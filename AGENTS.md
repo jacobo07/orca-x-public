@@ -48,6 +48,16 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
+## Durable State
+
+If a feature persists state that a crash or power loss could destroy, it needs a contract in [`config/durability-contracts.jsonc`](./config/durability-contracts.jsonc), not just a working write. Say what the state is, what breaks if it disappears, and its tier.
+
+Durability is proportional to that answer. `crash-durable` state — the only copy of something the user would notice losing, or the target of a pointer that is itself fsynced — must carry a barrier before the rename (route through [`src/main/durable-file-write.ts`](./src/main/durable-file-write.ts)) and a syscall-order proof, because a successful write is not a durable one and an fsync moved after the rename still fsyncs a file. `atomic-only` state must never be observed torn but may lose its newest write. `regenerable` state owes nothing.
+
+Two failure shapes recur and are worth checking for by name: a **durable pointer outliving a non-durable referent** (the ref is fsynced, the blob it names is not), and **failure collapsing into empty** (an unreadable file reported as an empty one, which turns a transient error into data loss when a read-modify-write publishes it back).
+
+`pnpm check:durability-contracts` enforces this. Modules that stage a temp file and rename it into place but carry no contract are ratcheted in `config/durability-unclassified-baseline.txt`: the existing ones are grandfathered and the list may only shrink, so a **new** unclassified publisher fails the gate. Prune with `--prune` after classifying one.
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
