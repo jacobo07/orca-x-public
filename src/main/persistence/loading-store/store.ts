@@ -727,6 +727,16 @@ export class Store {
       if (!(await exists(dataFile))) {
         return
       }
+      // Why heal without shifting: slot 0 is absent on a fresh profile or after a failed snapshot
+      // copy. Shifting here evicts the oldest slot without producing a replacement, and the
+      // interval check above reads the still-missing slot 0 as due, so each later save eats one
+      // more slot until the ring is empty (#1158).
+      if (!(await exists(backupPath(dataFile, 0)))) {
+        await copyFile(dataFile, backupPath(dataFile, 0)).catch((err) => {
+          console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+        })
+        return
+      }
       await rm(backupPath(dataFile, BACKUP_COUNT - 1)).catch((err: unknown) => {
         if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
           console.error('[persistence] Failed to remove oldest backup:', err)
@@ -753,6 +763,15 @@ export class Store {
 
   private rotateBackupsSync(dataFile: string): void {
     if (!existsSync(dataFile)) {
+      return
+    }
+    // Why: mirrors the async twin's heal-without-shift guard so both paths yield the same ring.
+    if (!existsSync(backupPath(dataFile, 0))) {
+      try {
+        copyFileSync(dataFile, backupPath(dataFile, 0))
+      } catch (err) {
+        console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+      }
       return
     }
     try {
