@@ -7,6 +7,7 @@ import {
   promises as fsPromises
 } from 'node:fs'
 import { join } from 'node:path'
+import { writeFileDurable } from '../durable-file-write'
 import {
   decodeLogHeader,
   encodeLogBatch,
@@ -87,8 +88,9 @@ export class TerminalHistorySessionWriter {
       }
     }
     const tmpPath = `${this.checkpointPath}.tmp`
-    await fsPromises.writeFile(tmpPath, data)
-    await fsPromises.rename(tmpPath, this.checkpointPath)
+    // Why: an unsynced rename can publish a zero-length checkpoint after power loss, and the log
+    // reset below has already discarded the increments that were the only other copy.
+    await writeFileDurable(tmpPath, this.checkpointPath, data)
     await fsPromises.writeFile(this.logPath, encodeLogHeader(generation))
     this.logGeneration = generation
     this.logBytes = LOG_HEADER_BYTES
