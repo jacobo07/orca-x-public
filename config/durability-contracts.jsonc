@@ -26,7 +26,11 @@
     // be read off the implementation, because an fsync moved after the rename still fsyncs a file.
     "proofRequiredForTiers": ["crash-durable"],
     "durablePrimitive": "src/main/durable-file-write.ts",
-    "unclassifiedWriterPolicy": "report"
+    // Ratcheted, not reported: config/durability-unclassified-baseline.txt grandfathers the
+    // publishers that predate this gate and may only shrink, so legacy debt stays visible while a
+    // newly added unclassified publisher fails the gate. "There were already some" is not an
+    // argument a future change can make.
+    "unclassifiedWriterPolicy": "ratchet"
   },
   "contracts": [
     {

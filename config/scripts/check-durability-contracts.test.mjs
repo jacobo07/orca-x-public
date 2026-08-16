@@ -2,7 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { main } from './check-durability-contracts.mjs'
+import {
+  collectUnclassifiedPublishers,
+  diffBaseline,
+  looksLikeAtomicPublisher,
+  main,
+  parseBaseline
+} from './check-durability-contracts.mjs'
 
 // Why the real `main` and a real temp tree: a gate that protects a production invariant is itself
 // reliability-critical. Asserting against a reimplementation of its logic would prove only that the
@@ -12,12 +18,16 @@ const tempDirs = []
 
 const DURABLE_WRITER = "import { writeFileDurable } from './durable-file-write'\nexport const w = 1\n"
 const BARE_WRITER = "import { writeFile } from 'node:fs/promises'\nexport const w = 1\n"
+const PUBLISHER = "const tmp = `${p}.tmp`\nawait rename(tmp, p)\n"
 
-function makeTempRoot(manifest, files = {}) {
+function makeTempRoot(manifest, files = {}, baseline = '') {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-durability-contracts-'))
   tempDirs.push(root)
   mkdirSync(path.join(root, 'config'), { recursive: true })
   writeFileSync(path.join(root, 'config', 'durability-contracts.jsonc'), manifest, 'utf8')
+  if (baseline !== null) {
+    writeFileSync(path.join(root, 'config', 'durability-unclassified-baseline.txt'), baseline, 'utf8')
+  }
   for (const [relativePath, contents] of Object.entries(files)) {
     mkdirSync(path.join(root, path.dirname(relativePath)), { recursive: true })
     writeFileSync(path.join(root, relativePath), contents, 'utf8')
@@ -32,7 +42,7 @@ function validManifest(contractOverrides = {}, policyOverrides = {}) {
       tiers: ['crash-durable', 'atomic-only', 'regenerable'],
       proofRequiredForTiers: ['crash-durable'],
       durablePrimitive: 'src/main/durable-file-write.ts',
-      unclassifiedWriterPolicy: 'report',
+      unclassifiedWriterPolicy: 'ratchet',
       ...policyOverrides
     },
     contracts: [
@@ -92,9 +102,7 @@ describe('durability contract gate', () => {
 
   it('rejects a crash-durable contract whose proof file does not exist', async () => {
     captureErrors()
-    const root = makeTempRoot(validManifest(), {
-      'src/main/demo-writer.ts': DURABLE_WRITER
-    })
+    const root = makeTempRoot(validManifest(), { 'src/main/demo-writer.ts': DURABLE_WRITER })
     await expect(main(root)).resolves.toBe(1)
     expect(errors.join('\n')).toContain('proof does not exist')
   })
@@ -139,5 +147,105 @@ describe('durability contract gate', () => {
     tempDirs.push(root)
     await expect(main(root)).resolves.toBe(1)
     expect(errors.join('\n')).toContain('unable to read manifest')
+  })
+})
+
+describe('durability ratchet', () => {
+  const errors = []
+
+  afterEach(() => {
+    errors.length = 0
+    vi.restoreAllMocks()
+    while (tempDirs.length > 0) {
+      rmSync(tempDirs.pop(), { recursive: true, force: true })
+    }
+  })
+
+  function captureErrors() {
+    vi.spyOn(console, 'error').mockImplementation((line) => errors.push(String(line)))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  }
+
+  it('fails a NEW unclassified publisher even while legacy ones are grandfathered', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest(),
+      {
+        ...COMPLIANT_FILES,
+        'src/main/legacy-publisher.ts': PUBLISHER,
+        'src/main/brand-new-publisher.ts': PUBLISHER
+      },
+      'src/main/legacy-publisher.ts\n'
+    )
+    await expect(main(root)).resolves.toBe(1)
+    const output = errors.join('\n')
+    // The whole point of the ratchet: existing debt does not license more of it.
+    expect(output).toContain('brand-new-publisher.ts')
+    expect(output).not.toContain('::error::New unclassified durability publisher: src/main/legacy-publisher.ts')
+  })
+
+  it('passes when every publisher is grandfathered', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest(),
+      { ...COMPLIANT_FILES, 'src/main/legacy-publisher.ts': PUBLISHER },
+      '# comment\nsrc/main/legacy-publisher.ts\n'
+    )
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  it('fails a stale baseline entry so the list can only shrink', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest(),
+      COMPLIANT_FILES,
+      'src/main/already-classified.ts\n'
+    )
+    await expect(main(root)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain('Stale durability baseline entry')
+  })
+
+  it('fails closed when the baseline file is absent', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), COMPLIANT_FILES, null)
+    await expect(main(root)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain('durability-unclassified-baseline.txt')
+  })
+
+  it('stops counting a publisher once it carries a contract', async () => {
+    const manifest = JSON.parse(validManifest())
+    manifest.contracts.push({
+      id: 'demo.second',
+      state: 'second.json',
+      writer: 'src/main/legacy-publisher.ts',
+      tier: 'regenerable',
+      lostIf: 'Nothing; it is rebuilt from the index on next launch.',
+      knownGaps: []
+    })
+    const root = makeTempRoot(JSON.stringify(manifest), {
+      ...COMPLIANT_FILES,
+      'src/main/legacy-publisher.ts': PUBLISHER
+    })
+    await expect(collectUnclassifiedPublishers(manifest, root)).resolves.toEqual([])
+  })
+})
+
+describe('ratchet helpers', () => {
+  it('recognizes the stage-then-rename publish shape', () => {
+    expect(looksLikeAtomicPublisher(PUBLISHER)).toBe(true)
+    expect(looksLikeAtomicPublisher('await writeFile(p, data)\n')).toBe(false)
+    // A rename with no temp staging is a move, not a publish.
+    expect(looksLikeAtomicPublisher('await rename(a, b)\n')).toBe(false)
+  })
+
+  it('drops comments and blank lines from the baseline', () => {
+    expect(parseBaseline('# header\n\nsrc/a.ts\n')).toEqual(new Set(['src/a.ts']))
+  })
+
+  it('reports added and stale entries', () => {
+    const { added, stale } = diffBaseline(['b.ts', 'c.ts'], new Set(['a.ts', 'b.ts']))
+    expect(added).toEqual(['c.ts'])
+    expect(stale).toEqual(['a.ts'])
   })
 })

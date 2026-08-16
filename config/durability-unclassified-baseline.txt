@@ -1,0 +1,32 @@
+# Modules under src/main that publish state atomically (temp file + rename) but carry no
+# durability contract in config/durability-contracts.jsonc.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — classify
+# the module instead. Existing debt stays visible here; new debt is blocked at the gate.
+# Prune after classifying: pnpm check:durability-contracts --prune
+src/main/active-view-preference.ts
+src/main/agent-hooks/installer-utils-remote.ts
+src/main/agent-hooks/installer-utils.ts
+src/main/agent-hooks/managed-hook-script-refresh.ts
+src/main/agent-hooks/server.ts
+src/main/ai-vault/session-parse-cache-persistence.ts
+src/main/amp/hook-service.ts
+src/main/artifacts/artifact-create-intent-store.ts
+src/main/cli/wsl-cli-installer.ts
+src/main/codex-accounts/fs-utils.ts
+src/main/codex/codex-pane-account-registry.ts
+src/main/codex/config-toml-trust.ts
+src/main/crash-reporting/crash-report-store.ts
+src/main/hermes/hermes-home-filesystem.ts
+src/main/integration-credential-file.ts
+src/main/ipc/pet-bundle-import.ts
+src/main/keybindings/keybinding-file.ts
+src/main/kimi/hook-service.ts
+src/main/orca-profiles/profile-index-store.ts
+src/main/orca-profiles/profile-project-state-file.ts
+src/main/plugins/plugin-atomic-file-write.ts
+src/main/rate-limits/gemini-oauth-sources.ts
+src/main/runtime/claude-agent-teams-shim-env.ts
+src/main/runtime/orca-runtime-files.ts
+src/main/serve-update-handoff.ts
+src/main/ssh/ssh-relay-endpoint-credential.ts

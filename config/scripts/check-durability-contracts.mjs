@@ -6,6 +6,7 @@ import process from 'node:process'
 import { parse, printParseErrorCode } from 'jsonc-parser'
 
 const MANIFEST_PATH = path.join('config', 'durability-contracts.jsonc')
+const BASELINE_PATH = path.join('config', 'durability-unclassified-baseline.txt')
 const SCAN_ROOT = path.join('src', 'main')
 
 function isRecord(value) {
@@ -37,13 +38,33 @@ async function readFileOrNull(root, relativePath) {
  * primitive, so importing it is what makes the guarantee reachable. A writer that hand-rolls its own
  * fsync sequence is exactly what this gate is meant to surface for review, not to silently accept.
  */
-function importsDurablePrimitive(source) {
+export function importsDurablePrimitive(source) {
   return /from\s+['"][^'"]*durable-file-write['"]/.test(source)
 }
 
 /** The publish shape: stage under a temp name, then rename it into place. */
-function looksLikeAtomicPublisher(source) {
+export function looksLikeAtomicPublisher(source) {
   return /\.tmp\b/.test(source) && /\brename(?:Sync)?\s*\(/.test(source)
+}
+
+// Deliberately local rather than imported from check-max-lines-ratchet.mjs: these are generic set
+// and text helpers, and coupling two unrelated CI gates so one can borrow a three-line diff would
+// add conflict surface to a fast-moving upstream file for no reliability gain.
+export function parseBaseline(text) {
+  return new Set(
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+  )
+}
+
+export function diffBaseline(current, baseline) {
+  const cur = new Set(current)
+  const base = baseline instanceof Set ? baseline : new Set(baseline)
+  const added = [...cur].filter((entry) => !base.has(entry)).sort()
+  const stale = [...base].filter((entry) => !cur.has(entry)).sort()
+  return { added, stale }
 }
 
 async function collectSourceFiles(root, relativeDir, found = []) {
@@ -67,6 +88,27 @@ async function collectSourceFiles(root, relativeDir, found = []) {
   return found
 }
 
+/** Modules that publish a file atomically but carry no durability classification. */
+export async function collectUnclassifiedPublishers(manifest, root) {
+  const registered = new Set(
+    (Array.isArray(manifest?.contracts) ? manifest.contracts : [])
+      .filter((contract) => isRecord(contract) && isNonEmptyString(contract.writer))
+      .map((contract) => contract.writer)
+  )
+  const primitive = manifest?.policy?.durablePrimitive
+  const unclassified = []
+  for (const relativePath of await collectSourceFiles(root, SCAN_ROOT)) {
+    if (registered.has(relativePath) || relativePath === primitive) {
+      continue
+    }
+    const source = await readFileOrNull(root, relativePath)
+    if (source !== null && looksLikeAtomicPublisher(source)) {
+      unclassified.push(relativePath)
+    }
+  }
+  return unclassified.sort()
+}
+
 function validatePolicy(manifest, failures) {
   if (!isRecord(manifest.policy)) {
     failures.push('policy must be an object')
@@ -84,7 +126,9 @@ function validatePolicy(manifest, failures) {
   return {
     tiers: new Set(Array.isArray(manifest.policy.tiers) ? manifest.policy.tiers : []),
     proofRequired: new Set(
-      Array.isArray(manifest.policy.proofRequiredForTiers) ? manifest.policy.proofRequiredForTiers : []
+      Array.isArray(manifest.policy.proofRequiredForTiers)
+        ? manifest.policy.proofRequiredForTiers
+        : []
     ),
     durablePrimitive: manifest.policy.durablePrimitive ?? null
   }
@@ -134,29 +178,57 @@ async function validateContract(contract, policy, root, failures) {
   }
 }
 
-/**
- * The omission closer. Every gap fixed here was invisible because nothing ever asked whether a new
- * writer persisted recovery-critical state. Report mode lists unclassified publishers without
- * failing; the backlog is real and classifying it wrongly is worse than classifying it slowly.
- */
-async function reportUnclassifiedPublishers(manifest, root) {
-  const registered = new Set(
-    (Array.isArray(manifest.contracts) ? manifest.contracts : [])
-      .filter((contract) => isRecord(contract) && isNonEmptyString(contract.writer))
-      .map((contract) => contract.writer)
-  )
-  const primitive = manifest.policy?.durablePrimitive
-  const unclassified = []
-  for (const relativePath of await collectSourceFiles(root, SCAN_ROOT)) {
-    if (registered.has(relativePath) || relativePath === primitive) {
-      continue
-    }
-    const source = await readFileOrNull(root, relativePath)
-    if (source !== null && looksLikeAtomicPublisher(source)) {
-      unclassified.push(relativePath)
-    }
+function printAddedFailure(added) {
+  for (const entry of added) {
+    console.error(`::error::New unclassified durability publisher: ${entry}`)
   }
-  return unclassified
+  console.error('')
+  console.error('  ❌  durability ratchet failed — a NEW module publishes state with no contract.')
+  console.error('')
+  console.error(`  ${added.length} module(s) stage a temp file and rename it into place, but no`)
+  console.error(`  entry in ${toPosix(MANIFEST_PATH)} says what is lost if that state disappears:`)
+  console.error('')
+  for (const entry of added) {
+    console.error(`    • ${entry}`)
+  }
+  console.error('')
+  console.error('  Existing unclassified publishers are grandfathered; NEW ones are not, so')
+  console.error('  "there were already some" is not an argument for adding another.')
+  console.error('')
+  console.error('  ✅  Fix it: add a contract naming the state, what breaks if it is lost, and its')
+  console.error('      tier. crash-durable writers must route through the durable primitive and')
+  console.error('      carry a syscall-order proof; regenerable state owes nothing.')
+  console.error('')
+}
+
+function printStaleFailure(stale) {
+  for (const entry of stale) {
+    console.error(`::error::Stale durability baseline entry (prune it): ${entry}`)
+  }
+  console.error('')
+  console.error('  ⚠️  durability baseline is out of date — nice work classifying a publisher!')
+  console.error('')
+  console.error(`  ${stale.length} baseline entr(y/ies) are no longer unclassified publishers.`)
+  console.error('  The baseline may only shrink, so these must be removed to keep re-adding blocked:')
+  console.error('')
+  for (const entry of stale) {
+    console.error(`    • ${entry}`)
+  }
+  console.error('')
+  console.error('  ✅  Fix it (one command):  pnpm check:durability-contracts --prune')
+  console.error('')
+}
+
+function baselineHeader() {
+  return [
+    '# Modules under src/main that publish state atomically (temp file + rename) but carry no',
+    '# durability contract in config/durability-contracts.jsonc.',
+    '#',
+    '# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — classify',
+    '# the module instead. Existing debt stays visible here; new debt is blocked at the gate.',
+    '# Prune after classifying: pnpm check:durability-contracts --prune',
+    ''
+  ].join('\n')
 }
 
 export async function main(root = process.cwd()) {
@@ -209,20 +281,66 @@ export async function main(root = process.cwd()) {
     }
     return 1
   }
-  const unclassified = isRecord(manifest) ? await reportUnclassifiedPublishers(manifest, root) : []
-  console.log(`Durability contract check passed for ${manifest.contracts.length} contract(s).`)
-  if (unclassified.length > 0) {
-    // Never silent: a truncated list reads as "everything is covered" when it is not.
-    console.log(
-      `${unclassified.length} unclassified atomic publisher(s) under ${toPosix(SCAN_ROOT)} (report-only):`
+
+  const baselineRaw = await readFileOrNull(root, BASELINE_PATH)
+  if (baselineRaw === null) {
+    console.error(
+      `::error::Missing ${toPosix(BASELINE_PATH)}. Generate it with: node config/scripts/check-durability-contracts.mjs --init`
     )
-    for (const relativePath of unclassified) {
-      console.log(`- ${relativePath}`)
-    }
+    return 1
   }
+  const current = await collectUnclassifiedPublishers(manifest, root)
+  const { added, stale } = diffBaseline(current, parseBaseline(baselineRaw))
+  if (added.length > 0) {
+    printAddedFailure(added)
+    if (stale.length > 0) {
+      printStaleFailure(stale)
+    }
+    return 1
+  }
+  if (stale.length > 0) {
+    printStaleFailure(stale)
+    return 1
+  }
+  console.log(
+    `Durability contract check passed for ${manifest.contracts.length} contract(s); ${current.length} grandfathered unclassified publisher(s), no new ones.`
+  )
   return 0
 }
 
+async function writeBaseline(root, entries) {
+  await fs.writeFile(path.join(root, BASELINE_PATH), `${baselineHeader()}${entries.join('\n')}\n`)
+}
+
+async function readManifestForCli(root) {
+  const raw = await fs.readFile(path.join(root, MANIFEST_PATH), 'utf8')
+  return parse(raw, [], { allowTrailingComma: true })
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(await main())
+  const root = process.cwd()
+  const arg = process.argv[2]
+  if (arg === '--init') {
+    const entries = await collectUnclassifiedPublishers(await readManifestForCli(root), root)
+    await writeBaseline(root, entries)
+    console.log(`Wrote ${toPosix(BASELINE_PATH)} with ${entries.length} entries.`)
+    process.exit(0)
+  }
+  if (arg === '--prune') {
+    // Shrink only: drops entries that are now classified, never adopts new debt.
+    const current = new Set(await collectUnclassifiedPublishers(await readManifestForCli(root), root))
+    const baseline = parseBaseline(await fs.readFile(path.join(root, BASELINE_PATH), 'utf8'))
+    const kept = [...baseline].filter((entry) => current.has(entry)).sort()
+    const newlyAdded = [...current].filter((entry) => !baseline.has(entry))
+    await writeBaseline(root, kept)
+    console.log(`Pruned baseline to ${kept.length} entries (removed ${baseline.size - kept.length}).`)
+    if (newlyAdded.length > 0) {
+      console.error(
+        `::error::--prune does not add entries; ${newlyAdded.length} unclassified publisher(s) remain — classify those.`
+      )
+      process.exit(1)
+    }
+    process.exit(0)
+  }
+  process.exit(await main(root))
 }
