@@ -1841,6 +1841,9 @@ type RuntimePtyController = {
     wslDistro?: string
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
+    /** The pane asked to resume a provider session, the resume was dropped as unverifiable, and a
+     *  fresh session launched instead. Optional so an older controller simply omits it. */
+    agentResumeUnavailable?: true
   }>
   write(ptyId: string, data: string): boolean
   writeWithSettlement?(ptyId: string, data: string): Promise<boolean>

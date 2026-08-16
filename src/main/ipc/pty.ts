@@ -4580,8 +4580,8 @@ export function registerPtyHandlers(
         ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)
         : noCodexResumeLaunch(preAdoptedStablePane ? undefined : args.command)
       const codexResumeHome = codexResumeLaunch.codexResumeHome
-      // Why: the drop still applies here, but this controller's result has no field for
-      // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
+      // The drop applies here too; the response below reports it so a runtime or relay pane cannot
+      // present its fresh session as a resume.
       const launchCommand = codexResumeLaunch.command
       const claudeAuth =
         isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
@@ -5395,7 +5395,13 @@ export function registerPtyHandlers(
                 }
               }
             : {}),
-          ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
+          ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
+          // Why: the pane asked to resume and got a fresh session instead. Runtime and relay panes
+          // ran the same drop as the desktop path, so staying silent here presents a restart as a
+          // resume. A reattach never ran this launch command and has nothing to disclaim.
+          ...(codexResumeLaunch.notifyResumeUnavailable && !result.isReattach
+            ? { agentResumeUnavailable: true as const }
+            : {})
         }
         resolvePaneSpawnReservation(paneSpawnReservationKey, paneSpawnReservation, {
           ...result,
