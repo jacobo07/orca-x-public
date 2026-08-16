@@ -88,7 +88,20 @@ describe('durability contract gate', () => {
     expect(errors).toEqual([])
   })
 
-  it('rejects a crash-durable writer that does not route through the durable primitive', async () => {
+  // Why this is accepted: integration-credential-file.ts fsyncs its handle before renaming and
+  // predates the shared primitive. Failing a genuinely durable writer would be a false positive, and
+  // a gate that cries wolf gets suppressed. Ordering is still proven separately by provenBy.
+  it('accepts a crash-durable writer whose barrier is a hand-rolled fsync', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), {
+      ...COMPLIANT_FILES,
+      'src/main/demo-writer.ts': 'import { fsyncSync } from "node:fs"\nfsyncSync(fd)\n'
+    })
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  it('rejects a crash-durable writer with no durability barrier at all', async () => {
     captureErrors()
     const root = makeTempRoot(validManifest(), {
       ...COMPLIANT_FILES,

@@ -76,6 +76,40 @@
       "knownGaps": [
         "There is no backup ring for this file, so a corrupt-quarantine is the only recovery path."
       ]
+    },
+    {
+      "id": "integrations.credential-file",
+      "state": "Per-integration token files (Linear, Jira), safeStorage-encrypted where a keyring exists",
+      "writer": "src/main/integration-credential-file.ts",
+      "tier": "crash-durable",
+      "lostIf": "The user is silently signed out of the integration and must re-authenticate. An empty file reads as 'missing' by design, so a torn publish degrades straight to logged-out with no error.",
+      "provenBy": ["src/main/integration-credential-durability.test.ts"],
+      "knownGaps": [
+        "The barrier is hand-rolled rather than routed through durable-file-write: it keeps a short-write loop and its own temp cleanup, which the shared sync primitive does not provide. Consolidating would first require the primitive to remove its temp on failure.",
+        "The containing directory is not fsynced, so the rename itself is durable only where the filesystem orders it."
+      ]
+    },
+    {
+      "id": "ssh-relay.endpoint-credential",
+      "state": "Relay endpoint shared secret, written on the REMOTE host by an SSH-executed script",
+      "writer": "src/main/ssh/ssh-relay-endpoint-credential.ts",
+      "tier": "atomic-only",
+      "lostIf": "The paired client cannot authenticate to the relay endpoint until a redeploy regenerates the secret. The value is freshly random per deploy, so it is replaceable rather than irrecoverable.",
+      "knownGaps": [
+        "The local durable primitive cannot apply: the bytes are written by node -e or PowerShell on the remote host, not by this process.",
+        "The two platform paths are asymmetric. Windows opens the temp with FileOptions::WriteThrough, which bypasses the cache; the POSIX script does writeFileSync then renameSync with no fsync. Only the Windows path currently survives remote power loss.",
+        "This file matched the publisher scan on the rename text inside its remote script string rather than on a local call."
+      ]
+    },
+    {
+      "id": "ui.active-view-preference",
+      "state": "The last active view, persisted beside the profile data file",
+      "writer": "src/main/active-view-preference.ts",
+      "tier": "atomic-only",
+      "lostIf": "Orca reopens on the previously stored view instead of the newest one. No user content is involved and the next view change rewrites it.",
+      "knownGaps": [
+        "There is no barrier here at all, which is deliberate at this tier: an fsync on every view toggle would cost more than the one preference it protects."
+      ]
     }
   ]
 }

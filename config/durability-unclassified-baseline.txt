@@ -4,7 +4,6 @@
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — classify
 # the module instead. Existing debt stays visible here; new debt is blocked at the gate.
 # Prune after classifying: pnpm check:durability-contracts --prune
-src/main/active-view-preference.ts
 src/main/agent-hooks/installer-utils-remote.ts
 src/main/agent-hooks/installer-utils.ts
 src/main/agent-hooks/managed-hook-script-refresh.ts
@@ -18,7 +17,6 @@ src/main/codex/codex-pane-account-registry.ts
 src/main/codex/config-toml-trust.ts
 src/main/crash-reporting/crash-report-store.ts
 src/main/hermes/hermes-home-filesystem.ts
-src/main/integration-credential-file.ts
 src/main/ipc/pet-bundle-import.ts
 src/main/keybindings/keybinding-file.ts
 src/main/kimi/hook-service.ts
@@ -29,4 +27,3 @@ src/main/rate-limits/gemini-oauth-sources.ts
 src/main/runtime/claude-agent-teams-shim-env.ts
 src/main/runtime/orca-runtime-files.ts
 src/main/serve-update-handoff.ts
-src/main/ssh/ssh-relay-endpoint-credential.ts

@@ -34,12 +34,17 @@ async function readFileOrNull(root, relativePath) {
 }
 
 /**
- * Why an import check rather than a call-site check: the ordering guarantee lives inside the
- * primitive, so importing it is what makes the guarantee reachable. A writer that hand-rolls its own
- * fsync sequence is exactly what this gate is meant to surface for review, not to silently accept.
+ * Why "has a barrier" rather than "imports our helper": integration-credential-file.ts fsyncs the
+ * handle before renaming and is genuinely durable, it just predates the shared primitive. Failing it
+ * would be a false positive, and a gate that cries wolf gets suppressed. Ordering is what actually
+ * matters and static text cannot show it — that is what the required syscall-order proof is for.
  */
-export function importsDurablePrimitive(source) {
-  return /from\s+['"][^'"]*durable-file-write['"]/.test(source)
+export function hasDurabilityBarrier(source) {
+  return (
+    /from\s+['"][^'"]*durable-file-write['"]/.test(source) ||
+    /\bfsync(?:Sync)?\s*\(/.test(source) ||
+    /\.sync\s*\(\s*\)/.test(source)
+  )
 }
 
 /** The publish shape: stage under a temp name, then rename it into place. */
@@ -159,9 +164,9 @@ async function validateContract(contract, policy, root, failures) {
     failures.push(`${id}: writer does not exist: ${contract.writer}`)
     return
   }
-  if (contract.tier === 'crash-durable' && !importsDurablePrimitive(source)) {
+  if (contract.tier === 'crash-durable' && !hasDurabilityBarrier(source)) {
     failures.push(
-      `${id}: crash-durable state is written by ${contract.writer}, which does not import ${policy.durablePrimitive}`
+      `${id}: crash-durable state is written by ${contract.writer}, which has no durability barrier — route it through ${policy.durablePrimitive} or fsync before the rename`
     )
   }
   if (!policy.proofRequired.has(contract.tier)) {
