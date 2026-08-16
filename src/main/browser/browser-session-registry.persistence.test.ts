@@ -77,7 +77,9 @@ function installModuleMocks(
     readFileSync: vi.fn((p: string) => {
       const v = fsState.files.get(fsKey(p))
       if (v === undefined) {
-        throw new Error('ENOENT')
+        // Real fs sets .code; without it a missing file is indistinguishable from an unreadable
+        // one, which is the exact conflation the store now refuses to make.
+        throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' })
       }
       return v
     }),
