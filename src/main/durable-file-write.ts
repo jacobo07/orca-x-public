@@ -7,6 +7,9 @@ import { closeSync, fsyncSync, openSync, renameSync, writeFileSync } from 'node:
 import { open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
+/** `mode` is applied when the temp file is created, so the payload is never briefly world-readable. */
+export type DurableWriteOptions = { mode?: number }
+
 /**
  * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
  * directory for fsync, and some filesystems reject it. The file fsync above it is the load-bearing
@@ -55,9 +58,10 @@ export async function renameDurable(tmpPath: string, finalPath: string): Promise
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string
+  payload: string | Buffer,
+  options: DurableWriteOptions = {}
 ): Promise<void> {
-  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true)
+  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true, options)
 }
 
 /**
@@ -69,14 +73,15 @@ export async function writeFileDurable(
 export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
-  payload: string,
-  isCurrent: () => boolean
+  payload: string | Buffer,
+  isCurrent: () => boolean,
+  options: DurableWriteOptions = {}
 ): Promise<boolean> {
   let renamed = false
   try {
-    const handle = await open(tmpPath, 'w')
+    const handle = await open(tmpPath, 'w', options.mode)
     try {
-      await handle.writeFile(payload, 'utf-8')
+      await handle.writeFile(payload)
       // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
       await handle.sync()
     } finally {
@@ -137,8 +142,13 @@ export async function removeStaleDurableWriteTempFiles(
 }
 
 /** Synchronous counterpart for quit and crash paths that cannot await. */
-export function writeFileDurableSync(tmpPath: string, finalPath: string, payload: string): void {
-  writeFileSync(tmpPath, payload, 'utf-8')
+export function writeFileDurableSync(
+  tmpPath: string,
+  finalPath: string,
+  payload: string | Buffer,
+  options: DurableWriteOptions = {}
+): void {
+  writeFileSync(tmpPath, payload, { mode: options.mode })
   const fd = openSync(tmpPath, 'r+')
   try {
     fsyncSync(fd)

@@ -1,17 +1,9 @@
 import { createHash } from 'node:crypto'
-import {
-  closeSync,
-  mkdirSync,
-  openSync,
-  readSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { closeSync, mkdirSync, openSync, readSync, rmSync, statSync } from 'node:fs'
+import { mkdir, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
+import { writeFileDurable, writeFileDurableSync } from './durable-file-write'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
@@ -117,8 +109,9 @@ export function writeTerminalScrollbackSnapshotSync(args: {
     const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
     let renamed = false
     try {
-      writeFileSync(tmpPath, bytes, { mode: 0o600 })
-      renameSync(tmpPath, path)
+      // Why durable: the session file holding this ref is fsynced, so an unsynced blob lets the
+      // pointer outlive its referent and the restore reports the loss as empty scrollback.
+      writeFileDurableSync(tmpPath, path, bytes, { mode: 0o600 })
       renamed = true
     } finally {
       if (!renamed) {
@@ -154,8 +147,9 @@ export async function writeTerminalScrollbackSnapshot(args: {
   try {
     await mkdir(snapshotRoot, { recursive: true, mode: 0o700 })
     const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
-    await writeFile(tmpPath, bytes, { mode: 0o600 })
-    await rename(tmpPath, path)
+    // Why durable: same pointer-outlives-referent hazard as the sync path. The fsync runs on the
+    // libuv threadpool, so the quit path's no-synchronous-syscall contract is preserved.
+    await writeFileDurable(tmpPath, path, bytes, { mode: 0o600 })
     renamed = true
     return ref
   } catch (err) {
