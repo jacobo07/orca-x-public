@@ -1,0 +1,77 @@
+// Durability contracts for recovery-critical state.
+//
+// Why this exists separately from reliability-gates.jsonc: that manifest disciplines *claims* —
+// it will not let a gate assert protection without a real test, command, and passed evidence run.
+// It never inspects source, so a subsystem can carry a formal invariant, eleven assertion refs and
+// a green evidence run while its writes have no durability barrier at all. That is not
+// hypothetical: terminal-history.daemon-checkpoint-session-isolation described "durable-history
+// checkpoints" three times, and the checkpoint write had no fsync anywhere in src/main/daemon.
+//
+// A durability contract answers a question no gate asks: if this state is lost, what breaks, and
+// what does the write owe as a result? Tiers exist because durability must be proportional —
+// forcing fsync on regenerable caches buys nothing and costs an I/O storm.
+//
+// tiers:
+//   crash-durable   The state is the only copy of something the user would notice losing, and the
+//                   pointer naming it is itself fsynced. Writes must route through
+//                   src/main/durable-file-write.ts and carry a syscall-order proof.
+//   atomic-only     Readers must never observe a torn file, but losing the newest write to power
+//                   loss is acceptable because a higher tier can reconstruct it.
+//   regenerable     Recomputable from a source of truth. No barrier owed.
+{
+  "schemaVersion": 1,
+  "policy": {
+    "tiers": ["crash-durable", "atomic-only", "regenerable"],
+    // Why proof is required only at the top tier: an ordering claim is the one property that cannot
+    // be read off the implementation, because an fsync moved after the rename still fsyncs a file.
+    "proofRequiredForTiers": ["crash-durable"],
+    "durablePrimitive": "src/main/durable-file-write.ts",
+    "unclassifiedWriterPolicy": "report"
+  },
+  "contracts": [
+    {
+      "id": "persistence.profile-data-file",
+      "state": "orca-data.json and its .bak ring — workspace session, terminal layouts, open files",
+      "writer": "src/main/persistence/loading-store/store.ts",
+      "tier": "crash-durable",
+      "lostIf": "A power loss between rename and flush leaves a zero-length profile, and the user reopens Orca to an empty workspace.",
+      "provenBy": ["src/main/persistence-async-write-syscalls.test.ts"],
+      "knownGaps": [
+        "The .bak ring bounds loss at roughly one hour, so the contract is 'no total loss', not 'no loss'."
+      ]
+    },
+    {
+      "id": "daemon.terminal-history-checkpoint",
+      "state": "checkpoint.json per daemon session, plus the generation-headered output.log it supersedes",
+      "writer": "src/main/daemon/terminal-history-session-writer.ts",
+      "tier": "crash-durable",
+      "lostIf": "The checkpoint is the sole copy once the log is reset. An unsynced publish can expose a zero-length checkpoint whose increments were already discarded, losing the session's scrollback across a crash the daemon was built to survive.",
+      "provenBy": ["src/main/daemon/terminal-history-checkpoint-durability.test.ts"],
+      "knownGaps": [
+        "The log reset is ordered after the checkpoint fsync, but the reset itself is not fsynced; a loss there costs the reset, not the checkpoint."
+      ]
+    },
+    {
+      "id": "terminal.scrollback-snapshot",
+      "state": "terminal-scrollback/<ref>.bin, referenced by scrollbackRefsByLeafId in the profile data file",
+      "writer": "src/main/terminal-scrollback-snapshots.ts",
+      "tier": "crash-durable",
+      "lostIf": "The referencing profile file is fsynced and the blob was not, so a durable pointer can outlive its referent. The reader returns an empty string for a zero-length snapshot, so the loss surfaces as empty scrollback rather than as a failure.",
+      "provenBy": ["src/main/terminal-scrollback-snapshot-durability.test.ts"],
+      "knownGaps": [
+        "The reader still cannot distinguish a missing snapshot from a genuinely empty one; see shared/terminal-snapshot-unavailability.ts for the vocabulary the live wire path already uses."
+      ]
+    },
+    {
+      "id": "browser.session-meta",
+      "state": "browser-session-meta.json — browser profiles, default source, pending cookie imports",
+      "writer": "src/main/browser/browser-session-meta-store.ts",
+      "tier": "atomic-only",
+      "lostIf": "Losing the newest write costs one profile edit. The severe failure here was never durability: a read-modify-write seeded from a failed read published an erasure of every profile, so the contract this file owes is a classified read, not an fsync.",
+      "provenBy": ["src/main/browser/browser-session-meta-transient-read-failure.test.ts"],
+      "knownGaps": [
+        "There is no backup ring for this file, so a corrupt-quarantine is the only recovery path."
+      ]
+    }
+  ]
+}
