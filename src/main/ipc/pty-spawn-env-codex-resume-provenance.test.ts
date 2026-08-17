@@ -180,14 +180,18 @@ describe('registerPtyHandlers', () => {
 
         expect(spawned.agentResumeUnavailable).toBe(true)
       })
-      it('stays silent for cross-agent provenance on a pane relabeled codex', async () => {
+      it('reports the drop for cross-agent provenance too, because silence is not neutral', async () => {
         registerWithTrustedHomes([OTHER_HOME], OTHER_HOME)
 
         const spawned = await spawnCodexResume(
           '/Users/example/.claude/projects/repo/019f81b9.jsonl'
         )
 
-        expect(spawned.agentResumeUnavailable).toBeUndefined()
+        // Staying silent here used to look like the conservative choice. It is not: the pane still
+        // holds a sleeping record, so pty-connection falls through to the plain "session restored"
+        // banner and claims a restoration that did not happen. Whenever the resume argv is dropped
+        // the pane is a new session, whoever the discarded metadata belonged to.
+        expect(spawned.agentResumeUnavailable).toBe(true)
       })
       posixOnlyIt('still pins CODEX_HOME and resumes when provenance is verified', async () => {
         const mockProc = createMockProc()

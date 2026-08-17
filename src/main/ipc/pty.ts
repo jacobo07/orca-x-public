@@ -4313,11 +4313,11 @@ export function registerPtyHandlers(
       return {
         codexResumeHome: null,
         command: dropped.command,
-        // Why: staying silent only makes sense for metadata that positively belongs to
-        // another agent; a resume with no transcript path at all still owes the user a notice.
-        notifyResumeUnavailable:
-          dropped.droppedResumeArgv &&
-          (prepared.claimedCodexProvenance || !providerSession.transcriptPath),
+        // Why unconditional: silence is not neutral here. The pane still carries a sleeping
+        // record, so pty-connection falls through to the plain "session restored" banner and
+        // claims a restoration that did not happen. A dropped resume argv means a new session,
+        // whoever the discarded metadata belonged to.
+        notifyResumeUnavailable: dropped.droppedResumeArgv,
         droppedResumeArgv: dropped.droppedResumeArgv,
         providerSession
       }
