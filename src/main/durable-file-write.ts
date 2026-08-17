@@ -3,7 +3,7 @@
 // empty-file symptom as issue #1158, from a different cause. The .bak ring recovers it at up to an
 // hour's loss; fsync stops it from happening.
 
-import { closeSync, fsyncSync, openSync, renameSync, writeFileSync } from 'node:fs'
+import { closeSync, fsyncSync, openSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
@@ -141,20 +141,37 @@ export async function removeStaleDurableWriteTempFiles(
   }
 }
 
-/** Synchronous counterpart for quit and crash paths that cannot await. */
+/**
+ * Synchronous counterpart for quit and crash paths that cannot await. Like the async variant, the
+ * temp file is removed on every path that doesn't commit — cleanup belongs to the primitive, since
+ * a caller that has to remember it is a caller that can forget. Only the failure path unlinks, so a
+ * successful quit write issues no extra syscall.
+ */
 export function writeFileDurableSync(
   tmpPath: string,
   finalPath: string,
   payload: string | Buffer,
   options: DurableWriteOptions = {}
 ): void {
-  writeFileSync(tmpPath, payload, { mode: options.mode })
-  const fd = openSync(tmpPath, 'r+')
+  let renamed = false
   try {
-    fsyncSync(fd)
+    writeFileSync(tmpPath, payload, { mode: options.mode })
+    const fd = openSync(tmpPath, 'r+')
+    try {
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(tmpPath, finalPath)
+    renamed = true
+    syncDirectorySync(dirname(finalPath))
   } finally {
-    closeSync(fd)
+    if (!renamed) {
+      try {
+        rmSync(tmpPath, { force: true })
+      } catch {
+        // The write already failed; a secondary cleanup error must not mask it.
+      }
+    }
   }
-  renameSync(tmpPath, finalPath)
-  syncDirectorySync(dirname(finalPath))
 }
