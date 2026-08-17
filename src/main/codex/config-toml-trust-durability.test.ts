@@ -58,13 +58,14 @@ describe('codex config.toml write durability', () => {
     }
 
     expect(readFileSync(configPath, 'utf-8')).toContain('o4')
-    // Without the barrier a power loss can leave this file zero-length — and a zero-length
-    // config.toml reads back as a legitimately empty document, so Orca would then rewrite it as
-    // trust-entries-only. The unsynced write is what manufactures that state in the first place.
-    expect(
-      syscalls.ordered.filter((entry) => entry !== 'fsync:directory'),
-      `recorded: ${syscalls.ordered.join(' | ') || '<none>'}`
-    ).toEqual(['fsync:file', 'rename'])
+    // Why not an exact sequence: rolling .bak forward is itself a rename, so this publish issues
+    // two. The invariant that matters is that no rename happens before the data is on disk —
+    // without it, a power loss leaves config.toml zero-length, which reads back as a legitimately
+    // empty document and lets the next trust edit rewrite the user's whole configuration.
+    const ordered = syscalls.ordered.filter((entry) => entry !== 'fsync:directory')
+    const trace = `recorded: ${ordered.join(' | ') || '<none>'}`
+    expect(ordered.indexOf('fsync:file'), trace).toBe(0)
+    expect(ordered.lastIndexOf('rename'), trace).toBeGreaterThan(0)
   })
 
   it('does not spend the last known-good backup on an empty config', async () => {
