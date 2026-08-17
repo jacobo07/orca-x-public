@@ -93,12 +93,25 @@ async function collectSourceFiles(root, relativeDir, found = []) {
   return found
 }
 
+/**
+ * A contract describes STATE, and state can have more than one publisher. Naming only the obvious
+ * one is how orca-data.json ended up with a durable writer in loading-store and a bare rename in
+ * profile transfer while the contract read as satisfied. Accepts a string or an array so a contract
+ * can enumerate every writer it knows about, and the gate then holds each of them to the tier.
+ */
+export function contractWriters(contract) {
+  if (isNonEmptyString(contract?.writer)) {
+    return [contract.writer]
+  }
+  return Array.isArray(contract?.writer) ? contract.writer.filter(isNonEmptyString) : []
+}
+
 /** Modules that publish a file atomically but carry no durability classification. */
 export async function collectUnclassifiedPublishers(manifest, root) {
   const registered = new Set(
     (Array.isArray(manifest?.contracts) ? manifest.contracts : [])
-      .filter((contract) => isRecord(contract) && isNonEmptyString(contract.writer))
-      .map((contract) => contract.writer)
+      .filter(isRecord)
+      .flatMap(contractWriters)
   )
   const primitive = manifest?.policy?.durablePrimitive
   const unclassified = []
@@ -145,10 +158,14 @@ async function validateContract(contract, policy, root, failures) {
     return
   }
   const id = contract.id ?? '<unknown>'
-  for (const field of ['id', 'state', 'writer', 'tier', 'lostIf']) {
+  for (const field of ['id', 'state', 'tier', 'lostIf']) {
     if (!isNonEmptyString(contract[field])) {
       failures.push(`${id}: ${field} must be a non-empty string`)
     }
+  }
+  const writers = contractWriters(contract)
+  if (writers.length === 0) {
+    failures.push(`${id}: writer must be a non-empty string or array of strings`)
   }
   if (!Array.isArray(contract.knownGaps) || !contract.knownGaps.every(isNonEmptyString)) {
     failures.push(`${id}: knownGaps must be an array of strings`)
@@ -156,18 +173,18 @@ async function validateContract(contract, policy, root, failures) {
   if (!policy.tiers.has(contract.tier)) {
     failures.push(`${id}: tier is not one of policy.tiers`)
   }
-  if (!isNonEmptyString(contract.writer)) {
-    return
-  }
-  const source = await readFileOrNull(root, contract.writer)
-  if (source === null) {
-    failures.push(`${id}: writer does not exist: ${contract.writer}`)
-    return
-  }
-  if (contract.tier === 'crash-durable' && !hasDurabilityBarrier(source)) {
-    failures.push(
-      `${id}: crash-durable state is written by ${contract.writer}, which has no durability barrier — route it through ${policy.durablePrimitive} or fsync before the rename`
-    )
+  // Every listed writer is held to the tier: a contract is only as strong as its weakest publisher.
+  for (const writer of writers) {
+    const source = await readFileOrNull(root, writer)
+    if (source === null) {
+      failures.push(`${id}: writer does not exist: ${writer}`)
+      continue
+    }
+    if (contract.tier === 'crash-durable' && !hasDurabilityBarrier(source)) {
+      failures.push(
+        `${id}: crash-durable state is written by ${writer}, which has no durability barrier — route it through ${policy.durablePrimitive} or fsync before the rename`
+      )
+    }
   }
   if (!policy.proofRequired.has(contract.tier)) {
     return

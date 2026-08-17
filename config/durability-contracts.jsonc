@@ -36,12 +36,22 @@
     {
       "id": "persistence.profile-data-file",
       "state": "orca-data.json and its .bak ring — workspace session, terminal layouts, open files",
-      "writer": "src/main/persistence/loading-store/store.ts",
+      // Two publishers, and the gate holds both to the tier. The transfer writer was a bare
+      // write+rename while this contract read as satisfied — a contract names state, not one file,
+      // and its guarantee is only as strong as its weakest publisher.
+      "writer": [
+        "src/main/persistence/loading-store/store.ts",
+        "src/main/orca-profiles/profile-project-state-file.ts"
+      ],
       "tier": "crash-durable",
       "lostIf": "A power loss between rename and flush leaves a zero-length profile, and the user reopens Orca to an empty workspace.",
-      "provenBy": ["src/main/persistence-async-write-syscalls.test.ts"],
+      "provenBy": [
+        "src/main/persistence-async-write-syscalls.test.ts",
+        "src/main/orca-profiles/profile-project-state-durability.test.ts"
+      ],
       "knownGaps": [
-        "The .bak ring bounds loss at roughly one hour, so the contract is 'no total loss', not 'no loss'."
+        "The .bak ring bounds loss at roughly one hour, so the contract is 'no total loss', not 'no loss'.",
+        "Only loading-store rotates the .bak ring; a profile transfer replaces the file with no backup refresh, so a transfer is the one publish with no recovery slot behind it."
       ]
     },
     {

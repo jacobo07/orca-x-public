@@ -88,6 +88,43 @@ describe('durability contract gate', () => {
     expect(errors).toEqual([])
   })
 
+  // Why: orca-data.json had a durable publisher and a bare one, and the contract read as satisfied
+  // because it named only the durable one. A tier is a claim about state, so every publisher of that
+  // state has to meet it — otherwise listing a second writer would weaken the contract, not tighten it.
+  it('fails when any one of several writers has no barrier', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest({ writer: ['src/main/demo-writer.ts', 'src/main/demo-transfer-writer.ts'] }),
+      { ...COMPLIANT_FILES, 'src/main/demo-transfer-writer.ts': BARE_WRITER }
+    )
+    await expect(main(root)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain('src/main/demo-transfer-writer.ts')
+  })
+
+  it('passes when every listed writer carries a barrier', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest({ writer: ['src/main/demo-writer.ts', 'src/main/demo-transfer-writer.ts'] }),
+      { ...COMPLIANT_FILES, 'src/main/demo-transfer-writer.ts': DURABLE_WRITER }
+    )
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  // A second writer must leave the unclassified scan, or classifying it would still read as new debt.
+  it('treats every listed writer as classified in the ratchet scan', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest({ writer: ['src/main/demo-writer.ts', 'src/main/demo-transfer-writer.ts'] }),
+      {
+        ...COMPLIANT_FILES,
+        'src/main/demo-transfer-writer.ts': `${DURABLE_WRITER}${PUBLISHER}`
+      }
+    )
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
+  })
+
   // Why this is accepted: integration-credential-file.ts fsyncs its handle before renaming and
   // predates the shared primitive. Failing a genuinely durable writer would be a false positive, and
   // a gate that cries wolf gets suppressed. Ordering is still proven separately by provenBy.
