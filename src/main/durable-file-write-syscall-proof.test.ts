@@ -15,13 +15,20 @@ vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
   return {
     ...actual,
+    // Why recorded only after the real call returns: an fsync that throws is not a barrier, and a
+    // rename that throws is not a publish. Recording the attempt instead made this disagree with
+    // the probe below on Windows, where opening a directory succeeds and fsyncing it fails EPERM —
+    // the probe saw "unsupported" while the log claimed the directory had been synced.
     fsyncSync: (fd: number) => {
-      syscalls.push(actual.fstatSync(fd).isDirectory() ? 'fsync:directory' : 'fsync:file')
-      return actual.fsyncSync(fd)
+      const kind = actual.fstatSync(fd).isDirectory() ? 'fsync:directory' : 'fsync:file'
+      const result = actual.fsyncSync(fd)
+      syscalls.push(kind)
+      return result
     },
     renameSync: (from: NodeFs.PathLike, to: NodeFs.PathLike) => {
+      const result = actual.renameSync(from, to)
       syscalls.push('rename')
-      return actual.renameSync(from, to)
+      return result
     }
   }
 })
