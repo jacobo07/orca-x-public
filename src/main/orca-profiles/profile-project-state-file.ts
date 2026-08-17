@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
+import { writeFileDurableSync } from '../durable-file-write'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
@@ -94,8 +95,10 @@ export function writeProfileState(
   const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
   mkdirSync(dirname(dataFile), { recursive: true })
   const tmpPath = `${dataFile}.${process.pid}.${randomUUID()}.tmp`
-  writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf-8')
-  renameSync(tmpPath, dataFile)
+  // Why durable: this is a second writer of the file persistence.profile-data-file rates
+  // crash-durable, and a transfer replaces it wholesale. A bare rename here can expose a
+  // zero-length profile, which the user meets as an empty workspace.
+  writeFileDurableSync(tmpPath, dataFile, JSON.stringify(state, null, 2))
 }
 
 function isRepoBackedProjectHostSetup(
