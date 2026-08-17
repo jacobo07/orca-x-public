@@ -1,8 +1,11 @@
 /* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
 import {
+  closeSync,
   existsSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   realpathSync,
   statSync,
@@ -814,13 +817,24 @@ export function writeConfigAtomically(configPath: string, contents: string): voi
   const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  const existingMode = existsSync(writePath) ? statSync(writePath).mode : undefined
+  const existingStat = existsSync(writePath) ? statSync(writePath) : null
   let renamed = false
   try {
     // Why: real-home trust cleanup must not widen a dotfiles-managed config's
     // restrictive permissions when the atomic rename installs new bytes.
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: existingMode })
-    if (existsSync(writePath)) {
+    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: existingStat?.mode })
+    // Why fsync here: an unsynced rename can leave config.toml zero-length after power loss, and
+    // a zero-length config.toml reads back as a legitimately empty document — so the next trust
+    // edit would rewrite the user's whole configuration as trust entries alone.
+    const fd = openSync(tmpPath, 'r+')
+    try {
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    // Why the size guard: the backup is the only way back from the state above, and rolling it
+    // forward from an empty file spends it to save nothing — losing both copies at once.
+    if (existingStat && existingStat.size > 0) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
     renameFileWithWindowsRetry(tmpPath, writePath)
