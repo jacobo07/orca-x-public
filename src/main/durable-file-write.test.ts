@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -74,6 +74,23 @@ describe('durable file write', () => {
         }
         expect(failed).toBe(true)
         expect(() => readFileSync(final, 'utf-8')).toThrow()
+      })
+
+      it('removes its own temp file when the publish fails', async () => {
+        // Why a directory as the target: it fails the rename specifically, which is the only
+        // window where a fully written and fsynced temp can survive the failure. Cleanup has to
+        // belong to the primitive — every caller re-implementing it is a caller that can forget.
+        const final = join(dir, 'occupied')
+        mkdirSync(final)
+        const tmp = join(dir, 'occupied.tmp')
+        let failed = false
+        try {
+          await write(tmp, final, 'x')
+        } catch {
+          failed = true
+        }
+        expect(failed).toBe(true)
+        expect(existsSync(tmp), 'the failed write orphaned its temp file').toBe(false)
       })
     })
   }
