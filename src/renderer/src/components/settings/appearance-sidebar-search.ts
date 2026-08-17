@@ -35,6 +35,46 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
   })
 )
 
+export const getSidePanelDockEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.sidePanelDock.title',
+      'Side Panel Position'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.sidePanelDock.description',
+      'Dock the Explorer, Search and Source Control panel to the left or right edge.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidePanelDock.panel',
+        'panel'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidePanelDock.explorer',
+        'explorer'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidePanelDock.position',
+        'position'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidePanelDock.left',
+        'left'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidePanelDock.right',
+        'right'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.sidePanelDock.dock',
+        'dock'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar')
+    ]
+  })
+)
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
@@ -193,5 +233,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getSidePanelDockEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

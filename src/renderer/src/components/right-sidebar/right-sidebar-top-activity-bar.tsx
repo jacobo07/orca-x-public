@@ -22,7 +22,8 @@ export function RightSidebarTopActivityBar({
   checksStatus,
   closeButton,
   activityBarPosition,
-  onChangeActivityBarPosition
+  onChangeActivityBarPosition,
+  applyWindowControlsInset = true
 }: {
   hasDesktopWindowChrome: boolean
   topActivityStripRef: (node: HTMLDivElement | null) => void
@@ -33,11 +34,18 @@ export function RightSidebarTopActivityBar({
   closeButton: React.ReactNode
   activityBarPosition: ActivityBarPosition
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void
+  /** Why: the inset reserves room for the top-RIGHT window-controls overlay, which a left-docked panel never sits under. */
+  applyWindowControlsInset?: boolean
 }): React.JSX.Element {
   return (
     /* ── Top activity bar: horizontal icon row ── */
     <ContextMenu>
-      <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+      <div
+        className={cn(
+          'flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-drag overflow-hidden',
+          applyWindowControlsInset && 'right-sidebar-header-inset'
+        )}
+      >
         {!hasDesktopWindowChrome && (
           <TooltipProvider delayDuration={400}>
             <ContextMenuTrigger asChild>

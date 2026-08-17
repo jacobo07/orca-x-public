@@ -96,6 +96,9 @@ export type RightSidebarTab =
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 
+/** Which window edge the Explorer/Search/Source Control panel docks to. 'left' matches VS Code/Cursor. */
+export type SidePanelDock = 'left' | 'right'
+
 export type ProjectOrderBy = 'manual' | 'recent'
 export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null

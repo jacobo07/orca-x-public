@@ -230,6 +230,7 @@ const UiUpdateFields = z
     _antigravityStatusBarDefaultAdded: z.boolean().optional(),
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
+    sidePanelDock: z.enum(['left', 'right']).optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
     dismissedUpdateVersion: NullableString.optional(),

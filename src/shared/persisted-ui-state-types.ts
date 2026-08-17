@@ -13,6 +13,7 @@ import type {
   ProjectOrderBy,
   RightSidebarExplorerView,
   RightSidebarTab,
+  SidePanelDock,
   StatusBarItem,
   TaskResumeState,
   TopLevelView,
@@ -33,6 +34,8 @@ export type PersistedUIState = {
   rightSidebarTab: RightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarWidth: number
+  /** Window edge the Explorer/Search/Source Control panel docks to; absent = 'left' (Cursor parity). */
+  sidePanelDock?: SidePanelDock
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'

@@ -18,6 +18,7 @@ import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
+  SidePanelDock,
   StatusBarItem,
   TaskResumeState,
   TaskViewPresetId,
@@ -936,6 +937,8 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
+  sidePanelDock: SidePanelDock
+  setSidePanelDock: (dock: SidePanelDock) => void
   usagePercentageDisplay: UsagePercentageDisplay
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
@@ -2249,6 +2252,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ statusBarVisible: v }).catch(console.error)
     set({ statusBarVisible: v })
   },
+  sidePanelDock: 'left',
+  setSidePanelDock: (dock) => {
+    window.api.ui.set({ sidePanelDock: dock }).catch(console.error)
+    set({ sidePanelDock: dock })
+  },
   usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   setUsagePercentageDisplay: (display) => {
     const normalized = normalizeUsagePercentageDisplay(display)
@@ -2549,6 +2557,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
         statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
+        // Why: absent means a profile that predates the dock setting — land on 'left' so the panel matches VS Code/Cursor rather than staying wherever it historically was.
+        sidePanelDock: (ui.sidePanelDock === 'right' ? 'right' : 'left') as SidePanelDock,
         usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.

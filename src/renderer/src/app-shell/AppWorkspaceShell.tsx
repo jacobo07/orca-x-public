@@ -87,7 +87,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
   )
 }
 
-/** The left sidebar + titlebar + page/workbench content area + right sidebar. */
+/** The left sidebar + titlebar + page/workbench content area + the Explorer/Search side panel. */
 export function AppWorkspaceShell(props: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
@@ -99,6 +99,27 @@ export function AppWorkspaceShell(props: {
   const scrollOffsetRef = useRef(0)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
+  const dockedLeft = layout.sidePanelDock === 'left'
+
+  // Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view.
+  const sidePanel = layout.showRightSidebarControls ? (
+    <RecoverableRenderErrorBoundary
+      boundaryId="right-sidebar"
+      surface="right-sidebar"
+      resetKey={
+        layout.rightSidebarTab === 'explorer'
+          ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
+          : layout.rightSidebarTab
+      }
+      title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
+      description={translate(
+        'auto.App.8d1e160ed1',
+        'Retry the sidebar or switch tabs to reload this surface.'
+      )}
+    >
+      <RightSidebar />
+    </RecoverableRenderErrorBoundary>
+  ) : null
 
   return (
     // Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake.
@@ -113,7 +134,8 @@ export function AppWorkspaceShell(props: {
       )}
     >
       <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-        {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the right-sidebar column. */}
+        {dockedLeft ? sidePanel : null}
+        {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the side-panel column. */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Why: workspace view drops the full-width titlebar so tab groups extend to the top; settings/landing/tasks keep it. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
@@ -160,14 +182,15 @@ export function AppWorkspaceShell(props: {
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
+                {/* Why: match the side panel header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
                 {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
                   <div
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
                       {
-                        // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
-                        right: 'var(--window-controls-width)',
+                        // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div. A left dock never meets that overlay, so it hugs the content edge instead.
+                        left: dockedLeft ? 0 : undefined,
+                        right: dockedLeft ? undefined : 'var(--window-controls-width)',
                         WebkitAppRegion: 'no-drag'
                       } as React.CSSProperties
                     }
@@ -222,25 +245,7 @@ export function AppWorkspaceShell(props: {
             </div>
           </div>
         </div>
-        {/* Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view. */}
-        {layout.showRightSidebarControls ? (
-          <RecoverableRenderErrorBoundary
-            boundaryId="right-sidebar"
-            surface="right-sidebar"
-            resetKey={
-              layout.rightSidebarTab === 'explorer'
-                ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
-                : layout.rightSidebarTab
-            }
-            title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-            description={translate(
-              'auto.App.8d1e160ed1',
-              'Retry the sidebar or switch tabs to reload this surface.'
-            )}
-          >
-            <RightSidebar />
-          </RecoverableRenderErrorBoundary>
-        ) : null}
+        {dockedLeft ? null : sidePanel}
       </div>
     </RecoverableRenderErrorBoundary>
   )
