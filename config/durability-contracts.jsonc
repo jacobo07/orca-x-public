@@ -95,7 +95,7 @@
       "lostIf": "The user is silently signed out of the integration and must re-authenticate. An empty file reads as 'missing' by design, so a torn publish degrades straight to logged-out with no error.",
       "provenBy": ["src/main/integration-credential-durability.test.ts"],
       "knownGaps": [
-        "The barrier is hand-rolled rather than routed through durable-file-write: it keeps a short-write loop and its own temp cleanup, which the shared sync primitive does not provide. Consolidating would first require the primitive to remove its temp on failure.",
+        "The barrier is hand-rolled rather than routed through durable-file-write, and it stays that way deliberately. Consolidation was attempted once the primitive learned to remove its own temp, and reverted: bitbucket/credential-store.test.ts injects failures at writeSync and unlinkSync to hold the STA-3941 guarantee, so replacing the explicit short-write loop deletes the boundary those regression tests assert against. This writer is specialized, not duplicated.",
         "The containing directory is not fsynced, so the rename itself is durable only where the filesystem orders it."
       ]
     },
@@ -109,6 +109,17 @@
         "The local durable primitive cannot apply: the bytes are written by node -e or PowerShell on the remote host, not by this process.",
         "The two platform paths are asymmetric. Windows opens the temp with FileOptions::WriteThrough, which bypasses the cache; the POSIX script does writeFileSync then renameSync with no fsync. Only the Windows path currently survives remote power loss.",
         "This file matched the publisher scan on the rename text inside its remote script string rather than on a local call."
+      ]
+    },
+    {
+      "id": "plugins.install-state",
+      "state": "plugins.lock.json, each plugin's current-content pointer, install provenance and the marketplace kill-list",
+      "writer": "src/main/plugins/plugin-atomic-file-write.ts",
+      "tier": "atomic-only",
+      "lostIf": "A plugin drops out of the lockfile that install and update paths consult, so it can be reinstalled or skipped. Recoverable: recoverPluginLockfile rebuilds the lock by scanning the plugins directory, which is the real source of truth.",
+      "knownGaps": [
+        "Distinct from durable-file-write, not a duplicate of it: this publisher is async-only and carries a Windows EPERM/EACCES/EBUSY rename backoff (#1507) that the synchronous primitive has no timer to park on. Merging the two would force one contract to adopt the other's cost — and do not add a third.",
+        "Reconstruction reads each plugin's content pointer through a catch that yields null, so a transient read failure is indistinguishable from 'never installed' and the truncated lock is written back. The recovery design is sound; its failure classification is not."
       ]
     },
     {

@@ -21,7 +21,6 @@ src/main/ipc/pet-bundle-import.ts
 src/main/keybindings/keybinding-file.ts
 src/main/kimi/hook-service.ts
 src/main/orca-profiles/profile-index-store.ts
-src/main/plugins/plugin-atomic-file-write.ts
 src/main/rate-limits/gemini-oauth-sources.ts
 src/main/runtime/claude-agent-teams-shim-env.ts
 src/main/runtime/orca-runtime-files.ts
