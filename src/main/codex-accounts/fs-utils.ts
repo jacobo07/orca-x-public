@@ -1,8 +1,41 @@
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, existsSync, linkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  fsyncSync,
+  linkSync,
+  openSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
+
+/**
+ * Why not the shared durable primitive: these publications need the Windows ACL recovery and the
+ * EPERM/EBUSY rename backoff below (#1507), which durable-file-write has no timer to carry. The
+ * barrier is what was missing, so it is added here rather than by adopting the other contract.
+ *
+ * A rename is atomic for readers but not durable. Without this, a power loss can leave a credential
+ * at its old bytes or at a zero-length inode, and an empty auth.json reads as "signed out" — a
+ * silent logout with nothing to explain it.
+ */
+function writeTempFileDurably(
+  tmpPath: string,
+  contents: string,
+  options?: { mode?: number }
+): void {
+  writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+  const fd = openSync(tmpPath, 'r+')
+  try {
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
 
 export function writeFileAtomically(
   targetPath: string,
@@ -11,7 +44,7 @@ export function writeFileAtomically(
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   try {
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+    writeTempFileDurably(tmpPath, contents, options)
     renameFileWithWindowsRetry(tmpPath, targetPath)
   } catch (error) {
     rmSync(tmpPath, { force: true })
@@ -26,7 +59,7 @@ export function writeFileAtomically(
         grantDirAcl(dirname(targetPath))
         const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
         try {
-          writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+          writeTempFileDurably(retryTmpPath, contents, options)
           renameFileWithWindowsRetry(retryTmpPath, targetPath)
           return
         } catch {
@@ -126,7 +159,7 @@ function attemptGuardedAtomicWrite(
   const heldPath = getGuardedOperationHeldPath(targetPath)
   recoverInterruptedGuardedOperation(heldPath, targetPath)
   try {
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+    writeTempFileDurably(tmpPath, contents, options)
     if (expectedContents === null) {
       return publishFileWithoutOverwrite(tmpPath, targetPath)
     }
