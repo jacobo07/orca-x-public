@@ -9,8 +9,9 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as CodexAccountFs from './fs-utils'
 
@@ -28,6 +29,32 @@ vi.mock('./fs-utils', async () => {
       actual.writeFileAtomically(targetPath, contents, options)
     }
   }
+})
+
+// Why the recorder: the marker and the credential are two independent files, so nothing but write
+// ordering stops the marker from being durable while the credential it certifies is not. The gate
+// on retry is marker EXISTENCE, so that state is terminal — the migration never runs again and the
+// account keeps its stale credential. Intent must not outlive commit.
+const publishes = vi.hoisted(() => ({ recording: false, ordered: [] as string[] }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  const patched = {
+    ...actual,
+    fsyncSync: (fd: number): void => {
+      actual.fsyncSync(fd)
+      if (publishes.recording) {
+        publishes.ordered.push('fsync')
+      }
+    },
+    renameSync: (from: NodeFs.PathLike, to: NodeFs.PathLike): void => {
+      actual.renameSync(from, to)
+      if (publishes.recording) {
+        publishes.ordered.push(`rename:${basename(String(to))}`)
+      }
+    }
+  }
+  return { ...patched, default: patched }
 })
 
 import {
@@ -69,6 +96,39 @@ describe('legacy shared Codex auth migration', () => {
     fixture.writeSharedAuth(createAuth('one@example.com', 'acct-1', 'later', 3_000))
     fixture.migrate([account], account.id)
     expect(readFileSync(accountAuthPath, 'utf-8')).toBe(fresh)
+  })
+
+  it('makes the credential durable before the marker that certifies it', () => {
+    const account = fixture.createAccount(
+      'account-1',
+      'acct-1',
+      createAuth('one@example.com', 'acct-1', 'stale', 1_000)
+    )
+    fixture.writeSharedAuth(createAuth('one@example.com', 'acct-1', 'fresh', 2_000))
+
+    publishes.ordered.length = 0
+    publishes.recording = true
+    try {
+      fixture.migrate([account], account.id)
+    } finally {
+      publishes.recording = false
+    }
+
+    const published = publishes.ordered.filter((entry) => entry !== 'fsync:directory')
+    const authPublish = published.indexOf('rename:auth.json')
+    const markerPublish = published.indexOf(`rename:${LEGACY_SHARED_AUTH_MIGRATION_MARKER}`)
+    const trace = `recorded: ${published.join(' | ') || '<none>'}`
+
+    expect(authPublish, trace).toBeGreaterThanOrEqual(0)
+    expect(markerPublish, trace).toBeGreaterThan(authPublish)
+    // Every publish must be immediately preceded by its own barrier. Checking only that the
+    // credential is fsynced somewhere would still pass if the marker were published unsynced
+    // ahead of it, which is the exact state that makes the migration never retry.
+    for (const [index, entry] of published.entries()) {
+      if (entry.startsWith('rename:')) {
+        expect(published[index - 1], `${entry} published without a barrier — ${trace}`).toBe('fsync')
+      }
+    }
   })
 
   it('marks a uniquely matching stale shared credential as a conclusive no-op', () => {
