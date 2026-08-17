@@ -112,6 +112,33 @@
       ]
     },
     {
+      "id": "codex-accounts.managed-credential",
+      "state": "Per-account auth.json and .credentials.json for every managed Codex and Claude account, plus the migration completion markers beside them",
+      "writer": "src/main/codex-accounts/fs-utils.ts",
+      "tier": "crash-durable",
+      "lostIf": "The user is silently signed out of a managed account. An empty auth.json reads as 'no credential' by design, so a torn publish degrades straight to logged-out with nothing to explain it — and because the legacy migration gates its retry on marker existence alone, a marker that outlived its credential makes that state terminal.",
+      "provenBy": [
+        "src/main/codex-accounts/managed-auth-durability.test.ts",
+        "src/main/codex-accounts/legacy-shared-auth-migration.test.ts"
+      ],
+      "knownGaps": [
+        "The barrier is hand-rolled rather than routed through durable-file-write, deliberately: these publications need the Windows ACL recovery and the EPERM/EBUSY rename backoff (#1507) that the shared synchronous primitive has no timer to carry.",
+        "The containing directory is not fsynced, so the rename is durable only where the filesystem orders it. The migration proof asserts barrier-before-publish for each file, which is the leg that does not depend on that."
+      ]
+    },
+    {
+      "id": "codex.config-toml-trust",
+      "state": "The user's own ~/.codex/config.toml — their comments, key order and every unrelated Codex setting — plus the hook trusted_hash and project trust_level Orca edits into it",
+      "writer": "src/main/codex/config-toml-trust.ts",
+      "tier": "crash-durable",
+      "lostIf": "A torn publish leaves the file zero-length, which reads back as a legitimately empty TOML document rather than as damage. The next trust edit then rewrites the user's whole configuration as trust entries alone, and Codex silently stops firing hooks or re-prompts for project trust.",
+      "provenBy": ["src/main/codex/config-toml-trust-durability.test.ts"],
+      "knownGaps": [
+        "Zero-length and intentionally-empty remain indistinguishable at the read boundary, because an empty config.toml is valid TOML. The defence is therefore the barrier that stops Orca creating that state, plus refusing to roll .bak forward from an empty file — not a read-side rejection that would break legitimately empty configs.",
+        "The read-modify-write holds no lock and races the Codex CLI's own /hooks writer; an idempotent reinstall repairs a lost update."
+      ]
+    },
+    {
       "id": "plugins.install-state",
       "state": "plugins.lock.json, each plugin's current-content pointer, install provenance and the marketplace kill-list",
       "writer": "src/main/plugins/plugin-atomic-file-write.ts",
@@ -119,7 +146,7 @@
       "lostIf": "A plugin drops out of the lockfile that install and update paths consult, so it can be reinstalled or skipped. Recoverable: recoverPluginLockfile rebuilds the lock by scanning the plugins directory, which is the real source of truth.",
       "knownGaps": [
         "Distinct from durable-file-write, not a duplicate of it: this publisher is async-only and carries a Windows EPERM/EACCES/EBUSY rename backoff (#1507) that the synchronous primitive has no timer to park on. Merging the two would force one contract to adopt the other's cost — and do not add a third.",
-        "Reconstruction reads each plugin's content pointer through a catch that yields null, so a transient read failure is indistinguishable from 'never installed' and the truncated lock is written back. The recovery design is sound; its failure classification is not."
+        "An earlier revision of this contract claimed a transient pointer-read failure drops a plugin from the reconstructed lock. That was wrong and is retracted: recoverPluginLockfile seeds from the existing lock and only ever assigns, so the failure path preserves the entry, and the write is gated on recovered.changed. The authoritative record is the immutable per-hash provenance file the lock is rebuilt from, and the lock is not on the consent or activation path."
       ]
     },
     {

@@ -12,9 +12,7 @@ src/main/ai-vault/session-parse-cache-persistence.ts
 src/main/amp/hook-service.ts
 src/main/artifacts/artifact-create-intent-store.ts
 src/main/cli/wsl-cli-installer.ts
-src/main/codex-accounts/fs-utils.ts
 src/main/codex/codex-pane-account-registry.ts
-src/main/codex/config-toml-trust.ts
 src/main/crash-reporting/crash-report-store.ts
 src/main/hermes/hermes-home-filesystem.ts
 src/main/ipc/pet-bundle-import.ts
