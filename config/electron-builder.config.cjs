@@ -326,10 +326,10 @@ module.exports = {
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
-    // Why: on a real uninstall, stop and remove the relocated terminal daemon
-    // (which lives outside the install dir under LOCALAPPDATA by design). Guarded
-    // by ${isUpdated} inside so it never runs during an update's uninstallOldVersion.
-    include: resolve(__dirname, 'nsis', 'daemon-host-uninstall.nsh')
+    // Why one aggregate file: electron-builder takes a single include, so this pulls in each
+    // hook's own named file — the daemon cleanup on a real uninstall (guarded by ${isUpdated}
+    // so it never runs during an update), and the Git check on install.
+    include: resolve(__dirname, 'nsis', 'orca-installer-hooks.nsh')
   },
   mac: {
     icon: 'resources/build/icon.icns',
