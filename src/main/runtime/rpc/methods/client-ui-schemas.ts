@@ -231,6 +231,8 @@ const UiUpdateFields = z
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     sidePanelDock: z.enum(['left', 'right']).optional(),
+    activityBarPosition: z.enum(['top', 'side']).optional(),
+    recentProjectIds: z.array(z.string()).optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
     dismissedUpdateVersion: NullableString.optional(),

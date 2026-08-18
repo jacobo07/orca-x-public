@@ -8,6 +8,7 @@ import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
 import type { CustomPet } from './pet-types'
 import type {
+  ActivityBarPosition,
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
@@ -36,6 +37,10 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   /** Window edge the Explorer/Search/Source Control panel docks to; absent = 'left' (Cursor parity). */
   sidePanelDock?: SidePanelDock
+  /** Activity icon strip placement; absent = 'side', which puts it on the window edge like VS Code/Cursor. */
+  activityBarPosition?: ActivityBarPosition
+  /** Project ids most-recently-opened first, capped; drives the launcher's Recent projects list. */
+  recentProjectIds?: string[]
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'

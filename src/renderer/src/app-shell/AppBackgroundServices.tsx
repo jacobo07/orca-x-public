@@ -6,6 +6,7 @@ import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGa
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
 import { useAppStore } from '../store'
+import { RecentProjectTrackingGate } from './RecentProjectTrackingGate'
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
 
@@ -27,6 +28,7 @@ export function AppBackgroundServices(): React.JSX.Element {
       {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
       <RetainedAgentsSyncGate />
       <AiVaultTabTitleSyncGate />
+      <RecentProjectTrackingGate />
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>
           <DashboardPopoutBridge />

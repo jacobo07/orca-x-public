@@ -99,6 +99,9 @@ export type RightSidebarExplorerView = 'files' | 'search'
 /** Which window edge the Explorer/Search/Source Control panel docks to. 'left' matches VS Code/Cursor. */
 export type SidePanelDock = 'left' | 'right'
 
+/** Where the panel's activity icons sit: a horizontal strip in its header, or a vertical strip on the window edge. */
+export type ActivityBarPosition = 'top' | 'side'
+
 export type ProjectOrderBy = 'manual' | 'recent'
 export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null

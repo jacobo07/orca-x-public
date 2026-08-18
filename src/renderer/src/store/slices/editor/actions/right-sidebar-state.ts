@@ -37,7 +37,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarRouteRequestId: 0,
     rightSidebarTabByWorktree: {},
     rightSidebarExplorerViewByWorktree: {},
-    activityBarPosition: 'top',
+    activityBarPosition: 'side',
     toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
     setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
@@ -124,6 +124,11 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
           }
         }
       }),
-    setActivityBarPosition: (position) => set({ activityBarPosition: position })
+    // Why persist here rather than through the debounced UI writer: that writer mirrors ui-slice
+    // fields only, which is how this preference silently reset to 'top' on every launch.
+    setActivityBarPosition: (position) => {
+      window.api.ui.set({ activityBarPosition: position }).catch(console.error)
+      set({ activityBarPosition: position })
+    }
   }
 }

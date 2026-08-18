@@ -2,6 +2,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar-route'
+import { withProjectOpened } from '../../lib/recent-project-order'
 import {
   findPrevLiveNonTaskStackHistoryIndex,
   findPrevLiveWorktreeHistoryIndex
@@ -15,6 +16,7 @@ import type { CustomPet } from '../../../../shared/pet-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
+  ActivityBarPosition,
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
@@ -939,6 +941,8 @@ export type UISlice = {
   setStatusBarVisible: (v: boolean) => void
   sidePanelDock: SidePanelDock
   setSidePanelDock: (dock: SidePanelDock) => void
+  recentProjectIds: string[]
+  noteProjectOpened: (repoId: string) => void
   usagePercentageDisplay: UsagePercentageDisplay
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
@@ -2257,6 +2261,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ sidePanelDock: dock }).catch(console.error)
     set({ sidePanelDock: dock })
   },
+  recentProjectIds: [],
+  noteProjectOpened: (repoId) =>
+    set((s) => {
+      const next = withProjectOpened(s.recentProjectIds, repoId)
+      // Why the identity check: the tracker fires on every activation, so re-opening the project
+      // already at the front must not schedule a durable write that changes nothing.
+      if (next.length === s.recentProjectIds.length && next[0] === s.recentProjectIds[0]) {
+        return {}
+      }
+      window.api.ui.set({ recentProjectIds: next }).catch(console.error)
+      return { recentProjectIds: next }
+    }),
   usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   setUsagePercentageDisplay: (display) => {
     const normalized = normalizeUsagePercentageDisplay(display)
@@ -2559,6 +2575,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent means a profile that predates the dock setting — land on 'left' so the panel matches VS Code/Cursor rather than staying wherever it historically was.
         sidePanelDock: (ui.sidePanelDock === 'right' ? 'right' : 'left') as SidePanelDock,
+        // Why: this used to live only in the editor slice, so it silently reset to 'top' every launch.
+        activityBarPosition: (ui.activityBarPosition === 'top'
+          ? 'top'
+          : 'side') as ActivityBarPosition,
+        recentProjectIds: Array.isArray(ui.recentProjectIds) ? [...ui.recentProjectIds] : [],
         usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.

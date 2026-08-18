@@ -16,6 +16,7 @@ import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
+import { LandingRecentProjects } from './landing-recent-projects'
 
 type ShortcutItem = {
   id: string
@@ -307,18 +308,24 @@ export default function Landing(): React.JSX.Element {
             </button>
           </div>
 
-          <div className="mt-6 w-full max-w-xs space-y-2">
-            {shortcuts.map((shortcut) => (
-              <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
-                <span className="text-sm text-muted-foreground">{shortcut.action}</span>
-                <ShortcutKeyCombo
-                  keys={shortcut.shortcut.keys}
-                  doubleTap={shortcut.shortcut.doubleTap}
-                  separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
-                />
-              </div>
-            ))}
-          </div>
+          <LandingRecentProjects />
+
+          {/* Why only with no projects: once the launcher can show real recents, they are the more
+              useful thing to occupy this slot — the shortcut hints are onboarding, not navigation. */}
+          {repos.length === 0 && (
+            <div className="mt-6 w-full max-w-xs space-y-2">
+              {shortcuts.map((shortcut) => (
+                <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
+                  <span className="text-sm text-muted-foreground">{shortcut.action}</span>
+                  <ShortcutKeyCombo
+                    keys={shortcut.shortcut.keys}
+                    doubleTap={shortcut.shortcut.doubleTap}
+                    separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

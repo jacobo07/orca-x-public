@@ -503,6 +503,8 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     sidePanelDock: 'left',
+    activityBarPosition: 'side',
+    recentProjectIds: [],
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     dismissedUpdateVersion: null,

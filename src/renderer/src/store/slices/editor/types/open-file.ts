@@ -147,7 +147,7 @@ export type OpenFile = {
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
-export type ActivityBarPosition = 'top' | 'side'
+export type { ActivityBarPosition } from '../../../../../../shared/ui-chrome-types'
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 

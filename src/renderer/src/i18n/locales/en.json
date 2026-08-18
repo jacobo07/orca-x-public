@@ -15733,6 +15733,11 @@
           "updating": "Updating…",
           "update": "Update shared content"
         }
+      },
+      "landingRecentProjects": {
+        "heading": "Recent projects",
+        "showFewer": "Show fewer",
+        "viewAll": "View all ({{count}})"
       }
     },
     "i18n": {
