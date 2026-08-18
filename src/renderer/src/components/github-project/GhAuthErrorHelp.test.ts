@@ -5,7 +5,8 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-import { buildRemediation, reloadOrcaRenderer } from './GhAuthErrorHelp'
+import { reloadOrcaRenderer } from './GhAuthErrorHelp'
+import { buildRemediation } from './gh-auth-remediation'
 
 afterEach(() => {
   vi.restoreAllMocks()
