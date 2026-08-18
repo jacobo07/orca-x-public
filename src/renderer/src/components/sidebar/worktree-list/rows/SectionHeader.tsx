@@ -33,7 +33,7 @@ import {
   RepoHeaderProjectActionsMenu,
   type RepoHeaderProjectActions
 } from './repo-header-project-actions'
-import { RepoHeaderLaunchButton } from './repo-header-launch-button'
+import { ProjectLaunchIconSlot } from './project-launch-icon-button'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
   shouldIgnoreRepoHeaderToggle
@@ -158,6 +158,8 @@ export function renderWorktreeSectionHeaderRow(args: {
     row.projectGroup.parentPath
       ? row.projectGroup
       : null
+  // Projects launch at their own path; a folder-backed group launches at the folder it scans.
+  const rowLaunchPath = row.repo?.path ?? folderBackedProjectGroup?.parentPath ?? null
   const projectGroupPathStatus = folderBackedProjectGroup
     ? ctx.getCachedFolderWorkspacePathStatus({
         scope: 'project-group',
@@ -302,7 +304,10 @@ export function renderWorktreeSectionHeaderRow(args: {
           )}
         >
           {row.icon ? (
-            <div
+            <ProjectLaunchIconSlot
+              launchPath={rowLaunchPath}
+              connectionId={row.repo?.connectionId}
+              label={row.label}
               className={cn(
                 'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
                 repoHeaderColor ? 'text-muted-foreground' : row.tone
@@ -318,7 +323,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               ) : (
                 <row.icon className="size-3" />
               )}
-            </div>
+            </ProjectLaunchIconSlot>
           ) : null}
 
           <div className="min-w-0 flex-1">
@@ -377,11 +382,6 @@ export function renderWorktreeSectionHeaderRow(args: {
               projectGroups={ctx.projectGroups}
               actions={ctx.projectActions}
             />
-          ) : null}
-
-          {/* Leading the actions so the most-used control sits furthest from the destructive menu. */}
-          {row.repo && ctx.groupBy === 'repo' ? (
-            <RepoHeaderLaunchButton repo={row.repo} label={row.label} />
           ) : null}
 
           {row.repo && ctx.groupBy === 'repo' ? (
