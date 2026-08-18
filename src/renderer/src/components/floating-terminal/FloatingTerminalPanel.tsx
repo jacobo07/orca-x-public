@@ -74,7 +74,11 @@ import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import { createTerminalPaneHandleRegistry } from './terminal-pane-handle-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { resolveFloatingWorkspaceDockGeometry } from '../../../../shared/floating-workspace-dock'
+import {
+  DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT,
+  resolveFloatingWorkspaceDockGeometry,
+  resolveMaxBottomDockHeight
+} from '../../../../shared/floating-workspace-dock'
 import { BOTTOM_DOCK_VIEWPORT_VARS } from '@/app-shell/bottom-dock-viewport-vars'
 import {
   keybindingMatchesAction,
@@ -275,6 +279,12 @@ export function FloatingTerminalPanel({
     useAppStore((s) => s.floatingWorkspaceDock)
   )
   const docked = dockGeometry.anchorsFullWidth
+  const bottomDockHeight = useAppStore((s) => s.floatingWorkspaceBottomHeight)
+  const setBottomDockHeight = useAppStore((s) => s.setFloatingWorkspaceBottomHeight)
+  // Maximize means something different once docked: the panel's rect comes from the reserved slot,
+  // so the floating maximize would move a rect nothing reads and leave the button visibly dead.
+  const [dockMaximized, setDockMaximized] = useState(false)
+  const dockRestoreHeightRef = useRef<number | null>(null)
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
   const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
@@ -1771,12 +1781,29 @@ export function FloatingTerminalPanel({
     dragRef.current = null
   }
 
+  // Docked: grow to the tallest the viewport allows and back, remembering the height it came from.
+  const toggleDockMaximized = useCallback((): void => {
+    if (dockMaximized) {
+      setBottomDockHeight(dockRestoreHeightRef.current ?? DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT)
+      dockRestoreHeightRef.current = null
+      setDockMaximized(false)
+      return
+    }
+    dockRestoreHeightRef.current = bottomDockHeight
+    setBottomDockHeight(
+      resolveMaxBottomDockHeight(typeof window === 'undefined' ? null : window.innerHeight)
+    )
+    setDockMaximized(true)
+  }, [bottomDockHeight, dockMaximized, setBottomDockHeight])
+
+  const toggleMaximizedForCurrentDock = docked ? toggleDockMaximized : toggleMaximized
+
   const handleTitlebarDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
     if (event.button !== 0 || !isFloatingTerminalDragTarget(event.target)) {
       return
     }
     event.preventDefault()
-    toggleMaximized()
+    toggleMaximizedForCurrentDock()
   }
 
   const dismissOrchestrationSetup = useCallback(() => {
@@ -1911,8 +1938,8 @@ export function FloatingTerminalPanel({
             />
           </div>
           <FloatingTerminalWindowControls
-            maximized={maximized}
-            onToggleMaximized={toggleMaximized}
+            maximized={docked ? dockMaximized : maximized}
+            onToggleMaximized={toggleMaximizedForCurrentDock}
             onMinimize={() => onOpenChange(false)}
           />
         </div>

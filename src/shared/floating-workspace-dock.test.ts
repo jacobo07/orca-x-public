@@ -4,7 +4,8 @@ import {
   MAX_FLOATING_WORKSPACE_BOTTOM_HEIGHT_RATIO,
   MIN_FLOATING_WORKSPACE_BOTTOM_HEIGHT,
   clampFloatingWorkspaceBottomHeight,
-  resolveFloatingWorkspaceDockGeometry
+  resolveFloatingWorkspaceDockGeometry,
+  resolveMaxBottomDockHeight
 } from './floating-workspace-dock'
 
 describe('resolveFloatingWorkspaceDockGeometry', () => {
@@ -76,5 +77,31 @@ describe('clampFloatingWorkspaceBottomHeight', () => {
     expect(clampFloatingWorkspaceBottomHeight(Number.NaN, 1000)).toBe(
       DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT
     )
+  })
+})
+
+describe('resolveMaxBottomDockHeight', () => {
+  it('is the viewport share', () => {
+    expect(resolveMaxBottomDockHeight(1000)).toBe(1000 * MAX_FLOATING_WORKSPACE_BOTTOM_HEIGHT_RATIO)
+  })
+
+  // Maximizing must never make the panel smaller, which is what the bare ratio does once the
+  // window is short enough that 80% of it falls under the floor.
+  it('never returns less than the usable floor', () => {
+    expect(resolveMaxBottomDockHeight(100)).toBe(MIN_FLOATING_WORKSPACE_BOTTOM_HEIGHT)
+  })
+
+  it('falls back to the default when the viewport is not measurable', () => {
+    expect(resolveMaxBottomDockHeight(null)).toBe(DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT)
+    expect(resolveMaxBottomDockHeight(Number.NaN)).toBe(DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT)
+  })
+
+  // The pair has to agree: a maximize target the clamp would then reject means pressing maximize
+  // stores one height and reads back another.
+  it('produces a height the clamp accepts unchanged', () => {
+    for (const viewport of [100, 400, 1000, 2400]) {
+      const target = resolveMaxBottomDockHeight(viewport)
+      expect(clampFloatingWorkspaceBottomHeight(target, viewport)).toBe(target)
+    }
   })
 })

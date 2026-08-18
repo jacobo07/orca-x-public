@@ -14,6 +14,23 @@ export const MIN_FLOATING_WORKSPACE_BOTTOM_HEIGHT = 120
 export const MAX_FLOATING_WORKSPACE_BOTTOM_HEIGHT_RATIO = 0.8
 
 /**
+ * Tallest the dock may get in a given viewport — what "maximize" means while docked.
+ *
+ * Never below the floor: on a short window the ratio alone would return a target smaller than the
+ * minimum, so maximizing would shrink the panel. Sharing the floor with the clamp also keeps
+ * "already maximized" decidable, since the two can never disagree about the ceiling.
+ */
+export function resolveMaxBottomDockHeight(viewportHeight: number | null | undefined): number {
+  if (!Number.isFinite(viewportHeight) || (viewportHeight ?? 0) <= 0) {
+    return DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT
+  }
+  return Math.max(
+    MIN_FLOATING_WORKSPACE_BOTTOM_HEIGHT,
+    (viewportHeight as number) * MAX_FLOATING_WORKSPACE_BOTTOM_HEIGHT_RATIO
+  )
+}
+
+/**
  * The decisions that must agree between the panel (which draws itself) and the shell (which
  * reserves room for it). Both read this one function so a change to either side cannot silently
  * leave the other behind — the failure mode would be a panel covering content it claims to reflow.
