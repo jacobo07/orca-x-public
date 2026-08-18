@@ -1,5 +1,18 @@
 export const TOGGLE_FLOATING_TERMINAL_EVENT = 'orca-toggle-floating-terminal'
 
+/**
+ * Idempotent open, distinct from the toggle above.
+ *
+ * Why both: a caller that is putting something *into* the panel — the project launch button spawns
+ * a terminal there — must not close it when it already happens to be open. Toggling would hide the
+ * terminal it just created, in the one case the user most wants to see it.
+ */
+export const OPEN_FLOATING_TERMINAL_EVENT = 'orca-open-floating-terminal'
+
+export function requestFloatingTerminalOpen(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_FLOATING_TERMINAL_EVENT))
+}
+
 // Why: maximize/restore lives in the panel's own keydown handler, but that
 // handler is unmounted while the panel is closed. When Cmd+Opt+Shift+A is
 // pressed with the panel closed, App opens it and records a one-shot intent

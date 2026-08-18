@@ -5926,6 +5926,11 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "repoHeaderLaunchButton": {
+          "label": "Run {{command}} in {{project}}",
+          "workspaceDisabled": "Turn the floating workspace on in Settings to run project commands.",
+          "unsupported": "This project has no local folder to run {{command}} in."
         }
       },
       "shared": {

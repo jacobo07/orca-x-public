@@ -33,6 +33,7 @@ import {
   RepoHeaderProjectActionsMenu,
   type RepoHeaderProjectActions
 } from './repo-header-project-actions'
+import { RepoHeaderLaunchButton } from './repo-header-launch-button'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
   shouldIgnoreRepoHeaderToggle
@@ -376,6 +377,11 @@ export function renderWorktreeSectionHeaderRow(args: {
               projectGroups={ctx.projectGroups}
               actions={ctx.projectActions}
             />
+          ) : null}
+
+          {/* Leading the actions so the most-used control sits furthest from the destructive menu. */}
+          {row.repo && ctx.groupBy === 'repo' ? (
+            <RepoHeaderLaunchButton repo={row.repo} label={row.label} />
           ) : null}
 
           {row.repo && ctx.groupBy === 'repo' ? (
