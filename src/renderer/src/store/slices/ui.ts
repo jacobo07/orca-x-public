@@ -15,9 +15,14 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import type { CustomPet } from '../../../../shared/pet-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import {
+  DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT,
+  clampFloatingWorkspaceBottomHeight
+} from '../../../../shared/floating-workspace-dock'
 import type {
   ActivityBarPosition,
   AgentActivityDisplayMode,
+  FloatingWorkspaceDock,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   SidePanelDock,
@@ -249,6 +254,15 @@ function clampPetSize(size: number): number {
     return PET_SIZE_DEFAULT
   }
   return Math.max(PET_SIZE_MIN, Math.min(PET_SIZE_MAX, Math.round(size)))
+}
+
+// Measured at call time, not captured: the window can be resized between a stored height being
+// written and the next drag, and a stale viewport would clamp against a size that no longer exists.
+function clampLiveBottomDockHeight(height: number): number {
+  return clampFloatingWorkspaceBottomHeight(
+    height,
+    typeof window === 'undefined' ? null : window.innerHeight
+  )
 }
 
 // Why: local copy of TaskPage's preset→query mapping avoids a store ↔ lib circular import while warming the exact cache key.
@@ -941,6 +955,13 @@ export type UISlice = {
   setStatusBarVisible: (v: boolean) => void
   sidePanelDock: SidePanelDock
   setSidePanelDock: (dock: SidePanelDock) => void
+  floatingWorkspaceDock: FloatingWorkspaceDock
+  setFloatingWorkspaceDock: (dock: FloatingWorkspaceDock) => void
+  floatingWorkspaceBottomHeight: number
+  /** In-drag update: clamps and re-renders without touching disk. */
+  previewFloatingWorkspaceBottomHeight: (height: number) => void
+  /** Drag release: clamps, re-renders and persists. */
+  setFloatingWorkspaceBottomHeight: (height: number) => void
   recentProjectIds: string[]
   noteProjectOpened: (repoId: string) => void
   usagePercentageDisplay: UsagePercentageDisplay
@@ -2261,6 +2282,21 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ sidePanelDock: dock }).catch(console.error)
     set({ sidePanelDock: dock })
   },
+  floatingWorkspaceDock: 'floating',
+  setFloatingWorkspaceDock: (dock) => {
+    window.api.ui.set({ floatingWorkspaceDock: dock }).catch(console.error)
+    set({ floatingWorkspaceDock: dock })
+  },
+  floatingWorkspaceBottomHeight: DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT,
+  previewFloatingWorkspaceBottomHeight: (height) =>
+    set({ floatingWorkspaceBottomHeight: clampLiveBottomDockHeight(height) }),
+  setFloatingWorkspaceBottomHeight: (height) => {
+    // Clamped before it is stored, so a drag past the cap persists the height the user can
+    // actually see rather than one that reads back different next launch.
+    const clamped = clampLiveBottomDockHeight(height)
+    window.api.ui.set({ floatingWorkspaceBottomHeight: clamped }).catch(console.error)
+    set({ floatingWorkspaceBottomHeight: clamped })
+  },
   recentProjectIds: [],
   noteProjectOpened: (repoId) =>
     set((s) => {
@@ -2580,6 +2616,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           ? 'top'
           : 'side') as ActivityBarPosition,
         recentProjectIds: Array.isArray(ui.recentProjectIds) ? [...ui.recentProjectIds] : [],
+        // Why 'floating' on absent: a profile that predates the dock keeps the panel exactly where
+        // its owner left it. Defaulting to 'bottom' would relocate a surface they never asked to move.
+        floatingWorkspaceDock: (ui.floatingWorkspaceDock === 'bottom'
+          ? 'bottom'
+          : 'floating') as FloatingWorkspaceDock,
+        // Viewport deliberately null: hydration can run before layout settles, and clamping against
+        // an unsettled window would bake a shrunken height into the store. The panel clamps on use.
+        floatingWorkspaceBottomHeight: clampFloatingWorkspaceBottomHeight(
+          ui.floatingWorkspaceBottomHeight ?? DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT,
+          null
+        ),
         usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.

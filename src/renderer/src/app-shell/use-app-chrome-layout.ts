@@ -26,6 +26,8 @@ export function useAppChromeLayout() {
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const sidePanelDock = useAppStore((s) => s.sidePanelDock)
+  const floatingWorkspaceDock = useAppStore((s) => s.floatingWorkspaceDock)
+  const floatingWorkspaceBottomHeight = useAppStore((s) => s.floatingWorkspaceBottomHeight)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
@@ -135,6 +137,8 @@ export function useAppChromeLayout() {
     shouldMountTerminalWorkbench,
     showSidebar,
     sidePanelDock,
+    floatingWorkspaceDock,
+    floatingWorkspaceBottomHeight,
     // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
     showRightSidebarControls: !creationLayoutActive && canShowRightSidebarForView(activeView),
     showTitlebarAppName: settings?.showTitlebarAppName !== false,

@@ -74,6 +74,8 @@ import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import { createTerminalPaneHandleRegistry } from './terminal-pane-handle-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { resolveFloatingWorkspaceDockGeometry } from '../../../../shared/floating-workspace-dock'
+import { BOTTOM_DOCK_VIEWPORT_VARS } from '@/app-shell/bottom-dock-viewport-vars'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -89,6 +91,7 @@ import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-w
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { BottomDockResizeHandle } from './BottomDockResizeHandle'
 import { FloatingBrowserSlot } from './FloatingBrowserSlot'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
@@ -268,6 +271,10 @@ export function FloatingTerminalPanel({
   const openFile = useAppStore((s) => s.openFile)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '')
+  const dockGeometry = resolveFloatingWorkspaceDockGeometry(
+    useAppStore((s) => s.floatingWorkspaceDock)
+  )
+  const docked = dockGeometry.anchorsFullWidth
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
   const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
@@ -1790,16 +1797,38 @@ export function FloatingTerminalPanel({
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
-      style={{
-        visibility: open ? 'visible' : 'hidden',
-        left: bounds.left,
-        top: bounds.top,
-        width: bounds.width,
-        height: bounds.height
-      }}
+      className={`fixed z-[45] flex bg-transparent text-card-foreground outline-none ${
+        docked
+          ? // Flush against the content it displaced: no rounding, no lift shadow, and none of the
+            // floating minimums — the reserved slot governs the size, and a 280px floor would push
+            // the panel past the slot and back over the editor it just made room beside.
+            'border-t border-border'
+          : 'min-h-[280px] min-w-[420px] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)]'
+      } ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      style={
+        docked
+          ? {
+              visibility: open ? 'visible' : 'hidden',
+              // Falls back to the floating rect rather than to zero: before the slot has measured
+              // itself these variables are unset, and collapsing to nothing would flash an empty
+              // panel. A stale-but-real rect is the safer of the two wrong answers.
+              left: `var(${BOTTOM_DOCK_VIEWPORT_VARS.left}, ${bounds.left}px)`,
+              top: `var(${BOTTOM_DOCK_VIEWPORT_VARS.top}, ${bounds.top}px)`,
+              width: `var(${BOTTOM_DOCK_VIEWPORT_VARS.width}, ${bounds.width}px)`,
+              height: `var(${BOTTOM_DOCK_VIEWPORT_VARS.height}, ${bounds.height}px)`
+            }
+          : {
+              visibility: open ? 'visible' : 'hidden',
+              left: bounds.left,
+              top: bounds.top,
+              width: bounds.width,
+              height: bounds.height
+            }
+      }
       onMouseUp={(event) => {
-        if (maximized || !stagedBoundsRef.current) {
+        // Docked excluded: the measured rect is the slot's, so committing it would overwrite the
+        // floating size with the dock's and hand the user a different panel when they undock.
+        if (docked || maximized || !stagedBoundsRef.current) {
           return
         }
         const rect = event.currentTarget.getBoundingClientRect()
@@ -1815,12 +1844,18 @@ export function FloatingTerminalPanel({
       }}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
-      <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
+      <div
+        className={`relative flex h-full w-full min-h-0 flex-col overflow-hidden bg-card ${
+          docked ? '' : 'rounded-lg border border-black/14 dark:border-white/14'
+        }`}
+      >
         <div
-          className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
+          className={`flex h-9 shrink-0 items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] ${
+            dockGeometry.movable ? 'cursor-grab active:cursor-grabbing' : ''
+          }`}
           data-floating-terminal-shortcut-surface
-          onPointerDown={handleDragStart}
-          onPointerMove={handleDragMove}
+          onPointerDown={dockGeometry.movable ? handleDragStart : undefined}
+          onPointerMove={dockGeometry.movable ? handleDragMove : undefined}
           onPointerUp={handleDragEnd}
           onPointerCancel={handleDragEnd}
           onDoubleClick={handleTitlebarDoubleClick}
@@ -2045,13 +2080,17 @@ export function FloatingTerminalPanel({
           </div>
         </div>
       ) : null}
-      {!maximized && (
+      {/* Docked, the panel has three edges it cannot leave, so the four-way handles are replaced
+          by a single top edge that drives the reserved slot's height. */}
+      {docked ? (
+        <BottomDockResizeHandle />
+      ) : !maximized ? (
         <FloatingTerminalResizeHandles
           bounds={bounds}
           onPreviewBounds={previewUserBounds}
           onCommitBounds={commitUserBounds}
         />
-      )}
+      ) : null}
       <FloatingTerminalOrchestrationDialog
         open={orchestrationDialogOpen}
         onOpenChange={setOrchestrationDialogOpen}

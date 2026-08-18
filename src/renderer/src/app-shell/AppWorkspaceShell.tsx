@@ -7,6 +7,7 @@ import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/R
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
+import { BottomDockSlot } from './BottomDockSlot'
 import { TitlebarLeftControls } from './TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
 import type { AppChromeLayout } from './use-app-chrome-layout'
@@ -100,6 +101,10 @@ export function AppWorkspaceShell(props: {
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
   const dockedLeft = layout.sidePanelDock === 'left'
+  // Gated on visibly open, not on mounted: the panel stays mounted while closed to keep hidden
+  // panes alive, and reserving space for an invisible panel would leave a dead band under the editor.
+  const dockedBottomWorkspace =
+    layout.floatingWorkspaceDock === 'bottom' && floatingWorkspace.enabled && floatingWorkspace.open
 
   // Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view.
   const sidePanel = layout.showRightSidebarControls ? (
@@ -234,6 +239,10 @@ export function AppWorkspaceShell(props: {
                       <ActivePage layout={layout} />
                     </RecoverableRenderErrorBoundary>
                   </Suspense>
+                  {/* Why last in the column: the slot's measured rect is what the docked panel positions onto, so it has to sit exactly where the panel should appear. */}
+                  {dockedBottomWorkspace ? (
+                    <BottomDockSlot height={layout.floatingWorkspaceBottomHeight} />
+                  ) : null}
                 </div>
                 {floatingWorkspace.showToggleButton ? (
                   <FloatingTerminalToggleButton

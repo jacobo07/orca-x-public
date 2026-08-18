@@ -21,6 +21,7 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { FloatingWorkspaceDockSetting } from './FloatingWorkspaceDockSetting'
 import { SidePanelDockSetting } from './SidePanelDockSetting'
 import {
   getLeftSidebarAppearanceEntry,
@@ -126,6 +127,8 @@ export function AppearanceWindowSidebarSection({
         </SearchableSetting>
 
         <SidePanelDockSetting forceVisible={forceVisiblePrimary} />
+
+        <FloatingWorkspaceDockSetting forceVisible={forceVisiblePrimary} />
 
         <SearchableSetting
           title={statusBarTitle}

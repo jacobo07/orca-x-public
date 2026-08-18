@@ -8701,6 +8701,10 @@
             "sidePanelDock": {
               "title": "Side Panel Position",
               "description": "Dock the Explorer, Search and Source Control panel to the left or right edge."
+            },
+            "floatingWorkspaceDock": {
+              "title": "Workspace Panel Position",
+              "description": "Keep the terminal workspace floating over the editor, or dock it along the bottom edge so the editor makes room for it."
             }
           }
         },
@@ -11259,6 +11263,10 @@
         "SidePanelDockSetting": {
           "left": "Left",
           "right": "Right"
+        },
+        "FloatingWorkspaceDockSetting": {
+          "floating": "Floating",
+          "bottom": "Bottom"
         }
       },
       "right": {

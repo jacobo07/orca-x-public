@@ -75,6 +75,41 @@ export const getSidePanelDockEntry = createLocalizedCatalog(
   })
 )
 
+export const getFloatingWorkspaceDockEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.appearance.search.floatingWorkspaceDock.title',
+      'Workspace Panel Position'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.floatingWorkspaceDock.description',
+      'Keep the terminal workspace floating over the editor, or dock it along the bottom edge so the editor makes room for it.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.floatingWorkspaceDock.terminal',
+        'terminal'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.floatingWorkspaceDock.panel',
+        'panel'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.floatingWorkspaceDock.bottom',
+        'bottom'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.floatingWorkspaceDock.floating',
+        'floating'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.floatingWorkspaceDock.dock',
+        'dock'
+      )
+    ]
+  })
+)
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
@@ -234,5 +269,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
   getSidePanelDockEntry(),
+  getFloatingWorkspaceDockEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])
