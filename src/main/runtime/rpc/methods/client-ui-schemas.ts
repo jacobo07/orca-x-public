@@ -233,6 +233,9 @@ const UiUpdateFields = z
     sidePanelDock: z.enum(['left', 'right']).optional(),
     activityBarPosition: z.enum(['top', 'side']).optional(),
     recentProjectIds: z.array(z.string()).optional(),
+    floatingWorkspaceDock: z.enum(['floating', 'bottom']).optional(),
+    // Finite guard, not a range: the clamp is viewport-relative and lives in shared/floating-workspace-dock.
+    floatingWorkspaceBottomHeight: z.number().finite().positive().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
     dismissedUpdateVersion: NullableString.optional(),

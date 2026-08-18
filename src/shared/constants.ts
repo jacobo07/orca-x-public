@@ -31,6 +31,7 @@ import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
+import { DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT } from './floating-workspace-dock'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -505,6 +506,8 @@ export function getDefaultUIState(): PersistedUIState {
     sidePanelDock: 'left',
     activityBarPosition: 'side',
     recentProjectIds: [],
+    floatingWorkspaceDock: 'floating',
+    floatingWorkspaceBottomHeight: DEFAULT_FLOATING_WORKSPACE_BOTTOM_HEIGHT,
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     dismissedUpdateVersion: null,

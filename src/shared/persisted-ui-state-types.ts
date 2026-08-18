@@ -10,6 +10,7 @@ import type { CustomPet } from './pet-types'
 import type {
   ActivityBarPosition,
   AgentActivityDisplayMode,
+  FloatingWorkspaceDock,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   RightSidebarExplorerView,
@@ -41,6 +42,10 @@ export type PersistedUIState = {
   activityBarPosition?: ActivityBarPosition
   /** Project ids most-recently-opened first, capped; drives the launcher's Recent projects list. */
   recentProjectIds?: string[]
+  /** How the floating workspace is anchored; absent = 'floating', the pre-existing overlay behavior. */
+  floatingWorkspaceDock?: FloatingWorkspaceDock
+  /** Height in px of the bottom-docked workspace. Only meaningful while docked; the floating bounds stay separate so switching modes restores each one's own size. */
+  floatingWorkspaceBottomHeight?: number
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'

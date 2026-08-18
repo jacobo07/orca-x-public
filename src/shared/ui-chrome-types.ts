@@ -102,6 +102,16 @@ export type SidePanelDock = 'left' | 'right'
 /** Where the panel's activity icons sit: a horizontal strip in its header, or a vertical strip on the window edge. */
 export type ActivityBarPosition = 'top' | 'side'
 
+/**
+ * How the floating workspace is anchored. 'bottom' is the VS Code/Cursor panel arrangement:
+ * full width, pinned to the bottom edge, resized only from its top edge, with the content
+ * area reserving its height instead of being covered.
+ *
+ * Why a mode rather than a rewrite: the panel is mounted as a root-level overlay, so docking
+ * by relocating it in the tree would remount it and destroy every live pane inside.
+ */
+export type FloatingWorkspaceDock = 'floating' | 'bottom'
+
 export type ProjectOrderBy = 'manual' | 'recent'
 export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
