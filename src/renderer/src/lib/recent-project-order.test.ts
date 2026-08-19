@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   RECENT_PROJECTS_LIMIT,
+  filterProjectsByQuery,
   orderProjectsByRecency,
   withProjectOpened
 } from './recent-project-order'
@@ -52,5 +53,45 @@ describe('orderProjectsByRecency', () => {
     const projects = [project('a', 1), project('b', 2)]
     orderProjectsByRecency(projects, ['b'])
     expect(projects.map((entry) => entry.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('filterProjectsByQuery', () => {
+  const named = (displayName: string, path: string): { displayName: string; path: string } => ({
+    displayName,
+    path
+  })
+  const orca = named('Orca X', 'C:/Users/User/Desktop/Cursor Projects/Vibe Coding Projects/Orca X')
+  const titan = named('Titan Launcher', 'C:/Users/User/Desktop/Repos/titan')
+
+  it('returns every project for an empty or whitespace-only query', () => {
+    expect(filterProjectsByQuery([orca, titan], '')).toEqual([orca, titan])
+    expect(filterProjectsByQuery([orca, titan], '   ')).toEqual([orca, titan])
+  })
+
+  it('matches on the display name, ignoring case', () => {
+    expect(filterProjectsByQuery([orca, titan], 'TITAN')).toEqual([titan])
+  })
+
+  it('matches on the path, so two projects with the same name stay separable', () => {
+    const otherOrca = named('Orca X', 'D:/archive/Orca X')
+    expect(filterProjectsByQuery([orca, otherOrca], 'archive')).toEqual([otherOrca])
+  })
+
+  it('requires every term but accepts them in any order across both fields', () => {
+    // The reason terms are matched separately: "orca vibe" is how the list is actually searched,
+    // and those two words never appear adjacent in either the name or the path.
+    expect(filterProjectsByQuery([orca, titan], 'orca vibe')).toEqual([orca])
+    expect(filterProjectsByQuery([orca, titan], 'vibe orca')).toEqual([orca])
+  })
+
+  it('returns nothing when a term matches no project', () => {
+    expect(filterProjectsByQuery([orca, titan], 'orca nonexistent')).toEqual([])
+  })
+
+  it('does not mutate the input list', () => {
+    const projects = [orca, titan]
+    filterProjectsByQuery(projects, 'orca')
+    expect(projects).toEqual([orca, titan])
   })
 })

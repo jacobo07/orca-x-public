@@ -15782,6 +15782,17 @@
         "heading": "Recent projects",
         "showFewer": "Show fewer",
         "viewAll": "View all ({{count}})"
+      },
+      "workspaceLauncher": {
+        "logoAlt": "Orca logo",
+        "title": "Workspace",
+        "subtitle": "Open a project to start working in it.",
+        "subtitleEmpty": "Add a project to get started.",
+        "openProject": "Open project",
+        "createNeedsProject": "Add a project first",
+        "createWorkspace": "Create workspace",
+        "filterLabel": "Filter projects by name or path",
+        "noMatches": "No project matches “{{query}}”."
       }
     },
     "i18n": {
