@@ -4,8 +4,9 @@
  * main tab model while still keeping the DOM-mounted panes local. */
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
+import { FileText, Globe, Minus, PanelRight, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
@@ -117,9 +118,11 @@ import {
   type FloatingTerminalPanelCommittedBounds
 } from './floating-terminal-panel-bounds'
 import {
+  persistFloatingTerminalPanelInstanceListVisible,
   persistFloatingTerminalPanelMaximized,
   readPersistedFloatingTerminalPanelViewState
 } from './floating-terminal-panel-view-state'
+import { TerminalInstanceColumn } from './TerminalInstanceColumn'
 import { useSettledPanelViewport } from './use-settled-panel-viewport'
 import { shouldRestoreMaximizedPanelBounds } from './floating-terminal-panel-restore-geometry'
 import { translate } from '@/i18n/i18n'
@@ -285,6 +288,16 @@ export function FloatingTerminalPanel({
   // so the floating maximize would move a rect nothing reads and leave the button visibly dead.
   const [dockMaximized, setDockMaximized] = useState(false)
   const dockRestoreHeightRef = useRef<number | null>(null)
+  const [instanceListVisible, setInstanceListVisible] = useState(
+    () => readPersistedFloatingTerminalPanelViewState()?.instanceListVisible !== false
+  )
+  // Persist outside the updater: React may run an updater more than once, which would write the
+  // same preference twice — harmless here, but the rule exists because the next such call may not be.
+  const toggleInstanceList = useCallback(() => {
+    const next = !instanceListVisible
+    setInstanceListVisible(next)
+    persistFloatingTerminalPanelInstanceListVisible(next)
+  }, [instanceListVisible])
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
   const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
@@ -1937,6 +1950,23 @@ export function FloatingTerminalPanel({
               tabStripChrome="floating-panel"
             />
           </div>
+          {/* Shown only when the column has something to offer, so the control never appears
+              next to a panel where pressing it would change nothing visible. */}
+          {terminalItems.length > 1 ? (
+            <button
+              type="button"
+              data-floating-terminal-no-drag
+              aria-pressed={instanceListVisible}
+              className="mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+              aria-label={translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.toggleTerminalColumn',
+                'Toggle the terminals column'
+              )}
+              onClick={toggleInstanceList}
+            >
+              <PanelRight className={cn('size-3.5', instanceListVisible && 'text-foreground')} />
+            </button>
+          ) : null}
           <FloatingTerminalWindowControls
             maximized={docked ? dockMaximized : maximized}
             onToggleMaximized={toggleMaximizedForCurrentDock}
@@ -1944,6 +1974,9 @@ export function FloatingTerminalPanel({
           />
         </div>
 
+        {/* Row wrapper so the instance column can sit beside the panes. The panes are absolutely
+            positioned against the surface below, so they cannot simply be padded aside. */}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
           className="relative min-h-0 flex-1 overflow-hidden bg-background"
           data-contextual-tour-target={
@@ -2056,6 +2089,24 @@ export function FloatingTerminalPanel({
               closeShortcut={closeShortcut}
             />
           ) : null}
+        </div>
+        {/* Only worth the width once there is more than one terminal to pick between. */}
+        {instanceListVisible && terminalItems.length > 1 ? (
+          <TerminalInstanceColumn
+            items={terminalItems.map((item) => ({
+              id: item.id,
+              title: item.title,
+              color: item.color
+            }))}
+            activeId={activeTerminalId}
+            // The same two handlers the horizontal strip passes for these same items: they resolve
+            // a terminal id to its unified tab, which is what activation and the pin-guarded close
+            // key on. Calling activateTab with a terminal id directly matches nothing.
+            onActivate={activateFloatingItem}
+            onClose={closeFloatingItemConfirmed}
+            onCreate={() => createFloatingTerminalTab()}
+          />
+        ) : null}
         </div>
       </div>
       {showOrchestrationSetup && activeTabType === 'terminal' ? (

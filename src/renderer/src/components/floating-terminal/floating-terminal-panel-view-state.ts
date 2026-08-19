@@ -4,6 +4,8 @@ export const FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY =
 export type FloatingTerminalPanelViewState = {
   open: boolean
   maximized: boolean
+  /** Whether the vertical terminal-instance column is shown along the panel's right edge. */
+  instanceListVisible: boolean
 }
 
 function getWindowStorage(): Storage | null {
@@ -35,7 +37,11 @@ export function readPersistedFloatingTerminalPanelViewState(): FloatingTerminalP
     // existed must still restore the half it does carry.
     return {
       open: record.open === true,
-      maximized: record.maximized === true
+      maximized: record.maximized === true,
+      // Read as "not explicitly off" rather than "explicitly on": every record written before
+      // this column existed lacks the field, and treating absent as off would hide the column
+      // for everyone who already had a panel — indistinguishable from it never having shipped.
+      instanceListVisible: record.instanceListVisible !== false
     }
   } catch {
     return null
@@ -55,12 +61,23 @@ export function persistFloatingTerminalPanelViewState(state: FloatingTerminalPan
 
 // Why field-scoped writers: `open` is owned by the app shell and `maximized` by the panel,
 // so a whole-record write from either side would clobber the other's flag.
-export function persistFloatingTerminalPanelOpen(open: boolean): void {
+function currentViewState(): FloatingTerminalPanelViewState {
   const current = readPersistedFloatingTerminalPanelViewState()
-  persistFloatingTerminalPanelViewState({ maximized: current?.maximized === true, open })
+  return {
+    open: current?.open === true,
+    maximized: current?.maximized === true,
+    instanceListVisible: current?.instanceListVisible !== false
+  }
+}
+
+export function persistFloatingTerminalPanelOpen(open: boolean): void {
+  persistFloatingTerminalPanelViewState({ ...currentViewState(), open })
 }
 
 export function persistFloatingTerminalPanelMaximized(maximized: boolean): void {
-  const current = readPersistedFloatingTerminalPanelViewState()
-  persistFloatingTerminalPanelViewState({ open: current?.open === true, maximized })
+  persistFloatingTerminalPanelViewState({ ...currentViewState(), maximized })
+}
+
+export function persistFloatingTerminalPanelInstanceListVisible(visible: boolean): void {
+  persistFloatingTerminalPanelViewState({ ...currentViewState(), instanceListVisible: visible })
 }

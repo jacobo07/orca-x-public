@@ -13352,7 +13352,8 @@
             "8b14ba6c17": "New Browser Tab",
             "b085fb58b5": "This file has unsaved changes.",
             "5ddc688c52": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
-            "25d7817f79": "terminal"
+            "25d7817f79": "terminal",
+            "toggleTerminalColumn": "Toggle the terminals column"
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Show floating workspace",
@@ -13370,6 +13371,12 @@
             "109870e023": "Maximize",
             "b5686fee1e": "Restore",
             "1e502f1284": "Open"
+          },
+          "TerminalInstanceColumn": {
+            "region": "Terminals",
+            "title": "Terminals",
+            "new": "New terminal",
+            "close": "Close {{title}}"
           }
         }
       },
