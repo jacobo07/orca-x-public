@@ -3,7 +3,7 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/e
 import {
   GLOBAL_WORKSPACE_SESSION_FIELDS,
   WORKSPACE_SESSION_FIELD_OWNERSHIP
-} from './workspace-session-host-field-ownership'
+} from '../../../shared/workspace-session-field-ownership'
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,
@@ -11,7 +11,7 @@ import {
   mergeWorkspaceSessionArrayField,
   mergeWorkspaceSessionRecordField,
   type WorkspaceSessionRecord
-} from './workspace-session-host-records'
+} from '../../../shared/workspace-session-records'
 
 /**
  * Split / merge the unified WorkspaceSessionState across per-host partitions.
@@ -22,9 +22,11 @@ import {
  * partition each worktree-scoped slice to its owning host, and on hydration it
  * must merge the per-host slices back into one.
  *
- * Field classification lives in FIELD_OWNERSHIP below and is checked for
- * exhaustiveness at compile time, mirroring SESSION_RELEVANT_FIELDS in
- * workspace-session.ts. The remote-workspace SSH projection
+ * Field classification lives in src/shared/workspace-session-field-ownership.ts
+ * and is checked for exhaustiveness at compile time, mirroring
+ * SESSION_RELEVANT_FIELDS in workspace-session.ts. It is shared rather than
+ * renderer-local because main partitions the same fields by owning window.
+ * The remote-workspace SSH projection
  * (src/shared/remote-workspace-session-projection.ts) enumerates the same
  * worktree/tab-scoped fields by worktree-path; the two surfaces are kept
  * deliberately aligned — when a new worktree-scoped field is added there it
