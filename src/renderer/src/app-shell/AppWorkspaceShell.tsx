@@ -10,6 +10,7 @@ import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAncho
 import { BottomDockSlot } from './BottomDockSlot'
 import { TitlebarLeftControls } from './TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
+import { WorkspaceProjectChrome } from './WorkspaceProjectChrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 
@@ -194,19 +195,33 @@ export function AppWorkspaceShell(props: {
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Why: match the side panel header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
-                {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
+                {layout.workspaceChromeActive && dockedLeft && !layout.rightSidebarOpen && (
+                  <div
+                    className="absolute top-0 left-0 z-10 flex items-center h-[36px]"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                  >
+                    {/* A left dock never meets the window-controls overlay, so the toggle hugs
+                        the content edge instead of the right chrome cluster. */}
+                    {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
+                  </div>
+                )}
+                {layout.workspaceChromeActive && (
                   <div
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
                       {
-                        // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div. A left dock never meets that overlay, so it hugs the content edge instead.
-                        left: dockedLeft ? 0 : undefined,
-                        right: dockedLeft ? undefined : 'var(--window-controls-width)',
+                        // Why: --window-controls-width keeps this cluster clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
+                        right: 'var(--window-controls-width)',
                         WebkitAppRegion: 'no-drag'
                       } as React.CSSProperties
                     }
                   >
-                    {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
+                    <WorkspaceProjectChrome />
+                    {/* Why: the open right sidebar renders its own close button, so hide this
+                        duplicate — the project chrome beside it has no such twin and stays. */}
+                    {layout.showRightSidebarControls && !layout.rightSidebarOpen && !dockedLeft ? (
+                      <RightSidebarToggle />
+                    ) : null}
                   </div>
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">
