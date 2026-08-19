@@ -3,15 +3,17 @@ import { join, delimiter } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import {
-  type BrowserWindow,
+  BrowserWindow,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   type WebContents,
   ipcMain,
   app,
-  powerMonitor
+  powerMonitor,
+  webContents
 } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
+import { createPtyRendererOwnership } from './pty-renderer-ownership'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
@@ -275,6 +277,24 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 // Why: the "recent user input" signal is PTY-scoped and must be cleared by every teardown path, incl. SSH/daemon shutdowns that skip the local exit listener.
 const lastInputAtByPty = new Map<string, number>()
 const interactiveOutputCharsByPty = new Map<string, number>()
+// Why module-level: ownership outlives any one registerPtyHandlers call, the same way the PTYs it
+// describes do. A recovery reload re-registers handlers; the terminals it re-homes are the same.
+const ptyRendererOwnership = createPtyRendererOwnership({
+  liveWindowForWebContentsId: (webContentsId) => {
+    const sender = webContents.fromId(webContentsId)
+    if (!sender || sender.isDestroyed()) {
+      return null
+    }
+    const window = BrowserWindow.fromWebContents(sender)
+    return window && !window.isDestroyed() ? window : null
+  }
+})
+
+/** Record which renderer owns a PTY's output. Exported for the window lifecycle to release on close. */
+export function releasePtyRendererOwnershipForWindow(webContentsId: number): string[] {
+  return ptyRendererOwnership.releaseWindow(webContentsId)
+}
+
 const activeRendererPtys = new Set<string>()
 const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
@@ -2387,6 +2407,12 @@ export function registerPtyHandlers(
   invalidatePendingPtyDrainPolicy = () => {}
   registerRendererLifecycleResetHandlers(mainWindow.webContents)
 
+  // Why: output belongs to the window that asked for the terminal, not to whichever window
+  // registered these handlers last. With one window the fallback is that same window, so this
+  // changes nothing until a second one exists.
+  const deliveryWindowFor = (ptyId: string): BrowserWindow =>
+    ptyRendererOwnership.ownerWindowFor(ptyId) ?? mainWindow
+
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
     if (connectionId) {
       return undefined
@@ -3120,7 +3146,7 @@ export function registerPtyHandlers(
     rendererInFlightTotalChars += charCount
     recordPtyRendererDeliveryPressure(id)
     try {
-      mainWindow.webContents.send('pty:data', payload)
+      deliveryWindowFor(id).webContents.send('pty:data', payload)
     } catch (error) {
       const current = rendererDeliveryAccountingByPty.get(id)
       if (current) {
@@ -3709,10 +3735,15 @@ export function registerPtyHandlers(
         schedulePendingDataAfterCreditReport(true)
       }
     }
-    mainWindow.webContents.send('pty:exit', {
+    deliveryWindowFor(payload.id).webContents.send('pty:exit', {
       ...payload,
       ...(reversibleStopOwnersByPtyId.has(payload.id) ? { preserveRendererBinding: true } : {})
     })
+    // Why after the send: the exit frame is the owner's last, and a reused id must not inherit
+    // the previous owner. A reversible stop keeps its binding, so it keeps its owner too.
+    if (!reversibleStopOwnersByPtyId.has(payload.id)) {
+      ptyRendererOwnership.release(payload.id)
+    }
   }
 
   function sendPtyExitToRenderer(payload: { id: string; code: number }): void {
@@ -3730,8 +3761,9 @@ export function registerPtyHandlers(
   }
 
   function sendPtySpawnedToRenderer(id: string): void {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('pty:spawned', { id })
+    const target = deliveryWindowFor(id)
+    if (!target.isDestroyed()) {
+      target.webContents.send('pty:spawned', { id })
     }
   }
 
@@ -4002,7 +4034,7 @@ export function registerPtyHandlers(
         ) {
           return
         }
-        mainWindow.webContents.send('pty:writeUnavailable', { id: payload.id })
+        deliveryWindowFor(payload.id).webContents.send('pty:writeUnavailable', { id: payload.id })
       }) ?? null
 
     // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
@@ -4163,7 +4195,7 @@ export function registerPtyHandlers(
       if (opts) {
         payload.opts = opts
       }
-      mainWindow.webContents.send('pty:serializeBuffer:request', payload)
+      deliveryWindowFor(ptyId).webContents.send('pty:serializeBuffer:request', payload)
     })
   }
 
@@ -5732,7 +5764,7 @@ export function registerPtyHandlers(
     },
     clearBuffer: async (ptyId) => {
       // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
-      mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+      deliveryWindowFor(ptyId).webContents.send('pty:clearBuffer:request', { ptyId })
       try {
         await getProviderForPty(ptyId).clearBuffer(ptyId)
       } catch {
@@ -5884,7 +5916,7 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:spawn',
     async (
-      _event,
+      spawnEvent,
       args: {
         cols: number
         rows: number
@@ -7041,6 +7073,17 @@ export function registerPtyHandlers(
             ? { agentResumeUnavailable: true as const }
             : {})
         }
+        // Why claimed here: the renderer that asked for this terminal is the one its output
+        // belongs to, and this is the first point where the pty id and the requester are both
+        // known. Claimed before the spawned frame so that frame already routes by owner.
+        //
+        // Why optional: not every spawn comes from a renderer. Main spawns terminals itself for
+        // background and runtime-owned work, and those arrive with no sender. An unclaimed PTY
+        // falls back to the primary window, which is exactly where it went before.
+        const spawnOwnerWebContentsId = spawnEvent?.sender?.id
+        if (typeof spawnOwnerWebContentsId === 'number') {
+          ptyRendererOwnership.claim(result.id, spawnOwnerWebContentsId)
+        }
         // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
         sendPtySpawnedToRenderer(result.id)
         if (!args.connectionId) {
@@ -7088,13 +7131,13 @@ export function registerPtyHandlers(
   const reportUnavailablePtyWrite = (id: string, error: unknown): void => {
     if (
       !isPtyWriteUnavailableError(error) ||
-      mainWindow.isDestroyed() ||
-      (typeof mainWindow.webContents.isDestroyed === 'function' &&
-        mainWindow.webContents.isDestroyed())
+      deliveryWindowFor(id).isDestroyed() ||
+      (typeof deliveryWindowFor(id).webContents.isDestroyed === 'function' &&
+        deliveryWindowFor(id).webContents.isDestroyed())
     ) {
       return
     }
-    mainWindow.webContents.send('pty:writeUnavailable', { id })
+    deliveryWindowFor(id).webContents.send('pty:writeUnavailable', { id })
   }
 
   const writePtyProviderInputWithinLimit = (
