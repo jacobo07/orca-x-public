@@ -1048,6 +1048,37 @@ html.native-shell .app-layout {
   color: var(--muted-foreground);
 }
 
+/* The application-menu strip: a text sibling of .titlebar-icon-button, sharing its
+   surface treatment so the titlebar reads as one row of controls. */
+.titlebar-menu-strip-button {
+  -webkit-app-region: no-drag;
+  background: none;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  border-radius: 4px;
+  transition: background 150ms;
+}
+
+.titlebar-menu-strip-button:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.titlebar-menu-strip-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.titlebar-menu-strip-button:disabled:hover {
+  background: none;
+  color: var(--muted-foreground);
+}
+
 .editor-header {
   display: flex;
   align-items: center;

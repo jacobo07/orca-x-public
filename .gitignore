@@ -21,6 +21,7 @@ node_modules/
 # Build output
 dist/
 dist-electron/
+dist-release/
 out/
 /build/
 release/

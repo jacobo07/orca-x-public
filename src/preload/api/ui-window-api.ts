@@ -1,3 +1,4 @@
+import type { MenuPopupRequest, MenuTopLevelItem } from '../../shared/app-menu-strip'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import type {
@@ -44,7 +45,8 @@ export type UiWindowApi = {
   isMaximized: () => Promise<boolean>
   onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
   requestClose: () => void
-  popupMenu: () => void
+  popupMenu: (request?: MenuPopupRequest) => void
+  getMenuTopLevelItems: () => Promise<MenuTopLevelItem[]>
   onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
   confirmWindowClose: () => void
   notifyWindowRevealed: () => void

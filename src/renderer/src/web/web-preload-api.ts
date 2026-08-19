@@ -2907,6 +2907,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onMaximizeChanged: () => noopUnsubscribe,
     requestClose: () => {},
     popupMenu: () => {},
+    // Why empty: the web runtime has no native application menu, so the strip renders nothing
+    // rather than offering buttons that could not pop anything.
+    getMenuTopLevelItems: () => Promise.resolve([]),
     onWindowCloseRequested: () => noopUnsubscribe,
     confirmWindowClose: () => {},
     notifyWindowRevealed: () => {}

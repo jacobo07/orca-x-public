@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { MenuPopupRequest, MenuTopLevelItem } from '../shared/app-menu-strip'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type {
@@ -4335,10 +4336,15 @@ const api = {
     requestClose: (): void => {
       ipcRenderer.send('window:request-close')
     },
-    /** Desktop custom titlebar only: pop up the app menu at the cursor — Alt-reveal replacement for the ··· button. */
-    popupMenu: (): void => {
-      ipcRenderer.send('menu:popup')
+    /** Desktop custom titlebar only: pop up the app menu — Alt-reveal replacement for the ··· button.
+     *  With a request, pops that top-level submenu at the given point, which is how the menu strip
+     *  drops down the real registered menu under its buttons. */
+    popupMenu: (request?: MenuPopupRequest): void => {
+      ipcRenderer.send('menu:popup', request)
     },
+    /** Desktop custom titlebar only: the registered menu's top-level entries, for the menu strip. */
+    getMenuTopLevelItems: (): Promise<MenuTopLevelItem[]> =>
+      ipcRenderer.invoke('menu:topLevelItems'),
     /** Fired by main when the user tries to close the window; renderer confirms running
      *  terminals then calls confirmWindowClose(). isQuitting (Cmd+Q / app.quit) skips that dialog. */
     onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void): (() => void) => {

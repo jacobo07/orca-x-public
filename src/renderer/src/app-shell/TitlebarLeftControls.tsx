@@ -15,6 +15,7 @@ import {
 } from '@/store/slices/worktree-nav-history'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
+import { AppMenuStrip } from './AppMenuStrip'
 import { hasCustomTitleBar, isMac } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
@@ -45,23 +46,29 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         {isMac && !layout.isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
         ) : hasCustomTitleBar ? (
-          /* Why: Windows/Linux remove the native title bar, so render the logo plus a ··· button that pops the application menu (as Alt does). */
+          /* Why: Windows/Linux remove the native title bar, so render the logo plus the menu strip.
+             The ··· fallback stays for the case where the strip has no items to show — before the
+             menu is registered, or on a runtime that has none. */
           <>
             <img src={logo} alt="" aria-hidden className="titlebar-logo" />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="titlebar-icon-button"
-                  aria-label={translate('auto.App.8b0b8eb54f', 'Application menu')}
-                  onClick={() => window.api.ui.popupMenu()}
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.App.8b0b8eb54f', 'Application menu')}
-              </TooltipContent>
-            </Tooltip>
+            <AppMenuStrip
+              fallback={
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="titlebar-icon-button"
+                      aria-label={translate('auto.App.8b0b8eb54f', 'Application menu')}
+                      onClick={() => window.api.ui.popupMenu()}
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {translate('auto.App.8b0b8eb54f', 'Application menu')}
+                  </TooltipContent>
+                </Tooltip>
+              }
+            />
           </>
         ) : (
           <div className="pl-2" />

@@ -16,6 +16,7 @@ import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { translateMain } from '../i18n/main-i18n'
+import type { MenuPopupRequest, MenuTopLevelItem } from '../../shared/app-menu-strip'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
@@ -1115,8 +1116,34 @@ export function createMainWindow(
   }
   // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
   const popupMenuChannel = 'menu:popup'
-  const onPopupMenu = (): void => {
-    Menu.getApplicationMenu()?.popup({ window: mainWindow })
+  // Why the real menu rather than a renderer-side copy: the strip pops the submenu Electron already
+  // registered, so a visible item without a working action cannot exist by construction.
+  const onPopupMenu = (_event: Electron.IpcMainEvent, request?: MenuPopupRequest): void => {
+    const menu = Menu.getApplicationMenu()
+    if (!menu) {
+      return
+    }
+    const submenu =
+      typeof request?.topLevelIndex === 'number' ? menu.items[request.topLevelIndex]?.submenu : null
+    const position =
+      typeof request?.x === 'number' && typeof request?.y === 'number'
+        ? { x: Math.round(request.x), y: Math.round(request.y) }
+        : {}
+    ;(submenu ?? menu).popup({ window: mainWindow, ...position })
+  }
+  const menuTopLevelItemsChannel = 'menu:topLevelItems'
+  const onMenuTopLevelItems = (): MenuTopLevelItem[] => {
+    const menu = Menu.getApplicationMenu()
+    if (!menu) {
+      return []
+    }
+    return menu.items.flatMap((item, index) =>
+      // Why submenu-only: a top-level entry with no submenu has nothing to drop down, and the
+      // strip is a row of drop-downs.
+      item.submenu && item.visible !== false
+        ? [{ index, label: item.label, enabled: item.enabled !== false }]
+        : []
+    )
   }
   // Why: WindowControls mounts after window:maximize-changed already fired, so expose a synchronous getter to init its icon.
   const isMaximizedChannel = 'window:isMaximized'
@@ -1127,6 +1154,7 @@ export function createMainWindow(
   ipcMain.on(maximizeChannel, onMaximize)
   ipcMain.on(requestCloseChannel, onRequestClose)
   ipcMain.on(popupMenuChannel, onPopupMenu)
+  ipcMain.handle(menuTopLevelItemsChannel, onMenuTopLevelItems)
   ipcMain.handle(isMaximizedChannel, onIsMaximized)
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
@@ -1151,6 +1179,7 @@ export function createMainWindow(
     browserManager.setDictationShortcutForwardingPredicate(null)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
+    ipcMain.removeHandler(menuTopLevelItemsChannel)
     ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
