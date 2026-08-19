@@ -1,7 +1,7 @@
 import React from 'react'
-import { ChevronDown } from 'lucide-react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
+import { openProjectInWorkbench } from '@/lib/open-project-in-workbench'
 import type { AppState } from '@/store/types'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
@@ -34,10 +34,8 @@ import {
   type RepoHeaderProjectActions
 } from './repo-header-project-actions'
 import { ProjectLaunchIconSlot } from './project-launch-icon-button'
-import {
-  handleRepoHeaderCollapseAffordancePointerDown,
-  shouldIgnoreRepoHeaderToggle
-} from './header-event-guards'
+import { HeaderCollapseButton } from './header-collapse-button'
+import { shouldIgnoreRepoHeaderToggle } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
 
@@ -171,6 +169,21 @@ export function renderWorktreeSectionHeaderRow(args: {
   const showHeaderCollapseAffordance =
     row.count > 0 &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+  // A project header's row opens the project; every other header row only expands and collapses.
+  // The chevron keeps collapsing in both cases, which is why it becomes the control that carries
+  // the expanded state once the row stops being the thing that toggles.
+  const activateHeaderRow = projectIdForHeader
+    ? () => {
+        void openProjectInWorkbench(projectIdForHeader).then((outcome) => {
+          // A project whose scan has not yielded a workspace has nothing to open. Falling back to
+          // the collapse keeps the row doing something rather than swallowing the click.
+          if (outcome === 'no-workspace') {
+            ctx.toggleGroupWithScrollAnchor(row.key)
+          }
+        })
+      }
+    : () => ctx.toggleGroupWithScrollAnchor(row.key)
+  const rowTogglesCollapse = projectIdForHeader === undefined
   return (
     <div
       key={vItem.key}
@@ -200,7 +213,9 @@ export function renderWorktreeSectionHeaderRow(args: {
         id={getWorktreeOptionId(row.key)}
         role="button"
         tabIndex={0}
-        aria-expanded={showHeaderCollapseAffordance ? !isHeaderCollapsed : undefined}
+        aria-expanded={
+          showHeaderCollapseAffordance && rowTogglesCollapse ? !isHeaderCollapsed : undefined
+        }
         data-repo-header-id={projectIdForHeader}
         data-repo-header-index={repoHeaderIndex}
         data-repo-header-bucket={repoHeaderBucketKey}
@@ -279,7 +294,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           if (shouldIgnoreRepoHeaderToggle(event)) {
             return
           }
-          ctx.toggleGroupWithScrollAnchor(row.key)
+          activateHeaderRow()
         }}
         onKeyDown={(e) => {
           if (shouldIgnoreRepoHeaderToggle(e)) {
@@ -287,7 +302,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
-            ctx.toggleGroupWithScrollAnchor(row.key)
+            activateHeaderRow()
           }
         }}
       >
@@ -339,21 +354,11 @@ export function renderWorktreeSectionHeaderRow(args: {
 
         <ProjectHeaderActions>
           {showHeaderCollapseAffordance ? (
-            <div
-              className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-              data-repo-header-collapse-affordance=""
-              aria-hidden
-              onPointerDown={handleRepoHeaderCollapseAffordancePointerDown}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                ctx.toggleGroupWithScrollAnchor(row.key)
-              }}
-            >
-              <ChevronDown
-                className={cn('size-3.5 transition-transform', isHeaderCollapsed && '-rotate-90')}
-              />
-            </div>
+            <HeaderCollapseButton
+              collapsed={isHeaderCollapsed}
+              label={row.label}
+              onToggle={() => ctx.toggleGroupWithScrollAnchor(row.key)}
+            />
           ) : null}
 
           {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (

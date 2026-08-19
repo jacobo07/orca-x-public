@@ -635,7 +635,9 @@ export type TerminalSlice = {
       forceHostRuntime?: boolean
     }
   ) => TerminalTab
-  openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
+  /** groupId is optional: a workspace being opened for the first time has no active group yet, and
+   *  both the local and web-runtime paths already treat an absent group as "use the default". */
+  openNewTerminalTabInActiveWorkspace: (groupId?: string) => Promise<void>
   closeTab: (
     tabId: string,
     opts?: {
