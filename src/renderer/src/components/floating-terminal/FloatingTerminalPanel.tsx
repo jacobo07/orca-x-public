@@ -2002,7 +2002,10 @@ export function FloatingTerminalPanel({
                         ref={terminalPaneRegistry.getRefCallback(tab.id)}
                         tabId={tab.id}
                         worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
-                        cwd={cwd}
+                        // Why per tab: a tab launched from a project's play button carries that
+                        // project's folder, and the panel-wide cwd is only the default for tabs
+                        // opened from the panel itself. Terminal.tsx resolves the same way.
+                        cwd={tab.startupCwd ?? cwd}
                         isActive={isActive}
                         // Why: the closed panel is only CSS-hidden, so gate
                         // visibility on `open` too. This routes the floating
