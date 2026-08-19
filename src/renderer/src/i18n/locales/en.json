@@ -15865,6 +15865,9 @@
           "deleteTable": "Delete table"
         }
       }
+    },
+    "WorkspaceProjectChrome": {
+      "home": "Go to Workspace home"
     }
   },
   "components": {
