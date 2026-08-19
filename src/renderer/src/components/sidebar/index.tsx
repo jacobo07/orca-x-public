@@ -50,6 +50,10 @@ function Sidebar({
   const settings = useAppStore((s) => s.settings)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  // The launcher's defining property is that it does not list every project: browsing the estate
+  // and choosing what to open are different questions, and answering both at once is what makes
+  // the current sidebar the permanent navigation it should not be.
+  const showProjectList = useAppStore((s) => s.activeView !== 'workspace')
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const systemPrefersDark = useSystemPrefersDark()
   const leftSidebarStyle = useMemo(
@@ -115,16 +119,23 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
-            <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
+            {showProjectList ? (
+              <>
+                <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
 
-            <WorktreeList
-              scrollOffsetRef={worktreeScrollOffsetRef}
-              scrollAnchorRef={worktreeScrollAnchorRef}
-              workspaceBoardOpen={workspaceBoardOpen}
-              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-            />
+                <WorktreeList
+                  scrollOffsetRef={worktreeScrollOffsetRef}
+                  scrollAnchorRef={worktreeScrollAnchorRef}
+                  workspaceBoardOpen={workspaceBoardOpen}
+                  onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                  onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                  onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                />
+              </>
+            ) : (
+              // Holds the column open so the nav does not jump to the bottom toolbar.
+              <div className="min-h-0 flex-1" />
+            )}
 
             <div className="relative shrink-0">
               <SetupScriptPromptCard />

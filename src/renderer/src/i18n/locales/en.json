@@ -4985,7 +4985,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "workspace": "Workspace"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",

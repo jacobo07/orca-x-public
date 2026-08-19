@@ -684,7 +684,10 @@ describe('client UI RPC methods', () => {
     ['worktree card property', { worktreeCardProperties: ['status', 'pr-status'] }],
     ['feature interaction id', { featureInteractions: { unknown: { firstInteractedAt: 100 } } }],
     ['feature tip id', { featureTipsSeenIds: ['voice-dictation', 'unknown-tip'] }],
-    ['right sidebar tab', { rightSidebarTab: 'not-a-tab' }]
+    ['right sidebar tab', { rightSidebarTab: 'not-a-tab' }],
+    // A newer client naming a view this host has never heard of. Pinned because that skew is now
+    // reachable: every top-level view added after a host shipped arrives here as a drifted value.
+    ['top-level view', { activeView: 'a-view-this-host-does-not-know' }]
   ])('drops an unknown %s instead of rejecting the batch around it', async (_label, drifted) => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

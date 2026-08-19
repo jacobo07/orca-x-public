@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
   openArtifactsPage: vi.fn(),
+  openWorkspacePage: vi.fn(),
   openModal: vi.fn(),
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
@@ -94,7 +95,8 @@ import SidebarNav, {
   shouldShowAutomationsButton,
   shouldShowArtifactsButton,
   shouldShowMobileButton,
-  shouldShowSetupGuideEntry
+  shouldShowSetupGuideEntry,
+  shouldShowWorkspaceButton
 } from './SidebarNav'
 
 function gitRepo(): Repo {
@@ -135,6 +137,7 @@ function setSidebarState({
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
     openArtifactsPage: mocks.openArtifactsPage,
+    openWorkspacePage: mocks.openWorkspacePage,
     openModal: mocks.openModal,
     updateSettings: mocks.updateSettings,
     preflightStatus: { glab: { installed: false } },
@@ -333,6 +336,41 @@ describe('SidebarNav', () => {
 
   it('hides the Mobile entry when the sidebar setting is off', () => {
     expect(shouldShowMobileButton({ showMobileButton: false })).toBe(false)
+  })
+
+  it('shows the Workspace entry by default for older settings', () => {
+    // Absent reads as shown: every profile written before this entry existed lacks the flag, and
+    // defaulting it off would hide the feature from everyone who already had Orca installed.
+    expect(shouldShowWorkspaceButton(null)).toBe(true)
+    expect(shouldShowWorkspaceButton({})).toBe(true)
+    expect(shouldShowWorkspaceButton({ showWorkspaceButton: false })).toBe(false)
+  })
+
+  it('opens the workspace launcher from the sidebar', async () => {
+    const container = await renderSidebarNav()
+
+    await clickButton(getButtonByText(container, 'Workspace'))
+
+    expect(mocks.openWorkspacePage).toHaveBeenCalledOnce()
+  })
+
+  it('omits the Workspace row when the sidebar setting is off', async () => {
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), showWorkspaceButton: false }
+    })
+    const container = await renderSidebarNav()
+
+    expect(queryButtonByText(container, 'Workspace')).toBeNull()
+  })
+
+  it('hides Workspace from its sidebar context menu', async () => {
+    const container = await renderSidebarNav()
+    const row = getButtonByText(container, 'Workspace')
+    const menu = row.closest('[data-testid="context-menu"]')
+
+    await clickButton(getHideButton(menu as Element))
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showWorkspaceButton: false })
   })
 
   it('updates localized labels when the language changes after mount', async () => {

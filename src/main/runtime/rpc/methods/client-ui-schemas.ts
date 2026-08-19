@@ -169,6 +169,7 @@ export const SettingsUpdate = z
 
 const TopLevelViewSchema = z.enum([
   'terminal',
+  'workspace',
   'settings',
   'tasks',
   'activity',

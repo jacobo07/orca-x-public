@@ -4,6 +4,10 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 type ActiveView = AppState['activeView']
 
 const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>([
+  // The launcher has no project open, so the Explorer and Source Control panels would have
+  // nothing to describe. This set is not exhaustively typed, so a new view defaults to showing
+  // them — an omission here is silent.
+  'workspace',
   'settings',
   'tasks',
   'activity',

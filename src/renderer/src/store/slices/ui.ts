@@ -627,79 +627,21 @@ export type UISlice = {
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   activeView: TopLevelView
-  previousViewBeforeTasks:
-    | 'terminal'
-    | 'settings'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'artifacts'
-    | 'mobile'
-  previousViewBeforeSettings:
-    | 'terminal'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'artifacts'
-    | 'mobile'
-  previousViewBeforeActivity:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'artifacts'
-    | 'mobile'
-  previousViewBeforeAutomations:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'space'
-    | 'skills'
-    | 'artifacts'
-    | 'mobile'
-  previousViewBeforeSpace:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'skills'
-    | 'artifacts'
-    | 'mobile'
-  previousViewBeforeSkills:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'artifacts'
-    | 'mobile'
-  previousViewBeforeMobile:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'artifacts'
-  previousViewBeforeArtifacts:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
+  // Why Exclude and not a written-out union: each of these is "every view except the one being
+  // returned from", and spelling that out cost one edit per field every time a view was added —
+  // eight mechanical edits whose only failure mode was forgetting one and silently narrowing a
+  // restore path.
+  previousViewBeforeTasks: Exclude<TopLevelView, 'tasks'>
+  previousViewBeforeSettings: Exclude<TopLevelView, 'settings'>
+  previousViewBeforeActivity: Exclude<TopLevelView, 'activity'>
+  previousViewBeforeAutomations: Exclude<TopLevelView, 'automations'>
+  previousViewBeforeSpace: Exclude<TopLevelView, 'space'>
+  previousViewBeforeSkills: Exclude<TopLevelView, 'skills'>
+  previousViewBeforeMobile: Exclude<TopLevelView, 'mobile'>
+  previousViewBeforeArtifacts: Exclude<TopLevelView, 'artifacts'>
   setActiveView: (view: UISlice['activeView']) => void
+  /** Shows the workspace launcher: open a project, rather than browse the whole project list. */
+  openWorkspacePage: () => void
   taskPageData: {
     preselectedRepoId?: string
     prefilledName?: string
@@ -1570,6 +1512,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeArtifacts
     })),
+  // No closeWorkspacePage twin: the launcher is left by opening a project, which is a real
+  // navigation to that workspace, not a dismissal that has to restore where you came from.
+  openWorkspacePage: () => set({ activeView: 'workspace' }),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',
