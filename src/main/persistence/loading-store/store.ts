@@ -54,6 +54,11 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/workspace-session-state-types'
+import {
+  mergeOwnerScopedSessionPatch,
+  ownsOneOfWorktrees,
+  type WorkspaceSessionWriteScope
+} from '../../../shared/workspace-session-owner-scope'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -2777,13 +2782,35 @@ export class Store {
     return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
   }
 
-  setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
+  setWorkspaceSession(
+    session: PersistedState['workspaceSession'],
+    hostId?: string | null,
+    scope: WorkspaceSessionWriteScope = {}
+  ): void {
     const resolved = this.resolveHostId(hostId)
+    const next = this.applyWorkspaceSessionOwnerScope(session, resolved, scope)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      this.setLocalWorkspaceSession(session)
+      this.setLocalWorkspaceSession(next)
       return
     }
-    this.setHostWorkspaceSession(resolved, session)
+    this.setHostWorkspaceSession(resolved, next)
+  }
+
+  /** Fold a scoped write onto the persisted session so it can only affect the
+   *  worktrees it claims. An unscoped write keeps whole-workspace authority. */
+  private applyWorkspaceSessionOwnerScope(
+    incoming: WorkspaceSessionState,
+    resolved: ExecutionHostId,
+    scope: WorkspaceSessionWriteScope
+  ): WorkspaceSessionState {
+    if (!scope.ownedWorktreeIds) {
+      return incoming
+    }
+    return mergeOwnerScopedSessionPatch(
+      this.getWorkspaceSession(resolved),
+      incoming,
+      ownsOneOfWorktrees(scope.ownedWorktreeIds)
+    )
   }
 
   removeWorkspaceSessionStateForWorktree(
@@ -3069,13 +3096,19 @@ export class Store {
     this.pendingSnapshotFileWork = work
   }
 
-  patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
+  patchWorkspaceSession(
+    patch: WorkspaceSessionPatch,
+    hostId?: string | null,
+    scope: WorkspaceSessionWriteScope = {}
+  ): void {
     const resolved = this.resolveHostId(hostId)
     // Why: the debounced hot path sends only changed slices; scalar/UI patches skip terminal normalization, topology patches keep stale-PTY protections.
-    let next: WorkspaceSessionState = {
-      ...this.getWorkspaceSession(resolved),
-      ...patch
-    }
+    let next: WorkspaceSessionState = scope.ownedWorktreeIds
+      ? this.applyWorkspaceSessionOwnerScope(patch as WorkspaceSessionState, resolved, scope)
+      : {
+          ...this.getWorkspaceSession(resolved),
+          ...patch
+        }
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
       this.setWorkspaceSession(next, resolved)
       return
