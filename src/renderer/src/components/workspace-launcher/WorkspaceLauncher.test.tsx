@@ -10,13 +10,20 @@ const state = {
   recentProjectIds: [] as string[],
   worktreesByRepo: {} as Record<string, { id: string }[]>,
   setActiveWorktree: vi.fn<(worktreeId: string) => boolean>(),
-  setActiveView: vi.fn(),
   openModal: vi.fn()
 }
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (value: typeof state) => unknown) => selector(state)
 }))
+
+const openProjectInWorkbench = vi.fn<(repoId: string) => Promise<string>>()
+vi.mock('@/lib/open-project-in-workbench', () => ({
+  openProjectInWorkbench: (repoId: string) => openProjectInWorkbench(repoId)
+}))
+
+const toastError = vi.fn()
+vi.mock('sonner', () => ({ toast: { error: (...args: unknown[]) => toastError(...args) } }))
 
 function project(id: string, displayName: string, path: string): (typeof state.repos)[number] {
   return { id, displayName, path, addedAt: 0 }
@@ -76,6 +83,7 @@ beforeEach(() => {
   state.recentProjectIds = ['orca', 'titan']
   state.worktreesByRepo = { orca: [{ id: 'orca-main' }], titan: [{ id: 'titan-main' }] }
   state.setActiveWorktree.mockReturnValue(true)
+  openProjectInWorkbench.mockResolvedValue('opened-with-terminal')
 })
 
 afterEach(() => {
@@ -88,29 +96,46 @@ afterEach(() => {
 })
 
 describe('WorkspaceLauncher', () => {
-  it('opens a recent project into the workbench', () => {
+  it('opens a recent project through the same action the sidebar uses', async () => {
+    // Pinned because the launcher once had its own weaker open that only switched view: on a
+    // project with no saved session that landed on an empty workbench and read as a dead click.
+    // Both places must mean the same thing by "open" — the last workspace, with a terminal ready.
     render()
 
     act(() => {
       buttonWithText('Orca X').click()
     })
+    await act(async () => {})
 
-    expect(state.setActiveWorktree).toHaveBeenCalledWith('orca-main')
-    expect(state.setActiveView).toHaveBeenCalledWith('terminal')
+    expect(openProjectInWorkbench).toHaveBeenCalledWith('orca')
+    expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('stays on the launcher when the workspace refuses to activate', () => {
-    // The discrimination that matters: a refused activation and a successful one are different
-    // outcomes. Navigating on a refusal would show an empty workbench and read as a broken open.
-    state.setActiveWorktree.mockReturnValue(false)
+  it('says so when the project has no workspace to open', async () => {
+    // The outcome the action reports has to reach the user. Swallowing it is what turns a project
+    // that is still being scanned into a button that appears broken.
+    openProjectInWorkbench.mockResolvedValue('no-workspace')
+    render()
+
+    act(() => {
+      buttonWithText('Orca X').click()
+    })
+    await act(async () => {})
+
+    expect(toastError).toHaveBeenCalledOnce()
+  })
+
+  it('says so when the workspace refuses to activate', async () => {
+    openProjectInWorkbench.mockResolvedValue('activation-refused')
     render()
 
     act(() => {
       buttonWithText('Titan Launcher').click()
     })
+    await act(async () => {})
 
-    expect(state.setActiveWorktree).toHaveBeenCalledWith('titan-main')
-    expect(state.setActiveView).not.toHaveBeenCalled()
+    expect(openProjectInWorkbench).toHaveBeenCalledWith('titan')
+    expect(toastError).toHaveBeenCalledOnce()
   })
 
   it('narrows the list as the filter is typed, matching name or path', () => {
@@ -150,12 +175,21 @@ describe('WorkspaceLauncher', () => {
     expect(state.openModal).toHaveBeenCalledWith('add-repo')
   })
 
-  it('disables a recent row whose worktrees have not loaded rather than dropping it', () => {
-    // Hiding it would read as the project being gone; the row stays and refuses the click.
+  it('keeps a project whose workspaces have not loaded clickable', async () => {
+    // It stays in the list because hiding it would read as the project being gone, and it stays
+    // enabled because the open action explains the refusal — a disabled row explains nothing.
     state.worktreesByRepo = { orca: [{ id: 'orca-main' }] }
+    openProjectInWorkbench.mockResolvedValue('no-workspace')
     render()
 
     expect(projectRowLabels()).toEqual(['Orca X', 'Titan Launcher'])
-    expect(buttonWithText('Titan Launcher').disabled).toBe(true)
+    expect(buttonWithText('Titan Launcher').disabled).toBe(false)
+
+    act(() => {
+      buttonWithText('Titan Launcher').click()
+    })
+    await act(async () => {})
+
+    expect(toastError).toHaveBeenCalledOnce()
   })
 })

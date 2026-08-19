@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { FolderPlus, GitBranchPlus, Search } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { filterProjectsByQuery, orderProjectsByRecency } from '@/lib/recent-project-order'
+import { openProjectInWorkbench } from '@/lib/open-project-in-workbench'
 import { translate } from '@/i18n/i18n'
 import { RecentProjectList } from '../recent-project-list'
 import logo from '../../../../../resources/logo.svg'
@@ -17,8 +19,6 @@ import logo from '../../../../../resources/logo.svg'
 export function WorkspaceLauncher(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const recentProjectIds = useAppStore((s) => s.recentProjectIds)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const [query, setQuery] = useState('')
 
@@ -28,12 +28,30 @@ export function WorkspaceLauncher(): React.JSX.Element {
     [repos, recentProjectIds, query]
   )
 
-  const openProject = (worktreeId: string): void => {
-    // Why gated on the result: setActiveWorktree reports whether the workspace could be activated,
-    // and navigating on a refusal would land on an empty workbench that looks like a broken open.
-    if (setActiveWorktree(worktreeId)) {
-      setActiveView('terminal')
-    }
+  const openProject = (repoId: string): void => {
+    // The same action the sidebar's project rows use, so "open" means one thing in both places:
+    // the workspace last worked in, with a terminal ready. An earlier version of this launcher
+    // only switched view, which on a project with no saved session landed on an empty workbench
+    // and read as the click doing nothing.
+    void openProjectInWorkbench(repoId).then((outcome) => {
+      if (outcome === 'no-workspace') {
+        toast.error(
+          translate(
+            'auto.components.workspaceLauncher.noWorkspaceToOpen',
+            'That project has no workspace to open yet.'
+          )
+        )
+        return
+      }
+      if (outcome === 'activation-refused') {
+        toast.error(
+          translate(
+            'auto.components.workspaceLauncher.couldNotOpen',
+            'That project could not be opened.'
+          )
+        )
+      }
+    })
   }
 
   return (

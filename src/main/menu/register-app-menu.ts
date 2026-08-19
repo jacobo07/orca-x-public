@@ -13,6 +13,7 @@ export type AppearanceMenuState = {
   showTasksButton: boolean
   showAutomationsButton: boolean
   showMobileButton: boolean
+  showWorkspaceButton: boolean
   showTitlebarAppName: boolean
   statusBarVisible: boolean
 }
@@ -259,6 +260,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         type: 'checkbox',
         checked: appearance.showMobileButton,
         click: () => onToggleAppearance('showMobileButton')
+      },
+      {
+        label: translateMain('menu.showWorkspaceButton', 'Show Workspace Button'),
+        type: 'checkbox',
+        checked: appearance.showWorkspaceButton,
+        click: () => onToggleAppearance('showWorkspaceButton')
       },
       {
         label: translateMain('menu.showTitlebarAppName', 'Show Titlebar App Name'),

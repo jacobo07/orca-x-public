@@ -96,7 +96,8 @@
     "help": "Help",
     "paste": "Paste",
     "copy": "Copy",
-    "selectAll": "Select All"
+    "selectAll": "Select All",
+    "showWorkspaceButton": "Show Workspace Button"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -15797,7 +15798,12 @@
         "createNeedsProject": "Add a project first",
         "createWorkspace": "Create workspace",
         "filterLabel": "Filter projects by name or path",
-        "noMatches": "No project matches “{{query}}”."
+        "noMatches": "No project matches “{{query}}”.",
+        "noWorkspaceToOpen": "That project has no workspace to open yet.",
+        "couldNotOpen": "That project could not be opened."
+      },
+      "recentProjectList": {
+        "stillLoading": "Still loading this project’s workspaces"
       }
     },
     "i18n": {

@@ -53,6 +53,7 @@ function buildMenuOptions() {
       showTasksButton: true,
       showAutomationsButton: true,
       showMobileButton: true,
+      showWorkspaceButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
     }))
@@ -471,6 +472,7 @@ describe('registerAppMenu', () => {
       showTasksButton: false,
       showAutomationsButton: false,
       showMobileButton: true,
+      showWorkspaceButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
     })
@@ -495,6 +497,12 @@ describe('registerAppMenu', () => {
     const mobileItem = appearanceSubmenu.find((item) => item.label === 'Show Orca Mobile Button')
     expect(mobileItem?.type).toBe('checkbox')
     expect(mobileItem?.checked).toBe(true)
+
+    // Pinned because it shipped without one: the Workspace entry could be hidden from its sidebar
+    // context menu with no control anywhere to bring it back — a one-way door.
+    const workspaceItem = appearanceSubmenu.find((item) => item.label === 'Show Workspace Button')
+    expect(workspaceItem?.type).toBe('checkbox')
+    expect(workspaceItem?.checked).toBe(true)
 
     const titlebarItem = appearanceSubmenu.find((item) => item.label === 'Show Titlebar App Name')
     expect(titlebarItem?.checked).toBe(true)
