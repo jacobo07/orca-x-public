@@ -79,6 +79,55 @@ test('the titlebar header never draws one control over another @workspace-chrome
   await orcaPage.screenshot({ path: 'pr-evidence/workspace-titlebar-no-overlap.png' })
 })
 
+test('the closed file panel keeps a reopen control clear of the tabs @workspace-chrome', async ({
+  orcaPage
+}) => {
+  // Closing the Explorer is only reversible if the control that reopens it can be seen and clicked.
+  // Docked left — the default — that control sits at the content edge, which is where the first tab
+  // starts. Painted over a tab it is invisible and takes the tab's clicks, so the file panel reads
+  // as gone for good. Overlap is the assertion because "the button is in the DOM" stayed true the
+  // whole time this was broken.
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await orcaPage.evaluate(() => {
+    const state = window.__store?.getState()
+    state?.setSidePanelDock('left')
+    if (state?.rightSidebarOpen) {
+      state.toggleRightSidebar()
+    }
+  })
+
+  await expect
+    .poll(
+      async () =>
+        orcaPage.evaluate(() => {
+          const strip = document.querySelector('[data-tab-group-strip-id]')
+          const reopen = [...document.querySelectorAll('button.sidebar-toggle')].find((button) =>
+            /derecha|right/i.test(button.getAttribute('aria-label') ?? '')
+          )
+          if (!strip || !reopen) {
+            return 'no reopen control'
+          }
+          const reopenRect = reopen.getBoundingClientRect()
+          const hit = [...strip.querySelectorAll('[data-tab-id], [role="tab"]')].find((tab) => {
+            const rect = tab.getBoundingClientRect()
+            return (
+              rect.width > 0 &&
+              reopenRect.left < rect.right &&
+              rect.left < reopenRect.right &&
+              reopenRect.top < rect.bottom &&
+              rect.top < reopenRect.bottom
+            )
+          })
+          return hit ? `overlaps tab "${hit.textContent?.trim()}"` : 'clear'
+        }),
+      { timeout: 15_000 }
+    )
+    .toBe('clear')
+
+  await orcaPage.screenshot({ path: 'pr-evidence/workspace-closed-panel-reopen.png' })
+})
+
 test('a project names itself in the chrome, and Home keeps the work @workspace-chrome', async ({
   orcaPage
 }) => {

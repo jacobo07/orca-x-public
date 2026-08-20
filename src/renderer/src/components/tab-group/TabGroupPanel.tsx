@@ -57,6 +57,7 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const sidePanelDock = useAppStore((state) => state.sidePanelDock)
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
@@ -222,6 +223,22 @@ export default function TabGroupPanel({
               style={
                 {
                   width: 'var(--collapsed-sidebar-header-width)',
+                  WebkitAppRegion: 'no-drag'
+                } as React.CSSProperties
+              }
+            />
+          ) : null}
+          {/* Why: mirrors the right-edge reservation below. A left-docked file panel puts its
+              reopen toggle at the content edge, which is exactly where the first tab starts — with
+              nothing reserved, the only control that brings the panel back is painted on top of
+              tab one, where it is invisible and takes the tab's clicks. */}
+          {reserveCollapsedSidebarHeaderSpace && sidePanelDock === 'left' && !rightSidebarOpen ? (
+            <div
+              className="shrink-0"
+              style={
+                {
+                  // The same 40px the right-edge reservation gives this toggle.
+                  width: '40px',
                   WebkitAppRegion: 'no-drag'
                 } as React.CSSProperties
               }
