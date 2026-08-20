@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
+import { findWindowsGitBinDirectory } from '../windows-git-executable-path'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -136,6 +137,15 @@ export function patchPackagedProcessPath(): void {
 
   // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail (also seeds Windows user-local dirs).
   extraPaths.push(...getVersionManagerBinPaths())
+
+  // Why: Orca spawns a bare `git`, and Git for Windows can be installed without the PATH option.
+  // A GUI-launched app then inherits a PATH with no git at all, and every git call fails with
+  // ENOENT — surfacing as domain errors that name the wrong cause ("No base branch found" when the
+  // base-ref probes never ran). Returns null when git already resolves, so a user's own git wins.
+  const windowsGitBin = findWindowsGitBinDirectory()
+  if (windowsGitBin) {
+    extraPaths.push(windowsGitBin)
+  }
 
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
   const currentPath = process.env[pathKey] ?? ''
