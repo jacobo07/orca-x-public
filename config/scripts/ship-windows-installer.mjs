@@ -42,6 +42,55 @@ function resolveDesktop() {
   return desktop
 }
 
+/**
+ * The MSVC environment script, when one is on disk and the shell has not already loaded it.
+ *
+ * Why this is needed at all: node-gyp finds MSVC only through `vswhere`, and a machine whose
+ * Visual Studio Installer registration is broken reports no installation while holding a perfectly
+ * good compiler. Sourcing vcvars sets VCINSTALLDIR, which node-gyp accepts directly. Without it the
+ * native rebuild fails with "Could not find any Visual Studio installation to use" — which reads as
+ * a missing toolchain rather than as a lookup that cannot see the one that is there.
+ */
+function findVisualStudioEnvironment() {
+  if (process.platform !== 'win32' || process.env.VCINSTALLDIR) {
+    return null
+  }
+  const roots = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles].filter(Boolean)
+  const editions = ['BuildTools', 'Community', 'Professional', 'Enterprise']
+  for (const root of roots) {
+    for (const edition of editions) {
+      const vcvars = join(
+        root,
+        'Microsoft Visual Studio',
+        '2022',
+        edition,
+        'VC',
+        'Auxiliary',
+        'Build',
+        'vcvars64.bat'
+      )
+      if (existsSync(vcvars)) {
+        return vcvars
+      }
+    }
+  }
+  return null
+}
+
+function runWindowsBuild() {
+  const options = { cwd: repoRoot, stdio: 'inherit' }
+  const vcvars = findVisualStudioEnvironment()
+  if (vcvars) {
+    console.log(`[ship] Using the MSVC environment from ${vcvars}`)
+    // Why cmd rather than exporting the variables here: vcvars sets dozens of them, and
+    // reproducing that set by hand is how a build ends up half-configured with nothing reporting it.
+    return spawnSync('cmd', ['/c', `call "${vcvars}" >nul && pnpm run build:win`], options)
+  }
+  // Fail-open: a host with a working vswhere needs none of this, and a host with no compiler at all
+  // should hear that from the build rather than from a guess made here.
+  return spawnSync('pnpm.cmd', ['run', 'build:win'], { ...options, shell: true })
+}
+
 function describeSource() {
   try {
     const git = process.platform === 'win32' ? 'C:/Program Files/Git/cmd/git.exe' : 'git'
@@ -62,14 +111,14 @@ function describeSource() {
 
 const source = describeSource()
 const startedAtMs = Date.now()
-console.error(`[ship] Building Orca X from ${source.commit}${source.dirty ? ' (+ uncommitted changes)' : ''}`)
+// Why stdout for the report and stderr only for failure: PowerShell wraps every stderr line from a
+// native command in an ErrorRecord, so a successful ship that narrates itself on stderr reads as a
+// failed one to anything checking $?.
+console.log(
+  `[ship] Building Orca X from ${source.commit}${source.dirty ? ' (+ uncommitted changes)' : ''}`
+)
 
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-const build = spawnSync(pnpm, ['run', 'build:win'], {
-  cwd: repoRoot,
-  stdio: 'inherit',
-  shell: process.platform === 'win32'
-})
+const build = runWindowsBuild()
 if (build.status !== 0) {
   fail(`Packaging failed with exit code ${build.status}. Nothing was copied to the Desktop.`)
 }
@@ -100,9 +149,9 @@ if (builtHash !== shippedHash) {
 }
 
 const megabytes = (builtStat.size / 1024 / 1024).toFixed(1)
-console.error(`\n[ship] ${destinationPath}`)
-console.error(`[ship] ${megabytes} MB  ·  built from ${source.commit}`)
-console.error(`[ship] SHA-256 ${shippedHash}`)
+console.log(`\n[ship] ${destinationPath}`)
+console.log(`[ship] ${megabytes} MB  ·  built from ${source.commit}`)
+console.log(`[ship] SHA-256 ${shippedHash}`)
 if (source.dirty) {
-  console.error('[ship] Built with uncommitted changes in the working tree.')
+  console.log('[ship] Built with uncommitted changes in the working tree.')
 }
