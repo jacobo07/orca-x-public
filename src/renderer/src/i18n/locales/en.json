@@ -15800,7 +15800,8 @@
         "filterLabel": "Filter projects by name or path",
         "noMatches": "No project matches “{{query}}”.",
         "noWorkspaceToOpen": "That project has no workspace to open yet.",
-        "couldNotOpen": "That project could not be opened."
+        "couldNotOpen": "That project could not be opened.",
+        "couldNotReadWorkspaces": "Could not read that project’s workspaces. Check that its folder still exists."
       },
       "recentProjectList": {
         "stillLoading": "Still loading this project’s workspaces"

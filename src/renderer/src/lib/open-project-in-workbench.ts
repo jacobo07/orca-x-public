@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 
@@ -6,8 +7,10 @@ export type OpenProjectInWorkbenchOutcome =
   | 'opened'
   /** Activated a workspace and started a terminal in it. */
   | 'opened-with-terminal'
-  /** The project has no workspace to open yet — usually its scan has not finished. */
+  /** The project genuinely has no workspace, confirmed by asking its host. */
   | 'no-workspace'
+  /** The host could not be asked which workspaces the project has. */
+  | 'workspace-lookup-failed'
   /** The store declined to activate the workspace. */
   | 'activation-refused'
 
@@ -39,6 +42,37 @@ export function pickProjectWorkspaceToOpen(
 }
 
 /**
+ * Ask the project's host which workspaces it has, then pick one.
+ *
+ * `reachable` is carried separately from the id on purpose: a host that could not be asked — a moved
+ * folder, a down SSH target — is not a project without workspaces, and reporting the latter would
+ * send the user looking for the wrong problem. It is a field rather than a sentinel id because
+ * every sentinel string is also a legal worktree id.
+ */
+async function loadProjectWorkspaces(
+  repoId: string
+): Promise<{ workspaceId: string | null; reachable: boolean }> {
+  const store = useAppStore.getState()
+  const repo = store.repos.find((candidate) => candidate.id === repoId)
+  try {
+    await store.fetchWorktrees(
+      repoId,
+      repo ? { executionHostId: getRepoExecutionHostId(repo) } : undefined
+    )
+  } catch {
+    return { workspaceId: null, reachable: false }
+  }
+  const loaded = useAppStore.getState()
+  return {
+    workspaceId: pickProjectWorkspaceToOpen(
+      loaded.worktreesByRepo[repoId],
+      loaded.lastVisitedAtByWorktreeId
+    ),
+    reachable: true
+  }
+}
+
+/**
  * Open a project in the main window: activate its workspace and leave a terminal in front of the
  * user, in the workbench itself rather than the floating panel or a second window.
  *
@@ -50,12 +84,22 @@ export async function openProjectInWorkbench(
   repoId: string
 ): Promise<OpenProjectInWorkbenchOutcome> {
   const store = useAppStore.getState()
-  const workspaceId = pickProjectWorkspaceToOpen(
+  let workspaceId = pickProjectWorkspaceToOpen(
     store.worktreesByRepo[repoId],
     store.lastVisitedAtByWorktreeId
   )
   if (!workspaceId) {
-    return 'no-workspace'
+    // Startup loads workspaces only for the projects the saved session names, so a project that has
+    // never been opened here has none — not zero, unknown. Reporting "no workspace" from an unasked
+    // question makes exactly the projects this list exists to reach the ones that cannot be opened.
+    const lookup = await loadProjectWorkspaces(repoId)
+    if (!lookup.reachable) {
+      return 'workspace-lookup-failed'
+    }
+    if (!lookup.workspaceId) {
+      return 'no-workspace'
+    }
+    workspaceId = lookup.workspaceId
   }
   // Why gated on the result: activation reports whether the workspace could be entered, and
   // navigating past a refusal would show an empty workbench that reads as a broken open.

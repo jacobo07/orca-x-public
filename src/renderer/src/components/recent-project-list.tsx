@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { useAppStore } from '../store'
 import { filterProjectsByQuery, orderProjectsByRecency } from '@/lib/recent-project-order'
 import { translate } from '@/i18n/i18n'
@@ -25,12 +26,15 @@ export function truncatePathFromStart(path: string, maxLength = 46): string {
 export function RecentProjectList({
   onOpenProject,
   query = '',
-  collapsible = true
+  collapsible = true,
+  openingRepoId = null
 }: {
   onOpenProject?: (repoId: string) => void
   query?: string
   /** The launcher scrolls its own list instead, so it opts out of the "View all" fold. */
   collapsible?: boolean
+  /** The project currently being opened, if the caller's open is slow enough to be worth showing. */
+  openingRepoId?: string | null
 } = {}): React.JSX.Element | null {
   const repos = useAppStore((s) => s.repos)
   const recentProjectIds = useAppStore((s) => s.recentProjectIds)
@@ -80,11 +84,13 @@ export function RecentProjectList({
           // onOpenProject resolves the project itself and reports why it could not open, so
           // disabling the row there would turn an explainable refusal into a dead click.
           const disabled = target === null && !onOpenProject
+          const opening = openingRepoId === repo.id
           return (
             <button
               key={repo.id}
               type="button"
-              disabled={disabled}
+              disabled={disabled || openingRepoId !== null}
+              aria-busy={opening}
               title={
                 disabled
                   ? translate(
@@ -102,9 +108,18 @@ export function RecentProjectList({
                   setActiveWorktree(target.id)
                 }
               }}
-              className="group flex items-baseline justify-between gap-4 rounded-md px-2 py-1 text-left transition-colors enabled:cursor-pointer enabled:hover:bg-accent disabled:opacity-40"
+              className={`group flex items-baseline justify-between gap-4 rounded-md px-2 py-1 text-left transition-colors enabled:cursor-pointer enabled:hover:bg-accent disabled:opacity-40${
+                // Why the override: the whole list disables during an open, and dimming the row
+                // being opened alongside the rest would hide the one row worth looking at.
+                opening ? ' bg-accent opacity-100' : ''
+              }`}
             >
-              <span className="shrink-0 text-sm text-foreground">{repo.displayName}</span>
+              <span className="flex min-w-0 shrink-0 items-baseline gap-1.5 text-sm text-foreground">
+                {repo.displayName}
+                {opening ? (
+                  <Loader2 className="size-3 shrink-0 animate-spin self-center text-muted-foreground" />
+                ) : null}
+              </span>
               <span
                 className="min-w-0 truncate text-right text-xs text-muted-foreground"
                 title={repo.path}

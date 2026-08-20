@@ -7,6 +7,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 }))
 
 const state = {
+  repos: [] as { id: string; path: string }[],
   worktreesByRepo: {} as Record<string, { id: string }[]>,
   lastVisitedAtByWorktreeId: {} as Record<string, number>,
   tabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -15,6 +16,7 @@ const state = {
   setActiveWorktree: vi.fn<(id: string) => boolean>(),
   setActiveView: vi.fn(),
   setActiveTabType: vi.fn(),
+  fetchWorktrees: vi.fn<(repoId: string, options?: unknown) => Promise<boolean>>(),
   openNewTerminalTabInActiveWorkspace: vi.fn<(groupId?: string) => Promise<void>>()
 }
 
@@ -24,6 +26,8 @@ vi.mock('@/store', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  state.repos = [{ id: 'orca', path: 'C:/projects/orca' }]
+  state.fetchWorktrees.mockResolvedValue(true)
   state.worktreesByRepo = { orca: [{ id: 'orca-main' }, { id: 'orca-feature' }] }
   state.lastVisitedAtByWorktreeId = {}
   state.tabsByWorktree = {}
@@ -97,7 +101,44 @@ describe('openProjectInWorkbench', () => {
     const outcome = await openProjectInWorkbench('orca')
 
     expect(outcome).toBe('no-workspace')
+    // Only honest after asking: "none loaded" and "none exist" are the same local state.
+    expect(state.fetchWorktrees).toHaveBeenCalledWith('orca', expect.anything())
     expect(state.setActiveWorktree).not.toHaveBeenCalled()
+    expect(state.setActiveView).not.toHaveBeenCalled()
+  })
+
+  it('opens a project whose workspaces were never loaded', async () => {
+    // Startup loads workspaces only for projects the saved session names, so every project the user
+    // has not opened in Orca starts out looking empty. Refusing those makes the recents list open
+    // precisely the projects that did not need it.
+    state.worktreesByRepo = {}
+    state.fetchWorktrees.mockImplementation(async () => {
+      state.worktreesByRepo = { orca: [{ id: 'orca-main' }] }
+      return true
+    })
+
+    const outcome = await openProjectInWorkbench('orca')
+
+    expect(outcome).toBe('opened-with-terminal')
+    expect(state.setActiveWorktree).toHaveBeenCalledWith('orca-main')
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('terminal-new')
+  })
+
+  it('does not ask the host about a project whose workspaces are already known', async () => {
+    await openProjectInWorkbench('orca')
+
+    expect(state.fetchWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('separates an unreachable host from a project without workspaces', async () => {
+    // A moved folder or a down SSH target is not an empty project; saying so would send the user
+    // looking for the wrong problem.
+    state.worktreesByRepo = {}
+    state.fetchWorktrees.mockRejectedValue(new Error('ENOENT: no such directory'))
+
+    const outcome = await openProjectInWorkbench('orca')
+
+    expect(outcome).toBe('workspace-lookup-failed')
     expect(state.setActiveView).not.toHaveBeenCalled()
   })
 

@@ -21,6 +21,9 @@ export function WorkspaceLauncher(): React.JSX.Element {
   const recentProjectIds = useAppStore((s) => s.recentProjectIds)
   const openModal = useAppStore((s) => s.openModal)
   const [query, setQuery] = useState('')
+  // Opening a project the session never named has to ask its host for the workspaces first, which
+  // spawns Git. Without a visible pending row that wait is indistinguishable from a dead click.
+  const [openingRepoId, setOpeningRepoId] = useState<string | null>(null)
 
   const hasProjects = repos.length > 0
   const matchCount = useMemo(
@@ -33,25 +36,39 @@ export function WorkspaceLauncher(): React.JSX.Element {
     // the workspace last worked in, with a terminal ready. An earlier version of this launcher
     // only switched view, which on a project with no saved session landed on an empty workbench
     // and read as the click doing nothing.
-    void openProjectInWorkbench(repoId).then((outcome) => {
-      if (outcome === 'no-workspace') {
-        toast.error(
-          translate(
-            'auto.components.workspaceLauncher.noWorkspaceToOpen',
-            'That project has no workspace to open yet.'
+    setOpeningRepoId(repoId)
+    void openProjectInWorkbench(repoId)
+      .then((outcome) => {
+        if (outcome === 'no-workspace') {
+          toast.error(
+            translate(
+              'auto.components.workspaceLauncher.noWorkspaceToOpen',
+              'That project has no workspace to open yet.'
+            )
           )
-        )
-        return
-      }
-      if (outcome === 'activation-refused') {
-        toast.error(
-          translate(
-            'auto.components.workspaceLauncher.couldNotOpen',
-            'That project could not be opened.'
+          return
+        }
+        if (outcome === 'workspace-lookup-failed') {
+          toast.error(
+            translate(
+              'auto.components.workspaceLauncher.couldNotReadWorkspaces',
+              'Could not read that project’s workspaces. Check that its folder still exists.'
+            )
           )
-        )
-      }
-    })
+          return
+        }
+        if (outcome === 'activation-refused') {
+          toast.error(
+            translate(
+              'auto.components.workspaceLauncher.couldNotOpen',
+              'That project could not be opened.'
+            )
+          )
+        }
+      })
+      // Why cleared unconditionally: opening navigates away, but a refusal leaves the launcher on
+      // screen, and a row stuck mid-open would be unclickable for the rest of the session.
+      .finally(() => setOpeningRepoId(null))
   }
 
   return (
@@ -136,7 +153,12 @@ export function WorkspaceLauncher(): React.JSX.Element {
           ) : null}
 
           {/* The launcher scrolls, so it lists every match rather than folding at five rows. */}
-          <RecentProjectList onOpenProject={openProject} query={query} collapsible={false} />
+          <RecentProjectList
+            onOpenProject={openProject}
+            query={query}
+            collapsible={false}
+            openingRepoId={openingRepoId}
+          />
 
           {/* Kept distinct from the no-projects case above: "nothing matches what you typed" and
               "you have no projects" ask for different next actions. */}
