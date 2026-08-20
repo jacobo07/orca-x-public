@@ -11,6 +11,11 @@ test('the titlebar strip mirrors the registered application menu @workspace-chro
   // The native menu bar is hidden on Windows and Linux, which is the only reason the strip exists.
   test.skip(process.platform === 'darwin', 'macOS keeps its native menu bar')
 
+  // The strip lives in the sidebar-width header and collapses to the compact menu button when the
+  // labels do not fit, so widen the sidebar first: at the default width the honest render is the
+  // fallback, and asserting the strip there would pin a layout the app is right not to draw.
+  await orcaPage.evaluate(() => window.__store?.getState().setSidebarWidth(520))
+
   const strip = orcaPage.locator('button.titlebar-menu-strip-button')
   await expect(strip.first()).toBeVisible({ timeout: 30_000 })
 
@@ -21,6 +26,57 @@ test('the titlebar strip mirrors the registered application menu @workspace-chro
   expect(await strip.allTextContents()).toEqual(registered.map((item) => item.label))
 
   await orcaPage.screenshot({ path: 'pr-evidence/workspace-menu-strip.png' })
+})
+
+test('the titlebar header never draws one control over another @workspace-chrome', async ({
+  orcaPage
+}) => {
+  test.skip(process.platform === 'darwin', 'macOS keeps its native menu bar')
+
+  // The header is sized to the sidebar, which the user drags. The menu strip does not shrink, so at
+  // ordinary widths it used to overflow and paint across the sidebar toggle and back/forward — every
+  // control still clickable underneath, nothing visibly broken, and the titlebar quietly unusable.
+  // Overlap is the property to pin, not the collapse threshold: the strip may fold to the compact
+  // button whenever it needs to, provided nothing ends up on top of anything else.
+  const overlapsAt = async (sidebarWidth: number): Promise<string[]> => {
+    await orcaPage.evaluate(
+      (width) => window.__store?.getState().setSidebarWidth(width),
+      sidebarWidth
+    )
+    await expect
+      .poll(async () =>
+        orcaPage.evaluate(() => document.querySelector('.titlebar-left')?.clientWidth ?? 0)
+      )
+      .toBeGreaterThan(0)
+    return orcaPage.evaluate(() => {
+      const header = document.querySelector('.titlebar-left')
+      if (!header) {
+        return ['no titlebar-left header']
+      }
+      const controls = [...header.querySelectorAll('button')]
+        .map((button) => ({
+          name: button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '?',
+          rect: button.getBoundingClientRect()
+        }))
+        .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+      const hits: string[] = []
+      for (let i = 0; i < controls.length; i += 1) {
+        for (let j = i + 1; j < controls.length; j += 1) {
+          const a = controls[i].rect
+          const b = controls[j].rect
+          if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) {
+            hits.push(`"${controls[i].name}" over "${controls[j].name}"`)
+          }
+        }
+      }
+      return hits
+    })
+  }
+
+  for (const width of [220, 280, 360, 520]) {
+    expect(await overlapsAt(width), `sidebar width ${width}`).toEqual([])
+  }
+  await orcaPage.screenshot({ path: 'pr-evidence/workspace-titlebar-no-overlap.png' })
 })
 
 test('a project names itself in the chrome, and Home keeps the work @workspace-chrome', async ({

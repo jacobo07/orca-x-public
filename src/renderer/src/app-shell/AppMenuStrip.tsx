@@ -1,5 +1,59 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MenuTopLevelItem } from '../../../shared/app-menu-strip'
+
+/**
+ * Collapse the strip to the compact menu button when the labels do not fit the space the titlebar
+ * gives them.
+ *
+ * Why measured rather than gated on a breakpoint: the space is the sidebar's width, which the user
+ * drags. Without this the buttons overflow their header and are painted over the sidebar toggle and
+ * the back/forward pair — controls that are still clickable underneath, so nothing looks broken
+ * enough to report while the titlebar quietly stops working.
+ *
+ * Two measurements, both deliberately state-independent, because anything that shrinks when the
+ * strip collapses cannot decide whether the strip should come back. The natural width is remembered
+ * from the renders that fit; the space is the titlebar header's own width, which is the sidebar's
+ * and does not move when the strip inside it changes shape.
+ */
+/** Room the header owes its other controls: the logo, the sidebar toggle, and back/forward. */
+const HEADER_CHROME_RESERVE_PX = 140
+function useStripFits(itemCount: number): {
+  wrapperRef: React.RefObject<HTMLDivElement | null>
+  stripRef: React.RefObject<HTMLDivElement | null>
+  fits: boolean
+} {
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const stripRef = useRef<HTMLDivElement | null>(null)
+  const naturalWidthRef = useRef(0)
+  const [fits, setFits] = useState(true)
+
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper || itemCount === 0) {
+      return
+    }
+    const header = wrapper.closest('.titlebar-left') ?? wrapper.closest('.titlebar')
+    if (!header) {
+      return
+    }
+    const measure = (): void => {
+      const strip = stripRef.current
+      if (strip) {
+        naturalWidthRef.current = Math.max(naturalWidthRef.current, strip.scrollWidth)
+      }
+      setFits(
+        naturalWidthRef.current === 0 ||
+          header.clientWidth >= naturalWidthRef.current + HEADER_CHROME_RESERVE_PX
+      )
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [itemCount])
+
+  return { wrapperRef, stripRef, fits }
+}
 
 /**
  * The horizontal application-menu strip for platforms whose native menu bar is hidden.
@@ -13,6 +67,7 @@ import type { MenuTopLevelItem } from '../../../shared/app-menu-strip'
  */
 export function AppMenuStrip({ fallback = null }: { fallback?: React.ReactNode } = {}): React.ReactNode {
   const [items, setItems] = useState<readonly MenuTopLevelItem[]>([])
+  const { wrapperRef, stripRef, fits } = useStripFits(items.length)
 
   useEffect(() => {
     let cancelled = false
@@ -34,6 +89,15 @@ export function AppMenuStrip({ fallback = null }: { fallback?: React.ReactNode }
   if (items.length === 0) {
     return fallback
   }
+  if (!fits) {
+    // Why the wrapper stays mounted: it is what measures the space, and the strip has to be able to
+    // come back when the sidebar is widened again.
+    return (
+      <div ref={wrapperRef} className="flex min-w-0 flex-1 items-center">
+        {fallback}
+      </div>
+    )
+  }
 
   const popupAt = (event: React.MouseEvent<HTMLButtonElement>, index: number): void => {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -43,18 +107,20 @@ export function AppMenuStrip({ fallback = null }: { fallback?: React.ReactNode }
   }
 
   return (
-    <div className="flex items-center gap-0.5">
-      {items.map((item) => (
-        <button
-          key={item.index}
-          type="button"
-          className="titlebar-menu-strip-button"
-          disabled={!item.enabled}
-          onClick={(event) => popupAt(event, item.index)}
-        >
-          {item.label}
-        </button>
-      ))}
+    <div ref={wrapperRef} className="flex min-w-0 flex-1 items-center overflow-hidden">
+      <div ref={stripRef} className="flex shrink-0 items-center gap-0.5">
+        {items.map((item) => (
+          <button
+            key={item.index}
+            type="button"
+            className="titlebar-menu-strip-button"
+            disabled={!item.enabled}
+            onClick={(event) => popupAt(event, item.index)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
