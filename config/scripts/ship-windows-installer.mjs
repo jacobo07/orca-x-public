@@ -84,7 +84,11 @@ function runWindowsBuild() {
     console.log(`[ship] Using the MSVC environment from ${vcvars}`)
     // Why cmd rather than exporting the variables here: vcvars sets dozens of them, and
     // reproducing that set by hand is how a build ends up half-configured with nothing reporting it.
-    return spawnSync('cmd', ['/c', `call "${vcvars}" >nul && pnpm run build:win`], options)
+    // Why one shell string rather than ['cmd', '/c', ...]: passing it as an argument makes Node
+    // escape the quotes around the path, and cmd then looks for a program named with the quotes in
+    // it. vcvars prints its own "vswhere.exe no se reconoce" on this host and continues — that line
+    // is the broken registration this exists to work around, not a failure.
+    return spawnSync(`call "${vcvars}" >nul && pnpm run build:win`, { ...options, shell: true })
   }
   // Fail-open: a host with a working vswhere needs none of this, and a host with no compiler at all
   // should hear that from the build rather than from a guess made here.
