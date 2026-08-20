@@ -74,7 +74,12 @@ function buildEntryWorktreeResolver(
     case 'sleepingAgentKeyed':
     case 'surfaceTombstoneKeyed':
       return (_key, entry) => resolveRecordWorktreeId(entry)
-    default:
+    // Not worktree-scoped: no other window owns a part of these, so replace wins.
+    case 'global':
+    case 'hostPrivate':
+      return null
+    // A list of ids rather than a record of entries; merged before a resolver is needed.
+    case 'worktreeArray':
       return null
   }
 }
