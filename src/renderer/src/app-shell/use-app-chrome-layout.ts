@@ -94,6 +94,26 @@ export function useAppChromeLayout() {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
   }, [sidebarOpen, rightSidebarOpen])
 
+  // Why measured rather than a constant: the cluster is as wide as the project's name, and the tab
+  // strip has to reserve exactly that. Reserving too little draws the name over the strip's own
+  // trailing buttons, which then take clicks meant for the name and vice versa.
+  const workspaceProjectChromeRef = useRef<HTMLDivElement | null>(null)
+  const [workspaceProjectChromeWidth, setWorkspaceProjectChromeWidth] = useState(0)
+  useLayoutEffect(() => {
+    const chrome = workspaceProjectChromeRef.current
+    if (!chrome) {
+      setWorkspaceProjectChromeWidth(0)
+      return
+    }
+    const updateWidth = (): void => {
+      setWorkspaceProjectChromeWidth(chrome.getBoundingClientRect().width)
+    }
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(chrome)
+    return () => observer.disconnect()
+  }, [workspaceChromeActive])
+
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   useLayoutEffect(() => {
@@ -148,6 +168,8 @@ export function useAppChromeLayout() {
     // Why: the workbench stays mounted while hidden, so visibility tracks the same condition separately.
     terminalWorkbenchVisible: workspaceChromeActive,
     titlebarLeftControlsRef,
-    workspaceChromeActive
+    workspaceChromeActive,
+    workspaceProjectChromeRef,
+    workspaceProjectChromeWidth
   }
 }

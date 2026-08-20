@@ -298,13 +298,18 @@ export default function TabGroupPanel({
               ) : null}
             </div>
           </div>
-          {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-          {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+          {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating chrome cluster + window controls clickable. */}
+          {/* The cluster's width is measured because it carries the project's name, and its offset
+              from this strip's right edge is the window-controls width it is positioned against.
+              Both terms unconditionally: under-reserving paints the project name over these
+              buttons, over-reserving only leaves a gap. Not a trade worth making. */}
+          {reserveClosedExplorerToggleSpace ? (
             <div
               className="shrink-0"
               style={
                 {
-                  width: 'calc(40px + var(--window-controls-width, 0px))',
+                  width:
+                    'calc(var(--workspace-project-chrome-width, 0px) + var(--window-controls-width, 0px))',
                   WebkitAppRegion: 'no-drag'
                 } as React.CSSProperties
               }

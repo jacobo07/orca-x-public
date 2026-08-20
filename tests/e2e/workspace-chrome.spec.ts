@@ -128,6 +128,58 @@ test('the closed file panel keeps a reopen control clear of the tabs @workspace-
   await orcaPage.screenshot({ path: 'pr-evidence/workspace-closed-panel-reopen.png' })
 })
 
+test('the project chrome never covers the tab strip controls @workspace-chrome', async ({
+  orcaPage
+}) => {
+  // The chrome floats over the tab strip's right end, so the strip has to reserve its width. It is
+  // the project's name, so that width is not a constant — with a short name nothing looks wrong,
+  // and the quick-command button disappears under a longer one.
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+
+  const coveredAt = async (dock: string, panelOpen: boolean): Promise<string[]> => {
+    await orcaPage.evaluate(
+      ([dock, panelOpen]) => {
+        const state = window.__store?.getState()
+        state?.setSidePanelDock(dock as 'left' | 'right')
+        if (state && state.rightSidebarOpen !== panelOpen) {
+          state.toggleRightSidebar()
+        }
+      },
+      [dock, panelOpen] as [string, boolean]
+    )
+    await orcaPage.waitForTimeout(500)
+    return orcaPage.evaluate(() => {
+      const home = document.querySelector('button[aria-label="Go to Workspace home"]')
+      const cluster = home?.parentElement
+      const strip = document.querySelector('[data-tab-group-strip-id]')
+      if (!cluster || !strip) {
+        return ['no project chrome mounted']
+      }
+      const clusterRect = cluster.getBoundingClientRect()
+      return [...strip.querySelectorAll('button')]
+        .map((button) => ({
+          name: button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '?',
+          rect: button.getBoundingClientRect()
+        }))
+        .filter(
+          ({ rect }) =>
+            rect.width > 0 &&
+            clusterRect.left < rect.right &&
+            rect.left < clusterRect.right &&
+            clusterRect.top < rect.bottom &&
+            rect.top < clusterRect.bottom
+        )
+        .map(({ name }) => `covers "${name}"`)
+    })
+  }
+
+  expect(await coveredAt('left', false), 'left dock, panel closed').toEqual([])
+  expect(await coveredAt('left', true), 'left dock, panel open').toEqual([])
+  expect(await coveredAt('right', false), 'right dock, panel closed').toEqual([])
+  await orcaPage.screenshot({ path: 'pr-evidence/workspace-project-chrome-clear.png' })
+})
+
 test('a project names itself in the chrome, and Home keeps the work @workspace-chrome', async ({
   orcaPage
 }) => {

@@ -17,6 +17,28 @@ import type { MenuTopLevelItem } from '../../../shared/app-menu-strip'
  */
 /** Floor for the room the header owes its other controls, until they can be measured. */
 const HEADER_CHROME_RESERVE_FLOOR_PX = 140
+
+/**
+ * Width of the controls sharing the header with the strip: what sits before it, plus everything
+ * that starts after it ends.
+ *
+ * Why not `header.clientWidth - wrapper.clientWidth`: the wrapper is a flex child of a
+ * content-sized row, so that subtraction returns the header's free space rather than its
+ * neighbours' width. The threshold it produced sat exactly at the width where the strip was
+ * already too wide, and the strip expanded straight back into the overlap this exists to prevent.
+ */
+function measureNeighbours(header: Element, wrapper: HTMLElement): number {
+  const headerRect = header.getBoundingClientRect()
+  const wrapperRect = wrapper.getBoundingClientRect()
+  const before = Math.max(0, wrapperRect.left - headerRect.left)
+  const after = [...header.querySelectorAll('button')]
+    .map((control) => control.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 && rect.left >= wrapperRect.right)
+    .reduce((total, rect) => total + rect.width, 0)
+  // Margins between those controls are not in their own rects; without slack the strip expands to
+  // within a few pixels of them, which is where the overlap starts.
+  return before + after + 24
+}
 function useStripFits(itemCount: number): {
   wrapperRef: React.RefObject<HTMLDivElement | null>
   stripRef: React.RefObject<HTMLDivElement | null>
@@ -41,10 +63,7 @@ function useStripFits(itemCount: number): {
       const strip = stripRef.current
       if (strip) {
         naturalWidthRef.current = Math.max(naturalWidthRef.current, strip.scrollWidth)
-        // The other controls' width, taken only while the strip is laid out beside them, so it is
-        // never the shrunken figure a collapsed strip reports. A guessed constant put the threshold
-        // a few pixels off and the strip expanded straight back into an overlap.
-        reserveRef.current = Math.max(reserveRef.current, header.clientWidth - wrapper.clientWidth)
+        reserveRef.current = Math.max(reserveRef.current, measureNeighbours(header, wrapper))
       }
       setFits(
         naturalWidthRef.current === 0 ||

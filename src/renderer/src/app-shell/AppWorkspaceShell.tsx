@@ -207,6 +207,7 @@ export function AppWorkspaceShell(props: {
                 )}
                 {layout.workspaceChromeActive && (
                   <div
+                    ref={layout.workspaceProjectChromeRef}
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
                       {

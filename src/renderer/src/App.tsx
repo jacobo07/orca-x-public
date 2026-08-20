@@ -59,6 +59,9 @@ function App(): React.JSX.Element {
       style={
         {
           '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
+          // The project name + Home cluster floats over the tab strip's right end; the strip
+          // reserves exactly this so neither is drawn on the other.
+          '--workspace-project-chrome-width': `${layout.workspaceProjectChromeWidth}px`,
           // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
           '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
           // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
