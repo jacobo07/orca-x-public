@@ -15,8 +15,8 @@ import type { MenuTopLevelItem } from '../../../shared/app-menu-strip'
  * from the renders that fit; the space is the titlebar header's own width, which is the sidebar's
  * and does not move when the strip inside it changes shape.
  */
-/** Room the header owes its other controls: the logo, the sidebar toggle, and back/forward. */
-const HEADER_CHROME_RESERVE_PX = 140
+/** Floor for the room the header owes its other controls, until they can be measured. */
+const HEADER_CHROME_RESERVE_FLOOR_PX = 140
 function useStripFits(itemCount: number): {
   wrapperRef: React.RefObject<HTMLDivElement | null>
   stripRef: React.RefObject<HTMLDivElement | null>
@@ -25,6 +25,7 @@ function useStripFits(itemCount: number): {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const stripRef = useRef<HTMLDivElement | null>(null)
   const naturalWidthRef = useRef(0)
+  const reserveRef = useRef(HEADER_CHROME_RESERVE_FLOOR_PX)
   const [fits, setFits] = useState(true)
 
   useLayoutEffect(() => {
@@ -40,10 +41,14 @@ function useStripFits(itemCount: number): {
       const strip = stripRef.current
       if (strip) {
         naturalWidthRef.current = Math.max(naturalWidthRef.current, strip.scrollWidth)
+        // The other controls' width, taken only while the strip is laid out beside them, so it is
+        // never the shrunken figure a collapsed strip reports. A guessed constant put the threshold
+        // a few pixels off and the strip expanded straight back into an overlap.
+        reserveRef.current = Math.max(reserveRef.current, header.clientWidth - wrapper.clientWidth)
       }
       setFits(
         naturalWidthRef.current === 0 ||
-          header.clientWidth >= naturalWidthRef.current + HEADER_CHROME_RESERVE_PX
+          header.clientWidth >= naturalWidthRef.current + reserveRef.current
       )
     }
     measure()
