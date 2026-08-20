@@ -18,6 +18,7 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { translateMain } from '../i18n/main-i18n'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../../shared/app-menu-strip'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
+import { PRODUCT_NAME } from '../../shared/product'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
@@ -272,7 +273,7 @@ export function createMainWindow(
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
-    title: opts?.title ?? 'Orca',
+    title: opts?.title ?? PRODUCT_NAME,
     show: false,
     // Why: macOS swallows the app-activating click by default, so clicking back into Orca needed a second click (Windows/Linux already deliver it).
     acceptFirstMouse: true,
@@ -1010,7 +1011,7 @@ export function createMainWindow(
     if (store.getUI().trayMinimizeNoticeShown !== true) {
       try {
         new Notification({
-          title: 'Orca',
+          title: PRODUCT_NAME,
           body: translateMain(
             'tray.minimizeNotice.body',
             'Orca is still running in the system tray'

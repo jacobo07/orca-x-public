@@ -46,7 +46,11 @@ const devChannelRepo = isMacHourly
     : isMacAdhoc
       ? 'orca-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+// Why its own id rather than upstream's: this is a fork with its own release identity. Sharing
+// com.stablyai.orca would make Windows treat our installer as an upgrade of theirs and hand our
+// build to their updater feed.
+const appId = 'com.orcax.app'
+const productName = 'Orca X'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -91,8 +95,10 @@ const winSpeechNativeResource = {
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName,
+  // Why both schemes: `orca://` links are minted by the CLI and by existing installs, and dropping
+  // it would break every deep link already in the wild. `orcax://` is the fork's own.
+  protocols: [{ name: productName, schemes: ['orcax', 'orca'] }],
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
     : localBuildVersion
@@ -297,7 +303,7 @@ module.exports = {
     }
   },
   win: {
-    executableName: 'Orca',
+    executableName: productName,
     // Why: Windows installers are signed after electron-builder packaging by
     // SignPath, so the packager cannot infer the updater publisherName.
     signtoolOptions: {
@@ -327,7 +333,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: 'orca-windows-setup.${ext}',
+    artifactName: 'orca-x-windows-setup.${ext}',
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
@@ -510,12 +516,18 @@ module.exports = {
   // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
   // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
-  publish: {
-    provider: 'github',
-    owner: 'stablyai',
-    repo: devChannelRepo ?? 'orca',
-    releaseType: devChannelRepo ? 'prerelease' : 'release'
-  }
+  // Why nothing is published: upstream's feed serves upstream's app. A fork that keeps pointing at
+  // it hands the user an update that silently replaces this build with the product it forked from,
+  // which is the one case where shipping no auto-update is safer than shipping one. The mac dev
+  // channels above still resolve their own repos when those env flags are set.
+  publish: devChannelRepo
+    ? {
+        provider: 'github',
+        owner: 'stablyai',
+        repo: devChannelRepo,
+        releaseType: 'prerelease'
+      }
+    : null
 }
 
 function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {

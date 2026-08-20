@@ -192,6 +192,24 @@ function areSameE2EHomePath(left: string, right: string): boolean {
     : normalizedLeft === normalizedRight
 }
 
+/**
+ * Directory Electron has always derived for packaged installs, from the app's npm name.
+ *
+ * Pinned rather than derived because renaming the product must not move it. Electron resolves
+ * userData from the app name, so a rebranded build would come up pointing at an empty directory —
+ * every project, workspace and setting apparently wiped, with the real data still on disk under a
+ * name nothing looks at any more. The rename is an identity change, not a data migration.
+ */
+const PACKAGED_USER_DATA_DIRECTORY = 'orca'
+
+export function configurePackagedUserDataPath(): void {
+  // Dev and E2E have already claimed their own directories above, and must keep them.
+  if (!app.isPackaged) {
+    return
+  }
+  app.setPath('userData', join(app.getPath('appData'), PACKAGED_USER_DATA_DIRECTORY))
+}
+
 export function configureOrcaUserDataPathEnv(): void {
   // Why: relaunches can inherit a stale ORCA_USER_DATA_PATH; canonicalize before CLI-shared modules build runtime-home paths.
   process.env.ORCA_USER_DATA_PATH = app.getPath('userData')

@@ -122,6 +122,7 @@ import {
   configureElectronNetworkCompatibility,
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
+  configurePackagedUserDataPath,
   disableUnsupportedChromiumFeatures,
   enableMainProcessGpuFeatures,
   installDevParentDisconnectQuit,
@@ -670,6 +671,9 @@ if (app.isPackaged && process.platform !== 'win32') {
   })
 }
 configureDevUserDataPath(is.dev)
+// Why here: after dev/E2E have claimed their own directories, and before anything resolves
+// userData — initDataPath() below captures whatever this leaves as canonical.
+configurePackagedUserDataPath()
 configureOrcaUserDataPathEnv()
 installServeSupervisorDisconnectQuit(isServeMode)
 
