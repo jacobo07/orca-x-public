@@ -69,7 +69,13 @@
     "help": "Ayuda",
     "paste": "Pegar",
     "copy": "Copiar",
-    "selectAll": "Seleccionar todo"
+    "selectAll": "Seleccionar todo",
+    "terminal": "Terminal",
+    "newTerminal": "Nueva terminal",
+    "chooseTerminalProfile": "Nueva terminal con perfil...",
+    "splitTerminalRight": "Dividir terminal a la derecha",
+    "splitTerminalDown": "Dividir terminal abajo",
+    "toggleTerminalRail": "Alternar barra de terminales"
   },
   "tray": {
     "openOrca": "Abrir Orca",

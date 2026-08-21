@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { TerminalMenuCommand } from '../shared/terminal-menu-command'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../shared/app-menu-strip'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -3676,6 +3677,14 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openCrashReport', listener)
       return () => ipcRenderer.removeListener('ui:openCrashReport', listener)
+    },
+    onTerminalCommand: (
+      callback: (command: TerminalMenuCommand) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, command: TerminalMenuCommand) =>
+        callback(command)
+      ipcRenderer.on('ui:terminalCommand', listener)
+      return () => ipcRenderer.removeListener('ui:terminalCommand', listener)
     },
     onToggleLeftSidebar: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

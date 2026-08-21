@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { TerminalMenuCommand } from '../../shared/terminal-menu-command'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -41,6 +42,7 @@ export type UiCommandEventApi = {
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
   onOpenCrashReport: (callback: () => void) => () => void
+  onTerminalCommand: (callback: (command: TerminalMenuCommand) => void) => () => void
   onToggleLeftSidebar: (callback: () => void) => () => void
   onToggleRightSidebar: (callback: () => void) => () => void
   onToggleWorktreePalette: (callback: () => void) => () => void

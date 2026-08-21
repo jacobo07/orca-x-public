@@ -5,6 +5,8 @@ export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
 export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
+/** Asks the terminal rail's toolbar to open its profile menu, from a keybinding or the app menu. */
+export const OPEN_TERMINAL_PROFILE_MENU_EVENT = 'orca-open-terminal-profile-menu'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 

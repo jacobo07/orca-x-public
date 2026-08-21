@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
+  OPEN_TERMINAL_PROFILE_MENU_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
@@ -2016,6 +2017,15 @@ function Terminal(): React.JSX.Element | null {
           keybindings
         })
       }
+      // Why: dispatched rather than handled here — the rail's toolbar owns the menu, and asking it
+      // to open is what keeps the keybinding, the Terminal menu and the button one action.
+      if (!e.repeat && matchShortcut('terminal.chooseProfile')) {
+        e.preventDefault()
+        notifyTerminalCapture('terminal.chooseProfile')
+        window.dispatchEvent(new CustomEvent(OPEN_TERMINAL_PROFILE_MENU_EVENT))
+        return
+      }
+
       // Why: Cmd/Ctrl+T always opens a terminal regardless of active surface; browser tabs have their own chord (Cmd/Ctrl+Shift+B).
       if (!e.repeat && matchShortcut('tab.newTerminal')) {
         e.preventDefault()

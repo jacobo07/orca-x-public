@@ -46,6 +46,7 @@ function buildMenuOptions() {
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
+    onTerminalCommand: vi.fn(),
     onToggleLeftSidebar: vi.fn(),
     onToggleRightSidebar: vi.fn(),
     onToggleAppearance: vi.fn(),
@@ -108,6 +109,31 @@ describe('registerAppMenu', () => {
     const forceReloadItem = viewSubmenu.find((item) => item.label === expectedForceReloadLabel)
     expect(forceReloadItem).toBeDefined()
     expect(forceReloadItem?.accelerator).toBeUndefined()
+  })
+
+  it('routes every Terminal menu item to the renderer, with no accelerator of its own', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const terminalSubmenu = getSubmenu(getTemplate(), 'Terminal')
+    const clickable = terminalSubmenu.filter((item) => typeof item.click === 'function')
+    expect(clickable.length).toBeGreaterThan(0)
+
+    for (const item of clickable) {
+      // Why: a menu accelerator is consumed in main before the renderer's keydown handler runs,
+      // which would bypass the policy deciding whether Orca or the running TUI owns the chord.
+      // These labels carry shortcut hints; the binding itself stays in the renderer.
+      expect(item.accelerator).toBeUndefined()
+      item.click?.({} as never, {} as never, {} as never)
+    }
+
+    expect(options.onTerminalCommand.mock.calls.map(([command]) => command)).toEqual([
+      'newTerminal',
+      'chooseProfile',
+      'splitRight',
+      'splitDown',
+      'toggleRail'
+    ])
   })
 
   it('reloads the focused window from the view menu', () => {

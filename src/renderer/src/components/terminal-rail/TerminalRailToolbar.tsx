@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { ChevronDown, Ellipsis, PanelRightClose, PanelRightOpen, Plus, Trash2 } from 'lucide-react'
+import { OPEN_TERMINAL_PROFILE_MENU_EVENT } from '@/constants/terminal'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +65,14 @@ export function TerminalRailToolbar({
       onNewTerminalWithShell
     })
   }
+  // Why controlled: the profile menu is reachable from a keybinding and the Terminal menu, and a
+  // menu only its own trigger can open is not one action with several surfaces.
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  useEffect(() => {
+    const open = (): void => setProfileMenuOpen(true)
+    window.addEventListener(OPEN_TERMINAL_PROFILE_MENU_EVENT, open)
+    return () => window.removeEventListener(OPEN_TERMINAL_PROFILE_MENU_EVENT, open)
+  }, [])
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const splitRightShortcut = useShortcutLabel('terminal.splitRight')
   const splitDownShortcut = useShortcutLabel('terminal.splitDown')
@@ -104,7 +114,7 @@ export function TerminalRailToolbar({
         </TooltipContent>
       </Tooltip>
 
-      <DropdownMenu>
+      <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"

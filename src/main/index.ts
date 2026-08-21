@@ -2957,6 +2957,9 @@ void app.whenReady().then(async () => {
         mainWindow?.webContents.send('terminal:zoom', 'reset')
       }
     },
+    onTerminalCommand: (command) => {
+      mainWindow?.webContents.send('ui:terminalCommand', command)
+    },
     onToggleLeftSidebar: () => {
       mainWindow?.webContents.send('ui:toggleLeftSidebar')
     },

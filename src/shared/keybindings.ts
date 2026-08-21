@@ -114,6 +114,7 @@ export type KeybindingActionId =
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
+  | 'terminal.chooseProfile'
   | 'terminal.switchInputSource'
   | PluginKeybindingActionId
 
@@ -1051,6 +1052,17 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'close'],
     defaultBindings: platformBindings(['Mod+W'])
+  },
+  {
+    id: 'terminal.chooseProfile',
+    title: 'Choose terminal profile',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'profile', 'shell', 'agent', 'new'],
+    // Why unbound by default: every comfortable terminal chord is already taken, and stealing one
+    // to introduce an action is worse than leaving it discoverable through the rail and the
+    // Terminal menu. Bindable in Settings for anyone who wants it on the keyboard.
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.splitRight',

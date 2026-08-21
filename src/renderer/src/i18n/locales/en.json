@@ -97,7 +97,13 @@
     "paste": "Paste",
     "copy": "Copy",
     "selectAll": "Select All",
-    "showWorkspaceButton": "Show Workspace Button"
+    "showWorkspaceButton": "Show Workspace Button",
+    "terminal": "Terminal",
+    "newTerminal": "New Terminal",
+    "chooseTerminalProfile": "New Terminal With Profile...",
+    "splitTerminalRight": "Split Terminal Right",
+    "splitTerminalDown": "Split Terminal Down",
+    "toggleTerminalRail": "Toggle Terminal Rail"
   },
   "tray": {
     "openOrca": "Open Orca",

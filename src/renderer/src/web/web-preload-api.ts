@@ -2828,6 +2828,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenCrashReport: () => noopUnsubscribe,
     // No desktop main process to push state changes; the web client re-reads via ui.get on interaction.
     onStateChanged: () => noopUnsubscribe,
+    onTerminalCommand: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
     onToggleRightSidebar: () => noopUnsubscribe,
     onToggleWorktreePalette: () => noopUnsubscribe,
