@@ -19,25 +19,33 @@ import type { MenuTopLevelItem } from '../../../shared/app-menu-strip'
 const HEADER_CHROME_RESERVE_FLOOR_PX = 140
 
 /**
- * Width of the controls sharing the header with the strip: what sits before it, plus everything
- * that starts after it ends.
+ * Width of the controls sharing the header with the strip.
+ *
+ * Measured by identity -- every header child except the one holding the strip -- and never by
+ * position. An earlier version summed the controls starting after the wrapper's right edge, which
+ * is self-confirming: once the strip is wide enough to paint over a control, that control no longer
+ * starts after the wrapper, so it drops out of the reserve and the measurement reports that the
+ * strip fits. Registering one more menu was enough to reach that state and stay in it.
  *
  * Why not `header.clientWidth - wrapper.clientWidth`: the wrapper is a flex child of a
  * content-sized row, so that subtraction returns the header's free space rather than its
  * neighbours' width. The threshold it produced sat exactly at the width where the strip was
  * already too wide, and the strip expanded straight back into the overlap this exists to prevent.
  */
-function measureNeighbours(header: Element, wrapper: HTMLElement): number {
-  const headerRect = header.getBoundingClientRect()
-  const wrapperRect = wrapper.getBoundingClientRect()
-  const before = Math.max(0, wrapperRect.left - headerRect.left)
-  const after = [...header.querySelectorAll('button')]
-    .map((control) => control.getBoundingClientRect())
-    .filter((rect) => rect.width > 0 && rect.left >= wrapperRect.right)
-    .reduce((total, rect) => total + rect.width, 0)
-  // Margins between those controls are not in their own rects; without slack the strip expands to
+function measureNeighbours(wrapper: HTMLElement): number {
+  // The wrapper's siblings, not the header's children: the header holds a single full-width row, so
+  // measuring its children finds only that row, reports no neighbours at all, and lets the strip
+  // grow into every control beside it.
+  const row = wrapper.parentElement
+  if (!row) {
+    return HEADER_CHROME_RESERVE_FLOOR_PX
+  }
+  const neighbours = [...row.children]
+    .filter((child) => child !== wrapper)
+    .reduce((total, child) => total + (child as HTMLElement).offsetWidth, 0)
+  // Margins between those controls are not in their own boxes; without slack the strip expands to
   // within a few pixels of them, which is where the overlap starts.
-  return before + after + 24
+  return neighbours + 24
 }
 function useStripFits(itemCount: number): {
   wrapperRef: React.RefObject<HTMLDivElement | null>
@@ -63,7 +71,7 @@ function useStripFits(itemCount: number): {
       const strip = stripRef.current
       if (strip) {
         naturalWidthRef.current = Math.max(naturalWidthRef.current, strip.scrollWidth)
-        reserveRef.current = Math.max(reserveRef.current, measureNeighbours(header, wrapper))
+        reserveRef.current = Math.max(reserveRef.current, measureNeighbours(wrapper))
       }
       setFits(
         naturalWidthRef.current === 0 ||
@@ -131,7 +139,7 @@ export function AppMenuStrip({ fallback = null }: { fallback?: React.ReactNode }
   }
 
   return (
-    <div ref={wrapperRef} className="flex min-w-0 flex-1 items-center overflow-hidden">
+    <div ref={wrapperRef} className="mr-2 flex min-w-0 flex-1 items-center overflow-hidden">
       <div ref={stripRef} className="flex shrink-0 items-center gap-0.5">
         {items.map((item) => (
           <button
