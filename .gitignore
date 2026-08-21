@@ -22,6 +22,7 @@ node_modules/
 dist/
 dist-electron/
 dist-release/
+dist-ship/
 out/
 /build/
 release/

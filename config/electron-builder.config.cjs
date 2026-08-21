@@ -105,7 +105,16 @@ module.exports = {
       ? { extraMetadata: { version: localBuildVersion } }
       : {}),
   directories: {
-    buildResources: 'resources/build'
+    buildResources: 'resources/build',
+    // Why an env override rather than a CLI flag: `pnpm run build:win <flag>` forwards the flag
+    // behind a literal `--`, which electron-builder reads as end-of-options and silently demotes to
+    // a positional — the build then writes to the default directory while reporting nothing amiss.
+    // Why it exists at all: an interrupted packaging run can leave the previous win-unpacked tree
+    // held open by something on the machine, and electron-builder unlinks that tree before
+    // repacking, so every later build fails with EBUSY on app.asar until the holder lets go.
+    ...(process.env.ORCA_SHIP_OUTPUT_DIR?.trim()
+      ? { output: process.env.ORCA_SHIP_OUTPUT_DIR.trim() }
+      : {})
   },
   files: [
     '!**/.vscode/*',
@@ -136,6 +145,7 @@ module.exports = {
     // previous win-unpacked tree and installer included. Observed: 1169 MB instead of 125 MB.
     '!dist{,/**/*}',
     '!dist-release{,/**/*}',
+    '!dist-ship{,/**/*}',
     '!Casks{,/**/*}',
     '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md,ORCHESTRATION_IMPLEMENTATION_CHECKLIST.md,ORCHESTRATION_STRUCTURED_OUTPUT_DESIGN.md}',
     '!out/**/*.test.js',

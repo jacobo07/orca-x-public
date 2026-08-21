@@ -11,12 +11,18 @@
  */
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, readFileSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const BUILT_ARTIFACT = 'orca-x-windows-setup.exe'
+/**
+ * Where electron-builder writes. The builder config reads the same variable and sets
+ * `directories.output` from it; this side only needs to look in the right place afterwards, so the
+ * two must agree. Every check below applies to whatever comes out, wherever it was written.
+ */
+const OUTPUT_DIR = process.env.ORCA_SHIP_OUTPUT_DIR?.trim() || 'dist'
 const DESKTOP_ARTIFACT = 'Orca X Setup.exe'
 
 function fail(message) {
@@ -122,14 +128,40 @@ console.log(
   `[ship] Building Orca X from ${source.commit}${source.dirty ? ' (+ uncommitted changes)' : ''}`
 )
 
+/**
+ * Vite writes content-hashed chunks and never removes the previous build's, so `out/` accumulates
+ * every bundle ever produced there — and electron-builder packs the whole directory. Observed on a
+ * machine that had run a handful of e2e builds: 883 files and 63.5 MB in out/renderer/assets alone,
+ * three copies of every KaTeX font, and an installer 15 MB larger than the code it contains.
+ *
+ * Rebuilding into a dirty directory is the failure this whole script exists to catch, so it is
+ * loud: a build that cannot start clean should say so rather than ship the difference.
+ */
+function clearPreviousBuildOutput() {
+  const outDir = join(repoRoot, 'out')
+  if (!existsSync(outDir)) {
+    return
+  }
+  try {
+    rmSync(outDir, { recursive: true, force: true })
+  } catch (error) {
+    fail(
+      `Could not clear out/ before building: ${error.message}
+` +
+        '        Something is holding a file there; shipping now would pack every previous build.'
+    )
+  }
+}
+
+clearPreviousBuildOutput()
 const build = runWindowsBuild()
 if (build.status !== 0) {
   fail(`Packaging failed with exit code ${build.status}. Nothing was copied to the Desktop.`)
 }
 
-const builtPath = join(repoRoot, 'dist', BUILT_ARTIFACT)
+const builtPath = join(repoRoot, OUTPUT_DIR, BUILT_ARTIFACT)
 if (!existsSync(builtPath)) {
-  fail(`Packaging reported success but produced no ${BUILT_ARTIFACT} in dist/.`)
+  fail(`Packaging reported success but produced no ${BUILT_ARTIFACT} in ${OUTPUT_DIR}/.`)
 }
 // Why the timestamp check: a build that skipped its packaging step leaves the previous run's
 // artifact in place, and exits 0 having shipped nothing.
