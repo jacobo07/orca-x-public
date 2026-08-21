@@ -47,6 +47,10 @@ export type PersistedUIState = {
   /** Height in px of the bottom-docked workspace. Only meaningful while docked; the floating bounds stay separate so switching modes restores each one's own size. */
   floatingWorkspaceBottomHeight?: number
   markdownTocPanelWidth?: number
+  /** Terminal rail width in px. Global chrome, like the sidebar widths beside it. */
+  terminalRailWidth?: number
+  /** Terminal rail folded to its toolbar. */
+  terminalRailCollapsed?: boolean
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'

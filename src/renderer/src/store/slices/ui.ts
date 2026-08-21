@@ -110,6 +110,10 @@ import {
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
+import {
+  TERMINAL_RAIL_DEFAULT_WIDTH,
+  clampTerminalRailWidth
+} from '../../../../shared/terminal-rail-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
@@ -613,6 +617,11 @@ export type UISlice = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
+  /** Terminal rail width in px; clamped on write so a drag past the limits cannot persist one. */
+  terminalRailWidth: number
+  terminalRailCollapsed: boolean
+  setTerminalRailWidth: (width: number) => void
+  toggleTerminalRailCollapsed: () => void
   agentSendPopoverTargetMode: AgentSendPopoverTargetMode | null
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
@@ -1003,6 +1012,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
+  terminalRailWidth: TERMINAL_RAIL_DEFAULT_WIDTH,
+  terminalRailCollapsed: false,
+  setTerminalRailWidth: (width) => set({ terminalRailWidth: clampTerminalRailWidth(width) }),
+  toggleTerminalRailCollapsed: () =>
+    set((s) => ({ terminalRailCollapsed: !s.terminalRailCollapsed })),
   agentSendPopoverTargetMode: null,
   openAgentSendPopoverTargetMode: (args) => {
     const targets = deriveRunningAgentSendTargets(get(), args.worktreeId)
@@ -2506,6 +2520,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           undefined,
           s.markdownTocPanelWidth
         ),
+        terminalRailWidth: clampTerminalRailWidth(ui.terminalRailWidth, s.terminalRailWidth),
+        terminalRailCollapsed: ui.terminalRailCollapsed === true,
         combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
           ui.combinedDiffFileTreeWidth,
           undefined,

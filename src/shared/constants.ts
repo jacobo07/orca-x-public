@@ -11,6 +11,7 @@ import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-at
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
+import { TERMINAL_RAIL_DEFAULT_WIDTH } from './terminal-rail-width'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
@@ -468,6 +469,8 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
+    terminalRailWidth: TERMINAL_RAIL_DEFAULT_WIDTH,
+    terminalRailCollapsed: false,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
     sortBy: 'recent',

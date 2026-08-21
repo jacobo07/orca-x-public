@@ -12,6 +12,7 @@ import {
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
+import { clampTerminalRailWidth } from '../../../shared/terminal-rail-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
   normalizeVisibleExecutionHostIds,
@@ -146,6 +147,12 @@ export function updatePersistedUI(
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(
       sanitizedUpdates.markdownTocPanelWidth ?? operations.state.ui?.markdownTocPanelWidth
     ),
+    terminalRailWidth: clampTerminalRailWidth(
+      sanitizedUpdates.terminalRailWidth ?? operations.state.ui?.terminalRailWidth
+    ),
+    terminalRailCollapsed:
+      (sanitizedUpdates.terminalRailCollapsed ?? operations.state.ui?.terminalRailCollapsed) ===
+      true,
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
     ),

@@ -2868,6 +2868,20 @@
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
           }
+        },
+        "rail": {
+          "TerminalRail": {
+            "paneCount": "Paneles en esta terminal",
+            "pane": "Panel",
+            "resize": "Redimensionar la barra de terminales"
+          },
+          "TerminalRailToolbar": {
+            "chooseProfile": "Elegir perfil de terminal",
+            "default": "Predeterminado",
+            "moreActions": "Más acciones de terminal",
+            "closeTerminal": "Cerrar terminal",
+            "toggleRail": "Alternar barra de terminales"
+          }
         }
       },
       "tab": {

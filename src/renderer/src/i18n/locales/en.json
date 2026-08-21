@@ -3072,6 +3072,20 @@
             "3ccc7981bb": "Host unavailable",
             "54f29b7c0d": "Loading host…"
           }
+        },
+        "rail": {
+          "TerminalRail": {
+            "resize": "Resize terminal rail",
+            "pane": "Pane",
+            "paneCount": "Panes in this terminal"
+          },
+          "TerminalRailToolbar": {
+            "chooseProfile": "Choose terminal profile",
+            "default": "Default",
+            "moreActions": "More terminal actions",
+            "closeTerminal": "Close terminal",
+            "toggleRail": "Toggle terminal rail"
+          }
         }
       },
       "tab": {
