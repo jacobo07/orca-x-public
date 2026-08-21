@@ -9,14 +9,8 @@ import { useAppStore } from '../../store'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
-import {
-  buildWindowsShellMenuEntries,
-  type WindowsShellMenuEntry
-} from './tab-bar-windows-shell-options'
-import type {
-  getProjectRuntimeShellMenuMode,
-  resolveWindowsPowerShellImplementationSetting
-} from './use-tab-bar-runtime-model'
+import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
+import type { resolveWindowsPowerShellImplementationSetting } from './use-tab-bar-runtime-model'
 
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
@@ -45,9 +39,7 @@ export function useTabBarCreateMenuController({
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled,
   workspaceHasSimulatorTab,
-  showWindowsShellMenu,
-  projectRuntimeShellMenuMode,
-  defaultWindowsShell,
+  shellMenuEntries,
   defaultWindowsPowerShellImplementation,
   windowsTerminalCapabilities,
   agentLaunchOptions,
@@ -65,9 +57,7 @@ export function useTabBarCreateMenuController({
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
   workspaceHasSimulatorTab: boolean
-  showWindowsShellMenu: boolean
-  projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
-  defaultWindowsShell: string
+  shellMenuEntries: WindowsShellMenuEntry[] | undefined
   defaultWindowsPowerShellImplementation: ReturnType<
     typeof resolveWindowsPowerShellImplementationSetting
   >
@@ -137,23 +127,9 @@ export function useTabBarCreateMenuController({
   const queueFocusAfterNewTabMenuClose = (focus: () => void): void => {
     pendingNewTabMenuFocusRef.current = focus
   }
-  const windowsShellEntries = useMemo(() => {
-    return buildWindowsShellMenuEntries({
-      showWindowsShellMenu,
-      hasShellLauncher: Boolean(onNewTerminalWithShell),
-      projectRuntimeShellMenuMode,
-      defaultWindowsShell,
-      gitBashAvailable: windowsTerminalCapabilities.gitBashAvailable,
-      wslAvailable: windowsTerminalCapabilities.wslAvailable
-    })
-  }, [
-    defaultWindowsShell,
-    onNewTerminalWithShell,
-    projectRuntimeShellMenuMode,
-    showWindowsShellMenu,
-    windowsTerminalCapabilities.gitBashAvailable,
-    windowsTerminalCapabilities.wslAvailable
-  ])
+  // Why: the shell list is resolved once by useTerminalLaunchProfiles; this menu only decides
+  // whether it can act on one, which it cannot without a shell launcher.
+  const windowsShellEntries = onNewTerminalWithShell ? shellMenuEntries : undefined
   const createMenuOptions = useMemo(
     () =>
       buildTabCreateMenuOptions({

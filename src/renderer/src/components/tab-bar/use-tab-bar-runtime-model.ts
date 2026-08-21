@@ -1,60 +1,38 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { useAppStore } from '../../store'
 import { buildStatusMap } from '../right-sidebar/status-display'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
-import {
-  getWindowsTerminalCapabilityOwnerKey,
-  useWindowsTerminalCapabilities,
-  type WindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
 import {
   selectTabBarAgentProjections,
   type TabBarAgentProjections
 } from './tab-agent-types-by-tab-id'
-import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
-import { DEFAULT_DISABLED_TUI_AGENTS } from '../../../../shared/tui-agent-selection'
-import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
+import {
+  getProjectRuntimeShellMenuMode,
+  resolveWindowsPowerShellImplementationSetting,
+  useTerminalLaunchProfiles
+} from '@/hooks/useTerminalLaunchProfiles'
+import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
+import type { TerminalLaunchProfileSet } from '@/lib/terminal-launch-profiles'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
-const isWindows = navigator.userAgent.includes('Windows')
 export const isMacOs = navigator.userAgent.includes('Mac')
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 type GitStatusEntries = AppStoreState['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
-const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 
-export function getProjectRuntimeShellMenuMode(
-  projectRuntime: ProjectExecutionRuntimeResolution | undefined
-): 'host' | 'wsl' | null {
-  if (!projectRuntime) {
-    return null
-  }
-  if (projectRuntime.status === 'repair-required') {
-    return 'wsl'
-  }
-  return projectRuntime.runtime.kind === 'wsl' ? 'wsl' : 'host'
-}
-
-export function resolveWindowsPowerShellImplementationSetting(settings: GlobalSettings | null) {
-  return settings?.terminalWindowsPowerShellImplementation ?? 'auto'
-}
+// Re-exported from their new owner: the launch-profile hook needs both, and leaving the definitions
+// here would have that hook import the tab bar it is meant to be independent of.
+export { getProjectRuntimeShellMenuMode, resolveWindowsPowerShellImplementationSetting }
 
 export type TabBarRuntimeModel = {
   newTerminalShortcut: string
@@ -76,6 +54,8 @@ export type TabBarRuntimeModel = {
   windowsTerminalCapabilities: WindowsTerminalCapabilities
   showWindowsShellMenu: boolean
   projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
+  shellMenuEntries: WindowsShellMenuEntry[] | undefined
+  terminalLaunchProfiles: TerminalLaunchProfileSet
   resolvedGroupId: string
   statusByRelativePath: Map<string, GitFileStatus>
   unifiedTabByVisibleId: Map<string, Tab>
@@ -115,112 +95,18 @@ export function useTabBarRuntimeModel({
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
-  const defaultWindowsShell = useAppStore(
-    (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
-  )
-  const defaultWindowsPowerShellImplementation = useAppStore((s) =>
-    resolveWindowsPowerShellImplementationSetting(s.settings)
-  )
-  const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const projects = useAppStore((s) => s.projects)
-  const repos = useAppStore((s) => s.repos)
-  const settings = useAppStore((s) => s.settings)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
-  const activeRuntimeEnvironmentId = useAppStore(
-    (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
-  )
-  // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
-  const worktreeConnectionId = useAppStore(
-    (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
-  )
-  const worktreeRemotePlatform = useAppStore((s) => {
-    if (!worktreeConnectionId) {
-      return null
-    }
-    return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
-  })
-  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
-  const disabledTuiAgents = useAppStore(
-    (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
-  )
-  const agentCmdOverrides = useAppStore(
-    (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
-  )
-  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
-  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
-  const agentLaunchOptions = useMemo(
-    () =>
-      buildTabAgentLaunchOptions(
-        orderTabLaunchAgents(defaultAgent, detectedIds ?? [], disabledTuiAgents),
-        agentCmdOverrides
-      ),
-    [agentCmdOverrides, defaultAgent, detectedIds, disabledTuiAgents]
-  )
-  const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
-  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId,
-    worktreeConnectionId
-  )
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
-    [activeRuntimeEnvironmentId]
-  )
-  const shouldProbeWindowsShellCapabilities =
-    isWindows ||
-    Boolean(activeRuntimeEnvironmentId?.trim()) ||
-    isWebClient ||
-    Boolean(worktreeConnectionId)
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    shouldProbeWindowsShellCapabilities,
-    false,
-    windowsTerminalCapabilityOwnerKey,
-    runtimeTarget,
-    worktreeConnectionId
-  )
-  const shellMenuHostPlatform = worktreeConnectionId
-    ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
-    : windowsTerminalCapabilities.hostPlatform
-  const showWindowsShellMenu = shouldShowWindowsShellMenu({
-    activeRuntimeEnvironmentId,
-    hostPlatform: shellMenuHostPlatform,
-    isWindowsClient: isWindows,
-    worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
-  })
-  const localProjectRuntime = useMemo(() => {
-    if (!showWindowsShellMenu || activeRuntimeEnvironmentId?.trim() || worktreeConnectionId) {
-      return undefined
-    }
-    return getLocalProjectExecutionRuntimeContext(
-      { activeRepoId, activeWorktreeId, projects, repos, settings, worktreesByRepo },
-      worktreeId,
-      'win32',
-      {
-        wslAvailable: windowsTerminalCapabilities.isLoading
-          ? undefined
-          : windowsTerminalCapabilities.wslAvailable,
-        availableWslDistros: windowsTerminalCapabilities.isLoading
-          ? null
-          : windowsTerminalCapabilities.wslDistros
-      }
-    )
-  }, [
-    activeRepoId,
-    activeRuntimeEnvironmentId,
-    activeWorktreeId,
-    projects,
-    repos,
-    settings,
+  // Why: one hook owns which shells and agents this worktree can launch, so the tab-bar menu and
+  // the terminal rail cannot drift into offering different sets.
+  const launchProfiles = useTerminalLaunchProfiles({ worktreeId, hasShellLauncher: true })
+  const {
+    agentLaunchOptions,
+    defaultWindowsShell,
+    defaultWindowsPowerShellImplementation,
+    projectRuntimeShellMenuMode,
+    shellMenuEntries,
     showWindowsShellMenu,
-    worktreeConnectionId,
-    windowsTerminalCapabilities.isLoading,
-    windowsTerminalCapabilities.wslAvailable,
-    windowsTerminalCapabilities.wslDistros,
-    worktreeId,
-    worktreesByRepo
-  ])
-  const projectRuntimeShellMenuMode = getProjectRuntimeShellMenuMode(localProjectRuntime)
+    windowsTerminalCapabilities
+  } = launchProfiles
   const resolvedGroupId = groupId ?? activeGroupIdForWorktree ?? worktreeId
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
   const unifiedTabByVisibleId = useMemo(
@@ -267,6 +153,8 @@ export function useTabBarRuntimeModel({
     windowsTerminalCapabilities,
     showWindowsShellMenu,
     projectRuntimeShellMenuMode,
+    shellMenuEntries,
+    terminalLaunchProfiles: launchProfiles,
     resolvedGroupId,
     statusByRelativePath,
     unifiedTabByVisibleId,
