@@ -68,7 +68,6 @@ import {
   clearPaneTitleOverlayRects
 } from './pane-title-overlay-rects'
 import NativeChatView from '../native-chat/NativeChatView'
-import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
@@ -258,8 +257,6 @@ type TerminalPaneProps = {
   isWorktreeActive?: boolean
   // When set (Activity portal), isolates one split pane as a transient override that doesn't touch expandedPaneId or persist the layout.
   isolatedPaneKey?: string | null
-  // Why: ephemeral one-off command terminals don't need the header's prominent split affordance (split shortcuts still work).
-  showSplitButton?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -312,8 +309,7 @@ function TerminalPane(
     isVisible = true,
     isWorktreeActive = isVisible,
     isolatedPaneKey = null,
-    showSplitButton = true,
-    onPtyExit,
+      onPtyExit,
     onCloseTab
   }: TerminalPaneProps,
   ref: React.ForwardedRef<TerminalPaneHandle>
@@ -2818,26 +2814,6 @@ function TerminalPane(
     managerRef.current?.setActivePane(paneId, { focus: false })
   }, [])
 
-  const splitTerminalPaneFromHeader = useCallback(
-    (pane: ManagedPane, direction: 'vertical' | 'horizontal') => {
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      splitTerminalPaneWithInheritedCwd({
-        manager,
-        getManager: () => managerRef.current,
-        paneTransports: paneTransportsRef.current,
-        paneCwdMap: paneCwdRef.current,
-        fallbackCwd: cwd ?? '',
-        pane,
-        direction,
-        source: 'context_menu'
-      })
-    },
-    [cwd]
-  )
-
   const beginPaneDragFromHeader = useCallback(
     (paneId: number, handle: HTMLElement, event: PointerEvent) => {
       managerRef.current?.beginPaneDragFromPointerDown(paneId, handle, event)
@@ -3204,7 +3180,6 @@ function TerminalPane(
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
-        showSplitButton={showSplitButton}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}
@@ -3226,7 +3201,6 @@ function TerminalPane(
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
         }
-        onSplitPane={splitTerminalPaneFromHeader}
         onBeginPaneDrag={beginPaneDragFromHeader}
         onActivatePaneTitleInteraction={activatePaneTitleInteraction}
         onPaneTitleContextMenu={contextMenu.onPaneTitleContextMenu}

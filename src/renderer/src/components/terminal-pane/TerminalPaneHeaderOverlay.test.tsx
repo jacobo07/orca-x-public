@@ -43,7 +43,6 @@ function renderOverlay({
   paneTitles,
   paneCount = 2,
   showAlwaysOnHeaders = true,
-  showSplitButton = true,
   onClosePane = vi.fn(),
   onRemoveTitle = vi.fn(),
   onRenameSubmit = vi.fn(),
@@ -55,7 +54,6 @@ function renderOverlay({
   paneTitles: Record<number, string>
   paneCount?: number
   showAlwaysOnHeaders?: boolean
-  showSplitButton?: boolean
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
   onRenameSubmit?: ReturnType<typeof vi.fn>
@@ -80,7 +78,6 @@ function renderOverlay({
         worktreeId="wt-1"
         cwd={path.join(path.sep, 'tmp')}
         showAlwaysOnHeaders={showAlwaysOnHeaders}
-        showSplitButton={showSplitButton}
         paneCount={paneCount}
         activePaneId={1}
         panes={panes}
@@ -102,7 +99,6 @@ function renderOverlay({
         onContinueAgentSessionInNewSession={
           onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
         }
-        onSplitPane={vi.fn()}
         onBeginPaneDrag={vi.fn()}
         onActivatePaneTitleInteraction={vi.fn()}
         onPaneTitleContextMenu={vi.fn()}
@@ -161,12 +157,14 @@ describe('TerminalPaneHeaderOverlay', () => {
     expect(onClosePane).not.toHaveBeenCalledWith(1)
   })
 
-  it('keeps split and close-pane controls available for untitled split pane headers', () => {
+  it('keeps the close-pane control available for untitled split pane headers', () => {
     const { container, onClosePane, onRemoveTitle } = renderOverlay({
       paneTitles: { 1: '', 2: '' }
     })
 
-    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).not.toBeNull()
+    // Close stays: it acts on this pane, so the pane's own header is where it belongs. Split does
+    // not -- it creates a pane, which is a terminal-level action and now lives in the rail.
+    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()
     expect(container.querySelector('.pane-title-drag-handle')).toBeNull()
     const closePane = container.querySelector<HTMLButtonElement>('button[aria-label="Close Pane"]')
     expect(closePane).not.toBeNull()
@@ -177,14 +175,13 @@ describe('TerminalPaneHeaderOverlay', () => {
     expect(onRemoveTitle).not.toHaveBeenCalled()
   })
 
-  it('omits the split control when the header affordance is hidden', () => {
-    const { container } = renderOverlay({
-      paneTitles: { 1: '', 2: '' },
-      paneCount: 1,
-      showSplitButton: false
-    })
+  it('leaves a lone pane titleless header with no controls of its own', () => {
+    // The split control used to live here alone, an 18px glyph in a bar showing nothing else. It
+    // reads as detached because it is: the bar exists to carry a title and a drag handle, so with
+    // no title there is nothing for a button to belong to.
+    const { container } = renderOverlay({ paneTitles: { 1: '', 2: '' }, paneCount: 1 })
 
-    expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()
+    expect(container.querySelectorAll('.pane-title-bar button')).toHaveLength(0)
   })
 
   it('ignores IME composition Enter before submitting a pane title rename', () => {
