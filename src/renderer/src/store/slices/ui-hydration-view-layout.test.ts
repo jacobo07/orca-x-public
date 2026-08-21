@@ -585,6 +585,23 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarExplorerView).toBe('files')
   })
 
+  it('restores the terminal rail, clamping a width no drag could have produced', () => {
+    // Rail geometry is global chrome and rides the same persisted ui blob as the sidebar widths,
+    // so it inherits their hazard too: the stored value can be stale, hand-edited, or written by a
+    // host on another version, and a layout the user has to repair by hand is the worst outcome.
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        terminalRailWidth: 4000,
+        terminalRailCollapsed: true
+      })
+    )
+
+    expect(store.getState().terminalRailWidth).toBe(420)
+    expect(store.getState().terminalRailCollapsed).toBe(true)
+  })
+
   it('clamps persisted sidebar widths into the supported range', () => {
     const store = createUIStore()
 
