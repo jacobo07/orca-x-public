@@ -59,6 +59,7 @@ test.describe('@terminal-rail-reality', () => {
     expect(menuBox).not.toBeNull()
     expect(menuBox!.x).toBeGreaterThanOrEqual(0)
     expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(viewport.width + 1)
+    await orcaPage.screenshot({ path: 'pr-evidence/terminal-rail-profile-menu.png' })
 
     await menuItems.first().click()
     await expect.poll(async () => countTerminalTabs(orcaPage), { timeout: 30_000 }).toBe(before + 1)
@@ -85,6 +86,7 @@ test.describe('@terminal-rail-reality', () => {
       .poll(async () => new Set(await readActivePanePtyIds(orcaPage)).size, { timeout: 30_000 })
       .toBe(2)
     await expect(rail.locator('[data-terminal-rail-row-kind="pane"]')).toHaveCount(2)
+    await orcaPage.screenshot({ path: 'pr-evidence/terminal-rail-split.png' })
   })
 
   test('widening the rail narrows the PTY, not just the pixels', async ({ orcaPage }) => {

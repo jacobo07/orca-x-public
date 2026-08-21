@@ -76,7 +76,6 @@ export function TerminalRailToolbar({
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const splitRightShortcut = useShortcutLabel('terminal.splitRight')
   const splitDownShortcut = useShortcutLabel('terminal.splitDown')
-  const closePaneShortcut = useShortcutLabel('terminal.closePane')
 
   const newTerminalLabel = translate(
     'auto.components.tab.bar.TabBar.d364f3c8d4',
@@ -203,9 +202,11 @@ export function TerminalRailToolbar({
           >
             <Trash2 className="size-3.5" />
             <span className="flex-1">
-              {translate('auto.components.terminal.rail.TerminalRailToolbar.closeTerminal', 'Close terminal')}
+              {translate(
+                'auto.components.terminal.rail.TerminalRailToolbar.closeTerminal',
+                'Close terminal'
+              )}
             </span>
-            <span className="text-[10px] text-muted-foreground">{closePaneShortcut}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
