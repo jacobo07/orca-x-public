@@ -7,6 +7,7 @@ import { WorkspaceLauncher } from './WorkspaceLauncher'
 
 const state = {
   repos: [] as { id: string; displayName: string; path: string; addedAt: number }[],
+  projects: [] as { id: string; displayName: string; sourceRepoIds: string[] }[],
   recentProjectIds: [] as string[],
   worktreesByRepo: {} as Record<string, { id: string }[]>,
   setActiveWorktree: vi.fn<(worktreeId: string) => boolean>(),
@@ -80,6 +81,7 @@ beforeEach(() => {
     project('orca', 'Orca X', '/home/user/Cursor Projects/Orca X'),
     project('titan', 'Titan Launcher', '/home/user/Repos/titan')
   ]
+  state.projects = []
   state.recentProjectIds = ['orca', 'titan']
   state.worktreesByRepo = { orca: [{ id: 'orca-main' }], titan: [{ id: 'titan-main' }] }
   state.setActiveWorktree.mockReturnValue(true)
@@ -147,6 +149,23 @@ describe('WorkspaceLauncher', () => {
 
     typeFilter('cursor')
     expect(projectRowLabels()).toEqual(['Orca X'])
+  })
+
+  it('lists a project once however many checkouts of it exist', () => {
+    // The estate this was built for carries 22 checkouts of one project. Listing the repo catalogue
+    // made each a peer of every real project, which is what pushed the real ones off the screen.
+    state.repos = [
+      project('tua', 'TUA-X', '/home/user/Cursor Projects/TUA-X'),
+      project('tua-qa', 'TUA-X-qa', '/home/user/Cursor Projects/TUA-X-qa'),
+      project('tua-msr', 'TUA-X-msr', '/home/user/Cursor Projects/TUA-X-msr')
+    ]
+    state.projects = [
+      { id: 'project-tua', displayName: 'TUA-X', sourceRepoIds: ['tua', 'tua-qa', 'tua-msr'] }
+    ]
+    state.recentProjectIds = ['tua-qa']
+    render()
+
+    expect(projectRowLabels()).toEqual(['TUA-X'])
   })
 
   it('reports an empty filter result separately from having no projects', () => {

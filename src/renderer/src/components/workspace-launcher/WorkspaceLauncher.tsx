@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { FolderPlus, GitBranchPlus, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { filterProjectsByQuery, orderProjectsByRecency } from '@/lib/recent-project-order'
+import { useLauncherProjectRows } from '@/lib/use-launcher-project-rows'
 import { openProjectInWorkbench } from '@/lib/open-project-in-workbench'
 import { translate } from '@/i18n/i18n'
 import { RecentProjectList } from '../recent-project-list'
@@ -18,7 +18,6 @@ import logo from '../../../../../resources/logo.svg'
  */
 export function WorkspaceLauncher(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
-  const recentProjectIds = useAppStore((s) => s.recentProjectIds)
   const openModal = useAppStore((s) => s.openModal)
   const [query, setQuery] = useState('')
   // Opening a project the session never named has to ask its host for the workspaces first, which
@@ -26,10 +25,8 @@ export function WorkspaceLauncher(): React.JSX.Element {
   const [openingRepoId, setOpeningRepoId] = useState<string | null>(null)
 
   const hasProjects = repos.length > 0
-  const matchCount = useMemo(
-    () => filterProjectsByQuery(orderProjectsByRecency(repos, recentProjectIds), query).length,
-    [repos, recentProjectIds, query]
-  )
+  // The same rows the list renders, so "no project matches" cannot appear above matching rows.
+  const matchCount = useLauncherProjectRows(query).length
 
   const openProject = (repoId: string): void => {
     // The same action the sidebar's project rows use, so "open" means one thing in both places:

@@ -114,6 +114,30 @@ export function getRuntimePathBasename(value: string): string {
 }
 
 /**
+ * The directory holding `value`, for saying where something lives without repeating its own name.
+ *
+ * Separators are left as they came in: these strings are shown to the user beside a Windows path
+ * they recognise, and folding them to `/` would make a local project read as remote.
+ */
+export function getRuntimePathParent(value: string): string {
+  const trimmed = value.replace(/[\\/]+$/g, '')
+  if (!trimmed) {
+    return ''
+  }
+  const separatorIndex = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
+  if (separatorIndex < 0) {
+    return ''
+  }
+  const parent = trimmed.slice(0, separatorIndex)
+  // Slicing at the separator eats it, so a root would come back as '' or 'C:' — neither of which
+  // reads as a place. Both cases restore the separator that makes it one.
+  if (!parent) {
+    return trimmed.startsWith('/') ? '/' : ''
+  }
+  return /^[A-Za-z]:$/.test(parent) ? `${parent}\\` : parent
+}
+
+/**
  * Pre-normalizes the root so a fan-out normalizes it once, not once per candidate.
  *
  * Why the name says "normalized": candidates must already be run through

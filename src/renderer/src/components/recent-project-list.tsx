@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '../store'
-import { filterProjectsByQuery, orderProjectsByRecency } from '@/lib/recent-project-order'
+import { useLauncherProjectRows } from '@/lib/use-launcher-project-rows'
+import { getRuntimePathParent } from '../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
 
 /** How many rows the launcher shows before "View all" is worth offering. */
@@ -36,16 +37,11 @@ export function RecentProjectList({
   /** The project currently being opened, if the caller's open is slow enough to be worth showing. */
   openingRepoId?: string | null
 } = {}): React.JSX.Element | null {
-  const repos = useAppStore((s) => s.repos)
-  const recentProjectIds = useAppStore((s) => s.recentProjectIds)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const [expanded, setExpanded] = useState(false)
 
-  const ordered = useMemo(
-    () => filterProjectsByQuery(orderProjectsByRecency(repos, recentProjectIds), query),
-    [repos, recentProjectIds, query]
-  )
+  const ordered = useLauncherProjectRows(query)
 
   if (ordered.length === 0) {
     return null
@@ -76,18 +72,18 @@ export function RecentProjectList({
       </div>
 
       <div className="flex flex-col">
-        {rows.map((repo) => {
+        {rows.map((row) => {
           // Why kept rather than hidden: a project whose workspaces have not loaded yet still
           // belongs in the list, and silently dropping it would read as the project being gone.
-          const target = worktreesByRepo[repo.id]?.[0] ?? null
+          const target = worktreesByRepo[row.repoId]?.[0] ?? null
           // Only the built-in path needs a loaded workspace up front. A caller that passed
           // onOpenProject resolves the project itself and reports why it could not open, so
           // disabling the row there would turn an explainable refusal into a dead click.
           const disabled = target === null && !onOpenProject
-          const opening = openingRepoId === repo.id
+          const opening = openingRepoId === row.repoId
           return (
             <button
-              key={repo.id}
+              key={row.id}
               type="button"
               disabled={disabled || openingRepoId !== null}
               aria-busy={opening}
@@ -101,7 +97,7 @@ export function RecentProjectList({
               }
               onClick={() => {
                 if (onOpenProject) {
-                  onOpenProject(repo.id)
+                  onOpenProject(row.repoId)
                   return
                 }
                 if (target) {
@@ -115,16 +111,18 @@ export function RecentProjectList({
               }`}
             >
               <span className="flex min-w-0 shrink-0 items-baseline gap-1.5 text-sm text-foreground">
-                {repo.displayName}
+                {row.displayName}
                 {opening ? (
                   <Loader2 className="size-3 shrink-0 animate-spin self-center text-muted-foreground" />
                 ) : null}
               </span>
+              {/* The containing folder, not the full path: the last segment is the name already on
+                  this row, so printing it twice spends the width that says which copy this is. */}
               <span
                 className="min-w-0 truncate text-right text-xs text-muted-foreground"
-                title={repo.path}
+                title={row.path}
               >
-                {truncatePathFromStart(repo.path)}
+                {truncatePathFromStart(getRuntimePathParent(row.path))}
               </span>
             </button>
           )
