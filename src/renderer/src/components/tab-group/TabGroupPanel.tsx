@@ -12,6 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import TabBar from '../tab-bar/TabBar'
 import TerminalRail from '../terminal-rail/TerminalRail'
+import { TerminalPanelToolbar } from '../terminal-rail/TerminalPanelToolbar'
 import { requestActiveTerminalPaneSplit } from '../tab-bar/request-active-terminal-pane-split'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
@@ -60,6 +61,8 @@ export default function TabGroupPanel({
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const sidePanelDock = useAppStore((state) => state.sidePanelDock)
+  const terminalRailCollapsed = useAppStore((state) => state.terminalRailCollapsed)
+  const toggleTerminalRailCollapsed = useAppStore((state) => state.toggleTerminalRailCollapsed)
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
@@ -251,6 +254,40 @@ export default function TabGroupPanel({
             className="ml-1.5 flex shrink-0 items-center gap-0.5"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {/* Why here and not in the rail: this is the terminal panel's toolbar, so it belongs in
+                the panel's header beside the tab row — and it has to outlive collapsing the rail,
+                which is the only thing that can bring the rail back. Inside the cluster so it sits
+                before the window-controls reservation rather than under the window buttons.
+
+                The rule ahead of it separates two identical glyphs: the tab row ends in a "New tab"
+                plus and this toolbar opens with a "new terminal" plus. Different scopes, but set
+                flush together they read as one control drawn twice. */}
+            {activeTab?.contentType === 'terminal' ? (
+              <div className="mx-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden />
+            ) : null}
+            {activeTab?.contentType === 'terminal' ? (
+              <TerminalPanelToolbar
+                worktreeId={worktreeId}
+                groupId={groupId}
+                isFocused={isFocused}
+                railCollapsed={terminalRailCollapsed}
+                canActOnTerminal={Boolean(activeTab.entityId)}
+                onToggleRail={toggleTerminalRailCollapsed}
+                onNewTerminalTab={commands.newTerminalTab}
+                onNewTerminalWithShell={commands.newTerminalWithShell}
+                onSplitActiveTerminal={(direction) => {
+                  requestActiveTerminalPaneSplit({ tabId: activeTab.entityId, direction })
+                }}
+                onCloseActiveTerminal={() => {
+                  const item = resolveGroupTabFromVisibleId(model.groupTabs, activeTab.entityId)
+                  if (item?.contentType === 'terminal') {
+                    commands.closeItem(item.id)
+                    return
+                  }
+                  closeTerminalTab(activeTab.entityId)
+                }}
+              />
+            ) : null}
             <div className={focusedActionChromeClassName}>
               {isFocused ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
@@ -366,25 +403,7 @@ export default function TabGroupPanel({
           {/* Why: terminal/browser/simulator panes render at the worktree level (overlay layers); per-group rendering remounted xterm/webview/simulator on split moves. */}
         </div>
         {activeTab?.contentType === 'terminal' ? (
-          <TerminalRail
-            worktreeId={worktreeId}
-            groupId={groupId}
-            tabs={terminalTabs}
-            activeTabId={activeTab.entityId}
-            onNewTerminalTab={commands.newTerminalTab}
-            onNewTerminalWithShell={commands.newTerminalWithShell}
-            onSplitActiveTerminal={(direction) => {
-              requestActiveTerminalPaneSplit({ tabId: activeTab.entityId, direction })
-            }}
-            onCloseTerminal={(terminalId) => {
-              const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
-              if (item?.contentType === 'terminal') {
-                commands.closeItem(item.id)
-                return
-              }
-              closeTerminalTab(terminalId)
-            }}
-          />
+          <TerminalRail tabs={terminalTabs} activeTabId={activeTab.entityId} />
         ) : null}
       </div>
     </div>

@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTerminalLaunchProfiles } from '@/hooks/useTerminalLaunchProfiles'
@@ -19,7 +18,11 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { ShellIcon } from '../tab-bar/shell-icons'
 
 /**
- * The rail's toolbar, and the reason the rail exists as chrome rather than as a list.
+ * The terminal panel's toolbar: new terminal, which kind, the rest, and whether the rail shows.
+ *
+ * It sits in the group's header strip beside the tab row rather than inside the rail, which is
+ * where every mature terminal panel puts it — and it means the controls survive collapsing the
+ * rail. A toolbar that disappears with the list it manages cannot bring that list back.
  *
  * The plus creates a terminal on the resolved default immediately — a primary action that opens a
  * menu is not a primary action. The chevron beside it is where choosing something else lives, and
@@ -30,12 +33,13 @@ import { ShellIcon } from '../tab-bar/shell-icons'
 const TOOLBAR_BUTTON_CLASS =
   'inline-flex size-[22px] shrink-0 items-center justify-center rounded-[5px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
 
-export function TerminalRailToolbar({
+export function TerminalPanelToolbar({
   worktreeId,
   groupId,
-  collapsed,
+  isFocused,
+  railCollapsed,
   canActOnTerminal,
-  onToggleCollapsed,
+  onToggleRail,
   onNewTerminalTab,
   onNewTerminalWithShell,
   onSplitActiveTerminal,
@@ -43,16 +47,25 @@ export function TerminalRailToolbar({
 }: {
   worktreeId: string
   groupId: string
-  collapsed: boolean
+  /** Only the focused group answers the profile-menu command; see the listener below. */
+  isFocused: boolean
+  railCollapsed: boolean
   canActOnTerminal: boolean
-  onToggleCollapsed: () => void
+  onToggleRail: () => void
   onNewTerminalTab: () => void
   onNewTerminalWithShell?: (shell: string) => void
   onSplitActiveTerminal: (direction: 'vertical' | 'horizontal') => void
   onCloseActiveTerminal: () => void
 }): React.JSX.Element {
-  const { profiles, defaultProfileId, defaultWindowsPowerShellImplementation, windowsTerminalCapabilities } =
-    useTerminalLaunchProfiles({ worktreeId, hasShellLauncher: Boolean(onNewTerminalWithShell) })
+  const {
+    profiles,
+    defaultProfileId,
+    defaultWindowsPowerShellImplementation,
+    windowsTerminalCapabilities
+  } = useTerminalLaunchProfiles({
+    worktreeId,
+    hasShellLauncher: Boolean(onNewTerminalWithShell)
+  })
   const launchProfile = (profileId: string): void => {
     launchTerminalProfile({
       profileId,
@@ -69,32 +82,32 @@ export function TerminalRailToolbar({
   // menu only its own trigger can open is not one action with several surfaces.
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   useEffect(() => {
+    // Why only when focused: the event is global but every terminal group mounts a toolbar, so an
+    // unguarded listener opened one menu per split group for a command the user issued once.
+    if (!isFocused) {
+      return
+    }
     const open = (): void => setProfileMenuOpen(true)
     window.addEventListener(OPEN_TERMINAL_PROFILE_MENU_EVENT, open)
     return () => window.removeEventListener(OPEN_TERMINAL_PROFILE_MENU_EVENT, open)
-  }, [])
+  }, [isFocused])
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const splitRightShortcut = useShortcutLabel('terminal.splitRight')
   const splitDownShortcut = useShortcutLabel('terminal.splitDown')
 
-  const newTerminalLabel = translate(
-    'auto.components.tab.bar.TabBar.d364f3c8d4',
-    'New Terminal'
+  const newTerminalLabel = translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
+  const toggleRailLabel = translate(
+    'auto.components.terminal.rail.TerminalRailToolbar.toggleRail',
+    'Toggle terminal rail'
   )
 
   return (
-    <div
-      data-terminal-rail-toolbar=""
-      className={cn(
-        'flex shrink-0 items-center gap-px border-b border-border px-1 py-1',
-        collapsed && 'flex-col'
-      )}
-    >
+    <div data-terminal-panel-toolbar="" className="flex shrink-0 items-center gap-px">
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            data-terminal-rail-action="new-terminal"
+            data-terminal-toolbar-action="new-terminal"
             aria-label={newTerminalLabel}
             onClick={() => {
               if (defaultProfileId) {
@@ -117,7 +130,7 @@ export function TerminalRailToolbar({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            data-terminal-rail-action="new-terminal-menu"
+            data-terminal-toolbar-action="new-terminal-menu"
             aria-label={translate(
               'auto.components.terminal.rail.TerminalRailToolbar.chooseProfile',
               'Choose terminal profile'
@@ -145,10 +158,7 @@ export function TerminalRailToolbar({
               <span className="flex-1 truncate">{profile.label}</span>
               {profile.id === defaultProfileId ? (
                 <span className="text-[10px] text-muted-foreground">
-                  {translate(
-                    'auto.components.terminal.rail.TerminalRailToolbar.default',
-                    'Default'
-                  )}
+                  {translate('auto.components.terminal.rail.TerminalRailToolbar.default', 'Default')}
                 </span>
               ) : null}
             </DropdownMenuItem>
@@ -160,7 +170,7 @@ export function TerminalRailToolbar({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            data-terminal-rail-action="more"
+            data-terminal-toolbar-action="more"
             {...(canActOnTerminal
               ? { 'data-contextual-tour-target': 'terminal-pane-split-target' }
               : {})}
@@ -180,7 +190,10 @@ export function TerminalRailToolbar({
             className="gap-2 text-[12px]"
           >
             <span className="flex-1">
-              {translate('auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight', 'Split terminal right')}
+              {translate(
+                'auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight',
+                'Split terminal right'
+              )}
             </span>
             <span className="text-[10px] text-muted-foreground">{splitRightShortcut}</span>
           </DropdownMenuItem>
@@ -190,7 +203,10 @@ export function TerminalRailToolbar({
             className="gap-2 text-[12px]"
           >
             <span className="flex-1">
-              {translate('auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown', 'Split terminal down')}
+              {translate(
+                'auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown',
+                'Split terminal down'
+              )}
             </span>
             <span className="text-[10px] text-muted-foreground">{splitDownShortcut}</span>
           </DropdownMenuItem>
@@ -211,33 +227,24 @@ export function TerminalRailToolbar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <div className={cn('flex-1', collapsed && 'hidden')} />
-
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            data-terminal-rail-action="collapse"
-            aria-label={translate(
-              'auto.components.terminal.rail.TerminalRailToolbar.toggleRail',
-              'Toggle terminal rail'
-            )}
-            onClick={onToggleCollapsed}
+            data-terminal-toolbar-action="collapse"
+            aria-label={toggleRailLabel}
+            aria-pressed={!railCollapsed}
+            onClick={onToggleRail}
             className={TOOLBAR_BUTTON_CLASS}
           >
-            {collapsed ? (
+            {railCollapsed ? (
               <PanelRightOpen className="size-3.5" />
             ) : (
               <PanelRightClose className="size-3.5" />
             )}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {translate(
-            'auto.components.terminal.rail.TerminalRailToolbar.toggleRail',
-            'Toggle terminal rail'
-          )}
-        </TooltipContent>
+        <TooltipContent side="bottom">{toggleRailLabel}</TooltipContent>
       </Tooltip>
     </div>
   )

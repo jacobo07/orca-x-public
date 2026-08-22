@@ -11,8 +11,6 @@
 export const TERMINAL_RAIL_DEFAULT_WIDTH = 180
 export const TERMINAL_RAIL_MIN_WIDTH = 132
 export const TERMINAL_RAIL_MAX_WIDTH = 420
-/** Width of the folded rail: enough for the toolbar, which stays reachable while collapsed. */
-export const TERMINAL_RAIL_COLLAPSED_WIDTH = 36
 
 export function clampTerminalRailWidth(
   width: unknown,

@@ -7,19 +7,45 @@ import { splitActiveTerminalPane, waitForPaneCount } from './helpers/terminal'
 // 18px glyph orphaned over the canvas. Source review cannot see any of that.
 
 test.describe('@terminal-rail', () => {
-  test('the terminal surface exposes a rail with a working toolbar', async ({ orcaPage }) => {
+  test('the terminal panel header carries the toolbar', async ({ orcaPage }) => {
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+
+    await expect(orcaPage.locator('[data-terminal-rail]')).toBeVisible({ timeout: 30_000 })
+    // Inside the header strip, not merely somewhere on the page: the placement is the claim.
+    const toolbar = orcaPage.locator(
+      '[data-tab-group-strip-id] [data-terminal-panel-toolbar]'
+    )
+    await expect(toolbar).toBeVisible()
+
+    // Each control is asserted separately: a toolbar that renders but whose primary action is
+    // missing is the failure mode worth naming, and a single "toolbar exists" check hides it.
+    await expect(toolbar.locator('[data-terminal-toolbar-action="new-terminal"]')).toBeVisible()
+    await expect(
+      toolbar.locator('[data-terminal-toolbar-action="new-terminal-menu"]')
+    ).toBeVisible()
+    await expect(toolbar.locator('[data-terminal-toolbar-action="more"]')).toBeVisible()
+    await expect(toolbar.locator('[data-terminal-toolbar-action="collapse"]')).toBeVisible()
+  })
+
+  test('collapsing the rail leaves the toolbar that can bring it back', async ({ orcaPage }) => {
+    // The reason the toolbar left the rail. While it lived inside, collapsing hid the only control
+    // that reopens it, so the rail could be dismissed into a state with no way out but a keybinding.
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
 
     const rail = orcaPage.locator('[data-terminal-rail]')
     await expect(rail).toBeVisible({ timeout: 30_000 })
+    const collapse = orcaPage.locator(
+      '[data-tab-group-strip-id] [data-terminal-toolbar-action="collapse"]'
+    )
 
-    // Each control is asserted separately: a toolbar that renders but whose primary action is
-    // missing is the failure mode worth naming, and a single "toolbar exists" check hides it.
-    await expect(rail.locator('[data-terminal-rail-action="new-terminal"]')).toBeVisible()
-    await expect(rail.locator('[data-terminal-rail-action="new-terminal-menu"]')).toBeVisible()
-    await expect(rail.locator('[data-terminal-rail-action="more"]')).toBeVisible()
-    await expect(rail.locator('[data-terminal-rail-action="collapse"]')).toBeVisible()
+    await collapse.click()
+    await expect(rail).toHaveCount(0)
+    await expect(collapse).toBeVisible()
+
+    await collapse.click()
+    await expect(rail).toBeVisible()
   })
 
   test('the rail lists the real terminal tabs and marks the active one', async ({ orcaPage }) => {

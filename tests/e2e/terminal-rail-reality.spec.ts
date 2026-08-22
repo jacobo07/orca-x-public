@@ -39,9 +39,10 @@ test.describe('@terminal-rail-reality', () => {
     await ensureTerminalVisible(orcaPage)
     const rail = orcaPage.locator('[data-terminal-rail]')
     await expect(rail).toBeVisible({ timeout: 30_000 })
+    const toolbar = orcaPage.locator('[data-tab-group-strip-id] [data-terminal-panel-toolbar]')
     const before = await countTerminalTabs(orcaPage)
 
-    await rail.locator('[data-terminal-rail-action="new-terminal-menu"]').click()
+    await toolbar.locator('[data-terminal-toolbar-action="new-terminal-menu"]').click()
     const menuItems = orcaPage.locator('[role="menuitem"]')
     await expect(menuItems.first()).toBeVisible()
 
@@ -77,7 +78,9 @@ test.describe('@terminal-rail-reality', () => {
     await expect(rail).toBeVisible({ timeout: 30_000 })
     expect(await readActivePanePtyIds(orcaPage)).toHaveLength(1)
 
-    await rail.locator('[data-terminal-rail-action="more"]').click()
+    await orcaPage
+      .locator('[data-tab-group-strip-id] [data-terminal-toolbar-action="more"]')
+      .click()
     await orcaPage.locator('[role="menuitem"]').first().click()
 
     // Distinct ids, not just two panes: a split that cloned the view would show two rectangles

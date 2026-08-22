@@ -7,7 +7,6 @@ import { translate } from '@/i18n/i18n'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
-  TERMINAL_RAIL_COLLAPSED_WIDTH,
   TERMINAL_RAIL_MAX_WIDTH,
   TERMINAL_RAIL_MIN_WIDTH
 } from '../../../../shared/terminal-rail-width'
@@ -18,15 +17,13 @@ import {
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { buildTerminalRailRows, findActiveTerminalRailRow } from './terminal-rail-rows'
 import { TerminalRailPaneRow, TerminalRailTabRow } from './TerminalRailRow'
-import { TerminalRailToolbar } from './TerminalRailToolbar'
 import { useTerminalRailResize } from './use-terminal-rail-resize'
 
 /**
  * The terminal rail: which terminals exist, which one is selected, and what each is doing.
  *
- * Before this, terminal instances were only visible as horizontal tabs and the sole control near
- * the terminal was an 18px split glyph alone in an overlay strip across the canvas. The rail is
- * where the terminal's own chrome lives, so those actions have somewhere to belong.
+ * Purely the list. The controls that act on it live in the group's header strip, where a terminal
+ * panel's toolbar belongs and where they stay reachable once this rail is collapsed away.
  */
 
 function TerminalRailTab({
@@ -75,29 +72,16 @@ function TerminalRailTab({
 }
 
 export default function TerminalRail({
-  worktreeId,
-  groupId,
   tabs,
-  activeTabId,
-  onNewTerminalTab,
-  onNewTerminalWithShell,
-  onSplitActiveTerminal,
-  onCloseTerminal
+  activeTabId
 }: {
-  worktreeId: string
-  groupId: string
   tabs: readonly TerminalTab[]
   activeTabId: string | null
-  onNewTerminalTab: () => void
-  onNewTerminalWithShell?: (shell: string) => void
-  onSplitActiveTerminal: (direction: 'vertical' | 'horizontal') => void
-  onCloseTerminal: (tabId: string) => void
 }): React.JSX.Element | null {
-  const { collapsed, width, toggleCollapsed } = useAppStore(
+  const { collapsed, width } = useAppStore(
     useShallow((s) => ({
       collapsed: s.terminalRailCollapsed,
-      width: s.terminalRailWidth,
-      toggleCollapsed: s.toggleTerminalRailCollapsed
+      width: s.terminalRailWidth
     }))
   )
   const layoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
@@ -116,48 +100,35 @@ export default function TerminalRail({
   )
   const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
 
+  // Why nothing rather than a stub strip: the toolbar that brings the rail back now lives in the
+  // panel header, so a collapsed rail has no control left to hold and would only take width.
+  if (collapsed) {
+    return null
+  }
+
   return (
     <div
       data-terminal-rail=""
-      {...(collapsed ? { 'data-collapsed': '' } : {})}
       className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
-      style={{ width: collapsed ? TERMINAL_RAIL_COLLAPSED_WIDTH : width }}
+      style={{ width }}
     >
-      {collapsed ? null : (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={translate(
-            'auto.components.terminal.rail.TerminalRail.resize',
-            'Resize terminal rail'
-          )}
-          aria-valuemin={TERMINAL_RAIL_MIN_WIDTH}
-          aria-valuemax={TERMINAL_RAIL_MAX_WIDTH}
-          aria-valuenow={width}
-          onPointerDown={onResizeHandlePointerDown}
-          className={cn(
-            'absolute inset-y-0 -left-[3px] z-10 w-[6px] cursor-col-resize',
-            isResizing && 'bg-accent'
-          )}
-        />
-      )}
-      <TerminalRailToolbar
-        worktreeId={worktreeId}
-        groupId={groupId}
-        collapsed={collapsed}
-        canActOnTerminal={activeTabId !== null}
-        onToggleCollapsed={toggleCollapsed}
-        onNewTerminalTab={onNewTerminalTab}
-        onNewTerminalWithShell={onNewTerminalWithShell}
-        onSplitActiveTerminal={onSplitActiveTerminal}
-        onCloseActiveTerminal={() => {
-          if (activeTabId) {
-            onCloseTerminal(activeTabId)
-          }
-        }}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={translate(
+          'auto.components.terminal.rail.TerminalRail.resize',
+          'Resize terminal rail'
+        )}
+        aria-valuemin={TERMINAL_RAIL_MIN_WIDTH}
+        aria-valuemax={TERMINAL_RAIL_MAX_WIDTH}
+        aria-valuenow={width}
+        onPointerDown={onResizeHandlePointerDown}
+        className={cn(
+          'absolute inset-y-0 -left-[3px] z-10 w-[6px] cursor-col-resize',
+          isResizing && 'bg-accent'
+        )}
       />
-      {collapsed ? null : (
-        <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-1">
+      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-1">
           {rows.map((row) => {
             if (row.kind === 'tab') {
               const tab = tabsById.get(row.tabId)
@@ -194,8 +165,7 @@ export default function TerminalRail({
               />
             )
           })}
-        </div>
-      )}
+      </div>
     </div>
   )
 }
