@@ -230,7 +230,6 @@ export function applyTerminalAppearance(
 
   manager.setPaneStyleOptions({
     splitBackground: paneBackground,
-    paneBackground,
     inactivePaneOpacity: paneStyles.inactivePaneOpacity,
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,

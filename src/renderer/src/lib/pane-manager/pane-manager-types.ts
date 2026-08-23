@@ -79,7 +79,6 @@ export type PaneManagerOptions = {
 
 export type PaneStyleOptions = {
   splitBackground?: string
-  paneBackground?: string
   inactivePaneOpacity?: number
   activePaneOpacity?: number
   opacityTransitionMs?: number
