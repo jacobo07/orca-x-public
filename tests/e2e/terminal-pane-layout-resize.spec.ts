@@ -1,6 +1,6 @@
 /**
- * E2E tests for pane layout chrome: the header split button, the divider that
- * splitting creates, drag resizing, and the space a closed pane gives back.
+ * E2E tests for pane layout chrome: the header's always-on control, the divider
+ * that splitting creates, drag resizing, and the space a closed pane gives back.
  *
  * User Prompt:
  * - resizing terminal panes works
@@ -25,12 +25,20 @@ test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
-  test('Always-on pane header split button hover stays transparent', async ({ orcaPage }) => {
-    const splitButton = orcaPage.getByRole('button', { name: 'Split Terminal Right' })
-    await expect(splitButton).toBeVisible()
-    await splitButton.hover()
+  // Why: this asserted the header's split button, which 23acc6312 moved to the terminal
+  // toolbar -- leaving the assertion pinned to a control that no longer exists. The property
+  // is about always-on header chrome, not about split, so it retargets to the control the
+  // header still owns. Close needs a sibling to be closable, hence the split first.
+  test('Always-on pane header close button hover stays transparent', async ({ orcaPage }) => {
+    const panesBefore = await countVisibleTerminalPanes(orcaPage)
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, panesBefore + 1)
 
-    const hoverStyle = await splitButton.evaluate((element) => {
+    const closeButton = orcaPage.getByRole('button', { name: 'Close Pane' }).first()
+    await expect(closeButton).toBeVisible()
+    await closeButton.hover()
+
+    const hoverStyle = await closeButton.evaluate((element) => {
       const style = getComputedStyle(element)
       return {
         backgroundColor: style.backgroundColor,
@@ -40,6 +48,9 @@ test.describe('Terminal Panes', () => {
 
     expect(hoverStyle.backgroundColor).toBe('rgba(0, 0, 0, 0)')
     expect(Number(hoverStyle.opacity)).toBeGreaterThan(0.9)
+
+    await closeActiveTerminalPane(orcaPage)
+    await waitForPaneCount(orcaPage, panesBefore)
   })
 
   /**
