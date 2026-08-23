@@ -4,11 +4,27 @@ import type {
   TerminalPaneLayoutNode
 } from '../../../shared/terminal-tab-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { normalizeSplitRatio } from '../../../shared/split-ratio'
 
 export type LayoutLeafNormalization = {
   snapshot: TerminalLayoutSnapshot
   changed: boolean
   leafIdByInputLeafId: Map<string, string>
+}
+
+/** Returns the same node when every ratio is already usable, so callers can detect a no-op by identity. */
+function normalizeLayoutRatios(node: TerminalPaneLayoutNode): TerminalPaneLayoutNode {
+  if (node.type === 'leaf') {
+    return node
+  }
+  const first = normalizeLayoutRatios(node.first)
+  const second = normalizeLayoutRatios(node.second)
+  const ratio = normalizeSplitRatio(node.ratio)
+  if (first === node.first && second === node.second && ratio === node.ratio) {
+    return node
+  }
+  const { ratio: _unusableRatio, ...rest } = node
+  return { ...rest, first, second, ...(ratio === undefined ? {} : { ratio }) }
 }
 
 export function collectLayoutLeafCounts(
@@ -162,9 +178,16 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     // Why: a debounced renderer writer can still hold the createTab-era empty layout after the UUID root was sync-flushed.
     changed = true
   }
-  const inputRoot = inputSnapshot.root
-  if (!inputRoot) {
+  const rawRoot = inputSnapshot.root
+  if (!rawRoot) {
     return { snapshot, changed: false, leafIdByInputLeafId: new Map() }
+  }
+  // Why before the leaf work: an unusable ratio is the one repair that leaves every id valid, so it
+  // would otherwise reach the no-change short-circuit below and persist untouched.
+  const inputRoot = normalizeLayoutRatios(rawRoot)
+  if (inputRoot !== rawRoot) {
+    inputSnapshot = { ...inputSnapshot, root: inputRoot }
+    changed = true
   }
   const counts = collectLayoutLeafCounts(inputRoot)
   const duplicatedInputLeafIds = new Set(
