@@ -24,6 +24,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
@@ -178,6 +179,35 @@ function describePersistedLayouts(userDataDir: string, tabId: string): string {
   return `wanted tab ${tabId}; profile holds ${seen.length === 0 ? 'no layouts' : seen.join(', ')}`
 }
 
+function readPersistedRootRatio(userDataDir: string, tabId: string): number | undefined {
+  for (const partition of readPersistedPartitions(userDataDir) ?? []) {
+    const root = partition.terminalLayoutsByTabId?.[tabId]?.root as
+      | TerminalPaneLayoutNode
+      | undefined
+    if (root?.type === 'split') {
+      return root.ratio
+    }
+  }
+  return undefined
+}
+
+/**
+ * The first visible pane's share of the two panes' combined width. A proportion rather than a
+ * pixel count, because the restored window need not match the crashed one's size.
+ */
+async function readFirstPaneWidthFraction(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const widths = Array.from(document.querySelectorAll<HTMLElement>('.xterm'))
+      .filter((element) => element.offsetParent !== null)
+      .map((element) => element.getBoundingClientRect().width)
+    if (widths.length < 2) {
+      return 0
+    }
+    const total = widths[0] + widths[1]
+    return total > 0 ? widths[0] / total : 0
+  })
+}
+
 test.describe.configure({ mode: 'serial' })
 
 test.describe('Terminal topology survives an abrupt main-process crash', () => {
@@ -244,6 +274,84 @@ test.describe('Terminal topology survives an abrupt main-process crash', () => {
       // permission error whether the topology came back or not.
       await session.dispose().catch((error: unknown) => {
         console.warn(`[e2e] topology crash profile cleanup failed: ${String(error)}`)
+      })
+    }
+  })
+
+  /**
+   * Why headful: the divider calls setPointerCapture on pointerdown, which needs a pointer id
+   * from a real pointing device. Headless silently drops it, pointermove never reaches the
+   * divider, and the drag becomes a no-op that would make this test vacuously green.
+   */
+  test('@headful restores a dragged split ratio after the main process is killed', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+  {},
+  testInfo) => {
+    test.setTimeout(300_000)
+    const repoPath = seededRepoPathOrSkip()
+    const session = createRestartSession(testInfo)
+
+    try {
+      // Arrange -- a split the user has actually dragged off centre.
+      const first = await session.launch()
+      await attachRepoAndOpenTerminal(first.page, repoPath)
+      await waitForActiveTerminalManager(first.page)
+      await waitForPaneCount(first.page, 1)
+      await splitActiveTerminalPane(first.page, 'vertical')
+      await waitForPaneCount(first.page, 2)
+
+      const before = await waitForPaneIdentitySnapshot(first.page, 2)
+      const divider = first.page.locator('.pane-divider.is-vertical').first()
+      await expect(divider).toBeVisible({ timeout: 5_000 })
+      const box = await divider.boundingBox()
+      expect(box).not.toBeNull()
+      const startX = box!.x + box!.width / 2
+      const startY = box!.y + box!.height / 2
+      await first.page.mouse.move(startX, startY)
+      await first.page.mouse.down()
+      await first.page.mouse.move(startX + 150, startY, { steps: 20 })
+      await first.page.mouse.up()
+
+      // The drag must have both moved the panes and reached disk. Crashing before either would
+      // test the debounce, or test nothing at all.
+      const ratioDeadline = Date.now() + 30_000
+      let persistedRatio: number | undefined
+      while (Date.now() < ratioDeadline) {
+        persistedRatio = readPersistedRootRatio(session.userDataDir, before.tabId)
+        if (persistedRatio !== undefined && Math.abs(persistedRatio - 0.5) > 0.02) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      expect(
+        persistedRatio,
+        `the dragged ratio never reached the profile on disk — ${describePersistedLayouts(session.userDataDir, before.tabId)}`
+      ).toBeDefined()
+      expect(Math.abs((persistedRatio ?? 0.5) - 0.5)).toBeGreaterThan(0.02)
+
+      const widthFractionBefore = await readFirstPaneWidthFraction(first.page)
+      const mainPid = await first.app.evaluate(() => process.pid)
+
+      // Act
+      await crashMainProcess(mainPid)
+
+      // Assert on what the user sees -- the panes come back the width they were left, not the
+      // stored number, which could round-trip correctly while the layout still rendered 50/50.
+      const second = await session.launch()
+      await waitForActiveTerminalManager(second.page)
+      await waitForPaneCount(second.page, 2)
+      await waitForPaneIdentitySnapshot(second.page, 2)
+
+      await expect
+        .poll(() => readFirstPaneWidthFraction(second.page), {
+          timeout: 15_000,
+          message: 'the restored split never settled at the dragged proportion'
+        })
+        .toBeCloseTo(widthFractionBefore, 1)
+
+      await session.close(second.app)
+    } finally {
+      await session.dispose().catch((error: unknown) => {
+        console.warn(`[e2e] ratio crash profile cleanup failed: ${String(error)}`)
       })
     }
   })
