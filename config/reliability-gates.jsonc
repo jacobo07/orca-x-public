@@ -5612,6 +5612,96 @@
       "demotionRule": "Keep experimental or quarantine with a linked harness defect if the Windows job flakes; never weaken the crash, identity, event-log, or same-shell reattach oracle to obtain a pass."
     },
     {
+      "id": "terminal-session.pane-topology-crash-recovery",
+      "title": "An abrupt main-process crash does not cost the user their pane layout",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-platform",
+      "layer": "electron-main-crash-and-relaunch",
+      "surfaces": [
+        "terminal pane split tree",
+        "dragged split ratio",
+        "active pane",
+        "abrupt main-process kill",
+        "relaunch restore"
+      ],
+      "platforms": ["windows", "macos", "linux"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Two Playwright specs against the real app build a split layout, wait for it to reach the profile on disk, force-kill the launched instance's real Electron main with no tree kill and no graceful close, then relaunch against the same profile. Recovery is asserted by persisted leaf UUID and DOM order rather than pane count, and each restored leaf must be bound to a live PTY. The ratio case drags a real divider and compares rendered pane widths.",
+      "motivatingLinks": [
+        "tests/e2e/terminal-restart-persistence.spec.ts#L24 — the header comment that scoped crash and SIGKILL recovery out of layout persistence and deferred it to daemon history checkpoints, which protect scrollback rather than the split tree",
+        "config/reliability-gates.jsonc#terminal-session.windows-main-crash-survival knownGaps[0] — the registered admission that concurrent restoration across a multi-terminal layout is not exercised live"
+      ],
+      "invariant": "Once a terminal pane topology has been durably published, abrupt death of the Electron main process must not change it: a relaunch against the same profile must restore the same panes, by identity, in the same order, with the same active pane and the same dragged proportion.",
+      "oracle": "Build a multi-pane split, resolve its persisted leaf count from every profile and host partition on disk, require the layout to be present before killing, resolve the launched instance's real main PID from inside Electron, force-kill only that PID and require it to die, relaunch with persisted state, then require the restored DOM leaf order and active leaf to equal the pre-crash values and every restored leaf to carry a live PTY binding. The headful case additionally requires the dragged ratio to be on disk and measurably off centre before the kill, and the restored pane width proportion to match afterwards.",
+      "commands": [
+        "pnpm exec playwright test tests/e2e/terminal-topology-crash-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec playwright test tests/e2e/terminal-topology-crash-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
+      ],
+      "testFiles": ["tests/e2e/terminal-topology-crash-recovery.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-topology-crash-recovery.spec.ts",
+          "assertions": [
+            "restores the same split panes after the main process is killed",
+            "@headful restores a dragged split ratio after the main process is killed"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec playwright test tests/e2e/terminal-topology-crash-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 21,
+          "summary": "Three panes built and published to disk; the real main was force-killed and confirmed dead; the relaunch restored the same three leaf UUIDs in the same DOM order with the same active leaf, each bound to a live PTY."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec playwright test tests/e2e/terminal-topology-crash-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 21,
+          "summary": "A real divider drag moved the persisted ratio off centre; after the same forced kill the relaunched window restored the panes at the dragged proportion measured from rendered widths."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "two Electron launches and one forced kill per spec, excluding the e2e build"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One green local run per project on Windows. No CI history yet, and the headful case does not run in the default headless project."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Both specs failed for real reasons before passing: the on-disk reader pointed at the userData root rather than profiles/<id>/orca-data.json and reported a healthy write as an empty profile, and a throwing cleanup in a finally masked the verdict. That proves the oracle reaches its assertions and reports honestly. No fault-injected build that genuinely loses pane topology has been retained as a red fixture."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The specs exercise recovery correctness, not latency. Waits are bounded: a 30-second on-disk publication wait polled at 250ms, a 15-second post-kill liveness poll, and a 15-second settle poll for the restored proportion."
+      },
+      "promotionCriteria": [
+        "Run both projects in CI and accumulate repeated passes rather than a single local run per project.",
+        "Retain a fault-injected red fixture in which the persisted topology is genuinely lost, so the assertions are proven non-vacuous by something other than their own development history.",
+        "Extend the scenario to more than one terminal tab and more than one worktree."
+      ],
+      "knownGaps": [
+        "This is a process kill, not power loss. The filesystem barrier that survives an actual power cut is proved separately by src/main/durable-file-write-syscall-proof.test.ts, and neither claim may borrow the other's evidence.",
+        "The specs wait for the layout to reach disk before killing, so they prove recovery of durably published topology and say nothing about the size of the window in which a topology change is still only in memory.",
+        "Evidence is local Windows only. The macOS and Linux branches take the SIGKILL path and have no recorded run.",
+        "The scenario is one tab's pane tree. Tab groups, multi-worktree layouts and rail selection are not exercised.",
+        "The dragged-ratio case is headful, so the default headless project does not cover ratio at all.",
+        "Unpackaged. The packaged journey remains the scope of terminal-session.windows-main-crash-survival."
+      ],
+      "demotionRule": "Quarantine with a linked defect if either project flakes; never relax the identity, active-pane, PTY-binding or proportion assertions into a pane count to obtain a pass."
+    },
+    {
       "id": "terminal-platform.windows-conpty-liveness",
       "title": "Windows ConPTY terminals stay input-live, render-live, and geometry-live",
       "maturity": "experimental",
