@@ -1,6 +1,36 @@
 import type { TerminalThemeMap } from './types'
 
 export const DEFAULT_TERMINAL_THEMES: TerminalThemeMap = {
+  // Ghostty's palette on the app's own dark surface. The canvas is the largest surface in the
+  // Workspace and #282c34 reads blue-grey against chrome painted from --background (#0a0a0a) and
+  // --card (#171717), so the terminal looked like a panel borrowed from another application.
+  // Only the surface moves: every ANSI colour, the cursor and the selection stay Ghostty's, so
+  // this is the same theme on the right background rather than a new look to re-tune.
+  'Orca X Dark': {
+    background: '#0a0a0a',
+    foreground: '#ffffff',
+    cursor: '#ffffff',
+    cursorAccent: '#0a0a0a',
+    selectionBackground: '#5a7898',
+    selectionForeground: '#ffffff',
+    black: '#1d1f21',
+    red: '#cc6666',
+    green: '#b5bd68',
+    yellow: '#f0c674',
+    blue: '#81a2be',
+    magenta: '#b294bb',
+    cyan: '#8abeb7',
+    white: '#c5c8c6',
+    brightBlack: '#666666',
+    brightRed: '#d54e53',
+    brightGreen: '#b9ca4a',
+    brightYellow: '#e7c547',
+    brightBlue: '#7aa6da',
+    brightMagenta: '#c397d8',
+    brightCyan: '#70c0b1',
+    brightWhite: '#eaeaea'
+  },
+
   // Most colors come from Ghostty. Orca raises dark selection contrast because Ghostty's
   // original #3e4451 blends into Codex-style gray instruction blocks.
   'Ghostty Default Style Dark': {

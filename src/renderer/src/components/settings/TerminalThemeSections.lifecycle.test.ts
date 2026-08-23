@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { DEFAULT_TERMINAL_THEME_DARK } from '../../lib/terminal-theme'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 
 let themeTarget: 'dark' | 'light' | undefined = 'dark'
@@ -58,7 +59,9 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   return {
     theme: 'system',
     terminalUseSeparateLightTheme: false,
-    terminalThemeDark: 'Ghostty Default Style Dark',
+    // Why the constant: these cases mean "dark is untouched, light is the customized one". A
+    // hardcoded name stops meaning that the moment the product default moves.
+    terminalThemeDark: DEFAULT_TERMINAL_THEME_DARK,
     terminalThemeLight: 'Builtin Tango Light',
     terminalDividerColorDark: '#3f3f46',
     terminalDividerColorLight: '#d4d4d8',
