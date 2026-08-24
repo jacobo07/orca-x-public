@@ -48,6 +48,14 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
+## Layout Ownership
+
+A container that takes its width from its content must not be the width authority for a sibling that has its own intended size. When a chrome header and a sized panel share an auto-width column, the column takes the header's max-content width and the remainder becomes a band no surface paints — a white gap in light mode, a large black block in dark. Keep the sized panel the authority and let the header render inside it (`w-0 min-w-full` contributes nothing to the parent's intrinsic width while still painting full width).
+
+The same circularity silently disables overflow guards. `AppMenuStrip` collapses when it does not fit, measured against `.titlebar-left` — but while the strip set that header's width it was measuring a space it had created, so it always fit and never collapsed. If a fit check compares a child against an ancestor the child can stretch, the check is dead code.
+
+Two habits follow. Header content width is often **localized**, so a layout defect can exist in one language and not another; a gap that reproduces in Spanish may be invisible in English. And diagnose voids by measuring the rendered gap between two *named* surfaces in the running app — a generic "large element with no children" scan flags legitimate cases such as `xterm-viewport`. `tests/e2e/workspace-left-column-geometry.spec.ts` is the worked example.
+
 ## Durable State
 
 If a feature persists state that a crash or power loss could destroy, it needs a contract in [`config/durability-contracts.jsonc`](./config/durability-contracts.jsonc), not just a working write. Say what the state is, what breaks if it disappears, and its tier.
