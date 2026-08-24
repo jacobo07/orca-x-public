@@ -25,9 +25,6 @@ import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
-/** Stable identity so hiding the terminal tabs does not hand TabBar a new array every render. */
-const EMPTY_TERMINAL_TABS: never[] = []
-
 export default function TabGroupPanel({
   groupId,
   worktreeId,
@@ -86,22 +83,10 @@ export default function TabGroupPanel({
     [bodyAnchorName]
   )
 
-  // Why: the rail and the tab row are two primary navigators for one set of terminals, and the
-  // strip's own layout already had to separate their duplicate plus glyphs with a rule. The rail is
-  // the richer surface — it lists panes, not just tabs — so it owns terminal navigation whenever it
-  // is on screen. Collapsing the rail hands the job back to the tabs, which keeps exactly one
-  // terminal navigator visible at all times and makes the collapse control the way back.
-  // Non-terminal tabs are untouched: editors, browsers and simulators have no rail, so the strip
-  // stays their only navigator and keeps its create menu.
-  const railOwnsTerminalNavigation = activeTab?.contentType === 'terminal' && !terminalRailCollapsed
   const tabBar = (
     <TabBar
-      tabs={railOwnsTerminalNavigation ? EMPTY_TERMINAL_TABS : terminalTabs}
-      activeTabId={
-        activeTab?.contentType === 'terminal' && !railOwnsTerminalNavigation
-          ? activeTab.entityId
-          : null
-      }
+      tabs={terminalTabs}
+      activeTabId={activeTab?.contentType === 'terminal' ? activeTab.entityId : null}
       groupId={groupId}
       worktreeId={worktreeId}
       expandedPaneByTabId={model.expandedPaneByTabId}
