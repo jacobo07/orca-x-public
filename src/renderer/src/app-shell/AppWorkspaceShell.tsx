@@ -165,16 +165,21 @@ export function AppWorkspaceShell(props: {
                 >
                   <div
                     // Why: floating titlebar-left occludes the center column's border-l seam; border-r restores that line, w-max sizes it to its own controls.
+                    // Why w-0 min-w-full in flow: the column is auto-width, so a header sized to its
+                    // own content made the header the column's width authority — the sidebar got its
+                    // width and the remainder became an empty band. w-0 keeps the header out of the
+                    // column's intrinsic width while min-w-full still paints it the sidebar's width,
+                    // so it tracks in-flight drag resizes (persisted to Zustand only on mouseup).
                     className={`titlebar-left${
                       layout.leftTitlebarChromeLayout.isFloating
                         ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
-                        : ''
+                        : layout.sidebarOpen
+                          ? ' w-0 min-w-full'
+                          : ''
                     }`}
                     style={{
                       // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
-                      // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                      width: layout.sidebarOpen ? '100%' : undefined
+                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined)
                     }}
                   >
                     {titlebarLeftControls}
