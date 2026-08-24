@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { resolveEffectiveSidebarOpen } from '@/lib/left-navigation-surface'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { useAppStore } from '../store'
@@ -21,7 +22,7 @@ export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
  */
 export function useAppChromeLayout() {
   const activeView = useAppStore((s) => s.activeView)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const storedSidebarOpen = useAppStore((s) => s.sidebarOpen)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -49,6 +50,15 @@ export function useAppChromeLayout() {
     hasRequestedBackgroundTerminalWorktreeMount,
     hasRequestedBackgroundTerminalWorktreeMount
   )
+
+  // Docked left the panel and the project sidebar are alternatives, so one yields rather than both
+  // stacking. Derived, so closing the panel restores the user's own sidebar choice untouched.
+  const sidebarOpen = resolveEffectiveSidebarOpen({
+    sidebarOpen: storedSidebarOpen,
+    sidePanelDock,
+    rightSidebarOpen,
+    activeView
+  })
 
   const systemPrefersDark = useSystemPrefersDark()
   const leftSidebarStyle = useMemo(

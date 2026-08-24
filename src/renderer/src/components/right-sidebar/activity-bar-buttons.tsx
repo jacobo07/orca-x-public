@@ -143,6 +143,9 @@ export function ActivityBarButton({
       <TooltipTrigger asChild>
         <button
           type="button"
+          // Why a data hook: the accessible name is translated, so selecting by it works in one
+          // locale and silently stops matching in every other.
+          data-activity-bar-item={item.id}
           className={cn(
             'relative flex shrink-0 items-center justify-center transition-colors',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,

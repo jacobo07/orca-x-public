@@ -14,6 +14,11 @@ test('left column reserves no unpainted width', async ({ orcaPage }) => {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
 
+  // The invariant is about the column the project sidebar shares with the titlebar header, so put
+  // that sidebar in the left region first. Docked left it yields to the file panel by default, and
+  // measuring then would measure a column this gate is not about.
+  await orcaPage.locator('[data-left-nav-switch="projects"]').click()
+
   // The strip collapses itself when it does not fit, and that decision is measured on a
   // ResizeObserver, so read geometry only once it has stopped moving.
   await expect

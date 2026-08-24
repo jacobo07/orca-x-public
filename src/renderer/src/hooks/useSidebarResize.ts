@@ -7,6 +7,8 @@ type UseSidebarResizeOptions = {
   maxWidth: number
   deltaSign: 1 | -1
   renderedExtraWidth?: number
+  /** Width the container keeps while closed; see getRenderedSidebarWidthCssValue. */
+  closedWidth?: number
   setWidth: (width: number) => void
   onDraftWidthChange?: (width: number) => void
 }
@@ -24,9 +26,15 @@ export function clampSidebarResizeWidth(width: number, minWidth: number, maxWidt
 export function getRenderedSidebarWidthCssValue(
   isOpen: boolean,
   width: number,
-  renderedExtraWidth: number
+  renderedExtraWidth: number,
+  /**
+   * Width kept while closed. Zero for a panel that should vanish entirely; the activity-bar width
+   * for one whose icon strip is the window's own edge, since a strip that disappears takes the
+   * control that brings the panel back with it.
+   */
+  closedWidth = 0
 ): string {
-  return isOpen ? `${width + renderedExtraWidth}px` : '0px'
+  return isOpen ? `${width + renderedExtraWidth}px` : `${closedWidth}px`
 }
 
 export function getNextSidebarResizeWidth({
@@ -55,6 +63,7 @@ export function useSidebarResize<T extends HTMLElement>({
   maxWidth,
   deltaSign,
   renderedExtraWidth = 0,
+  closedWidth = 0,
   setWidth,
   onDraftWidthChange
 }: UseSidebarResizeOptions): UseSidebarResizeResult<T> {
@@ -92,9 +101,14 @@ export function useSidebarResize<T extends HTMLElement>({
       // React props. Any unrelated rerender during a drag would otherwise
       // snap the DOM width back to the last persisted store value and make the
       // handle feel like it is lagging behind the pointer.
-      container.style.width = getRenderedSidebarWidthCssValue(isOpen, nextWidth, renderedExtraWidth)
+      container.style.width = getRenderedSidebarWidthCssValue(
+        isOpen,
+        nextWidth,
+        renderedExtraWidth,
+        closedWidth
+      )
     },
-    [isOpen, renderedExtraWidth]
+    [closedWidth, isOpen, renderedExtraWidth]
   )
 
   useLayoutEffect(() => {

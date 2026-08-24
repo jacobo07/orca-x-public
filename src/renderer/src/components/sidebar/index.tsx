@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { resolveEffectiveSidebarOpen } from '@/lib/left-navigation-surface'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
@@ -42,7 +43,17 @@ function Sidebar({
   worktreeScrollOffsetRef,
   worktreeScrollAnchorRef
 }: SidebarProps): React.JSX.Element {
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  // Why derived: docked left this sidebar yields the region to the file panel, and the shell's
+  // layout already sizes the column that way. Reading the raw flag here would leave this rendering
+  // at full width inside a collapsed column, spilling over the workspace.
+  const sidebarOpen = useAppStore((s) =>
+    resolveEffectiveSidebarOpen({
+      sidebarOpen: s.sidebarOpen,
+      sidePanelDock: s.sidePanelDock,
+      rightSidebarOpen: s.rightSidebarOpen,
+      activeView: s.activeView
+    })
+  )
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)

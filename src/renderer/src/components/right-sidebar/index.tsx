@@ -24,6 +24,7 @@ import {
 } from '@/lib/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { ActivityBarPositionMenu } from './activity-bar-position-menu'
+import { LeftNavProjectsSwitch } from './left-nav-projects-switch'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
@@ -79,6 +80,10 @@ function RightSidebarInner(): React.JSX.Element {
     maxWidth,
     deltaSign: geometry.resizeDeltaSign,
     renderedExtraWidth: activityBarSideWidth,
+    // Why the strip survives closing docked left: it is the window's own left edge there, and it
+    // now carries the switch back to project navigation. A strip that vanishes with the panel takes
+    // the only way back with it. Docked right the panel still collapses to nothing, as before.
+    closedWidth: geometry.activityBarLeads ? activityBarSideWidth : 0,
     setWidth: setRightSidebarWidth
   })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
@@ -151,7 +156,10 @@ function RightSidebarInner(): React.JSX.Element {
             geometry.appliesWindowControlsInset && 'side-activity-bar-windows-inset'
           )}
         >
-          <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
+          <TooltipProvider delayDuration={400}>
+            {geometry.activityBarLeads ? <LeftNavProjectsSwitch /> : null}
+            {sideActivityBarIcons}
+          </TooltipProvider>
         </div>
       </ContextMenuTrigger>
       <ActivityBarPositionMenu

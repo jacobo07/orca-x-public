@@ -18,6 +18,7 @@ import { requestActiveTerminalPaneSplit } from '../tab-bar/request-active-termin
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { resolveEffectiveSidebarOpen } from '@/lib/left-navigation-surface'
 import { buildTabGroupCloseCommands } from './tab-group-close-commands'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
@@ -63,8 +64,18 @@ export default function TabGroupPanel({
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
-  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const sidePanelDock = useAppStore((state) => state.sidePanelDock)
+  // Why derived and not the stored flag: the strip reserves space for the floating titlebar header,
+  // which appears whenever the project sidebar is not rendering — including when it yielded the left
+  // region to the panel. The raw flag would skip that reservation and paint the header over tab one.
+  const sidebarOpen = useAppStore((state) =>
+    resolveEffectiveSidebarOpen({
+      sidebarOpen: state.sidebarOpen,
+      sidePanelDock: state.sidePanelDock,
+      rightSidebarOpen: state.rightSidebarOpen,
+      activeView: state.activeView
+    })
+  )
   const terminalRailCollapsed = useAppStore((state) => state.terminalRailCollapsed)
   const toggleTerminalRailCollapsed = useAppStore((state) => state.toggleTerminalRailCollapsed)
 
