@@ -5702,6 +5702,148 @@
       "demotionRule": "Quarantine with a linked defect if either project flakes; never relax the identity, active-pane, PTY-binding or proportion assertions into a pane count to obtain a pass."
     },
     {
+      "id": "workspace-chrome.left-column-geometry-ownership",
+      "title": "The left column reserves no width that no surface paints",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-chrome",
+      "layer": "renderer-app-shell-layout",
+      "surfaces": [
+        "left sidebar column",
+        "titlebar-left header",
+        "application menu strip",
+        "terminal workbench column"
+      ],
+      "platforms": ["windows", "macos", "linux"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "A Playwright spec against the real app measures the rendered gap between the project sidebar's right edge and the terminal workbench's left edge, and asserts the application menu is still reachable as either the expanded strip or its compact fallback.",
+      "motivatingLinks": [
+        "src/renderer/src/app-shell/AppMenuStrip.tsx#L13 — the collapse mechanism's stated assumption that the header's width 'is the sidebar's', which the measured layout contradicted",
+        "src/renderer/src/app-shell/AppWorkspaceShell.tsx — the auto-width left column whose widest child set its width"
+      ],
+      "invariant": "The left navigation column's width is owned by the sidebar it contains, not by the titlebar header above it. No horizontal band may sit between the sidebar and the workbench, and constraining the column may never cost access to the application menu.",
+      "oracle": "Measure the project sidebar and the terminal workbench by their stable data attributes in the running app, require the gap between them to be at most one border pixel, and require either menu-strip labels or the compact menu button to be present. The menu check is by class rather than accessible name because the name is translated and an English selector reports a Spanish build as having no menu.",
+      "commands": [
+        "pnpm exec playwright test tests/e2e/workspace-left-column-geometry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": ["tests/e2e/workspace-left-column-geometry.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/workspace-left-column-geometry.spec.ts",
+          "assertions": ["left column reserves no unpainted width"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-24",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec playwright test tests/e2e/workspace-left-column-geometry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 20,
+          "summary": "Measured gap 201px before the fix and 0px after, with the left header falling from 481px to the sidebar's 280px and the workbench gaining that width. The compact menu button was present after the strip collapsed."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "one Electron launch and a settled-layout measurement, excluding the e2e build"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One green local run on Windows. No CI history."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The assertion failed at 201px against the pre-fix build and passed at 0px after, in the same session, with the failure message naming both edges and both widths."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The spec measures geometry, not latency. It waits for the sidebar to render and then settles for a fixed interval because the menu strip's collapse decision runs on a ResizeObserver."
+      },
+      "promotionCriteria": [
+        "Run in CI across macOS and Linux, where window chrome and the menu strip differ.",
+        "Cover the collapsed-sidebar and docked-right arrangements, which take different layout paths.",
+        "Replace the fixed settle interval with a deterministic signal that the strip's fit decision has stabilised."
+      ],
+      "knownGaps": [
+        "Evidence is local Windows only, in Spanish. The void's width depends on translated menu-label lengths, so other locales exercise different numbers and an English build may never have reproduced it.",
+        "Only the sidebar-open, panel-docked-left arrangement is asserted. Collapsed sidebar and docked-right are untested.",
+        "The spec measures one window size. Narrow windows, where the strip collapses for a different reason, are not covered.",
+        "It asserts the menu is present, not that every menu item opens; item-level reachability rests on the unchanged popup path."
+      ],
+      "demotionRule": "Quarantine with a linked defect if the measurement flakes; never widen the one-pixel tolerance to absorb a real band, and never drop the menu-reachability half to keep the geometry half green."
+    },
+    {
+      "id": "workspace-chrome.terminal-navigation-single-owner",
+      "title": "Exactly one terminal navigator is visible, and no terminal is unreachable",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-chrome",
+      "layer": "renderer-tab-group",
+      "surfaces": ["terminal rail", "tab group strip", "terminal tabs", "rail collapse control"],
+      "platforms": ["windows", "macos", "linux"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "A Playwright spec against the real app asserts the strip carries no terminal tabs while the rail is visible, that the rail lists the terminals it took ownership of, and that collapsing the rail returns the tabs and expanding it removes them again.",
+      "motivatingLinks": [
+        "src/renderer/src/components/tab-group/TabGroupPanel.tsx — the divider the strip used to separate the rail toolbar's plus from the tab row's plus, which documented the duplication rather than resolving it"
+      ],
+      "invariant": "Terminals have exactly one primary navigator on screen at any time. The rail owns them while it is visible; collapsing the rail hands navigation back to the tab row. Non-terminal tabs are unaffected, because no rail navigates them.",
+      "oracle": "Count sortable tabs in the strip with the rail visible (must be zero), count the rail's rows (must be non-zero), collapse the rail and require tabs to return, then expand it and require them to disappear again. The round trip is asserted in both directions so the surfaces stay mutually exclusive rather than one-way.",
+      "commands": [
+        "pnpm exec playwright test tests/e2e/terminal-navigation-single-owner.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": ["tests/e2e/terminal-navigation-single-owner.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-navigation-single-owner.spec.ts",
+          "assertions": ["the rail and the tab row never both navigate terminals"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-24",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec playwright test tests/e2e/terminal-navigation-single-owner.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 44,
+          "summary": "With the rail visible the strip carried no terminal tabs while the rail listed the terminal; collapsing returned the tabs and expanding removed them again."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 75,
+        "scope": "one Electron launch plus two rail collapse toggles, excluding the e2e build"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One green local run on Windows. No CI history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The first assertion contradicts the shipped behaviour directly: before this change a terminal tab was always rendered, and a captured screenshot from the same session shows it. No pre-change build was retained as an automated red fixture."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The spec exercises navigation ownership, not latency. Every wait is a bounded poll."
+      },
+      "promotionCriteria": [
+        "Cover a group holding an editor or browser tab alongside terminals, where the strip must keep rendering.",
+        "Cover split groups, where several strips and rails mount at once.",
+        "Run in CI rather than as a single local run."
+      ],
+      "knownGaps": [
+        "One terminal in one group. Multiple terminals, multiple panes and split groups are not exercised.",
+        "The mixed-content case that motivated scoping this to terminals — an editor or browser tab sharing the strip — is asserted only by construction, not by a test.",
+        "Keyboard and application-menu tab switching are not exercised; reachability is asserted through the visible surfaces only.",
+        "Evidence is local Windows only, unpackaged."
+      ],
+      "demotionRule": "Quarantine with a linked defect if it flakes; never satisfy it by hiding the tab row unconditionally, which would strand editor, browser and simulator tabs that have no rail."
+    },
+    {
       "id": "terminal-platform.windows-conpty-liveness",
       "title": "Windows ConPTY terminals stay input-live, render-live, and geometry-live",
       "maturity": "experimental",
