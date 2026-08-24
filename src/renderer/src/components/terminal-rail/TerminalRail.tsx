@@ -1,11 +1,14 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { cn } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { SortableTabContextMenu } from '../tab-bar/SortableTabContextMenu'
 import {
   TERMINAL_RAIL_MAX_WIDTH,
   TERMINAL_RAIL_MIN_WIDTH
@@ -26,16 +29,41 @@ import { useTerminalRailResize } from './use-terminal-rail-resize'
  * panel's toolbar belongs and where they stay reachable once this rail is collapsed away.
  */
 
+/**
+ * What the rail can do to a terminal beyond selecting it.
+ *
+ * Close semantics stay with the group's command layer — it owns which unified item a visible id
+ * maps to — while pin, colour and title come straight from the store, since those are tab-level
+ * facts with no group-scoped resolution to do.
+ */
+export type TerminalRailTabActions = {
+  groupId: string
+  /** Unified tabs for this group; supplies the unified id and pin state the menu needs. */
+  groupTabs: readonly Tab[]
+  onActivate: (visibleId: string) => void
+  onClose: (visibleId: string) => void
+  onCloseOthers: (visibleId: string) => void
+  onCloseToRight: (visibleId: string) => void
+  onCloseToLeft: (visibleId: string) => void
+}
+
 function TerminalRailTab({
   tab,
   paneCount,
   isActive,
-  onSelect
+  onSelect,
+  actions,
+  tabIndex,
+  tabCount
 }: {
   tab: TerminalTab
   paneCount: number
   isActive: boolean
   onSelect: () => void
+  /** Absent on surfaces that only navigate; the row then has no context menu rather than a dead one. */
+  actions?: TerminalRailTabActions
+  tabIndex: number
+  tabCount: number
 }): React.JSX.Element {
   // Why: the same selector the tab strip uses, so the rail cannot show a state the tab denies.
   const activityStatus = useAppStore((s) =>
@@ -56,27 +84,135 @@ function TerminalRailTab({
     })
   )
   const agent = useTabAgent(tab)
+  const pinTab = useAppStore((s) => s.pinTab)
+  const unpinTab = useAppStore((s) => s.unpinTab)
+  const setTabColor = useAppStore((s) => s.setTabColor)
+  const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
+
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+  const [isEditing, setIsEditing] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  // Why: onBlur fires while the input unmounts, so a committed or cancelled rename must be able to
+  // refuse a second commit — otherwise Escape discards the edit and the blur writes it back.
+  const renameResolvedRef = useRef(false)
+
+  const title = tab.customTitle ?? tab.title
+  const unifiedTab = actions?.groupTabs.find(
+    (candidate) => candidate.contentType === 'terminal' && candidate.entityId === tab.id
+  )
+  const unifiedTabId = unifiedTab?.id ?? tab.id
+
+  const openRename = useCallback(() => {
+    renameResolvedRef.current = false
+    setRenameValue(tab.customTitle ?? tab.title)
+    setIsEditing(true)
+  }, [tab.customTitle, tab.title])
+
+  const commitRename = useCallback(() => {
+    if (renameResolvedRef.current) {
+      return
+    }
+    renameResolvedRef.current = true
+    const trimmed = renameValue.trim()
+    setTabCustomTitle(tab.id, trimmed.length > 0 ? trimmed : null)
+    setIsEditing(false)
+  }, [renameValue, setTabCustomTitle, tab.id])
+
+  const cancelRename = useCallback(() => {
+    renameResolvedRef.current = true
+    setIsEditing(false)
+  }, [])
+
+  if (isEditing) {
+    return (
+      <Input
+        autoFocus
+        data-terminal-rail-rename-input="true"
+        value={renameValue}
+        aria-label={translate(
+          'auto.components.tab.bar.SortableTab.ab19f603eb',
+          'Rename tab {{value0}}',
+          { value0: title }
+        )}
+        onChange={(event) => setRenameValue(event.target.value)}
+        onBlur={commitRename}
+        onKeyDown={(event) => {
+          // Why the composition guard: an Enter that confirms a CJK IME candidate is not an Enter
+          // that commits the rename.
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            commitRename()
+            return
+          }
+          if (event.key === 'Escape') {
+            cancelRename()
+          }
+        }}
+        className="h-[26px] px-2 text-[12px]"
+      />
+    )
+  }
 
   return (
-    <TerminalRailTabRow
-      tab={tab}
-      agent={agent}
-      activityStatus={activityStatus}
-      paneCount={paneCount}
-      isActive={isActive}
-      hasUnreadActivity={hasUnreadActivity}
-      onSelect={onSelect}
-      onContextMenu={(event) => event.preventDefault()}
-    />
+    <>
+      <TerminalRailTabRow
+        tab={tab}
+        agent={agent}
+        activityStatus={activityStatus}
+        paneCount={paneCount}
+        isActive={isActive}
+        hasUnreadActivity={hasUnreadActivity}
+        onSelect={onSelect}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          if (!actions) {
+            return
+          }
+          setMenuPoint({ x: event.clientX, y: event.clientY })
+          setMenuOpen(true)
+        }}
+      />
+      {actions ? (
+        <SortableTabContextMenu
+          tab={tab}
+          unifiedTabId={unifiedTabId}
+          groupId={actions.groupId}
+          isActive={isActive}
+          open={menuOpen}
+          point={menuPoint}
+          tabCount={tabCount}
+          hasTabsToRight={tabIndex < tabCount - 1}
+          hasTabsToLeft={tabIndex > 0}
+          isPinned={unifiedTab?.isPinned === true}
+          onOpenChange={setMenuOpen}
+          onActivate={actions.onActivate}
+          onClose={actions.onClose}
+          onCloseOthers={actions.onCloseOthers}
+          onCloseToRight={actions.onCloseToRight}
+          onCloseToLeft={actions.onCloseToLeft}
+          onRenameOpen={openRename}
+          onSetTabColor={setTabColor}
+          onTogglePin={() => {
+            if (unifiedTab?.isPinned === true) {
+              unpinTab(unifiedTabId)
+              return
+            }
+            pinTab(unifiedTabId)
+          }}
+        />
+      ) : null}
+    </>
   )
 }
 
 export default function TerminalRail({
   tabs,
-  activeTabId
+  activeTabId,
+  tabActions
 }: {
   tabs: readonly TerminalTab[]
   activeTabId: string | null
+  tabActions?: TerminalRailTabActions
 }): React.JSX.Element | null {
   const { collapsed, width } = useAppStore(
     useShallow((s) => ({
@@ -142,6 +278,9 @@ export default function TerminalRail({
                   paneCount={row.paneCount}
                   isActive={activeRow === row}
                   onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
+                  actions={tabActions}
+                  tabIndex={tabIds.indexOf(row.tabId)}
+                  tabCount={tabIds.length}
                 />
               )
             }

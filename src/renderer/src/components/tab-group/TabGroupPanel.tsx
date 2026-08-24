@@ -18,6 +18,7 @@ import { requestActiveTerminalPaneSplit } from '../tab-bar/request-active-termin
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { buildTabGroupCloseCommands } from './tab-group-close-commands'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
@@ -83,6 +84,9 @@ export default function TabGroupPanel({
     [bodyAnchorName]
   )
 
+  // One resolution of visible-id -> unified item, shared by the tab strip and the rail.
+  const closeCommands = buildTabGroupCloseCommands(model.groupTabs, commands)
+
   const tabBar = (
     <TabBar
       tabs={terminalTabs}
@@ -91,34 +95,10 @@ export default function TabGroupPanel({
       worktreeId={worktreeId}
       expandedPaneByTabId={model.expandedPaneByTabId}
       onActivate={commands.activateTerminal}
-      onClose={(terminalId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
-        if (item?.contentType === 'terminal') {
-          commands.closeItem(item.id)
-          return
-        }
-        // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
-        closeTerminalTab(terminalId)
-      }}
-      onCloseOthers={(visibleId) => {
-        // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeOthers(item.id)
-        }
-      }}
-      onCloseToRight={(visibleId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeToRight(item.id)
-        }
-      }}
-      onCloseToLeft={(visibleId) => {
-        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
-        if (item) {
-          commands.closeToLeft(item.id)
-        }
-      }}
+      onClose={closeCommands.onClose}
+      onCloseOthers={closeCommands.onCloseOthers}
+      onCloseToRight={closeCommands.onCloseToRight}
+      onCloseToLeft={closeCommands.onCloseToLeft}
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
@@ -403,7 +383,18 @@ export default function TabGroupPanel({
           {/* Why: terminal/browser/simulator panes render at the worktree level (overlay layers); per-group rendering remounted xterm/webview/simulator on split moves. */}
         </div>
         {activeTab?.contentType === 'terminal' ? (
-          <TerminalRail tabs={terminalTabs} activeTabId={activeTab.entityId} />
+          <TerminalRail
+            tabs={terminalTabs}
+            activeTabId={activeTab.entityId}
+            // Why the same commands the tab strip gets: close semantics resolve a visible id to a
+            // unified item, and two surfaces resolving that independently is how they drift.
+            tabActions={{
+              groupId,
+              groupTabs: model.groupTabs,
+              onActivate: commands.activateTerminal,
+              ...closeCommands
+            }}
+          />
         ) : null}
       </div>
     </div>

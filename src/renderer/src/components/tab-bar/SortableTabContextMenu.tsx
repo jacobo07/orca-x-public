@@ -190,7 +190,7 @@ export function SortableTabContextMenu({
           </>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onTogglePin}>
+        <DropdownMenuItem data-tab-menu-action="toggle-pin" onSelect={onTogglePin}>
           {isPinned ? (
             <PinOff className="size-3.5 shrink-0" />
           ) : (
@@ -225,7 +225,10 @@ export function SortableTabContextMenu({
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onRenameOpen}>
+        {/* Why a data hook and not the label: the label is translated, so a test that clicks by
+            accessible name passes in English and silently stops exercising this in every other
+            locale. */}
+        <DropdownMenuItem data-tab-menu-action="rename" onSelect={onRenameOpen}>
           <Pencil className="size-3.5" />
           {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
           {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
