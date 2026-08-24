@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { resolveWindowsShellLaunchTarget } from '@/components/tab-bar/windows-shell-launch'
 import {
@@ -35,7 +37,15 @@ export function launchTerminalProfile({
   const profile = findTerminalLaunchProfile(profiles, profileId)
   if (!profile) {
     // A profile can disappear between opening the menu and choosing from it — an agent detection
-    // refresh, a host swap. Falling back to a plain terminal beats doing nothing silently.
+    // refresh, a host swap. Falling back to a plain terminal beats doing nothing silently, but the
+    // fallback is a different runtime than the one that was chosen, so say so: a substitution the
+    // user cannot see is indistinguishable from having picked the wrong entry.
+    toast.warning(
+      translate(
+        'auto.lib.launchTerminalProfile.profileUnavailable',
+        'That terminal profile is no longer available. Opened the default terminal instead.'
+      )
+    )
     onNewTerminalTab()
     return
   }

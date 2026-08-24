@@ -814,6 +814,9 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
+      },
+      "launchTerminalProfile": {
+        "profileUnavailable": "That terminal profile is no longer available. Opened the default terminal instead."
       }
     },
     "hooks": {
