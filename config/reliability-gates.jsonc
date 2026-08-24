@@ -5776,6 +5776,75 @@
       "demotionRule": "Quarantine with a linked defect if the measurement flakes; never widen the one-pixel tolerance to absorb a real band, and never drop the menu-reachability half to keep the geometry half green."
     },
     {
+      "id": "workspace-chrome.terminal-navigation-single-owner",
+      "title": "Exactly one terminal navigator is visible, and no terminal is unreachable",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-chrome",
+      "layer": "renderer-tab-group",
+      "surfaces": ["terminal rail", "tab group strip", "terminal tabs", "rail collapse control"],
+      "platforms": ["windows", "macos", "linux"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "A Playwright spec against the real app asserts the strip carries no terminal tabs while the rail is visible, that the rail lists the terminals it took ownership of, and that collapsing the rail returns the tabs and expanding it removes them again.",
+      "motivatingLinks": [
+        "src/renderer/src/components/tab-group/TabGroupPanel.tsx — the divider the strip used to separate the rail toolbar's plus from the tab row's plus, which documented the duplication rather than resolving it",
+        "tests/e2e/terminal-rail-tab-actions.spec.ts — the parity this depends on. A first attempt at this gate was reverted because the rail had no context menu, so hiding the tabs removed rename, colour, pin and the close family rather than duplicated navigation. That prerequisite is now met and separately gated."
+      ],
+      "invariant": "Terminals have exactly one primary navigator on screen at any time. The rail owns them while it is visible; collapsing the rail hands navigation back to the tab row. Non-terminal tabs are unaffected, because no rail navigates them.",
+      "oracle": "Count sortable tabs in the strip with the rail visible (must be zero), count the rail's rows (must be non-zero), collapse the rail and require tabs to return, then expand it and require them to disappear again. The round trip is asserted in both directions so the surfaces stay mutually exclusive rather than one-way.",
+      "commands": [
+        "pnpm exec playwright test tests/e2e/terminal-navigation-single-owner.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": ["tests/e2e/terminal-navigation-single-owner.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-navigation-single-owner.spec.ts",
+          "assertions": ["the rail and the tab row never both navigate terminals"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-24",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec playwright test tests/e2e/terminal-navigation-single-owner.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 44,
+          "summary": "With the rail visible the strip carried no terminal tabs while the rail listed the terminal; collapsing returned the tabs and expanding removed them again."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 75,
+        "scope": "one Electron launch plus two rail collapse toggles, excluding the e2e build"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One green local run on Windows. No CI history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The first assertion contradicts the shipped behaviour directly: before this change a terminal tab was always rendered, and a captured screenshot from the same session shows it. No pre-change build was retained as an automated red fixture."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The spec exercises navigation ownership, not latency. Every wait is a bounded poll."
+      },
+      "promotionCriteria": [
+        "Cover a group holding an editor or browser tab alongside terminals, where the strip must keep rendering.",
+        "Cover split groups, where several strips and rails mount at once.",
+        "Run in CI rather than as a single local run."
+      ],
+      "knownGaps": [
+        "One terminal in one group. Multiple terminals, multiple panes and split groups are not exercised.",
+        "The mixed-content case that motivated scoping this to terminals — an editor or browser tab sharing the strip — is asserted only by construction, not by a test.",
+        "Keyboard and application-menu tab switching are not exercised; reachability is asserted through the visible surfaces only.",
+        "Evidence is local Windows only, unpackaged."
+      ],
+      "demotionRule": "Quarantine with a linked defect if it flakes; never satisfy it by hiding the tab row unconditionally, which would strand editor, browser and simulator tabs that have no rail."
+    },
+    {
       "id": "terminal-platform.windows-conpty-liveness",
       "title": "Windows ConPTY terminals stay input-live, render-live, and geometry-live",
       "maturity": "experimental",
