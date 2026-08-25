@@ -51,7 +51,14 @@ export function launchCommandTerminalProfile({
   const store = useAppStore.getState()
   // Why the shell rides along: a wrapper profile names the shell that must host it (a `/K` batch
   // needs cmd, not pwsh), and recording it on the tab is what keeps the pairing after a restart.
-  const tab = store.createTab(worktreeId, groupId, shellOverride)
+  //
+  // Why the profile id as well, when shells and agents get by without it: those two are recoverable
+  // from what the tab already stores, and this kind is not. The command is delivered through a
+  // startup queue that is consumed once and never persisted, so without the id a restarted wrapper
+  // terminal is indistinguishable from a bare shell — which is precisely what it used to become.
+  const tab = store.createTab(worktreeId, groupId, shellOverride, {
+    launchProfileId: profile.id
+  })
   store.queueTabStartupCommand(tab.id, {
     command: resolution.startup.command,
     ...(resolution.startup.env ? { env: resolution.startup.env } : {}),

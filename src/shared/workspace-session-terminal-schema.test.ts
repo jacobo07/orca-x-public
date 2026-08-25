@@ -43,8 +43,8 @@ describe('parseWorkspaceSession terminal fields', () => {
     }
   })
 
-  // Why these two together: both are stamped at create time and both describe how the terminal was
-// launched, so a tab that loses them comes back as a shell nobody chose. `SortableTab` already
+  // Why together: all three are stamped at create time and all three describe how the terminal was
+  // launched, so a tab that loses them comes back as a shell nobody chose. `SortableTab` already
   // assumes shellOverride outlives a restart when it decides which icon to paint.
   it('preserves the launch identity a terminal was created with', () => {
     const result = parseWorkspaceSession({
@@ -60,6 +60,7 @@ describe('parseWorkspaceSession terminal fields', () => {
             title: 'Terminal 1',
             shellOverride: 'wsl.exe',
             forceHostRuntime: true,
+            launchProfileId: 'command:last-session',
             customTitle: null,
             color: null,
             sortOrder: 0,
@@ -74,6 +75,7 @@ describe('parseWorkspaceSession terminal fields', () => {
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].shellOverride).toBe('wsl.exe')
       expect(result.value.tabsByWorktree.wt[0].forceHostRuntime).toBe(true)
+      expect(result.value.tabsByWorktree.wt[0].launchProfileId).toBe('command:last-session')
     }
   })
 

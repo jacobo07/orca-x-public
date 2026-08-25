@@ -32,6 +32,13 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Why: the launch profile the user picked, which `shellOverride` cannot express — that field
+   *  holds a resolved executable, so two profiles hosting a command in the same shell are
+   *  indistinguishable in it, and a profile carrying a command leaves no trace there at all.
+   *  Stored as the profile's stable id, never its label: labels are renameable and may be shared,
+   *  so a tab pointing at one would re-point itself the moment the user edited it. Older tabs omit
+   *  this and are read through `resolveTerminalLaunchProfileIdentity` instead. */
+  launchProfileId?: string
   /** Keeps an ephemeral host fallback out of the active project's runtime. */
   forceHostRuntime?: boolean
   /** Why: explorer-created terminals can start below the workspace root while

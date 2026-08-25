@@ -110,7 +110,8 @@ const terminalTabSchema = z.object({
   // `.catch(undefined)` degrades a bad value to "host default" rather than dropping the terminal —
   // forgetting a shell preference is recoverable, losing the tab is not.
   shellOverride: z.string().min(1).optional().catch(undefined),
-  forceHostRuntime: z.boolean().optional().catch(undefined)
+  forceHostRuntime: z.boolean().optional().catch(undefined),
+  launchProfileId: z.string().min(1).optional().catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

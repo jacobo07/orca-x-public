@@ -628,6 +628,8 @@ export type TerminalSlice = {
       id?: string
       /** Coding-harness agent launched here, recorded so the tab bar shows the provider icon before the agent's first hook event. */
       launchAgent?: TuiAgent
+      /** Stable id of the launch profile the user picked, so a restart can name it rather than infer it. */
+      launchProfileId?: string
       quickCommandLabel?: string | null
       /** Initial native-chat view mode; agent launches pass 'chat' when openAgentTabsInChatByDefault is on, else omitted for the 'terminal' default. */
       viewMode?: Tab['viewMode']
@@ -1367,6 +1369,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
         ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
         ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
+        ...(options?.launchProfileId ? { launchProfileId: options.launchProfileId } : {}),
         // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
         ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
       }
