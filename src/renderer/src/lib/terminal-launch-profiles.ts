@@ -1,6 +1,7 @@
 import type { BuiltInWindowsTerminalShell } from '../../../shared/windows-terminal-shell'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { UserTerminalLaunchProfile } from '../../../shared/terminal-launch-profile-definition'
 
 /**
  * The one answer to "what can this workspace launch in a terminal, and which is the default".
@@ -72,9 +73,15 @@ export function agentProfileId(agent: TuiAgent): string {
   return `agent:${agent}`
 }
 
+/** Namespaced like the others so a user id can never collide with a shell or an agent. */
+export function userProfileId(id: string): string {
+  return `command:${id}`
+}
+
 export function buildTerminalLaunchProfiles({
   shellEntries,
   agentOptions,
+  userProfiles,
   defaultAgent,
   hostDefaultShellLabel
 }: {
@@ -82,6 +89,8 @@ export function buildTerminalLaunchProfiles({
   shellEntries: readonly { label: string; shell: BuiltInWindowsTerminalShell }[] | undefined
   /** Output of `buildTabAgentLaunchOptions`, already ordered and availability-filtered. */
   agentOptions: readonly { agent: TuiAgent; label: string }[]
+  /** Declared by the user and already reviewed; prerequisite filtering happens before this. */
+  userProfiles?: readonly UserTerminalLaunchProfile[]
   defaultAgent: TuiAgent | 'blank' | null | undefined
   hostDefaultShellLabel: string
 }): TerminalLaunchProfileSet {
@@ -109,7 +118,22 @@ export function buildTerminalLaunchProfiles({
     agent: option.agent
   }))
 
-  const ordered = [...shellProfiles, ...agentProfiles]
+  const commandProfiles: TerminalLaunchProfile[] = (userProfiles ?? []).map((profile) => ({
+    kind: 'command',
+    id: userProfileId(profile.id),
+    label: profile.label,
+    command: profile.command,
+    ...(profile.env ? { env: profile.env } : {}),
+    ...(profile.shell ? { shell: profile.shell } : {}),
+    ...(profile.startupCommandDelivery
+      ? { startupCommandDelivery: profile.startupCommandDelivery }
+      : {})
+  }))
+
+  // Why last: the detected sets answer "what does this machine have", the declared one answers
+  // "what did the user add". Ordering the additions after the discoveries keeps the menu stable
+  // when a shell or an agent appears or disappears.
+  const ordered = [...shellProfiles, ...agentProfiles, ...commandProfiles]
   // 'blank' is the settings value for "a plain terminal, no agent" — a real choice, not an absent
   // one, and it resolves to the shell rather than to the first agent that happens to be installed.
   const preferredAgentId =

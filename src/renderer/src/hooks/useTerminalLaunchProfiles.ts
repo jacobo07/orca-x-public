@@ -30,6 +30,7 @@ import {
   buildTerminalLaunchProfiles,
   type TerminalLaunchProfileSet
 } from '@/lib/terminal-launch-profiles'
+import { useAvailableUserTerminalProfiles } from '@/hooks/useAvailableUserTerminalProfiles'
 
 /**
  * Owns the question "what can this worktree launch in a terminal, and which is the default".
@@ -209,15 +210,17 @@ export function useTerminalLaunchProfiles({
     ]
   )
 
+  const userTerminalProfiles = useAvailableUserTerminalProfiles(worktreeConnectionId)
   const profileSet = useMemo(
     () =>
       buildTerminalLaunchProfiles({
         shellEntries: shellMenuEntries,
         agentOptions: agentLaunchOptions,
+        userProfiles: userTerminalProfiles.profiles,
         defaultAgent,
         hostDefaultShellLabel: translate('auto.App.d54e66004c', 'Terminal')
       }),
-    [agentLaunchOptions, defaultAgent, shellMenuEntries]
+    [agentLaunchOptions, defaultAgent, shellMenuEntries, userTerminalProfiles.profiles]
   )
 
   return {
