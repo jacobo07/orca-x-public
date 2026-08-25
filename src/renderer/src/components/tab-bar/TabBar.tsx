@@ -31,6 +31,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     mobileEmulatorCreationEnabled: runtime.mobileEmulatorCreationEnabled,
     workspaceHasSimulatorTab: runtime.workspaceHasSimulatorTab,
     shellMenuEntries: runtime.shellMenuEntries,
+    profiles: runtime.terminalLaunchProfiles.profiles,
     defaultWindowsPowerShellImplementation: runtime.defaultWindowsPowerShellImplementation,
     windowsTerminalCapabilities: runtime.windowsTerminalCapabilities,
     agentLaunchOptions: runtime.agentLaunchOptions,

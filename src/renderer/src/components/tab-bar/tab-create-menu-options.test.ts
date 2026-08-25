@@ -80,15 +80,15 @@ describe('tab create menu options', () => {
       hasOpenMarkdown: false,
       hasSimulator: false,
       simulatorIsGoTo: false,
-      windowsShellEntries: [
-        { label: 'PowerShell', shell: 'powershell.exe' },
-        { label: 'CMD Prompt', shell: 'cmd.exe' }
+      profiles: [
+        { kind: 'shell', id: 'shell:powershell.exe', label: 'PowerShell', shell: 'powershell.exe' },
+        { kind: 'shell', id: 'shell:cmd.exe', label: 'CMD Prompt', shell: 'cmd.exe' }
       ]
     })
 
     expect(
-      findMatchingTabCreateMenuOptions('new terminal', options).map((option) => option.shell)
-    ).toEqual(['powershell.exe', 'cmd.exe'])
+      findMatchingTabCreateMenuOptions('new terminal', options).map((option) => option.profileId)
+    ).toEqual(['shell:powershell.exe', 'shell:cmd.exe'])
   })
 
   it('returns no matches for an empty query', () => {

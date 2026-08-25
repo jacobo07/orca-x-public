@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
-import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
+import type { TerminalLaunchProfile } from '@/lib/terminal-launch-profiles'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type TabCreateMenuOptionKind =
@@ -9,7 +9,7 @@ export type TabCreateMenuOptionKind =
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
-  | 'new-terminal-shell'
+  | 'new-terminal-profile'
   | 'open-markdown'
 
 export type TabCreateMenuOption = {
@@ -17,7 +17,8 @@ export type TabCreateMenuOption = {
   kind: TabCreateMenuOptionKind
   keywords: readonly string[]
   label: string
-  shell?: BuiltInWindowsTerminalShell
+  /** Set on 'new-terminal-profile' rows; the canonical profile this row launches. */
+  profileId?: string
 }
 
 export type TabCreateMenuOptionsContext = {
@@ -27,7 +28,8 @@ export type TabCreateMenuOptionsContext = {
   hasSimulator: boolean
   simulatorIsGoTo: boolean
   terminalOnly: boolean
-  windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
+  /** The canonical launch set. Empty/absent yields the plain-terminal row instead. */
+  profiles?: readonly TerminalLaunchProfile[]
 }
 
 export const TAB_CREATE_MENU_QUERY_MAX_BYTES = 2 * 1024
@@ -67,19 +69,21 @@ export function buildTabCreateMenuOptions(
 
   const options: TabCreateMenuOption[] = []
 
-  if (context.windowsShellEntries && context.windowsShellEntries.length > 0) {
-    for (const entry of context.windowsShellEntries) {
-      const label = `${translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} ${entry.label}`
+  if (context.profiles && context.profiles.length > 0) {
+    for (const profile of context.profiles) {
+      const label = `${translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} ${profile.label}`
       options.push({
-        id: `new-terminal-shell:${entry.shell}`,
-        kind: 'new-terminal-shell',
+        id: `new-terminal-profile:${profile.id}`,
+        kind: 'new-terminal-profile',
         label,
-        shell: entry.shell,
+        profileId: profile.id,
         keywords: [
           translate('auto.components.tab.bar.tab.create.menu.options.5501c2fb7a', 'terminal'),
+          // Why both words: the set mixes shells and agents, and a user searching either term
+          // expects the whole list — filtering by kind here would recreate the split this removed.
           translate('auto.components.tab.bar.tab.create.menu.options.9630dd5494', 'shell'),
           translate('auto.components.tab.bar.tab.create.menu.options.a094576900', 'new terminal'),
-          entry.label,
+          profile.label,
           label
         ]
       })
