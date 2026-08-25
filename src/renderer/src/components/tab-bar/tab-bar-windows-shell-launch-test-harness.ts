@@ -38,6 +38,7 @@ export const appStoreSnapshot: {
   isDetectingLocalAgentsByContext: Record<string, boolean>
   isRefreshingLocalAgentsByContext: Record<string, boolean>
   isDetectingRemoteAgents: Record<string, boolean>
+  terminalLaunchProfiles: { id: string; label: string; command: string }[]
 } = {
   activeRepoId: null,
   activeTabId: null,
@@ -56,7 +57,8 @@ export const appStoreSnapshot: {
   isDetectingAgents: false,
   isDetectingLocalAgentsByContext: {},
   isRefreshingLocalAgentsByContext: {},
-  isDetectingRemoteAgents: {}
+  isDetectingRemoteAgents: {},
+  terminalLaunchProfiles: []
 }
 export const pinTabMock: (tabId: string) => void = vi.fn()
 export const unpinTabMock: (tabId: string) => void = vi.fn()
@@ -89,6 +91,7 @@ const useAppStoreMock = vi.fn(
         terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
         activeRuntimeEnvironmentId: string | null
         localWindowsRuntimeDefault: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
+        terminalLaunchProfiles: typeof appStoreSnapshot.terminalLaunchProfiles
       }
     }) => unknown
   ) =>
@@ -117,7 +120,8 @@ const useAppStoreMock = vi.fn(
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'pwsh.exe',
         activeRuntimeEnvironmentId: appStoreSnapshot.activeRuntimeEnvironmentId,
-        localWindowsRuntimeDefault: { kind: 'windows-host' }
+        localWindowsRuntimeDefault: { kind: 'windows-host' },
+        terminalLaunchProfiles: appStoreSnapshot.terminalLaunchProfiles
       }
     })
 )
@@ -167,5 +171,6 @@ export function resetAppStoreSnapshot(): void {
   appStoreSnapshot.activeGroupIdByWorktree = {}
   appStoreSnapshot.localDetectedAgentIdsByContext = {}
   appStoreSnapshot.isDetectingLocalAgentsByContext = {}
+  appStoreSnapshot.terminalLaunchProfiles = []
   appStoreSnapshot.isRefreshingLocalAgentsByContext = {}
 }

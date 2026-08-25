@@ -4,14 +4,10 @@ import { translate } from '@/i18n/i18n'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
-import { ShellIcon } from './shell-icons'
-import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
-import {
-  isMacOs,
-  type resolveWindowsPowerShellImplementationSetting
-} from './use-tab-bar-runtime-model'
+import { TerminalProfileIcon } from './TerminalProfileIcon'
+import { isMacOs } from './use-tab-bar-runtime-model'
 import type { TabBarProps } from './tab-bar-props'
-import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import type { TerminalLaunchProfile } from '@/lib/terminal-launch-profiles'
 
 export function renderTabBarStaticCreateMenu({
   terminalOnly,
@@ -21,9 +17,9 @@ export function renderTabBarStaticCreateMenu({
   workspaceHasSimulatorTab,
   showMobileEmulatorIntroCallout,
   props,
-  windowsShellEntries,
-  defaultWindowsPowerShellImplementation,
-  pwshAvailable,
+  profiles,
+  defaultProfileId,
+  launchProfile,
   newTerminalShortcut,
   newBrowserShortcut,
   newSimulatorShortcut,
@@ -38,11 +34,10 @@ export function renderTabBarStaticCreateMenu({
   mobileEmulatorCreationEnabled: boolean
   workspaceHasSimulatorTab: boolean
   showMobileEmulatorIntroCallout: boolean
-  windowsShellEntries: WindowsShellMenuEntry[] | undefined
-  defaultWindowsPowerShellImplementation: ReturnType<
-    typeof resolveWindowsPowerShellImplementationSetting
-  >
-  pwshAvailable: boolean
+  /** The canonical launch set, already filtered to what this workspace can offer. */
+  profiles: readonly TerminalLaunchProfile[]
+  defaultProfileId: string | null
+  launchProfile: (profileId: string) => void
   newTerminalShortcut: string
   newBrowserShortcut: string
   newSimulatorShortcut: string
@@ -53,41 +48,34 @@ export function renderTabBarStaticCreateMenu({
   const {
     newTabMenuOrder = 'default',
     onNewTerminalTab,
-    onNewTerminalWithShell,
     onNewBrowserTab,
     onNewSimulatorTab,
     onNewFileTab,
     onOpenFileTab
   } = props
+  // Why the canonical set here too: this is the menu you get before typing anything, so a list
+  // built from Windows shells alone meant agents and every user-declared profile were invisible
+  // until you searched for them — the same divergence the searchable branch was already fixed for.
   const defaultTerminalMenuItems =
-    windowsShellEntries && onNewTerminalWithShell ? (
-      windowsShellEntries.map((entry, index) => {
-        const isDefault = index === 0
-        return (
-          <DropdownMenuItem
-            key={entry.shell}
-            onSelect={() => {
-              // Why: menu models shell categories not executables; preserve the user's chosen PowerShell 7+ over inbox powershell.exe.
-              queueNewActiveTerminalFocusAfterNewTabMenuClose()
-              onNewTerminalWithShell(
-                resolveWindowsShellLaunchTarget(
-                  entry.shell,
-                  defaultWindowsPowerShellImplementation,
-                  pwshAvailable
-                )
-              )
-            }}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-          >
-            <ShellIcon shell={entry.shell} size={14} />
-            <span className="flex-1">
-              {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
-              {entry.label}
-            </span>
-            {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
-          </DropdownMenuItem>
-        )
-      })
+    profiles.length > 0 ? (
+      profiles.map((profile) => (
+        <DropdownMenuItem
+          key={profile.id}
+          onSelect={() => {
+            queueNewActiveTerminalFocusAfterNewTabMenuClose()
+            launchProfile(profile.id)
+          }}
+          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        >
+          <TerminalProfileIcon profile={profile} />
+          <span className="flex-1 truncate">
+            {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} {profile.label}
+          </span>
+          {profile.id === defaultProfileId ? (
+            <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
+      ))
     ) : (
       <DropdownMenuItem
         onSelect={() => {

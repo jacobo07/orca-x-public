@@ -8,7 +8,6 @@ import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabil
 import { useAppStore } from '../../store'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
-import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
 import type { TerminalLaunchProfile } from '@/lib/terminal-launch-profiles'
 import { launchTerminalProfile } from '@/lib/launch-terminal-profile'
 import type { resolveWindowsPowerShellImplementationSetting } from './use-tab-bar-runtime-model'
@@ -21,7 +20,9 @@ export type TabBarCreateMenuController = {
   setNewTabMenuOpen: (open: boolean) => void
   setCreateMenuQuery: (query: string) => void
   createMenuOptions: TabCreateMenuOption[]
-  windowsShellEntries: WindowsShellMenuEntry[] | undefined
+  /** The canonical set this tab bar can act on; empty when it has no shell launcher at all. */
+  offeredProfiles: readonly TerminalLaunchProfile[]
+  launchProfileFromMenu: (profileId: string) => void
   handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
   launchAgentFromNewTabEntry: (agent: TuiAgent) => void
   runPendingNewTabMenuFocusAfterClose: () => void
@@ -40,7 +41,6 @@ export function useTabBarCreateMenuController({
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled,
   workspaceHasSimulatorTab,
-  shellMenuEntries,
   profiles,
   defaultWindowsPowerShellImplementation,
   windowsTerminalCapabilities,
@@ -59,7 +59,6 @@ export function useTabBarCreateMenuController({
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
   workspaceHasSimulatorTab: boolean
-  shellMenuEntries: WindowsShellMenuEntry[] | undefined
   /** The canonical launch set this menu offers; the rail's profile menu reads the same one. */
   profiles: readonly TerminalLaunchProfile[]
   defaultWindowsPowerShellImplementation: ReturnType<
@@ -131,18 +130,31 @@ export function useTabBarCreateMenuController({
   const queueFocusAfterNewTabMenuClose = (focus: () => void): void => {
     pendingNewTabMenuFocusRef.current = focus
   }
-  // Why: the shell list is resolved once by useTerminalLaunchProfiles; this menu only decides
-  // whether it can act on one, which it cannot without a shell launcher.
-  const windowsShellEntries = onNewTerminalWithShell ? shellMenuEntries : undefined
+  // Why gated on the launcher rather than on the Windows shell menu: the canonical set already
+  // carries the host's own default shell where no explicit shell menu applies, so the only question
+  // left is whether this surface can act on a profile at all.
+  const offeredProfiles = onNewTerminalWithShell ? profiles : []
+  // Why the shared launcher: a second implementation of "turn a profile into a launch" is how the
+  // two menus drifted apart. Which surface asked is not part of what a profile means.
+  const launchProfileFromMenu = (profileId: string): void => {
+    launchTerminalProfile({
+      profileId,
+      profiles,
+      worktreeId,
+      groupId: resolvedGroupId,
+      powerShellImplementation: defaultWindowsPowerShellImplementation,
+      pwshAvailable: windowsTerminalCapabilities.pwshAvailable,
+      onNewTerminalTab,
+      onNewTerminalWithShell
+    })
+  }
   const createMenuOptions = useMemo(
     () =>
       buildTabCreateMenuOptions({
         terminalOnly,
         // Why the profile set and not the shell list: the rail's menu offers shells and agents from
         // one derivation, and search here used to see only shells — the same question, two answers.
-        // Gated on the launcher rather than on the Windows shell menu, because the set already
-        // carries the host's own default shell where no explicit shell menu applies.
-        profiles: onNewTerminalWithShell ? profiles : [],
+        profiles: offeredProfiles,
         hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
@@ -177,18 +189,7 @@ export function useTabBarCreateMenuController({
           break
         }
         queueNewActiveTerminalFocusAfterNewTabMenuClose()
-        // Why the shared launcher: a second implementation of "turn a profile into a launch" is how
-        // the two menus drifted apart. Which surface asked is not part of what a profile means.
-        launchTerminalProfile({
-          profileId: option.profileId,
-          profiles,
-          worktreeId,
-          groupId: resolvedGroupId,
-          powerShellImplementation: defaultWindowsPowerShellImplementation,
-          pwshAvailable: windowsTerminalCapabilities.pwshAvailable,
-          onNewTerminalTab,
-          onNewTerminalWithShell
-        })
+        launchProfileFromMenu(option.profileId)
         break
       case 'new-browser':
         onNewBrowserTab()
@@ -276,7 +277,8 @@ export function useTabBarCreateMenuController({
     setNewTabMenuOpen,
     setCreateMenuQuery,
     createMenuOptions,
-    windowsShellEntries,
+    offeredProfiles,
+    launchProfileFromMenu,
     handleSelectCreateMenuOption,
     launchAgentFromNewTabEntry,
     runPendingNewTabMenuFocusAfterClose,
