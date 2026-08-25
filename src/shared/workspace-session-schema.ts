@@ -103,7 +103,14 @@ const terminalTabSchema = z.object({
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  // Why these are here at all: z.object strips what it does not name, so a field absent from this
+  // schema is written to disk and silently discarded on the next cold load. Both describe how the
+  // terminal was launched, and losing them returns a WSL or Git Bash tab as the default shell.
+  // `.catch(undefined)` degrades a bad value to "host default" rather than dropping the terminal —
+  // forgetting a shell preference is recoverable, losing the tab is not.
+  shellOverride: z.string().min(1).optional().catch(undefined),
+  forceHostRuntime: z.boolean().optional().catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

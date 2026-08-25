@@ -43,6 +43,40 @@ describe('parseWorkspaceSession terminal fields', () => {
     }
   })
 
+  // Why these two together: both are stamped at create time and both describe how the terminal was
+// launched, so a tab that loses them comes back as a shell nobody chose. `SortableTab` already
+  // assumes shellOverride outlives a restart when it decides which icon to paint.
+  it('preserves the launch identity a terminal was created with', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Terminal 1',
+            shellOverride: 'wsl.exe',
+            forceHostRuntime: true,
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].shellOverride).toBe('wsl.exe')
+      expect(result.value.tabsByWorktree.wt[0].forceHostRuntime).toBe(true)
+    }
+  })
+
   it('drops a tab with an empty startup cwd instead of failing the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
