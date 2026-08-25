@@ -30,7 +30,11 @@ import {
   buildTerminalLaunchProfiles,
   type TerminalLaunchProfileSet
 } from '@/lib/terminal-launch-profiles'
-import { useAvailableUserTerminalProfiles } from '@/hooks/useAvailableUserTerminalProfiles'
+import {
+  useAvailableUserTerminalProfiles,
+  type UserTerminalProfileAvailability
+} from '@/hooks/useAvailableUserTerminalProfiles'
+import type { InvalidUserTerminalLaunchProfile } from '../../../shared/terminal-launch-profile-definition'
 
 /**
  * Owns the question "what can this worktree launch in a terminal, and which is the default".
@@ -63,6 +67,10 @@ export function resolveWindowsPowerShellImplementationSetting(settings: GlobalSe
 }
 
 export type TerminalLaunchProfileModel = TerminalLaunchProfileSet & {
+  /** Declared profiles this host cannot launch, each carrying the verdict that says why. */
+  withheldUserProfiles: readonly UserTerminalProfileAvailability[]
+  /** Declared entries that could not be read at all, so a typo surfaces instead of vanishing. */
+  invalidUserProfiles: readonly InvalidUserTerminalLaunchProfile[]
   agentLaunchOptions: TabAgentLaunchOption[]
   shellMenuEntries: WindowsShellMenuEntry[] | undefined
   showWindowsShellMenu: boolean
@@ -225,6 +233,13 @@ export function useTerminalLaunchProfiles({
 
   return {
     ...profileSet,
+    // Why alongside and not inside the set: the registry's invariant is that everything in it
+    // launches, and these do not. One derivation answers both questions; a surface that wants to
+    // explain an absence reads this projection instead of inferring the reason from a short list.
+    withheldUserProfiles: userTerminalProfiles.entries.filter(
+      (entry) => entry.state !== 'available'
+    ),
+    invalidUserProfiles: userTerminalProfiles.invalid,
     agentLaunchOptions,
     shellMenuEntries,
     showWindowsShellMenu,

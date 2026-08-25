@@ -14,8 +14,9 @@ import { translate } from '@/i18n/i18n'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTerminalLaunchProfiles } from '@/hooks/useTerminalLaunchProfiles'
 import { launchTerminalProfile } from '@/lib/launch-terminal-profile'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { describeWithheldTerminalProfile } from '@/lib/terminal-profile-availability-reason'
 import { ShellIcon } from '../tab-bar/shell-icons'
+import { TerminalProfileIcon } from '../tab-bar/TerminalProfileIcon'
 
 /**
  * The terminal panel's toolbar: new terminal, which kind, the rest, and whether the rail shows.
@@ -60,6 +61,7 @@ export function TerminalPanelToolbar({
   const {
     profiles,
     defaultProfileId,
+    withheldUserProfiles,
     defaultWindowsPowerShellImplementation,
     windowsTerminalCapabilities
   } = useTerminalLaunchProfiles({
@@ -150,17 +152,31 @@ export function TerminalPanelToolbar({
               onSelect={() => launchProfile(profile.id)}
               className="gap-2 text-[12px]"
             >
-              {profile.kind === 'agent' ? (
-                <AgentIcon agent={profile.agent} size={14} />
-              ) : (
-                <ShellIcon shell={profile.shell ?? undefined} size={14} />
-              )}
+              <TerminalProfileIcon profile={profile} />
               <span className="flex-1 truncate">{profile.label}</span>
               {profile.id === defaultProfileId ? (
                 <span className="text-[10px] text-muted-foreground">
                   {translate('auto.components.terminal.rail.TerminalRailToolbar.default', 'Default')}
                 </span>
               ) : null}
+            </DropdownMenuItem>
+          ))}
+          {/* Why show what cannot launch: a profile the user declared and then cannot find reads as
+              the product having lost it. Disabled with the reason says which of their machines the
+              wrapper is missing from, and tells a pending check apart from a failed one. */}
+          {withheldUserProfiles.map((entry) => (
+            <DropdownMenuItem
+              key={`withheld:${entry.profile.id}`}
+              disabled
+              className="gap-2 text-[12px] opacity-60"
+            >
+              <ShellIcon shell={entry.profile.shell ?? undefined} size={14} />
+              <span className="flex flex-1 flex-col truncate">
+                <span className="truncate">{entry.profile.label}</span>
+                <span className="truncate text-[10px] text-muted-foreground">
+                  {describeWithheldTerminalProfile(entry)}
+                </span>
+              </span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
