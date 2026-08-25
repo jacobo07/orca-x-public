@@ -7,7 +7,10 @@ import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTa
 import { TerminalProfileIcon } from './TerminalProfileIcon'
 import { isMacOs } from './use-tab-bar-runtime-model'
 import type { TabBarProps } from './tab-bar-props'
-import type { TerminalLaunchProfile } from '@/lib/terminal-launch-profiles'
+import {
+  HOST_DEFAULT_SHELL_PROFILE_ID,
+  type TerminalLaunchProfile
+} from '@/lib/terminal-launch-profiles'
 
 export function renderTabBarStaticCreateMenu({
   terminalOnly,
@@ -69,7 +72,12 @@ export function renderTabBarStaticCreateMenu({
         >
           <TerminalProfileIcon profile={profile} />
           <span className="flex-1 truncate">
-            {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} {profile.label}
+            {/* Why the special case: where no explicit shell menu applies (macOS, Linux) the set
+                carries one host-default entry already labelled "Terminal", and prefixing it reads
+                "New Terminal: Terminal". The prefix exists to name a choice, and there isn't one. */}
+            {profile.id === HOST_DEFAULT_SHELL_PROFILE_ID
+              ? translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
+              : `${translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} ${profile.label}`}
           </span>
           {profile.id === defaultProfileId ? (
             <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
