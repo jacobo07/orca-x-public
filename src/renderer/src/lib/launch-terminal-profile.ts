@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { launchCommandTerminalProfile } from '@/lib/launch-command-terminal-profile'
 import { resolveWindowsShellLaunchTarget } from '@/components/tab-bar/windows-shell-launch'
 import {
   findTerminalLaunchProfile,
@@ -56,6 +57,34 @@ export function launchTerminalProfile({
       groupId,
       launchSource: 'terminal_rail'
     })
+    return
+  }
+  if (profile.kind === 'command') {
+    const result = launchCommandTerminalProfile({
+      profile,
+      worktreeId,
+      groupId,
+      ...(profile.shell
+        ? {
+            shellOverride: resolveWindowsShellLaunchTarget(
+              profile.shell,
+              powerShellImplementation,
+              pwshAvailable
+            )
+          }
+        : {})
+    })
+    if (!result.ok) {
+      // Why name the token: a bare "could not launch" sends the user looking at the wrong thing.
+      // The profile is fine; this workspace cannot supply one of the values it asks for.
+      toast.error(
+        translate(
+          'auto.lib.launchTerminalProfile.unresolvedToken',
+          'This profile needs {{value0}}, which this workspace cannot supply.',
+          { value0: result.token }
+        )
+      )
+    }
     return
   }
   if (profile.shell === null || !onNewTerminalWithShell) {

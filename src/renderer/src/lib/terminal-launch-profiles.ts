@@ -1,4 +1,5 @@
 import type { BuiltInWindowsTerminalShell } from '../../../shared/windows-terminal-shell'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 /**
@@ -28,6 +29,28 @@ export type TerminalLaunchProfile =
       readonly id: string
       readonly label: string
       readonly agent: TuiAgent
+    }
+  /**
+   * A shell plus the command line that makes it this profile rather than a bare shell.
+   *
+   * Why a third kind and not a flag on `shell`: a wrapper invocation, a session slot and an `ssh`
+   * into a remote script are the same launch to the process table and three different capabilities
+   * to the user. Two entries that share an executable but differ in what runs inside it are not one
+   * profile — collapsing them is exactly how a "last session" entry becomes a plain new shell.
+   *
+   * `command` is a command LINE delivered to the shell, which is the shape the spawn path already
+   * transports; nothing here needs a wire field that does not exist.
+   */
+  | {
+      readonly kind: 'command'
+      readonly id: string
+      readonly label: string
+      readonly command: string
+      /** Non-secret launch configuration. Values may carry workspace tokens. */
+      readonly env?: Readonly<Record<string, string>>
+      /** Shell family to start first; null or absent means the host's own default. */
+      readonly shell?: BuiltInWindowsTerminalShell | null
+      readonly startupCommandDelivery?: StartupCommandDelivery
     }
 
 export type TerminalLaunchProfileSet = {
