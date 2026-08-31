@@ -67,6 +67,7 @@ vi.mock('../ipc/ui', async (importOriginal) => ({
 }))
 
 import { registerUpdaterHandlers } from './attach-main-window-services'
+import { resetAppWindowRendererRegistryForTest } from '../ipc/app-window-renderer-registry'
 
 const RECOVERY_CHANNELS = [
   'updater:getLinuxPackageInstallInstructions',
@@ -125,6 +126,8 @@ describe('updater linux package recovery IPC handlers', () => {
     isTrustedUIRendererMock
       .mockReset()
       .mockImplementation((sender) => actualUi.isTrustedUIRenderer(sender as WebContents))
+    // Trust is membership across app windows, so each test starts from an empty registry.
+    resetAppWindowRendererRegistryForTest()
     actualUi.setTrustedUIRendererWebContentsId(TRUSTED_ID)
     getLinuxPackageInstallInstructionsMock
       .mockReset()
@@ -174,7 +177,8 @@ describe('updater linux package recovery IPC handlers', () => {
   })
 
   it('rejects a foreign-origin renderer when only the dev URL fallback applies', () => {
-    actualUi.setTrustedUIRendererWebContentsId(null)
+    // The fallback applies only while no app window is registered, so close the one there is.
+    actualUi.clearTrustedUIRendererWebContentsId(TRUSTED_ID)
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 
     expectBothChannelsRejected(webContents({ getURL: () => 'http://evil.invalid/index.html' }))
@@ -184,10 +188,21 @@ describe('updater linux package recovery IPC handlers', () => {
     const event = senderEvent(webContents({}))
     void getHandler(RECOVERY_CHANNELS[0])(event)
 
-    // The main window was replaced between calls; the previously served sender is now stale.
-    actualUi.setTrustedUIRendererWebContentsId(TRUSTED_ID + 1)
+    // The window that owned this sender closed between calls, so the sender is now stale.
+    actualUi.clearTrustedUIRendererWebContentsId(TRUSTED_ID)
 
     expect(() => getHandler(RECOVERY_CHANNELS[0])(event)).toThrow(UNAUTHORIZED)
     expect(getLinuxPackageInstallInstructionsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the first window trusted after a second window registers', () => {
+    // Why: trust used to be a scalar, so opening a second window revoked the first one's updater
+    // recovery channels for the rest of its life — and closing the second never gave them back.
+    actualUi.setTrustedUIRendererWebContentsId(TRUSTED_ID + 1)
+
+    expect(() => getHandler(RECOVERY_CHANNELS[0])(senderEvent(webContents({})))).not.toThrow()
+    expect(() =>
+      getHandler(RECOVERY_CHANNELS[0])(senderEvent(webContents({ id: TRUSTED_ID + 1 })))
+    ).not.toThrow()
   })
 })

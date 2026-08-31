@@ -41,6 +41,7 @@ import {
   sendToTrustedUIRenderer,
   setTrustedUIRendererWebContentsId
 } from './ui'
+import { resetAppWindowRendererRegistryForTest } from './app-window-renderer-registry'
 
 function makeStore() {
   return {
@@ -89,7 +90,8 @@ describe('UI IPC', () => {
     handleMock.mockReset()
     onMock.mockReset()
     removeAllListenersMock.mockReset()
-    setTrustedUIRendererWebContentsId(null)
+    // Trust is membership now, so a per-test clean slate is the whole registry, not one id.
+    resetAppWindowRendererRegistryForTest()
   })
 
   afterEach(() => {

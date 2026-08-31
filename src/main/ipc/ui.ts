@@ -1,18 +1,25 @@
-import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import {
+  getPrimaryAppWindowRenderer,
+  hasNoAppWindowRenderer,
+  isAppWindowRenderer,
+  registerAppWindowRenderer,
+  unregisterAppWindowRenderer
+} from './app-window-renderer-registry'
 
-let trustedUIRendererWebContentsId: number | null = null
-
+// A null id means no window was supplied, so there is nothing to admit. It no longer clears trust:
+// with membership a window leaves through clearTrustedUIRendererWebContentsId, by its own id.
 export function setTrustedUIRendererWebContentsId(webContentsId: number | null): void {
-  trustedUIRendererWebContentsId = webContentsId
+  if (webContentsId !== null) {
+    registerAppWindowRenderer(webContentsId)
+  }
 }
 
 export function clearTrustedUIRendererWebContentsId(webContentsId: number): void {
-  if (trustedUIRendererWebContentsId === webContentsId) {
-    trustedUIRendererWebContentsId = null
-  }
+  unregisterAppWindowRenderer(webContentsId)
 }
 
 export function sendToTrustedUIRenderer(
@@ -28,15 +35,7 @@ export function getTrustedUIRendererWebContents(
   excludedWebContentsId?: number
 ): WebContents | null {
   // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
-  const rendererId = trustedUIRendererWebContentsId
-  if (rendererId == null || rendererId === excludedWebContentsId) {
-    return null
-  }
-  const renderer = webContents.fromId(rendererId)
-  if (!renderer || renderer.isDestroyed()) {
-    return null
-  }
-  return renderer
+  return getPrimaryAppWindowRenderer(excludedWebContentsId)
 }
 
 export function getTrustedUIRendererWindow(): BrowserWindow | null {
@@ -110,8 +109,8 @@ export function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
-  if (trustedUIRendererWebContentsId != null) {
-    return sender.id === trustedUIRendererWebContentsId
+  if (!hasNoAppWindowRenderer()) {
+    return isAppWindowRenderer(sender.id)
   }
 
   const senderUrl = sender.getURL()

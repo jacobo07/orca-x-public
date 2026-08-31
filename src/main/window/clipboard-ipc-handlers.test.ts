@@ -139,6 +139,7 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
+import { resetAppWindowRendererRegistryForTest } from '../ipc/app-window-renderer-registry'
 
 const REMOTE_CLIPBOARD_STAGING_ROOT = join(
   '/tmp',
@@ -231,7 +232,8 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     getSshFilesystemProviderMock.mockReset()
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
+    // Trust is membership now, so a per-test clean slate is the whole registry, not one id.
+    resetAppWindowRendererRegistryForTest()
   })
 
   afterEach(() => {

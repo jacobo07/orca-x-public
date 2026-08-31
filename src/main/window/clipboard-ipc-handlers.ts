@@ -39,8 +39,11 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
-
-let trustedClipboardRendererWebContentsId: number | null = null
+import {
+  hasNoAppWindowRenderer,
+  isAppWindowRenderer,
+  registerAppWindowRenderer
+} from '../ipc/app-window-renderer-registry'
 
 type ClipboardWriteFileRequest = {
   filePath: string
@@ -60,7 +63,12 @@ async function saveClipboardImageBufferForTarget(
 }
 
 export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
-  trustedClipboardRendererWebContentsId = webContentsId
+  // Why membership rather than a scalar: this was last-writer-wins, so a second app window
+  // de-trusted the first one's clipboard IPC and closing the second never gave it back. A null id
+  // supplies no window.
+  if (webContentsId !== null) {
+    registerAppWindowRenderer(webContentsId)
+  }
 }
 
 // Run a short-lived OS clipboard helper (PowerShell / wl-copy / xclip), feeding
@@ -261,8 +269,8 @@ function isTrustedClipboardRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
-  if (trustedClipboardRendererWebContentsId != null) {
-    return sender.id === trustedClipboardRendererWebContentsId
+  if (!hasNoAppWindowRenderer()) {
+    return isAppWindowRenderer(sender.id)
   }
 
   const senderUrl = sender.getURL()
