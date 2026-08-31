@@ -18,11 +18,15 @@ import { createMainWindow, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS } from './createM
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
+import { resetWindowChromeIpcRouterForTest } from './window-chrome-ipc-router'
 
 describe('createMainWindow', () => {
   beforeEach(() => {
     resetMainWindowMocks()
     resetExpectedTeardownStateForTest()
+    // Why: the chrome-IPC router keys windows by renderer id and is module state, so the fixtures
+    // in this file would otherwise resolve to the previous test's window.
+    resetWindowChromeIpcRouterForTest()
     vi.useRealTimers()
   })
 
@@ -84,7 +88,8 @@ describe('createMainWindow', () => {
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
-      isCrashed: vi.fn(() => false)
+      isCrashed: vi.fn(() => false),
+      id: 5
     }
     const browserWindowInstance = {
       webContents,
@@ -139,7 +144,8 @@ describe('createMainWindow', () => {
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
-      isCrashed: vi.fn(() => false)
+      isCrashed: vi.fn(() => false),
+      id: 5
     }
     const browserWindowInstance = {
       webContents,
@@ -171,7 +177,7 @@ describe('createMainWindow', () => {
 
     createMainWindow(null, { onRendererProcessGone })
 
-    ipcHandlers['window:confirm-close']?.()
+    ipcHandlers['window:confirm-close']?.({ sender: { id: 5 } })
     windowHandlers['render-process-gone']?.(
       {} as never,
       {
@@ -198,7 +204,8 @@ describe('createMainWindow', () => {
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
-      isCrashed: vi.fn(() => false)
+      isCrashed: vi.fn(() => false),
+      id: 5
     }
     const browserWindowInstance = {
       webContents,
@@ -257,7 +264,8 @@ describe('createMainWindow', () => {
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
-      isCrashed: vi.fn(() => false)
+      isCrashed: vi.fn(() => false),
+      id: 5
     }
     const browserWindowInstance = {
       webContents,
@@ -360,7 +368,8 @@ describe('createMainWindow', () => {
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
-      isCrashed: vi.fn(() => false)
+      isCrashed: vi.fn(() => false),
+      id: 5
     }
     const browserWindowInstance = {
       webContents,

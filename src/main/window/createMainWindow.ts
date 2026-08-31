@@ -17,6 +17,7 @@ import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { translateMain } from '../i18n/main-i18n'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../../shared/app-menu-strip'
+import { bindWindowChromeIpc } from './window-chrome-ipc-router'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { PRODUCT_NAME } from '../../shared/product'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
@@ -957,7 +958,6 @@ export function createMainWindow(
 
   // Intercept close so the renderer can confirm killing running-process terminals (replies window:confirm-close to proceed).
   let windowCloseConfirmed = false
-  const confirmCloseChannel = 'window:confirm-close'
   const closeRequestReceivedChannel = 'window:close-request-received'
   let closeRequestSequence = 0
   let quitRendererAckRequestId: number | null = null
@@ -1079,20 +1079,16 @@ export function createMainWindow(
       mainWindow.close()
     }
   }
-  const trafficLightChannel = 'ui:sync-traffic-lights'
-  const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
+  const onSyncTrafficLights = (zoomFactor: number): void => {
     syncTrafficLightPosition(mainWindow, zoomFactor)
   }
-  ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
   // Why: renderer-drawn window controls on Windows/Linux replicate the native title-bar buttons hidden by custom chrome.
-  const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
     if (!mainWindow.isDestroyed()) {
       mainWindow.minimize()
     }
   }
-  const maximizeChannel = 'window:maximize'
   const onMaximize = (): void => {
     if (mainWindow.isDestroyed()) {
       return
@@ -1104,7 +1100,6 @@ export function createMainWindow(
     }
   }
   // Why: mainWindow.close() from an IPC handler on Windows can make 'close' misfire, so send window:close-requested directly.
-  const requestCloseChannel = 'window:request-close'
   const onRequestClose = (): void => {
     if (mainWindow.isDestroyed()) {
       return
@@ -1116,10 +1111,9 @@ export function createMainWindow(
     mainWindow.webContents.send('window:close-requested', { isQuitting: false })
   }
   // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
-  const popupMenuChannel = 'menu:popup'
   // Why the real menu rather than a renderer-side copy: the strip pops the submenu Electron already
   // registered, so a visible item without a working action cannot exist by construction.
-  const onPopupMenu = (_event: Electron.IpcMainEvent, request?: MenuPopupRequest): void => {
+  const onPopupMenu = (request?: MenuPopupRequest): void => {
     const menu = Menu.getApplicationMenu()
     if (!menu) {
       return
@@ -1132,7 +1126,6 @@ export function createMainWindow(
         : {}
     ;(submenu ?? menu).popup({ window: mainWindow, ...position })
   }
-  const menuTopLevelItemsChannel = 'menu:topLevelItems'
   const onMenuTopLevelItems = (): MenuTopLevelItem[] => {
     const menu = Menu.getApplicationMenu()
     if (!menu) {
@@ -1147,18 +1140,24 @@ export function createMainWindow(
     )
   }
   // Why: WindowControls mounts after window:maximize-changed already fired, so expose a synchronous getter to init its icon.
-  const isMaximizedChannel = 'window:isMaximized'
   const onIsMaximized = (): boolean => {
     return !mainWindow.isDestroyed() && mainWindow.isMaximized()
   }
-  ipcMain.on(minimizeChannel, onMinimize)
-  ipcMain.on(maximizeChannel, onMaximize)
-  ipcMain.on(requestCloseChannel, onRequestClose)
-  ipcMain.on(popupMenuChannel, onPopupMenu)
-  ipcMain.handle(menuTopLevelItemsChannel, onMenuTopLevelItems)
-  ipcMain.handle(isMaximizedChannel, onIsMaximized)
+  // Why the router rather than per-window registration: ipcMain.handle throws on a channel that
+  // already has a handler, and ipcMain.on appends rather than replaces — so registering these here
+  // made a second live window impossible to construct, and made one window's title-bar controls
+  // drive the other's.
+  const unbindWindowChromeIpc = bindWindowChromeIpc(rendererWebContentsId, {
+    syncTrafficLights: onSyncTrafficLights,
+    minimize: onMinimize,
+    toggleMaximize: onMaximize,
+    requestClose: onRequestClose,
+    popupMenu: onPopupMenu,
+    menuTopLevelItems: onMenuTopLevelItems,
+    isMaximized: onIsMaximized,
+    confirmClose: onConfirmClose
+  })
 
-  ipcMain.on(confirmCloseChannel, onConfirmClose)
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
   mainWindow.on('closed', () => {
     // Why: the dashboard pop-out is a companion of the main window — close it
@@ -1174,15 +1173,8 @@ export function createMainWindow(
     floatingPanelFocused = false
     shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
-    ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
-    ipcMain.removeListener(minimizeChannel, onMinimize)
-    ipcMain.removeListener(maximizeChannel, onMaximize)
+    unbindWindowChromeIpc()
     browserManager.setDictationShortcutForwardingPredicate(null)
-    ipcMain.removeListener(requestCloseChannel, onRequestClose)
-    ipcMain.removeListener(popupMenuChannel, onPopupMenu)
-    ipcMain.removeHandler(menuTopLevelItemsChannel)
-    ipcMain.removeHandler(isMaximizedChannel)
-    ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)

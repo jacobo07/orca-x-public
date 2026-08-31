@@ -41,7 +41,8 @@ describe('createMainWindow', () => {
       setBackgroundThrottling: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
+      send: vi.fn(),
+      id: 7
     }
     const browserWindowInstance = {
       webContents,
@@ -69,7 +70,7 @@ describe('createMainWindow', () => {
 
     expect(syncListener).toBeTypeOf('function')
 
-    syncListener?.({} as never, 1.2)
+    syncListener?.({ sender: { id: browserWindowInstance.webContents.id } } as never, 1.2)
 
     if (process.platform === 'darwin') {
       expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({ x: 16, y: 16 })

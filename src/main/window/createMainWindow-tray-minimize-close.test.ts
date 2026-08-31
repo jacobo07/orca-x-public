@@ -27,11 +27,15 @@ import {
   notificationShowMock,
   resetMainWindowMocks
 } from './createMainWindow-test-harness'
+import { resetWindowChromeIpcRouterForTest } from './window-chrome-ipc-router'
 
 describe('createMainWindow', () => {
   beforeEach(() => {
     resetMainWindowMocks()
     resetExpectedTeardownStateForTest()
+    // Why: the chrome-IPC router registers its channels once per process, so without this reset a
+    // later test's handler capture sees no registration and silently records nothing.
+    resetWindowChromeIpcRouterForTest()
     vi.useRealTimers()
   })
 
@@ -263,7 +267,8 @@ describe('createMainWindow', () => {
       const store = makeStore(true, true)
 
       createMainWindow(store as never, { getIsQuitting: () => false })
-      ipcHandlers['window:request-close']?.()
+      // The chrome channels are routed by sender, so the request must carry the window's renderer id.
+      ipcHandlers['window:request-close']?.({ sender: { id: 1 } })
 
       expect(instance.hide).toHaveBeenCalledTimes(1)
       expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
@@ -276,7 +281,8 @@ describe('createMainWindow', () => {
       const store = makeStore(false, true)
 
       createMainWindow(store as never, { getIsQuitting: () => false })
-      ipcHandlers['window:request-close']?.()
+      // The chrome channels are routed by sender, so the request must carry the window's renderer id.
+      ipcHandlers['window:request-close']?.({ sender: { id: 1 } })
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
