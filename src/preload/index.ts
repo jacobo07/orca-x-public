@@ -4333,6 +4333,9 @@ const api = {
     },
     /** Desktop custom titlebar only: read initial maximize state on mount — maximize-changed only fires on transitions. */
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+    /** Ask to own a workspace here; main answers from the window that sent this, never from an id on the wire. */
+    claimWorkspace: (request) => ipcRenderer.invoke('window:claimWorkspace', request),
+    releaseWorkspace: () => ipcRenderer.invoke('window:releaseWorkspace'),
     /** Desktop custom titlebar only: subscribe to maximize-state changes so the maximize button shows the right icon. */
     onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>

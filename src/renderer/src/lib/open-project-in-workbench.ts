@@ -13,6 +13,8 @@ export type OpenProjectInWorkbenchOutcome =
   | 'workspace-lookup-failed'
   /** The store declined to activate the workspace. */
   | 'activation-refused'
+  /** Another window already owns this workspace and has been raised instead. */
+  | 'opened-in-other-window'
 
 /**
  * Which of a project's workspaces "open the project" means.
@@ -100,6 +102,14 @@ export async function openProjectInWorkbench(
       return 'no-workspace'
     }
     workspaceId = lookup.workspaceId
+  }
+  // Why claim before activating: a worktree belongs to one window at a time, because the session
+  // state both windows would publish is keyed by worktree and the merge cannot separate two writers
+  // of the same keys. Main raises the owning window, so the project still ends up in front of the
+  // user — in the window that already has it.
+  const claim = await window.api.ui.claimWorkspace({ repoId, worktreeId: workspaceId })
+  if (claim.outcome === 'owned-by-another-window') {
+    return 'opened-in-other-window'
   }
   // Why gated on the result: activation reports whether the workspace could be entered, and
   // navigating past a refusal would show an empty workbench that reads as a broken open.

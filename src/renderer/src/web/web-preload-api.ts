@@ -2818,6 +2818,10 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = level
     },
     isMaximized: () => Promise.resolve(false),
+    // Why always granted: the web client is one browser tab against one host, so there is no second
+    // window that could already own the workspace and none to raise instead.
+    claimWorkspace: () => Promise.resolve({ outcome: 'claimed' as const }),
+    releaseWorkspace: () => Promise.resolve(),
     onOpenSettings: () => noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
     consumePendingOpenSettings: () => Promise.resolve(false),

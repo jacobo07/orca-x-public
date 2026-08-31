@@ -5,6 +5,10 @@ import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
+import type {
+  WorkspaceWindowClaimRequest,
+  WorkspaceWindowClaimResult
+} from '../../shared/workspace-window-claim'
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
@@ -47,6 +51,12 @@ export type UiWindowApi = {
   requestClose: () => void
   popupMenu: (request?: MenuPopupRequest) => void
   getMenuTopLevelItems: () => Promise<MenuTopLevelItem[]>
+  /**
+   * Ask to own a workspace in this window. A worktree binds to at most one window, so a workspace
+   * another window holds answers `owned-by-another-window` and that window is raised instead.
+   */
+  claimWorkspace: (request: WorkspaceWindowClaimRequest) => Promise<WorkspaceWindowClaimResult>
+  releaseWorkspace: () => Promise<void>
   onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
   confirmWindowClose: () => void
   notifyWindowRevealed: () => void

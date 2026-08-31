@@ -194,7 +194,7 @@ const WINDOW_CASCADE_STEP = 32
  */
 function nextCascadeBounds(defaultSize: { width: number; height: number }): WindowRect {
   const openWindows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
-  const newest = openWindows[openWindows.length - 1]
+  const newest = openWindows.at(-1)
   const reference = newest?.getBounds()
   const width = reference?.width ?? defaultSize.width
   const height = reference?.height ?? defaultSize.height

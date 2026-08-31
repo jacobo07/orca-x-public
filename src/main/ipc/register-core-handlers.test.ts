@@ -23,6 +23,7 @@ const {
   registerShellHandlersMock,
   registerPetHandlersMock,
   registerSessionHandlersMock,
+  registerWorkspaceWindowClaimHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
   registerFilesystemHandlersMock,
@@ -88,6 +89,7 @@ const {
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
+  registerWorkspaceWindowClaimHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
@@ -262,6 +264,10 @@ vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
 
+vi.mock('./workspace-window-claim', () => ({
+  registerWorkspaceWindowClaimHandlers: registerWorkspaceWindowClaimHandlersMock
+}))
+
 vi.mock('./ui', () => ({
   registerUIHandlers: registerUIHandlersMock,
   setTrustedUIRendererWebContentsId: setTrustedUIRendererWebContentsIdMock
@@ -409,6 +415,7 @@ describe('registerCoreHandlers', () => {
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
+    registerWorkspaceWindowClaimHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
     registerFilesystemHandlersMock.mockReset()

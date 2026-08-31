@@ -24,8 +24,16 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => state }
 }))
 
+// A worktree belongs to one window at a time, so opening a project asks main to claim it first.
+const claimWorkspace =
+  vi.fn<
+    (request: { repoId: string; worktreeId: string }) => Promise<{ outcome: 'claimed' | 'already-owned' | 'owned-by-another-window' | 'unknown-window' }>
+  >()
+vi.stubGlobal('window', { api: { ui: { claimWorkspace } } })
+
 beforeEach(() => {
   vi.clearAllMocks()
+  claimWorkspace.mockResolvedValue({ outcome: 'claimed' })
   state.repos = [{ id: 'orca', path: 'C:/projects/orca' }]
   state.fetchWorktrees.mockResolvedValue(true)
   state.worktreesByRepo = { orca: [{ id: 'orca-main' }, { id: 'orca-feature' }] }
@@ -43,6 +51,7 @@ beforeEach(() => {
 describe('pickProjectWorkspaceToOpen', () => {
   it('returns null when the project has no workspace yet', () => {
     expect(pickProjectWorkspaceToOpen([], {})).toBeNull()
+
     expect(pickProjectWorkspaceToOpen(undefined, {})).toBeNull()
   })
 
@@ -152,6 +161,26 @@ describe('openProjectInWorkbench', () => {
     expect(outcome).toBe('activation-refused')
     expect(state.setActiveView).not.toHaveBeenCalled()
     expect(state.openNewTerminalTabInActiveWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('leaves a workspace another window owns to that window', async () => {
+    // Two windows publishing the same worktree's session are two writers of the same keys, which
+    // the ownership merge cannot separate. Main raises the owner, so this window must not also open
+    // it — activating here would put the same project in two windows and lose one of the sessions.
+    claimWorkspace.mockResolvedValue({ outcome: 'owned-by-another-window' })
+
+    const outcome = await openProjectInWorkbench('orca')
+
+    expect(outcome).toBe('opened-in-other-window')
+    expect(state.setActiveWorktree).not.toHaveBeenCalled()
+    expect(state.setActiveView).not.toHaveBeenCalled()
+    expect(state.openNewTerminalTabInActiveWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('claims the workspace it is about to open', async () => {
+    await openProjectInWorkbench('orca')
+
+    expect(claimWorkspace).toHaveBeenCalledWith({ repoId: 'orca', worktreeId: 'orca-main' })
   })
 
   it('opens the workspace the user last worked in', async () => {
