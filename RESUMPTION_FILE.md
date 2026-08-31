@@ -14,7 +14,8 @@ the ability to open a second window, never before it.
 
 ## Exact state
 
-Sealed (committed, verified green, baseline-differenced):
+Sealed (committed, verified green, baseline-differenced). Detail lives in the spec's
+"W5 progress" section; this is the index:
 
 1. `fix(window): route window-chrome IPC to the window that sent it` — `src/main/window/window-chrome-ipc-router.ts`.
    The title-bar channels (`ui:sync-traffic-lights`, `window:minimize|maximize|request-close|confirm-close`,
@@ -44,7 +45,22 @@ symlink- and POSIX-path-dependent suites, incl. all 4 in `clipboard-file-copy.te
 - **New window boots UNBOUND** into the existing launcher (`activeView: 'workspace'`). No new picker.
 - Reuse, do not rebuild: `dashboard-popout-window.ts` (per-window state, own bounds key, own partition),
   `window-bounds-validation.ts` (missing-monitor handling, already pure), `workspace-session-owner-scope.ts`
-  (scope merge, complete and still unreachable from the wire).
+  (scope merge, now reached from the wire by `ipc/session-write-scope.ts`).
+
+## Running anything on this host
+
+Three traps, all environment rather than code, each costing a full cycle before being named:
+
+- **`npx` is broken here** — `Class extends value undefined is not a constructor or null`. The
+  e2e `global-setup.ts` and the `test:e2e:*` scripts call `npx electron-vite build`, so they fail
+  before a single spec runs. Build with `pnpm exec electron-vite build --mode e2e`, then run specs
+  with `SKIP_BUILD=1 pnpm exec playwright test …`.
+- **`git` is not on PowerShell's non-interactive PATH**, and the e2e global setup shells out to
+  `git init`. Prepend `C:\Program Files\Git\cmd` before running anything that seeds the test repo.
+- **Native modules need the VS toolchain by hand.** `vswhere` does not see the install, so
+  node-gyp reports "Could not find any Visual Studio installation"; build through
+  `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"`.
+  `windows-native-registry` is the one that matters — `createMainWindow` loads it on every start.
 
 ## Next 3 actions
 
