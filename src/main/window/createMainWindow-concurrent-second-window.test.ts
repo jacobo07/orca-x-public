@@ -23,6 +23,7 @@ import { ipcMain } from 'electron'
 import { createMainWindow } from './createMainWindow'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import { resetWindowChromeIpcRouterForTest } from './window-chrome-ipc-router'
+import { resetWorkspaceWindowRegistryForTest } from './workspace-window-registry'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
 
 type WindowDouble = {
@@ -114,6 +115,7 @@ describe('createMainWindow with a second window alive', () => {
     resetMainWindowMocks()
     resetExpectedTeardownStateForTest()
     resetWindowChromeIpcRouterForTest()
+    resetWorkspaceWindowRegistryForTest()
     enforceElectronHandleContract()
   })
 
@@ -194,5 +196,36 @@ describe('createMainWindow with a second window alive', () => {
     emit('window:minimize', { sender: { id: 22 } })
 
     expect(second.instance.minimize).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets only the first window persist geometry, so the second cannot trample it', () => {
+    const first = makeWindowDouble(11)
+    const second = makeWindowDouble(22)
+    browserWindowMock
+      .mockImplementationOnce(function () {
+        return first.instance
+      })
+      .mockImplementationOnce(function () {
+        return second.instance
+      })
+    const updateUI = vi.fn()
+    const store = {
+      getUI: () => ({ windowBounds: null, windowMaximized: false }),
+      getSettings: () => ({}),
+      updateUI
+    }
+
+    createMainWindow(store as never, { deferLoad: true })
+    createMainWindow(store as never, { deferLoad: true })
+
+    // windowBounds/windowMaximized are single keys, so a second live window writing them would
+    // overwrite the first window's remembered size on every drag.
+    second.events.maximize?.()
+
+    expect(updateUI).not.toHaveBeenCalled()
+
+    first.events.maximize?.()
+
+    expect(updateUI).toHaveBeenCalledWith({ windowMaximized: true })
   })
 })

@@ -10,6 +10,8 @@ export const notificationShowMock: MainWindowSpy = vi.fn()
 export const browserWindowMock: Mock<
   (options: Electron.BrowserWindowConstructorOptions) => unknown
 > = vi.fn()
+/** Electron exposes this static on BrowserWindow; suites that open more than one window read it. */
+export const browserWindowGetAllWindowsMock: Mock<() => unknown[]> = vi.fn(() => [])
 export const openExternalMock: MainWindowSpy = vi.fn()
 export const attachGuestPoliciesMock: MainWindowSpy = vi.fn()
 export const buildFromTemplateMock: Mock<(...args: unknown[]) => { popup: MainWindowSpy }> = vi.fn(
@@ -41,7 +43,9 @@ const ipcMainMock: IpcMainMock = {
 
 export type ElectronModuleMock = {
   app: { on: MainWindowSpy; removeListener: MainWindowSpy }
-  BrowserWindow: typeof browserWindowMock
+  BrowserWindow: typeof browserWindowMock & {
+    getAllWindows: typeof browserWindowGetAllWindowsMock
+  }
   ipcMain: IpcMainMock
   Menu: { buildFromTemplate: typeof buildFromTemplateMock }
   Notification: typeof notificationMock
@@ -66,7 +70,9 @@ export type BrowserManagerModuleMock = {
 export function electronModuleMock(): ElectronModuleMock {
   return {
     app: { on: vi.fn(), removeListener: vi.fn() },
-    BrowserWindow: browserWindowMock,
+    BrowserWindow: Object.assign(browserWindowMock, {
+      getAllWindows: browserWindowGetAllWindowsMock
+    }),
     ipcMain: ipcMainMock,
     Menu: { buildFromTemplate: buildFromTemplateMock },
     Notification: notificationMock,
@@ -109,6 +115,8 @@ export function browserManagerMock(): BrowserManagerModuleMock {
 
 export function resetMainWindowMocks(): void {
   browserWindowMock.mockReset()
+  browserWindowGetAllWindowsMock.mockReset()
+  browserWindowGetAllWindowsMock.mockReturnValue([])
   openExternalMock.mockReset()
   attachGuestPoliciesMock.mockReset()
   buildFromTemplateMock.mockClear()

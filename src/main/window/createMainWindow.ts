@@ -57,7 +57,12 @@ import {
 } from '../../shared/rich-markdown-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
+import { rectHasVisibleAreaOnAnyDisplay, type WindowRect } from './window-bounds-validation'
+import {
+  listWorkspaceWindows,
+  registerWorkspaceWindow,
+  unregisterWorkspaceWindow
+} from './workspace-window-registry'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
@@ -180,6 +185,36 @@ const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
 const MIN_HEIGHT = 400
 
+/** Offset per additional window, big enough that the title bar underneath stays grabbable. */
+const WINDOW_CASCADE_STEP = 32
+
+/**
+ * Where an additional window opens: stepped down-right from the newest one, wrapping back to the
+ * work area's origin once the step would push the title bar off the display it started on.
+ */
+function nextCascadeBounds(defaultSize: { width: number; height: number }): WindowRect {
+  const openWindows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
+  const newest = openWindows[openWindows.length - 1]
+  const reference = newest?.getBounds()
+  const width = reference?.width ?? defaultSize.width
+  const height = reference?.height ?? defaultSize.height
+  const candidate = {
+    x: (reference?.x ?? 0) + WINDOW_CASCADE_STEP,
+    y: (reference?.y ?? 0) + WINDOW_CASCADE_STEP,
+    width,
+    height
+  }
+  if (rectHasVisibleAreaOnAnyDisplay(candidate, MIN_WIDTH / 2, MIN_HEIGHT / 2)) {
+    return candidate
+  }
+  try {
+    const workArea = screen.getPrimaryDisplay().workArea
+    return { x: workArea.x, y: workArea.y, width, height }
+  } catch {
+    return { x: 0, y: 0, width, height }
+  }
+}
+
 function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
   if (process.platform !== 'darwin' || win.isDestroyed()) {
     return
@@ -231,7 +266,13 @@ export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const rawSavedBounds = store?.getUI().windowBounds
+  // Why: windowBounds/windowMaximized are single keys, so two live windows would overwrite each
+  // other on every drag. Exactly one window reads and writes them — the first one open — and the
+  // rest cascade off it. Per-window geometry needs a per-window durable identity, which arrives
+  // with window-topology persistence; until then a second window deliberately remembers nothing
+  // rather than remembering the wrong thing for everyone.
+  const isGeometryAuthority = listWorkspaceWindows().length === 0
+  const rawSavedBounds = isGeometryAuthority ? store?.getUI().windowBounds : undefined
   // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
@@ -246,7 +287,7 @@ export function createMainWindow(
       rawSavedBounds
     )
   }
-  const savedMaximized = store?.getUI().windowMaximized ?? false
+  const savedMaximized = isGeometryAuthority ? (store?.getUI().windowMaximized ?? false) : false
   // Why: on first launch fill the primary display work area so the window feels spacious without maximize(); saved bounds win later.
   const defaultBounds = (() => {
     try {
@@ -256,6 +297,9 @@ export function createMainWindow(
       return { width: 1200, height: 800 }
     }
   })()
+  // Why cascade rather than reuse: an additional window opened at the same rect lands exactly on the
+  // one already there, and the user cannot tell that a second window appeared at all.
+  const cascadeBounds = isGeometryAuthority ? undefined : nextCascadeBounds(defaultBounds)
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
@@ -269,9 +313,11 @@ export function createMainWindow(
     blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
 
   const mainWindow = new BrowserWindow({
-    width: savedBounds?.width ?? defaultBounds.width,
-    height: savedBounds?.height ?? defaultBounds.height,
-    ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
+    width: savedBounds?.width ?? cascadeBounds?.width ?? defaultBounds.width,
+    height: savedBounds?.height ?? cascadeBounds?.height ?? defaultBounds.height,
+    ...(savedBounds ?? cascadeBounds
+      ? { x: (savedBounds ?? cascadeBounds)!.x, y: (savedBounds ?? cascadeBounds)!.y }
+      : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? PRODUCT_NAME,
@@ -308,6 +354,10 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  const workspaceWindow = registerWorkspaceWindow({
+    browserWindowId: mainWindow.id,
+    rendererWebContentsId
+  })
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
@@ -393,6 +443,9 @@ export function createMainWindow(
   // Why: teardown still emits resize/move/unmaximize at near-min bounds; freeze persistence once closing so they can't clobber the saved size.
   let windowClosing = false
   const saveBounds = (): void => {
+    if (!isGeometryAuthority) {
+      return
+    }
     if (boundsTimer) {
       clearTimeout(boundsTimer)
     }
@@ -434,7 +487,10 @@ export function createMainWindow(
     if (windowClosing) {
       return
     }
-    store?.updateUI({ windowMaximized: true })
+    // The renderer's own title-bar icon still tracks this window; only persistence is shared.
+    if (isGeometryAuthority) {
+      store?.updateUI({ windowMaximized: true })
+    }
     mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
@@ -442,6 +498,9 @@ export function createMainWindow(
       return
     }
     mainWindow.webContents.send('window:maximize-changed', false)
+    if (!isGeometryAuthority) {
+      return
+    }
     const bounds = mainWindow.getBounds()
     // Why: mirror the saveBounds guard — unmaximize during teardown can land at min size; don't persist that as remembered size.
     if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
@@ -1160,6 +1219,8 @@ export function createMainWindow(
 
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
   mainWindow.on('closed', () => {
+    // Releases this window's workspace claim, so the project it held can open in another window.
+    unregisterWorkspaceWindow(workspaceWindow.windowId)
     // Why: the dashboard pop-out is a companion of the main window — close it
     // alongside so it never orphans as a lone window after the app window is
     // gone (e.g. on macOS where the app stays alive after the window closes).
