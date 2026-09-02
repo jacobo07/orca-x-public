@@ -63,6 +63,7 @@ import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+import { broadcastToAppWindowRenderers } from './app-window-renderer-registry'
 import {
   registerOptionalSshWorktreeCreateRoots,
   registerRequiredSshWorktreeCreateRoots
@@ -1453,9 +1454,16 @@ async function getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate(
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   // Why: invalidate detected-worktree caches before renderer observers react, so follow-up listDetected sees post-change state.
   runWorktreeChangeInvalidators(repoId)
-  if (!mainWindow.isDestroyed()) {
+  const originIsAlive = !mainWindow.isDestroyed()
+  if (originIsAlive) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
   }
+  // Why: the worktree list is global, so every other window is now showing a stale one.
+  broadcastToAppWindowRenderers(
+    'worktrees:changed',
+    [{ repoId }],
+    originIsAlive ? mainWindow.webContents.id : undefined
+  )
 }
 
 export function notifyWorktreeGitStatusMetadataChanged(

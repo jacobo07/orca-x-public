@@ -92,6 +92,7 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
+import { broadcastToAppWindowRenderers } from './app-window-renderer-registry'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import type {
@@ -2777,9 +2778,16 @@ function getRepoForExecutionHost(
 
 export function notifyReposChanged(mainWindow: BrowserWindow): void {
   wakeFolderRepoGitUpgradeWatch()
-  if (!mainWindow.isDestroyed()) {
+  const originIsAlive = !mainWindow.isDestroyed()
+  if (originIsAlive) {
     mainWindow.webContents.send('repos:changed')
   }
+  // Why: the repo list is global, so a change made in one window leaves every other window stale.
+  broadcastToAppWindowRenderers(
+    'repos:changed',
+    [],
+    originIsAlive ? mainWindow.webContents.id : undefined
+  )
   // Why: paired clients only refetch a remote catalog on this event; without it a
   // host-side delete or rename stays invisible to them indefinitely (#11994).
   try {

@@ -3,14 +3,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const liveWebContentsIds = new Set<number>()
+const sendsByWebContentsId = new Map<number, ReturnType<typeof vi.fn>>()
+
+function sendSpyFor(id: number): ReturnType<typeof vi.fn> {
+  const existing = sendsByWebContentsId.get(id)
+  if (existing) {
+    return existing
+  }
+  const created = vi.fn()
+  sendsByWebContentsId.set(id, created)
+  return created
+}
 
 vi.mock('electron', () => ({
   webContents: {
-    fromId: (id: number) => (liveWebContentsIds.has(id) ? { id, isDestroyed: () => false } : null)
+    fromId: (id: number) =>
+      liveWebContentsIds.has(id)
+        ? { id, isDestroyed: () => false, send: sendSpyFor(id) }
+        : null
   }
 }))
 
 import {
+  broadcastToAppWindowRenderers,
   getPrimaryAppWindowRenderer,
   hasNoAppWindowRenderer,
   isAppWindowRenderer,
@@ -26,8 +41,39 @@ describe('app window renderer registry', () => {
   beforeEach(() => {
     resetAppWindowRendererRegistryForTest()
     liveWebContentsIds.clear()
+    sendsByWebContentsId.clear()
     liveWebContentsIds.add(WINDOW_A)
     liveWebContentsIds.add(WINDOW_B)
+  })
+
+  it('broadcasts a global-registry change to every registered window', () => {
+    registerAppWindowRenderer(WINDOW_A)
+    registerAppWindowRenderer(WINDOW_B)
+
+    broadcastToAppWindowRenderers('repos:changed')
+
+    expect(sendSpyFor(WINDOW_A)).toHaveBeenCalledWith('repos:changed')
+    expect(sendSpyFor(WINDOW_B)).toHaveBeenCalledWith('repos:changed')
+  })
+
+  it('skips the origin so the window that already got the event is not sent it twice', () => {
+    registerAppWindowRenderer(WINDOW_A)
+    registerAppWindowRenderer(WINDOW_B)
+
+    broadcastToAppWindowRenderers('worktrees:changed', [{ repoId: 'repo-1' }], WINDOW_A)
+
+    expect(sendSpyFor(WINDOW_A)).not.toHaveBeenCalled()
+    expect(sendSpyFor(WINDOW_B)).toHaveBeenCalledWith('worktrees:changed', { repoId: 'repo-1' })
+  })
+
+  it('skips a window that has gone without dropping the rest of the broadcast', () => {
+    registerAppWindowRenderer(WINDOW_A)
+    registerAppWindowRenderer(WINDOW_B)
+    liveWebContentsIds.delete(WINDOW_A)
+
+    broadcastToAppWindowRenderers('repos:changed')
+
+    expect(sendSpyFor(WINDOW_B)).toHaveBeenCalledWith('repos:changed')
   })
 
   it('reports no app window before the first registration, so callers keep their fallback', () => {

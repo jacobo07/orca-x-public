@@ -60,6 +60,31 @@ export function getPrimaryAppWindowRenderer(excludedWebContentsId?: number): Web
   return null
 }
 
+/**
+ * Send to every registered app window that is still alive.
+ *
+ * Global-registry events — the repo list, the worktree list — describe state that every window
+ * renders, so addressing one window leaves the others showing something that is no longer true.
+ * `excludeWebContentsId` skips a renderer the caller has already sent to directly.
+ */
+export function broadcastToAppWindowRenderers(
+  channel: string,
+  args: readonly unknown[] = [],
+  excludeWebContentsId?: number
+): void {
+  // Why a copy: a send into a renderer that is tearing down can unregister it, and mutating the
+  // list while iterating it would skip the window after the one that left.
+  for (const rendererId of rendererIdsInRegistrationOrder.slice()) {
+    if (rendererId === excludeWebContentsId) {
+      continue
+    }
+    const renderer = webContents.fromId(rendererId)
+    if (renderer && !renderer.isDestroyed()) {
+      renderer.send(channel, ...args)
+    }
+  }
+}
+
 export function resetAppWindowRendererRegistryForTest(): void {
   rendererIdsInRegistrationOrder.length = 0
 }
