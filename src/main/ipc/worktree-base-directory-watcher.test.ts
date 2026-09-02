@@ -48,6 +48,7 @@ import {
   setWorktreeGitStatusRefWatch,
   syncWorktreeBaseDirectoryWatchers
 } from './worktree-base-directory-watcher'
+import { setSurvivingAppWindowResolver } from '../window/surviving-app-window'
 import { matchingWorktreeBaseRepoIds } from './worktree-base-directory-event-filter'
 
 type PollerCallback = (events: WorktreeBasePollEvent[]) => void
@@ -118,6 +119,7 @@ describe('worktree base directory watcher', () => {
   })
 
   afterEach(async () => {
+    setSurvivingAppWindowResolver(null)
     await disposeWorktreeBaseDirectoryWatchers()
     vi.useRealTimers()
     vi.clearAllMocks()
@@ -157,6 +159,30 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
 
     expect(notifyWorktreesChanged).not.toHaveBeenCalled()
+  })
+
+  it('keeps notifying a surviving window after the window it was started with closes', async () => {
+    // The watcher is process-wide and keyed by path, but it captured one window to answer to. With
+    // a second workspace window open, closing the one that happened to start the watch left the
+    // survivor with a live watcher whose every event was dropped on the way out.
+    let destroyed = false
+    const survivor = makeWindow()
+    setSurvivingAppWindowResolver(() => survivor as never)
+    await syncWorktreeBaseDirectoryWatchers(
+      makeStore([makeRepo()]) as never,
+      makeWindow({ destroyed: () => destroyed }) as never
+    )
+
+    emit(WORKTREE_ROOT, [
+      {
+        type: 'create',
+        path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git')
+      }
+    ])
+    destroyed = true
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(1)
   })
 
   it('ignores deep checkout churn below candidate roots', async () => {

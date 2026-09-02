@@ -21,6 +21,7 @@ import {
   readWindowTopologyRestorePlan
 } from './window/window-topology-persistence'
 import type { LiveWindowTopologyEntry } from './window/window-topology'
+import { setSurvivingAppWindowResolver } from './window/surviving-app-window'
 import type { PersistedWindowTopologyEntry } from '../shared/window-topology-types'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -1357,11 +1358,16 @@ function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
  * Excludes the closing renderer by id rather than by object: at `closed` its webContents is already
  * gone, so there is nothing left to compare against.
  */
-function firstSurvivingAppWindow(closingRendererWebContentsId: number): BrowserWindow | null {
+function firstSurvivingAppWindow(closingRendererWebContentsId?: number): BrowserWindow | null {
   const renderer = getPrimaryAppWindowRenderer(closingRendererWebContentsId)
   const survivor = renderer ? BrowserWindow.fromWebContents(renderer) : null
   return survivor && !survivor.isDestroyed() ? survivor : null
 }
+
+// Why here and not inside the watchers: they hold no opinion about what an app window is, and this
+// is the process that knows. Set once — the answer is "whichever window is still alive", which does
+// not change per attach.
+setSurvivingAppWindowResolver(() => firstSurvivingAppWindow())
 
 /**
  * The renderer that should receive an agent status row.

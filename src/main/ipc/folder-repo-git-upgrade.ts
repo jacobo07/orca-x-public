@@ -15,6 +15,7 @@ import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cach
 import { notifyReposChanged } from './repos'
 import { notifyWorktreesChanged } from './worktree-remote'
 import { setFolderRepoGitUpgradeWakeListener } from './folder-repo-git-upgrade-wake'
+import { survivingAppWindow } from '../window/surviving-app-window'
 import {
   createWorktreePollerWindowVisibility,
   WORKTREE_BASE_BACKSTOP_TICKS,
@@ -146,13 +147,31 @@ async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<U
   return 'upgraded'
 }
 
+/**
+ * The window to notify, re-pointed at a survivor when the one this watch captured has closed.
+ *
+ * There is one watch for the process and it adopts whichever window attached last, so before this
+ * the second window closing idled the poll for the first — which is still open and still showing
+ * the folder projects the poll exists to upgrade.
+ */
+function liveWindowForUpgradeWatch(watch: UpgradeWatch): BrowserWindow | null {
+  if (!watch.mainWindow.isDestroyed()) {
+    return watch.mainWindow
+  }
+  const survivor = survivingAppWindow()
+  if (survivor) {
+    watch.mainWindow = survivor
+  }
+  return survivor
+}
+
 async function pollOnce(watch: UpgradeWatch): Promise<void> {
   // Why: a closed window on macOS leaves the app running with nothing to notify, and the
   // poller's visibility helper reports a destroyed window as visible on purpose so a
   // window-recreation gap cannot park it forever. Idle out instead of probing git.
-  const candidates = watch.mainWindow.isDestroyed()
-    ? []
-    : watch.store.getRepos().filter(isUpgradeCandidate)
+  const candidates = liveWindowForUpgradeWatch(watch)
+    ? watch.store.getRepos().filter(isUpgradeCandidate)
+    : []
   watch.hasCandidates = candidates.length > 0
   const liveKeys = new Set<string>()
   for (const repo of candidates) {
@@ -242,7 +261,7 @@ export function startFolderRepoGitUpgradeWatch(
     // Why: assume work on the first tick rather than reading the store on the attach
     // path; the tick itself settles the cadence once it has seen the repo list.
     hasCandidates: true,
-    visibility: createWorktreePollerWindowVisibility(() => watch.mainWindow),
+    visibility: createWorktreePollerWindowVisibility(() => liveWindowForUpgradeWatch(watch)),
     unsubscribeVisibility: () => {},
     pollIntervalMs: options.pollIntervalMs ?? WORKTREE_BASE_POLL_INTERVAL_MS,
     idlePollIntervalMs: options.idlePollIntervalMs ?? IDLE_POLL_INTERVAL_MS,
