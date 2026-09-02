@@ -1517,11 +1517,20 @@ export class LocalPtyProvider implements IPtyProvider {
 
   // ─── Local-only helpers (not part of IPtyProvider interface) ───────
 
-  /** Kill orphaned PTYs from previous page loads. */
-  killOrphanedPtys(currentGeneration: number): { id: string }[] {
+  /**
+   * Kill orphaned PTYs from previous page loads.
+   *
+   * `shouldSpare` exists because the generation counter is process-wide while page loads are
+   * per-window: with a second workspace window open, every PTY the other window owns is "from an
+   * earlier load" and would be swept by a reload that has nothing to do with it.
+   */
+  killOrphanedPtys(
+    currentGeneration: number,
+    options?: { shouldSpare?: (id: string) => boolean }
+  ): { id: string }[] {
     const killed: { id: string }[] = []
     for (const [id, proc] of ptyProcesses) {
-      if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration) {
+      if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration && !options?.shouldSpare?.(id)) {
         requestPtyTermination(id, proc)
         killed.push({ id })
       }

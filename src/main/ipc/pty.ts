@@ -14,6 +14,7 @@ import {
 } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
 import { createPtyRendererOwnership } from './pty-renderer-ownership'
+import { shouldSparePtyFromOrphanSweep } from './pty-orphan-sweep-scope'
 import { getPrimaryAppWindowRenderer, isAppWindowRenderer } from './app-window-renderer-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
@@ -4240,7 +4241,21 @@ export function registerPtyHandlers(
         return
       }
       // Why: the retained provider onExit callback is the only physical-exit proof; it clears ownership after the OS reaps it.
-      lp.killOrphanedPtys(generation - 1)
+      // Why scoped: the generation counter is process-wide, so with a second window open every PTY
+      // the other window owns reads as "from an earlier load" — and a reload here would kill its
+      // running terminals with no error anywhere.
+      lp.killOrphanedPtys(generation - 1, {
+        shouldSpare: (id) =>
+          shouldSparePtyFromOrphanSweep({
+            ptyId: id,
+            reloadingWebContentsId: mainWindow.webContents.id,
+            ownerWebContentsIdFor: (ptyId) => ptyRendererOwnership.ownerWebContentsIdFor(ptyId),
+            isRendererAlive: (webContentsId) => {
+              const owner = webContents.fromId(webContentsId)
+              return owner !== undefined && owner !== null && !owner.isDestroyed()
+            }
+          })
+      })
     }
     didFinishLoadWebContents = mainWindow.webContents
     mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
