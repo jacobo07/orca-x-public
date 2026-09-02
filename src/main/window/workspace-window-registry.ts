@@ -18,6 +18,8 @@
  * but ephemeral — a renderer is replaced on reload and crash recovery — so they are recorded as
  * *current* attributes of a window rather than as its name.
  */
+import type { WorkspaceWindowStartup } from '../../shared/workspace-window-claim'
+
 export type WorkspaceWindowId = string
 
 export type WorkspaceWindowBinding = {
@@ -29,6 +31,8 @@ export type WorkspaceWindowRecord = {
   windowId: WorkspaceWindowId
   browserWindowId: number
   rendererWebContentsId: number
+  /** Mint order, so "the first window" stays well defined as windows come and go. */
+  sequence: number
   /** Null while the window is UNBOUND — showing the launcher, owning no project. */
   binding: WorkspaceWindowBinding | null
 }
@@ -49,10 +53,10 @@ let nextWindowSequence = 1
  * changes meaning when the project moves, and one built from a counter alone collides across runs
  * once these records are persisted. Persistence (W6) will carry the minted id, not re-derive it.
  */
-function mintWorkspaceWindowId(): WorkspaceWindowId {
+function mintWorkspaceWindow(): { windowId: WorkspaceWindowId; sequence: number } {
   const sequence = nextWindowSequence
   nextWindowSequence += 1
-  return `window-${sequence}`
+  return { windowId: `window-${sequence}`, sequence }
 }
 
 export function registerWorkspaceWindow(attributes: {
@@ -60,12 +64,17 @@ export function registerWorkspaceWindow(attributes: {
   rendererWebContentsId: number
   windowId?: WorkspaceWindowId
 }): WorkspaceWindowRecord {
-  const windowId = attributes.windowId ?? mintWorkspaceWindowId()
+  const minted = attributes.windowId ? null : mintWorkspaceWindow()
+  const windowId = attributes.windowId ?? minted!.windowId
+  const existing = recordsByWindowId.get(windowId)
   const record: WorkspaceWindowRecord = {
     windowId,
     browserWindowId: attributes.browserWindowId,
     rendererWebContentsId: attributes.rendererWebContentsId,
-    binding: recordsByWindowId.get(windowId)?.binding ?? null
+    // Why preserved on re-register: a reload replaces the renderer, not the window, and a window
+    // that became "first" by being registered again would start restoring another window's project.
+    sequence: existing?.sequence ?? minted?.sequence ?? nextWindowSequence++,
+    binding: existing?.binding ?? null
   }
   recordsByWindowId.set(windowId, record)
   return record
@@ -164,6 +173,36 @@ export function releaseWorkspaceForWindow(windowId: WorkspaceWindowId): void {
 export function getOwnedWorktreeIds(windowId: WorkspaceWindowId): string[] {
   const binding = recordsByWindowId.get(windowId)?.binding
   return binding ? [binding.worktreeId] : []
+}
+
+/**
+ * What a window should show when its renderer finishes loading.
+ *
+ * The saved session names one active worktree for the whole profile, so restoring it in every window
+ * would put the same project in all of them: two sets of terminals for one worktree, two publishers
+ * of one worktree's runtime graph, and a PTY owner that depends on which window asked last. The
+ * window's own binding is the source of truth instead.
+ *
+ * - Bound (it already owns a project, or a reload replaced its renderer) → restore that project.
+ * - Unbound and first → restore the saved session, which is the single-window behaviour unchanged.
+ * - Unbound and not first → the launcher, which claims properly when the user picks something.
+ */
+export function resolveWorkspaceWindowStartup(
+  rendererWebContentsId: number
+): WorkspaceWindowStartup {
+  const record = getWorkspaceWindowForRenderer(rendererWebContentsId)
+  if (!record) {
+    // An unrecognised renderer is not a window we can speak for; leave the saved session alone
+    // rather than blanking a window that may be the only one there is.
+    return { worktreeId: null, restoreSession: true }
+  }
+  if (record.binding) {
+    return { worktreeId: record.binding.worktreeId, restoreSession: true }
+  }
+  const isFirst = [...recordsByWindowId.values()].every(
+    (candidate) => candidate.sequence >= record.sequence
+  )
+  return { worktreeId: null, restoreSession: isFirst }
 }
 
 export function resetWorkspaceWindowRegistryForTest(): void {

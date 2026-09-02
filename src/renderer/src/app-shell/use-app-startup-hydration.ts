@@ -18,6 +18,7 @@ import {
 } from '../startup/startup-diagnostics'
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
+import { applyWindowStartupBinding } from '../startup/window-startup-session-binding'
 import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
 import { getSystemPrefersDark } from '../lib/terminal-theme'
 import {
@@ -213,18 +214,19 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         await timeRendererStartupStep('repo-catalog-final-settlement', () =>
           actions.awaitLocalRepoCatalogSettlement()
         )
+        const windowSession = await applyWindowStartupBinding(sessionRead.session)
         if (!cancelled) {
           const sessionHydrationOptions = {
-            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(windowSession)
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
-            actions.hydrateWorkspaceSession(sessionRead.session, {
+            actions.hydrateWorkspaceSession(windowSession, {
               ...sessionHydrationOptions,
               runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey
             })
-            actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
-            actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
-            actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateTabsSession(windowSession, sessionHydrationOptions)
+            actions.hydrateEditorSession(windowSession, sessionHydrationOptions)
+            actions.hydrateBrowserSession(windowSession, sessionHydrationOptions)
           })
           // Why: prune visit timestamps AFTER hydration (earlier, worktreesByRepo may be empty and prune would drop entries for worktrees about to appear); seed the active worktree if missing.
           // See docs/cmd-j-empty-query-ordering.md.

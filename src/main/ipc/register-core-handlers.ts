@@ -95,6 +95,8 @@ import type { PluginMarketplaceHandlerServices } from './plugin-marketplaces'
 let registered = false
 
 type CoreHandlerLifecycleOptions = {
+  /** Open another project window. Absent in headless serve, where there is no window to open. */
+  onOpenNewWindow?: () => void
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
@@ -198,7 +200,7 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store)
-  registerWorkspaceWindowClaimHandlers()
+  registerWorkspaceWindowClaimHandlers({ openNewWindow: lifecycleOptions.onOpenNewWindow })
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()

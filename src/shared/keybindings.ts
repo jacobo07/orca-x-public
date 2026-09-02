@@ -33,6 +33,7 @@ export type KeybindingActionId =
   | 'worktree.navigateDown'
   | 'app.settings'
   | 'app.forceReload'
+  | 'window.new'
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
@@ -262,7 +263,18 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'new workspace'],
-    defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
+    // Why only Mod+N now: Mod+Shift+N was a second chord for the same action, and every desktop
+    // application spends it on a new window. Giving it up costs nothing here and matches the
+    // convention a user arrives with.
+    defaultBindings: platformBindings(['Mod+N'])
+  },
+  {
+    id: 'window.new',
+    title: 'New Window',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'window', 'new window', 'open window', 'project window'],
+    defaultBindings: platformBindings(['Mod+Shift+N'])
   },
   {
     id: 'workspace.rename',

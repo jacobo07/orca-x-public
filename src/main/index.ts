@@ -1508,6 +1508,11 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     crashReports ?? undefined,
     keybindings,
     {
+      // Why revealed on load: a window that appears only once its renderer paints reads as the menu
+      // item having done nothing, so it is shown when it has something to show.
+      onOpenNewWindow: () => {
+        openMainWindow({ revealOnDidFinishLoad: true })
+      },
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
       prepareAiVaultSessionResume: (args) =>
@@ -2971,6 +2976,9 @@ void app.whenReady().then(async () => {
   registerAppMenu({
     appMenuLabel: devInstanceIdentity.name,
     onCheckForUpdates: (options) => runUserInitiatedUpdateCheck(options),
+    onOpenNewWindow: () => {
+      openMainWindow({ revealOnDidFinishLoad: true })
+    },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)

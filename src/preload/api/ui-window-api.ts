@@ -7,7 +7,8 @@ import type {
 } from '../../shared/rich-markdown-context-menu'
 import type {
   WorkspaceWindowClaimRequest,
-  WorkspaceWindowClaimResult
+  WorkspaceWindowClaimResult,
+  WorkspaceWindowStartup
 } from '../../shared/workspace-window-claim'
 
 export type UiWindowApi = {
@@ -57,6 +58,20 @@ export type UiWindowApi = {
    */
   claimWorkspace: (request: WorkspaceWindowClaimRequest) => Promise<WorkspaceWindowClaimResult>
   releaseWorkspace: () => Promise<void>
+  /**
+   * What this window should show once loaded.
+   *
+   * The saved session names one active project for the whole profile, so a window that is not the
+   * first has to be told to start on the launcher rather than restore a project another window owns.
+   */
+  getStartupBinding: () => Promise<WorkspaceWindowStartup>
+  /**
+   * Open another Orca workspace window, unbound so it starts on the launcher.
+   *
+   * Resolves false when the caller is not itself a workspace window — main answers from the sender,
+   * never from an id on the wire, so a non-window renderer cannot spawn windows.
+   */
+  createWindow: () => Promise<boolean>
   onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
   confirmWindowClose: () => void
   notifyWindowRevealed: () => void

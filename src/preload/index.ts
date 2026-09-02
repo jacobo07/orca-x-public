@@ -4336,6 +4336,10 @@ const api = {
     /** Ask to own a workspace here; main answers from the window that sent this, never from an id on the wire. */
     claimWorkspace: (request) => ipcRenderer.invoke('window:claimWorkspace', request),
     releaseWorkspace: () => ipcRenderer.invoke('window:releaseWorkspace'),
+    /** What this window should show once loaded; answered from its own binding, not the shared session. */
+    getStartupBinding: () => ipcRenderer.invoke('window:getStartupBinding'),
+    /** Open another workspace window; main gates on the sender being a window, not on an id we pass. */
+    createWindow: () => ipcRenderer.invoke('window:create'),
     /** Desktop custom titlebar only: subscribe to maximize-state changes so the maximize button shows the right icon. */
     onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>

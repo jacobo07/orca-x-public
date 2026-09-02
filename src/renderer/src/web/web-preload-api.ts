@@ -2822,6 +2822,11 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     // window that could already own the workspace and none to raise instead.
     claimWorkspace: () => Promise.resolve({ outcome: 'claimed' as const }),
     releaseWorkspace: () => Promise.resolve(),
+    // Why always restoring: for the same reason — one tab, one host, no other window whose project
+    // this one could accidentally be showing.
+    getStartupBinding: () => Promise.resolve({ worktreeId: null, restoreSession: true }),
+    // Why false: the web client is one browser tab; there is no second window for it to open.
+    createWindow: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
     consumePendingOpenSettings: () => Promise.resolve(false),

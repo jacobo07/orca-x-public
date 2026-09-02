@@ -1,13 +1,15 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type {
   WorkspaceWindowClaimRequest,
-  WorkspaceWindowClaimResult
+  WorkspaceWindowClaimResult,
+  WorkspaceWindowStartup
 } from '../../shared/workspace-window-claim'
 import {
   claimWorkspaceForWindow,
   getWorkspaceWindow,
   getWorkspaceWindowForRenderer,
-  releaseWorkspaceForWindow
+  releaseWorkspaceForWindow,
+  resolveWorkspaceWindowStartup
 } from '../window/workspace-window-registry'
 import { safelyRevealWindow } from '../window/focus-existing-window'
 
@@ -20,9 +22,27 @@ function isClaimRequest(value: unknown): value is WorkspaceWindowClaimRequest {
  * Registered once for the process and routed by sender, so a window can only ever claim on its own
  * behalf — a renderer cannot name another window, and nothing here trusts a window id from the wire.
  */
-export function registerWorkspaceWindowClaimHandlers(): void {
+export function registerWorkspaceWindowClaimHandlers(
+  options: { openNewWindow?: () => void } = {}
+): void {
   ipcMain.removeHandler('window:claimWorkspace')
   ipcMain.removeHandler('window:releaseWorkspace')
+  ipcMain.removeHandler('window:getStartupBinding')
+  ipcMain.removeHandler('window:create')
+
+  ipcMain.handle('window:getStartupBinding', (event): WorkspaceWindowStartup => {
+    return resolveWorkspaceWindowStartup(event.sender.id)
+  })
+
+  ipcMain.handle('window:create', (event): boolean => {
+    // Why the sender must already be a window: opening a project window is a window's request, and
+    // an unrecognised renderer asking for one has no context to open it from.
+    if (!getWorkspaceWindowForRenderer(event.sender.id) || !options.openNewWindow) {
+      return false
+    }
+    options.openNewWindow()
+    return true
+  })
 
   ipcMain.handle('window:claimWorkspace', (event, args: unknown): WorkspaceWindowClaimResult => {
     const requester = getWorkspaceWindowForRenderer(event.sender.id)

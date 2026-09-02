@@ -135,6 +135,15 @@ export function useGlobalKeybindings(args: {
         })
       }
 
+      // Before the editable-target bail: opening a window is not a text action, so the chord should
+      // work while a rename field or the composer has focus, same as the File menu item does.
+      if (matchShortcut('window.new')) {
+        input.preventDefault()
+        notifyTerminalCapture('window.new')
+        void window.api.ui.createWindow()
+        return
+      }
+
       const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
 
       if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {

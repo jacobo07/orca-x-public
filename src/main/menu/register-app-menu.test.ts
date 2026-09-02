@@ -38,6 +38,7 @@ const isMac = process.platform === 'darwin'
 function buildMenuOptions() {
   return {
     onCheckForUpdates: vi.fn(),
+    onOpenNewWindow: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenSetupGuide: vi.fn(),
     onOpenFeatureTour: vi.fn(),
@@ -109,6 +110,26 @@ describe('registerAppMenu', () => {
     const forceReloadItem = viewSubmenu.find((item) => item.label === expectedForceReloadLabel)
     expect(forceReloadItem).toBeDefined()
     expect(forceReloadItem?.accelerator).toBeUndefined()
+  })
+
+  it('opens a new workspace window from File on every platform', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const fileSubmenu = getSubmenu(getTemplate(), 'File')
+    const expectedLabel = `New Window\t${isMac ? '⌘⇧N' : 'Ctrl+Shift+N'}`
+    const newWindowItem = fileSubmenu.find((item) => item.label === expectedLabel)
+
+    expect(newWindowItem).toBeDefined()
+    // Why: the chord is owned by the renderer keybinding policy, same as Terminal's items.
+    expect(newWindowItem?.accelerator).toBeUndefined()
+
+    newWindowItem?.click?.(
+      {} as Electron.MenuItem,
+      undefined as unknown as Electron.BrowserWindow,
+      {} as Electron.KeyboardEvent
+    )
+    expect(options.onOpenNewWindow).toHaveBeenCalledTimes(1)
   })
 
   it('routes every Terminal menu item to the renderer, with no accelerator of its own', () => {
@@ -408,7 +429,9 @@ describe('registerAppMenu', () => {
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
-    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
+    // Why New Window leads: it is the only File item that acts on the window itself,
+    // and Settings/Exit are the redistributed app-menu tail below it.
+    expect(fileLabels[0]).toBe(`New Window\t${isMac ? '⌘⇧N' : 'Ctrl+Shift+N'}`)
     expect(fileLabels).toEqual(
       expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
     )

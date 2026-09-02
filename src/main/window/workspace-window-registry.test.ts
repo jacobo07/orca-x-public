@@ -10,6 +10,7 @@ import {
   registerWorkspaceWindow,
   releaseWorkspaceForWindow,
   resetWorkspaceWindowRegistryForTest,
+  resolveWorkspaceWindowStartup,
   setWorkspaceWindowRenderer,
   unregisterWorkspaceWindow
 } from './workspace-window-registry'
@@ -25,6 +26,54 @@ function registerWindow(browserWindowId: number, rendererWebContentsId: number):
 describe('workspace window registry', () => {
   beforeEach(() => {
     resetWorkspaceWindowRegistryForTest()
+  })
+
+  describe('startup binding', () => {
+    it('restores the saved session in the only window', () => {
+      registerWindow(1, 11)
+
+      expect(resolveWorkspaceWindowStartup(11)).toEqual({ worktreeId: null, restoreSession: true })
+    })
+
+    it('starts a later window on the launcher instead of the first one’s project', () => {
+      registerWindow(1, 11)
+      registerWindow(2, 22)
+
+      // The saved session names one active worktree for the whole profile, so restoring it here
+      // would render a project the first window already owns.
+      expect(resolveWorkspaceWindowStartup(11)).toEqual({ worktreeId: null, restoreSession: true })
+      expect(resolveWorkspaceWindowStartup(22)).toEqual({ worktreeId: null, restoreSession: false })
+    })
+
+    it('restores a bound window to its own project, not to the saved one', () => {
+      registerWindow(1, 11)
+      const second = registerWindow(2, 22)
+      claimWorkspaceForWindow(second, { repoId: REPO, worktreeId: WORKTREE_B })
+
+      expect(resolveWorkspaceWindowStartup(22)).toEqual({
+        worktreeId: WORKTREE_B,
+        restoreSession: true
+      })
+    })
+
+    it('keeps a reloaded window on its own project rather than promoting it to first', () => {
+      const first = registerWindow(1, 11)
+      registerWindow(2, 22)
+      claimWorkspaceForWindow(first, { repoId: REPO, worktreeId: WORKTREE_A })
+
+      // A reload replaces the renderer, not the window. Re-registering must not renumber it, or the
+      // second window would inherit "first" and start restoring a project it does not own.
+      registerWorkspaceWindow({ browserWindowId: 2, rendererWebContentsId: 33, windowId: 'window-2' })
+
+      expect(resolveWorkspaceWindowStartup(33)).toEqual({ worktreeId: null, restoreSession: false })
+    })
+
+    it('leaves the saved session alone for a renderer it does not recognise', () => {
+      registerWindow(1, 11)
+
+      // Blanking a window we cannot speak for would be worse than restoring: it may be the only one.
+      expect(resolveWorkspaceWindowStartup(999)).toEqual({ worktreeId: null, restoreSession: true })
+    })
   })
 
   it('mints a distinct identity per window', () => {
