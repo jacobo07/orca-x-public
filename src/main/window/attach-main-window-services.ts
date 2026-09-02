@@ -23,7 +23,11 @@ import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
-import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
+import type {
+  OrcaRuntimeService,
+  RuntimeNotifier,
+  RuntimeWorktreeLifecycleEvent
+} from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
   downloadUpdate,
@@ -74,9 +78,6 @@ let pendingAutoUpdaterSetup: (() => void) | null = null
 export function ensureAutoUpdaterConfigured(): void {
   pendingAutoUpdaterSetup?.()
 }
-
-let runtimeNotifierTokenCounter = 0
-let activeRuntimeNotifierToken: number | null = null
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -239,8 +240,6 @@ function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
-  const notifierToken = ++runtimeNotifierTokenCounter
-  activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const mainWebContents = mainWindow.webContents
   const rendererNotifications = createRuntimeRendererNotificationSender({
@@ -249,7 +248,7 @@ function registerRuntimeWindowLifecycle(
     onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
   })
   const send = rendererNotifications.send
-  runtime.setNotifier({
+  const windowNotifier: RuntimeNotifier = {
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
       runWorktreeChangeInvalidators(repoId)
@@ -420,7 +419,8 @@ function registerRuntimeWindowLifecycle(
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver })
-  })
+  }
+  runtime.setNotifier(windowNotifier, mainWindow.id)
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
@@ -439,11 +439,10 @@ function registerRuntimeWindowLifecycle(
   mainWindow.on('closed', () => {
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
-    if (activeRuntimeNotifierToken === notifierToken) {
-      // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.
-      runtime.setNotifier(null)
-      activeRuntimeNotifierToken = null
-    }
+    // Why: the notifier closes over this window, so it goes with it — and keying by window is what
+    // makes that safe. It used to need a token to prove the clear was not a stale window wiping the
+    // live one's notifier out of the single slot they shared.
+    runtime.setNotifier(null, mainWindow.id)
   })
 }
 

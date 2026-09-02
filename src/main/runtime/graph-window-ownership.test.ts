@@ -11,10 +11,10 @@
  * and still let one window's reload strip another window's live terminals, which is a silent loss of
  * running work rather than a visible failure.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { RuntimeSyncedLeaf, RuntimeSyncedTab } from '../../shared/runtime-types'
-import { OrcaRuntimeService } from './orca-runtime'
+import { OrcaRuntimeService, type RuntimeNotifier } from './orca-runtime'
 
 const WT_A = 'repo-1::/tmp/worktree-a'
 const WT_B = 'repo-1::/tmp/worktree-b'
@@ -64,9 +64,26 @@ type RuntimeInternals = {
   leaves: Map<string, { worktreeId: string }>
   handles: Map<string, { worktreeId: string }>
   waitersByHandle: Map<string, Set<unknown>>
+  notifier: RuntimeNotifier | null
   issueHandle(leaf: unknown): string
   getLeafKey(tabId: string, leafId: string): string
   graphOwners: { get(windowId: number): { epoch: number; status: string } | undefined }
+}
+
+function makeNotifier(focusTerminal: RuntimeNotifier['focusTerminal']): RuntimeNotifier {
+  return {
+    worktreesChanged: () => {},
+    reposChanged: () => {},
+    activateWorktree: () => {},
+    createTerminal: () => {},
+    splitTerminal: () => {},
+    renameTerminal: () => {},
+    focusTerminal,
+    closeTerminal: () => {},
+    sleepWorktree: () => {},
+    terminalFitOverrideChanged: () => {},
+    terminalDriverChanged: () => {}
+  }
 }
 
 /** Mint a terminal handle for a published leaf — the hidden state a half-partition would destroy. */
@@ -211,5 +228,43 @@ describe('runtime graph ownership across windows', () => {
     expect(internals.graphOwners.get(WINDOW_B)?.epoch).toBe(epochBefore)
     expect(internals.graphOwners.get(WINDOW_B)?.status).toBe('ready')
     expect(internals.graphOwners.get(WINDOW_A)?.status).toBe('reloading')
+  })
+
+  it('routes a renderer command to the window that owns the addressed worktree', () => {
+    const { runtime, internals } = createRuntime()
+    const focusA = vi.fn()
+    const focusB = vi.fn()
+    runtime.attachWindow(WINDOW_A)
+    publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
+    runtime.setNotifier(makeNotifier(focusA), WINDOW_A)
+    runtime.attachWindow(WINDOW_B)
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
+    runtime.setNotifier(makeNotifier(focusB), WINDOW_B)
+
+    internals.notifier?.focusTerminal('tab-a', WT_A, null)
+    internals.notifier?.focusTerminal('tab-b', WT_B, null)
+
+    // The notifier was one slot, so B's attach destroyed A's outright and every command went to
+    // whichever window bound last — including commands for a worktree that window does not render.
+    expect(focusA.mock.calls).toEqual([['tab-a', WT_A, null]])
+    expect(focusB.mock.calls).toEqual([['tab-b', WT_B, null]])
+  })
+
+  it("leaves the other window's notifier bound when one window unbinds", () => {
+    const { runtime, internals } = createRuntime()
+    const focusA = vi.fn()
+    const focusB = vi.fn()
+    runtime.attachWindow(WINDOW_A)
+    publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
+    runtime.setNotifier(makeNotifier(focusA), WINDOW_A)
+    runtime.attachWindow(WINDOW_B)
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
+    runtime.setNotifier(makeNotifier(focusB), WINDOW_B)
+
+    runtime.setNotifier(null, WINDOW_A)
+
+    internals.notifier?.focusTerminal('tab-b', WT_B, null)
+    expect(focusB).toHaveBeenCalledTimes(1)
+    expect(focusA).not.toHaveBeenCalled()
   })
 })

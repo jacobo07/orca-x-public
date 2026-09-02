@@ -480,6 +480,7 @@ import {
   type RuntimeGraphEpochToken,
   type RuntimeGraphOwner
 } from './runtime-graph-owners'
+import { createRuntimeNotifierRouter } from './runtime-notifier-router'
 import {
   LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
@@ -2010,6 +2011,14 @@ function resolveTerminalPresentation(opts: {
   return undefined
 }
 
+/**
+ * The key a notifier bound before any window attached is filed under.
+ *
+ * Negative so it can never collide with a BrowserWindow id, and distinct from the headless
+ * sentinel: this is "not yet placed", not "there is no desktop".
+ */
+const UNSCOPED_NOTIFIER_WINDOW_ID = -1
+
 export type RuntimeNotifier = {
   worktreesChanged(repoId: string, renamed?: { oldWorktreeId: string; newWorktreeId: string }): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
@@ -2993,6 +3002,8 @@ export class OrcaRuntimeService {
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
   private ptyController: RuntimePtyController | null = null
+  private readonly notifiersByWindowId = new Map<number, RuntimeNotifier>()
+  /** The router over `notifiersByWindowId`, rebuilt on every change; null while no window is bound. */
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
   // Why: mobile subscribers discard terminalSideEffects; exclude them from batch delivery and production.
@@ -5951,14 +5962,67 @@ export class OrcaRuntimeService {
     this.ptyController = controller
   }
 
-  setNotifier(notifier: RuntimeNotifier | null): void {
-    this.notifier = notifier
+  /**
+   * Bind, or unbind, one window's renderer commands.
+   *
+   * This was a single slot, so a second window's attach destroyed the first window's notifier and
+   * the first window's close then cleared the second's — which is why the assignment needed a token
+   * to tell a stale window from a live one. Keying by window removes both problems and the token
+   * with them. `windowId` is optional because a caller with only one window has nothing to name.
+   */
+  setNotifier(notifier: RuntimeNotifier | null, windowId?: number): void {
+    if (notifier === null && windowId === undefined) {
+      // Why clear everything: this is the single-window form, where "no notifier" meant exactly
+      // that. Guessing a window to unbind would leave a live one bound and look like it worked.
+      for (const boundWindowId of [...this.notifiersByWindowId.keys()]) {
+        this.setNotifier(null, boundWindowId)
+      }
+      return
+    }
+    // Why the sole owner as the default: a caller with one window has nothing to name, and the
+    // runtime already knows which window that is. The unscoped key covers binding before attach.
+    const targetWindowId =
+      windowId ?? this.graphOwners.sole()?.windowId ?? UNSCOPED_NOTIFIER_WINDOW_ID
+    if (notifier) {
+      this.notifiersByWindowId.set(targetWindowId, notifier)
+    } else {
+      this.notifiersByWindowId.delete(targetWindowId)
+    }
+    // Why a fresh router object every time: the service compares `this.notifier` identity across an
+    // await to notice the renderer changing under an in-flight command, so rebuilding here IS that
+    // signal. A stable facade would silence those checks.
+    this.notifier =
+      this.notifiersByWindowId.size === 0
+        ? null
+        : createRuntimeNotifierRouter(
+            {
+              forWorktree: (worktreeId) =>
+                this.notifiersFor(this.graphOwners.ownerOfWorktree(worktreeId)),
+              forTab: (tabId) => this.notifiersFor(this.graphOwners.ownerOfTab(tabId)),
+              forPty: (ptyId) => this.notifiersFor(this.graphOwnerForPty(ptyId)),
+              all: () => [...this.notifiersByWindowId.values()]
+            },
+            () => [...this.notifiersByWindowId.values()]
+          )
     // Why: run the one-shot fork-upstream backfill once a renderer is attached,
     // so existing forks self-correct on launch and the result can be broadcast.
     if (notifier && !this.forkBackfillStarted) {
       this.forkBackfillStarted = true
       void this.backfillForkUpstreams()
     }
+  }
+
+  private notifiersFor(owner: RuntimeGraphOwner | null): RuntimeNotifier[] {
+    const owned = owner ? this.notifiersByWindowId.get(owner.windowId) : undefined
+    // Why every window when the target cannot be placed: it used to reach the only notifier there
+    // was, and dropping the command silently would be a worse answer than delivering it widely.
+    return owned ? [owned] : [...this.notifiersByWindowId.values()]
+  }
+
+  private graphOwnerForPty(ptyId: string): RuntimeGraphOwner | null {
+    const worktreeId =
+      this.getLeavesForPty(ptyId)[0]?.worktreeId ?? this.ptysById.get(ptyId)?.worktreeId ?? null
+    return this.graphOwners.ownerOfWorktree(worktreeId)
   }
 
   onClientEvent(

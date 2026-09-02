@@ -145,15 +145,16 @@ type RuntimeStub = {
 }
 
 function createMainWindow(
-  extraWebContents: { isLoadingMainFrame?: MockFn; on?: MockFn; send?: MockFn } = {}
+  extraWebContents: { isLoadingMainFrame?: MockFn; on?: MockFn; send?: MockFn } = {},
+  windowId = 1
 ): MainWindowStub {
   return {
-    id: 1,
+    id: windowId,
     isDestroyed: vi.fn(() => false),
     on: vi.fn(),
     once: vi.fn(),
     webContents: {
-      id: 1,
+      id: windowId,
       getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
       isDestroyed: vi.fn(() => false),
       isLoadingMainFrame: vi.fn(() => true),
@@ -714,7 +715,7 @@ describe('attachMainWindowServices', () => {
     expect(sendMock).not.toHaveBeenCalled()
   })
 
-  it('clears the runtime notifier when the owning window closes', () => {
+  it("unbinds only the closing window's runtime notifier", () => {
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
     mainWindow.on = mainWindowOnMock
@@ -728,19 +729,19 @@ describe('attachMainWindowServices', () => {
     }
 
     expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(1)
-    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null, 1)
   })
 
-  it('keeps a newer runtime notifier when an older window closes late', () => {
+  it("leaves a newer window's runtime notifier bound when an older window closes late", () => {
     const runtime = createRuntime()
     const oldWindowOnMock = vi.fn()
-    const oldWindow = createMainWindow()
+    const oldWindow = createMainWindow({}, 1)
     oldWindow.on = oldWindowOnMock
     attachMainWindowServices(oldWindow as never, createStore(), runtime as never)
     const oldClosedHandlers = getClosedHandlers(oldWindowOnMock)
 
     const newWindowOnMock = vi.fn()
-    const newWindow = createMainWindow()
+    const newWindow = createMainWindow({}, 2)
     newWindow.on = newWindowOnMock
     attachMainWindowServices(newWindow as never, createStore(), runtime as never)
 
@@ -749,12 +750,16 @@ describe('attachMainWindowServices', () => {
       handler()
     }
 
-    expect(runtime.setNotifier).not.toHaveBeenCalledWith(null)
+    // This used to need a token: both windows shared one notifier slot, so a late close of the
+    // older window would clear the newer window's. Naming the window makes the unbind precise, and
+    // the token unnecessary.
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null, 1)
+    expect(runtime.setNotifier).not.toHaveBeenCalledWith(null, 2)
 
     for (const handler of getClosedHandlers(newWindowOnMock)) {
       handler()
     }
-    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null, 2)
   })
 
   it('forwards runtime notifier events to the renderer', () => {
