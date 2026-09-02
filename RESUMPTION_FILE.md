@@ -2,80 +2,84 @@
 
 Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branch `orca-x/w0-durability-repros`.
 Thesis: turn Orca from a single-window app into one application with many independently owned project
-Workspace windows, then expose it as **Archivo → Abrir nueva ventana**. The menu item is the last step,
-not the first.
+Workspace windows, then expose it as **Archivo → Abrir nueva ventana**. The menu item is the last
+step, not the first, and it still has not shipped — deliberately.
 
 ## Spec of record
 
-`docs/workspace-window-mode-plan.md` — written in a prior session, still authoritative. W1–W4 and W7 are
-done; this work is **W5 (multi-window + session ownership)** and **W6 (window-set recovery)**. Its "W5 —
-the decided design" section names the PTY seams and the sequencing rule: per-pty routing must land *with*
-the ability to open a second window, never before it.
+`docs/workspace-window-mode-plan.md` — **gitignored** (`.gitignore:92 docs/**`), so `git log` cannot
+see it. It carries the ownership model and the measured decomposition of both blockers.
+
+## Two corrections — do not re-inherit the old claims
+
+1. **Per-PTY output routing already exists.** `ipc/pty-renderer-ownership.ts` landed 2026-08-20
+   (`763982ac3`) with tests; every pty-id-carrying send already routes through `deliveryWindowFor`.
+   The spec's "its own project, 7,926 lines" verdict predates it. What remains is the *input* gate
+   (`isPtyWriteEventFromMainWindow`, `pty.ts:7231`) plus a few lifecycle sends still closing over
+   `mainWindow`.
+2. **`updater:*` is not stolen.** `registerUpdaterHandlers` is called once from
+   `register-core-handlers.ts:231` and takes no window; only `setupAutoUpdater`'s push sink
+   (`updater.ts:117`) retargets.
 
 ## Exact state
 
-Sealed (committed, verified green, baseline-differenced). Detail lives in the spec's
-"W5 progress" section; this is the index:
+Sealed this session:
 
-1. `fix(window): route window-chrome IPC to the window that sent it` — `src/main/window/window-chrome-ipc-router.ts`.
-   The title-bar channels (`ui:sync-traffic-lights`, `window:minimize|maximize|request-close|confirm-close`,
-   `menu:popup`, `menu:topLevelItems`, `window:isMaximized`) are registered once and routed by `event.sender.id`.
-   Before this, a concurrent second `createMainWindow` **threw** on the duplicate `ipcMain.handle`.
-   RED proven by reverting the source only: 4/4 failed with Electron's real duplicate-handler error.
-2. `fix(ipc): make renderer trust a membership, not a single id` — `src/main/ipc/app-window-renderer-registry.ts`.
-   The three trusted-renderer scalars (UI / browser / clipboard) were last-writer-wins, so a second window
-   silently de-trusted the first and closing the second never gave it back.
-
-Coherence anchor: `pnpm exec vitest run --config config/vitest.config.ts src/main/ipc src/main/window`
-reports **90 failed / 3218 passed / 47 skipped**. 90 is the measured pre-existing Windows baseline (git-,
-symlink- and POSIX-path-dependent suites, incl. all 4 in `clipboard-file-copy.test.ts`). Any number above
-90 is a regression introduced by this work.
-
-## Active decisions
-
-- **Invariant:** a worktree is bound to at most one window. Session state is worktree-keyed and the
-  scope-merge cannot arbitrate two writers of the same key, so requesting an already-open worktree
-  focuses its window. Different worktrees of one repo in separate windows is the supported case.
-- **Accelerator:** `Mod+Shift+N` is currently a second alias of `workspace.create` (`src/shared/keybindings.ts:265`)
-  and `keybindings-conflicts.test.ts` pins defaults to zero conflicts. Free it from `workspace.create`
-  (which keeps `Mod+N`) and give it to a new `window.openNew`.
-- **Menu:** File/Archivo exists only on non-macOS today; add it on macOS carrying just this item.
-  New i18n key `menu.newWindow` ("Nueva ventana"), required in all 5 locales — three localization
-  verifiers run inside `pnpm lint`.
-- **New window boots UNBOUND** into the existing launcher (`activeView: 'workspace'`). No new picker.
-- Reuse, do not rebuild: `dashboard-popout-window.ts` (per-window state, own bounds key, own partition),
-  `window-bounds-validation.ts` (missing-monitor handling, already pure), `workspace-session-owner-scope.ts`
-  (scope merge, now reached from the wire by `ipc/session-write-scope.ts`).
-
-## Running anything on this host
-
-Three traps, all environment rather than code, each costing a full cycle before being named:
-
-- **`npx` is broken here** — `Class extends value undefined is not a constructor or null`. The
-  e2e `global-setup.ts` and the `test:e2e:*` scripts call `npx electron-vite build`, so they fail
-  before a single spec runs. Build with `pnpm exec electron-vite build --mode e2e`, then run specs
-  with `SKIP_BUILD=1 pnpm exec playwright test …`.
-- **`git` is not on PowerShell's non-interactive PATH**, and the e2e global setup shells out to
-  `git init`. Prepend `C:\Program Files\Git\cmd` before running anything that seeds the test repo.
-- **Native modules need the VS toolchain by hand.** `vswhere` does not see the install, so
-  node-gyp reports "Could not find any Visual Studio installation"; build through
-  `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"`.
-  `windows-native-registry` is the one that matters — `createMainWindow` loads it on every start.
+- `1616a4063 fix(window): stop a second window taking the first one's services` —
+  `window/window-service-ipc-router.ts` registers `app:reload`, the four `macosTccPrompts:*` channels
+  and the native file-drop relay **once** and routes them by sender, with the binding map as the
+  membership test. Eight existing cases that asserted the singleton as the contract were retargeted.
+  RED proven first: 4/4, including that closing window B never gave window A its reload back.
+- `de05686a1 feat(ipc): send global registry changes to every window` — `repos:changed` and
+  `worktrees:changed` now fan out to every registered window, skipping the origin.
+- `2ba8b149d test(runtime): pin the per-window runtime graph as a skipped specification`.
 
 ## Next 3 actions
 
-1. `src/main/window/attach-main-window-services.ts` has no registration latch and every sub-registrar
-   does `removeHandler` first, so a second window **steals** window A's `app:reload`, `updater:*`,
-   `pty:*`, `worktrees:*` and file-drop channels. Split app-global registration from window-coupled
-   registration and route the window-coupled ones by sender.
-2. Introduce the workspace window registry: durable window identity, renderer↔window mapping, and the
-   at-most-one-window-per-worktree claim. Then key `windowBounds`/`windowMaximized` by that identity
-   (they are single keys today, so two live windows trample them on every drag).
-3. `OrcaRuntimeService.attachWindow` (`src/main/runtime/orca-runtime.ts:6413`) ignores a second real
-   window, so window B would render with no runtime graph. Make graph authority a per-worktree claim.
+1. **Blocker B — the whole of it, or none of it.** `OrcaRuntimeService.attachWindow`
+   (`orca-runtime.ts:6413`) falls off the end for a second real window. Five single-consumer
+   mechanisms sit under it (one authority scalar at 26 sites, one notifier slot, one global epoch,
+   one reload fence, ~12 flat graph maps replaced wholesale). The merge is feasible with **no wire
+   change** — `RuntimeSyncedTab`/`RuntimeSyncedLeaf` already carry `worktreeId`. But
+   `beginGraphReload` and `markGraphUnavailable` clear handles, waiters and incarnations globally, so
+   partitioning only tabs and leaves is **half-safe**: window A reloading would still strip window
+   B's live handles. Start by unskipping `runtime/graph-window-ownership.test.ts` — it is the
+   executable spec and fails 4/4 for the four right reasons. Blast radius: 128 test files in
+   `src/main/runtime`.
+2. **Finish Blocker A's redirect half**: SSH (`currentGetMainWindow`, `ssh.ts:73`), remote-workspace
+   (`mainWindowGetter`), the updater status push, and the two directory watchers. Also the three
+   `dialog.showOpenDialog(mainWindow, …)` at `repos.ts:2352/2362/2373` — parenting them to
+   `BrowserWindow.fromWebContents(event.sender)` needs a **value** import of `BrowserWindow` into
+   repos.ts, which risks the electron-mock surface across its test files; give it its own commit.
+3. Only then `window:create`, the Archivo item, the accelerator and localization.
+
+## Baseline — re-measure, never inherit
+
+Measured at `1616a4063` by stashing the working changes: **84 failed / 3249 passed / 47 skipped**
+across 15 files for `src/main/ipc src/main/window`. Earlier notes said 90 and a truncated run said
+81 — three records that never agreed. Keep the **failing-file list**, not just a total. The 15:
+`ephemeral-vm` (8), `ephemeral-vm-provisioned-root-ref` (1), `filesystem-list-files-git-fallback-real`
+(1), `filesystem-watcher-local-unsubscribe` (7), `folder-repo-git-upgrade` (19),
+`local-network-connection-test` (1), `mobile` (1), `native-chat` (3), `pty-codex-account-attribution`
+(2), `pty-daemon-spawn-wsl-runtime` (1), `pty-spawn-env-codex-resume-provenance` (1),
+`worktree-base-directory-event-filter` (6), `worktree-base-directory-watcher` (20),
+`worktree-symlinks` (9), `clipboard-file-copy` (4). Many are Windows environment:
+`EPERM: operation not permitted, symlink` (needs elevation or developer mode) alone accounts for
+`folder-repo-git-upgrade` 19/19.
+
+## Running anything on this host
+
+- **`npx` is broken here.** Build with `pnpm exec electron-vite build --mode e2e`, run specs with
+  `SKIP_BUILD=1 pnpm exec playwright test …`.
+- **`git` is not on PowerShell's non-interactive PATH.** Prepend `C:\Program Files\Git\cmd`.
+- **Native modules need the VS toolchain by hand** (`vcvars64.bat`); vswhere does not see the install.
+- **Never run `grep`/`ls`/`cat` through the Bash tool** — it hangs. Use Grep/Glob/Read. `Grep` scoped
+  to all of `src/main` can time out; scope to a subdirectory.
+- **Capture test output whole** (`*> $log`) and select from the file; never narrow at capture time,
+  and never run a baseline while editing the tree it measures.
 
 ## Start instruction
 
-Read `docs/workspace-window-mode-plan.md`, then `git log --oneline -5`. Continue at action 1. Every
-change lands as its own micro-commit with a RED proven before the fix, and every test run is compared
-against the 90-failure baseline before anything is called a regression.
+Read `docs/workspace-window-mode-plan.md`, then `git log --oneline -8`. Continue at action 1. Every
+change lands as its own micro-commit with a RED proven first, and every run is compared against a
+freshly measured baseline before anything is called a regression.
