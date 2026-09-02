@@ -14,6 +14,7 @@ import {
 } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
 import { createPtyRendererOwnership } from './pty-renderer-ownership'
+import { getPrimaryAppWindowRenderer, isAppWindowRenderer } from './app-window-renderer-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
@@ -2410,8 +2411,20 @@ export function registerPtyHandlers(
   // Why: output belongs to the window that asked for the terminal, not to whichever window
   // registered these handlers last. With one window the fallback is that same window, so this
   // changes nothing until a second one exists.
+  // Why the fallback is resolved rather than captured: these handlers are re-registered per window,
+  // so a closed window can leave its own `mainWindow` behind serving the survivors. An ownerless
+  // PTY delivered into a destroyed window throws on every send; resolve a live one instead.
+  const liveFallbackDeliveryWindow = (): BrowserWindow => {
+    if (!mainWindow.isDestroyed()) {
+      return mainWindow
+    }
+    const renderer = getPrimaryAppWindowRenderer()
+    const window = renderer ? BrowserWindow.fromWebContents(renderer) : null
+    return window && !window.isDestroyed() ? window : mainWindow
+  }
+
   const deliveryWindowFor = (ptyId: string): BrowserWindow =>
-    ptyRendererOwnership.ownerWindowFor(ptyId) ?? mainWindow
+    ptyRendererOwnership.ownerWindowFor(ptyId) ?? liveFallbackDeliveryWindow()
 
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
     if (connectionId) {
@@ -7236,6 +7249,38 @@ export function registerPtyHandlers(
     !mainWindow.isDestroyed() &&
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
 
+  /**
+   * Whether this sender may type into this terminal.
+   *
+   * The gate used to be "is this the window the handlers were registered for", which is wrong in
+   * both directions once a second project window exists: that window cannot write its own
+   * terminals, and the registration window can write everyone's. The second half fails open, so
+   * this is a security boundary and not only a correctness one.
+   *
+   * Admission is by PTY ownership, which is already recorded at spawn from the requesting renderer.
+   * A PTY with no recorded owner keeps the old admission — main spawns terminals itself for
+   * background and runtime-owned work and those arrive with no sender to attribute, so refusing
+   * them would make restored and daemon-adopted terminals unusable. That fallback is deliberately
+   * widened to any registered project window and no further.
+   */
+  const isPtyInputSenderAuthorized = (
+    event: IpcMainEvent | IpcMainInvokeEvent,
+    ptyId: string
+  ): boolean => {
+    const sender = event.sender
+    if (!sender || (typeof sender.isDestroyed === 'function' && sender.isDestroyed())) {
+      return false
+    }
+    const ownerWebContentsId = ptyRendererOwnership.ownerWebContentsIdFor(ptyId)
+    if (ownerWebContentsId !== null) {
+      return ownerWebContentsId === sender.id
+    }
+    return (
+      isAppWindowRenderer(sender.id) ||
+      isPtyWriteEventFromMainWindow(event, mainWindow.webContents)
+    )
+  }
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -7286,7 +7331,7 @@ export function registerPtyHandlers(
   const hostViewportClaimTails = new Map<string, Promise<boolean>>()
 
   ipcMain.on('pty:write', (event, args: unknown) => {
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+    if (!isPtyWritePayload(args) || !isPtyInputSenderAuthorized(event, args.id)) {
       return
     }
     const claimTail = hostViewportClaimTails.get(args.id)
@@ -7297,7 +7342,7 @@ export function registerPtyHandlers(
     writePtyInput(args)
   })
   ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents) || !isPtyWritePayload(args)) {
+    if (!isPtyWritePayload(args) || !isPtyInputSenderAuthorized(event, args.id)) {
       return false
     }
     const claimTail = hostViewportClaimTails.get(args.id)
@@ -7309,9 +7354,9 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:claimViewport')
   ipcMain.on('pty:claimViewport', (event, args: unknown) => {
     if (
-      !isPtyWriteEventFromMainWindow(event, mainWindow.webContents) ||
       !runtime ||
-      !isPtyViewportClaimPayload(args)
+      !isPtyViewportClaimPayload(args) ||
+      !isPtyInputSenderAuthorized(event, args.id)
     ) {
       return
     }

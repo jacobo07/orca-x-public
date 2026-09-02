@@ -50,7 +50,11 @@ import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 import { _resetWslCachesForTests } from '../wsl'
 
 /** The mocked webContents each suite asserts sends against. */
-export type PtyIpcTestWebContents = { on: Mock; send: Mock; removeListener: Mock }
+export type PtyIpcTestWebContents = { id: number; on: Mock; send: Mock; removeListener: Mock }
+
+/** The renderer ids the two stub windows send from — distinct, because input admission is per owner. */
+export const PTY_IPC_TEST_MAIN_WEB_CONTENTS_ID = 1
+export const PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID = 2
 
 /** The mocked BrowserWindow handed to registerPtyHandlers. */
 export type PtyIpcTestMainWindow = {
@@ -77,6 +81,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     isVisible: () => true,
     isMinimized: () => false,
     webContents: {
+      id: PTY_IPC_TEST_MAIN_WEB_CONTENTS_ID,
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn()
@@ -84,7 +89,12 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
   const foreignWindowIpcEvent = {
-    sender: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
+    sender: {
+      id: PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID,
+      on: vi.fn(),
+      send: vi.fn(),
+      removeListener: vi.fn()
+    }
   }
   const envScope = createPtyIpcProcessEnvScope()
 

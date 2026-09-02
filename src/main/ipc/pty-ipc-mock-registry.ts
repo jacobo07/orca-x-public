@@ -47,6 +47,7 @@ export const ensureCodexBackfillRecoveryMock: Mock<() => Promise<void>> = vi.fn(
 
 export type ElectronModuleMock = {
   BrowserWindow: undefined
+  webContents: { fromId: () => null }
   app: { isPackaged: boolean; getPath: Mock; getVersion: () => string }
   powerMonitor: { on: Mock }
   nativeTheme: { shouldUseDarkColors: boolean }
@@ -56,6 +57,10 @@ export type ElectronModuleMock = {
 export const electronModuleMock = (): ElectronModuleMock => ({
   // Why defined-but-undefined: the real OrcaRuntimeService guards BrowserWindow with `?.`; vitest throws on reading exports the mock omits.
   BrowserWindow: undefined,
+  // Why present at all: the app-window renderer registry imports it at module scope to resolve send
+  // targets, and vitest throws on an omitted export the moment that module loads. Resolving to null
+  // is the honest answer here — these suites never construct a real renderer.
+  webContents: { fromId: () => null },
   app: {
     isPackaged: true,
     getPath: getPathMock,
