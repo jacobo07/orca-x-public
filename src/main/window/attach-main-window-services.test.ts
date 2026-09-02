@@ -111,6 +111,7 @@ vi.mock('../macos-tcc-prompt-notice', () => ({
 }))
 
 import { attachMainWindowServices } from './attach-main-window-services'
+import { resetWindowServiceIpcRouterForTest } from './window-service-ipc-router'
 
 type MockFn = ReturnType<typeof vi.fn>
 
@@ -233,6 +234,9 @@ describe('attachMainWindowServices', () => {
     consumePendingTccPromptNoticeMock.mockReset()
     dismissTccPromptNoticeMock.mockReset()
     releasePendingTccPromptNoticeMock.mockReset()
+    // Why: the window-service channels are registered once per process, so resetting the ipcMain
+    // mock without resetting the router leaves later cases observing no registration.
+    resetWindowServiceIpcRouterForTest()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
   })
@@ -259,7 +263,6 @@ describe('attachMainWindowServices', () => {
       { onBeforeRendererReload }
     )
 
-    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
     const reloadHandler = handleMock.mock.calls.find(([channel]) => channel === 'app:reload')?.[1]
     expect(reloadHandler).toBeTypeOf('function')
 
@@ -336,19 +339,20 @@ describe('attachMainWindowServices', () => {
     expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
   })
 
-  it('replaces the TCC handlers when the main window is reattached', () => {
+  it('registers the TCC handlers once and hands the claim to a reattached window', () => {
     attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
     const releaseCount = releasePendingTccPromptNoticeMock.mock.calls.length
     attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
 
+    // Why once: re-registering is what let a second window take these channels from the first.
     for (const channel of [
       'macosTccPrompts:consumePending',
       'macosTccPrompts:acknowledgePending',
       'macosTccPrompts:releasePending',
       'macosTccPrompts:dismiss'
     ]) {
-      expect(removeHandlerMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
-      expect(handleMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
+      expect(removeHandlerMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(0)
+      expect(handleMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(1)
     }
     expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledTimes(releaseCount + 1)
   })
@@ -426,9 +430,13 @@ describe('attachMainWindowServices', () => {
     expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
   })
 
-  it('removes the TCC handlers when the owning window closes', () => {
+  it('releases the TCC claim when the owning window closes and stops answering it', () => {
     const mainWindow = createMainWindow()
+    consumePendingTccPromptNoticeMock.mockReturnValue({ claimId: 1 })
     attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+    const consume = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:consumePending'
+    )?.[1]
 
     removeHandlerMock.mockClear()
     releasePendingTccPromptNoticeMock.mockClear()
@@ -436,36 +444,30 @@ describe('attachMainWindowServices', () => {
       handler()
     }
 
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:consumePending')
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:releasePending')
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:dismiss')
     expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
+    // The channel outlives the window: another window may still be listening on it.
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:consumePending')
+    expect(consume?.({ sender: mainWindow.webContents })).toBeNull()
   })
 
-  it('keeps newer TCC handlers when an older window closes late', () => {
+  it('keeps a newer window answering TCC when an older window closes late', () => {
     const oldWindow = createMainWindow()
     attachMainWindowServices(oldWindow as never, createStore(), createRuntime() as never)
     const oldClosedHandlers = getClosedHandlers(oldWindow.on)
     const newWindow = createMainWindow()
+    newWindow.webContents.id = 2
+    consumePendingTccPromptNoticeMock.mockReturnValue({ claimId: 1 })
     attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
+    const consume = handleMock.mock.calls.find(
+      ([channel]) => channel === 'macosTccPrompts:consumePending'
+    )?.[1]
 
-    removeHandlerMock.mockClear()
     for (const handler of oldClosedHandlers) {
       handler()
     }
-    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:consumePending')
-    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
-    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:releasePending')
-    expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:dismiss')
 
-    for (const handler of getClosedHandlers(newWindow.on)) {
-      handler()
-    }
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:consumePending')
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:releasePending')
-    expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:dismiss')
+    expect(consume?.({ sender: newWindow.webContents })).toEqual({ claimId: 1 })
+    expect(consume?.({ sender: oldWindow.webContents })).toBeNull()
   })
 
   it('ignores app reload requests from non-main webContents', async () => {
@@ -488,7 +490,7 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
   })
 
-  it('ignores app reload requests after the main window is destroyed without rereading webContents', () => {
+  it('ignores app reload requests after the owning window closes, without rereading webContents', () => {
     const onBeforeRendererReload = vi.fn()
     const mainWindow = createMainWindow()
     const mainWebContents = mainWindow.webContents
@@ -503,6 +505,9 @@ describe('attachMainWindowServices', () => {
     )
 
     const reloadHandler = handleMock.mock.calls.find(([channel]) => channel === 'app:reload')?.[1]
+    for (const handler of getClosedHandlers(mainWindow.on)) {
+      handler()
+    }
     mainWindow.isDestroyed?.mockReturnValue(true)
     Object.defineProperty(mainWindow, 'webContents', {
       get: () => {
@@ -537,12 +542,13 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
   })
 
-  it('removes the app reload IPC handler when the owning window closes', () => {
+  it('stops reloading a closed window while the reload channel survives', () => {
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
     mainWindow.on = mainWindowOnMock
 
     attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+    const reloadHandler = handleMock.mock.calls.find(([channel]) => channel === 'app:reload')?.[1]
 
     removeHandlerMock.mockClear()
     const closedHandlers = getClosedHandlers(mainWindowOnMock)
@@ -550,11 +556,14 @@ describe('attachMainWindowServices', () => {
     for (const handler of closedHandlers) {
       handler()
     }
+    reloadHandler?.({ sender: mainWindow.webContents })
 
-    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
+    expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
+    // Removing the channel is what used to unbind whichever window was still open.
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('app:reload')
   })
 
-  it('keeps a newer app reload handler when an older window closes late', () => {
+  it('keeps a newer window reloadable when an older window closes late', () => {
     const oldWindowOnMock = vi.fn()
     const oldWindow = createMainWindow()
     oldWindow.on = oldWindowOnMock
@@ -563,20 +572,17 @@ describe('attachMainWindowServices', () => {
 
     const newWindowOnMock = vi.fn()
     const newWindow = createMainWindow()
+    newWindow.webContents.id = 2
     newWindow.on = newWindowOnMock
     attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
+    const reloadHandler = handleMock.mock.calls.find(([channel]) => channel === 'app:reload')?.[1]
 
-    removeHandlerMock.mockClear()
     for (const handler of oldClosedHandlers) {
       handler()
     }
+    reloadHandler?.({ sender: newWindow.webContents })
 
-    expect(removeHandlerMock).not.toHaveBeenCalledWith('app:reload')
-
-    for (const handler of getClosedHandlers(newWindowOnMock)) {
-      handler()
-    }
-    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
+    expect(newWindow.webContents.reload).toHaveBeenCalledTimes(1)
   })
 
   it('only allows the explicit permission allowlist', async () => {
@@ -630,9 +636,10 @@ describe('attachMainWindowServices', () => {
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
   })
 
-  it('removes the native file-drop relay when the main window closes', () => {
+  it('stops relaying file drops from a closed window while the listener survives', () => {
     const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow({ send: vi.fn() })
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
     mainWindow.on = mainWindowOnMock
 
     attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
@@ -640,14 +647,16 @@ describe('attachMainWindowServices', () => {
     const channel = 'terminal:file-dropped-from-preload'
     const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
     expect(relayHandler).toBeTypeOf('function')
-    expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
+    // Clearing every listener on the channel is what used to strand a surviving window.
+    expect(removeAllListenersMock).not.toHaveBeenCalledWith(channel)
 
-    const closedHandlers = getClosedHandlers(mainWindowOnMock)
-    for (const handler of closedHandlers) {
+    for (const handler of getClosedHandlers(mainWindowOnMock)) {
       handler()
     }
+    relayHandler?.({ sender: mainWindow.webContents }, { paths: ['/tmp/a'], target: 'editor' })
 
-    expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(removeListenerMock).not.toHaveBeenCalledWith(channel, relayHandler)
   })
 
   it('relays native file drops only from the owning renderer webContents', () => {

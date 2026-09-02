@@ -8,12 +8,6 @@ import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/up
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
-import {
-  acknowledgePendingTccPromptNotice,
-  consumePendingTccPromptNotice,
-  dismissTccPromptNotice,
-  releasePendingTccPromptNotice
-} from '../macos-tcc-prompt-notice'
 import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -54,7 +48,6 @@ import type {
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
-import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
@@ -67,6 +60,11 @@ import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
+import {
+  bindWindowServiceIpc,
+  releaseTccPromptClaimFor,
+  type WindowServiceHandlers
+} from './window-service-ipc-router'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -77,10 +75,6 @@ export function ensureAutoUpdaterConfigured(): void {
   pendingAutoUpdaterSetup?.()
 }
 
-let appReloadHandlerTokenCounter = 0
-let activeAppReloadHandlerToken: number | null = null
-let tccPromptHandlerTokenCounter = 0
-let activeTccPromptHandlerToken: number | null = null
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
 
@@ -106,7 +100,20 @@ export function attachMainWindowServices(
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
 ): void {
-  registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
+  const mainWebContents = mainWindow.webContents
+  const windowServiceHandlers: WindowServiceHandlers = {}
+  if (options?.onBeforeRendererReload) {
+    windowServiceHandlers.onBeforeRendererReload = options.onBeforeRendererReload
+  }
+  const unbindWindowServiceIpc = bindWindowServiceIpc(mainWebContents.id, windowServiceHandlers)
+  // Why: a renderer reload or crash destroys the claim's callbacks without closing the window.
+  mainWebContents.on('did-start-loading', () => {
+    if (mainWebContents.isLoadingMainFrame()) {
+      releaseTccPromptClaimFor(mainWebContents.id)
+    }
+  })
+  mainWebContents.on('render-process-gone', () => releaseTccPromptClaimFor(mainWebContents.id))
+  mainWindow.on('closed', unbindWindowServiceIpc)
   registerRepoHandlers(mainWindow, store)
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
@@ -157,8 +164,6 @@ export function attachMainWindowServices(
   }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
-  registerFileDropRelay(mainWindow)
-  registerTccPromptNoticeHandlers(mainWindow)
   // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
   let updaterSetupDone = false
   const setupAutoUpdaterDeferred = (): void => {
@@ -227,93 +232,6 @@ export function attachMainWindowServices(
   mainWindow.on('closed', () => {
     // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
     browserManager.unregisterAll()
-  })
-}
-
-function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
-  const handlerToken = ++tccPromptHandlerTokenCounter
-  if (activeTccPromptHandlerToken !== null) {
-    releasePendingTccPromptNotice(activeTccPromptHandlerToken)
-  }
-  activeTccPromptHandlerToken = handlerToken
-  const consumeChannel = 'macosTccPrompts:consumePending'
-  const acknowledgeChannel = 'macosTccPrompts:acknowledgePending'
-  const releaseChannel = 'macosTccPrompts:releasePending'
-  const dismissChannel = 'macosTccPrompts:dismiss'
-  ipcMain.removeHandler(consumeChannel)
-  ipcMain.removeHandler(acknowledgeChannel)
-  ipcMain.removeHandler(releaseChannel)
-  ipcMain.removeHandler(dismissChannel)
-  const mainWebContents = mainWindow.webContents
-  const releaseOwnerClaim = (): void => releasePendingTccPromptNotice(handlerToken)
-  // Why: a renderer reload/crash destroys its claim callbacks without closing the BrowserWindow.
-  mainWebContents.on('did-start-loading', () => {
-    if (mainWebContents.isLoadingMainFrame()) {
-      releaseOwnerClaim()
-    }
-  })
-  mainWebContents.on('render-process-gone', releaseOwnerClaim)
-  const ownsNotice = (event: IpcMainInvokeEvent): boolean =>
-    !mainWindow.isDestroyed() && !mainWebContents.isDestroyed() && event.sender === mainWebContents
-  ipcMain.handle(consumeChannel, (event) =>
-    ownsNotice(event) ? consumePendingTccPromptNotice(handlerToken) : null
-  )
-  ipcMain.handle(acknowledgeChannel, (event, claimId: number) => {
-    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
-      acknowledgePendingTccPromptNotice(handlerToken, claimId)
-    }
-  })
-  ipcMain.handle(releaseChannel, (event, claimId: number) => {
-    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
-      releasePendingTccPromptNotice(handlerToken, claimId)
-    }
-  })
-  ipcMain.handle(dismissChannel, (event) => {
-    if (ownsNotice(event)) {
-      dismissTccPromptNotice()
-    }
-  })
-  // Why: macOS can stay windowless; drop stale closures without letting an old close clear newer handlers.
-  mainWindow.on('closed', () => {
-    if (activeTccPromptHandlerToken !== handlerToken) {
-      return
-    }
-    releaseOwnerClaim()
-    ipcMain.removeHandler(consumeChannel)
-    ipcMain.removeHandler(acknowledgeChannel)
-    ipcMain.removeHandler(releaseChannel)
-    ipcMain.removeHandler(dismissChannel)
-    activeTccPromptHandlerToken = null
-  })
-}
-
-function registerAppReloadHandler(
-  mainWindow: BrowserWindow,
-  onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
-): void {
-  // Why: the process-global IPC handler can outlive the window, so guard both lifetimes before using the WebContents.
-  const handlerToken = ++appReloadHandlerTokenCounter
-  activeAppReloadHandlerToken = handlerToken
-  const mainWebContents = mainWindow.webContents
-  ipcMain.removeHandler('app:reload')
-  ipcMain.handle('app:reload', (event) => {
-    if (
-      mainWindow.isDestroyed() ||
-      mainWebContents.isDestroyed() ||
-      event.sender !== mainWebContents
-    ) {
-      return
-    }
-    onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
-    mainWebContents.reload()
-  })
-  mainWindow.on('closed', () => {
-    if (activeAppReloadHandlerToken !== handlerToken) {
-      return
-    }
-    // Why: macOS keeps the process alive with no window; this handler would otherwise retain the closed window until reopen.
-    ipcMain.removeHandler('app:reload')
-    activeAppReloadHandlerToken = null
   })
 }
 
@@ -526,32 +444,6 @@ function registerRuntimeWindowLifecycle(
       runtime.setNotifier(null)
       activeRuntimeNotifierToken = null
     }
-  })
-}
-
-function registerFileDropRelay(mainWindow: BrowserWindow): void {
-  const channel = 'terminal:file-dropped-from-preload'
-  const mainWebContents = mainWindow.webContents
-  ipcMain.removeAllListeners(channel)
-  const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
-    if (
-      mainWindow.isDestroyed() ||
-      mainWebContents.isDestroyed() ||
-      event.sender !== mainWebContents
-    ) {
-      return
-    }
-    if (!isNativeFileDropPayload(args)) {
-      return
-    }
-
-    // Why: one IPC event per drop gesture so the renderer gets the full path batch without timer-based reconstruction.
-    mainWindow.webContents.send('terminal:file-drop', args)
-  }
-  ipcMain.on(channel, relayFileDrop)
-  mainWindow.on('closed', () => {
-    // Why: macOS keeps the process alive after window close; drop the closure so the destroyed window isn't retained.
-    ipcMain.removeListener(channel, relayFileDrop)
   })
 }
 
