@@ -19,15 +19,27 @@ export type CommandProfileLaunchResult =
   | { ok: true; tabId: string }
   | Extract<CommandProfileResolution, { ok: false }>
 
+/**
+ * The last segment of a path, split on both separators.
+ *
+ * Both, because the worktree may live on a remote POSIX host while this client runs on Windows —
+ * the client's own path module would pick the wrong one. The character class previously held only
+ * `/`, which the comment already said was not enough: a local Windows path never split, so the
+ * "basename" was the whole path.
+ */
+function lastPathSegment(path: string): string | null {
+  // findLast, not find: a trailing separator leaves an empty last segment, so the basename is the
+  // last non-empty one, never the first.
+  return path.split(/[\\/]/).findLast(Boolean) ?? null
+}
+
 export function resolveWorkspaceTokenContext(worktreeId: string): WorkspaceTokenContext {
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const path = worktree?.path?.trim() || null
   return {
     workspaceFolder: path,
-    // Split on both separators: the worktree may live on a remote POSIX host while this client runs
-    // on Windows, so the client's own path module would pick the wrong one.
-    workspaceFolderBasename: path ? (path.split(/[\/]/).filter(Boolean).pop() ?? null) : null
+    workspaceFolderBasename: path ? lastPathSegment(path) : null
   }
 }
 
