@@ -76,6 +76,57 @@ describe('workspace window registry', () => {
     })
   })
 
+  describe('adopting a persisted identity', () => {
+    it('restores a window under its recorded id, sequence and project', () => {
+      registerWorkspaceWindow({
+        browserWindowId: 1,
+        rendererWebContentsId: 11,
+        windowId: 'window-7',
+        sequence: 7,
+        binding: { repoId: REPO, worktreeId: WORKTREE_A }
+      })
+
+      expect(getWorkspaceWindowForWorktree(WORKTREE_A)?.windowId).toBe('window-7')
+      expect(resolveWorkspaceWindowStartup(11)).toEqual({
+        worktreeId: WORKTREE_A,
+        restoreSession: true
+      })
+    })
+
+    it('mints past an adopted sequence so a later window cannot collide with it', () => {
+      registerWorkspaceWindow({
+        browserWindowId: 1,
+        rendererWebContentsId: 11,
+        windowId: 'window-7',
+        sequence: 7
+      })
+
+      const fresh = registerWindow(2, 22)
+
+      // A counter that restarted at 1 would mint window-1 with a lower sequence than the restored
+      // window, quietly making the newest window "first" and handing it the saved session.
+      expect(fresh).not.toBe('window-7')
+      expect(getWorkspaceWindow(fresh)?.sequence).toBeGreaterThan(7)
+      expect(resolveWorkspaceWindowStartup(22)).toEqual({ worktreeId: null, restoreSession: false })
+    })
+
+    it('does not let an adopted binding steal a worktree another window already holds', () => {
+      const first = registerWindow(1, 11)
+      claimWorkspaceForWindow(first, { repoId: REPO, worktreeId: WORKTREE_A })
+
+      registerWorkspaceWindow({
+        browserWindowId: 2,
+        rendererWebContentsId: 22,
+        windowId: 'window-9',
+        sequence: 9,
+        binding: { repoId: REPO, worktreeId: WORKTREE_A }
+      })
+
+      expect(getWorkspaceWindowForWorktree(WORKTREE_A)?.windowId).toBe(first)
+      expect(getOwnedWorktreeIds('window-9')).toEqual([])
+    })
+  })
+
   it('mints a distinct identity per window', () => {
     const first = registerWindow(1, 11)
     const second = registerWindow(2, 22)

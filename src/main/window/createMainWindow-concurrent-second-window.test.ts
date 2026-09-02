@@ -27,7 +27,11 @@ import { ipcMain } from 'electron'
 import { createMainWindow } from './createMainWindow'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import { resetWindowChromeIpcRouterForTest } from './window-chrome-ipc-router'
-import { resetWorkspaceWindowRegistryForTest } from './workspace-window-registry'
+import {
+  getWorkspaceWindowForWorktree,
+  listWorkspaceWindows,
+  resetWorkspaceWindowRegistryForTest
+} from './workspace-window-registry'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
 
 type WindowDouble = {
@@ -256,5 +260,59 @@ describe('createMainWindow with a second window alive', () => {
     first.events.maximize?.()
 
     expect(updateUI).toHaveBeenCalledWith({ windowMaximized: true })
+  })
+
+  it('reopens a saved window under its own identity, project and geometry', () => {
+    const restored = makeWindowDouble(11)
+    browserWindowMock.mockImplementationOnce(function () {
+      return restored.instance
+    })
+    const onTopologyChanged = vi.fn()
+
+    createMainWindow(null, {
+      deferLoad: true,
+      onTopologyChanged,
+      restore: {
+        windowId: 'window-4',
+        sequence: 4,
+        binding: { repoId: 'repo-1', worktreeId: 'repo-1::/repos/one/feature' },
+        bounds: { x: 240, y: 160, width: 1100, height: 760 },
+        maximized: false
+      }
+    })
+
+    expect(getWorkspaceWindowForWorktree('repo-1::/repos/one/feature')?.windowId).toBe('window-4')
+    // The recorded rect, not a cascade offset: cascading a restored window would walk the whole
+    // saved set a little further across the screen on every relaunch.
+    expect(browserWindowMock.mock.calls[0][0]).toMatchObject({
+      x: 240,
+      y: 160,
+      width: 1100,
+      height: 760
+    })
+    expect(onTopologyChanged).toHaveBeenCalled()
+  })
+
+  it('re-records the topology when a window closes, so a deliberate close is forgotten', () => {
+    const first = makeWindowDouble(11)
+    const second = makeWindowDouble(22)
+    browserWindowMock
+      .mockImplementationOnce(function () {
+        return first.instance
+      })
+      .mockImplementationOnce(function () {
+        return second.instance
+      })
+    const onTopologyChanged = vi.fn()
+
+    createMainWindow(null, { deferLoad: true, onTopologyChanged })
+    createMainWindow(null, { deferLoad: true, onTopologyChanged })
+    onTopologyChanged.mockClear()
+
+    second.events.closed?.()
+
+    // Fires after the registry drops the window, so the capture the host takes here is the survivors.
+    expect(onTopologyChanged).toHaveBeenCalledTimes(1)
+    expect(listWorkspaceWindows()).toHaveLength(1)
   })
 })

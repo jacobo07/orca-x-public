@@ -63,20 +63,38 @@ export function registerWorkspaceWindow(attributes: {
   browserWindowId: number
   rendererWebContentsId: number
   windowId?: WorkspaceWindowId
+  /** Restore only: the recorded mint order, so a relaunched window keeps the position it had. */
+  sequence?: number
+  /** Restore only: the project this window owned. Refused, not transferred, if another window holds it. */
+  binding?: WorkspaceWindowBinding | null
 }): WorkspaceWindowRecord {
   const minted = attributes.windowId ? null : mintWorkspaceWindow()
   const windowId = attributes.windowId ?? minted!.windowId
   const existing = recordsByWindowId.get(windowId)
+  const sequence =
+    existing?.sequence ?? minted?.sequence ?? attributes.sequence ?? nextWindowSequence++
+  // Why: a restored window carries a sequence this run never minted, so the counter has to move past
+  // it. Left alone, the next fresh window would mint a *lower* sequence than a restored one and
+  // quietly become "first" — the window that restores the saved session.
+  if (sequence >= nextWindowSequence) {
+    nextWindowSequence = sequence + 1
+  }
   const record: WorkspaceWindowRecord = {
     windowId,
     browserWindowId: attributes.browserWindowId,
     rendererWebContentsId: attributes.rendererWebContentsId,
     // Why preserved on re-register: a reload replaces the renderer, not the window, and a window
     // that became "first" by being registered again would start restoring another window's project.
-    sequence: existing?.sequence ?? minted?.sequence ?? nextWindowSequence++,
+    sequence,
     binding: existing?.binding ?? null
   }
   recordsByWindowId.set(windowId, record)
+  // Why through the claim rather than by assignment: a recorded binding is a request like any other,
+  // and the one-worktree-one-window rule has to hold across a restart too. A duplicate in the record
+  // leaves this window unbound on the launcher instead of two windows publishing one worktree.
+  if (!record.binding && attributes.binding) {
+    claimWorkspaceForWindow(windowId, attributes.binding)
+  }
   return record
 }
 

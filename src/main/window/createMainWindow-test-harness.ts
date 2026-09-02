@@ -54,6 +54,9 @@ export type ElectronModuleMock = {
   screen: {
     getPrimaryDisplay: () => { workAreaSize: { width: number; height: number } }
     getDisplayMatching: () => { scaleFactor: number }
+    /** Without this, rectHasVisibleAreaOnAnyDisplay throws and catches to false, so every test using
+     *  this harness silently rejects persisted bounds — making geometry restore untestable. */
+    getAllDisplays: () => { workArea: { x: number; y: number; width: number; height: number } }[]
   }
   shell: { openExternal: MainWindowSpy }
 }
@@ -80,7 +83,8 @@ export function electronModuleMock(): ElectronModuleMock {
     powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
     screen: {
       getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
-      getDisplayMatching: () => ({ scaleFactor: 2 })
+      getDisplayMatching: () => ({ scaleFactor: 2 }),
+      getAllDisplays: () => [{ workArea: { x: 0, y: 0, width: 1440, height: 900 } }]
     },
     shell: { openExternal: openExternalMock }
   }

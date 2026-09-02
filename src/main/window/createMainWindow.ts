@@ -63,6 +63,7 @@ import {
   registerWorkspaceWindow,
   unregisterWorkspaceWindow
 } from './workspace-window-registry'
+import type { PersistedWindowTopologyEntry } from '../../shared/window-topology-types'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
@@ -252,6 +253,15 @@ type CreateMainWindowOptions = {
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   /** Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore re-attaches (#5787). */
   onBeforeRecoveryReload?: (webContentsId: number) => void
+  /**
+   * A window being reopened from the saved topology: its recorded identity, project and geometry.
+   *
+   * Present only on a restore. The binding is claimed rather than assigned, so the
+   * one-worktree-one-window rule still decides — a recorded duplicate opens on the launcher.
+   */
+  restore?: PersistedWindowTopologyEntry
+  /** Called whenever this window's presence or geometry changes, so the host can re-record the topology. */
+  onTopologyChanged?: () => void
 }
 
 export function loadMainWindow(mainWindow: BrowserWindow): void {
@@ -268,11 +278,14 @@ export function createMainWindow(
 ): BrowserWindow {
   // Why: windowBounds/windowMaximized are single keys, so two live windows would overwrite each
   // other on every drag. Exactly one window reads and writes them — the first one open — and the
-  // rest cascade off it. Per-window geometry needs a per-window durable identity, which arrives
-  // with window-topology persistence; until then a second window deliberately remembers nothing
-  // rather than remembering the wrong thing for everyone.
+  // rest cascade off it. A window reopened from the saved topology carries its own recorded
+  // geometry instead, which is the per-window identity those single keys never had.
   const isGeometryAuthority = listWorkspaceWindows().length === 0
-  const rawSavedBounds = isGeometryAuthority ? store?.getUI().windowBounds : undefined
+  const rawSavedBounds = opts?.restore
+    ? (opts.restore.bounds ?? undefined)
+    : isGeometryAuthority
+      ? store?.getUI().windowBounds
+      : undefined
   // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
@@ -287,7 +300,11 @@ export function createMainWindow(
       rawSavedBounds
     )
   }
-  const savedMaximized = isGeometryAuthority ? (store?.getUI().windowMaximized ?? false) : false
+  const savedMaximized = opts?.restore
+    ? opts.restore.maximized
+    : isGeometryAuthority
+      ? (store?.getUI().windowMaximized ?? false)
+      : false
   // Why: on first launch fill the primary display work area so the window feels spacious without maximize(); saved bounds win later.
   const defaultBounds = (() => {
     try {
@@ -298,8 +315,11 @@ export function createMainWindow(
     }
   })()
   // Why cascade rather than reuse: an additional window opened at the same rect lands exactly on the
-  // one already there, and the user cannot tell that a second window appeared at all.
-  const cascadeBounds = isGeometryAuthority ? undefined : nextCascadeBounds(defaultBounds)
+  // one already there, and the user cannot tell that a second window appeared at all. A restored
+  // window is exempt — it has a remembered rect of its own, and cascading off it would walk the
+  // whole set across the screen a little further on every relaunch.
+  const cascadeBounds =
+    isGeometryAuthority || savedBounds ? undefined : nextCascadeBounds(defaultBounds)
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
@@ -356,8 +376,16 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
   const workspaceWindow = registerWorkspaceWindow({
     browserWindowId: mainWindow.id,
-    rendererWebContentsId
+    rendererWebContentsId,
+    ...(opts?.restore
+      ? {
+          windowId: opts.restore.windowId,
+          sequence: opts.restore.sequence,
+          binding: opts.restore.binding
+        }
+      : {})
   })
+  opts?.onTopologyChanged?.()
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
@@ -443,9 +471,6 @@ export function createMainWindow(
   // Why: teardown still emits resize/move/unmaximize at near-min bounds; freeze persistence once closing so they can't clobber the saved size.
   let windowClosing = false
   const saveBounds = (): void => {
-    if (!isGeometryAuthority) {
-      return
-    }
     if (boundsTimer) {
       clearTimeout(boundsTimer)
     }
@@ -454,20 +479,32 @@ export function createMainWindow(
       if (windowClosing || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
         return
       }
+      // Why every window notifies but only the authority writes the single keys: the topology
+      // records geometry per window, which is what the shared windowBounds/windowMaximized pair
+      // never could. The pair stays for the pre-topology restore path and for a profile with no
+      // topology recorded yet.
       // Why: persist windowMaximized and windowBounds atomically; the near-min guard must not leave them a mismatched pair.
       const isMaximized = mainWindow.isMaximized()
       if (isMaximized) {
-        store?.updateUI({ windowMaximized: true })
+        if (isGeometryAuthority) {
+          store?.updateUI({ windowMaximized: true })
+        }
+        opts?.onTopologyChanged?.()
         return
       }
       const bounds = mainWindow.getBounds()
       // Why: never persist shrink-to-min bounds (teardown race past the freeze, PR #1269); fall back to defaultBounds next launch.
       if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
         console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
-        store?.updateUI({ windowMaximized: false })
+        if (isGeometryAuthority) {
+          store?.updateUI({ windowMaximized: false })
+        }
         return
       }
-      store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+      if (isGeometryAuthority) {
+        store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+      }
+      opts?.onTopologyChanged?.()
     }, 500)
   }
   mainWindow.on('resize', saveBounds)
@@ -491,6 +528,7 @@ export function createMainWindow(
     if (isGeometryAuthority) {
       store?.updateUI({ windowMaximized: true })
     }
+    opts?.onTopologyChanged?.()
     mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
@@ -498,6 +536,7 @@ export function createMainWindow(
       return
     }
     mainWindow.webContents.send('window:maximize-changed', false)
+    opts?.onTopologyChanged?.()
     if (!isGeometryAuthority) {
       return
     }
@@ -1221,6 +1260,9 @@ export function createMainWindow(
   mainWindow.on('closed', () => {
     // Releases this window's workspace claim, so the project it held can open in another window.
     unregisterWorkspaceWindow(workspaceWindow.windowId)
+    // Why here and not on 'close': a deliberate close should be forgotten, and the publish gate
+    // declines while quitting — so a quit leaves the set intact and a close removes exactly one.
+    opts?.onTopologyChanged?.()
     // Why: the dashboard pop-out is a companion of the main window — close it
     // alongside so it never orphans as a lone window after the app window is
     // gone (e.g. on macOS where the app stays alive after the window closes).

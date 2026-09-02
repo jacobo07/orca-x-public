@@ -12,7 +12,16 @@ import {
   type Tray,
   type WebContents
 } from 'electron'
-import { getWorkspaceWindowForWorktree } from './window/workspace-window-registry'
+import {
+  getWorkspaceWindowForWorktree,
+  listWorkspaceWindows
+} from './window/workspace-window-registry'
+import {
+  publishWindowTopology,
+  readWindowTopologyRestorePlan
+} from './window/window-topology-persistence'
+import type { LiveWindowTopologyEntry } from './window/window-topology'
+import type { PersistedWindowTopologyEntry } from '../shared/window-topology-types'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -1233,6 +1242,43 @@ async function prepareCodexSessionResumeForLaunch(args: {
     : preparation
 }
 
+/**
+ * The live window set as the topology records it.
+ *
+ * A maximized window's `getBounds()` is the maximized rect, which would restore as a normal window
+ * filling the screen and never un-maximize back to anything. `getNormalBounds()` is the rect the
+ * user actually sized, which is what "restore" has to mean.
+ */
+function liveWindowTopologyEntries(): LiveWindowTopologyEntry[] {
+  return listWorkspaceWindows().flatMap((record) => {
+    const browserWindow = BrowserWindow.fromId(record.browserWindowId)
+    if (!browserWindow || browserWindow.isDestroyed()) {
+      return []
+    }
+    const maximized = browserWindow.isMaximized()
+    return [
+      {
+        windowId: record.windowId,
+        sequence: record.sequence,
+        binding: record.binding,
+        bounds: maximized ? browserWindow.getNormalBounds() : browserWindow.getBounds(),
+        maximized
+      }
+    ]
+  })
+}
+
+function recordWindowTopology(): void {
+  publishWindowTopology({
+    store,
+    listLiveWindows: liveWindowTopologyEntries,
+    // Why both flags: a normal quit sets isQuitting, an update relaunch does not go through it, and
+    // either way every window closes in turn — which is exactly the sequence that would otherwise
+    // publish an empty set over the one we mean to reopen.
+    isQuitting: () => isQuitting || isQuittingForUpdate()
+  })
+}
+
 // Why: restore the window the close handler may have hidden to tray, or reopen it (dock-reactivation style) if fully torn down.
 function showMainWindowFromTray(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1336,7 +1382,9 @@ function agentStatusRenderer(worktreeId: string | null | undefined): WebContents
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
 }
 
-function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+function openMainWindow(
+  options: { revealOnDidFinishLoad?: boolean; restore?: PersistedWindowTopologyEntry } = {}
+): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
@@ -1426,6 +1474,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     },
     deferLoad: true,
     ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
+    ...(options.restore ? { restore: options.restore } : {}),
+    onTopologyChanged: recordWindowTopology,
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -1513,6 +1563,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       onOpenNewWindow: () => {
         openMainWindow({ revealOnDidFinishLoad: true })
       },
+      onWindowTopologyChanged: recordWindowTopology,
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
       prepareAiVaultSessionResume: (args) =>
@@ -3220,8 +3271,21 @@ void app.whenReady().then(async () => {
   if (!desktopRuntimeRpc) {
     throw new Error('runtime_rpc_unavailable')
   }
+  // Why read before the first window opens: the first window has to adopt the first recorded
+  // identity, and identity is decided at registration. Reading afterwards would leave window one
+  // freshly minted and every restored id shifted by one.
+  //
+  // Why worktreeExists is unconditional: main does not know which worktrees exist at startup — they
+  // are discovered per repo by the renderer through git. A binding whose worktree has since gone
+  // lands on the launcher anyway, because hydration finds nothing to restore. The rule that matters
+  // for corruption, one worktree to one window, is enforced regardless.
+  const savedWindowTopology = desktopWindow
+    ? null
+    : readWindowTopologyRestorePlan({ store, worktreeExists: () => true })
   const [win, runtimeRpcStartResult] = await Promise.all([
-    Promise.resolve(desktopWindow ?? openMainWindow()),
+    Promise.resolve(
+      desktopWindow ?? openMainWindow(savedWindowTopology ? { restore: savedWindowTopology[0] } : {})
+    ),
     shellPathReady
       .then(() => desktopRuntimeRpc.start())
       .then(
@@ -3234,6 +3298,19 @@ void app.whenReady().then(async () => {
   ])
   if (!runtimeRpcStartResult.ok) {
     void showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
+  }
+
+  // Why after the first window rather than beside it: these windows reveal on load, and opening
+  // them in parallel with the one the user is waiting for would put four cold renderers on the
+  // startup path instead of one. Why reveal at all: a restored window that never appears is
+  // indistinguishable from one that was lost.
+  for (const entry of savedWindowTopology?.slice(1) ?? []) {
+    try {
+      openMainWindow({ revealOnDidFinishLoad: true, restore: entry })
+    } catch (err) {
+      // One window failing to reopen must not cost the rest of the set.
+      console.warn('[window] Could not reopen a saved workspace window:', entry.windowId, err)
+    }
   }
 
   const cloudAuth = getOrcaCloudAuthConfig()

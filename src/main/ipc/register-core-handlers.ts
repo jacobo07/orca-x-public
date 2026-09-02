@@ -97,6 +97,8 @@ let registered = false
 type CoreHandlerLifecycleOptions = {
   /** Open another project window. Absent in headless serve, where there is no window to open. */
   onOpenNewWindow?: () => void
+  /** Re-record the saved window set after a claim or release changes which project a window owns. */
+  onWindowTopologyChanged?: () => void
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
@@ -200,7 +202,10 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store)
-  registerWorkspaceWindowClaimHandlers({ openNewWindow: lifecycleOptions.onOpenNewWindow })
+  registerWorkspaceWindowClaimHandlers({
+    openNewWindow: lifecycleOptions.onOpenNewWindow,
+    onTopologyChanged: lifecycleOptions.onWindowTopologyChanged
+  })
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()

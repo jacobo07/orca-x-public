@@ -23,7 +23,11 @@ function isClaimRequest(value: unknown): value is WorkspaceWindowClaimRequest {
  * behalf — a renderer cannot name another window, and nothing here trusts a window id from the wire.
  */
 export function registerWorkspaceWindowClaimHandlers(
-  options: { openNewWindow?: () => void } = {}
+  options: {
+    openNewWindow?: () => void
+    /** A binding change is a topology change: which project each window owns is most of what a relaunch restores. */
+    onTopologyChanged?: () => void
+  } = {}
 ): void {
   ipcMain.removeHandler('window:claimWorkspace')
   ipcMain.removeHandler('window:releaseWorkspace')
@@ -64,6 +68,9 @@ export function registerWorkspaceWindowClaimHandlers(
       }
       return { outcome: 'owned-by-another-window' }
     }
+    if (result.outcome === 'claimed') {
+      options.onTopologyChanged?.()
+    }
     return {
       outcome: result.outcome === 'already-owned-by-this-window' ? 'already-owned' : 'claimed'
     }
@@ -73,6 +80,7 @@ export function registerWorkspaceWindowClaimHandlers(
     const requester = getWorkspaceWindowForRenderer(event.sender.id)
     if (requester) {
       releaseWorkspaceForWindow(requester.windowId)
+      options.onTopologyChanged?.()
     }
   })
 }
