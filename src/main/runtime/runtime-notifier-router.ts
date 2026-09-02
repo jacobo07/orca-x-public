@@ -58,24 +58,32 @@ export function createRuntimeNotifierRouter(
 
   if (implemented('worktreeBaseStatus')) {
     optional.worktreeBaseStatus = (...args) => {
-      for (const n of targets.all()) n.worktreeBaseStatus?.(...args)
+      for (const n of targets.all()) {
+        n.worktreeBaseStatus?.(...args)
+      }
     }
   }
   if (implemented('worktreeRemoteBranchConflict')) {
     optional.worktreeRemoteBranchConflict = (...args) => {
-      for (const n of targets.all()) n.worktreeRemoteBranchConflict?.(...args)
+      for (const n of targets.all()) {
+        n.worktreeRemoteBranchConflict?.(...args)
+      }
     }
   }
   if (implemented('resolveLegacyWorkerTerminalRecovery')) {
     // Why every window: a pane key is not a graph node, so there is no owner to resolve it to.
     optional.resolveLegacyWorkerTerminalRecovery = (...args) => {
-      for (const n of targets.all()) n.resolveLegacyWorkerTerminalRecovery?.(...args)
+      for (const n of targets.all()) {
+        n.resolveLegacyWorkerTerminalRecovery?.(...args)
+      }
     }
   }
   if (implemented('browserDriverChanged')) {
     // Why every window: a browser page id is not a graph node either.
     optional.browserDriverChanged = (...args) => {
-      for (const n of targets.all()) n.browserDriverChanged?.(...args)
+      for (const n of targets.all()) {
+        n.browserDriverChanged?.(...args)
+      }
     }
   }
   if (implemented('revealTerminalSession')) {
@@ -84,37 +92,51 @@ export function createRuntimeNotifierRouter(
   }
   if (implemented('focusEditorTab')) {
     optional.focusEditorTab = (...args) => {
-      for (const n of targets.forWorktree(args[1])) n.focusEditorTab?.(...args)
+      for (const n of targets.forWorktree(args[1])) {
+        n.focusEditorTab?.(...args)
+      }
     }
   }
   if (implemented('closeSessionTab')) {
     optional.closeSessionTab = (...args) => {
-      for (const n of targets.forWorktree(args[1])) n.closeSessionTab?.(...args)
+      for (const n of targets.forWorktree(args[1])) {
+        n.closeSessionTab?.(...args)
+      }
     }
   }
   if (implemented('moveSessionTab')) {
     optional.moveSessionTab = (...args) => {
-      for (const n of targets.forWorktree(args[0])) n.moveSessionTab?.(...args)
+      for (const n of targets.forWorktree(args[0])) {
+        n.moveSessionTab?.(...args)
+      }
     }
   }
   if (implemented('openFile')) {
     optional.openFile = (...args) => {
-      for (const n of targets.forWorktree(args[0])) n.openFile?.(...args)
+      for (const n of targets.forWorktree(args[0])) {
+        n.openFile?.(...args)
+      }
     }
   }
   if (implemented('openDiff')) {
     optional.openDiff = (...args) => {
-      for (const n of targets.forWorktree(args[0])) n.openDiff?.(...args)
+      for (const n of targets.forWorktree(args[0])) {
+        n.openDiff?.(...args)
+      }
     }
   }
   if (implemented('resumeSleepingAgents')) {
     optional.resumeSleepingAgents = (...args) => {
-      for (const n of targets.forWorktree(args[0])) n.resumeSleepingAgents?.(...args)
+      for (const n of targets.forWorktree(args[0])) {
+        n.resumeSleepingAgents?.(...args)
+      }
     }
   }
   if (implemented('nativeChatLaunchDraftResolved')) {
     optional.nativeChatLaunchDraftResolved = (...args) => {
-      for (const n of targets.forTab(args[0])) n.nativeChatLaunchDraftResolved?.(...args)
+      for (const n of targets.forTab(args[0])) {
+        n.nativeChatLaunchDraftResolved?.(...args)
+      }
     }
   }
   if (implemented('readMobileMarkdownTab')) {
@@ -144,37 +166,59 @@ export function createRuntimeNotifierRouter(
   return {
     ...optional,
     worktreesChanged: (...args) => {
-      for (const n of targets.all()) n.worktreesChanged(...args)
+      for (const n of targets.all()) {
+        n.worktreesChanged(...args)
+      }
     },
     reposChanged: (...args) => {
-      for (const n of targets.all()) n.reposChanged(...args)
+      for (const n of targets.all()) {
+        n.reposChanged(...args)
+      }
     },
     activateWorktree: (...args) => {
-      for (const n of targets.forWorktree(args[1])) n.activateWorktree(...args)
+      for (const n of targets.forWorktree(args[1])) {
+        n.activateWorktree(...args)
+      }
     },
     createTerminal: (...args) => {
-      for (const n of targets.forWorktree(args[0])) n.createTerminal(...args)
+      for (const n of targets.forWorktree(args[0])) {
+        n.createTerminal(...args)
+      }
     },
     splitTerminal: (...args) => {
-      for (const n of targets.forTab(args[0])) n.splitTerminal(...args)
+      for (const n of targets.forTab(args[0])) {
+        n.splitTerminal(...args)
+      }
     },
     renameTerminal: (...args) => {
-      for (const n of targets.forTab(args[0])) n.renameTerminal(...args)
+      for (const n of targets.forTab(args[0])) {
+        n.renameTerminal(...args)
+      }
     },
     focusTerminal: (...args) => {
-      for (const n of targets.forWorktree(args[1])) n.focusTerminal(...args)
+      for (const n of targets.forWorktree(args[1])) {
+        n.focusTerminal(...args)
+      }
     },
     closeTerminal: (...args) => {
-      for (const n of targets.forTab(args[0])) n.closeTerminal(...args)
+      for (const n of targets.forTab(args[0])) {
+        n.closeTerminal(...args)
+      }
     },
     sleepWorktree: (...args) => {
-      for (const n of targets.forWorktree(args[0])) n.sleepWorktree(...args)
+      for (const n of targets.forWorktree(args[0])) {
+        n.sleepWorktree(...args)
+      }
     },
     terminalFitOverrideChanged: (...args) => {
-      for (const n of targets.forPty(args[0])) n.terminalFitOverrideChanged(...args)
+      for (const n of targets.forPty(args[0])) {
+        n.terminalFitOverrideChanged(...args)
+      }
     },
     terminalDriverChanged: (...args) => {
-      for (const n of targets.forPty(args[0])) n.terminalDriverChanged(...args)
+      for (const n of targets.forPty(args[0])) {
+        n.terminalDriverChanged(...args)
+      }
     }
   }
 }
