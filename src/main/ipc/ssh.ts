@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines -- Why: co-locates SSH IPC handlers, port-forward broadcasting, and session lifecycle to keep the data flow obvious. */
 import { ipcMain, powerMonitor, type BrowserWindow } from 'electron'
+import { sendToOriginAndAllAppWindowRenderers } from './app-window-renderer-registry'
 import { appendFileSync } from 'node:fs'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
@@ -422,10 +423,12 @@ function broadcastSshState(
     return
   }
   const enrichedState = withSshRemotePlatform(targetId, state)
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
-  }
+  // Why every window: SSH connection state is process-global truth. Every window renders the same
+  // host list, and addressing the one window a registrar captured leaves the rest showing a
+  // connection status that is no longer true.
+  sendToOriginAndAllAppWindowRenderers(getMainWindow(), 'ssh:state-changed', [
+    { targetId, state: enrichedState }
+  ])
   // Why: paired remote clients have no ssh:state-changed IPC; without this their terminals keep a stale reconnect overlay.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
 }
@@ -469,14 +472,9 @@ function getPublicSshState(targetId: string): SshConnectionState | undefined {
 }
 
 function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:port-forwards-changed', {
-    targetId,
-    forwards: listForwardsEnriched(targetId)
-  })
+  sendToOriginAndAllAppWindowRenderers(getMainWindow(), 'ssh:port-forwards-changed', [
+    { targetId, forwards: listForwardsEnriched(targetId) }
+  ])
 }
 
 function broadcastDetectedPorts(
@@ -485,14 +483,9 @@ function broadcastDetectedPorts(
   ports: DetectedPort[],
   options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:detected-ports-changed', {
-    targetId,
-    ports: enrichDetected(targetId, ports, options)
-  })
+  sendToOriginAndAllAppWindowRenderers(getMainWindow(), 'ssh:detected-ports-changed', [
+    { targetId, ports: enrichDetected(targetId, ports, options) }
+  ])
 }
 
 function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManager['listForwards']> {
@@ -1007,10 +1000,9 @@ export function registerSshHandlers(
     )) {
       rotateSshProviderAuthority(targetId)
     }
-    const win = getCurrentMainWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('repos:changed')
-    }
+    // Why a fanout: a re-adopted workspace changes the global repo list, and this raw send used to
+    // bypass the fanout that `notifyReposChanged` already does for every other repo mutation.
+    sendToOriginAndAllAppWindowRenderers(getCurrentMainWindow(), 'repos:changed')
     return repoReadoptions
   }
 

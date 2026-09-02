@@ -63,7 +63,7 @@ import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
-import { broadcastToAppWindowRenderers } from './app-window-renderer-registry'
+import { sendToOriginAndAllAppWindowRenderers } from './app-window-renderer-registry'
 import {
   registerOptionalSshWorktreeCreateRoots,
   registerRequiredSshWorktreeCreateRoots
@@ -1454,16 +1454,8 @@ async function getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate(
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   // Why: invalidate detected-worktree caches before renderer observers react, so follow-up listDetected sees post-change state.
   runWorktreeChangeInvalidators(repoId)
-  const originIsAlive = !mainWindow.isDestroyed()
-  if (originIsAlive) {
-    mainWindow.webContents.send('worktrees:changed', { repoId })
-  }
-  // Why: the worktree list is global, so every other window is now showing a stale one.
-  broadcastToAppWindowRenderers(
-    'worktrees:changed',
-    [{ repoId }],
-    originIsAlive ? mainWindow.webContents.id : undefined
-  )
+  // Why: the worktree list is global, so a change in one window leaves every other one stale.
+  sendToOriginAndAllAppWindowRenderers(mainWindow, 'worktrees:changed', [{ repoId }])
 }
 
 export function notifyWorktreeGitStatusMetadataChanged(
@@ -1471,9 +1463,9 @@ export function notifyWorktreeGitStatusMetadataChanged(
   repoId: string
 ): void {
   // Why: index churn is a Source Control freshness hint, not a graph mutation; leave structural caches and runtime/mobile events untouched.
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', { repoId })
-  }
+  sendToOriginAndAllAppWindowRenderers(mainWindow, 'worktrees:gitStatusMetadataChanged', [
+    { repoId }
+  ])
 }
 
 export function notifyWorktreeHeadIdentitiesChanged(
@@ -1482,9 +1474,9 @@ export function notifyWorktreeHeadIdentitiesChanged(
   identities: WorktreeHeadIdentity[]
 ): void {
   // Why: background worktrees have no active status refresh, so metadata-detected head moves ride this targeted event instead of the structural fanout.
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:headIdentitiesChanged', { repoId, identities })
-  }
+  sendToOriginAndAllAppWindowRenderers(mainWindow, 'worktrees:headIdentitiesChanged', [
+    { repoId, identities }
+  ])
 }
 
 // Why: two-phase spinner — fire 'fetching' before pre-create fetch and 'creating' before git worktree add so the renderer can swap its label.
@@ -1493,9 +1485,13 @@ export function emitCreateWorktreeProgress(
   phase: 'fetching' | 'creating',
   creationId?: string
 ): void {
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
-  }
+  // Why a fanout for a per-caller spinner: the renderer routes this by `creationId` into its own
+  // pending creation, so a window that did not start this one updates nothing. Addressing a
+  // captured window instead would send it to whichever window registered last, which need not be
+  // the window that asked.
+  sendToOriginAndAllAppWindowRenderers(mainWindow, 'createWorktree:progress', [
+    { creationId, phase }
+  ])
 }
 
 export async function createRemoteWorktree(

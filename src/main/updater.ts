@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { app, BrowserWindow, powerMonitor } from 'electron'
+import { sendToOriginAndAllAppWindowRenderers } from './ipc/app-window-renderer-registry'
 import { is } from '@electron-toolkit/utils'
 import type {
   LinuxPackageInstallInstructions,
@@ -115,6 +116,19 @@ const UPDATE_CHECK_SILENT_SETTLE_DELAY_MS = 1_000
 const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
 
 let mainWindowRef: BrowserWindow | null = null
+
+/**
+ * Push an updater event to every app window.
+ *
+ * There is one updater per process and every window renders the same update card, so addressing the
+ * one window `setupAutoUpdater` last captured leaves the others showing a state that has moved on —
+ * or, once that window closes, showing nothing at all. The captured window stays the origin because
+ * it can receive this before it has registered.
+ */
+function sendUpdaterPush(channel: string, args: readonly unknown[] = []): void {
+  sendToOriginAndAllAppWindowRenderers(mainWindowRef, channel, args)
+}
+
 let currentStatus: UpdateStatus = { state: 'idle' }
 let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
@@ -346,7 +360,7 @@ function sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
     // Why: a forced status must still land before the queued check restarts the cycle.
     if (options?.force) {
       currentStatus = decoratedStatus
-      mainWindowRef?.webContents.send('updater:status', decoratedStatus)
+      sendUpdaterPush('updater:status', [decoratedStatus])
     }
     launchPendingUserInitiatedCheckAfterInFlight(pendingUserInitiatedCheckVariant)
     return
@@ -355,7 +369,7 @@ function sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
     return
   }
   currentStatus = decoratedStatus
-  mainWindowRef?.webContents.send('updater:status', decoratedStatus)
+  sendUpdaterPush('updater:status', [decoratedStatus])
 }
 
 function getOptionsForUpdateCheckVariant(variant: UpdateCheckVariant): UpdateCheckOptions {
@@ -723,7 +737,7 @@ async function performQuitAndInstall(): Promise<void> {
     // Why: the renderer armed its restart before invoking, and it infers the abort from the error
     // status — which a stale-cycle verdict deliberately withholds. Signal the abandon here, where
     // it cannot depend on that decision, or the window keeps skipping its unsaved-work prompt.
-    mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+    sendUpdaterPush('updater:quitAndInstallAborted')
     return
   }
   quitAndInstallInProgress = true
@@ -2088,7 +2102,7 @@ async function checkForUpdateNudge(): Promise<void> {
     ) {
       awaitingNudgeCheckOutcome = true
       _setPendingUpdateNudgeId?.(nudge.id)
-      mainWindowRef?.webContents.send('updater:clearDismissal')
+      sendUpdaterPush('updater:clearDismissal')
       runBackgroundUpdateCheck(nudge.id)
     }
   } finally {

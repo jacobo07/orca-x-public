@@ -31,11 +31,20 @@ import {
   isAppWindowRenderer,
   registerAppWindowRenderer,
   resetAppWindowRendererRegistryForTest,
+  sendToOriginAndAllAppWindowRenderers,
   unregisterAppWindowRenderer
 } from './app-window-renderer-registry'
 
 const WINDOW_A = 11
 const WINDOW_B = 22
+
+/** A BrowserWindow stub that only needs to answer the two questions the origin send asks. */
+function originWindow(id: number, destroyed = false) {
+  return {
+    isDestroyed: () => destroyed,
+    webContents: { id, send: sendSpyFor(id) }
+  } as never
+}
 
 describe('app window renderer registry', () => {
   beforeEach(() => {
@@ -128,6 +137,50 @@ describe('app window renderer registry', () => {
     registerAppWindowRenderer(WINDOW_B)
 
     expect(getPrimaryAppWindowRenderer(WINDOW_B)?.id).toBe(WINDOW_A)
+  })
+
+  it('sends a global change to the acting window and to every other one, exactly once each', () => {
+    registerAppWindowRenderer(WINDOW_A)
+    registerAppWindowRenderer(WINDOW_B)
+
+    sendToOriginAndAllAppWindowRenderers(originWindow(WINDOW_A), 'ssh:state-changed', [
+      { targetId: 't1' }
+    ])
+
+    expect(sendSpyFor(WINDOW_A).mock.calls).toEqual([['ssh:state-changed', { targetId: 't1' }]])
+    expect(sendSpyFor(WINDOW_B).mock.calls).toEqual([['ssh:state-changed', { targetId: 't1' }]])
+  })
+
+  it('still reaches every window when the acting window has already gone', () => {
+    registerAppWindowRenderer(WINDOW_B)
+
+    // The captured origin outliving its window is the normal case for a push sink: nothing nulls
+    // `mainWindowRef` on close, and the survivors still need the event.
+    sendToOriginAndAllAppWindowRenderers(originWindow(WINDOW_A, true), 'updater:status', [
+      { state: 'available' }
+    ])
+
+    expect(sendSpyFor(WINDOW_A)).not.toHaveBeenCalled()
+    expect(sendSpyFor(WINDOW_B)).toHaveBeenCalledWith('updater:status', { state: 'available' })
+  })
+
+  it('broadcasts with no origin at all, for an event that arrives unsolicited', () => {
+    registerAppWindowRenderer(WINDOW_A)
+    registerAppWindowRenderer(WINDOW_B)
+
+    sendToOriginAndAllAppWindowRenderers(null, 'remoteWorkspace:changed', [{ targetId: 't1' }])
+
+    expect(sendSpyFor(WINDOW_A)).toHaveBeenCalledWith('remoteWorkspace:changed', { targetId: 't1' })
+    expect(sendSpyFor(WINDOW_B)).toHaveBeenCalledWith('remoteWorkspace:changed', { targetId: 't1' })
+  })
+
+  it('reaches the acting window even before it has registered', () => {
+    registerAppWindowRenderer(WINDOW_B)
+
+    sendToOriginAndAllAppWindowRenderers(originWindow(WINDOW_A), 'repos:changed')
+
+    expect(sendSpyFor(WINDOW_A)).toHaveBeenCalledWith('repos:changed')
+    expect(sendSpyFor(WINDOW_B)).toHaveBeenCalledWith('repos:changed')
   })
 
   it('re-registering an existing window makes it primary without duplicating it', () => {

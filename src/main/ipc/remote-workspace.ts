@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import { sendToOriginAndAllAppWindowRenderers } from './app-window-renderer-registry'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
 import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
@@ -90,10 +91,12 @@ export function handleRemoteWorkspaceNotification(
     snapshot,
     sourceClientId: typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
   }
-  const win = mainWindowGetter?.()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('remoteWorkspace:changed', event)
-  }
+  // Why every window: this arrives unsolicited from the SSH host, so there is no caller to answer.
+  // A remote workspace snapshot is host-global, and every window with that target open is stale
+  // until it hears about the change.
+  sendToOriginAndAllAppWindowRenderers(mainWindowGetter?.() ?? null, 'remoteWorkspace:changed', [
+    event
+  ])
 }
 
 export function registerRemoteWorkspaceHandlers(

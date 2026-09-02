@@ -1,4 +1,4 @@
-import { webContents, type WebContents } from 'electron'
+import { webContents, type BrowserWindow, type WebContents } from 'electron'
 
 /**
  * The renderers that are Orca application windows.
@@ -83,6 +83,26 @@ export function broadcastToAppWindowRenderers(
       renderer.send(channel, ...args)
     }
   }
+}
+
+/**
+ * Send to the window that caused the change, and to every other app window.
+ *
+ * State a window mutated is still global state: the window that acted needs the event, and so does
+ * every window that did not. The origin is addressed directly rather than through the registry
+ * because a window can act before it has registered — during construction, or in a test — and
+ * relying on membership alone would silently drop its own event.
+ */
+export function sendToOriginAndAllAppWindowRenderers(
+  origin: BrowserWindow | null,
+  channel: string,
+  args: readonly unknown[] = []
+): void {
+  const originIsAlive = origin !== null && !origin.isDestroyed()
+  if (originIsAlive) {
+    origin.webContents.send(channel, ...args)
+  }
+  broadcastToAppWindowRenderers(channel, args, originIsAlive ? origin.webContents.id : undefined)
 }
 
 export function resetAppWindowRendererRegistryForTest(): void {

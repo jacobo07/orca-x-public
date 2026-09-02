@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: repo IPC is centralized so SSH routing, clone lifecycle, and store persistence stay behind one audited boundary. */
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
-import { dialog, ipcMain } from 'electron'
+import type { IpcMainInvokeEvent, WebContents } from 'electron'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { z } from 'zod'
@@ -92,7 +92,7 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
-import { broadcastToAppWindowRenderers } from './app-window-renderer-registry'
+import { sendToOriginAndAllAppWindowRenderers } from './app-window-renderer-registry'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import type {
@@ -481,7 +481,7 @@ function getRemoteRepoFolderName(remotePath: string): string {
 
 async function cloneRemoteRepo(
   store: Store,
-  mainWindow: BrowserWindow,
+  progressTarget: WebContents,
   args: {
     connectionId: string
     url: string
@@ -544,8 +544,8 @@ async function cloneRemoteRepo(
         signal: controller.signal,
         timeoutMs: 10 * 60_000,
         onProgress: (progress) => {
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('repos:clone-progress', progress)
+          if (!progressTarget.isDestroyed()) {
+            progressTarget.send('repos:clone-progress', progress)
           }
         }
       }
@@ -792,11 +792,11 @@ const completedNestedRepoScans = new Map<string, CompletedNestedRepoScan>()
 const MAX_COMPLETED_NESTED_SCAN_RESULTS = 50
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
-function emitCloneProgressFromText(mainWindow: BrowserWindow, text: string): void {
+function emitCloneProgressFromText(target: WebContents, text: string): void {
   for (const line of text.split(/[\r\n]+/)) {
     const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-    if (match && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('repos:clone-progress', {
+    if (match && !target.isDestroyed()) {
+      target.send('repos:clone-progress', {
         phase: match[1].trim(),
         percent: Number.parseInt(match[2], 10)
       })
@@ -2349,8 +2349,29 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     notifySparsePresetsChanged(mainWindow, args.repoId)
   })
 
-  ipcMain.handle('repos:pickFolder', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+  /**
+   * The window a modal folder picker belongs to.
+   *
+   * A picker is modal to its parent, so parenting it to a captured window puts the sheet on a
+   * different project's window on macOS and blocks the wrong window everywhere else. The caller is
+   * the only correct parent; the capture is the fallback for a sender that has already gone.
+   */
+  const pickerParentWindow = (event: IpcMainInvokeEvent | null): BrowserWindow => {
+    const sender = event?.sender ? BrowserWindow.fromWebContents(event.sender) : null
+    return sender && !sender.isDestroyed() ? sender : mainWindow
+  }
+
+  /**
+   * The invoking renderer, or the captured one when there is no live caller.
+   *
+   * Why the event may be absent: not every call arrives from a renderer. Main drives some of these
+   * flows itself, and those come through with no sender to answer.
+   */
+  const senderOrMainRenderer = (event: IpcMainInvokeEvent | null): WebContents =>
+    event?.sender && !event.sender.isDestroyed() ? event.sender : mainWindow.webContents
+
+  ipcMain.handle('repos:pickFolder', async (event) => {
+    const result = await dialog.showOpenDialog(pickerParentWindow(event), {
       properties: ['openDirectory']
     })
     if (result.canceled || result.filePaths.length === 0) {
@@ -2359,8 +2380,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return result.filePaths[0]
   })
 
-  ipcMain.handle('repos:pickFolders', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+  ipcMain.handle('repos:pickFolders', async (event) => {
+    const result = await dialog.showOpenDialog(pickerParentWindow(event), {
       properties: ['openDirectory', 'multiSelections']
     })
     if (result.canceled || result.filePaths.length === 0) {
@@ -2370,8 +2391,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   // Why: generic folder picker, separate from pickFolder's add-project flow; a clone destination may not be a git repo yet.
-  ipcMain.handle('repos:pickDirectory', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+  ipcMain.handle('repos:pickDirectory', async (event) => {
+    const result = await dialog.showOpenDialog(pickerParentWindow(event), {
       // Why: macOS materializes typed partial paths with directory creation on; clone/create make the final path on submit.
       properties: ['openDirectory']
     })
@@ -2401,7 +2422,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle(
     'repos:clone',
-    async (_event, args: { url: string; destination: string }): Promise<Repo> => {
+    async (event, args: { url: string; destination: string }): Promise<Repo> => {
+      // Why the sender rather than a captured window: a clone is started by exactly one window's
+      // invoke, so its progress bar belongs to that window and nowhere else. Fanning it out would
+      // paint a progress bar in a window that started nothing.
+      const cloneProgressTarget = senderOrMainRenderer(event)
       // Why: derive the repo folder name from the URL's last segment, matching default git clone behavior.
       const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
@@ -2468,7 +2493,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             stderrTail = (stderrTail + text).slice(-4096)
 
             // Why: git progress lines use \r to overwrite in-place; parse fragments the same as SSH clone.
-            emitCloneProgressFromText(mainWindow, text)
+            emitCloneProgressFromText(cloneProgressTarget, text)
           })
 
           const finishClone = async (
@@ -2575,10 +2600,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle(
     'repos:cloneRemote',
     async (
-      _event,
+      event,
       args: { connectionId: string; url: string; destination: string }
     ): Promise<Repo> => {
-      const repo = await cloneRemoteRepo(store, mainWindow, args)
+      const repo = await cloneRemoteRepo(store, senderOrMainRenderer(event), args)
       notifyReposChanged(mainWindow)
       return repo
     }
@@ -2778,16 +2803,8 @@ function getRepoForExecutionHost(
 
 export function notifyReposChanged(mainWindow: BrowserWindow): void {
   wakeFolderRepoGitUpgradeWatch()
-  const originIsAlive = !mainWindow.isDestroyed()
-  if (originIsAlive) {
-    mainWindow.webContents.send('repos:changed')
-  }
   // Why: the repo list is global, so a change made in one window leaves every other window stale.
-  broadcastToAppWindowRenderers(
-    'repos:changed',
-    [],
-    originIsAlive ? mainWindow.webContents.id : undefined
-  )
+  sendToOriginAndAllAppWindowRenderers(mainWindow, 'repos:changed')
   // Why: paired clients only refetch a remote catalog on this event; without it a
   // host-side delete or rename stays invisible to them indefinitely (#11994).
   try {
@@ -2800,9 +2817,8 @@ export function notifyReposChanged(mainWindow: BrowserWindow): void {
 }
 
 function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sparsePresets:changed', { repoId })
-  }
+  // Why a fanout: sparse presets belong to the repo, not to the window that edited them.
+  sendToOriginAndAllAppWindowRenderers(mainWindow, 'sparsePresets:changed', [{ repoId }])
 }
 
 function normalizeSparsePresetName(name: string): string {

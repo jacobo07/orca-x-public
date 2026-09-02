@@ -199,7 +199,9 @@ export function createRepoHandlerHarness(): RepoHandlerHarness {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mockWindow = {
     isDestroyed: () => false,
-    webContents: { send: vi.fn() }
+    // Why the renderer needs its own id and liveness: caller-scoped sends (clone progress) resolve a
+    // WebContents rather than a window, and a stub without them cannot stand in for one.
+    webContents: { id: 1, isDestroyed: () => false, send: vi.fn() }
   }
   const captureHandlers = (handleMock: ReposIpcMocks['handleMock']): void => {
     handlers.clear()
