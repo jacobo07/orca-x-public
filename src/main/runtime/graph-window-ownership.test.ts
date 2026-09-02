@@ -1,10 +1,15 @@
 /**
  * Two project windows each own a runtime graph.
  *
- * The service was written for one: a single authority scalar, a single notifier slot, one reload
- * epoch and one flat set of graph maps. Every `windowId` parameter is checked against the authority
- * and then discarded, so it is an admission credential rather than a partition key. These cases pin
- * the four properties a second window needs, each of which the single-authority model breaks.
+ * The service was written for one: a single authority scalar, one reload epoch, one active fence and
+ * one flat set of graph maps that a publish replaced wholesale. Every `windowId` parameter was
+ * checked against the authority and then discarded, making it an admission credential rather than a
+ * partition key.
+ *
+ * The last three cases are the ones worth keeping honest. Partitioning only what the UI can see —
+ * tabs and leaves — while handles, waiters and the epoch stayed global would satisfy the first four
+ * and still let one window's reload strip another window's live terminals, which is a silent loss of
+ * running work rather than a visible failure.
  */
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -56,7 +61,21 @@ function makeSession(): WorkspaceSessionState {
 
 type RuntimeInternals = {
   tabs: Map<string, RuntimeSyncedTab>
-  leaves: Map<string, unknown>
+  leaves: Map<string, { worktreeId: string }>
+  handles: Map<string, { worktreeId: string }>
+  waitersByHandle: Map<string, Set<unknown>>
+  issueHandle(leaf: unknown): string
+  getLeafKey(tabId: string, leafId: string): string
+  graphOwners: { get(windowId: number): { epoch: number; status: string } | undefined }
+}
+
+/** Mint a terminal handle for a published leaf — the hidden state a half-partition would destroy. */
+function handleFor(internals: RuntimeInternals, tabId: string, leafId: string): string {
+  const leaf = internals.leaves.get(internals.getLeafKey(tabId, leafId))
+  if (!leaf) {
+    throw new Error(`leaf ${tabId}/${leafId} is not in the graph`)
+  }
+  return internals.issueHandle(leaf)
 }
 
 function createRuntime() {
@@ -94,12 +113,7 @@ function publish(
   })
 }
 
-// Skipped deliberately, not quarantined: this is the specification for the per-window runtime
-// graph, and it fails 4/4 today for the four reasons named above. Unskip it as the first step of
-// that change. It is not skipped because it is flaky or wrong — the behaviour it asks for does not
-// exist yet, and the partition it needs (graph maps, handle maps, waiter set, epoch, reload fence
-// and notifier, all per owner together) is tracked in docs/workspace-window-mode-plan.md.
-describe.skip('runtime graph ownership across windows', () => {
+describe('runtime graph ownership across windows', () => {
   it('accepts a graph from a second attached window', () => {
     const { runtime } = createRuntime()
     runtime.attachWindow(WINDOW_A)
@@ -107,8 +121,8 @@ describe.skip('runtime graph ownership across windows', () => {
 
     runtime.attachWindow(WINDOW_B)
 
-    // Today attachWindow falls off the end for a second real window, so this publish is refused
-    // and window B renders with no graph and no terminals.
+    // attachWindow used to fall off the end for a second real window, so this publish was refused
+    // and window B rendered with no graph and no terminals.
     expect(() =>
       publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
     ).not.toThrow()
@@ -120,11 +134,7 @@ describe.skip('runtime graph ownership across windows', () => {
     publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
     runtime.attachWindow(WINDOW_B)
 
-    try {
-      publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
-    } catch {
-      // The publish being refused is the first failure; the erasure is what it hides.
-    }
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
 
     expect(internals.tabs.has('tab-a')).toBe(true)
     expect(internals.tabs.has('tab-b')).toBe(true)
@@ -135,15 +145,11 @@ describe.skip('runtime graph ownership across windows', () => {
     runtime.attachWindow(WINDOW_A)
     publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
     runtime.attachWindow(WINDOW_B)
-    try {
-      publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
-    } catch {
-      // See above.
-    }
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
 
     runtime.markGraphUnavailable(WINDOW_A)
 
-    // Closing A clears the one shared graph today, taking B's terminals with it.
+    // Closing A used to clear the one shared graph, taking B's terminals with it.
     expect(internals.tabs.has('tab-b')).toBe(true)
   })
 
@@ -152,15 +158,58 @@ describe.skip('runtime graph ownership across windows', () => {
     runtime.attachWindow(WINDOW_A)
     publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
     runtime.attachWindow(WINDOW_B)
-    try {
-      publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
-    } catch {
-      // See above.
-    }
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
 
     runtime.markRendererReloading(WINDOW_A)
 
     // B is mid-flight on its own graph; A reloading must not invalidate it.
     expect(runtime.getStatus().graphStatus).not.toBe('reloading')
+  })
+
+  it("keeps the other window's terminal handles when one renderer reloads", () => {
+    const { runtime, internals } = createRuntime()
+    runtime.attachWindow(WINDOW_A)
+    publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
+    runtime.attachWindow(WINDOW_B)
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
+    const handleA = handleFor(internals, 'tab-a', 'leaf-a')
+    const handleB = handleFor(internals, 'tab-b', 'leaf-b')
+
+    runtime.markRendererReloading(WINDOW_A)
+
+    // The reload clears the reloading window's handles — and only those. Clearing the map wholesale
+    // is what silently took the other window's live terminals with it.
+    expect(internals.handles.has(handleA)).toBe(false)
+    expect(internals.handles.has(handleB)).toBe(true)
+  })
+
+  it("keeps the other window's terminal handles when one window closes", () => {
+    const { runtime, internals } = createRuntime()
+    runtime.attachWindow(WINDOW_A)
+    publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
+    runtime.attachWindow(WINDOW_B)
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
+    const handleB = handleFor(internals, 'tab-b', 'leaf-b')
+
+    runtime.markGraphUnavailable(WINDOW_A)
+
+    expect(internals.handles.has(handleB)).toBe(true)
+    expect(internals.leaves.has(internals.getLeafKey('tab-b', 'leaf-b'))).toBe(true)
+  })
+
+  it("does not advance the other window's graph epoch when one renderer reloads", () => {
+    const { runtime, internals } = createRuntime()
+    runtime.attachWindow(WINDOW_A)
+    publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
+    runtime.attachWindow(WINDOW_B)
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
+    const epochBefore = internals.graphOwners.get(WINDOW_B)?.epoch
+
+    runtime.markRendererReloading(WINDOW_A)
+
+    // An in-flight operation on B fences against B's epoch; one shared counter would fail it here.
+    expect(internals.graphOwners.get(WINDOW_B)?.epoch).toBe(epochBefore)
+    expect(internals.graphOwners.get(WINDOW_B)?.status).toBe('ready')
+    expect(internals.graphOwners.get(WINDOW_A)?.status).toBe('reloading')
   })
 })

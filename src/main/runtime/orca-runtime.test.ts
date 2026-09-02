@@ -2441,13 +2441,19 @@ describe('OrcaRuntimeService', () => {
     expect(closeTab).toHaveBeenCalledTimes(2)
   })
 
-  it('claims the first window as authoritative and ignores later windows', () => {
+  it('registers a later window without moving the representative window id', () => {
     const runtime = createRuntime()
 
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.attachWindow(2)
 
+    // A second window used to be ignored outright, which is why it rendered with no graph. It is
+    // now an owner in its own right; what must not move is the single id the wire reports, since a
+    // representative that followed the newest window would drift under every remote client.
     expect(runtime.getStatus().authoritativeWindowId).toBe(TEST_WINDOW_ID)
+    expect(() =>
+      runtime.syncWindowGraph(2, { rendererGeneration: 'gen-2', tabs: [], leaves: [] })
+    ).not.toThrow()
   })
 
   it('transfers authority from the headless sentinel to the first real window', () => {
