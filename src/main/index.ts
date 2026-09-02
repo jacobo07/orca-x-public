@@ -2,7 +2,17 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, type Tray } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  powerMonitor,
+  type Tray,
+  type WebContents
+} from 'electron'
+import { getWorkspaceWindowForWorktree } from './window/workspace-window-registry'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -208,6 +218,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { getPrimaryAppWindowRenderer } from './ipc/app-window-renderer-registry'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -1294,6 +1305,37 @@ function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
+/**
+ * An app window that outlives the one closing, or null when that was the last.
+ *
+ * Excludes the closing renderer by id rather than by object: at `closed` its webContents is already
+ * gone, so there is nothing left to compare against.
+ */
+function firstSurvivingAppWindow(closingRendererWebContentsId: number): BrowserWindow | null {
+  const renderer = getPrimaryAppWindowRenderer(closingRendererWebContentsId)
+  const survivor = renderer ? BrowserWindow.fromWebContents(renderer) : null
+  return survivor && !survivor.isDestroyed() ? survivor : null
+}
+
+/**
+ * The renderer that should receive an agent status row.
+ *
+ * An agent status creates per-pane state, so it belongs to the window rendering that pane. Sending
+ * it to a captured window would put another project's agents in a window that has none of them, and
+ * fanning it out would put them in every window. The workspace registry already binds a worktree to
+ * exactly one window, so it is the answer rather than a second guess at one.
+ *
+ * The fallback is the primary window, which is where these went before there was anywhere else.
+ */
+function agentStatusRenderer(worktreeId: string | null | undefined): WebContents | null {
+  const owner = worktreeId ? getWorkspaceWindowForWorktree(worktreeId) : null
+  const ownerWindow = owner ? BrowserWindow.fromId(owner.browserWindowId) : null
+  if (ownerWindow && !ownerWindow.isDestroyed()) {
+    return ownerWindow.webContents
+  }
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null
+}
+
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
@@ -1523,10 +1565,22 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   // Why: quota probes spawn CLIs and hit network, so don't fetch immediately and compete with first paint; show/focus listeners refresh later.
   rateLimits.start({ fetchImmediately: false })
   window.on('closed', () => {
+    clearExpectedRendererReload(rendererWebContentsId)
+    // Why the survivor check: these are application-wide services with a single consumer slot, so
+    // tearing them down on any window's close used to take them away from a window that is still
+    // open. A survivor adopts them instead; only the last window out turns them off.
+    const survivor = firstSurvivingAppWindow(rendererWebContentsId)
+    if (survivor) {
+      if (mainWindow === window) {
+        mainWindow = survivor
+      }
+      automations?.setWebContents(survivor.webContents)
+      rateLimits?.attach(survivor)
+      return
+    }
     if (mainWindow === window) {
       mainWindow = null
     }
-    clearExpectedRendererReload(rendererWebContentsId)
     automations?.setWebContents(null)
     // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
     agentHookServer.setListener(null)
@@ -1567,7 +1621,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       }
       if (providerSessionOnly) {
         // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
-        mainWindow?.webContents.send('agentStatus:set', {
+        agentStatusRenderer(worktreeId)?.send('agentStatus:set', {
           ...payload,
           paneKey,
           ...(launchToken ? { launchToken } : {}),
@@ -1608,7 +1662,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(orchestration ? { orchestration } : {})
       }
-      mainWindow?.webContents.send('agentStatus:set', statusEvent)
+      agentStatusRenderer(worktreeId)?.send('agentStatus:set', statusEvent)
       if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
         getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
       }

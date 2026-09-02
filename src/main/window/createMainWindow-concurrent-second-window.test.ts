@@ -18,6 +18,10 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+const closeDashboardPopoutMock = vi.hoisted(() => vi.fn())
+vi.mock('./dashboard-popout-window', () => ({
+  closeDashboardPopout: closeDashboardPopoutMock
+}))
 
 import { ipcMain } from 'electron'
 import { createMainWindow } from './createMainWindow'
@@ -134,6 +138,31 @@ describe('createMainWindow with a second window alive', () => {
 
     // The first window is deliberately NOT closed: concurrency is the property under test.
     expect(() => createMainWindow(null, { deferLoad: true })).not.toThrow()
+  })
+
+  it('keeps the dashboard pop-out open while another workspace window survives', () => {
+    const first = makeWindowDouble(11)
+    const second = makeWindowDouble(22)
+    browserWindowMock
+      .mockImplementationOnce(function () {
+        return first.instance
+      })
+      .mockImplementationOnce(function () {
+        return second.instance
+      })
+    createMainWindow(null, { deferLoad: true })
+    createMainWindow(null, { deferLoad: true })
+    closeDashboardPopoutMock.mockClear()
+
+    first.events.closed?.()
+
+    // The pop-out is a companion of the application, not of whichever window closed. Closing it
+    // here took a surface away from a window that never asked for it to go.
+    expect(closeDashboardPopoutMock).not.toHaveBeenCalled()
+
+    second.events.closed?.()
+
+    expect(closeDashboardPopoutMock).toHaveBeenCalledTimes(1)
   })
 
   it('minimizes only the window whose renderer asked', () => {

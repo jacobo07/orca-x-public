@@ -1224,7 +1224,12 @@ export function createMainWindow(
     // Why: the dashboard pop-out is a companion of the main window — close it
     // alongside so it never orphans as a lone window after the app window is
     // gone (e.g. on macOS where the app stays alive after the window closes).
-    closeDashboardPopout()
+    // Why "last": the pop-out belongs to the application, not to whichever window closed. With a
+    // second workspace window still open it has not orphaned, and closing it would take a surface
+    // away from a window that never asked.
+    if (listWorkspaceWindows().length === 0) {
+      closeDashboardPopout()
+    }
     clearInitialRevealFallbackTimer()
     clearQuitRendererAckTimer()
     // Why: default-deny the Cmd+B carve-out after the window is gone so a stale-true flag can't leak into later state.
