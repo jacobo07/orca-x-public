@@ -19,6 +19,9 @@ type MainOwnedUIState =
   | 'starNagCompleted'
   | 'starNagDeferredUntil'
   | 'starNagAgentValueMomentAppVersion'
+  // Why this one is main-owned rather than an oversight: a paired client has no windows. Accepting
+  // it from the wire would let a machine that cannot see the desktop's window set rewrite it.
+  | 'windowTopology'
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.infer<UiUpdateFieldsSchema>

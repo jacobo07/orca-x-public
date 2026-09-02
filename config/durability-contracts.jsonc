@@ -158,6 +158,22 @@
       "knownGaps": [
         "There is no barrier here at all, which is deliberate at this tier: an fsync on every view toggle would cost more than the one preference it protects."
       ]
+    },
+    {
+      "id": "ui.window-topology",
+      "state": "ui.windowTopology inside the profile data file — which workspace windows were open, which project each owned, and where each sat",
+      "writer": "src/main/window/window-topology-persistence.ts",
+      "tier": "atomic-only",
+      "lostIf": "A relaunch opens one default window instead of the set the user had. The projects, terminals and layouts are untouched — they live in the session this file already carries — so the loss is the arrangement, not the work.",
+      "provenBy": [
+        "src/main/window/window-topology.test.ts",
+        "src/main/window/window-topology-persistence.test.ts"
+      ],
+      "knownGaps": [
+        "It is a field of orca-data.json, so in practice it receives that file's crash-durable barrier — stronger than this tier owes. The tier states what the state is worth, not what the host file happens to give it; if the topology ever moves to a file of its own, atomic-only is the guarantee that must survive the move.",
+        "The dangerous shape here was never the barrier, it was collapse-into-empty. A quit closes every window one at a time, so the last close is the write that would publish an empty set over a good one, and an unreadable value returned as [] would do the same on the next publish. Both are refused in window-topology.ts rather than in the writer, which is why the proof is a pure test and not a syscall trace.",
+        "No completion marker gates the restore: the plan is re-derived from the recorded entries on every launch, so there is no 'topology restored' flag that could become durable ahead of the state it certifies."
+      ]
     }
   ]
 }

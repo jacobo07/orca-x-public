@@ -17,19 +17,12 @@
  *   refusal prevents, so the later window opens on the launcher instead.
  */
 import type { WorkspaceWindowBinding } from './workspace-window-registry'
+import type {
+  PersistedWindowTopologyBounds as WindowTopologyBounds,
+  PersistedWindowTopologyEntry
+} from '../../shared/window-topology-types'
 
-export type WindowTopologyBounds = { x: number; y: number; width: number; height: number }
-
-export type PersistedWindowTopologyEntry = {
-  /** The minted window id, carried rather than re-derived: a path-derived id changes meaning when the project moves. */
-  windowId: string
-  /** Mint order, so "the first window" survives the restart with the same meaning it had. */
-  sequence: number
-  /** Null for a window that was showing the launcher — a real window owning no project. */
-  binding: WorkspaceWindowBinding | null
-  bounds: WindowTopologyBounds | null
-  maximized: boolean
-}
+export type { PersistedWindowTopologyEntry, WindowTopologyBounds }
 
 export type LiveWindowTopologyEntry = PersistedWindowTopologyEntry
 

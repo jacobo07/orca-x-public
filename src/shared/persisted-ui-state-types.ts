@@ -7,6 +7,7 @@ import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
 import type { CustomPet } from './pet-types'
+import type { PersistedWindowTopologyEntry } from './window-topology-types'
 import type {
   ActivityBarPosition,
   AgentActivityDisplayMode,
@@ -167,6 +168,14 @@ export type PersistedUIState = {
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
+  /**
+   * The workspace windows that were open, so a relaunch reopens the same set with the same projects.
+   *
+   * Desktop-only and main-written: it is absent from `UiUpdateFields`, so a paired client cannot
+   * rewrite the window set of a machine it cannot see. Shape and rules live in
+   * `main/window/window-topology.ts`.
+   */
+  windowTopology?: PersistedWindowTopologyEntry[] | null
   /** Saved bounds for the pop-out dashboard window so it restores to its last
    *  position/size. Independent of the main window's bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
