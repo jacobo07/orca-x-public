@@ -190,7 +190,8 @@ describe('createOrFocusDashboardPopout', () => {
 
     expect(instances).toHaveLength(1)
     const opts = instances[0].options
-    expect(opts.title).toBe('Orca Agent Dashboard')
+    // Derived from PRODUCT_NAME so the fork's name cannot drift away from the packaged one again.
+    expect(opts.title).toBe('Orca X Agent Dashboard')
     expect(opts.minWidth).toBe(480)
     expect(opts.minHeight).toBe(360)
     // Native frame: neither a custom titleBarStyle nor frame:false is set.
