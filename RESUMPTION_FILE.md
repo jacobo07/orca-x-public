@@ -71,6 +71,19 @@ The release-blocking spec `runtime/graph-window-ownership.test.ts` is **unskippe
   separates owner-scoped from that. Each case pinned on both sides, so neither a no-op nor a
   wholesale teardown goes green.
 
+## Found while shipping, not caused by this branch
+
+- **A main process can survive with no window, no renderer and no tray.** Measured 2026-09-04: one
+  `Orca X.exe`, 2 MB, zero children, no window handle, days old — and it blocked the NSIS installer
+  with "close the application manually" when there was nothing to close. The profile log ends
+  mid-normal-operation with **no** `crash.breadcrumb` for process-gone, recovery or quit, and that
+  file can hold them (three exist earlier in it), so the recovery path is *not* evidenced as the
+  cause. **Cause remains unestablished.**
+  Fixed in `4c37af785`: `presentRendererRecoveryPrompt` acted only when Reload was chosen *and* a
+  live window existed, so Reload-with-the-window-gone fell past both branches and did nothing —
+  a different route to the same state. The decision is now a total function and both exits leave a
+  breadcrumb. Detection is automated in `~/.claude/hooks/orphan-dev-server-reaper.ps1`.
+
 ## Still open, named rather than half-fixed
 
 - `registerPtyHandlers` re-registers per window and `removeAllListeners` first, so the last window to
