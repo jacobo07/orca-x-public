@@ -22,6 +22,7 @@ import {
 } from './window/window-topology-persistence'
 import type { LiveWindowTopologyEntry } from './window/window-topology'
 import { setSurvivingAppWindowResolver } from './window/surviving-app-window'
+import { resolveRendererRecoveryPromptAction } from './crash-reporting/renderer-recovery-prompt-action'
 import type { PersistedWindowTopologyEntry } from '../shared/window-topology-types'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -1800,13 +1801,22 @@ async function presentRendererRecoveryPrompt(recentRecoveryCount: number): Promi
   const { response } = window
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options)
-  if (response === 0 && mainWindow && !mainWindow.isDestroyed()) {
+  // Why routed through a total function: the window can be destroyed while the prompt is open, and
+  // the old inline branches then matched neither — leaving a main process alive with no window, no
+  // renderer and no tray. Nothing can reach that state to close it.
+  const liveWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+  const action = resolveRendererRecoveryPromptAction({
+    response,
+    hasLiveWindow: liveWindow !== null
+  })
+  if (action === 'reload' && liveWindow) {
     recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
-    loadMainWindow(mainWindow)
-  } else if (response === 1) {
-    isQuitting = true
-    app.quit()
+    loadMainWindow(liveWindow)
+    return
   }
+  recordDurableCrashBreadcrumb('renderer_recovery_quit', { hadLiveWindow: liveWindow !== null })
+  isQuitting = true
+  app.quit()
 }
 
 function getGpuFallbackEnvironment(): GpuFallbackEnvironment {
