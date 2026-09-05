@@ -47,6 +47,39 @@ remains is making the topology survive a restart and proving it in a packaged bu
 The release-blocking spec `runtime/graph-window-ownership.test.ts` is **unskipped and 9/9 green**;
 `docs/workspace-window-mode-plan.md` had gone stale claiming otherwise and is corrected.
 
+## Workspace chrome & navigation convergence (started 2026-09-05)
+
+Spec of record: `docs/workspace-chrome-navigation-convergence-spec.md` (untracked, like its siblings).
+
+**Sealed.** Contextual window identity, production-verified:
+- `6a760673e` — `shared/window-identity-title.ts` (pure, 6/6) + `app-shell/use-window-identity-title.ts`.
+  Project leads, brand trails, worktree joins only when it differs from the repo.
+- `ff77532c9` — the derivation keyed off `activeRepoId`, which is **null on a bound window**; the
+  repo now resolves through the active worktree's `repoId`. Caught only by launching the app.
+  `tests/e2e/window-project-identity-title.spec.ts` asserts `BrowserWindow.getTitle()` and passes.
+  Observed: `orca-e2e-repo-wrcROW — master — Orca X`.
+
+**Measured, correcting likely assumptions:**
+- `hooks/useSidebarResize.ts` is **already live** (rAF + direct DOM width, store commit on mouseup).
+  Do not rebuild it; find the consumer that reads the release-only store value.
+- `app-shell/use-persisted-ui-writer.ts` persists sidebar/panel/activeView **profile-globally** —
+  an undeclared cross-window channel after W6. Classify scope before adding navigation state.
+- `AppWorkspaceShell.tsx:78-93` mounts non-`terminal` views *instead of* the workspace, so an
+  activity switch is a conditional unmount by design. Both sidebar and shell error boundaries carry
+  `resetKey={activeView}`.
+- `SidebarNav.tsx` holds the global rows (Tasks/Automations/Workspace/Mobile/Artifacts/Skills/Agents).
+  `SidebarTaskNavButton` carries four per-provider hover shortcuts that a 40px icon cannot hold —
+  the rail migration must relocate them, not drop them.
+- Projects/Files convergence already shipped (`right-sidebar/left-nav-projects-switch.tsx`); its
+  switch is pure presentation (`toggleRightSidebar` has no semantic side effect).
+
+**Baseline for these suites** (measured 2026-09-05, `_logs/baseline-nav-20260905-231600.log`):
+`components/sidebar components/right-sidebar hooks/useSidebarResize store/slices app-shell` =
+**2 failed / 6684**, both in `right-sidebar/SourceControl*`, untouched by this work.
+
+**Not started:** activity rail, icon-only collapse, live-resize consumer fix, UI-state scoping,
+redundant-control consolidation, baseline ascension.
+
 ## Next 3 actions
 
 1. **Finish the packaged proof.** A build is running through
@@ -83,6 +116,15 @@ The release-blocking spec `runtime/graph-window-ownership.test.ts` is **unskippe
   live window existed, so Reload-with-the-window-gone fell past both branches and did nothing —
   a different route to the same state. The decision is now a total function and both exits leave a
   breadcrumb. Detection is automated in `~/.claude/hooks/orphan-dev-server-reaper.ps1`.
+
+- **The installed app was a MIXED build, which is why New Window looked missing.** Measured
+  2026-09-04: `Orca X.exe` is byte-identical to `dist\win-unpacked`, `resources\app.asar` is the
+  08/24 one, and the other 3281 files match. Electron memory-maps the asar, so the husk above held
+  the single file carrying all application code; NSIS could not overwrite it and reported success
+  regardless. The feature is correct in source (`menu/register-app-menu.ts:177`) and present in the
+  built asar; it was absent only from the installed one. Repair and future detection:
+  `~\.claude\bin\verify-electron-install.ps1 -Built dist\win-unpacked -Installed <root> [-Repair]`
+  (self-test 5/5; refuses to repair while a process runs from the install root).
 
 ## Still open, named rather than half-fixed
 
