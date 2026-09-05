@@ -24,6 +24,7 @@ import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feat
 import { useTerminalMenuCommands } from '@/components/terminal-rail/use-terminal-menu-commands'
 import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
+import { useWindowIdentityTitle } from './app-shell/use-window-identity-title'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
 
 function App(): React.JSX.Element {
@@ -39,6 +40,7 @@ function App(): React.JSX.Element {
   usePersistedUIWriter()
   useTerminalMenuCommands()
   useDocumentAppearance()
+  useWindowIdentityTitle()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
 
