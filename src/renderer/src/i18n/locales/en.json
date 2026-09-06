@@ -15962,6 +15962,9 @@
         "countOne": "1 tool call",
         "countN": "{{value0}} tool calls"
       },
+      "diff": {
+        "region": "File diff"
+      },
       "status": {
         "responding": "Agent is responding"
       },
