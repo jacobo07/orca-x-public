@@ -417,6 +417,21 @@ describe('check-reliability-gates', () => {
     )
   })
 
+  // Why: every other rejection case supplies a well-formed but wrong value, so none of them
+  // reaches a validator that reads a field an earlier validator already rejected. An absent
+  // field is the shape a hand-edited manifest actually takes.
+  it('reports an absent required field instead of failing as the checker', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const manifest = JSON.parse(validManifest())
+    delete manifest.gates[0].evidenceRuns
+    const root = makeTempRoot(JSON.stringify(manifest, null, 2))
+
+    await expect(main(root)).resolves.toBe(1)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('evidenceRuns must be an array')
+    )
+  })
+
   it('rejects malformed JSONC', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const root = makeTempRoot('{ "schemaVersion": 1, } trailing')
