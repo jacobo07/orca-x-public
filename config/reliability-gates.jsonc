@@ -113,7 +113,7 @@
         "Measure the diff region's rendered height in a real window rather than asserting the class that produces it."
       ],
       "knownGaps": [
-        "The worktree sidebar's StatusIndicator still has no failure state. The wording half of that gap closed and moved to workspace-presentation.status-claims-only-what-it-knows; the missing state itself is covered nowhere.",
+        "The worktree sidebar's StatusIndicator carries no failure state; workspace-presentation.status-claims-only-what-it-knows records why that is correct rather than missing, and which upstream question owns it.",
         "Geometry evidence is Windows-only so far.",
         "The diff bound is asserted on rendered markup, not on measured pixels. It proves the class is applied, not that the region is 256px on screen."
       ],
@@ -287,12 +287,12 @@
         "evidence": "One string constant changed and one ternary branch was added to a list cell."
       },
       "promotionCriteria": [
-        "Give StatusIndicator a failure state, then bring it under this gate.",
+        "Decide upstream whether agent failure should be a worktree-level state at all; only then does giving StatusIndicator one mean anything.",
         "Sweep the remaining state-to-style maps for the same two defects and either fold them in or record why they are exempt.",
         "Run on a second platform."
       ],
       "knownGaps": [
-        "StatusIndicator has no failure state at all. This gate proves its label does not overclaim; it does not prove the surface can express failure.",
+        "StatusIndicator has no failure state, and measurement says that is correct rather than missing: AGENT_STATUS_STATES carries no failure member, and worktree-agent-activity-summary reads only done besides the permission fold, so no failure signal reaches this level. Giving the surface one would mean inventing the specificity this gate's own invariant forbids. Whether the runtime should model it is a state-model question, unowned and out of scope here.",
         "The rollup's other consumers were checked by grep for the old wording, not by an assertion that every consumer of a folded state avoids naming a cause.",
         "AgentStateDot still paints blocked from a raw bg-red-500 rather than a token; the role is correct but the value is not tokenised."
       ],

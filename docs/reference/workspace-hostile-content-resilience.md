@@ -85,7 +85,7 @@ Found while closing those, and not in the original scope:
 | 8 | An E2E setup failure was indistinguishable from a product failure | **Classified, not cured.** Setup phases are named and marked, attempts are counted, and an unattributed failure stays unknown. The worktree-seeding flake's root cause is still unknown. |
 | 9 | The structured diff had no viewport bound | **Done.** Content was never the problem — the producers already cap at 120 lines with an explicit marker. Height was. |
 | 10 | An unreadable automation run rendered identically to a successful one | **Done.** This was the real cost of the six-tone collapse, not the lost hues. |
-| 11 | `StatusIndicator` cannot express failure at all | **Open and unowned.** Its label no longer overclaims, but the surface has no failure state to give. |
+| 11 | `StatusIndicator` cannot express failure at all | **Not a presentation gap — reclassified after measuring.** `AGENT_STATUS_STATES` is `working / blocked / waiting / done`, and `worktree-agent-activity-summary.ts` reads only `done` besides the permission fold. No failure signal reaches the worktree level, so the surface cannot show what it is never told, and inventing one is the exact thing the aggregation rule forbids. Whether the runtime *should* model agent failure at worktree level is a state-model question, not a rendering one, and is out of this plan's scope. |
 | 12 | `tests/` is outside every tsconfig project | **Open, reported.** No typecheck covers the E2E tree; those modules are held by lint and execution only. Closing it would surface an unbounded backlog and belongs to its own change. |
 
 ### The two raw literals left alone
