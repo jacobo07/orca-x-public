@@ -177,6 +177,7 @@ function RightSidebarInner(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
+      data-side-panel=""
       className={cn(
         'relative flex-shrink-0 flex flex-row',
         // Why: overflow-visible is needed when open so the resize handle
@@ -192,6 +193,7 @@ function RightSidebarInner(): React.JSX.Element {
 
       {/* Panel content area */}
       <div
+        data-side-panel-content=""
         className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
         style={
           rightSidebarOpen
