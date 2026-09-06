@@ -1,9 +1,32 @@
 import React from 'react'
-import { AppWindow, Bell, BookOpen, CalendarClock, Files, List, Smartphone } from 'lucide-react'
+import {
+  AppWindow,
+  Bell,
+  BookOpen,
+  CalendarClock,
+  EyeOff,
+  Files,
+  Github,
+  Gitlab,
+  List,
+  Smartphone
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { JiraIcon } from '@/components/icons/JiraIcon'
+import { LinearIcon } from '@/components/icons/LinearIcon'
+import { useVisibleTaskProviders } from '@/hooks/useVisibleTaskProviders'
+import type { TaskProvider } from '../../../../shared/task-providers'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from '@/components/right-sidebar/right-sidebar-titlebar-drag-regions'
 import {
   activeViewForWorkspaceActivity,
@@ -58,11 +81,15 @@ function activityLabel(activity: WorkspaceActivityId): string {
 function WorkspaceActivityRailButton({
   activity,
   active,
-  onSelect
+  onSelect,
+  disabled = false,
+  onPrefetch
 }: {
   activity: WorkspaceActivityId
   active: boolean
   onSelect: () => void
+  disabled?: boolean
+  onPrefetch?: () => void
 }): React.JSX.Element {
   const Icon = ACTIVITY_ICONS[activity]
   const label = activityLabel(activity)
@@ -76,13 +103,22 @@ function WorkspaceActivityRailButton({
           // locale and silently stops matching in every other.
           data-workspace-activity={activity}
           aria-current={active ? 'page' : undefined}
+          aria-disabled={disabled || undefined}
           aria-label={label}
           className={cn(
             'relative flex h-10 w-10 shrink-0 items-center justify-center transition-colors',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
-            active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
+            active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground',
+            disabled && 'cursor-not-allowed opacity-50 hover:text-muted-foreground/60'
           )}
-          onClick={onSelect}
+          onPointerEnter={onPrefetch}
+          onFocus={onPrefetch}
+          onClick={() => {
+            if (disabled) {
+              return
+            }
+            onSelect()
+          }}
         >
           <Icon size={18} />
           {active ? (
@@ -98,9 +134,146 @@ function WorkspaceActivityRailButton({
   )
 }
 
+const TASK_PROVIDER_ICONS: Record<
+  TaskProvider,
+  React.ComponentType<{ className?: string; size?: number }>
+> = {
+  github: Github,
+  gitlab: Gitlab,
+  linear: LinearIcon,
+  jira: JiraIcon
+}
+
+function taskProviderLabel(provider: TaskProvider): string {
+  switch (provider) {
+    case 'github':
+      return translate('auto.components.sidebar.SidebarNav.0ccba862b8', 'Open GitHub tasks')
+    case 'gitlab':
+      return translate('auto.components.sidebar.SidebarNav.196c1b5362', 'Open GitLab tasks')
+    case 'linear':
+      return translate('auto.components.sidebar.SidebarNav.c39ab10000', 'Open Linear tasks')
+    case 'jira':
+      return translate('auto.components.sidebar.SidebarNav.e7ad3c540d', 'Open Jira tasks')
+  }
+}
+
+/**
+ * Tasks, plus the per-provider shortcuts the sidebar row revealed on hover.
+ *
+ * A 40px icon cannot carry four inline affordances, so they move to this item's context menu. That
+ * is a gain rather than a compromise: hover reached them with a pointer only, while a context menu
+ * is also reachable from the keyboard on a focused item.
+ */
+function TasksActivityRailButton({
+  active,
+  onSelect,
+  onSelectProvider,
+  onHide
+}: {
+  active: boolean
+  onSelect: () => void
+  onSelectProvider: (provider: TaskProvider) => void
+  onHide: () => void
+}): React.JSX.Element {
+  const { canBrowseTasks, visibleTaskProviders, prefetchTasks } = useVisibleTaskProviders()
+  // Why providers are gated but hide is not: with no git repo there is nothing to open, but the
+  // row could always be hidden — the sidebar kept its hide menu reachable while left click was
+  // inert, and that behaviour has a test.
+  const showProviders = canBrowseTasks && visibleTaskProviders.length > 0
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div data-workspace-activity-tasks="">
+          <WorkspaceActivityRailButton
+            activity="tasks"
+            active={active}
+            onSelect={onSelect}
+            disabled={!canBrowseTasks}
+            onPrefetch={prefetchTasks}
+          />
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        {showProviders
+          ? visibleTaskProviders.map((provider) => {
+              const ProviderIcon = TASK_PROVIDER_ICONS[provider]
+              return (
+                <ContextMenuItem
+                  key={provider}
+                  data-task-provider={provider}
+                  onSelect={() => onSelectProvider(provider)}
+                >
+                  <ProviderIcon className="size-3.5" />
+                  <span>{taskProviderLabel(provider)}</span>
+                </ContextMenuItem>
+              )
+            })
+          : null}
+        {showProviders ? <ContextMenuSeparator /> : null}
+        <ContextMenuItem onSelect={onHide}>
+          <EyeOff className="size-3.5" />
+          {translate('auto.components.sidebar.SidebarNav.d599269755', 'Hide from sidebar')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+}
+
+/**
+ * The settings flag each activity's "Hide from sidebar" writes, or null where hiding is not
+ * offered. Carried over so the rows' right-click hide survives their removal — an activity you
+ * cannot hide is a capability lost, not a simplification.
+ */
+const HIDE_SETTING_BY_ACTIVITY: Record<WorkspaceActivityId, keyof GlobalSettings | null> = {
+  workspace: 'showWorkspaceButton',
+  tasks: 'showTasksButton',
+  automations: 'showAutomationsButton',
+  mobile: 'showMobileButton',
+  artifacts: 'showArtifactsButton',
+  skills: 'showSkillsButton',
+  // Agents is an experiment toggle rather than a sidebar preference; it never offered hiding.
+  agents: null
+}
+
+function HideActivityMenu({ onHide }: { onHide: () => void }): React.JSX.Element {
+  return (
+    <ContextMenuContent>
+      <ContextMenuItem onSelect={onHide}>
+        <EyeOff className="size-3.5" />
+        {translate('auto.components.sidebar.SidebarNav.d599269755', 'Hide from sidebar')}
+      </ContextMenuItem>
+    </ContextMenuContent>
+  )
+}
+
+/** Wraps an activity in its hide menu, or renders it plainly when hiding is not offered. */
+function ActivityRailItemWithHide({
+  activity,
+  onHide,
+  children
+}: {
+  activity: WorkspaceActivityId
+  onHide: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  if (HIDE_SETTING_BY_ACTIVITY[activity] === null) {
+    return <>{children}</>
+  }
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div>{children}</div>
+      </ContextMenuTrigger>
+      <HideActivityMenu onHide={onHide} />
+    </ContextMenu>
+  )
+}
+
 export function WorkspaceActivityRailSection(): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const activeView = useAppStore((s) => s.activeView)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const openWorkspacePage = useAppStore((s) => s.openWorkspacePage)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
@@ -141,20 +314,49 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
     ]
   )
 
+  const hideActivity = React.useCallback(
+    (activity: WorkspaceActivityId) => {
+      const key = HIDE_SETTING_BY_ACTIVITY[activity]
+      if (!key) {
+        return
+      }
+      void updateSettings({ [key]: false })
+    },
+    [updateSettings]
+  )
+
   if (visible.length === 0) {
     return null
   }
 
   return (
     <div className="flex flex-col items-center" data-workspace-activity-rail="">
-      {visible.map((activity) => (
-        <WorkspaceActivityRailButton
-          key={activity}
-          activity={activity}
-          active={activeView === activeViewForWorkspaceActivity(activity)}
-          onSelect={() => select(activity)}
-        />
-      ))}
+      {visible.map((activity) => {
+        const active = activeView === activeViewForWorkspaceActivity(activity)
+        // Tasks is the one activity with secondary actions, so it renders its own variant rather
+        // than teaching the generic button about providers it will never have.
+        return activity === 'tasks' ? (
+          <TasksActivityRailButton
+            key={activity}
+            active={active}
+            onSelect={() => openTaskPage()}
+            onSelectProvider={(taskSource) => openTaskPage({ taskSource })}
+            onHide={() => hideActivity('tasks')}
+          />
+        ) : (
+          <ActivityRailItemWithHide
+            key={activity}
+            activity={activity}
+            onHide={() => hideActivity(activity)}
+          >
+            <WorkspaceActivityRailButton
+              activity={activity}
+              active={active}
+              onSelect={() => select(activity)}
+            />
+          </ActivityRailItemWithHide>
+        )
+      })}
       {/* Scope seam: application surfaces above, contextual selectors below. */}
       <div className="my-1 h-px w-5 shrink-0 bg-border" aria-hidden="true" />
     </div>
