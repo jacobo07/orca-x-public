@@ -2503,18 +2503,29 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui.rightSidebarTab,
         ui.rightSidebarExplorerView
       )
+      // Why this group ignores a broadcast: the persisted blob is profile-global and every window
+      // re-reads it whenever any window writes, so it is a live channel between windows and not
+      // only a restore point. Right for a preference, wrong for the layout of the window you are
+      // looking at — resizing one window would resize the others, and collapsing the panel in one
+      // would collapse it everywhere. Seeding a NEW window from the last values is the part worth
+      // keeping, so this splits by source rather than dropping the sharing.
+      //
+      // Spelled as "is startup" and not "is not sync": sync is this parameter's default, so the
+      // permissive spelling would let any caller that omits a source reach across windows. Same
+      // shape as activeView below; keep the two consistent.
+      const isOwnLoad = source === 'startup'
       const hydrated = {
         // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
-        sidebarWidth: sanitizePersistedSidebarWidth(
-          ui.sidebarWidth,
-          s.sidebarWidth,
-          MAX_LEFT_SIDEBAR_WIDTH
-        ),
-        rightSidebarWidth: sanitizePersistedSidebarWidth(
-          ui.rightSidebarWidth,
-          s.rightSidebarWidth,
-          MAX_RIGHT_SIDEBAR_WIDTH
-        ),
+        sidebarWidth: isOwnLoad
+          ? sanitizePersistedSidebarWidth(ui.sidebarWidth, s.sidebarWidth, MAX_LEFT_SIDEBAR_WIDTH)
+          : s.sidebarWidth,
+        rightSidebarWidth: isOwnLoad
+          ? sanitizePersistedSidebarWidth(
+              ui.rightSidebarWidth,
+              s.rightSidebarWidth,
+              MAX_RIGHT_SIDEBAR_WIDTH
+            )
+          : s.rightSidebarWidth,
         markdownTocPanelWidth: clampMarkdownTocPanelWidth(
           ui.markdownTocPanelWidth,
           undefined,
@@ -2527,9 +2538,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           undefined,
           s.combinedDiffFileTreeWidth
         ),
-        rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-        rightSidebarTab: rightSidebarRoute.rightSidebarTab,
-        rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
+        rightSidebarOpen: isOwnLoad
+          ? typeof ui.rightSidebarOpen === 'boolean'
+            ? ui.rightSidebarOpen
+            : true
+          : s.rightSidebarOpen,
+        // The tab and the explorer view are one route and are normalized together, so they are
+        // scoped together too — splitting them would let a window show a tab it did not choose.
+        rightSidebarTab: isOwnLoad ? rightSidebarRoute.rightSidebarTab : s.rightSidebarTab,
+        rightSidebarExplorerView: isOwnLoad
+          ? rightSidebarRoute.rightSidebarExplorerView
+          : s.rightSidebarExplorerView,
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
         // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.

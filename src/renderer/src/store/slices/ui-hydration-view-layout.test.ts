@@ -148,6 +148,48 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().activeView).toBe('tasks')
   })
 
+  it('keeps this window layout when another window broadcasts a UI change', () => {
+    // Same channel as the active view above, and the same reasoning: a width and a panel state
+    // describe the window in front of you, so a broadcast must not reach in and change them.
+    // Driven here as well as in the two-window e2e because the tab and the explorer view are
+    // awkward to set through the UI, and they ride this guard together with the widths.
+    const store = createUIStore()
+    store.setState({
+      sidebarWidth: 300,
+      rightSidebarWidth: 340,
+      rightSidebarOpen: true,
+      rightSidebarTab: 'explorer'
+    })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        sidebarWidth: 420,
+        rightSidebarWidth: 300,
+        rightSidebarOpen: false,
+        rightSidebarTab: 'checks'
+      }),
+      'sync'
+    )
+
+    expect(store.getState().sidebarWidth).toBe(300)
+    expect(store.getState().rightSidebarWidth).toBe(340)
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+  })
+
+  it('still seeds layout from the persisted blob at startup', () => {
+    // The counterweight: scoping the broadcast must not stop a newly opened window from starting
+    // at the size the user last chose, which is the part of the sharing worth keeping.
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ sidebarWidth: 420, rightSidebarOpen: false }), 'startup')
+
+    expect(store.getState().sidebarWidth).toBe(420)
+    expect(store.getState().rightSidebarOpen).toBe(false)
+  })
+
   it('falls back to terminal when the persisted active view is not a known view', () => {
     const store = createUIStore()
 
@@ -207,7 +249,10 @@ describe('createUISlice hydratePersistedUI', () => {
       )
 
     expect(store.getState().activeView).toBe('tasks')
-    expect(store.getState().rightSidebarOpen).toBe(false)
+    // Was asserted as false here, back when a broadcast still carried the panel state. It no longer
+    // does: whether this window's panel is open describes this window, so another one closing its
+    // panel must not close this one. See "keeps this window layout ..." above.
+    expect(store.getState().rightSidebarOpen).toBe(true)
   })
 
   it('preserves the current right sidebar width when older persisted UI omits it', () => {
@@ -225,7 +270,9 @@ describe('createUISlice hydratePersistedUI', () => {
   it('hydrates a persisted closed right sidebar preference', () => {
     const store = createUIStore()
 
-    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: false }))
+    // Source named explicitly here and below: it defaults to 'sync', and layout is deliberately not
+    // taken from a broadcast. These cases are about restoring a saved preference, which is startup.
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: false }), 'startup')
 
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
@@ -233,7 +280,7 @@ describe('createUISlice hydratePersistedUI', () => {
   it('hydrates a persisted open right sidebar preference', () => {
     const store = createUIStore()
 
-    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: true }))
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarOpen: true }), 'startup')
 
     expect(store.getState().rightSidebarOpen).toBe(true)
   })
@@ -241,7 +288,7 @@ describe('createUISlice hydratePersistedUI', () => {
   it('hydrates a persisted right sidebar tab preference', () => {
     const store = createUIStore()
 
-    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }))
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }), 'startup')
 
     expect(store.getState().rightSidebarTab).toBe('checks')
     expect(store.getState().rightSidebarExplorerView).toBe('files')
@@ -306,7 +353,7 @@ describe('createUISlice hydratePersistedUI', () => {
   it('hydrates legacy persisted search tab as Explorer search', () => {
     const store = createUIStore()
 
-    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'search' }))
+    store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'search' }), 'startup')
 
     expect(store.getState().rightSidebarTab).toBe('explorer')
     expect(store.getState().rightSidebarExplorerView).toBe('search')
@@ -318,7 +365,8 @@ describe('createUISlice hydratePersistedUI', () => {
     store
       .getState()
       .hydratePersistedUI(
-        makePersistedUI({ rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' })
+        makePersistedUI({ rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' }),
+        'startup'
       )
 
     expect(store.getState().rightSidebarTab).toBe('explorer')
@@ -622,7 +670,8 @@ describe('createUISlice hydratePersistedUI', () => {
       makePersistedUI({
         sidebarWidth: 100,
         rightSidebarWidth: 100
-      })
+      }),
+      'startup'
     )
 
     expect(store.getState().sidebarWidth).toBe(220)
@@ -658,7 +707,8 @@ describe('createUISlice hydratePersistedUI', () => {
       makePersistedUI({
         sidebarWidth: 260,
         rightSidebarWidth: 900
-      })
+      }),
+      'startup'
     )
 
     // Left sidebar stays capped; right sidebar now allows wide drag targets
@@ -694,7 +744,8 @@ describe('createUISlice hydratePersistedUI', () => {
       makePersistedUI({
         sidebarWidth: Number.NaN,
         rightSidebarWidth: Number.POSITIVE_INFINITY
-      })
+      }),
+      'startup'
     )
 
     expect(store.getState().sidebarWidth).toBe(320)
