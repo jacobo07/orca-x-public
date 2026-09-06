@@ -229,6 +229,38 @@ Three scrollbar classes are defined globally in `main.css`:
 
 Apply one of these to overflow containers; don't write a fourth style.
 
+### Overflow policy
+
+The scrollbar classes above say what an overflow container *looks* like. This says which surfaces
+are allowed to overflow at all, and how. **Overflow policy belongs to the semantic surface, not to
+the string.** The same long path is ellipsized in a rail, kept whole and copyable in a diagnostic,
+and scrolled horizontally in raw terminal output — one CSS rule cannot serve all three, and reaching
+for one is how a fix in one surface becomes a regression in another.
+
+| Surface | Policy | Full value recovered by | Pinned by |
+| --- | --- | --- | --- |
+| Raw PTY stream | Terminal-native reflow. Never restyled, re-wrapped or collapsed. | The terminal's own scrollback | `terminal-rendering-golden`, `terminal-perf` |
+| Structured tool body | Bounded height, scrolls | Scrolling; `truncateToolDetail` marks its own cut | `NativeChatToolRun.tsx` |
+| Structured diff | Bounded height, scrolls, focusable and named | Scrolling; producers cap at 120 lines and append an explicit truncation line | `NativeChatDiffView.test.tsx` |
+| Error / diagnostic body | Bounded height, scrolls | Scrolling | `NativeChatToolRun.tsx` |
+| File path / Explorer label | Truncates; indent is floored so the name keeps a readable width | Native `title` | `file-explorer-deep-nesting-geometry.spec.ts` |
+| Session title | Truncates; trailing controls stay unshrinkable | Native `title` | `TerminalRailRow.tsx` |
+| Status label | Never truncates — short by construction | n/a | `worktree-status.test.ts` |
+| Table / grid cell | Truncates | Native `title` | `AutomationListLastRunCell.test.tsx` |
+| Unknown external text | Treated as raw: bounded, never interpreted | Scrolling | `workspace-hostile-content-resilience.md` |
+
+Four rules follow from that table:
+
+- **Truncation is only acceptable while the complete value stays recoverable** wherever the user
+  might need it. A name that existed only in the row you just ellipsized is a name you deleted.
+- **Bounding is a viewport decision, never a content one.** Cap what is on screen; do not drop lines
+  the producer sent. If content genuinely must be cut, cut it in the producer and mark the cut.
+- **A region you make scrollable must be reachable by keyboard and named.** Turning content into a
+  scroller hides it behind an interaction; a scroller only a wheel can drive hides it completely.
+- **Do not mount `Tooltip` on a virtualized row.** Every row would instantiate one. Native `title`
+  is the right recovery affordance there, and the Tooltip guidance above assumes a bounded number
+  of triggers.
+
 ## UX rules
 
 These are the rules a contributor will most often get wrong if they're working in isolation. They apply to every UI change.

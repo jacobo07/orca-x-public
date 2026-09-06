@@ -28,10 +28,12 @@
       "oracle": "Build a fourteen-deep tree in the narrowest explorer the store will hydrate to, walk it open while asserting the walk reached the bottom, and measure the filename's width clipped to its row rather than its reported box. Require room to read and a recoverable full name. Separately, render the state indicator for failed, blocked and interrupted, strip the accessible name, and require the remaining markup to differ pairwise — with the name itself still exact.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/AgentStateDot.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/native-chat/NativeChatDiffView.test.tsx",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/file-explorer-deep-nesting-geometry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/AgentStateDot.test.ts",
+        "src/renderer/src/components/native-chat/NativeChatDiffView.test.tsx",
         "tests/e2e/file-explorer-deep-nesting-geometry.spec.ts"
       ],
       "assertionRefs": [
@@ -49,6 +51,14 @@
             "tells a failure apart from a block",
             "does not raise an interrupted run to the same alarm as a block",
             "still names blocked, interrupted and failed exactly"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/native-chat/NativeChatDiffView.test.tsx",
+          "assertions": [
+            "bounds its own height the way every sibling detail branch does",
+            "keeps every line the producer handed it",
+            "lets a keyboard reach the diff it just made scrollable"
           ]
         }
       ],
@@ -70,6 +80,15 @@
           "result": "passed",
           "durationSeconds": 6,
           "summary": "Ten assertions. The two new ones failed beforehand with identical markup for failed against blocked and interrupted against blocked; they pass now that failure renders a crossed circle and interruption a quiet stopped marker."
+        },
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/native-chat/NativeChatDiffView.test.tsx",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "Two of four failed first: no height bound and no keyboard route into the region. The line-preservation case passed throughout, which is the evidence that the producers' 120-line cap was already doing its job and that the defect was viewport height, not lost content. 770 pass across native-chat after the fix."
         }
       ],
       "runtimeBudget": {
@@ -89,16 +108,194 @@
         "evidence": "The indent cap is a CSS min() evaluated by the engine, replacing an unconditional pixel value, and adds no measurement or layout pass. The name carries a native title attribute rather than a tooltip instance, which is what keeps it free in a virtualized list. The state indicator gains two branches and renders one icon where it previously rendered one span."
       },
       "promotionCriteria": [
-        "Collect soak history for the geometry spec once precondition health is reported separately from product outcome.",
+        "Collect soak history for the geometry spec now that precondition health is reported separately from product outcome.",
         "Extend the geometry case to a second platform.",
-        "Bring the remaining status surfaces under the same semantic assertions before claiming the family is covered."
+        "Measure the diff region's rendered height in a real window rather than asserting the class that produces it."
       ],
       "knownGaps": [
-        "The worktree sidebar's StatusIndicator has no failure state at all, and resolveWorktreeStatus folds blocked into permission, so the same runtime state reads as an attention dot in one surface and an approval request in another. Unmeasured by this gate.",
-        "AutomationLastRunTone carries six tones and AutomationListLastRunCell collapses them to failed-or-not at render. A second state-to-style map, outside this gate's scope.",
-        "Geometry evidence is Windows-only so far."
+        "The worktree sidebar's StatusIndicator still has no failure state. The wording half of that gap closed and moved to workspace-presentation.status-claims-only-what-it-knows; the missing state itself is covered nowhere.",
+        "Geometry evidence is Windows-only so far.",
+        "The diff bound is asserted on rendered markup, not on measured pixels. It proves the class is applied, not that the region is 256px on screen."
       ],
-      "demotionRule": "Demote if a filename can reach zero readable width at any depth, if truncated text becomes unrecoverable, if two states requiring different user action render identically once the accessible name is removed, or if the gate fails without an identified harness defect."
+      "demotionRule": "Demote if a filename can reach zero readable width at any depth, if truncated text becomes unrecoverable, if two states requiring different user action render identically once the accessible name is removed, if a detail surface loses its viewport bound, or if the gate fails without an identified harness defect."
+    },
+    {
+      "id": "evidence-integrity.verdicts-name-their-own-failures",
+      "title": "A run says whether it judged its subject or failed to reach it",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "evidence-integrity",
+      "layer": "tooling",
+      "surfaces": ["reliability gate checker", "shared Electron E2E fixture"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Both proofs are deterministic unit runs with no dependency on the seeded workspace, which is deliberate: an instrument-integrity gate must not be gated on the harness whose integrity it exists to describe. The classifier is pure. The checker's internal-failure branch is driven by a throwing getter, an input a JSONC file cannot express — which is the point, since the branch exists for field shapes nobody anticipated.",
+      "motivatingLinks": ["docs/reference/workspace-hostile-content-resilience.md"],
+      "invariant": "Non-success is not one state. A verifier that rejected its subject and a verifier that could not judge its subject are different evidence, and so are a test whose precondition failed and a test whose behaviour under test failed. Neither pair may be collapsed, and neither unknown may be resolved toward the convenient answer: an unattributed failure is never reported as a product failure, and a run that could not judge every gate never reports as a plain rejection.",
+      "oracle": "Delete a required field from a manifest and require a readable validation verdict rather than a crash. Make a validator throw and require it to be reported as a checker failure that outranks any contract failures found in the same run. Separately, classify a marked setup failure, an unmarked setup failure, a spec-body failure, a dead-harness message and an unattributed message, and require five distinct answers with unknown preserved.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/check-reliability-gates.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/e2e-precondition.unit.test.ts"
+      ],
+      "testFiles": [
+        "config/scripts/check-reliability-gates.test.mjs",
+        "tests/e2e/helpers/e2e-precondition.unit.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/check-reliability-gates.test.mjs",
+          "assertions": [
+            "reports an absent required field instead of failing as the checker",
+            "reports a throwing validator as a checker failure, not as an invalid contract",
+            "lets a checker failure outrank contract failures found in the same run",
+            "names unreadable input as its own verdict rather than an invalid contract"
+          ]
+        },
+        {
+          "file": "tests/e2e/helpers/e2e-precondition.unit.test.ts",
+          "assertions": [
+            "tells a setup failure apart from a failure of the behaviour under test",
+            "refuses to call an unattributed failure a product failure",
+            "classifies an unmarked setup failure as precondition, never as product",
+            "marks a failed phase so the report can name where it stopped"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/check-reliability-gates.test.mjs",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 7,
+          "summary": "24 passed and 1 failed before the fix: the absent-field case rejected with a TypeError instead of resolving to a verdict. 28 pass after. None of the twenty-odd pre-existing rejection cases could have caught it, because every one of them supplies a well-formed but wrong value rather than removing a field."
+        },
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/e2e-precondition.unit.test.ts",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 4,
+          "summary": "Failed first for the right reason — the module did not exist, with the suite discovered and reported as one failed suite rather than silently matching nothing. 8 pass after."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "two deterministic unit suites, no Electron and no seeded workspace"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Both suites are pure and in-process. No soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The checker crash was observed as a rejected promise before the guard landed. The classifier suite was observed failing on a missing module with the suite discovered, which distinguishes a real red from a pattern that matched no tests."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The checker gains one try/catch per gate over 89 gates. The E2E phase wrapper adds one try/catch per setup step and one array push per failure; a passing run pushes nothing except a poll-attempt note."
+      },
+      "promotionCriteria": [
+        "Consume the precondition annotations in whatever reads the Playwright report, so the classification reaches a human without being looked for.",
+        "Collect soak history for the worktree-seeding attempt counts and decide from that data whether the flake has a bounded root cause.",
+        "Run both suites on a second platform."
+      ],
+      "knownGaps": [
+        "The classification is recorded on the test and in the failure message; nothing yet aggregates it into a per-run summary, so reading it is still a human act.",
+        "The worktree-seeding flake is isolated and observable but not diagnosed. Its root cause remains unknown.",
+        "tests/ is outside every tsconfig project in the repo, so no typecheck covers the E2E helpers. Both new modules are checked by lint and by execution only."
+      ],
+      "demotionRule": "Demote if a malformed manifest again reaches an uncaught exception, if a checker failure is reported as a plain contract rejection, if an unattributed failure is classified as a product failure, or if a setup failure reaches a report without its phase."
+    },
+    {
+      "id": "workspace-presentation.status-claims-only-what-it-knows",
+      "title": "A rolled-up status may lose detail but may not invent it",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-presentation",
+      "layer": "renderer-presentation",
+      "surfaces": ["worktree sidebar status", "command palette live status", "automation list"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Unit renders and pure label assertions. The label case compares against agentStateLabel rather than a literal, so the two surfaces rendering the same rollup cannot drift apart without a red. The tone case holds the status text identical across tones so the only thing that can differ in the markup is the tone channel itself.",
+      "motivatingLinks": ["docs/reference/workspace-hostile-content-resilience.md"],
+      "invariant": "Aggregation may reduce specificity and may not manufacture it. A bucket holding blocked and waiting may say something needs the user; it may not say what, because the folded value cannot tell the two apart. And a state the runtime could not read must not be presented as one that went well: unknown may look quiet, never healthy.",
+      "oracle": "Assert the worktree rollup's label names no cause and equals the label the other surface gives the same rollup. Render the automation cell for each tone with identical status text and require unknown to differ from succeeded, to carry neither the error nor the success role, and require failure to use the status role rather than the action-scoped destructive role.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/worktree-status.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/automations/AutomationListLastRunCell.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/lib/worktree-status.test.ts",
+        "src/renderer/src/components/automations/AutomationListLastRunCell.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/worktree-status.test.ts",
+          "assertions": ["does not name a cause the rollup cannot prove"]
+        },
+        {
+          "file": "src/renderer/src/components/automations/AutomationListLastRunCell.test.tsx",
+          "assertions": [
+            "stops an unknown outcome from looking like a successful one",
+            "keeps an unknown outcome quiet rather than alarming",
+            "does not borrow the destructive action role for a run outcome"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/worktree-status.test.ts",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "29 passed and 1 failed before the change: the label read \"Needs permission\" for a bucket that also holds blocked. Five assertions across three spec files had pinned that wording, so they were pinning the claim rather than the behaviour and moved with it."
+        },
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/automations/AutomationListLastRunCell.test.tsx",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 4,
+          "summary": "2 passed and 2 failed first: unknown and succeeded rendered byte-identical, and the failure tone painted with destructive. 169 pass across the automations components after the fix."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "two deterministic unit suites"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Both suites are pure renders with a fixed clock. No soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Each assertion was observed failing against the code that preceded it, including the byte-identical markup for unknown against succeeded."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "One string constant changed and one ternary branch was added to a list cell."
+      },
+      "promotionCriteria": [
+        "Give StatusIndicator a failure state, then bring it under this gate.",
+        "Sweep the remaining state-to-style maps for the same two defects and either fold them in or record why they are exempt.",
+        "Run on a second platform."
+      ],
+      "knownGaps": [
+        "StatusIndicator has no failure state at all. This gate proves its label does not overclaim; it does not prove the surface can express failure.",
+        "The rollup's other consumers were checked by grep for the old wording, not by an assertion that every consumer of a folded state avoids naming a cause.",
+        "AgentStateDot still paints blocked from a raw bg-red-500 rather than a token; the role is correct but the value is not tokenised."
+      ],
+      "demotionRule": "Demote if a rolled-up label names a cause its source data cannot establish, if an unknown or unreadable state renders identically to a successful one, or if a runtime status borrows the destructive action role."
     },
     {
       "id": "ephemeral-vm-runtime.rollback-readable-sidecar",
