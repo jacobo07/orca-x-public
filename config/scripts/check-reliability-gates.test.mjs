@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { main } from './check-reliability-gates.mjs'
+import {
+  main,
+  resolveVerdict,
+  validateManifest,
+  VERDICT_CHECKER_INTERNAL_FAILURE,
+  VERDICT_CONTRACT_INVALID,
+  VERDICT_CONTRACT_VALID
+} from './check-reliability-gates.mjs'
 
 const tempDirs = []
 
@@ -471,5 +478,53 @@ describe('check-reliability-gates', () => {
         'policy.blockingPromotion.maximumUnexplainedFlakes must be a non-negative number'
       )
     )
+  })
+
+  // Why: the positive control for the internal-failure branch. Without an input that genuinely
+  // throws, a checker that had stopped catching would report the same clean green as one that
+  // still does. A getter is the only way to build a throwing field a JSONC file cannot express —
+  // which is the point, since the branch exists for field shapes nobody anticipated.
+  it('reports a throwing validator as a checker failure, not as an invalid contract', async () => {
+    const manifest = JSON.parse(validManifest())
+    Object.defineProperty(manifest.gates[0], 'evidenceRuns', {
+      configurable: true,
+      get() {
+        throw new Error('field access exploded')
+      }
+    })
+
+    const result = await validateManifest(manifest, process.cwd())
+
+    expect(result.internalFailures).toHaveLength(1)
+    expect(result.internalFailures[0]).toContain('terminal-session.snapshot-freshness')
+    expect(result.internalFailures[0]).toContain('field access exploded')
+    expect(resolveVerdict(result)).toEqual({
+      verdict: VERDICT_CHECKER_INTERNAL_FAILURE,
+      code: 2
+    })
+  })
+
+  it('lets a checker failure outrank contract failures found in the same run', () => {
+    // A run that could not judge every gate proves nothing about the ones it skipped, so it must
+    // not report as a plain rejection — that would claim the manifest was fully examined.
+    expect(resolveVerdict({ failures: [], internalFailures: [] })).toEqual({
+      verdict: VERDICT_CONTRACT_VALID,
+      code: 0
+    })
+    expect(resolveVerdict({ failures: ['a gate is wrong'], internalFailures: [] })).toEqual({
+      verdict: VERDICT_CONTRACT_INVALID,
+      code: 1
+    })
+    expect(
+      resolveVerdict({ failures: ['a gate is wrong'], internalFailures: ['a gate threw'] })
+    ).toEqual({ verdict: VERDICT_CHECKER_INTERNAL_FAILURE, code: 2 })
+  })
+
+  it('names unreadable input as its own verdict rather than an invalid contract', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = makeTempRoot('{ "schemaVersion": 1, } trailing')
+
+    await expect(main(root)).resolves.toBe(1)
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('UNREADABLE INPUT'))
   })
 })

@@ -275,10 +275,10 @@ function validateCoveredScope(gate, failures) {
   }
   if (
     ['partial', 'active'].includes(gate.protection) &&
-    gate.evidenceRuns.some((run) => isRecord(run) && run.result === 'passed')
+    asArray(gate.evidenceRuns).some((run) => isRecord(run) && run.result === 'passed')
   ) {
     const evidencePlatforms = new Set(
-      gate.evidenceRuns
+      asArray(gate.evidenceRuns)
         .filter((run) => isRecord(run) && run.result === 'passed')
         .map((run) => run.platform)
     )
@@ -372,6 +372,65 @@ async function validateGate(gate, maturities, root) {
   return failures
 }
 
+export const VERDICT_CONTRACT_VALID = 'CONTRACT VALID'
+export const VERDICT_CONTRACT_INVALID = 'CONTRACT INVALID'
+export const VERDICT_UNREADABLE_INPUT = 'UNREADABLE INPUT'
+export const VERDICT_CHECKER_INTERNAL_FAILURE = 'CHECKER INTERNAL FAILURE'
+
+/**
+ * Validate every gate, isolating a validator that throws. A thrown validator means the checker
+ * could not judge that gate — a different fact from the gate being invalid, and separated here so
+ * one unanticipated field shape cannot take down the verdict for the whole manifest.
+ */
+export async function validateManifest(manifest, root) {
+  const failures = []
+  const internalFailures = []
+  if (!isRecord(manifest)) {
+    failures.push('manifest must be an object')
+    return { failures, internalFailures }
+  }
+  if (manifest.schemaVersion !== 1) {
+    failures.push('schemaVersion must be 1')
+  }
+  const maturities = validatePolicy(manifest, failures)
+  if (!Array.isArray(manifest.gates) || manifest.gates.length === 0) {
+    failures.push('gates must be a non-empty array')
+    return { failures, internalFailures }
+  }
+  const seenIds = new Set()
+  for (const gate of manifest.gates) {
+    const gateId = isRecord(gate) && isNonEmptyString(gate.id) ? gate.id : '<unknown>'
+    if (isRecord(gate) && isNonEmptyString(gate.id)) {
+      if (seenIds.has(gate.id)) {
+        failures.push(`${gate.id}: duplicate gate id`)
+      }
+      seenIds.add(gate.id)
+    }
+    try {
+      failures.push(...(await validateGate(gate, maturities, root)))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      internalFailures.push(`${gateId}: the checker threw while validating this gate (${message})`)
+    }
+  }
+  return { failures, internalFailures }
+}
+
+/**
+ * A checker that cannot judge its subject and a subject that failed judgement are both non-success,
+ * and they are not the same evidence. Exit 1 rejects the manifest; exit 2 says the manifest was not
+ * fully judged and the run proves nothing about it.
+ */
+export function resolveVerdict({ failures, internalFailures }) {
+  if (internalFailures.length > 0) {
+    return { verdict: VERDICT_CHECKER_INTERNAL_FAILURE, code: 2 }
+  }
+  if (failures.length > 0) {
+    return { verdict: VERDICT_CONTRACT_INVALID, code: 1 }
+  }
+  return { verdict: VERDICT_CONTRACT_VALID, code: 0 }
+}
+
 export async function main(root = process.cwd()) {
   const manifestPath = path.join(root, MANIFEST_PATH)
   let raw
@@ -380,6 +439,7 @@ export async function main(root = process.cwd()) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`${MANIFEST_PATH}: unable to read manifest (${message})`)
+    console.error(`Verdict: ${VERDICT_UNREADABLE_INPUT}`)
     return 1
   }
   const parseErrors = []
@@ -390,40 +450,39 @@ export async function main(root = process.cwd()) {
         `${MANIFEST_PATH}: JSONC parse error ${printParseErrorCode(error.error)} at offset ${error.offset}`
       )
     }
+    console.error(`Verdict: ${VERDICT_UNREADABLE_INPUT}`)
     return 1
   }
-  const failures = []
-  if (!isRecord(manifest)) {
-    failures.push('manifest must be an object')
-  } else {
-    if (manifest.schemaVersion !== 1) {
-      failures.push('schemaVersion must be 1')
-    }
-    const maturities = validatePolicy(manifest, failures)
-    if (!Array.isArray(manifest.gates) || manifest.gates.length === 0) {
-      failures.push('gates must be a non-empty array')
-    } else {
-      const seenIds = new Set()
-      for (const gate of manifest.gates) {
-        if (isRecord(gate) && isNonEmptyString(gate.id)) {
-          if (seenIds.has(gate.id)) {
-            failures.push(`${gate.id}: duplicate gate id`)
-          }
-          seenIds.add(gate.id)
-        }
-        failures.push(...(await validateGate(gate, maturities, root)))
-      }
-    }
+  let result
+  try {
+    result = await validateManifest(manifest, root)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`The checker failed before it could judge the manifest (${message})`)
+    console.error(`Verdict: ${VERDICT_CHECKER_INTERNAL_FAILURE}`)
+    return 2
   }
-  if (failures.length > 0) {
-    console.error(`Reliability gate manifest check failed with ${failures.length} issue(s):`)
-    for (const failure of failures) {
+  const { verdict, code } = resolveVerdict(result)
+  if (result.failures.length > 0) {
+    console.error(`Reliability gate manifest check failed with ${result.failures.length} issue(s):`)
+    for (const failure of result.failures) {
       console.error(`- ${failure}`)
     }
-    return 1
   }
-  console.log(`Reliability gate manifest check passed for ${manifest.gates.length} gate(s).`)
-  return 0
+  if (result.internalFailures.length > 0) {
+    console.error(
+      `The checker could not judge ${result.internalFailures.length} gate(s); this run proves nothing about them:`
+    )
+    for (const failure of result.internalFailures) {
+      console.error(`- ${failure}`)
+    }
+  }
+  if (code === 0) {
+    console.log(`Reliability gate manifest check passed for ${manifest.gates.length} gate(s).`)
+    return 0
+  }
+  console.error(`Verdict: ${verdict}`)
+  return code
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
