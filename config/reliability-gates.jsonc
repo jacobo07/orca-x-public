@@ -29,11 +29,13 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/AgentStateDot.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/native-chat/NativeChatDiffView.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard/DashboardAgentRow.test.tsx",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/file-explorer-deep-nesting-geometry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/AgentStateDot.test.ts",
         "src/renderer/src/components/native-chat/NativeChatDiffView.test.tsx",
+        "src/renderer/src/components/dashboard/DashboardAgentRow.test.tsx",
         "tests/e2e/file-explorer-deep-nesting-geometry.spec.ts"
       ],
       "assertionRefs": [
@@ -59,6 +61,14 @@
             "bounds its own height the way every sibling detail branch does",
             "keeps every line the producer handed it",
             "lets a keyboard reach the diff it just made scrollable"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard/DashboardAgentRow.test.tsx",
+          "assertions": [
+            "renders interrupted done rows with plain text on the secondary line",
+            "keeps blocked rows red",
+            "renders waiting rows with the shared question glyph"
           ]
         }
       ],
@@ -89,6 +99,15 @@
           "result": "passed",
           "durationSeconds": 5,
           "summary": "Two of four failed first: no height bound and no keyboard route into the region. The line-preservation case passed throughout, which is the evidence that the producers' 120-line cap was already doing its job and that the defect was viewport height, not lost content. 770 pass across native-chat after the fix."
+        },
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard/DashboardAgentRow.test.tsx",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 9,
+          "summary": "Found by a full-suite run, not by the change-scoped sweep: this file renders AgentStateDot through the DOM and never names it, so a grep of test files for the module name could not see it. It was a second test pinning interrupted to the blocked alarm. It now asserts the interrupted glyph and the absence of red, pinning the distinction in both directions, while its blocked-stays-red neighbour is untouched. 490 pass across dashboard, dashboard-popout, tab-bar and AgentStateDot."
         }
       ],
       "runtimeBudget": {
