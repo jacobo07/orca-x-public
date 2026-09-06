@@ -1,5 +1,5 @@
 import React from 'react'
-import { CircleCheck } from 'lucide-react'
+import { CircleCheck, CircleSlash, CircleX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
@@ -96,6 +96,35 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     )
   }
 
+  if (state === 'failed') {
+    // Why: a failure asks the user to investigate or retry; a block asks them to clear whatever it
+    // waits on. Different answers, so they cannot share a glyph — and the difference is carried by
+    // the shape, which survives both a colour-blind reader and a rail scanned at a glance. Paired
+    // with 'done' as its opposite so the two terminal outcomes read as a set.
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleX className={cn('text-status-error', icon)} aria-hidden="true" />
+      </span>
+    )
+  }
+
+  if (state === 'interrupted') {
+    // Why: the runtime models this as done carrying a flag, not as a peer of blocked. It is a
+    // terminal outcome that nobody needs to act on right now, so it stays quiet — a red dot here
+    // spends the user's attention on work that merely stopped.
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleSlash className={cn('text-muted-foreground', icon)} aria-hidden="true" />
+      </span>
+    )
+  }
+
   if (state === 'permission' || state === 'waiting') {
     return (
       <span
@@ -116,9 +145,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn(
           'block rounded-full',
           inner,
-          state === 'blocked' || state === 'interrupted' || state === 'failed'
-            ? 'bg-red-500'
-            : 'bg-neutral-500/40'
+          state === 'blocked' ? 'bg-red-500' : 'bg-neutral-500/40'
         )}
       />
     </span>
