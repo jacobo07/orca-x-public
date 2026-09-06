@@ -3,19 +3,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AgentStateDot, type AgentDotState } from './AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from './AgentStateDot'
 
 function renderMarkup(state: AgentDotState): string {
   return renderToStaticMarkup(React.createElement(AgentStateDot, { state }))
-}
-
-function renderDotClassNames(state: AgentDotState): string[] {
-  const markup = renderMarkup(state)
-  const dotClassName = markup.match(/<span class="([^"]*rounded-full[^"]*)"/)?.[1]
-
-  expect(dotClassName).toBeDefined()
-
-  return dotClassName!.split(/\s+/)
 }
 
 describe('AgentStateDot', () => {
@@ -68,13 +59,30 @@ describe('AgentStateDot', () => {
     }
   )
 
-  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
-    'renders %s as a red attention dot',
-    (state) => {
-      const classNames = renderDotClassNames(state)
+  // Why: the accessible name already differs for every state, so comparing whole markup would
+  // report these as distinct while they paint identically. Strip the name to leave only what a
+  // sighted user actually receives.
+  function visualSignature(state: AgentDotState): string {
+    return renderMarkup(state).replace(/aria-label="[^"]*"/g, '')
+  }
 
-      expect(classNames).toContain('bg-red-500')
-      expect(classNames).not.toContain('bg-amber-500')
+  it('tells a failure apart from a block', () => {
+    // Blocked means something must be unblocked; failed means something must be investigated or
+    // retried. Different operator action, so they cannot share one glyph.
+    expect(visualSignature('failed')).not.toBe(visualSignature('blocked'))
+  })
+
+  it('does not raise an interrupted run to the same alarm as a block', () => {
+    // 'interrupted' is a variant of done — the runtime models it as done with a flag, not as a
+    // peer of blocked (see the done:interrupted grouping in ActivityPrototypePage). Painting it
+    // as the blocked attention dot manufactures urgency for work that merely stopped.
+    expect(visualSignature('interrupted')).not.toBe(visualSignature('blocked'))
+  })
+
+  it.each(['blocked', 'interrupted', 'failed'] satisfies AgentDotState[])(
+    'still names %s exactly',
+    (state) => {
+      expect(renderMarkup(state)).toContain(`aria-label="${agentStateLabel(state)}"`)
     }
   )
 })
