@@ -135,6 +135,19 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().activeView).toBe('skills')
   })
 
+  it('keeps the active view window-local when another window broadcasts a UI change', () => {
+    // The persisted UI blob is profile-global and every window re-hydrates from it on 'sync'
+    // (hooks/useIpcEvents.ts). Applying activeView there would let one window's navigation move
+    // another's — with the activity rail that is a visible jump to a different surface mid-task.
+    // Every other test here drives 'startup', so without this the guard has never been exercised.
+    const store = createUIStore()
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'automations' }), 'sync')
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
   it('falls back to terminal when the persisted active view is not a known view', () => {
     const store = createUIStore()
 
