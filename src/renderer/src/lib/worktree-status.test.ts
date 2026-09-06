@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import { agentStateLabel } from '@/components/AgentStateDot'
 import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from './worktree-status'
 
 const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
@@ -39,6 +40,16 @@ describe('getWorktreeStatus', () => {
 
     expect(status).toBe('permission')
     expect(getWorktreeStatusLabel(status)).toBe('Needs permission')
+  })
+
+  it('does not name a cause the rollup cannot prove', () => {
+    // Why: worktree-agent-activity-summary folds {blocked, waiting} into one flag, and
+    // terminal-tab-activity-status records that the same collapse is what every status surface
+    // does. Compressing the two is deliberate and stays. Claiming *which* of them it was is not
+    // something the compressed value can support: a blocked agent is not necessarily waiting for
+    // an approval. AgentStateDot renders this same rollup and already names it without a cause.
+    expect(getWorktreeStatusLabel('permission')).not.toMatch(/permission/i)
+    expect(getWorktreeStatusLabel('permission')).toBe(agentStateLabel('permission'))
   })
 
   it('treats browser-only worktrees as active', () => {
