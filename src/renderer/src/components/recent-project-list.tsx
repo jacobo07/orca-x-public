@@ -85,6 +85,10 @@ export function RecentProjectList({
             <button
               key={row.id}
               type="button"
+              // Marks the rows as the sequence arrow keys walk. Position in the DOM is not enough:
+              // the surfaces around this list hold buttons of their own, and a walker that counted
+              // those would step out of the list without appearing to.
+              data-launcher-project-row=""
               disabled={disabled || openingRepoId !== null}
               aria-busy={opening}
               title={

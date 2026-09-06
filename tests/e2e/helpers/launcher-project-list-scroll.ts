@@ -92,6 +92,28 @@ async function applyLauncherProjectEstate(page: Page): Promise<void> {
   }, LAUNCHER_SCROLL_FIXTURE_PROJECT_COUNT)
 }
 
+/**
+ * The project row holding keyboard focus, and whether it can actually be seen.
+ *
+ * Both halves matter together: focus that has moved to a row scrolled out of the window is the
+ * shape of keyboard navigation that reads, to the person using it, as focus having vanished.
+ */
+export async function focusedProjectRow(
+  page: Page
+): Promise<{ label: string | null; fullyVisible: boolean }> {
+  return page.evaluate(() => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLButtonElement) || !active.querySelector('span[title]')) {
+      return { label: null, fullyVisible: false }
+    }
+    const rect = active.getBoundingClientRect()
+    return {
+      label: active.querySelector('span')?.textContent?.trim() ?? '',
+      fullyVisible: rect.top >= 0 && rect.bottom <= window.innerHeight
+    }
+  })
+}
+
 /** Reads the rendered list. Throws rather than returning zeroes if the list is not on screen. */
 export async function measureLauncherProjectList(
   page: Page

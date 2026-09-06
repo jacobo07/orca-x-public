@@ -1,6 +1,7 @@
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import {
+  focusedProjectRow,
   LAUNCHER_SCROLL_FIXTURE_PROJECT_COUNT,
   measureLauncherProjectList,
   seedLauncherProjectEstate,
@@ -79,4 +80,41 @@ test('the landing list filters instead of folding', async ({ orcaPage }) => {
     })
     .toBe(1)
   expect((await measureLauncherProjectList(orcaPage)).lastRowLabel).toBe('Estate Project 42')
+})
+
+test('the keyboard reaches the far end of the list without the wheel', async ({ orcaPage }) => {
+  // Tabbing is not reach: sixty rows are sixty stops, and the row a person lands on has to be one
+  // they can see. Focus that moves to a row still below the fold is the version of this that looks
+  // to the user like focus disappearing.
+  await waitForSessionReady(orcaPage)
+  await seedLauncherProjectEstate(orcaPage)
+
+  const filter = orcaPage.getByLabel('Filter projects by name or path')
+  await filter.click()
+
+  // Down from the filter enters the list rather than skipping past it.
+  await orcaPage.keyboard.press('ArrowDown')
+  expect(await focusedProjectRow(orcaPage)).toEqual({
+    label: 'Estate Project 60',
+    fullyVisible: true
+  })
+
+  await orcaPage.keyboard.press('ArrowDown')
+  expect((await focusedProjectRow(orcaPage)).label).toBe('Estate Project 59')
+
+  await orcaPage.keyboard.press('ArrowUp')
+  expect((await focusedProjectRow(orcaPage)).label).toBe('Estate Project 60')
+
+  // The end of a sixty-row list is the case the wheel had to be used for.
+  await orcaPage.keyboard.press('End')
+  expect(await focusedProjectRow(orcaPage)).toEqual({
+    label: 'Estate Project 01',
+    fullyVisible: true
+  })
+
+  await orcaPage.keyboard.press('Home')
+  expect(await focusedProjectRow(orcaPage)).toEqual({
+    label: 'Estate Project 60',
+    fullyVisible: true
+  })
 })

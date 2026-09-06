@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -22,6 +22,7 @@ export function LauncherProjectPicker(): React.JSX.Element | null {
   // Opening a project the session never named has to ask its host for the workspaces first, which
   // spawns Git. Without a visible pending row that wait is indistinguishable from a dead click.
   const [openingRepoId, setOpeningRepoId] = useState<string | null>(null)
+  const filterRef = useRef<HTMLInputElement | null>(null)
 
   const hasProjects = repos.length > 0
   // The same rows the list renders, so "no project matches" cannot appear above matching rows.
@@ -67,12 +68,60 @@ export function LauncherProjectPicker(): React.JSX.Element | null {
       .finally(() => setOpeningRepoId(null))
   }
 
+  /**
+   * Walks the rows with the arrow keys, so reaching the far end of a large estate does not mean
+   * sixty tab stops or the wheel.
+   *
+   * Home and End are deliberately ignored while the filter has focus: there they mean the ends of
+   * the text being typed, and taking them would break editing to add a shortcut.
+   */
+  const moveFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const rows = [
+      ...(event.currentTarget.querySelectorAll<HTMLButtonElement>(
+        'button[data-launcher-project-row]'
+      ) ?? [])
+    ]
+    if (rows.length === 0) {
+      return
+    }
+    const current = rows.indexOf(document.activeElement as HTMLButtonElement)
+    const onRow = current !== -1
+
+    const target = ((): HTMLElement | null => {
+      if (event.key === 'ArrowDown') {
+        return rows[Math.min(current + 1, rows.length - 1)] ?? null
+      }
+      if (event.key === 'ArrowUp') {
+        // Up from the first row returns to the filter rather than trapping focus in the list.
+        return current <= 0 ? filterRef.current : rows[current - 1]
+      }
+      if (event.key === 'Home' && onRow) {
+        return rows[0] ?? null
+      }
+      if (event.key === 'End' && onRow) {
+        return rows.at(-1) ?? null
+      }
+      return null
+    })()
+
+    if (!target) {
+      return
+    }
+    event.preventDefault()
+    target.focus()
+    // Focusing scrolls the row into view on its own, but only just: `nearest` keeps a row that is
+    // already visible where it is instead of jumping the list under the reader.
+    target.scrollIntoView({ block: 'nearest' })
+  }
+
   if (!hasProjects) {
     return null
   }
 
   return (
-    <>
+    // `contents` so this wrapper can carry the key handling without becoming a box in the
+    // surrounding column and changing the spacing its callers already lay out.
+    <div className="contents" onKeyDown={moveFocus}>
       {/* Why a filter and not just the list: this estate runs to dozens of projects, and past
           roughly a screenful the recents list stops being a shortcut and becomes a scan.
           The magnifier plus the accessible name carry the affordance; hint text inside the
@@ -84,6 +133,7 @@ export function LauncherProjectPicker(): React.JSX.Element | null {
           aria-hidden
         />
         <input
+          ref={filterRef}
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -114,6 +164,6 @@ export function LauncherProjectPicker(): React.JSX.Element | null {
           )}
         </p>
       ) : null}
-    </>
+    </div>
   )
 }
