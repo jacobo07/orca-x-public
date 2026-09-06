@@ -206,6 +206,7 @@
       ],
       "knownGaps": [
         "The classification is recorded on the test and in the failure message; nothing yet aggregates it into a per-run summary, so reading it is still a human act.",
+        "runSetupPhase's failure branch is driven by unit tests, and the fixture's happy path is proven by a green spec. The composition of the two — a real seeding failure surfacing with its phase attached — has not been observed, because the flake did not occur during this work and forcing one would mean editing the shared fixture to break it.",
         "The worktree-seeding flake is isolated and observable but not diagnosed. Its root cause remains unknown.",
         "tests/ is outside every tsconfig project in the repo, so no typecheck covers the E2E helpers. Both new modules are checked by lint and by execution only."
       ],
