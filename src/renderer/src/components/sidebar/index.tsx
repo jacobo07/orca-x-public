@@ -122,12 +122,16 @@ function Sidebar({
       <div
         ref={containerRef}
         data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
-        className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        // Why the clip moved inward: the resize handle is deliberately placed outside this box so
+        // the grab zone straddles the seam, and a clip here silently ate its outer half — the
+        // divider a user aims at belonged to the centre pane, not to the handle. Content still
+        // needs clipping while the width shrinks, so the content column owns that instead.
+        className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col"
         style={leftSidebarStyle}
         {...dropHandlers}
       >
         {sidebarOpen && (
-          <>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden scrollbar-sleek-parent">
             {/* Fixed controls */}
             <SidebarNav />
             {showProjectList ? (
@@ -158,7 +162,7 @@ function Sidebar({
                 onWorkspaceBoardToggle={toggleWorkspaceBoard}
               />
             </div>
-          </>
+          </div>
         )}
 
         {sidebarOpen && affordance.visible ? (
