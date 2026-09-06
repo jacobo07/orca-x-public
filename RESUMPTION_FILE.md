@@ -77,8 +77,39 @@ Spec of record: `docs/workspace-chrome-navigation-convergence-spec.md` (untracke
 `components/sidebar components/right-sidebar hooks/useSidebarResize store/slices app-shell` =
 **2 failed / 6684**, both in `right-sidebar/SourceControl*`, untouched by this work.
 
-**Not started:** activity rail, icon-only collapse, live-resize consumer fix, UI-state scoping,
-redundant-control consolidation, baseline ascension.
+**Sealed 2026-09-06 — the rail and everything that hung off it.**
+
+- `8eb07139f` application surfaces get their own section of the **existing** far-left rail
+  (`right-sidebar/index.tsx` already renders a 40px side strip when `activityBarLeads`; defaults are
+  `sidePanelDock: 'left'` + `activityBarPosition: 'side'`). New: `components/activity-rail/`.
+- `ec0a87a36` capability relocation. Tasks' four provider shortcuts (hover-only before) move to a
+  context menu; `hooks/useVisibleTaskProviders.ts` is the one resolution both surfaces share. Every
+  row's "Hide from sidebar" and both badges (Agents unread, Mobile "New") relocated too.
+- `e67a37927` rows removed, `SidebarTaskNavButton` deleted (−887/+298). Tour anchors checked against
+  `shared/contextual-tours.ts` first: neither is referenced.
+- `6ccaa7233` e2e: rail is real, and Automations→back preserves **tab identity** (surface isolation).
+- `b2b499b85` e2e: icon-only collapse. **No code change was needed** — see below.
+- `9dbbc336e` unit: drives the `'sync'` branch that keeps `activeView` window-local.
+
+**Three things that already existed and must not be rebuilt:**
+1. The far-left vertical rail (it just carried nothing worth keeping until the surfaces moved in).
+2. Icon-only collapse — `closedWidth: activityBarLeads ? activityBarSideWidth : 0`.
+3. `activeView` window-scoping on `'sync'` hydration (guard existed; nothing had tested it).
+
+**Packaged reality (2026-09-06, HEAD 9dbbc336e):** built via the BuildTools
+`vcvars64.bat`; `dist/orca-x-windows-setup.exe` 188 MB. Verified by **content**, not timestamp — the
+packaged `app.asar` contains `data-workspace-activity-rail`, `data-workspace-activity-tasks` and
+`buildWindowIdentityTitle`. Note `dist/orca-windows-setup.exe` (19/08, upstream-named) is stale and
+sitting beside it.
+
+**Still open:**
+- **Live-resize consumer: UNMEASURED, not cleared.** A synthetic drag left the handle at the same x
+  (`handleX 314 -> 314`), so the run carried no information; the harness was deleted rather than
+  weakened. Next instrument is a different shape: assert the handle's `bg-ring` class right after
+  `mouse.down()` to separate "press never landed" from "consumers ignore it".
+- `sidebarWidth` and `rightSidebarOpen` still ride the cross-window sync broadcast unguarded.
+- The dashboard pop-out entry still lives in the sidebar (it opens a window, not a view).
+- Redundant-control consolidation beyond the row removal.
 
 ## Next 3 actions
 
