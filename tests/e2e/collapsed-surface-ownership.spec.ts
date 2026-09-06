@@ -190,4 +190,39 @@ test('collapsing the side panel surrenders layout, pointer and focus, and keeps 
   await expect
     .poll(async () => (await panelContent.boundingBox())?.width ?? 0, { timeout: 20_000 })
     .toBeGreaterThan(0)
+
+  // ── Focus transition: collapsing from inside must not strand the focus ring ────────────────
+  // Focus left on a control the collapse just removed is invisible but still live — the next
+  // keystroke goes somewhere nobody can see.
+  //
+  // Last on purpose. This puts focus somewhere programmatically, and a programmatic focus changes
+  // the modality Chromium uses to decide `:focus-visible`; run before the tab walk it makes
+  // focus-revealed controls stay hidden there and the walk then reports the product's fault as its
+  // own. Ordering is part of the instrument.
+  const focusedInsidePanel = await sharedPage.evaluate(() => {
+    const candidate = document
+      .querySelector('[data-side-panel-content]')
+      ?.querySelector<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])')
+    if (!candidate) {
+      return false
+    }
+    candidate.focus()
+    return document.activeElement === candidate
+  })
+  expect(focusedInsidePanel, 'no focusable control inside the open panel to collapse away').toBe(
+    true
+  )
+
+  await setPanelOpen(sharedPage, false)
+  const stranded = await sharedPage.evaluate(() => {
+    const active = document.activeElement
+    if (!active || active === document.body || !active.closest('[data-side-panel-content]')) {
+      return null
+    }
+    const rect = active.getBoundingClientRect()
+    return rect.width === 0 || rect.height === 0
+      ? `focus stayed on a control the collapse removed: ${active.tagName.toLowerCase()}`
+      : null
+  })
+  expect(stranded, stranded ?? '').toBeNull()
 })

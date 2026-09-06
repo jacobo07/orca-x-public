@@ -55,6 +55,8 @@ test('the sidebar and the centre follow the drag, not the release', async ({ sha
 
   const handle = sharedPage.locator('[data-sidebar-resize-handle]')
   const sidebar = handle.locator('xpath=..')
+  // A real consumer inside the sidebar, addressed by data hook rather than by its translated label.
+  const sidebarContent = sharedPage.locator('[data-contextual-tour-target="sidebar-navigation"]')
   const centre = sharedPage.locator('.xterm').first()
 
   // ── Layer 1: the handle is on screen and hit-testable ──────────────────────────────────────
@@ -66,7 +68,9 @@ test('the sidebar and the centre follow the drag, not the release', async ({ sha
   const sessionsBefore = await readTabIdentity(sharedPage)
   expect(sessionsBefore, 'the fixture must leave a live terminal to protect').not.toBe('{}')
 
+  await expect(sidebarContent).toBeVisible({ timeout: 20_000 })
   const startWidth = await widthOf(sidebar, 'the sidebar')
+  const startContent = await widthOf(sidebarContent, 'the sidebar contents')
   const startCentre = await widthOf(centre, 'the centre')
   const box = await handle.boundingBox()
   if (!box) {
@@ -122,7 +126,17 @@ test('the sidebar and the centre follow the drag, not the release', async ({ sha
     })
     .toBeGreaterThan(startWidth + targetDelta / 2)
 
-  // ── Layer 4: the centre yields the space during the same gesture ───────────────────────────
+  // ── Layer 4: the sidebar's contents reflow with it, not after it ───────────────────────────
+  // A frame that moves while the content inside it stays put is the shape of the complaint that
+  // started this, so the content is measured separately from the container that holds it.
+  await expect
+    .poll(async () => widthOf(sidebarContent, 'the sidebar contents'), {
+      timeout: 10_000,
+      message: 'the sidebar moved but its contents did not reflow during the drag'
+    })
+    .toBeGreaterThan(startContent + targetDelta / 2)
+
+  // ── Layer 5: the centre yields the space during the same gesture ───────────────────────────
   await expect
     .poll(async () => widthOf(centre, 'the centre'), {
       timeout: 10_000,
