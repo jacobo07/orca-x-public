@@ -15,7 +15,6 @@
 
 import {
   test as base,
-  expect as playwrightExpect,
   _electron as electron,
   type Page,
   type ElectronApplication,
@@ -33,6 +32,8 @@ import {
   createElectronHomeIsolation
 } from './electron-home-isolation'
 import { createSeededTestRepo, isValidGitRepo } from './seeded-test-repo'
+import { runSetupPhase } from './e2e-precondition'
+import { establishSeededWorkspace } from './seeded-workspace-precondition'
 
 type OrcaTestFixtures = {
   electronApp: ElectronApplication
@@ -279,158 +280,46 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.
-  sharedPage: async ({ electronApp, seedTestRepo, testRepoPath }, provideFixture) => {
-    // Why: the Electron app may take a while to create the first window,
-    // especially on cold start with no prior dev userData. Isolated per-test
-    // profiles make late-suite launches slower, so use the full test budget.
-    const page = await electronApp.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
+  sharedPage: async ({ electronApp, seedTestRepo, testRepoPath }, provideFixture, testInfo) => {
+    // Why: everything this fixture does is precondition, not behaviour under test. Each phase is
+    // named so a failure says where setup stopped instead of arriving as a bare timeout that
+    // reads exactly like the product failing. See e2e-precondition.ts.
+    const page = await runSetupPhase(
+      'app-launch',
+      async () => {
+        // Why: the Electron app may take a while to create the first window,
+        // especially on cold start with no prior dev userData. Isolated per-test
+        // profiles make late-suite launches slower, so use the full test budget.
+        const firstWindow = await electronApp.firstWindow({ timeout: 120_000 })
+        await firstWindow.waitForLoadState('domcontentloaded')
+        return firstWindow
+      },
+      testInfo
+    )
 
     // Wait for the store to be available
-    await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+    await runSetupPhase(
+      'renderer-store',
+      () => page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 }),
+      testInfo
+    )
 
     if (!seedTestRepo) {
-      await page.waitForFunction(
-        () => window.__store?.getState().workspaceSessionReady === true,
-        null,
-        { timeout: 30_000 }
+      await runSetupPhase(
+        'session-ready',
+        () =>
+          page.waitForFunction(
+            () => window.__store?.getState().workspaceSessionReady === true,
+            null,
+            { timeout: 30_000 }
+          ),
+        testInfo
       )
       await provideFixture(page)
       return
     }
 
-    const repoPath = isValidGitRepo(testRepoPath) ? testRepoPath : createSeededTestRepo()
-
-    // Add the test repo via the IPC bridge
-    // Why: calling window.api.repos.add() goes through the same code path as
-    // the "Add Project" UI flow, ensuring worktrees are fetched and the session
-    // initializes properly.
-    const seededRepoId = await page.evaluate(async (repoPath) => {
-      const result = await window.api.repos.add({ path: repoPath })
-      if ('error' in result) {
-        throw new Error(result.error)
-      }
-      return result.repo.id
-    }, repoPath)
-
-    // Fetch repos in the renderer store so it picks up the new repo, then opt
-    // this disposable repo into showing external worktrees.
-    // Why: repos.add() fires a repos:changed echo that triggers a *concurrent*
-    // fetchRepos() in the renderer; the store's generation guard can then drop
-    // this awaited fetch's result, leaving `repos` briefly stale. Poll the
-    // public fetch path until the repo lands instead of asserting on the first
-    // tick (mirrors the seeded-worktree poll below). updateRepo is idempotent,
-    // so running it once the repo appears is safe across poll ticks.
-    await playwrightExpect
-      .poll(
-        () =>
-          page.evaluate(async (repoId) => {
-            const store = window.__store
-            if (!store) {
-              return false
-            }
-            await store.getState().fetchRepos()
-            const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
-            if (!repo) {
-              return false
-            }
-            // Why: the fixture deliberately creates external Git worktrees. New
-            // repos hide those by default after the visibility rollout.
-            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-            return true
-          }, seededRepoId),
-        {
-          timeout: 30_000,
-          message: `Expected e2e repo to be loaded: ${repoPath}`
-        }
-      )
-      .toBe(true)
-
-    // Best-effort fetch of the seeded repo's worktrees. Why: the renderer can still
-    // re-navigate during initial hydration and destroy the execution context
-    // mid-evaluate; the authoritative seeded-worktree poll below is the real wait,
-    // so swallow a hydration-reload failure here instead of failing setup.
-    await page
-      .evaluate(async (repoId) => {
-        const store = window.__store
-        if (!store) {
-          return
-        }
-        await store.getState().fetchWorktrees(repoId)
-      }, seededRepoId)
-      .catch(() => false)
-
-    // Why: parallel specs mutate real git worktrees in the shared fixture repo.
-    // A first scan can briefly return no rows while git holds a worktree lock,
-    // so poll the public fetch path until the seeded primary + secondary load.
-    await playwrightExpect
-      .poll(
-        () =>
-          page.evaluate(async (repoId) => {
-            const store = window.__store
-            if (!store) {
-              return 0
-            }
-            await store.getState().fetchWorktrees(repoId)
-            return store.getState().worktreesByRepo[repoId]?.length ?? 0
-          }, seededRepoId),
-        {
-          timeout: 30_000,
-          message: 'seeded e2e worktrees did not load'
-        }
-      )
-      .toBeGreaterThanOrEqual(2)
-
-    // Wait for workspaceSessionReady to become true
-    await page.waitForFunction(
-      () => {
-        const store = window.__store
-        return store?.getState().workspaceSessionReady === true
-      },
-      null,
-      { timeout: 30_000 }
-    )
-
-    // Re-activate the test repo's primary worktree after session hydration.
-    // Why: workspaceSessionReady restoration can overwrite activeWorktreeId
-    // after earlier setup calls. Selecting it here ensures every test starts on
-    // the seeded repo instead of the "Select a worktree" empty state.
-    await page.evaluate((repoId: string) => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      const state = store.getState()
-      // Why: provider-returned identity is stable across Windows path casing
-      // and separator normalization, unlike comparing renderer path strings.
-      const testWorktree = state.worktreesByRepo[repoId]?.find(
-        (worktree) => worktree.isMainWorktree
-      )
-      if (testWorktree) {
-        state.setActiveWorktree(testWorktree.id)
-      }
-    }, seededRepoId)
-
-    // Best-effort seed of a baseline terminal tab when a fresh isolated
-    // profile has none yet.
-    // Why: terminal-focused suites call ensureTerminalVisible(), which does the
-    // authoritative wait. The shared fixture itself should not block non-
-    // terminal suites on tab creation timing.
-    await page.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-      const state = store.getState()
-      if (!state.activeWorktreeId) {
-        return
-      }
-      const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
-      if (tabs.length === 0) {
-        state.createTab(state.activeWorktreeId)
-      }
-    })
+    await establishSeededWorkspace({ page, testRepoPath, testInfo })
 
     await provideFixture(page)
   },
