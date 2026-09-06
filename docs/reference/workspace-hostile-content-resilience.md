@@ -63,6 +63,41 @@ Six gaps survived measurement.
    table above is unprotected against regression. `docs/STYLEGUIDE.md` documents three overflow
    container styles but no policy for which content wraps, truncates, or scrolls.
 
+## Where each gap stands
+
+The six above, plus what measurement turned up while closing them. A gap is only closed when
+something drove its red branch; a documented gap is visibility, not closure.
+
+| # | Gap | State |
+| --- | --- | --- |
+| 1 | Semantic error / warning tokens | **Error done.** `--status-error` exists and is distinct from `--destructive`, which STYLEGUIDE scopes to irreversible actions. Consumers: the failed agent state and the automation failure tone. **Warning deliberately not built** — no surface needs one, and a token without a consumer is banned. |
+| 2 | Three agent states, one dot | **Done.** Failure and interruption carry distinct shapes; the accessible names were already exact. |
+| 3 | Token bypass | **Partly done.** The automation cell moved off `destructive`. Two raw literals remain by decision, see below. |
+| 4 | Explorer indent has no floor | **Done.** Capped, pinned by a rendered-window geometry spec. |
+| 5 | Truncated filename unrecoverable | **Done.** Native `title`, not a Tooltip instance, because the list is virtualized. |
+| 6 | Nothing protects presentation geometry | **Done.** Three gates now cover it, and `docs/STYLEGUIDE.md` carries the overflow policy per semantic surface. |
+
+Found while closing those, and not in the original scope:
+
+| # | Gap | State |
+| --- | --- | --- |
+| 7 | The reliability checker crashed on a malformed manifest instead of reporting it | **Done.** Four distinct verdicts; a checker failure outranks contract failures in the same run. |
+| 8 | An E2E setup failure was indistinguishable from a product failure | **Classified, not cured.** Setup phases are named and marked, attempts are counted, and an unattributed failure stays unknown. The worktree-seeding flake's root cause is still unknown. |
+| 9 | The structured diff had no viewport bound | **Done.** Content was never the problem — the producers already cap at 120 lines with an explicit marker. Height was. |
+| 10 | An unreadable automation run rendered identically to a successful one | **Done.** This was the real cost of the six-tone collapse, not the lost hues. |
+| 11 | `StatusIndicator` cannot express failure at all | **Open and unowned.** Its label no longer overclaims, but the surface has no failure state to give. |
+| 12 | `tests/` is outside every tsconfig project | **Open, reported.** No typecheck covers the E2E tree; those modules are held by lint and execution only. Closing it would surface an unbounded backlog and belongs to its own change. |
+
+### The two raw literals left alone
+
+`AgentStateDot` paints `blocked` from `bg-red-500`. Moving it to `--status-error` would assert that
+a blocked run is an error, which it is not, and minting a second red token with one consumer adds a
+name without adding information. A recorded prior decision also pins blocked to red rather than
+amber. The role is right; the value is untokenised, and that is the smaller wrong.
+
+`FileExplorerRow` flashes `amber-400` on reveal. That is a transient animation, not a status role,
+and the token vocabulary is for states.
+
 ## Out of scope
 
 Terminal restyling of any kind. Command blocks rendered from OSC 133, which has no command text to
