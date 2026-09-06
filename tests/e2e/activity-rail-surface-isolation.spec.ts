@@ -56,6 +56,16 @@ test('the rail switches surfaces without replacing the terminal session', async 
     .toBe('automations')
   await expect(sharedPage.locator('.xterm')).not.toBeVisible({ timeout: 20_000 })
 
+  // The rail has to survive its own use. Every surface it offers is a full-page view, and those
+  // unmount the side panel the rail is hosted in — so arriving somewhere by the rail used to leave
+  // no rail to leave by. Asserted here because this spec previously navigated back through the
+  // page's own close action, which is exactly the path that hides the problem.
+  await expect(
+    sharedPage.locator('[data-workspace-activity-rail]'),
+    'the rail disappeared on the surface it navigated to'
+  ).toBeVisible()
+  await expect(sharedPage.locator('[data-workspace-activity="workspace"]')).toBeVisible()
+
   await sharedPage.evaluate(() => {
     const store = window.__store
     if (!store) {

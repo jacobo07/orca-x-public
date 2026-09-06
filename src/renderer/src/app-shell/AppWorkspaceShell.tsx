@@ -3,6 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
 import Sidebar from '../components/Sidebar'
 import RightSidebar from '../components/right-sidebar'
+import { WorkspaceActivityRailColumn } from '../components/activity-rail/WorkspaceActivityRailColumn'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
@@ -131,7 +132,12 @@ export function AppWorkspaceShell(props: {
     >
       <RightSidebar />
     </RecoverableRenderErrorBoundary>
-  ) : null
+  ) : (
+    // The panel is suppressed on full-page surfaces, but the rail it hosts is how you leave them.
+    // Exactly one of these two renders, so this is a relocation and not a second rail; the column
+    // returns null itself unless the rail belongs on this edge.
+    <WorkspaceActivityRailColumn />
+  )
 
   return (
     // Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake.
