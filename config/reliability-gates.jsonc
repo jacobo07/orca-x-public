@@ -11,6 +11,96 @@
   },
   "gates": [
     {
+      "id": "workspace-presentation.information-survives-rendering",
+      "title": "A surface cannot drop information the user needs, to geometry or to a collapsed state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-presentation",
+      "layer": "renderer-presentation",
+      "surfaces": ["file explorer rows", "agent state indicator", "terminal session rail"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "The geometry proof is a real rendered Electron window, because layout is the thing under test and a happy-dom unit test cannot measure it. The semantic proof is a unit render, which keeps it off the worktree-seeding harness whose setup flakes at roughly one run in three. Both were driven red before the fixes landed. Only Windows has executed the geometry spec so far; the layout rule it pins is a percentage cap with no platform-specific branch.",
+      "motivatingLinks": ["docs/reference/workspace-hostile-content-resilience.md"],
+      "invariant": "Presentation may compress what the user sees but may not destroy what they need. A filename keeps room to be read at any nesting depth the tree can reach, and whatever truncation removes stays recoverable without opening the file. States whose resolution demands different action from the user stay distinguishable by more than their accessible name: a failed run, a blocked run and an interrupted run are three answers, not one red dot.",
+      "oracle": "Build a fourteen-deep tree in the narrowest explorer the store will hydrate to, walk it open while asserting the walk reached the bottom, and measure the filename's width clipped to its row rather than its reported box. Require room to read and a recoverable full name. Separately, render the state indicator for failed, blocked and interrupted, strip the accessible name, and require the remaining markup to differ pairwise — with the name itself still exact.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/AgentStateDot.test.ts",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/file-explorer-deep-nesting-geometry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/AgentStateDot.test.ts",
+        "tests/e2e/file-explorer-deep-nesting-geometry.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/file-explorer-deep-nesting-geometry.spec.ts",
+          "assertions": [
+            "a deeply nested filename keeps room to be read",
+            "a truncated filename can still be read in full",
+            "the walk reached the depth it claims to have measured"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/AgentStateDot.test.ts",
+          "assertions": [
+            "tells a failure apart from a block",
+            "does not raise an interrupted run to the same alarm as a block",
+            "still names blocked, interrupted and failed exactly"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/file-explorer-deep-nesting-geometry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 72,
+          "summary": "Both cases failed before the fix: measured visible filename width was 0 at depth 14, and no title or aria-label existed on the row or the name. Both pass after capping the indent and carrying the full name."
+        },
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/AgentStateDot.test.ts",
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "durationSeconds": 6,
+          "summary": "Ten assertions. The two new ones failed beforehand with identical markup for failed against blocked and interrupted against blocked; they pass now that failure renders a crossed circle and interruption a quiet stopped marker."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "one rendered-window geometry spec and one unit render of the state indicator"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The unit render is deterministic. The geometry spec shares the e2e worktree-seeding setup, which failed in its beforeEach on roughly one run in three during this work — before the behavior under test is ever reached. Treat a beforeEach failure as inconclusive rather than as a product verdict. No soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Every assertion here was observed failing against the code that preceded its fix, and the semantic assertions replaced an earlier test that had pinned the collapse rather than caught it."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The indent cap is a CSS min() evaluated by the engine, replacing an unconditional pixel value, and adds no measurement or layout pass. The name carries a native title attribute rather than a tooltip instance, which is what keeps it free in a virtualized list. The state indicator gains two branches and renders one icon where it previously rendered one span."
+      },
+      "promotionCriteria": [
+        "Collect soak history for the geometry spec once precondition health is reported separately from product outcome.",
+        "Extend the geometry case to a second platform.",
+        "Bring the remaining status surfaces under the same semantic assertions before claiming the family is covered."
+      ],
+      "knownGaps": [
+        "The worktree sidebar's StatusIndicator has no failure state at all, and resolveWorktreeStatus folds blocked into permission, so the same runtime state reads as an attention dot in one surface and an approval request in another. Unmeasured by this gate.",
+        "AutomationLastRunTone carries six tones and AutomationListLastRunCell collapses them to failed-or-not at render. A second state-to-style map, outside this gate's scope.",
+        "Geometry evidence is Windows-only so far."
+      ],
+      "demotionRule": "Demote if a filename can reach zero readable width at any depth, if truncated text becomes unrecoverable, if two states requiring different user action render identically once the accessible name is removed, or if the gate fails without an identified harness defect."
+    },
+    {
       "id": "ephemeral-vm-runtime.rollback-readable-sidecar",
       "title": "VM lifecycle stays rollback-readable and cleanup-retryable",
       "maturity": "experimental",
