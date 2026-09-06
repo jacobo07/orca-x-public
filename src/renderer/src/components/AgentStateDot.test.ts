@@ -19,6 +19,20 @@ describe('AgentStateDot', () => {
     expect(darkTheme).toContain('--agent-question: var(--color-orange-500)')
   })
 
+  it('defines the status-error role in both themes', () => {
+    // Why: a token defined only under :root renders a dark-theme surface from whatever the light
+    // value inherits, which is a contrast failure nobody sees in review because reviewers read one
+    // theme. --status-error is deliberately separate from --destructive, which docs/STYLEGUIDE.md
+    // scopes to irreversible actions rather than to states.
+    const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
+    const lightTheme = css.match(/:root\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
+    const darkTheme = css.match(/\.dark\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
+
+    expect(lightTheme).toContain('--status-error:')
+    expect(darkTheme).toContain('--status-error:')
+    expect(css).toContain('--color-status-error: var(--status-error)')
+  })
+
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 
