@@ -39,7 +39,7 @@ describe('getWorktreeStatus', () => {
     )
 
     expect(status).toBe('permission')
-    expect(getWorktreeStatusLabel(status)).toBe('Needs permission')
+    expect(getWorktreeStatusLabel(status)).toBe('Needs attention')
   })
 
   it('does not name a cause the rollup cannot prove', () => {

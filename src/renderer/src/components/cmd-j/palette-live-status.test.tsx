@@ -115,7 +115,7 @@ describe('palette live status', () => {
     await act(async () => {
       setAgentState('blocked')
     })
-    expect(dotLabels()).toEqual(['Needs permission'])
+    expect(dotLabels()).toEqual(['Needs attention'])
   })
 
   // Why this is the whole point: the palette body no longer subscribes to agent status, so if the
@@ -129,7 +129,7 @@ describe('palette live status', () => {
       setAgentState('blocked')
     })
 
-    expect(dotLabels()).toEqual(['Needs permission'])
+    expect(dotLabels()).toEqual(['Needs attention'])
     expect(bodyRenderCount).toBe(rendersAfterMount)
   })
 
@@ -230,8 +230,8 @@ describe('palette live status', () => {
     })
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
-    expect(dotLabels()).toEqual(['Needs permission'])
-    expect(testContainer.querySelector('[title="Needs permission"]')).not.toBeNull()
+    expect(dotLabels()).toEqual(['Needs attention'])
+    expect(testContainer.querySelector('[title="Needs attention"]')).not.toBeNull()
   })
 
   it('shows only the content icon when a terminal-backed row is inactive', async () => {
@@ -383,7 +383,7 @@ describe('palette live status', () => {
         </PaletteLiveStatusProvider>
       )
     })
-    expect(dotLabels()).toEqual(['Needs permission'])
+    expect(dotLabels()).toEqual(['Needs attention'])
   })
 
   it('cuts the pip out of the dialog surface, and out of accent when selected', async () => {

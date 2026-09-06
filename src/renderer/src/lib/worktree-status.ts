@@ -20,10 +20,15 @@ type WorktreeStatusHeuristicOptions = {
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
 }
 
+// Why: `permission` is the name of a bucket, not of a cause. It holds both blocked and waiting
+// (see worktree-agent-activity-summary), and the folded value cannot say which one it came from —
+// so the label may say something needs the user, and may not say what. Matches
+// agentStateLabel('permission'), which renders the same rollup; worktree-status.test.ts pins that
+// the two agree.
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
   active: 'Active',
   working: 'Working',
-  permission: 'Needs permission',
+  permission: 'Needs attention',
   done: 'Done',
   inactive: 'Inactive'
 }
