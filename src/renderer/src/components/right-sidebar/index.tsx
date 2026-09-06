@@ -24,6 +24,7 @@ import {
 } from '@/lib/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { ActivityBarPositionMenu } from './activity-bar-position-menu'
+import { WorkspaceActivityRailSection } from '@/components/activity-rail/WorkspaceActivityRailSection'
 import { LeftNavProjectsSwitch } from './left-nav-projects-switch'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
@@ -157,6 +158,10 @@ function RightSidebarInner(): React.JSX.Element {
           )}
         >
           <TooltipProvider delayDuration={400}>
+            {/* Why only when leading: docked left this strip is the window's own edge, which is
+                where application-level navigation belongs. Docked right it is a panel gutter, and
+                putting product surfaces there would say the wrong thing about their scope. */}
+            {geometry.activityBarLeads ? <WorkspaceActivityRailSection /> : null}
             {geometry.activityBarLeads ? <LeftNavProjectsSwitch /> : null}
             {sideActivityBarIcons}
           </TooltipProvider>
