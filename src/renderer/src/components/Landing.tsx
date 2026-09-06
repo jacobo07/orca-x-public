@@ -16,7 +16,7 @@ import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
-import { RecentProjectList } from './recent-project-list'
+import { LauncherProjectPicker } from './launcher-project-picker'
 
 type ShortcutItem = {
   id: string
@@ -314,7 +314,7 @@ export default function Landing(): React.JSX.Element {
             </button>
           </div>
 
-          <RecentProjectList />
+          <LauncherProjectPicker />
 
           {/* Why only with no projects: once the launcher can show real recents, they are the more
               useful thing to occupy this slot — the shortcut hints are onboarding, not navigation. */}

@@ -27,20 +27,17 @@ test('every launcher project row is reachable by wheel scrolling', async ({ orca
   await waitForSessionReady(orcaPage)
   await seedLauncherProjectEstate(orcaPage)
 
-  // "View all" is what takes the list past the window. Reading the list folded would measure the
-  // one state that never overflows and would pass on both sides of the fix.
-  const viewAll = orcaPage.locator('button', { hasText: /View all \(\d+\)/ })
-  await expect(viewAll).toBeVisible({ timeout: 15_000 })
-  await viewAll.click()
-
-  const expanded = await measureLauncherProjectList(orcaPage)
+  // The list shows the whole estate up front, so it overflows with nothing expanded first.
+  // Guarded rather than assumed: a list that quietly went back to folding would fit the window,
+  // and a test measuring a list that fits cannot fail whatever the scrolling does.
+  const listed = await measureLauncherProjectList(orcaPage)
   expect(
-    expanded.rowCount,
-    'the list did not expand to the full estate, so this run never reproduced the overflow'
+    listed.rowCount,
+    'the list did not show the full estate, so this run never reproduced the overflow'
   ).toBe(LAUNCHER_SCROLL_FIXTURE_PROJECT_COUNT)
   expect(
-    expanded.contentExceedsViewport,
-    `the estate fit inside the window (${expanded.viewportHeight}px), so nothing was clipped to reach`
+    listed.contentExceedsViewport,
+    `the estate fit inside the window (${listed.viewportHeight}px), so nothing was clipped to reach`
   ).toBe(true)
 
   await wheelOverLauncherProjectList(orcaPage)
@@ -54,4 +51,32 @@ test('every launcher project row is reachable by wheel scrolling', async ({ orca
       `top=${scrolled.lastRowTop} bottom=${scrolled.lastRowBottom} in a ${scrolled.viewportHeight}px ` +
       `window. Scroll owner: ${scrolled.scrollOwner ?? 'none — no ancestor of the list scrolls'}.`
   ).toBe(true)
+})
+
+test('the landing list filters instead of folding', async ({ orcaPage }) => {
+  // Both project surfaces list the same rows, but only one of them could search them, and the one
+  // that could not folded at five rows instead. The fold is what put a large estate behind a
+  // control, and the control is only there because the list had no other way to stay short.
+  // Searching makes it short on purpose, so the fold has nothing left to do.
+  await waitForSessionReady(orcaPage)
+  await seedLauncherProjectEstate(orcaPage)
+
+  await expect(orcaPage.locator('button', { hasText: /View all \(\d+\)/ })).toHaveCount(0)
+  await expect(orcaPage.locator('button', { hasText: 'Show fewer' })).toHaveCount(0)
+
+  const filter = orcaPage.getByLabel('Filter projects by name or path')
+  await expect(filter).toBeVisible()
+
+  // Every row is listed up front now, so the filter is the thing that has to narrow them.
+  expect((await measureLauncherProjectList(orcaPage)).rowCount).toBe(
+    LAUNCHER_SCROLL_FIXTURE_PROJECT_COUNT
+  )
+
+  await filter.fill('Estate Project 42')
+  await expect
+    .poll(async () => (await measureLauncherProjectList(orcaPage)).rowCount, {
+      message: 'the filter never narrowed the list'
+    })
+    .toBe(1)
+  expect((await measureLauncherProjectList(orcaPage)).lastRowLabel).toBe('Estate Project 42')
 })
