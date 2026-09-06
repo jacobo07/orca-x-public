@@ -25,6 +25,8 @@ import {
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { useVisibleTaskProviders } from '@/hooks/useVisibleTaskProviders'
+import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
+import { useMobileSidebarOnboardingBadge } from '@/components/sidebar/mobile-sidebar-onboarding-badge'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from '@/components/right-sidebar/right-sidebar-titlebar-drag-regions'
@@ -78,21 +80,34 @@ function activityLabel(activity: WorkspaceActivityId): string {
   }
 }
 
+/**
+ * The rows carried two informational badges — an unread count on Agents and a "New" marker on
+ * Orca Mobile. A rail entry has no room for a word, so the count keeps its number and the marker
+ * becomes a dot; both stay in the accessible name so the information is not pointer-only.
+ */
+type ActivityBadge = { count: number } | { dot: true } | null
+
 function WorkspaceActivityRailButton({
   activity,
   active,
   onSelect,
   disabled = false,
-  onPrefetch
+  onPrefetch,
+  badge = null,
+  badgeLabel
 }: {
   activity: WorkspaceActivityId
   active: boolean
   onSelect: () => void
   disabled?: boolean
   onPrefetch?: () => void
+  badge?: ActivityBadge
+  /** Appended to the accessible name so a badge is not conveyed by colour and position alone. */
+  badgeLabel?: string
 }): React.JSX.Element {
   const Icon = ACTIVITY_ICONS[activity]
-  const label = activityLabel(activity)
+  const baseLabel = activityLabel(activity)
+  const label = badge && badgeLabel ? `${baseLabel} — ${badgeLabel}` : baseLabel
 
   return (
     <Tooltip>
@@ -121,6 +136,20 @@ function WorkspaceActivityRailButton({
           }}
         >
           <Icon size={18} />
+          {badge && 'count' in badge ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-1 right-0.5 min-w-[14px] rounded-full bg-primary px-1 text-[9px] leading-[14px] font-semibold text-primary-foreground"
+            >
+              {badge.count}
+            </span>
+          ) : null}
+          {badge && 'dot' in badge ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-[7px] right-[7px] size-[7px] rounded-full bg-primary ring-1 ring-sidebar"
+            />
+          ) : null}
           {active ? (
             <div className="absolute top-[25%] right-0 bottom-[25%] w-[2px] rounded-l bg-foreground" />
           ) : null}
@@ -283,6 +312,23 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
   const openMobilePage = useAppStore((s) => s.openMobilePage)
 
   const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
+  const showsAgents = visible.includes('agents')
+  const showsMobile = visible.includes('mobile')
+  const agentsUnreadCount = useActivityUnreadCount(showsAgents, 'sidebar-badge')
+  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showsMobile)
+
+  const badgeFor = React.useCallback(
+    (activity: WorkspaceActivityId): ActivityBadge => {
+      if (activity === 'agents' && agentsUnreadCount > 0) {
+        return { count: agentsUnreadCount }
+      }
+      if (activity === 'mobile' && mobileOnboardingBadge.visible) {
+        return { dot: true }
+      }
+      return null
+    },
+    [agentsUnreadCount, mobileOnboardingBadge.visible]
+  )
 
   const select = React.useCallback(
     (activity: WorkspaceActivityId) => {
@@ -300,10 +346,13 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
         case 'skills':
           return openSkillsPage()
         case 'mobile':
+          // Opening the surface retires the "New" marker, exactly as the row did.
+          mobileOnboardingBadge.dismiss()
           return openMobilePage()
       }
     },
     [
+      mobileOnboardingBadge,
       openActivityPage,
       openArtifactsPage,
       openAutomationsPage,
@@ -353,6 +402,12 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
               activity={activity}
               active={active}
               onSelect={() => select(activity)}
+              badge={badgeFor(activity)}
+              badgeLabel={
+                activity === 'mobile'
+                  ? translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')
+                  : String(agentsUnreadCount)
+              }
             />
           </ActivityRailItemWithHide>
         )
