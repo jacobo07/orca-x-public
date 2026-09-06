@@ -256,7 +256,13 @@ export default function Landing(): React.JSX.Element {
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
-      <div className="w-full max-w-lg px-6">
+      {/* Why this column and not its parent owns the overflow: the parent centres it, and a
+          centred child that outgrows its container is clipped at the top as well as the bottom,
+          which puts the "Show fewer" control that would undo the expansion out of reach along
+          with the rows. Capping the column at the container's height instead keeps it centred
+          while it fits and lets it scroll once it does not, and leaves the parent free to go on
+          positioning the footer against the window rather than against the list. */}
+      <div className="max-h-full w-full max-w-lg overflow-y-auto px-6 scrollbar-sleek">
         <div className="flex flex-col items-center gap-4 py-8">
           <div
             className="flex items-center justify-center size-20 rounded-2xl border border-border/80 shadow-lg shadow-black/40"
