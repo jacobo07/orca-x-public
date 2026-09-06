@@ -316,11 +316,15 @@ describe('DashboardAgentRow', () => {
     const promptIndex = markup.indexOf('Give me a quick update')
     const interruptedIndex = markup.indexOf('>interrupted<')
 
-    // Why: interrupted keeps the leading red dot, but the plain text belongs
-    // on the response line so it does not compete with the user's prompt.
+    // Why: interrupted gets its own quiet glyph rather than the blocked alarm — the runtime models
+    // it as done carrying a flag (this row builds it from entry.interrupted on a done state), and a
+    // red dot spends the user's attention on work that merely stopped. It stays distinct from done's
+    // check for the same reason it is not blocked's dot: three outcomes, three glyphs. The plain
+    // text belongs on the response line so it does not compete with the user's prompt.
     expect(markup).toContain('data-slot="tooltip-trigger"')
     expect(markup).toContain('aria-label="Interrupted by user"')
-    expect(markup).toContain('bg-red-500')
+    expect(markup).toContain('lucide-circle-slash')
+    expect(classTokens(markup)).not.toContain('bg-red-500')
     expect(markup).not.toContain('data-slot="badge"')
     expect(interruptedIndex).toBeGreaterThan(promptIndex)
     expect(markup).not.toContain('lucide-circle-check')
