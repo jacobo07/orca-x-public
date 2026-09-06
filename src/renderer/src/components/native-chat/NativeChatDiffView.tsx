@@ -16,7 +16,10 @@ export function NativeChatDiffView({ lines }: { lines: DiffLine[] }): React.JSX.
       // region for a screen reader now that it is one.
       className="max-h-64 overflow-auto rounded bg-accent py-1 font-mono text-[11px] leading-relaxed scrollbar-sleek"
       tabIndex={0}
-      role="region"
+      // Why: `group` rather than `region` — a region is a landmark, and a conversation with a
+      // dozen expanded tool runs would put a dozen of them in landmark navigation. This needs a
+      // name, not a place in the page's table of contents.
+      role="group"
       aria-label={translate('components.native-chat.diff.region', 'File diff')}
     >
       {lines.map((line, i) => (
