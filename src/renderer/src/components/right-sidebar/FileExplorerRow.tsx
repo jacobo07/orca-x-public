@@ -21,6 +21,13 @@ import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
 // ─── File / Folder Row with Context Menu ─────────────────────────
 
+/**
+ * Width the row keeps for everything that is not indent: the chevron and type icon with their gaps
+ * (~32px), the row's own right padding (8px), a git status label when one is present (~24px), and
+ * enough left for the name to survive as more than an ellipsis (~48px).
+ */
+const ROW_NAME_RESERVE_PX = 112
+
 export type FileExplorerRowProps = {
   node: TreeNode
   isExpanded: boolean
@@ -137,7 +144,11 @@ export function FileExplorerRow({
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          // Why: indent stops growing once it would leave the filename no room. Depth past that
+          // point is already unreadable as indent, so spending the row on it costs a name and buys
+          // nothing. The percentage resolves against the virtual row wrapper, which is the
+          // explorer's width, so the cap follows a resize with no measurement.
+          style={{ paddingLeft: `min(${node.depth * 16 + 8}px, calc(100% - ${ROW_NAME_RESERVE_PX}px))` }}
           ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           // Why: marks this draggable row so the wheel-capture handler can rescue
@@ -204,6 +215,10 @@ export function FileExplorerRow({
             // Why: marks the rename hotspot so the row's click handler can hold
             // back the directory toggle until the double-click window closes.
             {...{ [RENAME_HOTSPOT_ATTR]: '' }}
+            // Why: this name truncates, so without the full value the row is the only place it
+            // existed and it is now unreadable. Native title rather than the Tooltip primitive:
+            // the list is virtualized and every row would otherwise mount one.
+            title={node.name}
             className={cn(
               'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
