@@ -26,6 +26,14 @@ export type LauncherProjectListMeasurement = {
   lastRowTop: number
   lastRowBottom: number
   lastRowFullyVisible: boolean
+  /**
+   * The label at each end, read from the DOM rather than assumed from the seed.
+   *
+   * Persisted UI state can still re-order the rows after the seed has settled, so a test that
+   * names the project it expects at an end asserts something the fixture does not control. The
+   * ends are what navigation is about; which project occupies them is not.
+   */
+  firstRowLabel: string
   /** The nearest ancestor that actually scrolls, described for the failure message. */
   scrollOwner: string | null
   listCenterX: number
@@ -41,24 +49,18 @@ export type LauncherProjectListMeasurement = {
 export async function seedLauncherProjectEstate(page: Page): Promise<void> {
   await applyLauncherProjectEstate(page)
 
-  // Persisted UI state syncs into the store after session readiness, and it carries its own
-  // recent-project order — so a seed applied once can be silently replaced, leaving the rows in an
-  // order the test did not choose. Re-apply until it sticks: an assertion about which project sits
-  // where is worthless if the estate underneath it is still being rewritten.
+  // Wait for the rows, not for a particular order. Persisted UI state syncs in after session
+  // readiness and carries its own recent-project order, so the order is not the fixture's to
+  // decide. An earlier version re-applied the seed until the order matched, which turned a
+  // settling surface into a permanently re-rendering one and left Playwright waiting on an
+  // element that never stopped moving. What the tests need is the whole estate present.
   await expect
     .poll(
-      async () => {
-        const settled = await page.evaluate(
-          () => window.__store?.getState().recentProjectIds?.[0] ?? null
-        )
-        if (settled !== 'estate-01') {
-          await applyLauncherProjectEstate(page)
-        }
-        return settled
-      },
-      { timeout: 10_000, message: 'the seeded project estate kept being overwritten' }
+      async () =>
+        page.evaluate(() => document.querySelectorAll('button[data-launcher-project-row]').length),
+      { timeout: 15_000, message: 'the seeded project estate never finished rendering' }
     )
-    .toBe('estate-01')
+    .toBe(LAUNCHER_SCROLL_FIXTURE_PROJECT_COUNT)
 }
 
 async function applyLauncherProjectEstate(page: Page): Promise<void> {
@@ -100,14 +102,17 @@ async function applyLauncherProjectEstate(page: Page): Promise<void> {
  */
 export async function focusedProjectRow(
   page: Page
-): Promise<{ label: string | null; fullyVisible: boolean }> {
+): Promise<{ index: number; label: string | null; fullyVisible: boolean }> {
   return page.evaluate(() => {
+    const rows = [...document.querySelectorAll('button[data-launcher-project-row]')]
     const active = document.activeElement
-    if (!(active instanceof HTMLButtonElement) || !active.querySelector('span[title]')) {
-      return { label: null, fullyVisible: false }
+    const index = rows.indexOf(active as Element)
+    if (index === -1 || !(active instanceof HTMLButtonElement)) {
+      return { index: -1, label: null, fullyVisible: false }
     }
     const rect = active.getBoundingClientRect()
     return {
+      index,
       label: active.querySelector('span')?.textContent?.trim() ?? '',
       fullyVisible: rect.top >= 0 && rect.bottom <= window.innerHeight
     }
@@ -160,6 +165,7 @@ export async function measureLauncherProjectList(
       rowCount: rows.length,
       viewportHeight,
       contentExceedsViewport: listRect.bottom > viewportHeight || listRect.top < 0,
+      firstRowLabel: rows[0]?.querySelector('span')?.textContent?.trim() ?? '',
       lastRowLabel: lastRow.querySelector('span')?.textContent?.trim() ?? '',
       lastRowTop: Math.round(lastRect.top),
       lastRowBottom: Math.round(lastRect.bottom),

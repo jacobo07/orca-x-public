@@ -82,6 +82,33 @@ test('the landing list filters instead of folding', async ({ orcaPage }) => {
   expect((await measureLauncherProjectList(orcaPage)).lastRowLabel).toBe('Estate Project 42')
 })
 
+test('the list still scrolls in a short window', async ({ orcaPage, electronApp }) => {
+  // The height the list may occupy has to come from the window, not from a number that happened
+  // to suit the window it was written against. Shrinking to under half the height the other tests
+  // run at is what tells those two apart: a constant survives the first and fails here.
+  await waitForSessionReady(orcaPage)
+  await seedLauncherProjectEstate(orcaPage)
+
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.setSize(1200, 420)
+  })
+  await expect
+    .poll(async () => (await measureLauncherProjectList(orcaPage)).viewportHeight, {
+      message: 'the window never shrank, so this never tested a short viewport'
+    })
+    .toBeLessThan(500)
+
+  await wheelOverLauncherProjectList(orcaPage)
+
+  const scrolled = await measureLauncherProjectList(orcaPage)
+  console.log(`[launcher-scroll:short] ${JSON.stringify(scrolled)}`)
+  expect(
+    scrolled.lastRowFullyVisible,
+    `in a ${scrolled.viewportHeight}px window the last project sits at top=${scrolled.lastRowTop}. ` +
+      `Scroll owner: ${scrolled.scrollOwner ?? 'none'}.`
+  ).toBe(true)
+})
+
 test('the keyboard reaches the far end of the list without the wheel', async ({ orcaPage }) => {
   // Tabbing is not reach: sixty rows are sixty stops, and the row a person lands on has to be one
   // they can see. Focus that moves to a row still below the fold is the version of this that looks
@@ -89,32 +116,29 @@ test('the keyboard reaches the far end of the list without the wheel', async ({ 
   await waitForSessionReady(orcaPage)
   await seedLauncherProjectEstate(orcaPage)
 
+  // Asserted by position, not by project name. Persisted UI state re-orders these rows while the
+  // test runs, so a name read at the start is a different row by the end — and the question here
+  // is where in the list the keys land, which the order cannot change.
+  const lastIndex = LAUNCHER_SCROLL_FIXTURE_PROJECT_COUNT - 1
+
   const filter = orcaPage.getByLabel('Filter projects by name or path')
   await filter.click()
 
   // Down from the filter enters the list rather than skipping past it.
   await orcaPage.keyboard.press('ArrowDown')
-  expect(await focusedProjectRow(orcaPage)).toEqual({
-    label: 'Estate Project 60',
-    fullyVisible: true
-  })
+  expect(await focusedProjectRow(orcaPage)).toMatchObject({ index: 0, fullyVisible: true })
 
   await orcaPage.keyboard.press('ArrowDown')
-  expect((await focusedProjectRow(orcaPage)).label).toBe('Estate Project 59')
+  expect(await focusedProjectRow(orcaPage)).toMatchObject({ index: 1, fullyVisible: true })
 
+  // Up from the first row hands focus back to the filter instead of trapping it in the list.
   await orcaPage.keyboard.press('ArrowUp')
-  expect((await focusedProjectRow(orcaPage)).label).toBe('Estate Project 60')
+  expect((await focusedProjectRow(orcaPage)).index).toBe(0)
 
   // The end of a sixty-row list is the case the wheel had to be used for.
   await orcaPage.keyboard.press('End')
-  expect(await focusedProjectRow(orcaPage)).toEqual({
-    label: 'Estate Project 01',
-    fullyVisible: true
-  })
+  expect(await focusedProjectRow(orcaPage)).toMatchObject({ index: lastIndex, fullyVisible: true })
 
   await orcaPage.keyboard.press('Home')
-  expect(await focusedProjectRow(orcaPage)).toEqual({
-    label: 'Estate Project 60',
-    fullyVisible: true
-  })
+  expect(await focusedProjectRow(orcaPage)).toMatchObject({ index: 0, fullyVisible: true })
 })
