@@ -16,6 +16,7 @@ import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
+import { takePendingTerminalTranscript } from '../dictation/pending-terminal-transcripts'
 import {
   hideTerminalVisibility,
   resumeTerminalVisibility,
@@ -264,7 +265,9 @@ export function useTerminalPaneGlobalEffects({
         return
       }
       const detail = (
-        event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
+        event as CustomEvent<
+          string | { text?: string; tabId?: string; paneId?: number; claimed?: boolean }
+        >
       ).detail
       const text = typeof detail === 'string' ? detail : detail?.text
       if (!text) {
@@ -272,6 +275,11 @@ export function useTerminalPaneGlobalEffects({
       }
       if (typeof detail === 'object' && detail.tabId && detail.tabId !== tabId) {
         return
+      }
+      // Why: tells the dispatcher this pane took the transcript, so an insert no
+      // foreground pane accepts is retained instead of silently discarded.
+      if (typeof detail === 'object') {
+        detail.claimed = true
       }
       const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
       handleTerminalProgrammaticTextPaste({
@@ -289,6 +297,35 @@ export function useTerminalPaneGlobalEffects({
     document.addEventListener('dictation:insertText', onDictationInsert)
     return () => document.removeEventListener('dictation:insertText', onDictationInsert)
   }, [isActiveRef, managerRef, paneTransportsRef, tabId])
+
+  // Why: a transcript whose tab was backgrounded when the final arrived is held
+  // rather than dropped; deliver it when the user returns to that tab.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const pending = takePendingTerminalTranscript(tabId)
+    if (!pending) {
+      return
+    }
+    // Why: the originating pane may have been closed or re-split while the text
+    // waited, so target it only if it still exists and otherwise let the tab's
+    // active pane take it — the tab is the ownership unit that was captured.
+    const paneStillExists = managerRef.current
+      ?.getPanes()
+      .some((pane) => pane.id === pending.paneId)
+    handleTerminalProgrammaticTextPaste({
+      detail: {
+        tabId,
+        text: pending.text,
+        ...(paneStillExists ? { paneId: pending.paneId } : {})
+      },
+      tabId,
+      worktreeId: worktreeIdRef.current,
+      getManager: () => managerRef.current,
+      getPaneTransports: () => paneTransportsRef.current
+    })
+  }, [isActive, managerRef, paneTransportsRef, tabId, worktreeIdRef])
 
   // Why: visible but unfocused split-group terminals can still receive native
   // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy

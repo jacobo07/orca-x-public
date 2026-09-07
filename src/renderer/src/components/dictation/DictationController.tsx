@@ -10,6 +10,7 @@ import {
 } from './dictation-insertion-target'
 import { formatFinalTranscriptSegment } from './dictation-final-segments'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
+import { hasPendingTerminalTranscript } from './pending-terminal-transcripts'
 import { translate } from '@/i18n/i18n'
 import { showDictationStartErrorToast } from './dictation-start-error-toast'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
@@ -72,6 +73,20 @@ export function DictationController() {
           translate(
             'auto.components.dictation.DictationController.5d2c3e7ae3',
             'No speech detected.'
+          )
+        )
+      }
+      // Why: the target tab was backgrounded when the final landed, so the text
+      // is held rather than lost. Say so — silence reads as a failed dictation.
+      const finishedTarget = insertionTargetRef.current
+      if (
+        finishedTarget?.kind === 'terminal' &&
+        hasPendingTerminalTranscript(finishedTarget.tabId)
+      ) {
+        toast.message(
+          translate(
+            'auto.components.dictation.DictationController.transcriptHeldForTab',
+            'Transcript saved. Return to that terminal tab to insert it.'
           )
         )
       }

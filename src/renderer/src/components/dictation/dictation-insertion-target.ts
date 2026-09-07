@@ -8,11 +8,21 @@ import {
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
 } from '@/lib/text-control-paste'
+import { retainUndeliveredTerminalTranscript } from './pending-terminal-transcripts'
 
 export type DictationInsertionTarget =
   | { kind: 'terminal'; tabId: string; paneId: number }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
+
+/** `claimed` is set by the pane that accepts the insert, so an unclaimed
+ *  transcript can be retained instead of silently dropped. */
+export type TerminalDictationInsertDetail = {
+  text: string
+  tabId: string
+  paneId: number
+  claimed?: boolean
+}
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
   const activeElement = document.activeElement
@@ -45,11 +55,16 @@ export function captureInsertionTarget(): DictationInsertionTarget | null {
 
 export function insertText(text: string, target: DictationInsertionTarget): void {
   if (target.kind === 'terminal') {
-    document.dispatchEvent(
-      new CustomEvent('dictation:insertText', {
-        detail: { text, tabId: target.tabId, paneId: target.paneId }
-      })
-    )
+    const detail: TerminalDictationInsertDetail = {
+      text,
+      tabId: target.tabId,
+      paneId: target.paneId,
+      claimed: false
+    }
+    document.dispatchEvent(new CustomEvent('dictation:insertText', { detail }))
+    if (!detail.claimed) {
+      retainUndeliveredTerminalTranscript({ tabId: target.tabId, paneId: target.paneId, text })
+    }
     return
   }
 

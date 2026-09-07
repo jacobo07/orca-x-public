@@ -64,7 +64,9 @@ describe('dictation insertion target', () => {
     expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({
       text: 'git status',
       tabId: 'tab-1',
-      paneId: 7
+      paneId: 7,
+      // The accepting pane flips this; an unclaimed transcript is retained.
+      claimed: false
     })
   })
 
