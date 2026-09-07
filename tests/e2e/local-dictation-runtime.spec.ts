@@ -132,42 +132,71 @@ async function readDictationState(page: Page): Promise<string | undefined> {
   return page.evaluate(() => window.__store?.getState().dictationState)
 }
 
+type TerminalLogicalView = {
+  /** Every logical line, with xterm's soft wraps rejoined. */
+  lines: string[]
+  /** The logical line the cursor sits on, wraps rejoined. */
+  cursorLine: string
+  rowCount: number
+  baseY: number
+  cursorY: number
+  paneCount: number
+}
+
 /**
- * The row the cursor is on. If dictation had pressed Enter the shell would have
- * consumed the line and the phrase would be in scrollback above the cursor, so
- * this distinguishes "inserted at the prompt" from "submitted" without matching
- * a localized shell error message.
+ * Reads the buffer as LOGICAL lines rather than rows, for two reasons learned
+ * the hard way. A freshly started terminal holds its content at the TOP, so
+ * sampling the last N rows measures empty space and reports "no transcript"
+ * against a terminal that plainly has one. And a dictated sentence is long
+ * enough to soft-wrap, so a phrase can straddle two rows and match neither.
+ *
+ * cursorLine is the no-auto-submit check: the brief forbids an implicit Enter,
+ * and if one had been sent the shell would have consumed the input and left the
+ * cursor on a fresh prompt instead of on the text. Comparing against the cursor
+ * beats matching a shell error message, which is localized.
  */
-async function readCursorRowText(page: Page, tabId: string): Promise<string> {
+async function readTerminalLogicalView(page: Page, tabId: string): Promise<TerminalLogicalView> {
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const buffer = pane?.terminal?.buffer?.active
+    const paneCount = manager?.getPanes?.().length ?? 0
     if (!buffer) {
-      return ''
+      return { lines: [], cursorLine: '', rowCount: 0, baseY: 0, cursorY: 0, paneCount }
     }
-    return buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? ''
+    const cursorRow = buffer.baseY + buffer.cursorY
+    const lines: string[] = []
+    let cursorLine = ''
+    let current = ''
+    let currentHoldsCursor = false
+    const flush = (): void => {
+      lines.push(current)
+      if (currentHoldsCursor) {
+        cursorLine = current
+      }
+      current = ''
+      currentHoldsCursor = false
+    }
+    for (let row = 0; row < buffer.length; row += 1) {
+      const line = buffer.getLine(row)
+      if (line && !line.isWrapped && row > 0) {
+        flush()
+      }
+      current += line?.translateToString(true) ?? ''
+      if (row === cursorRow) {
+        currentHoldsCursor = true
+      }
+    }
+    flush()
+    return {
+      lines,
+      cursorLine,
+      rowCount: buffer.length,
+      baseY: buffer.baseY,
+      cursorY: buffer.cursorY,
+      paneCount
+    }
   }, tabId)
-}
-
-async function readTerminalTail(page: Page, tabId: string, rows = 40): Promise<string> {
-  return page.evaluate(
-    ({ tabId, rows }) => {
-      const manager = window.__paneManagers?.get(tabId)
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      const buffer = pane?.terminal?.buffer?.active
-      if (!buffer) {
-        return ''
-      }
-      const lines: string[] = []
-      const first = Math.max(0, buffer.length - rows)
-      for (let row = first; row < buffer.length; row += 1) {
-        lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
-      }
-      return lines.join('\n')
-    },
-    { tabId, rows }
-  )
 }
 
 async function clickVoiceDock(page: Page): Promise<void> {
@@ -242,17 +271,17 @@ test.describe('Local dictation runtime', () => {
 
     const tabId = await dictateOnce(orcaPage)
 
-    const cursorRow = (await readCursorRowText(orcaPage, tabId)).toLowerCase()
-    const tail = (await readTerminalTail(orcaPage, tabId)).toLowerCase()
+    const view = await readTerminalLogicalView(orcaPage, tabId)
+    const where = `rows=${view.rowCount} baseY=${view.baseY} cursorY=${view.cursorY} panes=${view.paneCount}`
     expect(
-      tail,
-      `the local engine produced no usable transcript. Terminal tail:\n${tail}`
+      view.lines.join('\n').toLowerCase(),
+      `the local engine produced no usable transcript (${where}). Terminal:\n${view.lines.join('\n')}`
     ).toContain(SPOKEN_PHRASE)
     // Delivered to the prompt, never executed: the brief forbids an implicit
-    // Enter, and a transcript in scrollback above the cursor would mean one.
+    // Enter, and a submitted line would leave the cursor on a fresh prompt.
     expect(
-      cursorRow,
-      `the transcript is not on the prompt line — it looks submitted. Cursor row: "${cursorRow}"`
+      view.cursorLine.toLowerCase(),
+      `the transcript is not on the prompt line — it looks submitted (${where}). Cursor line: "${view.cursorLine}"`
     ).toContain(SPOKEN_PHRASE)
   })
 
