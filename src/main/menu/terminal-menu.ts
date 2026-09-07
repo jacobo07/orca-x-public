@@ -13,7 +13,13 @@ export function buildTerminalMenu({
   onTerminalCommand,
   shortcutLabel
 }: {
-  onTerminalCommand: (command: TerminalMenuCommand) => void
+  // Why the window travels with the command: these act on the renderer that owns the menu, and main
+  // cannot recover which one that was after the fact — see register-app-menu.ts for the reference
+  // that used to be guessed here.
+  onTerminalCommand: (
+    command: TerminalMenuCommand,
+    window?: Electron.BaseWindow | null
+  ) => void
   shortcutLabel: (action: KeybindingActionId) => string
 }): Electron.MenuItemConstructorOptions {
   return {
@@ -21,25 +27,25 @@ export function buildTerminalMenu({
     submenu: [
       {
         label: `${translateMain('menu.newTerminal', 'New Terminal')}\t${shortcutLabel('tab.newTerminal')}`,
-        click: () => onTerminalCommand('newTerminal')
+        click: (_menuItem, window) => onTerminalCommand('newTerminal', window)
       },
       {
         label: `${translateMain('menu.chooseTerminalProfile', 'New Terminal With Profile...')}\t${shortcutLabel('terminal.chooseProfile')}`,
-        click: () => onTerminalCommand('chooseProfile')
+        click: (_menuItem, window) => onTerminalCommand('chooseProfile', window)
       },
       { type: 'separator' },
       {
         label: `${translateMain('menu.splitTerminalRight', 'Split Terminal Right')}\t${shortcutLabel('terminal.splitRight')}`,
-        click: () => onTerminalCommand('splitRight')
+        click: (_menuItem, window) => onTerminalCommand('splitRight', window)
       },
       {
         label: `${translateMain('menu.splitTerminalDown', 'Split Terminal Down')}\t${shortcutLabel('terminal.splitDown')}`,
-        click: () => onTerminalCommand('splitDown')
+        click: (_menuItem, window) => onTerminalCommand('splitDown', window)
       },
       { type: 'separator' },
       {
         label: translateMain('menu.toggleTerminalRail', 'Toggle Terminal Rail'),
-        click: () => onTerminalCommand('toggleRail')
+        click: (_menuItem, window) => onTerminalCommand('toggleRail', window)
       }
     ]
   }

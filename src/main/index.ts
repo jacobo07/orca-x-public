@@ -667,6 +667,22 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
   )
 }
 
+/**
+ * The window a menu command should act on.
+ *
+ * Electron hands every menu click the window whose menu ran it, and that is the answer whenever it
+ * is there. `mainWindow` is only the fallback for an invocation that carries no window — an
+ * accelerator fired with nothing focused — because it names the most recently *created* window, not
+ * the one in front of the user. Using it as the primary answer meant that with two windows open, a
+ * command invoked from the older one acted on the newer one.
+ */
+function menuTargetWindow(window?: Electron.BaseWindow | null): BrowserWindow | null {
+  if (window instanceof BrowserWindow && !window.isDestroyed()) {
+    return window
+  }
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+}
+
 const devInstanceIdentity = getDevInstanceIdentity(is.dev)
 const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   ? devInstanceIdentity.appUserModelId
@@ -3071,29 +3087,29 @@ void app.whenReady().then(async () => {
     },
     // Why: menu zoom must act on the window the user is looking at — routing to
     // the main window while the dashboard pop-out is focused zooms behind it.
-    onZoomIn: () => {
+    onZoomIn: (targetWindow) => {
       if (!zoomDashboardPopoutIfFocused('in')) {
-        mainWindow?.webContents.send('terminal:zoom', 'in')
+        menuTargetWindow(targetWindow)?.webContents.send('terminal:zoom', 'in')
       }
     },
-    onZoomOut: () => {
+    onZoomOut: (targetWindow) => {
       if (!zoomDashboardPopoutIfFocused('out')) {
-        mainWindow?.webContents.send('terminal:zoom', 'out')
+        menuTargetWindow(targetWindow)?.webContents.send('terminal:zoom', 'out')
       }
     },
-    onZoomReset: () => {
+    onZoomReset: (targetWindow) => {
       if (!zoomDashboardPopoutIfFocused('reset')) {
-        mainWindow?.webContents.send('terminal:zoom', 'reset')
+        menuTargetWindow(targetWindow)?.webContents.send('terminal:zoom', 'reset')
       }
     },
-    onTerminalCommand: (command) => {
-      mainWindow?.webContents.send('ui:terminalCommand', command)
+    onTerminalCommand: (command, targetWindow) => {
+      menuTargetWindow(targetWindow)?.webContents.send('ui:terminalCommand', command)
     },
-    onToggleLeftSidebar: () => {
-      mainWindow?.webContents.send('ui:toggleLeftSidebar')
+    onToggleLeftSidebar: (targetWindow) => {
+      menuTargetWindow(targetWindow)?.webContents.send('ui:toggleLeftSidebar')
     },
-    onToggleRightSidebar: () => {
-      mainWindow?.webContents.send('ui:toggleRightSidebar')
+    onToggleRightSidebar: (targetWindow) => {
+      menuTargetWindow(targetWindow)?.webContents.send('ui:toggleRightSidebar')
     },
     onToggleAppearance: (key) => {
       if (!store) {

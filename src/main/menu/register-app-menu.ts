@@ -36,12 +36,19 @@ type RegisterAppMenuOptions = {
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
-  onZoomIn: () => void
-  onZoomOut: () => void
-  onZoomReset: () => void
-  onToggleLeftSidebar: () => void
-  onToggleRightSidebar: () => void
-  onTerminalCommand: (command: TerminalMenuCommand) => void
+  // Why each of these takes the invoking window: Electron hands every click the window whose menu
+  // ran it, and a handler that drops it has to guess. The guess in main was a module-level reference
+  // assigned on window creation, so with two windows open a command invoked from the older one acted
+  // on the newer one. Same shape as onOpenSetupGuide/onOpenFeatureTour above, which already do this.
+  onZoomIn: (window?: Electron.BaseWindow | null) => void
+  onZoomOut: (window?: Electron.BaseWindow | null) => void
+  onZoomReset: (window?: Electron.BaseWindow | null) => void
+  onToggleLeftSidebar: (window?: Electron.BaseWindow | null) => void
+  onToggleRightSidebar: (window?: Electron.BaseWindow | null) => void
+  onTerminalCommand: (
+    command: TerminalMenuCommand,
+    window?: Electron.BaseWindow | null
+  ) => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -249,15 +256,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       {
         label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,
-        click: () => onZoomReset()
+        click: (_menuItem, window) => onZoomReset(window)
       },
       {
         label: `${translateMain('menu.zoomIn', 'Zoom In')}\t${shortcutLabel('zoom.in')}`,
-        click: () => onZoomIn()
+        click: (_menuItem, window) => onZoomIn(window)
       },
       {
         label: `${translateMain('menu.zoomOut', 'Zoom Out')}\t${shortcutLabel('zoom.out')}`,
-        click: () => onZoomOut()
+        click: (_menuItem, window) => onZoomOut(window)
       },
       { type: 'separator' },
       {

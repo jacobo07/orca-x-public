@@ -20,8 +20,10 @@ export function buildAppearanceSubmenu({
 }: {
   appearance: AppearanceMenuState
   onToggleAppearance: (key: AppearanceMenuKey) => void
-  onToggleLeftSidebar: () => void
-  onToggleRightSidebar: () => void
+  // The invoking window travels with the toggle: it acts on one renderer's layout, and main would
+  // otherwise have to guess which. See register-app-menu.ts.
+  onToggleLeftSidebar: (window?: Electron.BaseWindow | null) => void
+  onToggleRightSidebar: (window?: Electron.BaseWindow | null) => void
   shortcutLabel: (action: KeybindingActionId) => string
 }): Electron.MenuItemConstructorOptions {
   return {
@@ -35,12 +37,12 @@ export function buildAppearanceSubmenu({
         // fire. Sidebar open/closed lives in the renderer store (non-persisted),
         // so we forward a toggle request rather than mirroring state in main.
         label: `${translateMain('menu.toggleLeftSidebar', 'Toggle Left Sidebar')}\t${shortcutLabel('sidebar.left.toggle')}`,
-        click: () => onToggleLeftSidebar()
+        click: (_menuItem, window) => onToggleLeftSidebar(window)
       },
       {
         // Why: display-only shortcut hint for the same reason as above.
         label: `${translateMain('menu.toggleRightSidebar', 'Toggle Right Sidebar')}\t${shortcutLabel('sidebar.right.toggle')}`,
-        click: () => onToggleRightSidebar()
+        click: (_menuItem, window) => onToggleRightSidebar(window)
       },
       {
         label: translateMain('menu.showStatusBar', 'Show Status Bar'),
