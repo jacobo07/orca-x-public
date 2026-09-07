@@ -817,7 +817,13 @@
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
       },
       "launchTerminalProfile": {
-        "profileUnavailable": "That terminal profile is no longer available. Opened the default terminal instead."
+        "profileUnavailable": "That terminal profile is no longer available. Opened the default terminal instead.",
+        "unresolvedToken": "This profile needs {{value0}}, which this workspace cannot supply."
+      },
+      "terminalProfileAvailability": {
+        "probing": "Checking whether this is installed…",
+        "missing": "Not found on this machine: {{value0}}",
+        "unknown": "Could not check whether this is installed."
       }
     },
     "hooks": {
@@ -14635,7 +14641,8 @@
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
-          "micDisconnected": "Microphone disconnected. Dictation stopped."
+          "micDisconnected": "Microphone disconnected. Dictation stopped.",
+          "transcriptHeldForTab": "Transcript saved. Return to that terminal tab to insert it."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation"
@@ -16240,6 +16247,24 @@
         "workspaceSpace": {
           "otherTopLevelItems": "Other top-level items ({{value0}})"
         }
+      }
+    },
+    "right": {
+      "sidebar": {
+        "leftNavProjectsSwitch": {
+          "projects": "Projects"
+        }
+      }
+    },
+    "terminal": {
+      "voiceDock": {
+        "noModel": "Dictation unavailable — no speech model ready",
+        "recording": "Recording — stop dictation",
+        "starting": "Starting dictation…",
+        "stopping": "Transcribing…",
+        "failed": "Dictation failed — try again",
+        "busyElsewhere": "Dictation is active in another pane",
+        "start": "Start dictation"
       }
     }
   },
