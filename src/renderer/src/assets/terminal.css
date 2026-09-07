@@ -240,6 +240,9 @@
 
 :root {
   --orca-pane-title-height: 24px;
+  /* 24px is also the WCAG 2.2 minimum target size, so the dock's control does
+     not need a hit area larger than the strip that reserves it. */
+  --orca-terminal-voice-dock-height: 24px;
   --orca-pane-title-fg: var(--terminal-pane-title-on-dark-fg);
   --orca-pane-title-input-fg: var(--terminal-pane-title-on-dark-input-fg);
   --orca-pane-title-placeholder: var(--terminal-pane-title-on-dark-placeholder);
@@ -517,6 +520,40 @@
 .pane[data-has-title] .xterm-container {
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
+}
+
+/* Voice dock: pane-owned chrome on the bottom strip. Unlike the reveal-on-hover
+   pane controls it is always visible, so it reserves its height instead of
+   floating over the bottom row — that row is where an agent TUI draws its
+   prompt and status. */
+.terminal-voice-dock {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  height: var(--orca-terminal-voice-dock-height);
+  padding: 0 4px;
+  pointer-events: none;
+}
+
+.terminal-voice-dock > * {
+  pointer-events: auto;
+}
+
+.pane[data-has-voice-dock] .xterm-container {
+  height: calc(100% - var(--orca-terminal-voice-dock-height));
+}
+
+/* Both reservations are independent, so a pane carrying both must subtract
+   both. Without this the later rule wins on its own and one reserved strip
+   silently goes back to covering terminal rows. */
+.pane[data-has-title][data-has-voice-dock] .xterm-container {
+  height: calc(100% - var(--orca-pane-title-height) - var(--orca-terminal-voice-dock-height));
 }
 
 /* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */
