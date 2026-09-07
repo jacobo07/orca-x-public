@@ -163,4 +163,102 @@ test.describe('@workspace-menu-presence', () => {
 
     await orcaPage.screenshot({ path: 'pr-evidence/workspace-menu-presence-collapsed.png' })
   })
+
+  test('the header may be wider than the sidebar but never covers a tab', async ({ orcaPage }) => {
+    // The menu is allowed to overhang the column it sits above, which is a new way for chrome to be
+    // drawn on content. A tab under the header is still clickable and still reported present, so
+    // "the tab is in the DOM" would stay true the whole time this was broken — overlap is the only
+    // honest assertion.
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await ensureProjectSidebarOwnsLeftRegion(orcaPage)
+
+    const coveredAt = async (
+      sidebarWidth: number
+    ): Promise<{ hits: string[]; considered: number }> => {
+      await orcaPage.evaluate(
+        (width) => window.__store?.getState().setSidebarWidth(width),
+        sidebarWidth
+      )
+      await expect
+        .poll(async () => (await titlebarMenuState(orcaPage)).headerWidth)
+        .toBeGreaterThan(0)
+      return orcaPage.evaluate(() => {
+        const header = document.querySelector('.titlebar-left')
+        const strip = document.querySelector('[data-tab-group-strip-id]')
+        if (!header || !strip) {
+          return { hits: ['no header or tab strip mounted'], considered: 0 }
+        }
+        const headerRect = header.getBoundingClientRect()
+        const candidates = [...strip.querySelectorAll('[data-tab-id], [role="tab"], button')]
+          .map((element) => ({
+            name: element.getAttribute('aria-label') ?? element.textContent?.trim() ?? '?',
+            rect: element.getBoundingClientRect()
+          }))
+          .filter(({ rect }) => rect.width > 0)
+        return {
+          considered: candidates.length,
+          hits: candidates
+            .filter(
+              ({ rect }) =>
+                headerRect.left < rect.right &&
+                rect.left < headerRect.right &&
+                headerRect.top < rect.bottom &&
+                rect.top < headerRect.bottom
+            )
+            .map(({ name }) => `menu header covers "${name}"`)
+        }
+      })
+    }
+
+    for (const width of [220, 280, 360, 520]) {
+      const { hits, considered } = await coveredAt(width)
+      // Positive control: an empty tab strip cannot report an overlap, and would return exactly the
+      // clean result a strip correctly clear of the header returns.
+      expect(
+        considered,
+        `sidebar width ${width}: nothing in the tab strip to compare the header against`
+      ).toBeGreaterThan(0)
+      expect(hits, `sidebar width ${width}`).toEqual([])
+    }
+    await orcaPage.screenshot({ path: 'pr-evidence/workspace-menu-header-clear-of-tabs.png' })
+  })
+
+  test('a narrow window folds the menu without losing it', async ({ orcaPage, electronApp }) => {
+    // Two things at once, because either alone is weak. That the fold HAPPENS is the positive
+    // control for the whole fit mechanism — a gate that can only ever answer "fits" is the mirror
+    // image of the defect this spec exists for. That the compact button is there is the capability:
+    // responsive compression may change the presentation, never remove the commands.
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await ensureProjectSidebarOwnsLeftRegion(orcaPage)
+
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]
+      const bounds = window.getBounds()
+      window.setBounds({ ...bounds, width: 620 })
+    })
+
+    await expect
+      .poll(async () => {
+        const state = await titlebarMenuState(orcaPage)
+        return `${state.labels.length} labels, fallback ${state.fallbackPresent ? 'shown' : 'absent'}`
+      })
+      .toBe('0 labels, fallback shown')
+
+    await orcaPage.screenshot({ path: 'pr-evidence/workspace-menu-presence-narrow.png' })
+  })
+
+  test('the menu is present before any project is bound', async ({ orcaPage }) => {
+    // Open Project, New Window, Settings and Help are all useful with nothing open, so project
+    // binding cannot be a precondition for the window's own command map.
+    await orcaPage.evaluate(() => window.__store?.getState().setActiveView('workspace'))
+    await expect.poll(async () => (await titlebarMenuState(orcaPage)).headerFound).toBe(true)
+
+    const registered = await registeredMenuLabels(orcaPage)
+    const state = await titlebarMenuState(orcaPage)
+    expect(state.labels, `launcher header ${state.headerWidth}px`).toEqual(registered)
+
+    await orcaPage.screenshot({ path: 'pr-evidence/workspace-menu-presence-unbound.png' })
+  })
 })
