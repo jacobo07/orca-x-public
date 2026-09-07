@@ -71,6 +71,8 @@ import NativeChatView from '../native-chat/NativeChatView'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
+import { TerminalVoiceDockPortals } from './TerminalVoiceDockPortals'
+import { syncTerminalVoiceDockSpace } from './terminal-voice-dock-pane-state'
 import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
 import {
   addSessionRestoredBannerPaneId,
@@ -511,6 +513,20 @@ function TerminalPane(
         ?.viewMode === 'chat'
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
+  const isVoiceDockEnabled = useAppStore((store) => store.settings?.voice?.enabled === true)
+  // Why a boolean rather than the model list: the selector returns a primitive,
+  // so a model-state refresh that changes nothing cannot re-render every pane.
+  const isSpeechModelReady = useAppStore((store) => {
+    const selected = store.settings?.voice?.sttModel
+    return Boolean(
+      selected && store.modelStates.some((state) => state.id === selected && state.status === 'ready')
+    )
+  })
+  const isDictationHoldMode = useAppStore(
+    (store) => store.settings?.voice?.dictationMode === 'hold'
+  )
+  const dictationState = useAppStore((store) => store.dictationState)
+  const dictationTarget = useAppStore((store) => store.dictationTarget)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
   const unifiedTabLabel = useAppStore(
     (store) =>
@@ -2274,6 +2290,24 @@ function TerminalPane(
     shouldMeasureHiddenStartup
   ])
 
+  // The dock is always visible when voice is on, so it reserves its strip
+  // rather than floating over the bottom row the way the hover-revealed pane
+  // controls do. Reserving without re-fitting would leave the PTY believing it
+  // still owns the covered row.
+  useLayoutEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    const needsFit = syncTerminalVoiceDockSpace({
+      panes: manager.getPanes(),
+      isVoiceDockEnabled
+    })
+    if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
+      fitPanes(manager)
+    }
+  }, [isVoiceDockEnabled, paneCount, paneLayoutRevision, isVisible, shouldMeasureHiddenStartup])
+
   const syncPaneTitleOverlayRects = useCallback((): void => {
     const manager = managerRef.current
     const container = containerRef.current
@@ -3211,6 +3245,15 @@ function TerminalPane(
         onRenameSubmit={handleRenameSubmit}
         onRenameCancel={handleRenameCancel}
         onRenameBlur={handleRenameBlur}
+      />
+      <TerminalVoiceDockPortals
+        panes={managedPanes}
+        tabId={tabId}
+        isVoiceEnabled={isVoiceDockEnabled}
+        isModelReady={isSpeechModelReady}
+        dictationState={dictationState}
+        dictationTarget={dictationTarget}
+        isHoldMode={isDictationHoldMode}
       />
       {!showSshReconnectOverlay
         ? managedPanes.map((pane) => {
