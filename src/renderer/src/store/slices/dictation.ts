@@ -2,11 +2,21 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DictationState, SpeechModelState } from '../../../../shared/speech-types'
 
+/** The terminal a dictation job was started from, captured when it began.
+ *  Presentation only — delivery is fenced by the controller's run id and
+ *  session, and must never be re-derived from this. */
+export type TerminalDictationTarget = {
+  tabId: string
+  paneId: number
+}
+
 export type DictationSlice = {
   dictationState: DictationState
   partialTranscript: string
   activeModelId: string | null
   modelStates: SpeechModelState[]
+  dictationTarget: TerminalDictationTarget | null
+  setDictationTarget: (target: TerminalDictationTarget | null) => void
   setDictationState: (state: DictationState) => void
   setPartialTranscript: (text: string) => void
   setActiveModelId: (id: string | null) => void
@@ -45,7 +55,9 @@ export const createDictationSlice: StateCreator<AppState, [], [], DictationSlice
     partialTranscript: '',
     activeModelId: null,
     modelStates: [],
+    dictationTarget: null,
 
+    setDictationTarget: (target) => set({ dictationTarget: target }),
     setDictationState: (state) => set({ dictationState: state }),
     setPartialTranscript: (text) => set({ partialTranscript: text }),
     setActiveModelId: (id) => set({ activeModelId: id }),

@@ -20,6 +20,7 @@ export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
   const setPartialTranscript = useAppStore((s) => s.setPartialTranscript)
+  const setDictationTarget = useAppStore((s) => s.setDictationTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
@@ -137,6 +138,18 @@ export function DictationController() {
     dictationRunRef.current = runId
     activeSessionIdRef.current = sessionId
     insertionTargetRef.current = captureInsertionTarget()
+    // Publish which terminal owns this job so its pane can show it is recording
+    // and every other pane can show that it is not. Written on every start —
+    // including to null for a non-terminal target — because leaving the last
+    // job's terminal here would light up a pane that started nothing. Nothing
+    // clears it on completion: the consumer gates on the job still running, so
+    // one write site is correct where four clear sites would each have to be.
+    const startedTarget = insertionTargetRef.current
+    setDictationTarget(
+      startedTarget?.kind === 'terminal'
+        ? { tabId: startedTarget.tabId, paneId: startedTarget.paneId }
+        : null
+    )
     stopRequestedDuringStartRef.current = false
     finalTranscriptReceivedRef.current = false
     erroredSessionIdsRef.current.clear()
@@ -265,6 +278,7 @@ export function DictationController() {
     finishDictationSession,
     drainStoppedSession,
     setPartialTranscript,
+    setDictationTarget,
     recordFeatureInteraction
   ])
 
