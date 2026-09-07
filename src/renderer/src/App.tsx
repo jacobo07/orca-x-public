@@ -63,6 +63,10 @@ function App(): React.JSX.Element {
       style={
         {
           '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
+          // The part of that header which extends past the column it sits above. The tab strip
+          // reserves exactly this, so the application menu can be wider than the project sidebar
+          // without being drawn on tab one.
+          '--titlebar-left-overhang-width': `${layout.titlebarLeftOverhangWidth}px`,
           // The project name + Home cluster floats over the tab strip's right end; the strip
           // reserves exactly this so neither is drawn on the other.
           '--workspace-project-chrome-width': `${layout.workspaceProjectChromeWidth}px`,

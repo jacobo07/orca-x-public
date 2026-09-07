@@ -2,21 +2,29 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MenuTopLevelItem } from '../../../shared/app-menu-strip'
 
 /**
- * Collapse the strip to the compact menu button when the labels do not fit the space the titlebar
- * gives them.
+ * Collapse the strip to the compact menu button when the labels do not fit the space the window's
+ * top band gives them.
  *
- * Why measured rather than gated on a breakpoint: the space is the sidebar's width, which the user
- * drags. Without this the buttons overflow their header and are painted over the sidebar toggle and
- * the back/forward pair — controls that are still clickable underneath, so nothing looks broken
- * enough to report while the titlebar quietly stops working.
+ * Why the window and not the header: the header above the project sidebar is the sidebar's width,
+ * which the user drags, and at ordinary widths six localized labels never fit it. Measuring against
+ * it made the application menu a property of the sidebar — open the project sidebar and the whole
+ * top-level command map was replaced by a single compact button, in a window with hundreds of
+ * unused pixels beside it. The header is allowed to exceed its column (the tab strip reserves the
+ * overhang), so the honest question is whether the top band has room, not whether the column does.
  *
- * Two measurements, both deliberately state-independent, because anything that shrinks when the
- * strip collapses cannot decide whether the strip should come back. The natural width is remembered
- * from the renders that fit; the space is the titlebar header's own width, which is the sidebar's
- * and does not move when the strip inside it changes shape.
+ * Every input stays deliberately state-independent, because anything that shrinks when the strip
+ * collapses cannot decide whether the strip should come back. The natural width is remembered from
+ * the renders that fit; the window's width and the window-controls reserve do not move when the
+ * strip inside changes shape.
  */
 /** Floor for the room the header owes its other controls, until they can be measured. */
 const HEADER_CHROME_RESERVE_FLOOR_PX = 140
+/**
+ * Room the top band owes the surfaces that share it — the first tab and the project-name cluster —
+ * before the menu may take any. Below this the strip is genuinely too wide for the window and folds
+ * to the compact button, which is a representation change, not a loss of the commands.
+ */
+const TOP_BAND_CONTENT_RESERVE_PX = 320
 
 /**
  * Width of the controls sharing the header with the strip.
@@ -63,24 +71,29 @@ function useStripFits(itemCount: number): {
     if (!wrapper || itemCount === 0) {
       return
     }
-    const header = wrapper.closest('.titlebar-left') ?? wrapper.closest('.titlebar')
-    if (!header) {
-      return
-    }
     const measure = (): void => {
       const strip = stripRef.current
       if (strip) {
         naturalWidthRef.current = Math.max(naturalWidthRef.current, strip.scrollWidth)
         reserveRef.current = Math.max(reserveRef.current, measureNeighbours(wrapper))
       }
+      // Inherited from the app root, so this is the same reserve every other surface uses to stay
+      // clear of the Windows/Linux window-controls overlay rather than a second copy of 138px.
+      const windowControls =
+        Number.parseFloat(
+          getComputedStyle(wrapper).getPropertyValue('--window-controls-width')
+        ) || 0
+      const available = window.innerWidth - windowControls - TOP_BAND_CONTENT_RESERVE_PX
       setFits(
         naturalWidthRef.current === 0 ||
-          header.clientWidth >= naturalWidthRef.current + reserveRef.current
+          available >= naturalWidthRef.current + reserveRef.current
       )
     }
     measure()
+    // The window, not the header: the header is what the strip resizes, so observing it is the
+    // circularity this measurement exists to avoid.
     const observer = new ResizeObserver(measure)
-    observer.observe(header)
+    observer.observe(document.documentElement)
     return () => observer.disconnect()
   }, [itemCount])
 

@@ -167,7 +167,7 @@ export function AppWorkspaceShell(props: {
               layout.leftTitlebarChromeLayout.shouldMount ? (
                 /* Why: when the sidebar is collapsed, take this titlebar-height header out of flex layout so the terminal/editor reclaim the left edge. */
                 <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                  className={`relative flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' w-0 overflow-visible'}`}
                 >
                   <div
                     // Why: floating titlebar-left occludes the center column's border-l seam; border-r restores that line, w-max sizes it to its own controls.
@@ -176,12 +176,17 @@ export function AppWorkspaceShell(props: {
                     // width and the remainder became an empty band. w-0 keeps the header out of the
                     // column's intrinsic width while min-w-full still paints it the sidebar's width,
                     // so it tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                    className={`titlebar-left${
+                    // Why absolute in both layouts, not only when floating: the header is allowed to
+                    // be wider than the column it sits above, because six localized menu labels do
+                    // not fit a project sidebar and the window has room beside it. Out of flow it can
+                    // overhang without becoming the column's width authority — the circularity that
+                    // once turned an auto-width column into an unpainted band — while min-w-full
+                    // still paints it the column's full width. The top-left tab group reserves
+                    // --titlebar-left-overhang-width, so the menu is never drawn on tab one.
+                    className={`titlebar-left absolute top-0 left-0 z-10 w-max min-w-full${
                       layout.leftTitlebarChromeLayout.isFloating
-                        ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
-                        : layout.sidebarOpen
-                          ? ' w-0 min-w-full'
-                          : ''
+                        ? ' titlebar-left-floating border-r border-border'
+                        : ''
                     }`}
                     style={{
                       // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
@@ -190,6 +195,9 @@ export function AppWorkspaceShell(props: {
                   >
                     {titlebarLeftControls}
                   </div>
+                  {/* Why in flow: the header above it is out of flow, so the sidebar needs this to
+                      start below the header rather than underneath it. */}
+                  {layout.sidebarOpen ? <div className="h-[36px] shrink-0" /> : null}
                   {/* Why: flex-1/min-h-0 slot needed under the fixed 36px header, else the sidebar collapses to content height and loses its scroll viewport. */}
                   <div className="flex min-h-0 flex-1">
                     <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
@@ -202,7 +210,14 @@ export function AppWorkspaceShell(props: {
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
               {/* Why: automations owns its page header; the stacked titlebar would be an empty 36px stripe. */}
               {layout.stackedSidebarOpen && layout.activeView !== 'automations' ? (
-                <div className="titlebar">{titlebarMainStrip}</div>
+                // Why the inset: the sidebar header may overhang into this column, and this row is
+                // the first thing it would be drawn over.
+                <div
+                  className="titlebar"
+                  style={{ paddingLeft: 'var(--titlebar-left-overhang-width)' }}
+                >
+                  {titlebarMainStrip}
+                </div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Why: match the side panel header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}

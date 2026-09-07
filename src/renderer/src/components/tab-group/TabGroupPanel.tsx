@@ -18,7 +18,6 @@ import { requestActiveTerminalPaneSplit } from '../tab-bar/request-active-termin
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { resolveEffectiveSidebarOpen } from '@/lib/left-navigation-surface'
 import { buildTabGroupCloseCommands } from './tab-group-close-commands'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
@@ -65,17 +64,6 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidePanelDock = useAppStore((state) => state.sidePanelDock)
-  // Why derived and not the stored flag: the strip reserves space for the floating titlebar header,
-  // which appears whenever the project sidebar is not rendering — including when it yielded the left
-  // region to the panel. The raw flag would skip that reservation and paint the header over tab one.
-  const sidebarOpen = useAppStore((state) =>
-    resolveEffectiveSidebarOpen({
-      sidebarOpen: state.sidebarOpen,
-      sidePanelDock: state.sidePanelDock,
-      rightSidebarOpen: state.rightSidebarOpen,
-      activeView: state.activeView
-    })
-  )
   const terminalRailCollapsed = useAppStore((state) => state.terminalRailCollapsed)
   const toggleTerminalRailCollapsed = useAppStore((state) => state.toggleTerminalRailCollapsed)
 
@@ -229,12 +217,16 @@ export default function TabGroupPanel({
       >
         <div className="flex h-full items-stretch pr-1.5">
           {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-          {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+          {reserveCollapsedSidebarHeaderSpace ? (
             <div
               className="shrink-0"
               style={
                 {
-                  width: 'var(--collapsed-sidebar-header-width)',
+                  // Why the overhang and not the whole header: the header may now be wider than the
+                  // column it sits above, so what this row owes it is the part that extends past
+                  // that column. Collapsed the column is 0 wide, which is the previous
+                  // reserve-the-whole-header case expressed as the same measurement.
+                  width: 'var(--titlebar-left-overhang-width)',
                   WebkitAppRegion: 'no-drag'
                 } as React.CSSProperties
               }

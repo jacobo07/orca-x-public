@@ -23,6 +23,7 @@ export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 export function useAppChromeLayout() {
   const activeView = useAppStore((s) => s.activeView)
   const storedSidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -150,9 +151,19 @@ export function useAppChromeLayout() {
     sidebarOpen
   ])
 
+  // Why max(0, …): the header is allowed to exceed the column it sits above — six localized menu
+  // labels do not fit a 280px project sidebar — and the top-left tab group reserves exactly the part
+  // that overhangs, so the menu is never drawn on tab one. Collapsed, the column is 0 wide, which
+  // makes the previous "reserve the whole header" case the same measurement rather than a second one.
+  const titlebarLeftOverhangWidth = Math.max(
+    0,
+    collapsedSidebarHeaderWidth - (sidebarOpen ? sidebarWidth : 0)
+  )
+
   return {
     activeView,
     activeWorktreeId,
+    titlebarLeftOverhangWidth,
     activePendingCreationId,
     activeTabCanExpand,
     effectiveActiveTabId,
