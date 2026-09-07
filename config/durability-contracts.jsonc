@@ -34,6 +34,27 @@
   },
   "contracts": [
     {
+      "id": "speech.openai-api-key",
+      "state": "~/.orca/openai-speech-token.enc — the safeStorage-encrypted OpenAI speech key",
+      "writer": "src/main/speech/openai-api-key-store.ts",
+      "tier": "atomic-only",
+      "lostIf": "Losing the newest write costs one re-paste of the key. The failure that mattered was tearing, not loss: the writer was a bare writeFileSync, and the reader pair splits on a fragment — hasOpenAiSpeechApiKey() tests existence only, so a truncated file reported the key as configured while every transcription failed to decrypt. It now stages and renames, so the file is the old key or the new one.",
+      "knownGaps": [
+        "No test drives a torn write. The atomicity is inherited from writeFileDurableSync rather than pinned here, so a future refactor back to a direct write would not go red at this contract.",
+        "A key written while safeStorage is unavailable is stored in plaintext at mode 0600; that is a confidentiality decision, not a durability one, and is unchanged by this contract."
+      ]
+    },
+    {
+      "id": "speech.model-cache",
+      "state": "Downloaded sherpa-onnx speech model files under the shared models directory",
+      "writer": "src/main/speech/model-manager.ts",
+      "tier": "regenerable",
+      "lostIf": "Nothing the user cannot rebuild: each catalog file carries a sha256 and size, so a lost or partial model is re-downloaded and re-verified. A partially written model must never be loaded, which the status machine enforces by publishing 'ready' only after verification rather than after the write.",
+      "knownGaps": [
+        "Model bytes are large enough that an fsync-per-file would cost an I/O storm for state the catalog can reproduce, which is why this is regenerable rather than atomic-only."
+      ]
+    },
+    {
       "id": "persistence.profile-data-file",
       "state": "orca-data.json and its .bak ring — workspace session, terminal layouts, open files",
       // Two publishers, and the gate holds both to the tier. The transfer writer was a bare

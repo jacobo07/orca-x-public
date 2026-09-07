@@ -1,5 +1,6 @@
 import { safeStorage } from 'electron'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -47,6 +48,17 @@ export function hasOpenAiSpeechApiKey(): boolean {
   return existsSync(getOpenAiKeyPath())
 }
 
+/**
+ * Why atomic: a bare write left a torn key file after a crash, and the reader
+ * pair splits on that — hasOpenAiSpeechApiKey() only tests existence, so the UI
+ * reported "configured" while every transcription failed to decrypt. Staging and
+ * renaming means the file is either the old key or the new one, never a fragment.
+ */
+function writeOpenAiKeyFile(payload: Buffer): void {
+  const keyPath = getOpenAiKeyPath()
+  writeFileDurableSync(durableWriteTempPath(keyPath), keyPath, payload, { mode: 0o600 })
+}
+
 export function saveOpenAiSpeechApiKey(apiKey: string): void {
   const trimmed = apiKey.trim()
   if (!trimmed) {
@@ -54,7 +66,7 @@ export function saveOpenAiSpeechApiKey(apiKey: string): void {
   }
   ensureOrcaDir()
   if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(getOpenAiKeyPath(), safeStorage.encryptString(trimmed), { mode: 0o600 })
+    writeOpenAiKeyFile(safeStorage.encryptString(trimmed))
     cachedOpenAiSpeechApiKey = trimmed
     return
   }
@@ -62,7 +74,7 @@ export function saveOpenAiSpeechApiKey(apiKey: string): void {
   console.warn(
     '[speech] safeStorage encryption unavailable — storing OpenAI speech key in plaintext'
   )
-  writeFileSync(getOpenAiKeyPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
+  writeOpenAiKeyFile(Buffer.from(trimmed, 'utf8'))
   cachedOpenAiSpeechApiKey = trimmed
 }
 
