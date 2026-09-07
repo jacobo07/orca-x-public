@@ -545,8 +545,15 @@
   pointer-events: auto;
 }
 
+/* The padding term has to stay: the base rule pairs `margin-top: pane-padding-y`
+   with a height reduced by the same amount, so replacing that height with only
+   the dock's leaves the container 4px too tall and it laps over the dock. That
+   overlap was invisible to the CSS string assertion and only showed up as a
+   measured 868 against a dock top of 865 in the running app.
+   The title variant below needs no padding term because the title rule also
+   replaces `margin-top`, so its top and height already agree. */
 .pane[data-has-voice-dock] .xterm-container {
-  height: calc(100% - var(--orca-terminal-voice-dock-height));
+  height: calc(100% - var(--pane-padding-y, 4px) - var(--orca-terminal-voice-dock-height));
 }
 
 /* Both reservations are independent, so a pane carrying both must subtract
