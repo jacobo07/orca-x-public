@@ -1,0 +1,44 @@
+# Modules under src/main that write state directly into the user's data directory (no temp file, no rename) but carry no
+# durability contract in config/durability-contracts.jsonc.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — classify
+# the module instead. Existing debt stays visible here; new debt is blocked at the gate.
+# Prune after classifying: pnpm check:durability-contracts --prune
+src/main/browser/browser-cookie-import.ts
+src/main/claude-accounts/managed-auth-path.ts
+src/main/claude-accounts/runtime-auth-service-test-harness.ts
+src/main/claude-accounts/service.ts
+src/main/claude/hook-service.ts
+src/main/cli/cli-installer-test-fixtures.ts
+src/main/cli/cli-installer.ts
+src/main/cli/linux-terminal-orca-cli-shim.ts
+src/main/codex-accounts/runtime-home-service-test-harness.ts
+src/main/codex-accounts/runtime-home-service.ts
+src/main/codex-accounts/service-test-harness.ts
+src/main/codex-accounts/service.ts
+src/main/codex/codex-managed-home-resource-copy-marker.ts
+src/main/codex/codex-session-backfill-copy.ts
+src/main/codex/config-settings-baseline.ts
+src/main/codex/hook-trust-promotion.ts
+src/main/daemon/daemon-host-relocation.ts
+src/main/daemon/shell-ready.ts
+src/main/emulator/android/scrcpy-server-download.ts
+src/main/emulator/serve-sim-execution.ts
+src/main/hang-watchdog/hang-detection-marker.ts
+src/main/ipc/filesystem-import-ssh.ts
+src/main/ipc/filesystem-mutations.ts
+src/main/ipc/terminal-render-desync-evidence.ts
+src/main/ipc/worktrees.ts
+src/main/issue-command-file.ts
+src/main/jira/site-credential-store.ts
+src/main/mimo/hook-service.ts
+src/main/opencode/hook-service.ts
+src/main/pi/legacy-omp-overlay-migration.ts
+src/main/pi/titlebar-extension-service.ts
+src/main/providers/__tests__/shell-ready-framework/shell-script-test.ts
+src/main/pty/legacy-terminal-shim-dir.ts
+src/main/runtime/orca-runtime.ts
+src/main/runtime/rpc/ws-fallback-port-store.ts
+src/main/ssh/ssh-relay-session.ts
+src/main/startup/gpu-fallback-marker.ts
+src/main/startup/windows-user-data-acl.ts

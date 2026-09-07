@@ -6,6 +6,7 @@ import {
   collectUnclassifiedPublishers,
   diffBaseline,
   looksLikeAtomicPublisher,
+  looksLikeDirectStateWriter,
   main,
   parseBaseline
 } from './check-durability-contracts.mjs'
@@ -19,14 +20,31 @@ const tempDirs = []
 const DURABLE_WRITER = "import { writeFileDurable } from './durable-file-write'\nexport const w = 1\n"
 const BARE_WRITER = "import { writeFile } from 'node:fs/promises'\nexport const w = 1\n"
 const PUBLISHER = "const tmp = `${p}.tmp`\nawait rename(tmp, p)\n"
+// The exact shape of the OpenAI speech key before it was fixed: a plain write
+// onto a path under the user's ~/.orca, with no temp file to announce it.
+const D7_SHAPED_WRITER =
+  "import { writeFileSync } from 'node:fs'\n" +
+  "const keyPath = join(homedir(), '.orca', 'token.enc')\n" +
+  'writeFileSync(keyPath, payload)\n'
+// A real write call that is not app state. BARE_WRITER only imports the API and
+// never calls it, so it would pass the destination clause without exercising it.
+const NON_STATE_WRITER =
+  "import { writeFileSync } from 'node:fs'\nwriteFileSync(join(outDir, 'report.pdf'), bytes)\n"
 
-function makeTempRoot(manifest, files = {}, baseline = '') {
+function makeTempRoot(manifest, files = {}, baseline = '', directBaseline = '') {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-durability-contracts-'))
   tempDirs.push(root)
   mkdirSync(path.join(root, 'config'), { recursive: true })
   writeFileSync(path.join(root, 'config', 'durability-contracts.jsonc'), manifest, 'utf8')
   if (baseline !== null) {
     writeFileSync(path.join(root, 'config', 'durability-unclassified-baseline.txt'), baseline, 'utf8')
+  }
+  if (directBaseline !== null) {
+    writeFileSync(
+      path.join(root, 'config', 'durability-direct-writer-baseline.txt'),
+      directBaseline,
+      'utf8'
+    )
   }
   for (const [relativePath, contents] of Object.entries(files)) {
     mkdirSync(path.join(root, path.dirname(relativePath)), { recursive: true })
@@ -254,6 +272,67 @@ describe('durability ratchet', () => {
     )
     await expect(main(root)).resolves.toBe(1)
     expect(errors.join('\n')).toContain('Stale durability baseline entry')
+  })
+
+  // The aperture the OpenAI speech key slipped through: the gate keyed discovery
+  // on the atomic-publish shape, so the writers with the weakest guarantee were
+  // the ones it could not see. These drive the new detector's red branch.
+  describe('direct state writers', () => {
+    it('flags a bare write into the user data directory', () => {
+      expect(looksLikeDirectStateWriter(D7_SHAPED_WRITER)).toBe(true)
+    })
+
+    it('does not flag a staged publisher, which the other ratchet already owns', () => {
+      expect(looksLikeDirectStateWriter(`${D7_SHAPED_WRITER}${PUBLISHER}`)).toBe(false)
+    })
+
+    it('does not flag a write that never aims at the user data directory', () => {
+      // Otherwise every PDF export and generated shell shim lands in the list,
+      // and a gate that cries wolf gets suppressed rather than satisfied.
+      expect(looksLikeDirectStateWriter(NON_STATE_WRITER)).toBe(false)
+    })
+
+    it('fails when a new direct state writer appears with no contract', async () => {
+      captureErrors()
+      const root = makeTempRoot(validManifest(), {
+        ...COMPLIANT_FILES,
+        'src/main/token-store.ts': D7_SHAPED_WRITER
+      })
+      await expect(main(root)).resolves.toBe(1)
+      expect(errors.join('\n')).toContain(
+        '::error::New unclassified direct state writer: src/main/token-store.ts'
+      )
+    })
+
+    it('passes once that writer is named by a contract', async () => {
+      captureErrors()
+      const root = makeTempRoot(
+        validManifest({ writer: ['src/main/demo-writer.ts', 'src/main/token-store.ts'] }),
+        { ...COMPLIANT_FILES, 'src/main/token-store.ts': `${D7_SHAPED_WRITER}${DURABLE_WRITER}` }
+      )
+      await expect(main(root)).resolves.toBe(0)
+      expect(errors).toEqual([])
+    })
+
+    it('passes with the writer grandfathered instead', async () => {
+      captureErrors()
+      const root = makeTempRoot(
+        validManifest(),
+        { ...COMPLIANT_FILES, 'src/main/token-store.ts': D7_SHAPED_WRITER },
+        '',
+        'src/main/token-store.ts\n'
+      )
+      await expect(main(root)).resolves.toBe(0)
+      expect(errors).toEqual([])
+    })
+
+    it('refuses to judge when its baseline is missing rather than reporting a pass', async () => {
+      // A gate that cannot read its own list has not cleared the tree.
+      captureErrors()
+      const root = makeTempRoot(validManifest(), COMPLIANT_FILES, '', null)
+      await expect(main(root)).resolves.toBe(1)
+      expect(errors.join('\n')).toContain('durability-direct-writer-baseline.txt')
+    })
   })
 
   it('fails closed when the baseline file is absent', async () => {

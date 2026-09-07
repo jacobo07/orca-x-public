@@ -7,6 +7,10 @@ import { parse, printParseErrorCode } from 'jsonc-parser'
 
 const MANIFEST_PATH = path.join('config', 'durability-contracts.jsonc')
 const BASELINE_PATH = path.join('config', 'durability-unclassified-baseline.txt')
+// Kept separate from the atomic-publisher baseline: the two lists mean different
+// things, and merging them would make "classified it" indistinguishable from
+// "rewrote it to stage and rename" when an entry moves between them.
+const DIRECT_BASELINE_PATH = path.join('config', 'durability-direct-writer-baseline.txt')
 const SCAN_ROOT = path.join('src', 'main')
 
 function isRecord(value) {
@@ -127,6 +131,61 @@ export async function collectUnclassifiedPublishers(manifest, root) {
   return unclassified.sort()
 }
 
+const WRITE_CALL =
+  /\b(?:writeFileSync|writeFile|appendFileSync|appendFile|createWriteStream)\s*\(/
+/**
+ * Destinations that outlive the process and belong to the user's install, as
+ * opposed to a temp dir, a build output, a worktree checkout, or a path the
+ * caller handed in (writing the user's own files is not app state).
+ */
+const USER_DATA_DESTINATION =
+  /getPath\(\s*['"]userData['"]\s*\)|\.orca\b|getOrcaDir|userDataPath|getUserDataPath/
+
+/**
+ * The shape that made openai-api-key-store invisible: a plain write, straight
+ * onto a path in the user's data directory, with no temp file to give it away.
+ *
+ * Why this exists next to looksLikeAtomicPublisher rather than replacing it:
+ * keying discovery on the *safer* implementation shape meant the weakest
+ * writers were the ones the gate could not see, which inverts the reliability
+ * economics it exists to enforce. A staged publisher announced itself; a bare
+ * writeFileSync said nothing.
+ *
+ * Why not every direct write: measured against src/main, 97 non-test modules
+ * write directly and only 31 aim at a user-data destination. Flagging all 97
+ * would bury the signal under PDF exports, downloaded binaries, generated shell
+ * shims, and handlers that write files the user asked for — and a gate that
+ * cries wolf gets suppressed rather than satisfied.
+ */
+export function looksLikeDirectStateWriter(source) {
+  return (
+    WRITE_CALL.test(source) &&
+    USER_DATA_DESTINATION.test(source) &&
+    !looksLikeAtomicPublisher(source)
+  )
+}
+
+/** Modules that write state straight into the user's data directory with no contract. */
+export async function collectUnclassifiedDirectWriters(manifest, root) {
+  const registered = new Set(
+    (Array.isArray(manifest?.contracts) ? manifest.contracts : [])
+      .filter(isRecord)
+      .flatMap(contractWriters)
+  )
+  const primitive = manifest?.policy?.durablePrimitive
+  const unclassified = []
+  for (const relativePath of await collectSourceFiles(root, SCAN_ROOT)) {
+    if (registered.has(relativePath) || relativePath === primitive) {
+      continue
+    }
+    const source = await readFileOrNull(root, relativePath)
+    if (source !== null && looksLikeDirectStateWriter(source)) {
+      unclassified.push(relativePath)
+    }
+  }
+  return unclassified.sort()
+}
+
 function validatePolicy(manifest, failures) {
   if (!isRecord(manifest.policy)) {
     failures.push('policy must be an object')
@@ -200,21 +259,45 @@ async function validateContract(contract, policy, root, failures) {
   }
 }
 
-function printAddedFailure(added) {
+/**
+ * Two lists, one ratchet mechanism. The second exists because keying discovery
+ * on the atomic-publish shape left the least durable writers invisible: the
+ * OpenAI speech key was a bare writeFileSync into ~/.orca and the gate passed
+ * it every time, while a module that took the trouble to stage and rename got
+ * asked for a contract.
+ */
+const RATCHETS = [
+  {
+    baselinePath: BASELINE_PATH,
+    collect: collectUnclassifiedPublishers,
+    noun: 'durability publisher',
+    shape: 'stage a temp file and rename it into place',
+    headerShape: 'publish state atomically (temp file + rename)'
+  },
+  {
+    baselinePath: DIRECT_BASELINE_PATH,
+    collect: collectUnclassifiedDirectWriters,
+    noun: 'direct state writer',
+    shape: "write straight onto a path in the user's data directory",
+    headerShape: "write state directly into the user's data directory (no temp file, no rename)"
+  }
+]
+
+function printAddedFailure(added, ratchet) {
   for (const entry of added) {
-    console.error(`::error::New unclassified durability publisher: ${entry}`)
+    console.error(`::error::New unclassified ${ratchet.noun}: ${entry}`)
   }
   console.error('')
   console.error('  ❌  durability ratchet failed — a NEW module publishes state with no contract.')
   console.error('')
-  console.error(`  ${added.length} module(s) stage a temp file and rename it into place, but no`)
+  console.error(`  ${added.length} module(s) ${ratchet.shape}, but no`)
   console.error(`  entry in ${toPosix(MANIFEST_PATH)} says what is lost if that state disappears:`)
   console.error('')
   for (const entry of added) {
     console.error(`    • ${entry}`)
   }
   console.error('')
-  console.error('  Existing unclassified publishers are grandfathered; NEW ones are not, so')
+  console.error(`  Existing ${ratchet.noun}s are grandfathered; NEW ones are not, so`)
   console.error('  "there were already some" is not an argument for adding another.')
   console.error('')
   console.error('  ✅  Fix it: add a contract naming the state, what breaks if it is lost, and its')
@@ -223,15 +306,16 @@ function printAddedFailure(added) {
   console.error('')
 }
 
-function printStaleFailure(stale) {
+function printStaleFailure(stale, ratchet) {
   for (const entry of stale) {
     console.error(`::error::Stale durability baseline entry (prune it): ${entry}`)
   }
   console.error('')
-  console.error('  ⚠️  durability baseline is out of date — nice work classifying a publisher!')
+  console.error('  ⚠️  durability baseline is out of date — nice work classifying a writer!')
   console.error('')
-  console.error(`  ${stale.length} baseline entr(y/ies) are no longer unclassified publishers.`)
-  console.error('  The baseline may only shrink, so these must be removed to keep re-adding blocked:')
+  console.error(`  ${stale.length} entr(y/ies) in ${toPosix(ratchet.baselinePath)} are no longer`)
+  console.error(`  ${ratchet.noun}s. The baseline may only shrink, so remove them to keep`)
+  console.error('  re-adding blocked:')
   console.error('')
   for (const entry of stale) {
     console.error(`    • ${entry}`)
@@ -241,9 +325,9 @@ function printStaleFailure(stale) {
   console.error('')
 }
 
-function baselineHeader() {
+function baselineHeader(ratchet) {
   return [
-    '# Modules under src/main that publish state atomically (temp file + rename) but carry no',
+    `# Modules under src/main that ${ratchet.headerShape} but carry no`,
     '# durability contract in config/durability-contracts.jsonc.',
     '#',
     '# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — classify',
@@ -304,34 +388,41 @@ export async function main(root = process.cwd()) {
     return 1
   }
 
-  const baselineRaw = await readFileOrNull(root, BASELINE_PATH)
-  if (baselineRaw === null) {
-    console.error(
-      `::error::Missing ${toPosix(BASELINE_PATH)}. Generate it with: node config/scripts/check-durability-contracts.mjs --init`
-    )
-    return 1
-  }
-  const current = await collectUnclassifiedPublishers(manifest, root)
-  const { added, stale } = diffBaseline(current, parseBaseline(baselineRaw))
-  if (added.length > 0) {
-    printAddedFailure(added)
-    if (stale.length > 0) {
-      printStaleFailure(stale)
+  const summary = []
+  for (const ratchet of RATCHETS) {
+    const baselineRaw = await readFileOrNull(root, ratchet.baselinePath)
+    if (baselineRaw === null) {
+      console.error(
+        `::error::Missing ${toPosix(ratchet.baselinePath)}. Generate it with: node config/scripts/check-durability-contracts.mjs --init`
+      )
+      return 1
     }
-    return 1
-  }
-  if (stale.length > 0) {
-    printStaleFailure(stale)
-    return 1
+    const current = await ratchet.collect(manifest, root)
+    const { added, stale } = diffBaseline(current, parseBaseline(baselineRaw))
+    if (added.length > 0) {
+      printAddedFailure(added, ratchet)
+      if (stale.length > 0) {
+        printStaleFailure(stale, ratchet)
+      }
+      return 1
+    }
+    if (stale.length > 0) {
+      printStaleFailure(stale, ratchet)
+      return 1
+    }
+    summary.push(`${current.length} grandfathered ${ratchet.noun}(s)`)
   }
   console.log(
-    `Durability contract check passed for ${manifest.contracts.length} contract(s); ${current.length} grandfathered unclassified publisher(s), no new ones.`
+    `Durability contract check passed for ${manifest.contracts.length} contract(s); ${summary.join('; ')}; no new ones.`
   )
   return 0
 }
 
-async function writeBaseline(root, entries) {
-  await fs.writeFile(path.join(root, BASELINE_PATH), `${baselineHeader()}${entries.join('\n')}\n`)
+async function writeBaseline(root, ratchet, entries) {
+  await fs.writeFile(
+    path.join(root, ratchet.baselinePath),
+    `${baselineHeader(ratchet)}${entries.join('\n')}\n`
+  )
 }
 
 async function readManifestForCli(root) {
@@ -343,26 +434,37 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const root = process.cwd()
   const arg = process.argv[2]
   if (arg === '--init') {
-    const entries = await collectUnclassifiedPublishers(await readManifestForCli(root), root)
-    await writeBaseline(root, entries)
-    console.log(`Wrote ${toPosix(BASELINE_PATH)} with ${entries.length} entries.`)
+    const manifest = await readManifestForCli(root)
+    for (const ratchet of RATCHETS) {
+      const entries = await ratchet.collect(manifest, root)
+      await writeBaseline(root, ratchet, entries)
+      console.log(`Wrote ${toPosix(ratchet.baselinePath)} with ${entries.length} entries.`)
+    }
     process.exit(0)
   }
   if (arg === '--prune') {
     // Shrink only: drops entries that are now classified, never adopts new debt.
-    const current = new Set(await collectUnclassifiedPublishers(await readManifestForCli(root), root))
-    const baseline = parseBaseline(await fs.readFile(path.join(root, BASELINE_PATH), 'utf8'))
-    const kept = [...baseline].filter((entry) => current.has(entry)).sort()
-    const newlyAdded = [...current].filter((entry) => !baseline.has(entry))
-    await writeBaseline(root, kept)
-    console.log(`Pruned baseline to ${kept.length} entries (removed ${baseline.size - kept.length}).`)
-    if (newlyAdded.length > 0) {
-      console.error(
-        `::error::--prune does not add entries; ${newlyAdded.length} unclassified publisher(s) remain — classify those.`
+    const manifest = await readManifestForCli(root)
+    let remaining = 0
+    for (const ratchet of RATCHETS) {
+      const current = new Set(await ratchet.collect(manifest, root))
+      const baseline = parseBaseline(
+        await fs.readFile(path.join(root, ratchet.baselinePath), 'utf8')
       )
-      process.exit(1)
+      const kept = [...baseline].filter((entry) => current.has(entry)).sort()
+      const newlyAdded = [...current].filter((entry) => !baseline.has(entry))
+      await writeBaseline(root, ratchet, kept)
+      console.log(
+        `Pruned ${toPosix(ratchet.baselinePath)} to ${kept.length} entries (removed ${baseline.size - kept.length}).`
+      )
+      if (newlyAdded.length > 0) {
+        console.error(
+          `::error::--prune does not add entries; ${newlyAdded.length} ${ratchet.noun}(s) remain — classify those.`
+        )
+        remaining += newlyAdded.length
+      }
     }
-    process.exit(0)
+    process.exit(remaining > 0 ? 1 : 0)
   }
   process.exit(await main(root))
 }
