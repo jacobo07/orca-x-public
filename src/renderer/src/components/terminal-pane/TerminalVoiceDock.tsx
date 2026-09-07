@@ -12,6 +12,12 @@ export type TerminalVoiceDockProps = {
   /** True only on the pane whose dictation job is running. */
   isRecordingOwner: boolean
   isHoldMode: boolean
+  /**
+   * Focuses the terminal this dock belongs to. Called on press, before the job
+   * starts, because the job reads its insertion target from the focused element
+   * at that moment — see the mousedown handler for why both halves are needed.
+   */
+  onFocusTarget?: () => void
 }
 
 type DockPresentation = {
@@ -121,11 +127,28 @@ export function TerminalVoiceDock(props: TerminalVoiceDockProps): React.JSX.Elem
             aria-label={presentation.label}
             aria-pressed={presentation.pressed}
             disabled={presentation.disabled}
+            // Why both halves: dictation captures its insertion target from
+            // document.activeElement when the job starts. A button that takes
+            // focus on press makes that target the button — not a text field —
+            // so the transcript has nowhere to land and the feature silently
+            // produces nothing. Preventing the default keeps focus off the
+            // button; focusing this pane is the other half, because the dock is
+            // per-pane and a press here must not record into whichever pane
+            // happened to hold focus. DictationIndicator prevents the default
+            // for the same reason; the composer instead refocuses its own
+            // textarea ref, which is the same idea where a ref is available.
+            onMouseDown={(event) => {
+              event.preventDefault()
+              props.onFocusTarget?.()
+            }}
             onClick={hold ? undefined : () => dispatchDictationControl('toggle')}
             onPointerDown={
               hold
                 ? (event) => {
+                    // Preventing the default here suppresses the compatibility
+                    // mousedown above, so this branch repeats the focus call.
                     event.preventDefault()
+                    props.onFocusTarget?.()
                     dispatchDictationControl('start')
                   }
                 : undefined

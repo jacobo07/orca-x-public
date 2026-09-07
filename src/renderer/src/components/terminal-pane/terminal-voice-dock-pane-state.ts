@@ -1,6 +1,10 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 
-export type TerminalVoiceDockPane = Pick<ManagedPane, 'id' | 'container'>
+// `terminal` is here so a dock can focus the pane it belongs to before starting
+// a job. Optional because the reservation below has no use for it, and a pane
+// fixture that only exercises reservation should not have to invent one.
+export type TerminalVoiceDockPane = Pick<ManagedPane, 'id' | 'container'> &
+  Partial<Pick<ManagedPane, 'terminal'>>
 
 /**
  * Reserves the bottom strip each pane's voice dock occupies.

@@ -24,6 +24,20 @@ export function DictationController() {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
+  const refreshModelStates = useAppStore((s) => s.refreshModelStates)
+  const hasScannedModels = useAppStore((s) => s.modelStates.length > 0)
+
+  // Why here: modelStates was only ever populated by the Settings voice pane,
+  // so every other surface saw an empty list on a cold start and could not tell
+  // "no model" from "not scanned". This controller owns dictation for the
+  // window, which makes it the one place that should establish that state.
+  useEffect(() => {
+    if (!settings?.voice?.enabled || hasScannedModels) {
+      return
+    }
+    void refreshModelStates()
+  }, [settings?.voice?.enabled, hasScannedModels, refreshModelStates])
+
   const {
     start: startCapture,
     stop: stopCapture,

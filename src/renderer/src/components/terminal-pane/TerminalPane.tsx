@@ -518,9 +518,17 @@ function TerminalPane(
   // so a model-state refresh that changes nothing cannot re-render every pane.
   const isSpeechModelReady = useAppStore((store) => {
     const selected = store.settings?.voice?.sttModel
-    return Boolean(
-      selected && store.modelStates.some((state) => state.id === selected && state.status === 'ready')
-    )
+    if (!selected) {
+      return false
+    }
+    const state = store.modelStates.find((entry) => entry.id === selected)
+    // Why unknown counts as ready: modelStates is only populated by a scan, so
+    // no entry means "not scanned yet", which is not the same as "unavailable".
+    // Reporting the negative from missing data left this dock permanently dead
+    // on a cold start — the keyboard shortcut gates on the selected model alone
+    // and worked, which is how the asymmetry showed up. A press with no model
+    // downloaded reports the real reason from the start path.
+    return state === undefined || state.status === 'ready'
   })
   const isDictationHoldMode = useAppStore(
     (store) => store.settings?.voice?.dictationMode === 'hold'

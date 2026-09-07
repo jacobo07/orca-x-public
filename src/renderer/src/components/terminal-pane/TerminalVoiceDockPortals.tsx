@@ -42,6 +42,9 @@ export function TerminalVoiceDockPortals({
               paneId: pane.id
             })}
             isHoldMode={isHoldMode}
+            // The pane manager's own focus API, so a press targets this pane
+            // rather than whichever one last held focus.
+            onFocusTarget={() => pane.terminal?.focus()}
           />,
           pane.container,
           `terminal-voice-dock-${pane.id}`

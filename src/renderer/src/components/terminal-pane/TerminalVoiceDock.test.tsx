@@ -102,4 +102,44 @@ describe('TerminalVoiceDock', () => {
 
     expect(screen.getByRole('button', { name: /dictation failed/i })).toBeTruthy()
   })
+
+  // Why this is a gate and not a detail: the job captures its insertion target
+  // from document.activeElement at start. A button that takes focus on press
+  // makes that target the button, which is not a text field, so the transcript
+  // has nowhere to land and the whole feature silently produces nothing. Hold
+  // mode already prevented the default; toggle mode did not.
+  it('does not take focus on press, and focuses its own pane before activating', () => {
+    const control = recordControlActions()
+    const focused: string[] = []
+    renderDock({ onFocusTarget: () => focused.push('pane') })
+    const button = screen.getByRole('button')
+
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    button.dispatchEvent(mouseDown)
+    fireEvent.click(button)
+
+    control.stop()
+    // Letting the button take focus makes the captured insertion target the
+    // button, which is not a text field, so the transcript is dropped.
+    expect(mouseDown.defaultPrevented, 'the dock takes focus off the terminal').toBe(true)
+    // And the target must be THIS pane, not whichever one last held focus —
+    // otherwise a per-pane control silently records into a different pane.
+    expect(focused, 'the dock did not focus the pane it belongs to').toEqual(['pane'])
+    expect(control.actions).toEqual(['toggle'])
+  })
+
+  it('focuses its own pane on a hold-mode press too', () => {
+    const control = recordControlActions()
+    const focused: string[] = []
+    renderDock({ isHoldMode: true, onFocusTarget: () => focused.push('pane') })
+    const button = screen.getByRole('button')
+
+    const pointerDown = new Event('pointerdown', { bubbles: true, cancelable: true })
+    button.dispatchEvent(pointerDown)
+
+    control.stop()
+    expect(pointerDown.defaultPrevented).toBe(true)
+    expect(focused).toEqual(['pane'])
+    expect(control.actions).toEqual(['start'])
+  })
 })
