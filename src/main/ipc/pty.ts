@@ -168,6 +168,7 @@ import { mergePersistedWindowsPath, resolvePathEnvKey } from '../pty/windows-env
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from '../pty/wsl-orca-env'
 import { resolveCodexShellLaunchPreflightCommand } from '../pty/codex-shell-launch-preflight'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
+import { PtyViewerWindowRegistry } from './pty-viewer-window-registry'
 import { beginTerminalInstall } from './watcher-removal-gate'
 import {
   clearHiddenRendererPtyDeliveryState,
@@ -300,6 +301,30 @@ export function releasePtyRendererOwnershipForWindow(webContentsId: number): str
 const activeRendererPtys = new Set<string>()
 const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
+// Why a second registry rather than a flag on the sets above: those answer "which pane is showing
+// this PTY", which stays true when the OS minimizes the window around that pane. This one answers
+// "can any window actually present it", which is the question delivery policy needs.
+const ptyViewerWindows = new PtyViewerWindowRegistry()
+let resyncPtyBackgroundedDeliveries = (_ptyIds: readonly string[]): void => {}
+
+/**
+ * Reports whether a renderer window can put pixels on screen at all. A minimized window's panes
+ * still claim their PTYs are visible, so without this the delivery gate keeps them under full
+ * producer flow control — which pauses the writing process, not merely its rendering.
+ * Exported for the window lifecycle to call on minimize/restore/hide/show.
+ */
+export function setPtyViewerWindowPresentable(webContentsId: number, presentable: boolean): void {
+  ptyViewerWindows.setWindowPresentable(webContentsId, presentable)
+  resyncPtyBackgroundedDeliveries(ptyViewerWindows.ptyIdsClaimedByWindow(webContentsId))
+}
+
+/** Drops a closed window's viewer claims so it cannot pin a PTY presentable forever. */
+export function forgetPtyViewerWindow(webContentsId: number): void {
+  // Why capture first: forgetWindow drops the claims this resync needs to name.
+  const affectedPtyIds = ptyViewerWindows.ptyIdsClaimedByWindow(webContentsId)
+  ptyViewerWindows.forgetWindow(webContentsId)
+  resyncPtyBackgroundedDeliveries(affectedPtyIds)
+}
 let invalidatePendingPtyDrainPriority = (_id?: string, _schedule?: boolean): void => {}
 let invalidatePendingPtyDrainPolicy = (_id?: string, _schedule?: boolean): void => {}
 const pendingHiddenRendererResizeOutputPtys = new Set<string>()
@@ -2092,6 +2117,9 @@ export function clearProviderPtyState(
   const activeChanged = activeRendererPtys.delete(id)
   visibleRendererPtys.delete(id)
   rendererVisibilityKnownPtys.delete(id)
+  // Why here too: PTY ids are reused, and a stale viewer claim would make a fresh PTY inherit the
+  // previous one's presentability instead of starting unknown.
+  ptyViewerWindows.forgetPty(id)
   pendingHiddenRendererResizeOutputPtys.delete(id)
   deliveredHiddenRendererResizeOutputPtys.delete(id)
   // Why: every teardown path funnels through here — hidden/interest gate bits must not outlive the PTY or a reused map entry could silently gate a new one.
@@ -2678,6 +2706,17 @@ export function registerPtyHandlers(
     if (!PRODUCER_FLOW_CONTROL_ENABLED) {
       return
     }
+    // Why no backpressure while nothing can present this PTY: pausing here is node-pty pause(),
+    // which stops reading the master fd and blocks the child on write — the agent stops working,
+    // not just drawing. That is the right trade for a renderer that is merely slow, and the wrong
+    // one for a window the OS has minimized, where no amount of waiting produces a consumer.
+    // The daemon provider answers this by thinning; the local provider has no such lever, so the
+    // exemption has to live here. Memory stays bounded by the pendingData cap, which drops bytes
+    // and heals the pane from main's buffer snapshot — bounded loss of pixels, never of progress.
+    if (ptyHasNoPresentableViewer(id)) {
+      producerFlowControl.release(id)
+      return
+    }
     if (sourceCreditPendingPtys.has(id)) {
       if (pendingData.get(id)) {
         return
@@ -2690,9 +2729,17 @@ export function registerPtyHandlers(
   // Why: hidden ptys are exempt from pendingData flow control, so background agents can run 100MB+ ahead in the daemon stream buffer; this sync tells the provider transport which ptys to keep-tail thin.
   // Why keyed on the visibility registry (not gate marks): thinning asks "does any visible view show this PTY?"; remote-view subscribers consume raw bytes, so their presence vetoes thinning.
   const backgroundedDeliverySyncByPty = new Map<string, boolean>()
+  // Why the second clause: a pane keeps claiming its PTY visible while the OS minimizes the window
+  // around it, so "no pane shows this" missed the one state where the renderer can neither draw nor
+  // drain. Composed with `||` so this can only ever add backgrounding — the pane registry stays the
+  // authority on everything it already decided.
+  function ptyHasNoPresentableViewer(id: string): boolean {
+    return ptyViewerWindows.isKnown(id) && !ptyViewerWindows.hasPresentableViewer(id)
+  }
   function syncPtyBackgroundedDelivery(id: string, caller: string): void {
     const background =
-      rendererPtyIsKnownHidden(id) && !(runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
+      (rendererPtyIsKnownHidden(id) || ptyHasNoPresentableViewer(id)) &&
+      !(runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
     if (backgroundedDeliverySyncByPty.get(id) === background) {
       return
     }
@@ -2705,13 +2752,21 @@ export function registerPtyHandlers(
       background,
       caller,
       known: rendererVisibilityKnownPtys.has(id),
-      visible: visibleRendererPtys.has(id)
+      visible: visibleRendererPtys.has(id),
+      // Why reported separately: it distinguishes "no pane shows it" from "a pane shows it in a
+      // window that cannot present", which are the same verdict with different causes.
+      presentable: ptyViewerWindows.hasPresentableViewer(id)
     })
     backgroundedDeliverySyncByPty.set(id, background)
     provider.setPtyBackgrounded(id, background)
   }
   clearBackgroundedDeliverySyncForPty = (id: string) => {
     backgroundedDeliverySyncByPty.delete(id)
+  }
+  resyncPtyBackgroundedDeliveries = (ptyIds: readonly string[]) => {
+    for (const id of ptyIds) {
+      syncPtyBackgroundedDelivery(id, 'window-presentability')
+    }
   }
   if (runtime) {
     runtime.onRemoteTerminalViewPresenceChanged = (id) =>
@@ -7575,7 +7630,7 @@ export function registerPtyHandlers(
   })
 
   ipcMain.removeAllListeners('pty:setRendererPtyVisible')
-  ipcMain.on('pty:setRendererPtyVisible', (_event, args: { id: string; visible: boolean }) => {
+  ipcMain.on('pty:setRendererPtyVisible', (event, args: { id: string; visible: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
@@ -7586,6 +7641,15 @@ export function registerPtyHandlers(
       closeStartupQueryAuthorityForPty(args.id)
     } else {
       visibleRendererPtys.delete(args.id)
+    }
+    // Why the sender matters: this claim is about one window's pane. Dropping it made every
+    // window's report indistinguishable, so a second window could not have its own answer — and
+    // "is that window on screen" had nowhere to attach.
+    // Why guarded: a claim whose window cannot be identified must not be attributed to one, and
+    // callers that never needed a sender (the gate's own harnesses) still exercise the rest.
+    const viewerWindowId = event?.sender?.id
+    if (typeof viewerWindowId === 'number') {
+      ptyViewerWindows.setViewerVisibility(args.id, viewerWindowId, args.visible)
     }
     syncPtyBackgroundedDelivery(args.id, 'visibility-report')
   })

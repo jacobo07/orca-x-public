@@ -50,6 +50,8 @@ import {
   getLocalPtyProvider,
   getSshPtyProvider,
   registerHeadlessPtyRuntime,
+  setPtyViewerWindowPresentable,
+  forgetPtyViewerWindow,
   type CodexHomeLaunchContext
 } from './ipc/pty'
 import {
@@ -1679,6 +1681,19 @@ function openMainWindow(
   // Why: user is back on show/restore, so clear the tray attention dot set while hidden (see notifications.ts).
   window.on('show', () => setTrayAttention(false))
   window.on('restore', () => setTrayAttention(false))
+  // Why the PTY layer needs this: a minimized window's panes keep reporting their terminals
+  // visible, so without it main holds them under full producer flow control — which pauses the
+  // shell writing into them rather than only the rendering of it. Captured up front because the
+  // closed handler runs after webContents is gone, and this id is how per-window claims are keyed.
+  const ptyViewerWebContentsId = window.webContents.id
+  const reportPtyViewerPresentable = (presentable: boolean) => (): void => {
+    setPtyViewerWindowPresentable(ptyViewerWebContentsId, presentable)
+  }
+  window.on('minimize', reportPtyViewerPresentable(false))
+  window.on('hide', reportPtyViewerPresentable(false))
+  window.on('restore', reportPtyViewerPresentable(true))
+  window.on('show', reportPtyViewerPresentable(true))
+  window.on('closed', () => forgetPtyViewerWindow(ptyViewerWebContentsId))
   agentHookServer.setListener(
     ({
       paneKey,
