@@ -51,6 +51,47 @@ const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
   'terminal.unsubscribe'
 ]
 
+// Why name-based: the population has to be enumerated by a marker independent of the property being
+// tested. Grepping for the context check itself would only ever find the methods that already have
+// one, which is the shape of an instrument that cannot return the other answer.
+const MUTATION_VERB =
+  /\.(create|createAgentSession|ensureAgentSession|delete|remove|rm|close|closeTab|closeLifecycle|rename|write|writeTerminalArtifact|move|set|update|activate|checkout|commit|discard|stage|unstage|bulkStage|bulkUnstage|push|pull|fetch|fastForward|forkSync|rebaseFromBase|abortMerge|abortRebase|forceDeleteBranch|sleep|send|focus|clearBuffer|multiplex|adoptOrphans|prefetchCreateBase|mergePR|setPRAutoMerge|requestPRReviewers|removePRReviewers|addIssueComment|createIssue|addPRReviewComment|addPRReviewCommentReply)$/
+
+/**
+ * Mobile-reachable mutations whose schema requires nothing at all.
+ *
+ * This list may only SHRINK. Each entry is a mutation whose own params cannot express which
+ * workspace it belongs to, so its context comes from somewhere else and this test cannot say from
+ * where. That is not automatically a defect -- a host-global preference legitimately has no
+ * workspace -- but it is exactly the population worth reviewing before adding to it.
+ */
+const MOBILE_MUTATIONS_WITHOUT_CONTEXT: string[] = [
+  // Host-global by design: one settings document per host, so there is no workspace to name.
+  'settings.update',
+  // Latent, not live: `worktree` is optional here and an absent one is handed straight to the
+  // runtime to resolve, so a caller that omits it gets whichever workspace the host picks. Mobile
+  // does not reach this path -- it creates through session.tabs.createTerminal, which requires a
+  // worktree -- but nothing except that habit keeps it that way.
+  'terminal.create',
+  // Routes panes by streamId inside the stream, so there is no per-call workspace to require.
+  'terminal.multiplex',
+  // Host-global UI state, the same shape as settings.update.
+  'ui.set'
+]
+
+function acceptsEmptyParams(method: { params?: unknown }): boolean {
+  const params = method.params
+  if (!params) {
+    // A method declared with no params schema cannot require context by construction.
+    return true
+  }
+  const schema = params as { safeParse?: (value: unknown) => { success: boolean } }
+  if (typeof schema.safeParse !== 'function') {
+    return true
+  }
+  return schema.safeParse({}).success
+}
+
 function listSourceFiles(root: string): string[] {
   const entries = readdirSync(root)
   const files: string[] = []
@@ -131,6 +172,42 @@ describe('mobile RPC allowlist', () => {
     const missing = MOBILE_STREAMING_CLEANUP_RPC_METHODS.filter((method) => !allowed.has(method))
 
     expect(missing).toEqual([])
+  })
+
+  /**
+   * A mobile client is authenticated to a host, which says nothing about which of that host's
+   * workspaces an operation belongs to. Every mutation that reaches durable state must therefore
+   * carry its own context and be rejected without one -- never resolved from whatever the host
+   * happens to be showing, because focus moves and a queued operation must not move with it.
+   *
+   * Empty params are the discriminating probe: a mutation that parses `{}` has no required context
+   * of any kind, so nothing in its own schema can stop it from acting on a host-chosen default.
+   */
+  it('rejects every state-changing mobile mutation that arrives with no context at all', () => {
+    const allowed = mobileRpcAllowlist()
+    const mutations = ALL_RPC_METHODS.filter(
+      (method) => allowed.has(method.name) && MUTATION_VERB.test(method.name)
+    )
+
+    // Positive control: a matcher that stopped matching would report a clean run over nothing.
+    expect(mutations.length).toBeGreaterThan(40)
+
+    const contextFree = mutations
+      .filter((method) => acceptsEmptyParams(method))
+      .map((method) => method.name)
+      .sort()
+
+    expect(contextFree).toEqual(MOBILE_MUTATIONS_WITHOUT_CONTEXT)
+  })
+
+  it('can tell a context-free method from a scoped one', () => {
+    // Without this the check above could pass by never finding anything either way.
+    const byName = new Map(ALL_RPC_METHODS.map((method) => [method.name, method]))
+    const scoped = byName.get('terminal.createAgentSession')
+    const unscoped = byName.get('preflight.detectAgents')
+
+    expect(scoped && acceptsEmptyParams(scoped)).toBe(false)
+    expect(unscoped && acceptsEmptyParams(unscoped)).toBe(true)
   })
 
   it('does not grant mobile credentials control over host updates', () => {
