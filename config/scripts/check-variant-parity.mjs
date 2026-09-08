@@ -8,6 +8,13 @@ import { parse, printParseErrorCode } from 'jsonc-parser'
 
 const MANIFEST_PATH = path.join('config', 'variant-parity.jsonc')
 const BASELINE_PATH = path.join('config', 'variant-parity-unknown-baseline.txt')
+const MEASURED_OPEN_BASELINE_PATH = path.join(
+  'config',
+  'variant-parity-measured-open-baseline.txt'
+)
+
+/** `--release` additionally fails the run when release-critical parity debt is open. */
+const releaseMode = process.argv.includes('--release')
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -83,7 +90,42 @@ function evaluateCapability(capability, index, policy) {
   if (disposition === 'blocked' && !isNonEmptyString(capability.owner)) {
     problems.push({ id: where, message: 'disposition "blocked" must name an owner' })
   }
+  // Severity is optional, but a value outside the policy is worse than none: the release gate reads
+  // this field, and a typo would otherwise sail past as "not P0".
+  if (capability.severity !== undefined && !policy.severities.includes(capability.severity)) {
+    problems.push({
+      id: where,
+      message: `severity ${JSON.stringify(capability.severity)} is not one of ${policy.severities.join(', ')}`
+    })
+  }
   return problems
+}
+
+/**
+ * One shrink-only list per unresolved disposition, checked in both directions: a new entry that
+ * nobody acknowledged fails as new debt, and a listed id that is no longer in that state fails as a
+ * stale exception.
+ */
+function evaluateRatchet(capabilities, disposition, grandfathered, newEntryHint) {
+  const problems = []
+  const ids = capabilities
+    .filter((capability) => isRecord(capability) && capability.disposition === disposition)
+    .map((capability) => capability.id)
+  for (const id of ids) {
+    if (!grandfathered.has(id)) {
+      problems.push({ id, message: newEntryHint })
+    }
+  }
+  const current = new Set(ids)
+  for (const id of grandfathered) {
+    if (!current.has(id)) {
+      problems.push({
+        id,
+        message: `baseline lists ${id} as ${disposition} but the manifest no longer is. Remove it from the baseline -- the list may only shrink.`
+      })
+    }
+  }
+  return { ids, problems }
 }
 
 /**
@@ -108,12 +150,12 @@ function evaluateEvidencePaths(capabilities, knownPath) {
   return problems
 }
 
-export function evaluateManifest({ manifest, baseline, knownPath }) {
+export function evaluateManifest({ manifest, baseline, measuredOpenBaseline = [], knownPath }) {
   if (!isRecord(manifest) || !isRecord(manifest.policy) || !Array.isArray(manifest.capabilities)) {
     return { verdict: VERDICT.unreadableInput, problems: [{ id: '-', message: 'manifest is missing policy or capabilities' }] }
   }
   const policy = manifest.policy
-  for (const field of ['dispositions', 'evidenceRequiredFor', 'reasonRequiredFor', 'invariantRequiredFor']) {
+  for (const field of ['dispositions', 'evidenceRequiredFor', 'reasonRequiredFor', 'invariantRequiredFor', 'unresolvedDispositions', 'severities']) {
     if (!Array.isArray(policy[field])) {
       return { verdict: VERDICT.unreadableInput, problems: [{ id: '-', message: `policy.${field} is missing` }] }
     }
@@ -133,31 +175,62 @@ export function evaluateManifest({ manifest, baseline, knownPath }) {
   }
   problems.push(...evaluateEvidencePaths(manifest.capabilities, knownPath))
 
-  // The ratchet: grandfathered unknowns may stay, new ones may not, and the list may only shrink.
-  const grandfathered = new Set(baseline)
-  const unknowns = manifest.capabilities
-    .filter((capability) => isRecord(capability) && capability.disposition === 'unknown')
-    .map((capability) => capability.id)
-  for (const id of unknowns) {
-    if (!grandfathered.has(id)) {
+  const unknownGrandfathered = new Set(baseline)
+  const measuredOpenGrandfathered = new Set(measuredOpenBaseline)
+  const unknown = evaluateRatchet(
+    manifest.capabilities,
+    'unknown',
+    unknownGrandfathered,
+    'new capability is unclassified for mobile. Give it a disposition, or add it to config/variant-parity-unknown-baseline.txt only if it predates this gate.'
+  )
+  const measuredOpen = evaluateRatchet(
+    manifest.capabilities,
+    'measured-open',
+    measuredOpenGrandfathered,
+    'new measured gap. Acknowledge it in config/variant-parity-measured-open-baseline.txt -- a gap someone has measured is debt someone has to carry, and it may not appear silently.'
+  )
+  problems.push(...unknown.problems, ...measuredOpen.problems)
+
+  // One capability, one kind of debt. Both lists are summed to report the unresolved total, so an id
+  // in both would let a single gap pay for two rows of "progress" when it moves.
+  for (const id of unknownGrandfathered) {
+    if (measuredOpenGrandfathered.has(id)) {
       problems.push({
         id,
-        message:
-          'new capability is unclassified for mobile. Give it a disposition, or add it to config/variant-parity-unknown-baseline.txt only if it predates this gate.'
-      })
-    }
-  }
-  const unknownSet = new Set(unknowns)
-  for (const id of grandfathered) {
-    if (!unknownSet.has(id)) {
-      problems.push({
-        id,
-        message: `baseline lists ${id} as unclassified but the manifest no longer is. Remove it from the baseline -- the list may only shrink.`
+        message: `${id} is grandfathered in both baselines. A capability is unknown or measured-open, never both.`
       })
     }
   }
 
-  return { verdict: problems.length === 0 ? VERDICT.ok : VERDICT.subjectInvalid, problems }
+  /**
+   * Two axes, deliberately not added together into one score.
+   *
+   * `unknown` is epistemic debt (nobody looked) and `measured-open` is implementation debt (someone
+   * looked and named the gap). Moving a row from the first to the second is real progress and must
+   * not read as a capability closing, so `unresolved` counts both and only falls when something is
+   * actually resolved.
+   *
+   * An unresolved capability with no severity counts as P0. Absence is the least-capability answer:
+   * forgetting to triage can only ever make the release gate stricter, never quieter.
+   */
+  const unresolvedIds = new Set([...unknown.ids, ...measuredOpen.ids])
+  const p0Unresolved = manifest.capabilities
+    .filter(
+      (capability) =>
+        isRecord(capability) &&
+        unresolvedIds.has(capability.id) &&
+        (capability.severity === undefined || capability.severity === 'P0')
+    )
+    .map((capability) => capability.id)
+  const debt = {
+    unknown: unknown.ids.length,
+    measuredOpen: measuredOpen.ids.length,
+    unresolved: unresolvedIds.size,
+    p0Unresolved,
+    releaseReady: p0Unresolved.length === 0
+  }
+
+  return { verdict: problems.length === 0 ? VERDICT.ok : VERDICT.subjectInvalid, problems, debt }
 }
 
 export function parseBaseline(text) {
@@ -185,13 +258,16 @@ async function main() {
     return 2
   }
 
-  let baseline = []
-  try {
-    baseline = parseBaseline(await fs.readFile(path.join(root, BASELINE_PATH), 'utf8'))
-  } catch {
-    // An absent baseline means nothing is grandfathered, which is stricter, never looser.
-    baseline = []
+  // An absent baseline means nothing is grandfathered, which is stricter, never looser.
+  const readBaseline = async (file) => {
+    try {
+      return parseBaseline(await fs.readFile(path.join(root, file), 'utf8'))
+    } catch {
+      return []
+    }
   }
+  const baseline = await readBaseline(BASELINE_PATH)
+  const measuredOpenBaseline = await readBaseline(MEASURED_OPEN_BASELINE_PATH)
 
   const knownPath = (reference) => {
     try {
@@ -202,7 +278,12 @@ async function main() {
     }
   }
 
-  const { verdict, problems } = evaluateManifest({ manifest, baseline, knownPath })
+  const { verdict, problems, debt } = evaluateManifest({
+    manifest,
+    baseline,
+    measuredOpenBaseline,
+    knownPath
+  })
   if (verdict === VERDICT.ok) {
     const counts = new Map()
     for (const capability of manifest.capabilities) {
@@ -210,7 +291,23 @@ async function main() {
     }
     const summary = [...counts.entries()].map(([key, value]) => `${key}=${value}`).join(' ')
     console.log(`variant parity: ${manifest.capabilities.length} capabilities classified (${summary})`)
-    return 0
+    // Printed on every run, not only under --release: a debt total nobody sees is a debt total
+    // nobody notices moving.
+    console.log(
+      `variant parity: unresolved=${debt.unresolved} (unknown=${debt.unknown} measured-open=${debt.measuredOpen}) release-critical=${debt.p0Unresolved.length}`
+    )
+    if (!releaseMode) {
+      return 0
+    }
+    if (debt.releaseReady) {
+      console.log('variant parity: no release-critical parity debt')
+      return 0
+    }
+    console.error('variant parity: release-critical parity debt is open')
+    for (const id of debt.p0Unresolved) {
+      console.error(`  ${id}: unresolved and release-critical (P0, or untriaged and counted as P0)`)
+    }
+    return 1
   }
 
   console.error(`variant parity: ${verdict}`)

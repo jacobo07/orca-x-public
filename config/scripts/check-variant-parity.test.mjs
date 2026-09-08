@@ -16,11 +16,14 @@ const POLICY = {
     'not-applicable',
     'superseded',
     'blocked',
+    'measured-open',
     'unknown'
   ],
-  evidenceRequiredFor: ['shared-already', 'ported', 'equivalent'],
-  reasonRequiredFor: ['desktop-only', 'not-applicable', 'superseded', 'blocked'],
-  invariantRequiredFor: ['equivalent']
+  evidenceRequiredFor: ['shared-already', 'ported', 'equivalent', 'measured-open'],
+  reasonRequiredFor: ['desktop-only', 'not-applicable', 'superseded', 'blocked', 'measured-open'],
+  invariantRequiredFor: ['equivalent'],
+  unresolvedDispositions: ['unknown', 'measured-open'],
+  severities: ['P0', 'P1', 'P2', 'P3']
 }
 
 function manifestOf(capabilities) {
@@ -29,8 +32,29 @@ function manifestOf(capabilities) {
 
 const acceptAllPaths = () => true
 
-function run(capabilities, { baseline = [], knownPath = acceptAllPaths } = {}) {
-  return evaluateManifest({ manifest: manifestOf(capabilities), baseline, knownPath })
+function run(
+  capabilities,
+  { baseline = [], measuredOpenBaseline = [], knownPath = acceptAllPaths } = {}
+) {
+  return evaluateManifest({
+    manifest: manifestOf(capabilities),
+    baseline,
+    measuredOpenBaseline,
+    knownPath
+  })
+}
+
+/** A measured-open row that satisfies every field requirement, so a test can vary one thing. */
+function measuredOpen(overrides = {}) {
+  return {
+    id: 'a.measured',
+    title: 'measured and open',
+    disposition: 'measured-open',
+    evidence: ['mobile/src/thing.test.ts'],
+    reason: 'the host projects it but the client cannot read it yet',
+    severity: 'P1',
+    ...overrides
+  }
 }
 
 describe('variant parity gate', () => {
@@ -168,6 +192,149 @@ describe('variant parity gate', () => {
     const result = run([hostile])
     expect(result.verdict).toBe(VERDICT.verifierFailed)
     expect(result.problems[0].message).toContain('checker threw')
+  })
+
+  /**
+   * The two debt axes.
+   *
+   * "unknown" and "measured-open" are both unresolved and they are not the same state: one says
+   * nobody looked, the other says someone looked and named the gap. Collapsing them loses the
+   * difference between work that needs investigation and work that needs implementing. Separating
+   * them creates a new hazard instead -- relabelling as progress -- so every test below is really
+   * asking one of two questions: can the two states be told apart, and can moving between them
+   * make the debt look smaller than it is.
+   */
+  describe('measured-open debt', () => {
+    it('accepts a gap that says what was measured, what remains, and how bad it is', () => {
+      const result = run([measuredOpen()], { measuredOpenBaseline: ['a.measured'] })
+      expect(result.verdict).toBe(VERDICT.ok)
+      expect(result.problems).toEqual([])
+    })
+
+    it('rejects a measured-open gap that measured nothing', () => {
+      const result = run([measuredOpen({ evidence: undefined })], {
+        measuredOpenBaseline: ['a.measured']
+      })
+      expect(result.verdict).toBe(VERDICT.subjectInvalid)
+      expect(result.problems.some((problem) => problem.message.includes('cite evidence'))).toBe(true)
+    })
+
+    it('rejects a measured-open gap that does not say why it is still open', () => {
+      const result = run([measuredOpen({ reason: undefined })], {
+        measuredOpenBaseline: ['a.measured']
+      })
+      expect(result.verdict).toBe(VERDICT.subjectInvalid)
+      expect(result.problems.some((problem) => problem.message.includes('reason'))).toBe(true)
+    })
+
+    it('rejects a severity outside the policy, so the release gate cannot be fed a made-up one', () => {
+      const result = run([measuredOpen({ severity: 'urgent' })], {
+        measuredOpenBaseline: ['a.measured']
+      })
+      expect(result.verdict).toBe(VERDICT.subjectInvalid)
+      expect(result.problems.some((problem) => problem.message.includes('severity'))).toBe(true)
+    })
+
+    // The same ratchet the unknown list has, in both directions -- otherwise the new disposition is
+    // simply a place to put debt where nothing counts it.
+    it('fails a NEW measured-open gap that nobody acknowledged', () => {
+      const result = run([measuredOpen()], { measuredOpenBaseline: [] })
+      expect(result.verdict).toBe(VERDICT.subjectInvalid)
+      expect(result.problems.some((problem) => problem.id === 'a.measured')).toBe(true)
+    })
+
+    it('fails a measured-open baseline entry that is no longer open', () => {
+      const result = run(
+        [{ id: 'was.open', title: 'closed', disposition: 'ported', evidence: ['mobile/src/t.ts'] }],
+        { measuredOpenBaseline: ['was.open'] }
+      )
+      expect(result.verdict).toBe(VERDICT.subjectInvalid)
+      expect(result.problems[0].message).toContain('may only shrink')
+    })
+
+    it('refuses to count one capability as two kinds of debt at once', () => {
+      const result = run([{ id: 'both.lists', title: 'both', disposition: 'unknown' }], {
+        baseline: ['both.lists'],
+        measuredOpenBaseline: ['both.lists']
+      })
+      expect(result.verdict).toBe(VERDICT.subjectInvalid)
+      expect(result.problems.some((problem) => problem.message.includes('both'))).toBe(true)
+    })
+  })
+
+  /**
+   * Reclassifying an unknown into a measured-open gap is real progress -- we know something we did
+   * not know. It is not progress toward shipping, and the count must say so. If the unresolved
+   * total falls when a row moves between the two lists, the metric rewards relabelling and the
+   * whole distinction becomes a way to look finished.
+   */
+  describe('debt accounting', () => {
+    it('does not shrink the unresolved total when a row moves from unknown to measured-open', () => {
+      const before = run(
+        [
+          { id: 'a.one', title: 'one', disposition: 'unknown' },
+          { id: 'a.two', title: 'two', disposition: 'unknown' }
+        ],
+        { baseline: ['a.one', 'a.two'] }
+      )
+      const after = run(
+        [
+          { id: 'a.one', title: 'one', disposition: 'unknown' },
+          measuredOpen({ id: 'a.two', title: 'two' })
+        ],
+        { baseline: ['a.one'], measuredOpenBaseline: ['a.two'] }
+      )
+
+      expect(before.verdict).toBe(VERDICT.ok)
+      expect(after.verdict).toBe(VERDICT.ok)
+      expect(before.debt.unknown).toBe(2)
+      expect(after.debt.unknown).toBe(1)
+      expect(after.debt.measuredOpen).toBe(1)
+      expect(after.debt.unresolved).toBe(before.debt.unresolved)
+    })
+
+    it('counts an unresolved capability with no severity as P0, never as harmless', () => {
+      // Absence is the least-capability answer here: an untriaged gap is treated as the worst it
+      // could be, so forgetting the field can only ever make the release gate stricter.
+      const result = run([{ id: 'a.untriaged', title: 'untriaged', disposition: 'unknown' }], {
+        baseline: ['a.untriaged']
+      })
+      expect(result.verdict).toBe(VERDICT.ok)
+      expect(result.debt.p0Unresolved).toEqual(['a.untriaged'])
+      expect(result.debt.releaseReady).toBe(false)
+    })
+
+    it('is release-ready only when no unresolved capability is release-critical', () => {
+      const result = run(
+        [
+          measuredOpen({ id: 'a.minor', severity: 'P2' }),
+          { id: 'a.later', title: 'later', disposition: 'unknown', severity: 'P3' }
+        ],
+        { baseline: ['a.later'], measuredOpenBaseline: ['a.minor'] }
+      )
+      expect(result.debt.p0Unresolved).toEqual([])
+      expect(result.debt.releaseReady).toBe(true)
+    })
+
+    it('names the release-critical gaps rather than only counting them', () => {
+      const result = run(
+        [
+          measuredOpen({ id: 'a.bad', severity: 'P0' }),
+          measuredOpen({ id: 'a.fine', severity: 'P2' })
+        ],
+        { measuredOpenBaseline: ['a.bad', 'a.fine'] }
+      )
+      expect(result.debt.p0Unresolved).toEqual(['a.bad'])
+      expect(result.debt.releaseReady).toBe(false)
+    })
+
+    it('reports a resolved capability as no debt at all', () => {
+      const result = run([
+        { id: 'a.done', title: 'done', disposition: 'ported', evidence: ['mobile/src/t.ts'] }
+      ])
+      expect(result.debt.unresolved).toBe(0)
+      expect(result.debt.releaseReady).toBe(true)
+    })
   })
 
   it('ignores comments and blank lines in the baseline', () => {

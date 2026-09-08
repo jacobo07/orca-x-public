@@ -27,7 +27,20 @@
 //   not-applicable   Mobile has no such surface. Requires `reason`.
 //   superseded       Mobile already solves this, at least as well. Requires `reason`.
 //   blocked          Real gap with a named external blocker. Requires `reason` and `owner`.
-//   unknown          Not yet classified. Ratcheted -- see unknownPolicy.
+//   measured-open    Investigated, gap named, nothing external blocking it -- it just is not built.
+//                    Requires `evidence` (what was measured) AND `reason` (what remains and what
+//                    closes it). Ratcheted separately from unknown.
+//   unknown          Nobody has looked yet. Ratcheted -- see unknownPolicy.
+//
+// Why unknown and measured-open are two states and not one: they need different actions. An unknown
+// needs someone to investigate; a measured-open gap needs someone to implement. Collapsing them
+// understates what has been learned and hides which of the two a capability is waiting on. The
+// hazard that comes with splitting them is relabelling -- calling a row "measured" and booking it as
+// progress -- so the gate counts BOTH lists in one unresolved total, and that total only falls when
+// a capability is genuinely resolved. Knowing more is not the same as having built it.
+//
+// severity is optional and drawn from `severities`. An unresolved capability without one counts as
+// P0 in the release gate: forgetting to triage can only make the gate stricter.
 {
   "schemaVersion": 1,
   "updatedAt": "2026-09-08",
@@ -41,16 +54,21 @@
       "not-applicable",
       "superseded",
       "blocked",
+      "measured-open",
       "unknown"
     ],
-    "evidenceRequiredFor": ["shared-already", "ported", "equivalent"],
-    "reasonRequiredFor": ["desktop-only", "not-applicable", "superseded", "blocked"],
+    "evidenceRequiredFor": ["shared-already", "ported", "equivalent", "measured-open"],
+    "reasonRequiredFor": ["desktop-only", "not-applicable", "superseded", "blocked", "measured-open"],
     "invariantRequiredFor": ["equivalent"],
-    // Ratcheted, not reported: config/variant-parity-unknown-baseline.txt grandfathers the
-    // capabilities that predate this gate and may only shrink. Existing debt stays visible while a
-    // NEW unknown fails the gate. "There were already some" is not an argument a future change can
-    // make.
-    "unknownPolicy": "ratchet"
+    // The two kinds of debt. Summed for the unresolved total the gate prints on every run.
+    "unresolvedDispositions": ["unknown", "measured-open"],
+    "severities": ["P0", "P1", "P2", "P3"],
+    // Ratcheted, not reported: config/variant-parity-unknown-baseline.txt and
+    // config/variant-parity-measured-open-baseline.txt grandfather the capabilities that predate
+    // each gate and may only shrink. Existing debt stays visible while a NEW entry in either state
+    // fails. "There were already some" is not an argument a future change can make.
+    "unknownPolicy": "ratchet",
+    "measuredOpenPolicy": "ratchet"
   },
   "capabilities": [
     {
