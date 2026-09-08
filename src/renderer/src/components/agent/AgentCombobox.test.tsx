@@ -133,7 +133,8 @@ describe('AgentCombobox', () => {
       />
     )
 
-    expect(markup).toContain('Codex')
+    // The value stays on the runtime identity while the row renders the product brand.
+    expect(markup).toContain('ChatGPT')
     expect(markup).not.toContain('!min-w-[260px]')
     expect(markup).toContain('min-w-0 w-full')
     expect(markup).toContain('leading-none')

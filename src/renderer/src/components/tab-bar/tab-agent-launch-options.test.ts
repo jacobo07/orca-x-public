@@ -4,6 +4,7 @@ import {
   findMatchingTabAgentLaunchOptions,
   orderTabLaunchAgents
 } from './tab-agent-launch-options'
+import { agentProfileId, buildTerminalLaunchProfiles } from '@/lib/terminal-launch-profiles'
 
 describe('tab agent launch options', () => {
   it('orders detected agents by the configured default first', () => {
@@ -97,5 +98,46 @@ describe('tab agent launch options', () => {
     expect(findMatchingTabAgentLaunchOptions('co', options).map((o) => o.agent)).toEqual(
       expect.arrayContaining(['codex', 'copilot'])
     )
+  })
+
+  // Why these live together: they are the two halves of one contract. The product identity the user
+  // picks is ChatGPT; the identity everything else persists, resolves and recognises is `codex`. A
+  // rename that let the label reach an id, or an id that leaked into the label, would break one half
+  // while leaving the other green.
+  describe('ChatGPT display identity over the Codex runtime identity', () => {
+    it('offers OpenAI Codex to the user as ChatGPT', () => {
+      const [option] = buildTabAgentLaunchOptions(['codex'])
+
+      expect(option?.label).toBe('ChatGPT')
+    })
+
+    it('keeps the launch profile id on the runtime identity, not the brand', () => {
+      // The persisted id outlives renames and localization: a tab restored tomorrow must resolve to
+      // the same agent even if the row is relabelled again.
+      expect(agentProfileId('codex')).toBe('agent:codex')
+
+      const { profiles } = buildTerminalLaunchProfiles({
+        shellEntries: [{ label: 'PowerShell', shell: 'powershell.exe' }],
+        agentOptions: buildTabAgentLaunchOptions(['codex']),
+        defaultAgent: null,
+        hostDefaultShellLabel: 'Terminal'
+      })
+      const codex = profiles.find((profile) => profile.id === 'agent:codex')
+
+      expect(codex).toMatchObject({ kind: 'agent', agent: 'codex', label: 'ChatGPT' })
+    })
+
+    it('finds it under the brand and under the runtime name', () => {
+      // Users arrive from both directions — "chatgpt" is the product they know, "codex" is the
+      // binary on their PATH and the name every existing doc and muscle memory uses.
+      const options = buildTabAgentLaunchOptions(['codex'])
+
+      expect(findMatchingTabAgentLaunchOptions('chatgpt', options).map((o) => o.agent)).toEqual([
+        'codex'
+      ])
+      expect(findMatchingTabAgentLaunchOptions('codex', options).map((o) => o.agent)).toEqual([
+        'codex'
+      ])
+    })
   })
 })

@@ -66,8 +66,11 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://openclaude.gitlawb.com/'
   },
   {
+    // Why the label and the id disagree: ChatGPT is the product a user picks, Codex is the CLI that
+    // runs, and only the id is load-bearing — profiles, persisted tabs, process recognition and the
+    // managed-account homes all key on `codex`. Renaming the row must never reach any of them.
     id: 'codex',
-    label: translate('auto.lib.agent.catalog.760bc6883d', 'Codex'),
+    label: translate('auto.lib.agent.catalog.760bc6883d', 'ChatGPT'),
     cmd: 'codex',
     homepageUrl: 'https://github.com/openai/codex'
   },
