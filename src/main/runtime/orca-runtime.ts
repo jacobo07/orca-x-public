@@ -1446,6 +1446,9 @@ type RuntimePtyWorktreeRecord = {
   // spawn-time tab/pane identity so later reveals can adopt under the env key.
   tabId: string | null
   paneKey: string | null
+  // Why here rather than in a map of its own: this fact belongs to one PTY and dies with it, so the
+  // record that already has that lifecycle is the one place it cannot outlive its subject.
+  resumeUnavailable?: boolean
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   // Why: provider PTY IDs can be reused; launch identity belongs only to the process that received the token.
@@ -19542,7 +19545,14 @@ export class OrcaRuntimeService {
         interrupted: src.interrupted,
         stateStartedAt: src.stateStartedAt,
         updatedAt: src.updatedAt,
-        ...(src.restoredUnconfirmed ? { restoredUnconfirmed: true } : {})
+        ...(src.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+        // Why this is projected and not inferred: only the host watched the resume fail. A client
+        // seeing a live agent on a familiar pane has no way to tell that its earlier turns are gone,
+        // and every signal it could reach for -- recency, connection, the pane still existing --
+        // says the opposite.
+        ...(src.ptyId && this.ptysById.get(src.ptyId)?.resumeUnavailable
+          ? { resumeUnavailable: true }
+          : {})
       }
       // Why: SSH/runtime projections can spell an equivalent path differently;
       // bucket by the canonical summary id so mobile keeps the agent activity.
@@ -27266,6 +27276,9 @@ export class OrcaRuntimeService {
         })
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
+          // Assigned rather than only set, so a later spawn on this record that DID resume clears a
+          // stale claim instead of inheriting it.
+          pty.resumeUnavailable = result.agentResumeUnavailable === true
           if (persistHostSessionBinding) {
             pty.runtimeSessionOwned = true
           }

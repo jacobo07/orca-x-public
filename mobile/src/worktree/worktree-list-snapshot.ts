@@ -112,6 +112,9 @@ function areAgentRowsEqual(
       // as idle, so a change to it alone changes the screen. A comparison that ignores a field the
       // renderer reads reports "nothing moved" for a row that now looks different.
       a.restoredUnconfirmed !== b.restoredUnconfirmed ||
+      // Same reason: a row that loses its history gains an annotation, so the two states do not
+      // look alike on screen and must not compare equal.
+      a.resumeUnavailable !== b.resumeUnavailable ||
       a.stateStartedAt !== b.stateStartedAt ||
       a.updatedAt !== b.updatedAt
     ) {

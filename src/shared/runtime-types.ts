@@ -761,6 +761,18 @@ export type RuntimeWorktreeAgentRow = {
   updatedAt: number
   /** See AgentStatusEntry.restoredUnconfirmed — set for hydrated nonterminal rows so clients don't render them as confirmed activity. */
   restoredUnconfirmed?: boolean
+  /**
+   * This pane asked to resume a provider session, the resume could not be verified, and a fresh one
+   * was launched instead — so the work is real but its earlier turns are gone.
+   *
+   * Separate from `restoredUnconfirmed`, which is about whether the host can vouch for the activity;
+   * this is about whether the history survived. A row can be either, both, or neither.
+   *
+   * Absence is only meaningful when the host advertises
+   * AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY. Without it a client knows nothing about provenance
+   * and must say so rather than reading silence as a successful resume.
+   */
+  resumeUnavailable?: boolean
 }
 
 export type RuntimeWorktreePsSummary = {

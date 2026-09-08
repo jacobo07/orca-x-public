@@ -169,6 +169,13 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects a row losing its session history, which adds an annotation', () => {
+    const first = [worktree({ agents: [agent({ resumeUnavailable: false })] })]
+    const second = [worktree({ agents: [agent({ resumeUnavailable: true })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
   it('treats missing and empty agent arrays as equivalent for rendering', () => {
     const first = [worktree({ agents: undefined })]
     const second = [worktree({ agents: [] })]
