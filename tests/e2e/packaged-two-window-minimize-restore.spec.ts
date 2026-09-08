@@ -12,30 +12,13 @@
  * a fix that recovers window A by repainting everything would show up here as B losing its session
  * or its identity.
  *
- * MARKED fixme: this cannot reach its own subject yet, because setting it up uncovered something
- * before the minimize. Opening a second window on the same worktree leaves both windows resolving
- * one terminal tab and one PTY, and in that state the packaged app measured:
- *
- *   A pty === B pty                            (one session, two surfaces)
- *   write from A  → nothing: bare prompt, zero pending bytes, one listener, document visible
- *   the same bytes written from B → 4000 chars and the marker appears
- *   stream reached A=false B=true              (A also stops receiving)
- *
- * So window A goes inert in both directions while still showing a plausible live prompt. The
- * runtime is healthy throughout — which is the shape of the freeze this whole area is chasing,
- * reached by a different trigger.
- *
- * What is NOT established, and why nothing is being fixed on the strength of it. Per-window PTY
- * input ownership is deliberate (`src/main/ipc/pty-multi-window-input-ownership.test.ts`), and its
- * contract is that the owning window may write. The PTY here was spawned by A, so the reading
- * inverts that — either ownership transferred when B adopted the session, or two windows sharing
- * one session is not a supported state and this setup drove the app into it. Deciding between those
- * needs the intended product contract, not another test. Shipping a fix without it would be
- * guessing at which of two designs is the real one.
- *
- * Reachability is the open question worth answering first: a user opening a second window on the
- * same project is ordinary, and terminal tab state is known to be profile-global here, so this may
- * need no test harness at all to reproduce.
+ * Each window owns a worktree of its own, because that is the only two-window topology the product
+ * has. A worktree binds to at most one window (`src/main/window/workspace-window-registry.ts`), and
+ * an earlier version of this spec activated A's worktree in B by setting it on the store directly —
+ * which skips the claim and put both windows on one PTY. Everything measured in that state described
+ * a configuration the product refuses, so it could not be read as the product's behaviour. The
+ * refusal is asserted below rather than assumed, so the topology this spec depends on is the one the
+ * product actually enforces.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -53,10 +36,8 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { establishSeededWorkspace } from './helpers/seeded-workspace-precondition'
 import {
   getTerminalContent,
-  sendToTerminal,
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
@@ -70,7 +51,7 @@ import {
 const MINIMIZED_HOLD_MS = Number(process.env.ORCA_E2E_PACKAGED_HOLD_MS) || 20_000
 const RESTORE_SETTLE_MS = 6_000
 
-test.fixme('a packaged window recovers on restore while a second window stays visible @headful', async (
+test('a packaged window recovers on restore while a second window stays visible @headful', async (
   // oxlint-disable-next-line no-empty-pattern -- this spec owns its own launch and opts out of the app fixture.
   {},
   testInfo
@@ -83,7 +64,7 @@ test.fixme('a packaged window recovers on restore while a second window stays vi
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
   test.skip(!repoPath || !existsSync(repoPath), 'global setup did not produce a seeded test repo')
 
-  test.setTimeout(MINIMIZED_HOLD_MS + 420_000)
+  test.setTimeout(MINIMIZED_HOLD_MS + 480_000)
 
   let run: PackagedOrcaRun | null = null
   try {
@@ -102,6 +83,41 @@ test.fixme('a packaged window recovers on restore while a second window stays vi
     expect(windowIdsBefore, 'the packaged app did not start with exactly one window').toHaveLength(1)
     const windowIdA = windowIdsBefore[0]
 
+    const worktreeIdA = await waitForActiveWorktree(pageA)
+    // From the worktree rather than from `activeRepoId`: a packaged launch can have an active
+    // worktree while that pointer is still null, and reading it there reports "no repository" for a
+    // window that plainly has one.
+    const repoIdA = await pageA.evaluate((worktreeId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available in window A')
+      }
+      const state = store.getState()
+      for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
+        if ((worktrees ?? []).some((worktree) => worktree.id === worktreeId)) {
+          return repoId
+        }
+      }
+      return state.activeRepoId ?? null
+    }, worktreeIdA)
+    expect(repoIdA, 'window A has no active repository to branch a second worktree from').toBeTruthy()
+
+    // A second worktree, created by the window that owns the repository. B claims this one; nothing
+    // else in this spec would give B a project it is entitled to hold.
+    const worktreeIdB = await pageA.evaluate(async (repoId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available in window A')
+      }
+      const created = await store.getState().createWorktree(repoId, `e2e-two-window-${Date.now()}`)
+      await store.getState().fetchWorktrees(repoId)
+      return created.worktree.id
+    }, repoIdA as string)
+    expect(worktreeIdB, 'no second worktree was created — setup failure').toBeTruthy()
+    expect(worktreeIdB, 'the second worktree is the same one window A already holds').not.toBe(
+      worktreeIdA
+    )
+
     const pageB = await Promise.all([
       app.waitForEvent('window', { timeout: 60_000 }),
       pageA.evaluate(() => window.api.ui.createWindow())
@@ -113,6 +129,7 @@ test.fixme('a packaged window recovers on restore while a second window stays vi
         message: 'the second packaged window never finished hydrating — setup failure'
       })
       .toBe(true)
+    await waitForSessionReady(pageB)
 
     const windowIdsAfter = await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().map((window) => window.id)
@@ -122,42 +139,79 @@ test.fixme('a packaged window recovers on restore while a second window stays vi
       'a second native window did not appear — setup failure'
     ).toHaveLength(1)
 
-    // B gets its own workspace and terminal, so "B was undisturbed" is a claim about a live session
-    // rather than about an empty window.
-    await waitForSessionReady(pageB)
-    await establishSeededWorkspace({ page: pageB, testRepoPath: repoPath, testInfo })
-    await waitForActiveWorktree(pageB)
+    // The contract this spec's topology rests on, asserted in the packaged app rather than assumed
+    // from the source. If a second window could take A's worktree, both windows would resolve one
+    // terminal tab and one PTY, and every per-window reading below would be describing one session
+    // painted twice.
+    const refusedClaim = await pageB.evaluate(
+      async ({ repoId, worktreeId }) =>
+        (await window.api.ui.claimWorkspace({ repoId, worktreeId })).outcome,
+      { repoId: repoIdA as string, worktreeId: worktreeIdA }
+    )
+    expect(
+      refusedClaim,
+      'a second window was allowed to claim the worktree window A already owns, so the one-window-per-worktree rule no longer holds and a shared-PTY window is reachable'
+    ).toBe('owned-by-another-window')
+
+    // B takes the worktree that is free, through the same claim the launcher uses.
+    const acceptedClaim = await pageB.evaluate(
+      async ({ repoId, worktreeId }) =>
+        (await window.api.ui.claimWorkspace({ repoId, worktreeId })).outcome,
+      { repoId: repoIdA as string, worktreeId: worktreeIdB }
+    )
+    expect(acceptedClaim, 'window B could not claim a worktree nobody owns — setup failure').toBe(
+      'claimed'
+    )
+
+    await pageB.evaluate(
+      async ({ repoId, worktreeId }) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('window.__store is not available in window B')
+        }
+        const state = store.getState()
+        state.setActiveRepo(repoId)
+        await state.fetchWorktrees(repoId)
+        store.getState().setActiveWorktree(worktreeId)
+        store.getState().setActiveView('terminal')
+        if ((store.getState().tabsByWorktree[worktreeId] ?? []).length === 0) {
+          await store.getState().openNewTerminalTabInActiveWorkspace()
+        }
+      },
+      { repoId: repoIdA as string, worktreeId: worktreeIdB }
+    )
+    await expect
+      .poll(async () => getStoreState<string | null>(pageB, 'activeWorktreeId'), {
+        timeout: 60_000,
+        message: 'window B never activated the worktree it claimed — setup failure'
+      })
+      .toBe(worktreeIdB)
     await ensureTerminalVisible(pageB)
     await waitForActiveTerminalManager(pageB)
+
     const paneB = await waitForPaneIdentitySnapshot(pageB, 1)
     const ptyIdB = paneB.panes[0]?.ptyId
     expect(ptyIdB, 'the second packaged window left no live PTY to measure').toBeTruthy()
-    // Measured, not asserted: opening a second window on the same worktree resolves the same
-    // terminal tab, so both windows attach to one PTY. That is this app's behaviour rather than a
-    // contract this spec is entitled to invent, and it makes the differential sharper rather than
-    // weaker — one model painted onto two surfaces, only one of which went away. If A comes back
-    // stale while B shows the same model painted fresh, the divergence can only be presentation.
-    // Re-read A's identity here rather than trusting the one captured at launch. Establishing a
-    // workspace in B touches state both windows share, and a pane recreated in between leaves the
-    // launch-time id naming a session that no longer exists — a write to it then reaches nothing
-    // and reads, wrongly, as "the terminal stopped working".
+
+    // Re-read A's identity rather than trusting the one captured at launch: creating a worktree and
+    // a second window touches state A also holds, and a pane recreated in between leaves the
+    // launch-time id naming a session that no longer exists — a write to it then reaches nothing and
+    // reads, wrongly, as "the terminal stopped working".
     const paneARefreshed = await waitForPaneIdentitySnapshot(pageA, 1)
     const livePtyIdA = paneARefreshed.panes[0]?.ptyId
-    expect(livePtyIdA, 'window A no longer reports a live PTY after the second window opened').toBeTruthy()
+    expect(
+      livePtyIdA,
+      'window A no longer reports a live PTY after the second window opened'
+    ).toBeTruthy()
     if (livePtyIdA !== ptyIdA) {
       console.error(`[two-window] window A's pty changed while B was set up: ${ptyIdA} -> ${livePtyIdA}`)
     }
-
-    const sessionsAreShared = ptyIdB === livePtyIdA
-    console.error(`[two-window] A pty=${livePtyIdA}`)
-    console.error(`[two-window] B pty=${ptyIdB}`)
-    console.error(`[two-window] shared=${sessionsAreShared}`)
-    testInfo.annotations.push({
-      type: 'two-window-sessions',
-      description: sessionsAreShared
-        ? 'both windows attached to one PTY, so model readings are common and only the pixel readings are per-window'
-        : 'the windows hold independent PTYs'
-    })
+    console.error(`[two-window] A pty=${livePtyIdA} worktree=${worktreeIdA}`)
+    console.error(`[two-window] B pty=${ptyIdB} worktree=${worktreeIdB}`)
+    expect(
+      ptyIdB,
+      'both windows resolved the same PTY despite owning different worktrees, so these are two views of one session and the per-window readings below mean nothing'
+    ).not.toBe(livePtyIdA)
 
     for (const [label, page] of [
       ['A', pageA],
@@ -170,105 +224,45 @@ test.fixme('a packaged window recovers on restore while a second window stays vi
       ).toBe(true)
     }
 
-    // One workload per distinct session. Starting a second script inside a shared PTY would put two
-    // writers on one shell rather than giving each window a stream of its own.
+    // One workload per session, each with its own marker, so "this window is showing its own stream"
+    // is a claim about identity and not only about motion.
     const stagedA = await runNodeScriptInTerminal(
       pageA,
       livePtyIdA as string,
       scrollingTerminalWorkload('WIN-A'),
       { dir: runDir, prefix: 'orca-two-window-a' }
     )
-    const stagedB = sessionsAreShared
-      ? null
-      : await runNodeScriptInTerminal(pageB, ptyIdB as string, scrollingTerminalWorkload('WIN-B'), {
-          dir: runDir,
-          prefix: 'orca-two-window-b'
-        })
+    const stagedB = await runNodeScriptInTerminal(
+      pageB,
+      ptyIdB as string,
+      scrollingTerminalWorkload('WIN-B'),
+      { dir: runDir, prefix: 'orca-two-window-b' }
+    )
 
     try {
-      // Before asserting anything, ask the delivery fabric what happened. It separates the two
-      // readings a bare "no marker" cannot: bytes produced but not processed by a renderer is a
-      // binding that moved, no bytes at all is a write that never reached a live shell.
-      await new Promise((resolve) => setTimeout(resolve, 8_000))
-      for (const [label, page] of [
-        ['A', pageA],
-        ['B', pageB]
-      ] as const) {
-        const delivery = await page.evaluate(async () => {
-          const build = (
-            window as unknown as {
-              __orcaTerminalFreezeReport?: () => Promise<{
-                renderer?: { ptyDataListenerCount?: unknown; documentVisibilityState?: unknown }
-                main?: unknown
-              }>
-            }
-          ).__orcaTerminalFreezeReport
-          if (typeof build !== 'function') {
-            return 'no freeze report'
-          }
-          const report = await build()
-          return JSON.stringify({
-            listeners: report?.renderer?.ptyDataListenerCount ?? null,
-            visibility: report?.renderer?.documentVisibilityState ?? null,
-            main: report?.main ?? null
-          }).slice(0, 1500)
-        })
-        const content = await getTerminalContent(page)
-        console.error(
-          `[two-window] ${label} content=${content.length} chars tail=${JSON.stringify(content.slice(-80))}`
-        )
-        console.error(`[two-window] ${label} delivery=${delivery}`)
-      }
-
-      const markerFor = { A: 'WIN-A', B: sessionsAreShared ? 'WIN-A' : 'WIN-B' } as const
       const sawMarker = async (page: typeof pageA, marker: string): Promise<boolean> =>
         (await getTerminalContent(page)).includes(`${marker}-`)
 
-      // If A's write produced nothing, re-send the identical command from B before concluding
-      // anything. Both windows address the same PTY by the same id, so a command that runs from one
-      // window and not the other localises the loss to the writing window rather than the session:
-      // input authority moved when the second window attached, and the first window's terminal went
-      // quietly dead to typing. Sending the same bytes twice is safe — the shell is at a prompt.
-      if (sessionsAreShared && !(await sawMarker(pageA, markerFor.A))) {
-        console.error('[two-window] A produced nothing; re-sending the same command from B')
-        await sendToTerminal(pageB, livePtyIdA as string, `${stagedA.command}\r`)
-        await new Promise((resolve) => setTimeout(resolve, 8_000))
-        const afterB = await getTerminalContent(pageB)
-        console.error(
-          `[two-window] after writing from B: B content=${afterB.length} chars sawMarker=${afterB.includes(`${markerFor.A}-`)}`
-        )
-      }
-
-      // Which windows the stream actually reaches, asked of both rather than demanded of one. The
-      // write goes to the PTY by id over IPC, so it is focus-independent and reaches the process
-      // regardless; what is in question is which renderers are still bound to receive its output.
-      // A window that has silently lost that binding is a finding, and one this must be able to
-      // report rather than mislabel as "the workload never started".
+      // Both streams have to be running before anything is minimized, or a stale surface after the
+      // restore cannot be told from a workload that never started.
       await expect
-        .poll(
-          async () =>
-            (await sawMarker(pageA, markerFor.A)) || (await sawMarker(pageB, markerFor.B)),
-          {
-            timeout: 60_000,
-            message:
-              'neither window received the workload, so it never ran or the PTY is dead — setup failure, and inconclusive for anything below'
-          }
-        )
+        .poll(async () => (await sawMarker(pageA, 'WIN-A')) && (await sawMarker(pageB, 'WIN-B')), {
+          timeout: 90_000,
+          message:
+            'one of the two workloads never appeared in its own window, so it never ran or its PTY is dead — setup failure, and inconclusive for anything below'
+        })
         .toBe(true)
 
-      const reached = {
-        A: await sawMarker(pageA, markerFor.A),
-        B: await sawMarker(pageB, markerFor.B)
-      }
-      console.error(`[two-window] stream reached A=${reached.A} B=${reached.B}`)
-      testInfo.annotations.push({
-        type: 'two-window-delivery',
-        description: `stream reached A=${reached.A} B=${reached.B} (shared session=${sessionsAreShared})`
-      })
+      // Neither window is showing the other's stream. A crossed binding would make every reading
+      // below describe the wrong window while looking perfectly healthy.
       expect(
-        reached.A,
-        `opening a second window on the same worktree left window A no longer showing its own terminal stream (B is showing it: ${reached.B}). The write reaches the PTY by id, so this is a renderer binding that moved rather than a process that stopped`
-      ).toBe(true)
+        await sawMarker(pageA, 'WIN-B'),
+        "window A is showing window B's workload, so terminal output is reaching a window that does not own it"
+      ).toBe(false)
+      expect(
+        await sawMarker(pageB, 'WIN-A'),
+        "window B is showing window A's workload, so terminal output is reaching a window that does not own it"
+      ).toBe(false)
 
       const modelBeforeA = await getTerminalContent(pageA)
       const modelBeforeB = await getTerminalContent(pageB)
@@ -353,7 +347,7 @@ test.fixme('a packaged window recovers on restore while a second window stays vi
       ).toBe(ptyIdB)
     } finally {
       stagedA.cleanup()
-      stagedB?.cleanup()
+      stagedB.cleanup()
     }
   } finally {
     await run?.dispose()
