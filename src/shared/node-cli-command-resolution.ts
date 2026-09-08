@@ -99,6 +99,10 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
     // Why: Anthropic's native Windows installer places claude.exe here, and
     // GUI-launched Orca may not inherit the user's PATH entry for it.
     directories.push(join(homePath, '.local', 'bin'))
+    // Why: OpenAI's standalone Windows installer has the same shape — it writes the persisted
+    // user PATH, which a GUI-launched Orca started earlier cannot see, so a freshly installed
+    // Codex was discoverable to Claude's fallback and invisible to its own until relaunch.
+    directories.push(join(homePath, 'AppData', 'Local', 'Programs', 'OpenAI', 'Codex', 'bin'))
     directories.push(join(homePath, 'AppData', 'Roaming', 'npm'))
     directories.push(join(homePath, 'AppData', 'Local', 'pnpm'))
     directories.push(join(homePath, 'AppData', 'Local', 'Yarn', 'bin'))
