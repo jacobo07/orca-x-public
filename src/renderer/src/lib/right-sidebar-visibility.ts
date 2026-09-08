@@ -23,6 +23,17 @@ const PROJECT_SCOPED_APPLICATION_VIEWS = new Set<ActiveView>([
 ])
 
 /**
+ * Whether this view is an application surface reached from inside a project.
+ *
+ * These borrow the content area from the workspace rather than replacing the window, so a panel tab
+ * selected here is a request to go back to work — Explorer describes files you cannot act on while
+ * Automations owns the surface in front of them.
+ */
+export function isProjectScopedApplicationView(activeView: ActiveView): boolean {
+  return PROJECT_SCOPED_APPLICATION_VIEWS.has(activeView)
+}
+
+/**
  * Whether the side panel belongs on screen for this view.
  *
  * `hasActiveProject` is required rather than optional on purpose: it makes the compiler enumerate

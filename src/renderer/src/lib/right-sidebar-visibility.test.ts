@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canShowRightSidebarForView,
+  isProjectScopedApplicationView,
   rightSidebarShowsPullRequestData
 } from './right-sidebar-visibility'
 import type { AppState } from '@/store/types'
@@ -55,6 +56,20 @@ describe('right sidebar visibility helpers', () => {
   it('still suppresses application surfaces reached with no project open', () => {
     for (const view of PROJECT_SCOPED_APP_VIEWS) {
       expect(canShowRightSidebarForView(view as AppState['activeView'], false)).toBe(false)
+    }
+  })
+
+  // Selecting a panel tab from one of these is a request to go back to work, so the content area
+  // returns to the workspace rather than leaving a file tree beside a page you cannot act from.
+  it('names the application surfaces a panel tab should return from', () => {
+    for (const view of PROJECT_SCOPED_APP_VIEWS) {
+      expect(isProjectScopedApplicationView(view as AppState['activeView'])).toBe(true)
+    }
+  })
+
+  it('does not treat the workspace or full-page globals as returnable surfaces', () => {
+    for (const view of ['terminal', 'workspace', 'settings', 'space']) {
+      expect(isProjectScopedApplicationView(view as AppState['activeView'])).toBe(false)
     }
   })
 

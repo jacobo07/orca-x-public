@@ -91,3 +91,35 @@ test('the rail switches surfaces without replacing the terminal session', async 
   await expect(sharedPage.locator('.xterm').first()).toBeVisible({ timeout: 30_000 })
   expect(await readTabIdentity(sharedPage)).toBe(before)
 })
+
+test('Explorer returns from an application surface to the same session', async ({ sharedPage }) => {
+  test.setTimeout(180_000)
+
+  // Arrange — record what "the same session" means before leaving it.
+  await expect
+    .poll(async () => getStoreState<string>(sharedPage, 'activeView'), { timeout: 30_000 })
+    .toBe('terminal')
+  const before = await readTabIdentity(sharedPage)
+  expect(before, 'the fixture must leave a live terminal to return to').not.toBe('{}')
+
+  await sharedPage.locator('[data-workspace-activity="automations"]').click()
+  await expect
+    .poll(async () => getStoreState<string>(sharedPage, 'activeView'), { timeout: 20_000 })
+    .toBe('automations')
+
+  // Act — the route the user actually reaches for. Explorer describes the project they were working
+  // in, so choosing it while Automations owns the content area means "take me back", not "show me a
+  // file tree beside this page".
+  await sharedPage.locator('[data-activity-bar-item="explorer"]').click()
+
+  // Assert — the workspace is back, and it is the same one. The workbench never unmounted, so this
+  // is a return rather than a reconstruction; asserting tab ids is what tells those two apart.
+  await expect
+    .poll(async () => getStoreState<string>(sharedPage, 'activeView'), {
+      timeout: 20_000,
+      message: 'Explorer did not return the content area to the workspace'
+    })
+    .toBe('terminal')
+  await expect(sharedPage.locator('.xterm').first()).toBeVisible({ timeout: 30_000 })
+  expect(await readTabIdentity(sharedPage)).toBe(before)
+})

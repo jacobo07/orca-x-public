@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import type { PluginPanelsFetchStatus } from '@/store/plugin-panels'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
+import { isProjectScopedApplicationView } from '@/lib/right-sidebar-visibility'
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
 import { useInstalledPluginRouteReconciliation } from './use-installed-plugin-route-reconciliation'
 import type { ActivityBarItem } from './activity-bar-buttons'
@@ -29,6 +30,8 @@ export function useRightSidebarTabRouting({
   const rightSidebarRouteRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
+  const activeView = useAppStore((s) => s.activeView)
+  const setActiveView = useAppStore((s) => s.setActiveView)
 
   const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})
   const lastRightSidebarRouteRequestIdRef = useRef(rightSidebarRouteRequestId)
@@ -79,6 +82,14 @@ export function useRightSidebarTabRouting({
   const selectActivityTab = (tab: ActiveRightSidebarTab): void => {
     if (activeFolderWorkspaceKey) {
       rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = tab
+    }
+    // Why the view changes too: these tabs describe the project you were working in, and an
+    // application surface is borrowing the content area in front of them. Picking Explorer while
+    // Automations is showing is a request to go back to work, not to read a file tree beside a page
+    // you cannot act from. The workbench never unmounted, so this returns the same tab, pane, PTY
+    // and agent session rather than rebuilding an approximation of them.
+    if (isProjectScopedApplicationView(activeView)) {
+      setActiveView('terminal')
     }
     if (tab === 'explorer') {
       showRightSidebarFiles()
