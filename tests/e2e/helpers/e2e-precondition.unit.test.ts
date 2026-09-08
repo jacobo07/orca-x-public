@@ -50,6 +50,36 @@ describe('classifyE2EFailure', () => {
     }
   })
 
+  it('separates a cleanup failure from a precondition failure', () => {
+    // Why these must not share a class: they make opposite claims about whether a subject verdict
+    // exists. A precondition failure says the behaviour was never observed. A cleanup failure says
+    // it was observed, concluded, and then the harness failed to tidy up after itself. Reporting
+    // the second as the first discards a verdict that was actually reached.
+    const cleanup = classifyE2EFailure({
+      message: 'EPERM: operation not permitted, unlink orca-e2e-repo-Tek4aa',
+      origin: 'teardown'
+    })
+    const precondition = classifyE2EFailure({
+      message: `${PRECONDITION_FAILURE_MARKER} [repository-seed] ${SEEDING_TIMEOUT_MESSAGE}`,
+      origin: 'setup'
+    })
+
+    expect(cleanup).toBe('cleanup-failed')
+    expect(cleanup).not.toBe(precondition)
+    expect(cleanup).not.toBe('product-failure')
+  })
+
+  it('does not read a closed page during teardown as harness ill-health', () => {
+    // A dead page is the expected end state of teardown, not evidence the harness is sick. The
+    // origin outranks the message shape here, which it does not for a test body.
+    expect(
+      classifyE2EFailure({
+        message: 'Target page, context or browser has been closed',
+        origin: 'teardown'
+      })
+    ).toBe('cleanup-failed')
+  })
+
   it('lets the marker win over the origin it was reported from', () => {
     // A precondition helper called from inside a test body still failed to establish a
     // precondition; the marker is positive evidence and outranks where it surfaced.

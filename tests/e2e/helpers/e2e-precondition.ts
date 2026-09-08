@@ -9,6 +9,13 @@
  *
  * A precondition failure is still a failure. It is never converted to a pass. What changes is that
  * the product verdict is reported as unmeasured rather than as failed.
+ *
+ * Cleanup failures sit at the opposite end of the same run and need their own class. A precondition
+ * failure means the behaviour was never observed; a cleanup failure means it was observed, reached a
+ * verdict, and then the harness could not tidy up after itself. Windows keeps handles on a
+ * just-closed profile, so this is routine here — and an unguarded removal turns it into the run's
+ * exit code, reporting a suite that passed as a suite that failed. Both are still failures of the
+ * harness's own health contract; neither may rewrite a subject verdict that was already reached.
  */
 
 export const PRECONDITION_FAILURE_MARKER = 'ORCA-E2E-PRECONDITION-FAILED'
@@ -24,6 +31,7 @@ export type E2ESetupPhase =
 
 export type E2EFailureClass =
   | 'precondition-failed'
+  | 'cleanup-failed'
   | 'product-failure'
   | 'harness-error'
   | 'unknown'
@@ -61,10 +69,15 @@ export function classifyE2EFailure(input: {
   if (message.includes(PRECONDITION_FAILURE_MARKER)) {
     return 'precondition-failed'
   }
+  // Before the harness patterns, not after: a closed page is teardown's expected end state, so
+  // reading it there as harness ill-health would report a sick harness on every healthy run.
+  if (input.origin === 'teardown') {
+    return 'cleanup-failed'
+  }
   if (HARNESS_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
     return 'harness-error'
   }
-  if (input.origin === 'setup' || input.origin === 'teardown') {
+  if (input.origin === 'setup') {
     return 'precondition-failed'
   }
   if (input.origin === 'test-body') {
