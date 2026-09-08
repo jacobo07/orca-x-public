@@ -1327,7 +1327,7 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onToggleRightSidebar(() => {
         const store = useAppStore.getState()
-        if (!canShowRightSidebarForView(store.activeView)) {
+        if (!canShowRightSidebarForView(store.activeView, store.activeWorktreeId !== null)) {
           return
         }
         store.toggleRightSidebar()

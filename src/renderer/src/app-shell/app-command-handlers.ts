@@ -95,7 +95,8 @@ export function createAppCommandHandlers(
     workspaceChromeActive
   } = state
   const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
-  const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
+  const canRevealRightSidebar =
+    !creationLayoutActive && canShowRightSidebarForView(activeView, activeWorktreeId !== null)
   const claim = (actionId: KeybindingActionId, run: () => void): boolean => {
     input?.preventDefault()
     if (

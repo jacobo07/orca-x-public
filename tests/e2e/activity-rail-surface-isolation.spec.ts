@@ -66,6 +66,16 @@ test('the rail switches surfaces without replacing the terminal session', async 
   ).toBeVisible()
   await expect(sharedPage.locator('[data-workspace-activity="workspace"]')).toBeVisible()
 
+  // The side panel is Explorer and Source Control. It used to be unmounted on every application
+  // surface, so arriving at Automations from a project window took those with it — the rail could
+  // bring you back to the workspace, but nothing here could tell you what was in it. Suppression is
+  // keyed on whether a project is open, not on which view is showing, so with one bound they stay.
+  await expect(
+    sharedPage.locator('[data-activity-bar-item="explorer"]'),
+    'Explorer left the window when the application surface opened'
+  ).toBeVisible()
+  await expect(sharedPage.locator('[data-activity-bar-item="source-control"]')).toBeVisible()
+
   await sharedPage.evaluate(() => {
     const store = window.__store
     if (!store) {

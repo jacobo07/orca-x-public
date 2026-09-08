@@ -144,7 +144,8 @@ export function useGlobalKeybindings(args: {
         return
       }
 
-      const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
+      const canRevealRightSidebar =
+        !creationLayoutActive && canShowRightSidebarForView(activeView, activeWorktreeId !== null)
 
       if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {
         // With a folder selected in the explorer, Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern with it, not a text search.

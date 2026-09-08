@@ -51,7 +51,8 @@ function Sidebar({
       sidebarOpen: s.sidebarOpen,
       sidePanelDock: s.sidePanelDock,
       rightSidebarOpen: s.rightSidebarOpen,
-      activeView: s.activeView
+      activeView: s.activeView,
+      hasActiveProject: s.activeWorktreeId !== null
     })
   )
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)

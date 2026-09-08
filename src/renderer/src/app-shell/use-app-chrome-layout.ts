@@ -54,11 +54,15 @@ export function useAppChromeLayout() {
 
   // Docked left the panel and the project sidebar are alternatives, so one yields rather than both
   // stacking. Derived, so closing the panel restores the user's own sidebar choice untouched.
+  // Why the panel's visibility turns on this: application surfaces host Explorer/Source Control/
+  // Agents beside them only while there is a project for those to describe.
+  const hasActiveProject = activeWorktreeId !== null
   const sidebarOpen = resolveEffectiveSidebarOpen({
     sidebarOpen: storedSidebarOpen,
     sidePanelDock,
     rightSidebarOpen,
-    activeView
+    activeView,
+    hasActiveProject
   })
 
   const systemPrefersDark = useSystemPrefersDark()
@@ -181,7 +185,8 @@ export function useAppChromeLayout() {
     floatingWorkspaceDock,
     floatingWorkspaceBottomHeight,
     // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
-    showRightSidebarControls: !creationLayoutActive && canShowRightSidebarForView(activeView),
+    showRightSidebarControls:
+      !creationLayoutActive && canShowRightSidebarForView(activeView, hasActiveProject),
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
     sidebarOpen,

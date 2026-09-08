@@ -18,27 +18,41 @@ import type { SidePanelDock, TopLevelView } from '../../../shared/ui-chrome-type
 export function projectSidebarYieldsToPanel({
   sidePanelDock,
   rightSidebarOpen,
-  activeView
+  activeView,
+  hasActiveProject
 }: {
   sidePanelDock: SidePanelDock
   rightSidebarOpen: boolean
   activeView: TopLevelView
+  hasActiveProject: boolean
 }): boolean {
-  return sidePanelDock === 'left' && rightSidebarOpen && canShowRightSidebarForView(activeView)
+  return (
+    sidePanelDock === 'left' &&
+    rightSidebarOpen &&
+    canShowRightSidebarForView(activeView, hasActiveProject)
+  )
 }
 
 export function resolveEffectiveSidebarOpen({
   sidebarOpen,
   sidePanelDock,
   rightSidebarOpen,
-  activeView
+  activeView,
+  hasActiveProject
 }: {
   sidebarOpen: boolean
   sidePanelDock: SidePanelDock
   rightSidebarOpen: boolean
   activeView: TopLevelView
+  hasActiveProject: boolean
 }): boolean {
   return (
-    sidebarOpen && !projectSidebarYieldsToPanel({ sidePanelDock, rightSidebarOpen, activeView })
+    sidebarOpen &&
+    !projectSidebarYieldsToPanel({
+      sidePanelDock,
+      rightSidebarOpen,
+      activeView,
+      hasActiveProject
+    })
   )
 }
