@@ -53,7 +53,7 @@ describe('workspace agent selection', () => {
 
   it('normalizes legacy blank sentinel and labels known choices', () => {
     expect(normalizeWorkspaceAgent('__blank__')).toBe('blank')
-    expect(workspaceAgentLabel('codex')).toBe('Codex')
+    expect(workspaceAgentLabel('codex')).toBe('ChatGPT')
   })
 
   it('keeps automatic selection current while create selection is active', () => {

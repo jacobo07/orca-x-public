@@ -46,7 +46,8 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   claude: 'Claude',
   'claude-agent-teams': 'Claude Agent Teams',
   openclaude: 'OpenClaude',
-  codex: 'Codex',
+  // ChatGPT is the product the user picks; `codex` stays the id every load-bearing path keys on.
+  codex: 'ChatGPT',
   grok: 'Grok',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
