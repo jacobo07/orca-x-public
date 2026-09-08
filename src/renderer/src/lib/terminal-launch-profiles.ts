@@ -130,19 +130,34 @@ export function buildTerminalLaunchProfiles({
       : {})
   }))
 
-  // Why last: the detected sets answer "what does this machine have", the declared one answers
-  // "what did the user add". Ordering the additions after the discoveries keeps the menu stable
-  // when a shell or an agent appears or disappears.
-  const ordered = [...shellProfiles, ...agentProfiles, ...commandProfiles]
+  // Why agents first: they are the reason this menu is opened. A shell is a fallback the user
+  // reaches for deliberately, so the agents belong together at the top where they can be compared
+  // — Claude and ChatGPT adjacent, rather than separated by three shells.
+  // Why user profiles last: the detected sets answer "what does this machine have", the declared
+  // one answers "what did the user add". Ordering the additions after the discoveries keeps the
+  // menu stable when a shell or an agent appears or disappears.
+  const ordered = [...agentProfiles, ...shellProfiles, ...commandProfiles]
   // 'blank' is the settings value for "a plain terminal, no agent" — a real choice, not an absent
   // one, and it resolves to the shell rather than to the first agent that happens to be installed.
   const preferredAgentId =
     defaultAgent && defaultAgent !== 'blank' ? agentProfileId(defaultAgent) : null
+  // Why the shell is named rather than taken as `ordered[0]`: that position used to hold a shell
+  // and now holds an agent, so a positional fallback would quietly hand "no agent, please" to
+  // whichever agent sorts first. The fallback has to say the word "shell" to keep meaning it.
   const defaultProfileId =
-    ordered.find((profile) => profile.id === preferredAgentId)?.id ?? ordered[0]?.id ?? null
+    ordered.find((profile) => profile.id === preferredAgentId)?.id ??
+    shellProfiles[0]?.id ??
+    ordered[0]?.id ??
+    null
 
+  // Why only an agent is hoisted: `orderTabLaunchAgents` already puts the configured agent at the
+  // head of the agent list, so this hoist does real work only when the default is a *shell* — and
+  // lifting a shell above the agents both contradicts the grouping above and splits the shells in
+  // two. The default is still reported through `defaultProfileId`, which is what marks the row.
+  const defaultIsAgent =
+    ordered.find((profile) => profile.id === defaultProfileId)?.kind === 'agent'
   return {
-    profiles: hoistDefaultFirst(ordered, defaultProfileId),
+    profiles: defaultIsAgent ? hoistDefaultFirst(ordered, defaultProfileId) : ordered,
     defaultProfileId
   }
 }

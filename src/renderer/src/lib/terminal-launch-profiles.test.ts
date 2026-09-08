@@ -17,7 +17,7 @@ const AGENTS = [
 ] as const
 
 describe('buildTerminalLaunchProfiles', () => {
-  it('offers shells and agents from one list', () => {
+  it('offers shells and agents from one list, agents first', () => {
     const { profiles } = buildTerminalLaunchProfiles({
       shellEntries: WINDOWS_SHELLS,
       agentOptions: AGENTS,
@@ -26,11 +26,25 @@ describe('buildTerminalLaunchProfiles', () => {
     })
 
     expect(profiles.map((profile) => profile.id)).toEqual([
-      'shell:powershell.exe',
-      'shell:cmd.exe',
       'agent:claude',
-      'agent:codex'
+      'agent:codex',
+      'shell:powershell.exe',
+      'shell:cmd.exe'
     ])
+  })
+
+  it('keeps the agents adjacent instead of separating them with shells', () => {
+    // The reason to open this menu is usually to pick an agent, and comparing two agents means
+    // seeing them next to each other. A shell landing between them is the regression to catch.
+    const { profiles } = buildTerminalLaunchProfiles({
+      shellEntries: WINDOWS_SHELLS,
+      agentOptions: AGENTS,
+      defaultAgent: 'claude',
+      hostDefaultShellLabel: 'Terminal'
+    })
+    const kinds = profiles.map((profile) => profile.kind)
+
+    expect(kinds.indexOf('shell')).toBeGreaterThan(kinds.lastIndexOf('agent'))
   })
 
   it('makes the configured default agent the default profile, and puts it first', () => {

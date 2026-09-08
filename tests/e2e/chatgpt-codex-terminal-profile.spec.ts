@@ -60,7 +60,20 @@ async function pinDetectedAgents(page: Page): Promise<void> {
  * without the ChatGPT row fail identically, and the second is the only one that is about this code.
  */
 async function openCreateMenu(page: Page): Promise<void> {
-  await page.getByTestId('tab-bar-new-tab').click({ force: true })
+  const plus = page.getByTestId('tab-bar-new-tab')
+  // Why retried: a click into a tab bar that is still hydrating gets swallowed, and the menu then
+  // never opens. Retrying the trigger characterises that as the flake it is; the assertion below
+  // still fails loudly if the menu genuinely cannot open, so this cannot paper over a real break.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await plus.click({ force: attempt > 1 })
+    try {
+      await page.waitForSelector('[role="menuitem"]', { timeout: 8_000 })
+      return
+    } catch {
+      await page.keyboard.press('Escape').catch(() => {})
+      await page.waitForTimeout(1_000)
+    }
+  }
   await expect
     .poll(() => page.getByRole('menuitem').count(), {
       timeout: 10_000,
@@ -89,6 +102,21 @@ test.describe('ChatGPT terminal profile', () => {
     // The runtime name must never surface to the user: the brand is the label, `codex` is only the
     // identity underneath it.
     await expect(orcaPage.getByRole('menuitem', { name: /Codex/ })).toHaveCount(0)
+  })
+
+  test('puts ChatGPT directly under Claude, ahead of the shells', async ({ orcaPage }) => {
+    await openCreateMenu(orcaPage)
+    const items = await orcaPage.getByRole('menuitem').allTextContents()
+
+    // Index-based rather than "is present": the ask was adjacency, and a row can be present while
+    // sitting three shells further down.
+    const claude = items.findIndex((text) => /terminal.*Claude/i.test(text))
+    const chatGpt = items.findIndex((text) => /terminal.*ChatGPT/i.test(text))
+    const firstShell = items.findIndex((text) => /terminal.*(CMD|PowerShell|Git Bash)/i.test(text))
+
+    expect(claude).toBeGreaterThanOrEqual(0)
+    expect(chatGpt).toBe(claude + 1)
+    expect(firstShell).toBeGreaterThan(chatGpt)
   })
 
   test('launches the row under the codex runtime identity', async ({ orcaPage }) => {
