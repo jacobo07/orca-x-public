@@ -1,0 +1,18 @@
+# Capabilities that were already unclassified for mobile when the parity gate landed.
+#
+# This list may only SHRINK. A capability added to config/variant-parity.jsonc with disposition
+# "unknown" that is not named here fails the gate, so existing debt stays visible while new debt
+# cannot be created silently. Removing an entry means the capability was given a real disposition;
+# the gate also fails if a name here is no longer unknown, so the list cannot go stale in the
+# other direction either.
+#
+# Every entry below is a measured gap between Orca X desktop and the mobile app as of 2026-09-08,
+# when 195 fork-local commits had landed and none of them had touched mobile/.
+authority.stale-client-cannot-overwrite-current-state
+drafts.user-invested-input-survives-process-death
+navigation.reversible-navigation-preserves-context
+product.display-name
+runtime.command-acts-on-the-window-that-owns-the-target
+session.lifecycle-vocabulary
+terminal.launch-profile-identity
+voice.transcript-target-ownership

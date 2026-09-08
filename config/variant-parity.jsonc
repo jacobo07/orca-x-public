@@ -1,0 +1,151 @@
+// Cross-variant capability parity for the Orca X product family.
+//
+// Why this exists separately from the two manifests beside it: reliability-gates.jsonc disciplines
+// *claims* (a gate may not assert protection without a real test and a passed run), and
+// durability-contracts.jsonc answers *what a write owes* if its state is lost. Neither asks the
+// question this one does -- when a capability improves on one variant, does the sibling variant
+// inherit it, and if not, why not?
+//
+// That question needs its own registry because nobody was asking it. Measured 2026-09-08: 195
+// fork-local commits since the upstream fork point e4e54a17d, 367 files changed, and *zero* of them
+// touch mobile/. The mobile app is not behind because it is primitive -- it is 743 source files and
+// 111k lines with a stronger transport layer than the desktop's. It is behind because every
+// improvement landed on the desktop side of a wire that never learned to describe it.
+//
+// Parity here is SEMANTIC, never file-based. "Desktop changed file X so mobile must change file Y"
+// is not a rule this gate can state or would want to. A capability may be shared code, a shared
+// protocol, a different presentation of one invariant, or genuinely inapplicable. What the gate
+// refuses is the fifth case: nobody checked.
+//
+// dispositions:
+//   shared-already   One implementation serves both variants, or one mirrors the other under a test
+//                    that fails when they drift. Requires `evidence`.
+//   ported           The desktop behaviour now exists in mobile. Requires `evidence`.
+//   equivalent       Mobile expresses the same user capability and invariant through a different
+//                    presentation. Requires `evidence` AND `invariant`.
+//   desktop-only     The capability cannot exist on mobile by nature. Requires `reason`.
+//   not-applicable   Mobile has no such surface. Requires `reason`.
+//   superseded       Mobile already solves this, at least as well. Requires `reason`.
+//   blocked          Real gap with a named external blocker. Requires `reason` and `owner`.
+//   unknown          Not yet classified. Ratcheted -- see unknownPolicy.
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-08",
+  "policy": {
+    "variants": ["desktop", "mobile"],
+    "dispositions": [
+      "shared-already",
+      "ported",
+      "equivalent",
+      "desktop-only",
+      "not-applicable",
+      "superseded",
+      "blocked",
+      "unknown"
+    ],
+    "evidenceRequiredFor": ["shared-already", "ported", "equivalent"],
+    "reasonRequiredFor": ["desktop-only", "not-applicable", "superseded", "blocked"],
+    "invariantRequiredFor": ["equivalent"],
+    // Ratcheted, not reported: config/variant-parity-unknown-baseline.txt grandfathers the
+    // capabilities that predate this gate and may only shrink. Existing debt stays visible while a
+    // NEW unknown fails the gate. "There were already some" is not an argument a future change can
+    // make.
+    "unknownPolicy": "ratchet"
+  },
+  "capabilities": [
+    {
+      "id": "agents.catalog-membership",
+      "title": "Both variants offer the same set of agents, in the same order",
+      "disposition": "shared-already",
+      "evidence": ["mobile/src/tasks/mobile-agent-catalog.test.ts"],
+      "notes": "Mobile mirrors src/shared/tui-agent-selection.ts and the test reads the desktop source across the project boundary to assert it. Measured in parity at 36 agents on 2026-09-08."
+    },
+    {
+      "id": "agents.display-label",
+      "title": "An agent carries the same user-facing name on both variants",
+      "disposition": "shared-already",
+      "evidence": ["mobile/src/tasks/mobile-agent-catalog.test.ts"],
+      "notes": "The fork renamed the Codex launch row to ChatGPT in the renderer catalog alone, so the same agent had two names in one product. The membership test could not see it: it compared order and set, never labels. Widened 2026-09-08, which is the drift this registry was opened on. Desktop still labels Codex as 'Codex' on non-launch surfaces (notifications, CLI, usage provider); that is a deliberate scoping decision by fe30a7426, not drift."
+    },
+    {
+      "id": "terminal.launch-profile-identity",
+      "title": "A terminal can say which launch profile it came from, and tell recorded from inferred",
+      "disposition": "unknown",
+      "notes": "src/shared/terminal-launch-profile-identity.ts is pure TypeScript with type-only imports, so it is portable to React Native as-is. Mobile has no launch-profile concept at all and infers agent identity from a title glyph instead. Blocked on wire aperture: the profile registry has zero importers outside src/renderer, so mobile cannot reach it without an additive RPC capability."
+    },
+    {
+      "id": "session.lifecycle-vocabulary",
+      "title": "The user can tell reconnect from resume from restart from restore-state-only",
+      "disposition": "unknown",
+      "notes": "Desktop distinguishes these and reports a dropped resume. Mobile collapses every redial into 'Connecting…'/'Reconnecting…' (mobile/src/transport/connection-health.ts), so a restarted agent and a re-attached one look identical. The desktop classification stops at the Electron IPC boundary with zero references under src/main/runtime/rpc."
+    },
+    {
+      "id": "session.background-does-not-stop-remote-work",
+      "title": "Backgrounding the control client does not stop host-owned work",
+      "disposition": "superseded",
+      "reason": "Mobile already holds this: the host PTY outlives the app, and mobile re-subscribes on foreground (mobile/src/terminal/terminal-foreground-recovery.ts). The webview backing store dies, not the remote work. Nothing to port; what is missing is a proof, tracked under session.lifecycle-vocabulary."
+    },
+    {
+      "id": "transport.reconnect-and-command-deduplication",
+      "title": "A dropped connection recovers without duplicating commands",
+      "disposition": "superseded",
+      "reason": "Mobile's transport is ahead of the desktop's here and was never a fork target: E2EE v2, relay/direct upgrade with hysteresis, a reconnect controller, a resume director, a session-liveness watchdog, and request-single-flight. Porting desktop semantics onto this would be a regression."
+    },
+    {
+      "id": "workspace.repo-and-worktree-are-distinct",
+      "title": "Selecting a worktree acts on that worktree, not on the repo's primary checkout",
+      "disposition": "shared-already",
+      "evidence": ["mobile/src/worktree/workspace-list-types.ts"],
+      "notes": "repoId and worktreeId are distinct fields on mobile with full lineage modelling, so the flattening risk this family exists to catch does not apply."
+    },
+    {
+      "id": "source-control.actions",
+      "title": "Source control is usable, not merely viewable",
+      "disposition": "superseded",
+      "reason": "Mobile is at action parity, not view parity: stage, commit, push with --force-with-lease, pull, PR, branch-compare and conflict-abort all exist. No porting owed."
+    },
+    {
+      "id": "voice.no-auto-submit",
+      "title": "A transcript is never submitted to an agent without the user acting",
+      "disposition": "shared-already",
+      "evidence": ["mobile/app.json"],
+      "notes": "Mobile streams microphone audio to the paired desktop over speech.* RPC and inserts the transcript without submitting it; no auto-submit path exists on either variant. ASR placement differs (host-local for mobile) but the safety contract is identical."
+    },
+    {
+      "id": "voice.transcript-target-ownership",
+      "title": "A transcript belongs to the input that started recording, not the one focused when it lands",
+      "disposition": "unknown",
+      "notes": "Desktop pins this (fork commits 90f53945d, 80b685f84). Mobile's equivalent is unmeasured: navigating away mid-transcription is the case that would show it."
+    },
+    {
+      "id": "navigation.reversible-navigation-preserves-context",
+      "title": "Leaving a work surface and coming back preserves the scene rather than recreating it",
+      "disposition": "unknown",
+      "notes": "Mobile screens survive navigation only because no screen sets unmountOnBlur or freezeOnBlur. The capability is real and nothing protects it, so one future flag deletes it with a green suite."
+    },
+    {
+      "id": "drafts.user-invested-input-survives-process-death",
+      "title": "Text the user composed and has not sent survives the app being killed",
+      "disposition": "unknown",
+      "notes": "Mobile has an editable file preview with dirty-draft tracking and no persistence site was found, so process death discards it silently. Needs a durability tier in config/durability-contracts.jsonc rather than a mobile-only taxonomy."
+    },
+    {
+      "id": "runtime.command-acts-on-the-window-that-owns-the-target",
+      "title": "A remote command reaches the workspace it named, not a representative one",
+      "disposition": "unknown",
+      "notes": "The fork gave every window its own runtime graph, but the runtime RPC server is a process-wide singleton. Window resolution is worktree-scoped only when a worktree id is present and otherwise falls back to a global representative window, so a mobile call without one can land in the wrong window."
+    },
+    {
+      "id": "authority.stale-client-cannot-overwrite-current-state",
+      "title": "A client that reconnects after missing changes adopts current state instead of publishing its own",
+      "disposition": "unknown",
+      "notes": "Three narrow mechanisms exist and none composes into general protection: an SSH connection generation covering file mutations only, an internal per-worktree epoch, and a hardcoded desktop-wins rule for terminal viewport claims. Desktop-vs-mobile git and worktree mutations are unfenced."
+    },
+    {
+      "id": "product.display-name",
+      "title": "Both variants present the product under its current name",
+      "disposition": "unknown",
+      "notes": "Desktop is 'Orca X' via src/shared/product.ts; mobile's app.json expo.name is still 'Orca'. The rename must not reach scheme 'orca', bundle id com.stably.orca.mobile, slug orca-mobile, or the 'orca:' storage-key prefix, which are stable identities."
+    }
+  ]
+}
