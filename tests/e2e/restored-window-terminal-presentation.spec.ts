@@ -28,7 +28,6 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -37,6 +36,7 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
+import { screenshotTerminalSurface } from './helpers/terminal-presentation-witness'
 
 /** Enough rows per tick that a hold turns the visible surface over many times. */
 const TICK_INTERVAL_MS = 120
@@ -100,29 +100,6 @@ function readTickCount(heartbeatPath: string): number {
   const lines = readFileSync(heartbeatPath, 'utf8').trim().split('\n')
   const parsed = Number.parseInt(lines[lines.length - 1] ?? '', 10)
   return Number.isFinite(parsed) ? parsed : 0
-}
-
-/**
- * The pixel witness: the upper part of the terminal surface, where scrolled content lives and the
- * cursor does not. Returns null when the surface cannot be measured, which is a setup failure and
- * must not be reported as a presentation result.
- */
-async function screenshotTerminalSurface(page: Page): Promise<Buffer | null> {
-  const surface = page.locator('.xterm-screen').first()
-  const box = await surface.boundingBox()
-  if (!box || box.width < 40 || box.height < 40) {
-    return null
-  }
-  return surface.screenshot({
-    clip: {
-      x: box.x,
-      y: box.y,
-      width: box.width,
-      // Why 55%: keeps the cursor row and the newest lines out of the sample, so a blinking cursor
-      // cannot manufacture the difference this assertion is looking for.
-      height: Math.floor(box.height * 0.55)
-    }
-  })
 }
 
 // @headful because a headless window has no window manager to honour minimize(): the call no-ops,
