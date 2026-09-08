@@ -33,7 +33,7 @@ describe('mobile new-tab agent loading', () => {
         worktreeId: FLOATING_WORKSPACE_WORKTREE_ID
       })
     ).resolves.toEqual([
-      { agent: 'codex', label: 'Codex' },
+      { agent: 'codex', label: 'ChatGPT' },
       { agent: 'claude', label: 'Claude' }
     ])
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([

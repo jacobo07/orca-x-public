@@ -20,7 +20,7 @@ describe('mobile new-tab agent options', () => {
         'codex',
         'not-real'
       ])
-    ).toEqual([{ agent: 'codex', label: 'Codex' }])
+    ).toEqual([{ agent: 'codex', label: 'ChatGPT' }])
   })
 
   it('does not show stale presets while detection is pending', () => {
