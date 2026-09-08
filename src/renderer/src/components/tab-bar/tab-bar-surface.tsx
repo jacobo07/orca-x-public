@@ -205,6 +205,9 @@ export function renderTabBarSurface({
             title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             // Why: aria-label matches the tooltip so E2E can locate the "+" via getByRole('button', { name: 'New tab' }).
             aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            // Why also a testid: that accessible name is localized, so a role+name lookup finds
+            // nothing on a non-English host and reads as "the tab bar never rendered".
+            data-testid="tab-bar-new-tab"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
