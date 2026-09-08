@@ -98,7 +98,7 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Orca X Mobile')
     expect(output).toContain('Open App Store')
     expect(output).not.toContain('HostContent')
   })
@@ -112,8 +112,8 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
+    expect(output).toContain('Update Orca X Mobile')
+    expect(output).toContain('Update Orca X Mobile from GitHub Releases')
     expect(output).toContain('Open GitHub Releases')
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
@@ -215,7 +215,7 @@ describe('HostProtocolGate', () => {
     })
 
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Orca X Mobile')
     expect(output).not.toContain('HostContent')
   })
 
