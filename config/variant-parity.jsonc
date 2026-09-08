@@ -84,7 +84,14 @@
       "id": "session.lifecycle-vocabulary",
       "title": "The user can tell reconnect from resume from restart from restore-state-only",
       "disposition": "unknown",
-      "notes": "Desktop distinguishes these and reports a dropped resume. Mobile collapses every redial into 'Connecting…'/'Reconnecting…' (mobile/src/transport/connection-health.ts), so a restarted agent and a re-attached one look identical. The desktop classification stops at the Electron IPC boundary with zero references under src/main/runtime/rpc."
+      "notes": "Measured 2026-09-08, and narrower than the title implies. Desktop's actual user-facing vocabulary is two values -- 'restored' and 'resume-unavailable' (session-restored-banner-pane-state.ts) -- driven by an agentResumeUnavailable flag whose complete inventory is main/ipc/pty.ts, preload and renderer, with ZERO references under src/main/runtime/rpc or mobile/. That half is genuinely absent from the wire and needs an additive negotiated capability, unlike restoredUnconfirmed which was already there and is now consumed. sessionBoundary is separately not a mobile concern: mobile has no `state === 'done'` branch in any non-test source, so there is no completion consumer to mislead. Kept unknown rather than reclassified because this manifest has no disposition for a measured-but-open gap with no external blocker; that is a taxonomy gap, not an unexamined capability."
+    },
+    {
+      "id": "session.unconfirmed-activity-is-not-presented-as-live",
+      "title": "A row the host could not confirm is not shown as a working agent",
+      "disposition": "ported",
+      "evidence": ["mobile/src/worktree/agent-row-unconfirmed-provenance.test.ts"],
+      "notes": "restoredUnconfirmed rides on RuntimeWorktreeAgentRow and says the host hydrated a nonterminal row from disk with no live hook since. Mobile dropped it -- it was not in agentDotState's Pick -- so a turn that may have ended hours ago rendered as Working until a 30-minute clock expired on a timestamp that was never evidence of liveness. Mobile now uses the desktop's own isFreshNonDoneAgentStatus instead of a local mirror; the mirror is how the clause went missing, having copied the timeout and not the condition. The list equality was extended to compare the field, because a field the renderer reads must be one the change check sees."
     },
     {
       "id": "session.background-does-not-stop-remote-work",
