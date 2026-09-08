@@ -157,10 +157,17 @@
       "notes": "Narrowed, not closed. The inbound half is measured under runtime.mutation-carries-its-own-context; what remains is the OUTBOUND half, where orca-runtime.ts notifiersFor delivers to every bound window when a target cannot be placed. That fallback is deliberate and defended in its own comment -- dropping a command silently would be worse -- and for a notification it is likely right. Unknown because nobody has checked what a mobile-initiated command looks like to the wrong window when it arrives there, not because the routing is unexamined."
     },
     {
+      "id": "authority.repository-mutations-are-classified-by-stale-consequence",
+      "title": "Every repository mutation a client can reach says what a stale caller does to it",
+      "disposition": "shared-already",
+      "evidence": ["src/main/runtime/mobile-git-mutation-consequence.test.ts"],
+      "notes": "One wire schema serves both variants, so the classification is the product's, not mobile's. Each git and worktree method mobile can reach is a read or a mutation with a named protection -- compare-and-swap, guarded-by-git, converges-on-repeat, operation-id, or recoverable -- and a method in neither list fails the sweep, so a newly allowlisted mutation cannot inherit the subsystem's reputation without being looked at. The sweep's red branch is driven by a test, and the unprotected set is shrink-only."
+    },
+    {
       "id": "authority.stale-client-cannot-overwrite-current-state",
       "title": "A client that reconnects after missing changes adopts current state instead of publishing its own",
       "disposition": "unknown",
-      "notes": "Three narrow mechanisms exist and none composes into general protection: an SSH connection generation covering file mutations only, an internal per-worktree epoch, and a hardcoded desktop-wins rule for terminal viewport claims. Desktop-vs-mobile git and worktree mutations are unfenced."
+      "notes": "The last sentence of this note used to read 'desktop-vs-mobile git and worktree mutations are unfenced'. Measured 2026-09-08, that is wrong. Four mechanisms cover the surface: a required compare-and-swap on a ref (worktree.forceDeleteBranch/expectedHead, git.forkSync/expectedUpstream), git's own refusal of a non-fast-forward or a work-losing checkout, --force-with-lease on the force push, and clientMutationId on the creates. Every mobile-reachable git and worktree method is now classified in src/main/runtime/mobile-git-mutation-consequence.test.ts, and one comes out unprotected: git.discard destroys uncommitted changes at a path with no statement of what the caller believed was there, and mobile calls it live from two surfaces. Every other stale case is recoverable from the object graph; uncommitted work is not. Kept unknown for that one operation -- closing it needs a per-file identity the porcelain parser currently discards, which is a parser change, a hot-read-path shape change, a negotiated capability and a mixed-version matrix."
     },
     {
       "id": "product.display-name",
