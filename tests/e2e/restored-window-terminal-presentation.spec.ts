@@ -54,6 +54,16 @@ const MINIMIZED_HOLD_MS = Number(process.env.ORCA_E2E_PRESENTATION_HOLD_MS) || 4
 const MIN_TICKS_BEFORE_MINIMIZE = 8
 /** Settle window for the restore path's own recovery (refit, WebGL reattach, reveal present). */
 const RESTORE_SETTLE_MS = 4_000
+/**
+ * Bounded stress budget for the repeated-cycle gate.
+ *
+ * The reported defect is intermittent, and one clean transition is a sample of one. Repetition is
+ * the cheapest way to raise the chance of observing it, and each cycle re-arms every latch the
+ * restore path owns — WebGL attach, atlas state, fit, the reveal present — so a leak that only
+ * shows after several transitions has somewhere to appear. Bounded, never a loop to convergence.
+ */
+const MINIMIZE_CYCLES = Number(process.env.ORCA_E2E_MINIMIZE_CYCLES) || 6
+const CYCLE_HOLD_MS = Number(process.env.ORCA_E2E_CYCLE_HOLD_MS) || 8_000
 
 function scrollingWorkload(heartbeatPath: string): string {
   return `
@@ -337,6 +347,119 @@ test('the pixel witness reports no change when the surface is quiet @headful', a
       second?.equals(first as Buffer),
       'a quiet terminal produced differing screenshots: the witness has a noise floor above zero, so "the pixels changed" cannot be trusted to mean the surface advanced'
     ).toBe(true)
+  } finally {
+    staged.cleanup()
+    rmSync(runDir, { recursive: true, force: true })
+  }
+})
+
+/**
+ * The same guarantee across repeated transitions, because the reported defect is intermittent.
+ *
+ * One clean minimize/restore is a sample of one, and a bug that appears sometimes is exactly the
+ * shape a single observation cannot rule out. Every cycle re-arms the latches the restore path
+ * owns — WebGL attach, glyph atlas, fit, the reveal present — so a state that only degrades after
+ * several transitions has somewhere to show itself. The failure message carries the cycle index,
+ * because "it broke on the fifth" and "it broke immediately" are different bugs.
+ */
+test('a terminal keeps presenting across repeated minimize and restore @headful', async ({
+  orcaPage,
+  electronApp
+}) => {
+  test.setTimeout(MINIMIZE_CYCLES * (CYCLE_HOLD_MS + RESTORE_SETTLE_MS + 20_000) + 120_000)
+
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage)
+  const paneSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+  const ptyId = paneSnapshot.panes[0]?.ptyId
+  expect(ptyId, 'the fixture must leave a live PTY to measure').toBeTruthy()
+
+  const runDir = path.join(tmpdir(), `orca-presentation-cycles-${randomUUID()}`)
+  mkdirSync(runDir, { recursive: true })
+  const heartbeatPath = path.join(runDir, 'heartbeat.log')
+
+  const staged = await runNodeScriptInTerminal(
+    orcaPage,
+    ptyId as string,
+    scrollingWorkload(heartbeatPath),
+    { dir: runDir, prefix: 'orca-presentation-cycles' }
+  )
+
+  try {
+    await expect
+      .poll(() => readTickCount(heartbeatPath), {
+        timeout: 30_000,
+        message: 'the workload never advanced while visible — setup failure, not a product result'
+      })
+      .toBeGreaterThanOrEqual(MIN_TICKS_BEFORE_MINIMIZE)
+
+    let cyclesJudged = 0
+    for (let cycle = 1; cycle <= MINIMIZE_CYCLES; cycle += 1) {
+      const pixelsBefore = await screenshotTerminalSurface(orcaPage)
+      const modelBefore = await getTerminalContent(orcaPage)
+      expect(
+        pixelsBefore,
+        `cycle ${cycle}: the terminal surface could not be measured — setup failure`
+      ).not.toBeNull()
+
+      await electronApp.evaluate(({ BrowserWindow }) => {
+        const [window] = BrowserWindow.getAllWindows()
+        window?.minimize()
+      })
+      const reallyMinimized = await electronApp.evaluate(({ BrowserWindow }) => {
+        const [window] = BrowserWindow.getAllWindows()
+        return window?.isMinimized() ?? false
+      })
+      // A refused minimize makes this cycle prove nothing; skip it rather than count it as clean.
+      if (!reallyMinimized) {
+        continue
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, CYCLE_HOLD_MS))
+
+      await electronApp.evaluate(({ BrowserWindow }) => {
+        const [window] = BrowserWindow.getAllWindows()
+        window?.restore()
+        window?.focus()
+      })
+      await expect
+        .poll(
+          async () =>
+            electronApp.evaluate(({ BrowserWindow }) => {
+              const [window] = BrowserWindow.getAllWindows()
+              return window?.isMinimized() ?? true
+            }),
+          { timeout: 20_000, message: `cycle ${cycle}: the window never left the minimized state` }
+        )
+        .toBe(false)
+      await new Promise((resolve) => setTimeout(resolve, RESTORE_SETTLE_MS))
+
+      const modelAfter = await getTerminalContent(orcaPage)
+      // Model unchanged means the stop is upstream of presentation; this gate must not judge it.
+      if (modelAfter === modelBefore) {
+        continue
+      }
+
+      const pixelsAfter = await screenshotTerminalSurface(orcaPage)
+      expect(
+        pixelsAfter,
+        `cycle ${cycle}: the terminal surface could not be measured after restore — setup failure`
+      ).not.toBeNull()
+      expect(
+        pixelsAfter?.equals(pixelsBefore as Buffer),
+        `cycle ${cycle} of ${MINIMIZE_CYCLES}: the restored terminal painted nothing new — its model advanced while minimized but the surface did not`
+      ).toBe(false)
+      cyclesJudged += 1
+    }
+
+    // Why a floor: cycles can legitimately skip (a refused minimize, a model that did not move),
+    // and a run that skipped every one of them reports exactly what a clean run reports.
+    expect(
+      cyclesJudged,
+      `only ${cyclesJudged} of ${MINIMIZE_CYCLES} cycles were actually judged — too few to call this a result`
+    ).toBeGreaterThanOrEqual(Math.ceil(MINIMIZE_CYCLES / 2))
   } finally {
     staged.cleanup()
     rmSync(runDir, { recursive: true, force: true })
