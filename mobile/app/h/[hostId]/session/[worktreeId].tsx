@@ -186,7 +186,7 @@ import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
 } from '../../../../src/session/mobile-terminal-tab-agent'
-import type { MobileNewTabAgentOption } from '../../../../src/session/mobile-new-tab-agent-options'
+import type { MobileLaunchProfileOption } from '../../../../src/session/mobile-launch-profile-options'
 import { loadMobileNewTabAgentOptions } from '../../../../src/session/mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from '../../../../src/session/use-mobile-session-image-attachments'
 import { useMobileAttachmentInputLeaseGate } from '../../../../src/session/use-mobile-attachment-input-lease-gate'
@@ -841,7 +841,9 @@ export default function SessionScreen() {
   const [showQuickCommands, setShowQuickCommands] = useState(false)
   const [createTabAgentLoadState, setCreateTabAgentLoadState] =
     useState<MobileNewTabAgentLoadState>('idle')
-  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
+  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileLaunchProfileOption[]>(
+    []
+  )
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
@@ -3651,10 +3653,16 @@ export default function SessionScreen() {
   }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
 
   async function handleCreateTerminal(
-    agent?: MobileNewTabAgentOption['agent'],
-    options?: MobileQuickCommandLaunch['options'] & {
+    agent?: MobileLaunchProfileOption['agent'],
+    options?: Omit<MobileQuickCommandLaunch['options'], 'startupCommandDelivery'> & {
       onPromptSent?: () => void
       errorToast?: string
+      // Why: a declared launch profile carries non-secret launch configuration, and one that
+      // arrives without it launches something other than what its name promises.
+      env?: Readonly<Record<string, string>>
+      // Why widened: quick commands only ever ask for 'shell-ready', but a declared profile may
+      // choose either, and the host schema has accepted both all along.
+      startupCommandDelivery?: 'fast' | 'shell-ready'
     }
   ) {
     if (!client || creatingTerminalRef.current) {
@@ -3680,6 +3688,7 @@ export default function SessionScreen() {
           ? { startupCommandDelivery: options.startupCommandDelivery }
           : {}),
         ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
+        ...(options?.env ? { env: options.env } : {}),
         ...(agent ? { agent } : {}),
         activate: false,
         select: true,
@@ -4193,14 +4202,36 @@ export default function SessionScreen() {
           }
         ]
       : createTabAgentOptions.length > 0
-        ? createTabAgentOptions.map((option) => ({
-            label: option.label,
-            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
-            onPress: () => {
-              setShowCreateTabDrawer(false)
-              void handleCreateTerminal(option.agent)
+        ? createTabAgentOptions.map((option) => {
+            const agent = option.agent
+            if (agent) {
+              return {
+                label: option.label,
+                renderIcon: () => <MobileAgentIcon agentId={agent} size={16} />,
+                onPress: () => {
+                  setShowCreateTabDrawer(false)
+                  void handleCreateTerminal(agent)
+                }
+              }
             }
-          }))
+            // A declared launch profile is a shell running the command that defines it, so it
+            // carries the terminal icon rather than an agent's -- and its command, or it would
+            // open a plain terminal under a name promising something else.
+            return {
+              label: option.label,
+              icon: SquareTerminal,
+              onPress: () => {
+                setShowCreateTabDrawer(false)
+                void handleCreateTerminal(undefined, {
+                  ...(option.command ? { startupCommand: option.command } : {}),
+                  ...(option.startupCommandDelivery
+                    ? { startupCommandDelivery: option.startupCommandDelivery }
+                    : {}),
+                  ...(option.env ? { env: option.env } : {})
+                })
+              }
+            }
+          })
         : createTabAgentLoadState === 'loaded'
           ? [
               {
@@ -4234,8 +4265,12 @@ export default function SessionScreen() {
               onPress: () => {}
             }
           ]
-        : createTabAgentOptions.length > 0
-          ? createTabAgentOptions.map((option) => ({
+        : // Why agents only: this list delivers a prompt, and a declared launch profile has nothing
+          // to deliver it to. Offering an ssh session here would accept the notes and drop them.
+          createTabAgentOptions.filter((option) => option.agent).length > 0
+          ? createTabAgentOptions
+              .filter((option) => option.agent)
+              .map((option) => ({
               label: option.label,
               hint: 'New agent session',
               icon: Bot,

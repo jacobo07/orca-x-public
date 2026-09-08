@@ -33,8 +33,8 @@ describe('mobile new-tab agent loading', () => {
         worktreeId: FLOATING_WORKSPACE_WORKTREE_ID
       })
     ).resolves.toEqual([
-      { agent: 'codex', label: 'ChatGPT' },
-      { agent: 'claude', label: 'Claude' }
+      { id: 'agent:codex', agent: 'codex', label: 'ChatGPT' },
+      { id: 'agent:claude', agent: 'claude', label: 'Claude' }
     ])
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'preflight.detectAgents',
@@ -62,7 +62,7 @@ describe('mobile new-tab agent loading', () => {
         client,
         worktreeId: 'repo-1::/remote/worktree'
       })
-    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+    ).resolves.toEqual([{ id: 'agent:claude', agent: 'claude', label: 'Claude' }])
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'repo.list',
       'settings.get',

@@ -3,10 +3,10 @@ import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 import {
-  buildMobileNewTabAgentOptions,
-  type MobileNewTabAgentOption,
-  type MobileNewTabAgentSettings
-} from './mobile-new-tab-agent-options'
+  buildMobileLaunchProfileOptions,
+  type MobileLaunchProfileOption,
+  type MobileLaunchProfileSettings
+} from './mobile-launch-profile-options'
 
 type RuntimeRepoSummary = {
   id: string
@@ -16,7 +16,7 @@ type RuntimeRepoSummary = {
 export async function loadMobileNewTabAgentOptions(args: {
   client: RpcClient
   worktreeId: string
-}): Promise<MobileNewTabAgentOption[]> {
+}): Promise<MobileLaunchProfileOption[]> {
   const { client, worktreeId } = args
   // Why: the floating workspace runs on the paired host, so it has no repo connection to resolve.
   const detectedAgentsRequest = isFloatingWorkspaceWorktreeId(worktreeId)
@@ -34,10 +34,10 @@ export async function loadMobileNewTabAgentOptions(args: {
   }
   const settings = (
     (settingsResponse as RpcSuccess).result as {
-      settings?: MobileNewTabAgentSettings
+      settings?: MobileLaunchProfileSettings
     }
   ).settings
-  return buildMobileNewTabAgentOptions(
+  return buildMobileLaunchProfileOptions(
     settings,
     (detectedResponse as RpcSuccess).result as unknown[]
   )
