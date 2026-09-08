@@ -48,7 +48,7 @@ const MUTATIONS: Record<string, { protection: Protection; why: string }> = {
   'git.commit': { protection: 'recoverable', why: 'A stale caller can commit changes it never saw, which is wrong but undoable -- nothing is destroyed.' },
   'git.discard': {
     protection: 'unprotected',
-    why: 'Destroys uncommitted changes to a named path with no statement of what the caller believed that path contained. Uncommitted work is not in the object graph, so this is the one entry here whose stale case is unrecoverable.'
+    why: 'Destroys uncommitted changes to a named path with no statement of what the caller believed that path contained. Uncommitted work is not in the object graph, so this is the one entry here whose stale case is unrecoverable. The ENFORCEMENT now exists -- discardChanges takes a working-tree content precondition and refuses a stale one, proved against real git in discard-stale-worktree-state.test.ts -- but no wire carries it yet, so a mobile caller still cannot supply one and this stays unprotected. Deliberately not half-landed: the identity has to ride on the status payload, because one of the two mobile discard surfaces acts from a list row without opening a diff, and a status shape change plus a negotiated capability plus enforcement for negotiated clients is one slice or none.'
   },
   'worktree.create': { protection: 'operation-id', why: 'clientMutationId dedupes a retry into the in-flight create.' },
   'worktree.prefetchCreateBase': { protection: 'converges-on-repeat', why: 'A prefetch warms a cache and changes no user state.' },
