@@ -50,6 +50,14 @@ export type TerminalRendererMode = {
   paneId: number
   gpuRenderingEnabled: boolean
   hasWebgl: boolean
+  /**
+   * Set while the pane's rendering is suspended. This — not `hasWebgl` — is the signal that a pane
+   * was made presentation-ineligible: suspension deliberately *retains* the renderer for recently
+   * hidden panes so switching back never presents a DOM-fallback frame, and only evicted or
+   * over-cap owners actually dispose it. Reading `hasWebgl` for suspension therefore reports "still
+   * eligible" for a pane that was correctly suspended.
+   */
+  webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
   webglAttachFailedSinceRecovery: boolean
 }
@@ -79,6 +87,69 @@ export async function readTerminalRendererModes(page: Page): Promise<TerminalRen
     const panes = report?.renderer?.paneRendering
     return Array.isArray(panes) ? (panes as TerminalRendererMode[]) : null
   })
+}
+
+/** One entry of Orca's renderer breadcrumb ring, as the freeze report publishes it. */
+export type TerminalRecoveryBreadcrumb = {
+  atMs: number
+  kind: string
+  detail?: Record<string, string | number | boolean | null>
+  repeats?: number
+}
+
+/**
+ * The renderer's own record of which recovery ran, and when.
+ *
+ * Why this is the instrument for a lifecycle question rather than a new one: Orca already stamps a
+ * crumb from every recovery path in production — the window-wake hook records which trigger fired
+ * and whether it wiped the glyph atlas, and the atlas reset records the reason that asked for it, so
+ * a surface reveal is distinguishable from a system resume. Reading that stream around a transition
+ * says whether recovery was skipped, deferred or executed, which no black-box before/after pair can.
+ *
+ * Read it at each transition rather than once at the end: the ring is bounded and coalesces
+ * same-kind events, so a crumb that existed at the moment of interest may be gone by the finish.
+ * Returns null when the report is unavailable — a setup failure, not a finding about recovery.
+ */
+export async function readTerminalRecoveryBreadcrumbs(
+  page: Page
+): Promise<TerminalRecoveryBreadcrumb[] | null> {
+  return page.evaluate(async () => {
+    const build = (
+      window as unknown as {
+        __orcaTerminalFreezeReport?: () => Promise<{ renderer?: { breadcrumbs?: unknown } }>
+      }
+    ).__orcaTerminalFreezeReport
+    if (typeof build !== 'function') {
+      return null
+    }
+    const report = await build()
+    const crumbs = report?.renderer?.breadcrumbs
+    return Array.isArray(crumbs) ? (crumbs as TerminalRecoveryBreadcrumb[]) : null
+  })
+}
+
+/** Crumbs recorded strictly after a reference reading, so one transition's effects stay separable. */
+export function breadcrumbsSince(
+  before: TerminalRecoveryBreadcrumb[] | null,
+  after: TerminalRecoveryBreadcrumb[] | null
+): TerminalRecoveryBreadcrumb[] {
+  const cutoff = (before ?? []).reduce((latest, crumb) => Math.max(latest, crumb.atMs), 0)
+  return (after ?? []).filter((crumb) => crumb.atMs > cutoff)
+}
+
+/**
+ * Did a recovery capable of repainting a stale surface run in this window? The window-wake hook and
+ * the surface/tab reveal are different owners reached by different transitions, so both count — the
+ * contract is that recovery happened, not that one particular owner ran.
+ */
+export function describeRecoveries(crumbs: TerminalRecoveryBreadcrumb[]): string[] {
+  return crumbs
+    .filter((crumb) => crumb.kind.startsWith('wake-recovery:') || crumb.kind === 'webgl-atlas-reset')
+    .map((crumb) =>
+      crumb.kind === 'webgl-atlas-reset'
+        ? `webgl-atlas-reset(${String(crumb.detail?.reason ?? 'unspecified')})`
+        : crumb.kind
+    )
 }
 
 /** A workload whose every line differs, so the surface must visibly turn over as it runs. */
