@@ -13,9 +13,12 @@
 # toward shipping. The gate reports one unresolved total across both lists precisely so that move
 # cannot make the number look better. An id may appear in one list or the other, never both.
 #
-# Both entries below arrived from the unknown list on 2026-09-08, carrying the measurements that
-# were already written into their notes. Both are P0: one is a session that can present itself as
-# resumable when its history is gone, the other is a destructive git operation that can be issued
-# against a file the client last saw some time ago.
+# Two entries arrived from the unknown list on 2026-09-08, carrying the measurements already
+# written into their notes. session.lifecycle-vocabulary left again the same day, CLOSED rather
+# than relabelled -- the runtime now retains the failed-resume fact and projects it, and mobile
+# reads it three-valued against a negotiated capability. That is the unresolved total genuinely
+# falling by one, which is the only way it is allowed to fall.
+#
+# What remains is the destructive one: a git operation a client can issue against a file it last
+# saw some time ago.
 authority.stale-client-cannot-overwrite-current-state
-session.lifecycle-vocabulary

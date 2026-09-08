@@ -37050,6 +37050,65 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  /**
+   * The host end of resume provenance.
+   *
+   * The controller reports a failed resume once, at spawn. If the runtime does not keep it, no
+   * client can ever learn it -- and a paired client has no way to work it out, because a fresh
+   * session on a familiar pane looks exactly like a resumed one from the outside.
+   */
+  async function psAgentRowAfterSpawn(
+    spawnResult: Record<string, unknown>
+  ): Promise<Record<string, unknown> | undefined> {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue(spawnResult),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'codex' })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        { tabId: 'tab-1', worktreeId: TEST_WORKTREE_ID, leafId, paneRuntimeId: 1, ptyId: 'pty-1' }
+      ]
+    })
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07',
+      321
+    )
+    const { worktrees } = await runtime.getWorktreePs()
+    return worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)?.agents?.[0] as
+      | Record<string, unknown>
+      | undefined
+  }
+
+  it('tells a client when a pane could not resume its provider session', async () => {
+    const row = await psAgentRowAfterSpawn({ id: 'pty-1', agentResumeUnavailable: true })
+    expect(row).toMatchObject({ state: 'working', resumeUnavailable: true })
+  })
+
+  it('says nothing about provenance when the resume worked', async () => {
+    // The control that makes the assertion above mean something: if the row carried the marker
+    // either way, the first test would pass against a runtime that had simply hardcoded it.
+    const row = await psAgentRowAfterSpawn({ id: 'pty-1' })
+    expect(row).toMatchObject({ state: 'working' })
+    expect(row?.resumeUnavailable).toBeUndefined()
+  })
+
   it('attaches inline agent rows from hook-reported status (not just OSC)', async () => {
     // Why: agent status arrives via hooks, not OSC; worktree.ps reads the hook snapshot so mobile surfaces those agents.
     const leafId = '33333333-3333-4333-8333-333333333333'

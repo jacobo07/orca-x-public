@@ -101,14 +101,13 @@
     {
       "id": "session.lifecycle-vocabulary",
       "title": "The user can tell a restored session from one whose history could not be resumed",
-      "disposition": "measured-open",
-      "severity": "P0",
+      "disposition": "ported",
       "evidence": [
-        "src/renderer/src/components/terminal-pane/session-restored-banner-pane-state.ts",
-        "src/main/ipc/pty-controller-codex-resume-unavailable.test.ts"
+        "src/main/runtime/orca-runtime.test.ts",
+        "mobile/src/worktree/agent-row-resume-provenance.test.ts",
+        "mobile/src/components/WorktreeListRow.test.ts"
       ],
-      "reason": "The runtime already receives the truth and drops it. Closing this is retention plus projection plus a negotiated capability, then mobile consumption -- no new lifecycle model, and nothing external is blocking it.",
-      "notes": "The old title named a four-way vocabulary Orca does not have. Desktop's actual user-facing vocabulary is two values, 'restored' and 'resume-unavailable' (session-restored-banner-pane-state.ts), driven by an agentResumeUnavailable flag the PTY controller sets when a pane asked to resume a provider session, the resume was dropped as unverifiable, and a fresh session launched instead. A previous note here claimed that flag has ZERO references under src/main/runtime; re-measured 2026-09-08 that is wrong -- orca-runtime.ts declares it on the controller interface it holds and never reads it, so the fact already arrives at the runtime that serves mobile and is discarded there. That makes this the same shape as terminal.launch-profile-offer and session.unconfirmed-activity: available and unconsumed, rather than absent. Mobile therefore cannot tell a session whose history survived from one wearing its clothes. sessionBoundary is separately not a mobile concern: mobile has no `state === 'done'` branch in any non-test source, so there is no completion consumer to mislead."
+      "notes": "The old title named a four-way vocabulary Orca does not have. Desktop's actual user-facing vocabulary is two values, 'restored' and 'resume-unavailable' (session-restored-banner-pane-state.ts), driven by an agentResumeUnavailable flag the PTY controller sets when a pane asked to resume a provider session, the resume was dropped as unverifiable, and a fresh session launched instead. A previous note here claimed that flag has ZERO references under src/main/runtime; re-measured 2026-09-08 that is wrong -- orca-runtime.ts declares it on the controller interface it holds and never reads it, so the fact already arrives at the runtime that serves mobile and is discarded there. That makes this the same shape as terminal.launch-profile-offer and session.unconfirmed-activity: available and unconsumed, rather than absent. Mobile therefore cannot tell a session whose history survived from one wearing its clothes. sessionBoundary is separately not a mobile concern: mobile has no `state === 'done'` branch in any non-test source, so there is no completion consumer to mislead. CLOSED 2026-09-08: the flag is retained on the per-PTY record (so it cannot outlive its subject) and projected onto the agent row beside restoredUnconfirmed, which answers a different question -- that one is whether the host vouches for the activity, this one whether the history survived, and the tests pin that they move independently. Mobile reads it three-valued, because an older host omitting the field is byte-identical to a newer host reporting universal success: absence means 'resumed' only when agent-session.resume-provenance.v1 is advertised, and otherwise means unknown, where mobile refuses the continuity claim. That ambiguity is why an additive optional field still needed a negotiated capability."
     },
     {
       "id": "session.unconfirmed-activity-is-not-presented-as-live",
