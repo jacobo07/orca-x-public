@@ -15,7 +15,7 @@ import type { BrowserWindow } from 'electron'
  */
 
 export type PtyRendererOwnership = {
-  /** Record the renderer that requested this PTY. */
+  /** Record the renderer that requested this PTY, unless a live renderer already owns it. */
   claim: (ptyId: string, ownerWebContentsId: number) => void
   /** Forget one PTY, on exit. */
   release: (ptyId: string) => void
@@ -42,6 +42,23 @@ export function createPtyRendererOwnership({
 
   return {
     claim(ptyId, ownerWebContentsId) {
+      // Why a claim can be refused: ownership is claimed from whoever asked for the terminal, and a
+      // reattach asks for one that already exists. So a second renderer requesting a live session
+      // would take it — and because input is admitted by equality against this record and output is
+      // routed through it, that takes both at once, leaving the previous owner showing an ordinary
+      // prompt it can no longer type into or hear back from.
+      //
+      // Only a *live* different renderer is protected. An id whose record was released on exit is
+      // free to be reused, and an owner whose renderer is gone must be replaceable or a crash would
+      // strand its terminals on a webContents that no longer exists.
+      const currentOwnerId = ownerWebContentsIdByPtyId.get(ptyId)
+      if (
+        currentOwnerId !== undefined &&
+        currentOwnerId !== ownerWebContentsId &&
+        liveWindowForWebContentsId(currentOwnerId)
+      ) {
+        return
+      }
       ownerWebContentsIdByPtyId.set(ptyId, ownerWebContentsId)
     },
     release(ptyId) {

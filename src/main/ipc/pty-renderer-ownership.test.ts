@@ -84,9 +84,10 @@ describe('createPtyRendererOwnership', () => {
   })
 
   it('re-claims a reused PTY id to its new owner', () => {
-    // Arrange — ids can be reused after an exit.
+    // Arrange — ids can be reused after an exit, which releases the record first.
     const { windows, ownership } = makeOwnership([WINDOW_A, WINDOW_B])
     ownership.claim('pty-a', WINDOW_A)
+    ownership.release('pty-a')
 
     // Act
     ownership.claim('pty-a', WINDOW_B)
@@ -94,5 +95,50 @@ describe('createPtyRendererOwnership', () => {
     // Assert
     expect(ownership.ownerWindowFor('pty-a')).toBe(windows.get(WINDOW_B))
     expect(ownership.ownedPtyIds(WINDOW_A)).toEqual([])
+  })
+
+  it('refuses to move a live terminal to a second window', () => {
+    // Arrange — one live PTY, owned by A, with A still open.
+    const { windows, ownership } = makeOwnership([WINDOW_A, WINDOW_B])
+    ownership.claim('pty-a', WINDOW_A)
+
+    // Act — B asks for the same session. A reattach returns the id it already has, and the spawn
+    // handler claims from whoever asked, so this is one unguarded call away from happening.
+    ownership.claim('pty-a', WINDOW_B)
+
+    // Assert — both halves, because a half-moved terminal is the failure this prevents: input is
+    // admitted by equality against the owner and output is routed through it, so a silent move
+    // leaves A rendering an ordinary prompt it can neither type into nor hear back from.
+    expect(ownership.ownerWindowFor('pty-a')).toBe(windows.get(WINDOW_A))
+    expect(ownership.ownedPtyIds(WINDOW_A)).toEqual(['pty-a'])
+    expect(ownership.ownedPtyIds(WINDOW_B)).toEqual([])
+  })
+
+  it('lets a replacement renderer take over the terminals its predecessor left', () => {
+    // Arrange — the owning renderer is gone, which is what crash recovery looks like from here:
+    // the window survives, its webContents does not.
+    const { windows, ownership } = makeOwnership([WINDOW_A, WINDOW_B])
+    ownership.claim('pty-a', WINDOW_A)
+    windows.delete(WINDOW_A)
+
+    // Act
+    ownership.claim('pty-a', WINDOW_B)
+
+    // Assert — refusing here would strand a terminal on a renderer that no longer exists, which is
+    // the opposite failure and just as bad. Only a *live* owner is protected.
+    expect(ownership.ownerWindowFor('pty-a')).toBe(windows.get(WINDOW_B))
+  })
+
+  it('keeps a re-claim by the same renderer a no-op', () => {
+    // Arrange — a reattach by the window that already owns the PTY is the ordinary case.
+    const { windows, ownership } = makeOwnership([WINDOW_A])
+    ownership.claim('pty-a', WINDOW_A)
+
+    // Act
+    ownership.claim('pty-a', WINDOW_A)
+
+    // Assert
+    expect(ownership.ownerWindowFor('pty-a')).toBe(windows.get(WINDOW_A))
+    expect(ownership.ownedPtyIds(WINDOW_A)).toEqual(['pty-a'])
   })
 })
