@@ -1,10 +1,17 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus
+} from '../../../src/shared/agent-status-types'
 
-// Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
-// 30 min). Defined locally rather than imported because a runtime-value import
-// from a root .ts breaks mobile's vitest transform (no tsconfig in the
-// mobile-only checkout); root type-only imports stay fine.
-export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
+// Re-exported so this module stays the mobile import surface for the threshold. The value and the
+// freshness rule are the desktop's own: a local mirror had already drifted, missing the
+// `restoredUnconfirmed` clause entirely and showing unconfirmed rows as live work.
+//
+// The previous note here said a runtime-value import from a root .ts breaks mobile's vitest
+// transform. That is no longer true -- src/shared/terminal-launch-profiles.ts is imported for value
+// by mobile's launch-profile options and its suite passes.
+export { AGENT_STATUS_STALE_AFTER_MS }
 
 // Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
 // status state; 'blocked'/'waiting' read as attention states, 'done' as
@@ -12,7 +19,10 @@ export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 export type AgentDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle' | 'interrupted'
 
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'updatedAt'>,
+  row: Pick<
+    RuntimeWorktreeAgentRow,
+    'state' | 'interrupted' | 'updatedAt' | 'restoredUnconfirmed'
+  >,
   now: number
 ): AgentDotState {
   if (row.interrupted) {
@@ -22,10 +32,11 @@ export function agentDotState(
     case 'working':
     case 'blocked':
     case 'waiting':
-      // Why: an agent that exits without a final report would otherwise read as
-      // active forever. Decay a stale active state to idle, matching desktop's
-      // renderer-side staleness decay (worktree-agent-rows.ts).
-      return now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS ? 'idle' : row.state
+      // Why the shared predicate rather than a timestamp comparison: an agent that exits without a
+      // final report would read as active forever, and so would one the host hydrated from disk
+      // and never had confirmed -- `restoredUnconfirmed` says the host is not asserting this turn
+      // is still running, and no amount of recency makes that assertion true.
+      return isFreshNonDoneAgentStatus(row, now) ? row.state : 'idle'
     case 'done':
       return 'done'
   }

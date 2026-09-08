@@ -108,6 +108,10 @@ function areAgentRowsEqual(
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||
       a.interrupted !== b.interrupted ||
+      // Why it belongs here: this marker decides whether a nonterminal row renders as live work or
+      // as idle, so a change to it alone changes the screen. A comparison that ignores a field the
+      // renderer reads reports "nothing moved" for a row that now looks different.
+      a.restoredUnconfirmed !== b.restoredUnconfirmed ||
       a.stateStartedAt !== b.stateStartedAt ||
       a.updatedAt !== b.updatedAt
     ) {

@@ -160,6 +160,15 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects a row losing its confirmation, which changes what the dot shows', () => {
+    // Everything else is identical, including updatedAt: only the host's confidence moved. That
+    // alone flips the row between live work and idle, so it has to count as a change.
+    const first = [worktree({ agents: [agent({ restoredUnconfirmed: false })] })]
+    const second = [worktree({ agents: [agent({ restoredUnconfirmed: true })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
   it('treats missing and empty agent arrays as equivalent for rendering', () => {
     const first = [worktree({ agents: undefined })]
     const second = [worktree({ agents: [] })]
