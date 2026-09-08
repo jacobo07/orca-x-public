@@ -36,7 +36,10 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
-import { screenshotTerminalSurface } from './helpers/terminal-presentation-witness'
+import {
+  readTerminalRendererModes,
+  screenshotTerminalSurface
+} from './helpers/terminal-presentation-witness'
 
 /** Enough rows per tick that a hold turns the visible surface over many times. */
 const TICK_INTERVAL_MS = 120
@@ -328,6 +331,43 @@ test('the pixel witness reports no change when the surface is quiet @headful', a
     staged.cleanup()
     rmSync(runDir, { recursive: true, force: true })
   }
+})
+
+/**
+ * Which renderer this suite is actually exercising.
+ *
+ * Every stale-surface mechanism these specs exist to catch lives on the WebGL path: glyph-atlas
+ * corruption, context loss and its DOM fallback, a refresh swallowed by the paused-render gate. The
+ * DOM renderer has none of them. So a suite that quietly ran on the DOM fallback could only ever
+ * report success, and the greens above would say nothing about the failure they are named for.
+ *
+ * This does not assert that WebGL is *required* — a machine with no usable GPU is a legitimate
+ * configuration. It asserts the run can say which side of that gap it stood on, and fails loudly
+ * if the whole suite silently ran on the lenient one.
+ */
+test('the presentation suite exercises the GPU terminal renderer @headful', async ({ orcaPage }) => {
+  test.setTimeout(120_000)
+
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage)
+  await waitForPaneIdentitySnapshot(orcaPage, 1)
+
+  const modes = await readTerminalRendererModes(orcaPage)
+  expect(
+    modes,
+    'the freeze report was unavailable, so the run cannot say which renderer it used — setup failure'
+  ).not.toBeNull()
+  expect(
+    (modes ?? []).length,
+    'no pane reported rendering diagnostics — setup failure, not a renderer finding'
+  ).toBeGreaterThan(0)
+
+  expect(
+    (modes ?? []).some((mode) => mode.hasWebgl),
+    `no pane attached the WebGL renderer, so every presentation assertion in this file ran on the DOM fallback, where the stale-surface mechanisms they target do not exist: ${JSON.stringify(modes)}`
+  ).toBe(true)
 })
 
 /**

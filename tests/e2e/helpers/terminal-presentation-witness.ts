@@ -45,6 +45,42 @@ export async function screenshotTerminalSurface(page: Page): Promise<Buffer | nu
   })
 }
 
+/** The subset of Orca's per-pane rendering diagnostics that says which renderer actually ran. */
+export type TerminalRendererMode = {
+  paneId: number
+  gpuRenderingEnabled: boolean
+  hasWebgl: boolean
+  webglDisabledAfterContextLoss: boolean
+  webglAttachFailedSinceRecovery: boolean
+}
+
+/**
+ * Which renderer each live pane is actually using, read through the freeze report Orca already
+ * installs in prod builds.
+ *
+ * Why a presentation test needs this: the stale-surface mechanisms this suite exists to catch —
+ * glyph-atlas corruption, context loss, a refresh swallowed by the paused-render gate — live on the
+ * WebGL path. A run that quietly fell back to the DOM renderer is standing on the permissive side
+ * of that gap and can only report success, so a green is uninterpretable unless the run also says
+ * which renderer produced it. Returns null when the report is unavailable, which is a setup
+ * failure rather than a finding about renderers.
+ */
+export async function readTerminalRendererModes(page: Page): Promise<TerminalRendererMode[] | null> {
+  return page.evaluate(async () => {
+    const build = (
+      window as unknown as {
+        __orcaTerminalFreezeReport?: () => Promise<{ renderer?: { paneRendering?: unknown } }>
+      }
+    ).__orcaTerminalFreezeReport
+    if (typeof build !== 'function') {
+      return null
+    }
+    const report = await build()
+    const panes = report?.renderer?.paneRendering
+    return Array.isArray(panes) ? (panes as TerminalRendererMode[]) : null
+  })
+}
+
 /** A workload whose every line differs, so the surface must visibly turn over as it runs. */
 export function scrollingTerminalWorkload(markerPrefix: string, heartbeatPath?: string): string {
   const heartbeat = heartbeatPath
