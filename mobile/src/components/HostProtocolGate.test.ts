@@ -131,7 +131,7 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca on your computer')
+    expect(output).toContain('Update Orca X on your computer')
     expect(output).toContain('Open GitHub Releases')
     expect(output).not.toContain('HostContent')
   })
@@ -150,7 +150,7 @@ describe('HostProtocolGate', () => {
     const output = renderedText(renderer)
     expect(output).toContain('HostContent')
     expect(output).toContain('browser.screencast.v1')
-    expect(output).not.toContain('Update Orca')
+    expect(output).not.toContain('Update Orca X')
     expect(client.sendRequest).toHaveBeenCalledOnce()
   })
 
