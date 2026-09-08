@@ -137,10 +137,17 @@
       "notes": "Mobile has an editable file preview with dirty-draft tracking and no persistence site was found, so process death discards it silently. Needs a durability tier in config/durability-contracts.jsonc rather than a mobile-only taxonomy."
     },
     {
+      "id": "runtime.mutation-carries-its-own-context",
+      "title": "A mobile mutation names the workspace it acts on, and is refused without one",
+      "disposition": "shared-already",
+      "evidence": ["src/main/runtime/mobile-rpc-allowlist.test.ts"],
+      "notes": "One wire schema serves both variants. Measured 2026-09-08: the RPC method directory holds no BrowserWindow reference, and of the 40+ state-changing methods mobile can reach, all but four reject a request naming no workspace -- settings.update and ui.set are host-global by design, terminal.multiplex routes by streamId, and terminal.create leaves worktree optional and is not on any mobile path. The test enumerates by mutation verb rather than by looking for the context check, so it can find a method that lacks one."
+    },
+    {
       "id": "runtime.command-acts-on-the-window-that-owns-the-target",
       "title": "A remote command reaches the workspace it named, not a representative one",
       "disposition": "unknown",
-      "notes": "The fork gave every window its own runtime graph, but the runtime RPC server is a process-wide singleton. Window resolution is worktree-scoped only when a worktree id is present and otherwise falls back to a global representative window, so a mobile call without one can land in the wrong window."
+      "notes": "Narrowed, not closed. The inbound half is measured under runtime.mutation-carries-its-own-context; what remains is the OUTBOUND half, where orca-runtime.ts notifiersFor delivers to every bound window when a target cannot be placed. That fallback is deliberate and defended in its own comment -- dropping a command silently would be worse -- and for a notification it is likely right. Unknown because nobody has checked what a mobile-initiated command looks like to the wrong window when it arrives there, not because the routing is unexamined."
     },
     {
       "id": "authority.stale-client-cannot-overwrite-current-state",
