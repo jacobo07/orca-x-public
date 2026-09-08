@@ -393,6 +393,112 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(setSizeCalls)
   })
 
+  function mountWindowForPlatform(platform: NodeJS.Platform): {
+    webContents: Record<string, ReturnType<typeof vi.fn>>
+    windowHandlers: Map<string, ((...args: any[]) => void)[]>
+  } {
+    const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    let windowSize: [number, number] = [1200, 800]
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        const handlers = windowHandlers.get(event) ?? []
+        handlers.push(handler)
+        windowHandlers.set(event, handlers)
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => windowSize),
+      setSize: vi.fn((width: number, height: number) => {
+        windowSize = [width, height]
+      }),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    withPlatform(platform, () => createMainWindow(null))
+    return { webContents, windowHandlers }
+  }
+
+  it('installs the reveal repaint on exactly the platforms that throttle a hidden window', () => {
+    // Why an equality rather than a per-platform expectation: the reveal repaint is not a general
+    // "restore needs an invalidate" contract, it is compensation for this app's own decision to
+    // background-throttle the hidden window. A throttled, occluded window comes back with layers
+    // and a stale dynamic-viewport height that only a repaint plus reflow corrects (STA-2383, the
+    // clipped status bar). A platform that never throttles never enters that state, so it needs no
+    // backstop — and giving it one would cost a size nudge that SIGWINCHes every terminal, which is
+    // exactly why the occlusion path avoids it.
+    //
+    // Pinning the coupling makes both directions fail: enabling throttling on a new platform
+    // without the backstop, or dropping the backstop while throttling stays on.
+    const observed = new Map<string, { throttlesHiddenWindow: boolean; installsBackstop: boolean }>()
+    for (const platform of ['darwin', 'win32', 'linux'] as const) {
+      resetMainWindowMocks()
+      const { webContents, windowHandlers } = mountWindowForPlatform(platform)
+      observed.set(platform, {
+        throttlesHiddenWindow: webContents.setBackgroundThrottling.mock.calls.some(
+          ([allowed]) => allowed === true
+        ),
+        installsBackstop: (windowHandlers.get('restore')?.length ?? 0) > 0
+      })
+    }
+
+    for (const [platform, { throttlesHiddenWindow, installsBackstop }] of observed) {
+      expect(
+        installsBackstop,
+        `${platform} throttles=${throttlesHiddenWindow} but installs the reveal repaint=${installsBackstop}; a platform needs that backstop when, and only when, it throttles its hidden window`
+      ).toBe(throttlesHiddenWindow)
+    }
+
+    // The control. Without both answers present the equality above holds for a sweep in which
+    // nothing throttles and nothing installs anything, which would assert nothing at all.
+    const answers = [...observed.values()]
+    expect(
+      answers.some((entry) => entry.throttlesHiddenWindow),
+      'no platform in the sweep throttled its hidden window, so the coupling was never exercised'
+    ).toBe(true)
+    expect(
+      answers.some((entry) => !entry.throttlesHiddenWindow),
+      'every platform in the sweep throttled, so the "no throttling, no backstop" half was never exercised'
+    ).toBe(true)
+  })
+
+  it('still repaints a Windows window on system resume, where it installs no reveal backstop', () => {
+    // The other half of the same story: Windows is not left without compositor recovery. It has no
+    // show/restore/focus backstop because it has no throttled-hidden state to recover from, but the
+    // resume relay is cross-platform — a focus-preserving display wake fires neither focus nor
+    // visibilitychange, so main invalidates and tells the renderer to run its own wake recovery.
+    const { webContents, windowHandlers } = mountWindowForPlatform('win32')
+
+    expect(windowHandlers.get('restore') ?? []).toHaveLength(0)
+    const onResume = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1] as
+      | (() => void)
+      | undefined
+    expect(onResume, 'no system-resume handler was registered on Windows').toBeTypeOf('function')
+
+    onResume?.()
+
+    expect(webContents.invalidate).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('system:resumed')
+  })
+
   it('runs a full repaint when the renderer relays a genuine window reveal (STA-2383)', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
