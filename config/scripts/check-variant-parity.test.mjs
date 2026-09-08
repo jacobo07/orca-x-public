@@ -345,16 +345,19 @@ describe('variant parity gate', () => {
   it('accepts the manifest this repository ships', async () => {
     const root = path.resolve(import.meta.dirname, '..', '..')
     const manifest = parse(await fs.readFile(path.join(root, 'config/variant-parity.jsonc'), 'utf8'))
-    const baseline = parseBaseline(
-      await fs.readFile(path.join(root, 'config/variant-parity-unknown-baseline.txt'), 'utf8')
-    )
+    const readBaseline = async (file) =>
+      parseBaseline(await fs.readFile(path.join(root, file), 'utf8'))
     const result = evaluateManifest({
       manifest,
-      baseline,
+      baseline: await readBaseline('config/variant-parity-unknown-baseline.txt'),
+      measuredOpenBaseline: await readBaseline('config/variant-parity-measured-open-baseline.txt'),
       knownPath: (reference) => existsSync(path.join(root, reference))
     })
     expect(result.problems).toEqual([])
     expect(result.verdict).toBe(VERDICT.ok)
     expect(manifest.capabilities.length).toBeGreaterThan(10)
+    // The two axes must add up on the real manifest, not only on fixtures -- a row counted twice or
+    // dropped would otherwise surface first as a debt total nobody could reconcile.
+    expect(result.debt.unresolved).toBe(result.debt.unknown + result.debt.measuredOpen)
   })
 })

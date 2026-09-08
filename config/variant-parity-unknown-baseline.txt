@@ -8,10 +8,13 @@
 #
 # Every entry below is a measured gap between Orca X desktop and the mobile app as of 2026-09-08,
 # when 195 fork-local commits had landed and none of them had touched mobile/.
-authority.stale-client-cannot-overwrite-current-state
+#
+# Two names left here on 2026-09-08, for variant-parity-measured-open-baseline.txt:
+# authority.stale-client-cannot-overwrite-current-state and session.lifecycle-vocabulary. Both had
+# been measured and written up while still labelled "nobody checked". They are no less open for
+# having moved -- the unresolved total the gate prints is unchanged at seven.
 drafts.user-invested-input-survives-process-death
 navigation.reversible-navigation-preserves-context
 runtime.command-acts-on-the-window-that-owns-the-target
-session.lifecycle-vocabulary
 terminal.launch-profile-identity
 voice.transcript-target-ownership

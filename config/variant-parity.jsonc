@@ -100,9 +100,15 @@
     },
     {
       "id": "session.lifecycle-vocabulary",
-      "title": "The user can tell reconnect from resume from restart from restore-state-only",
-      "disposition": "unknown",
-      "notes": "Measured 2026-09-08, and narrower than the title implies. Desktop's actual user-facing vocabulary is two values -- 'restored' and 'resume-unavailable' (session-restored-banner-pane-state.ts) -- driven by an agentResumeUnavailable flag whose complete inventory is main/ipc/pty.ts, preload and renderer, with ZERO references under src/main/runtime/rpc or mobile/. That half is genuinely absent from the wire and needs an additive negotiated capability, unlike restoredUnconfirmed which was already there and is now consumed. sessionBoundary is separately not a mobile concern: mobile has no `state === 'done'` branch in any non-test source, so there is no completion consumer to mislead. Kept unknown rather than reclassified because this manifest has no disposition for a measured-but-open gap with no external blocker; that is a taxonomy gap, not an unexamined capability."
+      "title": "The user can tell a restored session from one whose history could not be resumed",
+      "disposition": "measured-open",
+      "severity": "P0",
+      "evidence": [
+        "src/renderer/src/components/terminal-pane/session-restored-banner-pane-state.ts",
+        "src/main/ipc/pty-controller-codex-resume-unavailable.test.ts"
+      ],
+      "reason": "The runtime already receives the truth and drops it. Closing this is retention plus projection plus a negotiated capability, then mobile consumption -- no new lifecycle model, and nothing external is blocking it.",
+      "notes": "The old title named a four-way vocabulary Orca does not have. Desktop's actual user-facing vocabulary is two values, 'restored' and 'resume-unavailable' (session-restored-banner-pane-state.ts), driven by an agentResumeUnavailable flag the PTY controller sets when a pane asked to resume a provider session, the resume was dropped as unverifiable, and a fresh session launched instead. A previous note here claimed that flag has ZERO references under src/main/runtime; re-measured 2026-09-08 that is wrong -- orca-runtime.ts declares it on the controller interface it holds and never reads it, so the fact already arrives at the runtime that serves mobile and is discarded there. That makes this the same shape as terminal.launch-profile-offer and session.unconfirmed-activity: available and unconsumed, rather than absent. Mobile therefore cannot tell a session whose history survived from one wearing its clothes. sessionBoundary is separately not a mobile concern: mobile has no `state === 'done'` branch in any non-test source, so there is no completion consumer to mislead."
     },
     {
       "id": "session.unconfirmed-activity-is-not-presented-as-live",
@@ -184,7 +190,10 @@
     {
       "id": "authority.stale-client-cannot-overwrite-current-state",
       "title": "A client that reconnects after missing changes adopts current state instead of publishing its own",
-      "disposition": "unknown",
+      "disposition": "measured-open",
+      "severity": "P0",
+      "evidence": ["src/main/runtime/mobile-git-mutation-consequence.test.ts"],
+      "reason": "One operation of the twenty-two is unprotected, and it is the only one whose stale case destroys state absent from the object graph. git.discard replaces a path's working-tree bytes from HEAD, or deletes the file outright when untracked, with no statement of what the caller believed was there. Closing it needs an identity for working-tree CONTENT, which porcelain v2 does not print -- it gives HEAD and index blob oids and a worktree mode, none of which identify the bytes discard destroys.",
       "notes": "The last sentence of this note used to read 'desktop-vs-mobile git and worktree mutations are unfenced'. Measured 2026-09-08, that is wrong. Four mechanisms cover the surface: a required compare-and-swap on a ref (worktree.forceDeleteBranch/expectedHead, git.forkSync/expectedUpstream), git's own refusal of a non-fast-forward or a work-losing checkout, --force-with-lease on the force push, and clientMutationId on the creates. Every mobile-reachable git and worktree method is now classified in src/main/runtime/mobile-git-mutation-consequence.test.ts, and one comes out unprotected: git.discard destroys uncommitted changes at a path with no statement of what the caller believed was there, and mobile calls it live from two surfaces. Every other stale case is recoverable from the object graph; uncommitted work is not. Kept unknown for that one operation -- closing it needs a per-file identity the porcelain parser currently discards, which is a parser change, a hot-read-path shape change, a negotiated capability and a mixed-version matrix."
     },
     {
