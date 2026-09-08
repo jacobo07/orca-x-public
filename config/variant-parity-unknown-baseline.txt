@@ -11,7 +11,6 @@
 authority.stale-client-cannot-overwrite-current-state
 drafts.user-invested-input-survives-process-death
 navigation.reversible-navigation-preserves-context
-product.display-name
 runtime.command-acts-on-the-window-that-owns-the-target
 session.lifecycle-vocabulary
 terminal.launch-profile-identity

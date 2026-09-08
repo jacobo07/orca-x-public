@@ -144,8 +144,12 @@
     {
       "id": "product.display-name",
       "title": "Both variants present the product under its current name",
-      "disposition": "unknown",
-      "notes": "Desktop is 'Orca X' via src/shared/product.ts; mobile's app.json expo.name is still 'Orca'. The rename must not reach scheme 'orca', bundle id com.stably.orca.mobile, slug orca-mobile, or the 'orca:' storage-key prefix, which are stable identities."
+      "disposition": "ported",
+      "evidence": [
+        "mobile/src/diagnostics/connection-diagnostics-report.test.ts",
+        "mobile/src/components/HostProtocolGate.test.ts"
+      ],
+      "notes": "Desktop is 'Orca X' via src/shared/product.ts. Mobile named itself 'Orca' on its icon, about screen, onboarding, diagnostics and OS permission prompts, and called the desktop 'Orca' throughout its prose. Both halves are done; doing only the first would have reproduced the split-label defect this registry opened on. The rename deliberately does not reach scheme 'orca', bundle id com.stably.orca.mobile, slug orca-mobile, or the 'orca:' storage-key prefix -- those are what deep links, the stores and already-paired devices resolve against."
     }
   ]
 }
