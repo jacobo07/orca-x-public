@@ -208,4 +208,66 @@ describe('memoized worktree rows', () => {
     })
     expect(agentStateDotRender).toHaveBeenCalledTimes(2)
   })
+
+  /**
+   * The rendered end of the resume-provenance path. The logic has its own unit tests; what those
+   * cannot show is that the row ever asks the question -- a correct predicate nobody calls renders
+   * exactly like no predicate at all.
+   */
+  describe('a session whose history could not be resumed', () => {
+    const annotations = () =>
+      renderer!.root
+        .findAll((node) => node.type === 'Text' && Boolean(node.props.accessibilityLabel))
+        .map((node) => String(node.props.accessibilityLabel))
+
+    it('marks the row, and explains itself to a screen reader', async () => {
+      await act(async () => {
+        renderer = create(
+          createElement(WorktreeAgentRow, {
+            agent: agent({ resumeUnavailable: true }),
+            depth: 0,
+            now: 2_000,
+            unvisited: false,
+            resumeProvenanceReported: true
+          })
+        )
+      })
+      // The visible marker is two words; the accessible name has to carry the whole meaning, or the
+      // fact exists only for someone looking straight at a small grey badge.
+      expect(annotations()).toHaveLength(1)
+      expect(annotations()[0]!.length).toBeGreaterThan('no history'.length)
+    })
+
+    it('says nothing about a session that resumed normally', async () => {
+      await act(async () => {
+        renderer = create(
+          createElement(WorktreeAgentRow, {
+            agent: agent(),
+            depth: 0,
+            now: 2_000,
+            unvisited: false,
+            resumeProvenanceReported: true
+          })
+        )
+      })
+      expect(annotations()).toEqual([])
+    })
+
+    it('says nothing against a host that does not report provenance', async () => {
+      // Same row as the first case. Only the host's capability differs, and without it mobile has
+      // no standing to make the claim either way -- so it makes neither.
+      await act(async () => {
+        renderer = create(
+          createElement(WorktreeAgentRow, {
+            agent: agent({ resumeUnavailable: false }),
+            depth: 0,
+            now: 2_000,
+            unvisited: false,
+            resumeProvenanceReported: false
+          })
+        )
+      })
+      expect(annotations()).toEqual([])
+    })
+  })
 })

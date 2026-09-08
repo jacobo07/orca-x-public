@@ -9,12 +9,19 @@ type Props = {
   agents: RuntimeWorktreeAgentRow[]
   now: number
   unvisited: boolean
+  /** Whether the host reports resume provenance; absent means it does not, which claims nothing. */
+  resumeProvenanceReported?: boolean
 }
 
 // Inline agent list for one worktree row: flattens the spawn lineage and renders
 // a depth-indented WorktreeAgentRow per agent, mirroring the desktop sidebar's
 // WorktreeCardAgents.
-export function WorktreeAgentList({ agents, now, unvisited }: Props) {
+export function WorktreeAgentList({
+  agents,
+  now,
+  unvisited,
+  resumeProvenanceReported
+}: Props) {
   const nodes = useMemo(() => flattenAgentRowLineage(agents), [agents])
   const summaryAgents = useMemo(() => {
     const lineage = buildAgentRowLineageTree(agents)
@@ -41,6 +48,7 @@ export function WorktreeAgentList({ agents, now, unvisited }: Props) {
               depth={node.depth}
               now={now}
               unvisited={unvisited}
+              resumeProvenanceReported={resumeProvenanceReported}
             />
           ))
         : null}

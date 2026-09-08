@@ -54,6 +54,7 @@ import { floatingWorkspaceSessionPath } from '../../../src/session/floating-work
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
+import { hostReportsResumeProvenance } from '../../../src/worktree/agent-row-resume-provenance'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { HostRouteNoticeBanner } from '../../../src/components/HostRouteNoticeBanner'
 import { visibleHostRouteNotice } from '../../../src/host-route-notice'
@@ -1210,6 +1211,7 @@ export function HostScreen({
               repoColor={uniqueRepoColors.get(item.repo) ?? repoColor(item.repo)}
               repoIcon={repoIconsByName.get(item.repo) ?? null}
               hideRepo={groupMode === 'repo'}
+              resumeProvenanceReported={hostReportsResumeProvenance(hostCapabilities)}
               onPress={openWorktreeSession}
               onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
               onToggleLineage={toggleWorktreeLineage}

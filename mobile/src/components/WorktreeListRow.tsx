@@ -53,6 +53,8 @@ type Props<T extends WorktreeListRowItem> = {
   // omits its own repo icon+name to avoid the redundant "📁 orca" on every row.
   hideRepo?: boolean
   status: WorktreeRollupStatus
+  /** Whether the host reports resume provenance; absent means it does not, which claims nothing. */
+  resumeProvenanceReported?: boolean
   onPress: (item: T) => void
   onLongPress?: (item: T) => void
   onToggleLineage?: (item: T) => void
@@ -66,6 +68,7 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
   repoIcon,
   hideRepo = false,
   status,
+  resumeProvenanceReported,
   onPress,
   onLongPress,
   onToggleLineage
@@ -166,7 +169,12 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
         {/* Only agents get a secondary activity line, matching desktop. A plain
             terminal's shell-output tail is intentionally not surfaced here. */}
         {item.agents && item.agents.length > 0 ? (
-          <WorktreeAgentList agents={item.agents} now={now} unvisited={item.unread} />
+          <WorktreeAgentList
+            agents={item.agents}
+            now={now}
+            unvisited={item.unread}
+            resumeProvenanceReported={resumeProvenanceReported}
+          />
         ) : null}
         {lineageChildCount > 0 && onToggleLineage ? (
           <Pressable
