@@ -27,7 +27,7 @@ import {
   resolvePackagedOrcaExecutable,
   type PackagedOrcaRun
 } from './helpers/packaged-orca-app'
-import { waitForActiveWorktree } from './helpers/store'
+import { getStoreState, waitForActiveWorktree } from './helpers/store'
 
 test(
   'a packaged window updates its binding when it switches worktree @headful',
@@ -71,15 +71,19 @@ test(
       }, firstWorktreeId)
       expect(repoId, 'no repository to branch a second worktree from — setup failure').toBeTruthy()
 
+      // Asked, not established: the window has been showing this project since launch, and entering
+      // one is what claims it. `already-owned` is therefore the proof that the automatic claim ran —
+      // `claimed` here would mean the window was presenting a project the registry thought was free.
       const claimed = await page.evaluate(
         async ({ owningRepoId, worktreeId }) =>
           (await window.api.ui.claimWorkspace({ repoId: owningRepoId, worktreeId })).outcome,
         { owningRepoId: repoId as string, worktreeId: firstWorktreeId }
       )
+      console.error(`[binding] claim for the project already on screen=${claimed}`)
       expect(
-        ['claimed', 'already-owned-by-this-window'],
-        'the window could not take the workspace it is showing — setup failure'
-      ).toContain(claimed)
+        claimed,
+        'the window was showing a project it had not claimed, so the registry reported it as free and a second window could have taken it'
+      ).toBe('already-owned')
 
       // The ordinary in-window move: a second worktree, selected the way a sidebar row selects one.
       const secondWorktreeId = await page.evaluate(async (owningRepoId) => {
@@ -102,13 +106,73 @@ test(
         })
         .toBe(secondWorktreeId)
 
-      const bindingAfterSwitch = await page.evaluate(() => window.api.ui.getStartupBinding())
-      console.error(
-        `[binding] showing=${secondWorktreeId} bound=${bindingAfterSwitch.worktreeId ?? 'none'} (was ${firstWorktreeId})`
+      // Polled rather than read once: the switch is synchronous but the claim behind it is a round
+      // trip to main, so a single read samples whichever side of it happened to land first. A window
+      // that never claims stays wrong for any timeout, so waiting costs no strictness.
+      await expect
+        .poll(
+          async () => (await page.evaluate(() => window.api.ui.getStartupBinding())).worktreeId,
+          {
+            timeout: 30_000,
+            message:
+              'the window switched worktree without claiming it: the registry still names the previous project, so the one on screen reads as free and a second window may claim it'
+          }
+        )
+        .toBe(secondWorktreeId)
+      console.error(`[binding] showing and bound to ${secondWorktreeId} (was ${firstWorktreeId})`)
+
+      // The other half of the switch: the project the window left has to become claimable, or the
+      // stale binding has only changed direction. A second window is the only honest way to ask —
+      // this window rebinding to it would prove nothing, since a window may always take what it
+      // already holds.
+      const pageB = await Promise.all([
+        run.app.waitForEvent('window', { timeout: 60_000 }),
+        page.evaluate(() => window.api.ui.createWindow())
+      ]).then(([opened]) => opened)
+      await pageB.waitForLoadState('domcontentloaded')
+      await expect
+        .poll(async () => getStoreState<boolean>(pageB, 'persistedUIReady'), {
+          timeout: 60_000,
+          message: 'the second packaged window never finished hydrating — setup failure'
+        })
+        .toBe(true)
+
+      const releasedClaim = await pageB.evaluate(
+        async ({ owningRepoId, worktreeId }) =>
+          (await window.api.ui.claimWorkspace({ repoId: owningRepoId, worktreeId })).outcome,
+        { owningRepoId: repoId as string, worktreeId: firstWorktreeId }
       )
       expect(
-        bindingAfterSwitch.worktreeId,
-        'the window switched worktree without claiming it: the registry still names the previous project, so the one on screen reads as free and a second window may claim it'
+        releasedClaim,
+        'the first window kept its old project after switching away, so nothing else can ever open it'
+      ).toBe('claimed')
+
+      // And the refusal: the first window asks for the project the second one now owns. The claim
+      // handler reveals the owner itself, so all that is left to check is that this window did not
+      // settle on a project it does not own.
+      await page.evaluate((worktreeId) => {
+        window.__store?.getState().setActiveWorktree(worktreeId)
+      }, firstWorktreeId)
+      await expect
+        .poll(async () => page.evaluate(() => window.__store?.getState().activeWorktreeId ?? null), {
+          timeout: 30_000,
+          message:
+            'the first window stayed on a project another window owns, so both now present it as theirs'
+        })
+        .toBe(secondWorktreeId)
+
+      const bindingB = await pageB.evaluate(() => window.api.ui.getStartupBinding())
+      expect(
+        bindingB.worktreeId,
+        "the refused switch took the project away from the window that owns it"
+      ).toBe(firstWorktreeId)
+      const bindingAAfterRefusal = await page.evaluate(() => window.api.ui.getStartupBinding())
+      console.error(
+        `[binding] after refusal: A bound=${bindingAAfterRefusal.worktreeId ?? 'none'} B bound=${bindingB.worktreeId ?? 'none'}`
+      )
+      expect(
+        bindingAAfterRefusal.worktreeId,
+        'the first window lost its own project by asking for one it could not have'
       ).toBe(secondWorktreeId)
     } finally {
       await run?.dispose()

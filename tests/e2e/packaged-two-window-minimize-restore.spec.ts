@@ -102,21 +102,20 @@ test('a packaged window recovers on restore while a second window stays visible 
     }, worktreeIdA)
     expect(repoIdA, 'window A has no active repository to branch a second worktree from').toBeTruthy()
 
-    // Window A takes the binding for what it is showing. In the product this happens on the way in —
-    // the launcher claims before it navigates, and a window restoring a saved session claims what it
-    // restores. This harness has neither: the packaged profile is seeded with onboarding only, so
-    // there is no session to restore, and the workspace is established by driving the store. Without
-    // this the registry would hold no owner for A's worktree, and the refusal asserted below would be
-    // measuring the harness's shortcut rather than the product's rule.
+    // Window A already owns what it is showing, because entering a project is what claims it. Asked
+    // rather than established: this used to be a stand-in for the launcher, since the packaged
+    // profile seeds onboarding only and the workspace is established by driving the store. Now the
+    // activation itself claims, so the same call is a check instead of a setup step — and the
+    // refusal asserted below is measuring the product's rule rather than the harness's shortcut.
     const claimA = await pageA.evaluate(
       async ({ repoId, worktreeId }) =>
         (await window.api.ui.claimWorkspace({ repoId, worktreeId })).outcome,
       { repoId: repoIdA as string, worktreeId: worktreeIdA }
     )
     expect(
-      ['claimed', 'already-owned-by-this-window'],
-      'window A could not take the workspace it is showing — setup failure'
-    ).toContain(claimA)
+      claimA,
+      'window A was showing a project it had not claimed, so the registry reported it as free and window B could have taken it'
+    ).toBe('already-owned')
 
     // A second worktree, created by the window that owns the repository. B claims this one; nothing
     // else in this spec would give B a project it is entitled to hold.
