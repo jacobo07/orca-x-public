@@ -6,6 +6,7 @@ import { applyWorktreeUpdates } from '../../worktree-helpers'
 import { projectWorktreeTabModelReconciliation } from '../../tabs'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { claimActiveWorkspaceForWindow } from '@/lib/active-workspace-window-claim'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import {
   ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS,
@@ -46,7 +47,10 @@ export function createSetActiveWorktree(
       markInputQuietSchedulerInput()
     }
 
-    if (get().activeWorktreeId !== worktreeId) {
+    // Captured before the switch: it is the window's binding until the new project is claimed, and
+    // the place to put the window back if that project turns out to belong to another window.
+    const previousWorktreeId = get().activeWorktreeId
+    if (previousWorktreeId !== worktreeId) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
     let shouldClearUnread = false
@@ -205,6 +209,23 @@ export function createSetActiveWorktree(
         ...tabsByWorktreeUpdate
       }
     })
+
+    // Claimed here rather than in each navigation surface: this is the single writer to the active
+    // workspace, so every path that changes the project reaches it — sidebar, Explorer, deep links,
+    // the palette, automations, mobile-initiated opens, and whatever is added next. The binding has
+    // to follow what the window shows, or the project on screen reads as unowned and another window
+    // may take it while this one's session writes still name the project the user left.
+    if (worktreeId && worktreeId !== previousWorktreeId) {
+      claimActiveWorkspaceForWindow({
+        repoId: get().activeRepoId,
+        worktreeId: get().activeWorktreeId,
+        previousWorktreeId,
+        currentWorktreeId: () => get().activeWorktreeId,
+        revertTo: (target) => {
+          get().setActiveWorktree(target)
+        }
+      })
+    }
 
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {
