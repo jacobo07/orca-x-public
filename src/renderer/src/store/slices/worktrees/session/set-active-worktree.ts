@@ -217,7 +217,11 @@ export function createSetActiveWorktree(
     // may take it while this one's session writes still name the project the user left.
     if (worktreeId && worktreeId !== previousWorktreeId) {
       claimActiveWorkspaceForWindow({
-        repoId: get().activeRepoId,
+        // From the worktree, not from `activeRepoId`: that field only follows the worktree when the
+        // caller supplies a state transition, so on the plain path it still names whichever repo was
+        // active before — or nothing at all, which skipped the claim outright.
+        repoId:
+          get().getKnownWorktreeById(worktreeId, executionHostId)?.repoId ?? get().activeRepoId,
         worktreeId: get().activeWorktreeId,
         previousWorktreeId,
         currentWorktreeId: () => get().activeWorktreeId,
