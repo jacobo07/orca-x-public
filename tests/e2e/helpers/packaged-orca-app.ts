@@ -18,7 +18,15 @@
 
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -35,6 +43,7 @@ import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-sh
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './store'
 import { establishSeededWorkspace } from './seeded-workspace-precondition'
 import { waitForActiveTerminalManager, waitForPaneIdentitySnapshot } from './terminal'
+import { PRECONDITION_FAILURE_MARKER } from './e2e-precondition'
 
 /** Where the packaging script puts the artifact; overridable so CI can point elsewhere. */
 export const PACKAGED_ORCA_APP_DIR =
@@ -158,6 +167,55 @@ export function resolvePackagedOrcaExecutable(): string | null {
   return null
 }
 
+function mtimeOrNull(target: string): number | null {
+  try {
+    return statSync(target).mtimeMs
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Refuse to run against an artifact older than the build output it is supposed to contain.
+ *
+ * `PACKAGED_ORCA_APP_DIR` defaults to a directory under the system temp folder that nothing in this
+ * repository creates or refreshes — it is staged by hand. So `pnpm run build:unpack` writes
+ * `dist/win-unpacked` and leaves whatever the packaged specs actually launch untouched, and a fix can
+ * be absent at runtime while being present in every artifact you think to inspect. That reads as a
+ * product defect, reproducibly, and the checks that would rule it out (is the symbol in the asar, is
+ * the call in the emitted chunk) all pass, because they are aimed at a build nobody is running.
+ *
+ * `out/` is what the packaging step consumes, so `out/` newer than the executable means the artifact
+ * cannot contain the current build. This is a precondition: it says the run could not judge the
+ * product, not that the product is wrong.
+ */
+export function assertPackagedArtifactIsNotStale(executablePath: string): void {
+  const builtAt = mtimeOrNull(executablePath)
+  if (builtAt === null) {
+    return
+  }
+  const sources = [
+    path.join(process.cwd(), 'out', 'main', 'index.js'),
+    path.join(process.cwd(), 'out', 'renderer', 'index.html')
+  ]
+    .map(mtimeOrNull)
+    .filter((value): value is number => value !== null)
+  if (sources.length === 0) {
+    // No build output to compare against, so this cannot say anything either way.
+    return
+  }
+  const newestSource = Math.max(...sources)
+  if (newestSource <= builtAt) {
+    return
+  }
+  throw new Error(
+    `${PRECONDITION_FAILURE_MARKER} the packaged artifact at ${PACKAGED_ORCA_APP_DIR} was built ` +
+      `${new Date(builtAt).toISOString()}, before the current build output ` +
+      `(${new Date(newestSource).toISOString()}). It cannot contain the change under test. Rebuild ` +
+      `into that directory, or point ORCA_E2E_PACKAGED_APP_DIR at the build you mean to exercise.`
+  )
+}
+
 export async function launchPackagedOrca({
   executablePath,
   repoPath,
@@ -167,6 +225,7 @@ export async function launchPackagedOrca({
   repoPath: string
   testInfo: TestInfo
 }): Promise<PackagedOrcaRun> {
+  assertPackagedArtifactIsNotStale(executablePath)
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-packaged-userdata-'))
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
