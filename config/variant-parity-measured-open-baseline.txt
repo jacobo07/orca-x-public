@@ -19,14 +19,15 @@
 # reads it three-valued against a negotiated capability. That is the unresolved total genuinely
 # falling by one, which is the only way it is allowed to fall.
 #
-# What remains is the destructive one: a git operation a client can issue against a file it last
-# saw some time ago.
-#
 # Four more arrived on 2026-09-10, emptying the unknown list. Read that as one number moving between
-# two columns, not as progress: the unresolved total the gate prints is unchanged at five. What DID
-# change is that every remaining row now names a gap someone can act on, and only one of them still
-# blocks a release.
-authority.stale-client-cannot-overwrite-current-state
+# two columns, not as progress: the unresolved total the gate printed was unchanged at five. What
+# DID change is that every remaining row names a gap someone can act on.
+#
+# The destructive one left the same day, CLOSED rather than relabelled: a client can now only
+# discard the working-tree content it says it saw, the host re-reads the bytes immediately before
+# destroying them, and one that states nothing is refused instead of falling back. That is the
+# unresolved total genuinely falling to four, and it takes release-critical debt to zero -- the
+# remaining four are P1 and below, each carrying a severityReason that had to argue itself.
 drafts.user-invested-input-survives-process-death
 runtime.command-acts-on-the-window-that-owns-the-target
 terminal.launch-profile-identity
