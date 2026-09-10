@@ -98,6 +98,31 @@ function evaluateCapability(capability, index, policy) {
       message: `severity ${JSON.stringify(capability.severity)} is not one of ${policy.severities.join(', ')}`
     })
   }
+  /**
+   * A de-escalation has to argue itself.
+   *
+   * `unresolved` is protected by construction -- it sums both debt lists, so relabelling cannot move
+   * it. `release-critical` had no such protection: it counts an untriaged capability as P0, so
+   * typing a severity is by itself enough to make it fall, and nothing was required alongside. That
+   * is the one number a release decision reads, and it was the cheapest to move. Measured on
+   * 2026-09-10, four triages took it from 5 to 1 without a line of product code.
+   *
+   * So a claim that unresolved debt is NOT release-critical must say why, in its own field. This
+   * cannot check that the argument is a good one; it can insist that someone had to write one down
+   * where a reviewer will see it, which is the difference between a judgement and a keystroke.
+   */
+  if (
+    Array.isArray(policy.unresolvedDispositions) &&
+    policy.unresolvedDispositions.includes(disposition) &&
+    capability.severity !== undefined &&
+    capability.severity !== 'P0' &&
+    !isNonEmptyString(capability.severityReason)
+  ) {
+    problems.push({
+      id: where,
+      message: `severity ${capability.severity} takes this unresolved capability out of the release gate and must carry severityReason saying why it is not P0`
+    })
+  }
   return problems
 }
 

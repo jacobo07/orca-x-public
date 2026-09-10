@@ -41,6 +41,14 @@
 //
 // severity is optional and drawn from `severities`. An unresolved capability without one counts as
 // P0 in the release gate: forgetting to triage can only make the gate stricter.
+//
+// severityReason is REQUIRED on an unresolved capability whose severity is not P0, because that is
+// the only assertion in this file that moves the release number without building anything.
+// `unresolved` cannot be gamed -- it sums both debt lists, so relabelling leaves it where it was.
+// `release-critical` could be, and was: on 2026-09-10 four triages took it from 5 to 1 with no
+// product code and nothing required alongside. The field cannot check that an argument is a good
+// one; it insists that someone wrote one down where a reviewer will find it, which is the
+// difference between a judgement and a keystroke.
 {
   "schemaVersion": 1,
   "updatedAt": "2026-09-08",
@@ -97,6 +105,7 @@
       "title": "A terminal can say which launch profile it came from, and tell recorded from inferred",
       "disposition": "measured-open",
       "severity": "P2",
+      "severityReason": "No mobile surface consumes the distinction: there is no relaunch-from-this-tab affordance anywhere in mobile/src or mobile/app, so nothing presents an inference as a fact today. This is a gap to close BEFORE mobile grows such an affordance, and it becomes release-critical on the day one lands.",
       "evidence": [
         "src/shared/terminal-launch-profile-identity.ts",
         "src/shared/runtime-types.ts",
@@ -160,6 +169,7 @@
       "title": "A transcript belongs to the input that started recording, not the one focused when it lands",
       "disposition": "measured-open",
       "severity": "P1",
+      "severityReason": "voice.no-auto-submit is shared-already, so a transcript landing on the wrong surface is inserted and never submitted: a user action stands between this and any effect, including the chat-to-terminal direction where the text reaches a live PTY. Remove that contract and this is P0.",
       "evidence": [
         "src/renderer/src/components/dictation/DictationController.tsx",
         "mobile/app/h/[hostId]/session/[worktreeId].tsx",
@@ -180,6 +190,7 @@
       "title": "Text the user composed and has not sent survives the app being killed",
       "disposition": "measured-open",
       "severity": "P1",
+      "severityReason": "It takes the OS killing the app to reach, and what is lost is the user's own unsent input rather than a file on disk -- nothing already saved or committed is worse off, which is what separates this from the discard P0 beside it.",
       "evidence": ["mobile/src/files/MobileFilePreviewScreen.tsx"],
       "reason": "Confirmed 2026-09-10 with an instrument wide enough to answer it. The earlier note said 'no persistence site was found', which is only worth something if the search could have found one -- mobile/src/storage exists, so the check was re-run across every source in mobile/src/files for an import of that module as well as for the storage APIs themselves. There are none. The draft lives in useState with two refs mirroring it, and the screen's only protection is an in-session guard that warns before navigating away, which is a different hazard from the one this capability names. Process death discards composed, unsent text with no notice. P1 rather than P0: it takes the OS killing the app, and what is lost is the user's own unsent input rather than a file on disk. What closes it: a durability tier in config/durability-contracts.jsonc naming the state and its consequence, then a write that satisfies it -- not a mobile-only draft taxonomy, since 'what does this write owe if it is lost' already has an owner in this repository."
     },
@@ -195,6 +206,7 @@
       "title": "A remote command reaches the workspace it named, not a representative one",
       "disposition": "measured-open",
       "severity": "P1",
+      "severityReason": "It needs two or more windows AND a target no window has placed. Past that point the chosen window still has to find the tab at all, which bounds the blast radius -- and that bound is itself unmeasured, so this severity is the weakest of the four and the first to revisit.",
       "evidence": [
         "src/main/runtime/runtime-notifier-router.ts",
         "src/main/runtime/runtime-graph-owners.ts"

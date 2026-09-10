@@ -53,11 +53,51 @@ function measuredOpen(overrides = {}) {
     evidence: ['mobile/src/thing.test.ts'],
     reason: 'the host projects it but the client cannot read it yet',
     severity: 'P1',
+    severityReason: 'no client surface consumes it, so nothing presents a guess as a fact',
     ...overrides
   }
 }
 
 describe('variant parity gate', () => {
+  it('refuses to let an unresolved capability leave the release gate without an argument', () => {
+    // The whole point of the field: `release-critical` counts an untriaged row as P0, so a bare
+    // severity is enough to make the release number fall. Nothing else in this gate is assertable
+    // without evidence, and this was.
+    // Acknowledged in the baseline so the ratchet stays quiet and the only problem left is the one
+    // under test.
+    const acknowledged = { measuredOpenBaseline: ['a.measured'] }
+    const result = run([measuredOpen({ severityReason: undefined })], acknowledged)
+    expect(result.verdict).toBe(VERDICT.subjectInvalid)
+    expect(result.problems).toEqual([
+      {
+        id: 'a.measured',
+        message:
+          'severity P1 takes this unresolved capability out of the release gate and must carry severityReason saying why it is not P0'
+      }
+    ])
+  })
+
+  it('asks nothing extra of a row that stays release-critical, or of a resolved one', () => {
+    // The check must bite on the downgrade only. P0 concedes the point, and a resolved capability is
+    // not in the release count at all, so neither owes an argument.
+    expect(
+      run([measuredOpen({ severity: 'P0', severityReason: undefined })], {
+        measuredOpenBaseline: ['a.measured']
+      }).verdict
+    ).toBe(VERDICT.ok)
+    expect(
+      run([
+        {
+          id: 'a.shared',
+          title: 'shared thing',
+          disposition: 'shared-already',
+          evidence: ['mobile/src/thing.test.ts'],
+          severity: 'P2'
+        }
+      ]).verdict
+    ).toBe(VERDICT.ok)
+  })
+
   it('accepts a capability that claims parity and cites evidence', () => {
     const result = run([
       {
