@@ -151,8 +151,15 @@
     {
       "id": "voice.transcript-target-ownership",
       "title": "A transcript belongs to the input that started recording, not the one focused when it lands",
-      "disposition": "unknown",
-      "notes": "Desktop pins this (fork commits 90f53945d, 80b685f84). Mobile's equivalent is unmeasured: navigating away mid-transcription is the case that would show it."
+      "disposition": "measured-open",
+      "severity": "P1",
+      "evidence": [
+        "src/renderer/src/components/dictation/DictationController.tsx",
+        "mobile/app/h/[hostId]/session/[worktreeId].tsx",
+        "mobile/src/session/use-mobile-native-chat-drafts.ts"
+      ],
+      "reason": "Measured 2026-09-10. Desktop captures the insertion target once at job start (DictationController captureInsertionTarget) and delivers to that captured ref, never re-reading document.activeElement; the target is tab AND pane, because pane ids are allocated per tab; and a transcript the origin cannot claim is RETAINED and the user told, rather than dropped. Mobile has half of it: startDictation captures the terminal handle and live-input flag, so switching terminal tabs mid-transcription still inserts into the originating PTY. What is not captured is WHICH SURFACE. Delivery reads showNativeChatRef.current -- a live mirror of the current view mode -- and returns on that branch before the captured context is read at all, and the chat write goes through a draft key derived from the currently active tab. So three sequences misdeliver, none of which need navigation: terminal then toggle to chat (text lands in the chat composer); chat tab A then switch to chat tab B (text lands in B's draft); and chat then toggle to terminal, where the fallback types it into the live PTY. Not P0 because voice.no-auto-submit is shared-already: the text is inserted, never submitted, so a further user action stands between this and any effect. What closes it: capture the surface at start alongside the handle, and consume the captured value rather than the live ref. Retention of an unclaimed transcript is the second half and has no mobile counterpart -- teardown cancels the job outright, which loses the text but does not misdeliver it.",
+      "notes": "No test pins any of this: dictationRouteContextRef and showNativeChatRef appear in zero test files, and terminal-live-dictation-routing.test.ts covers only live-vs-buffered routing of already-delivered text. Unmeasured, and it decides how wide the race is rather than whether it exists: whether pushing another route unmounts the session screen (which would produce the safe cancel instead), and the real latency of the speech.dictation.finish round trip."
     },
     {
       "id": "navigation.reversible-navigation-preserves-context",

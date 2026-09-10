@@ -16,4 +16,3 @@
 drafts.user-invested-input-survives-process-death
 runtime.command-acts-on-the-window-that-owns-the-target
 terminal.launch-profile-identity
-voice.transcript-target-ownership

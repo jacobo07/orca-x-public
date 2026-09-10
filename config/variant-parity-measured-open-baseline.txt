@@ -22,3 +22,4 @@
 # What remains is the destructive one: a git operation a client can issue against a file it last
 # saw some time ago.
 authority.stale-client-cannot-overwrite-current-state
+voice.transcript-target-ownership
