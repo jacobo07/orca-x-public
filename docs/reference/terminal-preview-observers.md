@@ -61,26 +61,75 @@ main's flow control counts bytes per subscription.
 only one of them. Never fall back to another pane of the same tab; a preview that retargets by
 convenience is how someone ends up confidently reading the wrong terminal.
 
-## The Windows taskbar is out of scope, and why
+## The Windows taskbar: what Electron lacks is not what Windows lacks
 
-Measured against `node_modules/electron/electron.d.ts` at Electron ^43.1.0. The Windows taskbar
-surface Electron exposes is `setThumbnailClip`, `setThumbnailToolTip`, `setThumbarButtons`,
-`setOverlayIcon`, `setProgressBar`, `setAppDetails`, `flashFrame`. There is **no API to supply a
-thumbnail bitmap** — no `Iconic`, no `DwmSet`. `setThumbnailClip` only chooses which region of the
-window's own composited surface the shell shows; it cannot make a throttled window paint.
+An earlier version of this note concluded the taskbar was unreachable and that Orca accepted the
+limit. **That conclusion was wrong**, and the way it was wrong is worth more than the conclusion: it
+read a framework's silence as the platform's answer. The Electron findings below are accurate. The
+inference drawn from them was not.
 
-And the window is throttled: `createMainWindow.ts` calls `setBackgroundThrottling(true)` gated to
-darwin only and sets no `disable-renderer-backgrounding` switch, so Windows runs at Chromium's
-default. `tests/e2e/minimized-window-background-progress.spec.ts` documents the behaviour — a hidden
-renderer drops to 1/second immediately and to 1/minute after five minutes hidden.
+Windows has supplied this capability since Windows 7. An application marks its window with
+`DWMWA_HAS_ICONIC_BITMAP` and `DWMWA_FORCE_ICONIC_REPRESENTATION`; DWM then *asks* for a picture
+whenever it needs one — `WM_DWMSENDICONICTHUMBNAIL` for the taskbar hover, whose lParam carries the
+maximum size it will accept, and `WM_DWMSENDICONICLIVEPREVIEWBITMAP` for Peek, which fires precisely
+when an iconic representation is the only one that exists, i.e. when the window is minimized. The app
+answers with `DwmSetIconicThumbnail` / `DwmSetIconicLivePreviewBitmap`, and calls
+`DwmInvalidateIconicBitmaps` when its content has moved on.
 
-So a minimized Orca window has nothing fresh for DWM to composite and no supported route to be handed
-anything fresher. The three ways out are all consequential — keep minimized renderers painting
-(resource and battery cost, and it changes the background-continuity behaviour the 330-second
-minimize gate protects), add a native module for the DWM iconic-thumbnail path (a new cross-process
-presentation authority), or accept the limit. **Orca accepts the limit.** The in-app preview is
-unaffected by it, because it reads the main-side model rather than the compositor.
+Three properties of that protocol shape any implementation:
 
-If this is ever revisited, the decision to re-examine is the *native module*, not the throttling
-switch: throttling is what keeps a minimized window cheap, and the existing minimize gate exists
-precisely because background behaviour here has been got wrong before.
+- **It is demand-driven.** DWM asks on a cache miss; the app never polls. No timer per terminal.
+- **Invalidation is a hint, not a refresh.** Microsoft's own docs warn against calling it frequently,
+  and say that under cache pressure DWM may simply not re-request. Taskbar freshness is therefore
+  bounded by DWM's willingness to ask, not by how fast Orca can draw — so a freshness claim here has
+  to be measured at the shell, not inferred from the update rate.
+- **The window must belong to the calling process.** This is stated on the parameter docs of both
+  `DwmSetIconicThumbnail` and `DwmInvalidateIconicBitmaps`. It is the decisive constraint: it rules
+  out an out-of-process helper, and therefore rules out reusing *every* Windows-native seam Orca has
+  (`native/windows-cli-launcher`, `native/computer-use-windows`), all of which are separate
+  processes. The calls must run inside the process that owns the `BrowserWindow`.
+
+What Electron gives and withholds, measured against `node_modules/electron/electron.d.ts` at ^43.1.0:
+`setThumbnailClip`, `setThumbnailToolTip`, `setThumbarButtons`, `setOverlayIcon`, `setProgressBar`,
+`setAppDetails`, `flashFrame` — and no API to supply a thumbnail bitmap. But it *does* expose
+`hookWindowMessage` (win32, "called when the message is received in the WndProc") and
+`getNativeWindowHandle`, which is the receiving half of the protocol. `electron/electron#42232` asked
+for the supplying half by name and was closed as *not planned*. So the gap is a deliberate framework
+decision with a documented platform capability underneath it.
+
+`setThumbnailClip` cannot substitute: it selects a region of the window's own composited surface, and
+a minimized window has no fresh surface to select from. `createMainWindow.ts` gates
+`setBackgroundThrottling(true)` to darwin and sets no renderer-backgrounding switch, so Windows runs
+at Chromium's default — `tests/e2e/minimized-window-background-progress.spec.ts` documents a hidden
+renderer dropping to 1/second, then 1/minute after five minutes.
+
+The route that follows from all of this is **not** to make minimized renderers paint. It is to take
+the visible rows from the main-side headless model — which is correct while minimized precisely
+because it never depended on the renderer — rasterize them in the main process, and hand the result
+to DWM when DWM asks. That keeps the throttling behaviour the 330-second minimize gate protects.
+
+Still unverified, and not to be assumed: DWM's behaviour under the Windows 11 taskbar (no doc
+addresses it either way), what it does with an aspect-ratio mismatch, alpha semantics, and the
+numeric message values — Microsoft publishes only the symbolic names, so those come from the SDK
+headers. One trap worth naming: an **elevated** process never receives these messages unless it
+admits them through the message filter, and the symptom is silence, not an error — the feature would
+simply look unimplemented.
+
+Nothing above is shipped yet. The in-app preview does not depend on any of it, because it reads the
+main-side model rather than the compositor — which is also why the same model is the right source for
+the taskbar if and when that adapter is built.
+
+## Proving a preview, rather than asserting one
+
+`tests/e2e/terminal-hover-preview-reality.spec.ts` opens the card in a running Orca: it splits a
+terminal, emits a marker into the pane that is *not* active, hovers that rail row, and checks the
+card shows that terminal and that the terminal is unchanged. Geometry is read through `pty.getSize`,
+which reports what main **applied** rather than what the renderer asked for — the source sweep can
+only show nobody wrote a resize call, and this shows the PTY did not move.
+
+Two habits this suite depends on. A row must carry the identity of its own pane: the hover trigger
+originally stamped only the tab id, so two panes of one tab were indistinguishable and the selector
+named something that was not the subject. And a run killed by the host is **inconclusive**, never a
+failure of the product — on a memory-starved machine this suite dies with empty stdout, no reporter
+line and exit -1, and the failure moves earlier as headroom shrinks until globalSetup itself dies
+during git seeding. Measure free memory before reading such a run as a verdict.

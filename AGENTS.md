@@ -61,8 +61,12 @@ Two habits follow. Header content width is often **localized**, so a layout defe
 A surface that *shows* a terminal without being it — a hover card, a thumbnail, an inspector — reads
 the main-process headless emulator, never a second ANSI interpreter and never a screen capture. It
 must not call `terminalPreview.fit` (which resizes the PTY and parks the host pane), must not route
-input, and must not take focus. See [`docs/reference/terminal-preview-observers.md`](./docs/reference/terminal-preview-observers.md),
-which also records why the Windows taskbar thumbnail is out of scope.
+input, and must not take focus. See [`docs/reference/terminal-preview-observers.md`](./docs/reference/terminal-preview-observers.md).
+
+That note also carries the Windows taskbar capability trace, and the correction behind it: Electron
+exposes no way to supply a thumbnail bitmap, but Windows has since 7, so a missing binding in the
+framework is not a missing capability in the platform. Before recording any feature as blocked by the
+OS, trace it down to the OS.
 
 ## Durable State
 
