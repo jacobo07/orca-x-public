@@ -5,6 +5,11 @@ import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
 import { mobileReviewCountLabel } from './mobile-diff-review-screen-model'
+import {
+  discardConflictMessage,
+  resolveDiscardAuthorization,
+  type DiscardAuthorization
+} from '../source-control/discard-authorization'
 
 type GitActionsInput = {
   client: RpcClient | null
@@ -14,11 +19,22 @@ type GitActionsInput = {
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
   loadReviewData: () => Promise<void>
+  /** Whether the host refuses a discard whose stated content no longer matches. Defaults to false,
+   *  which claims nothing rather than assuming a protection the host may not have. */
+  hostEnforcesDiscardPrecondition?: boolean
 }
 
 export function useMobileDiffReviewGitActions(input: GitActionsInput) {
-  const { client, connState, worktreeId, queue, setActionError, setBusyAction, loadReviewData } =
-    input
+  const {
+    client,
+    connState,
+    worktreeId,
+    queue,
+    setActionError,
+    setBusyAction,
+    loadReviewData,
+    hostEnforcesDiscardPrecondition = false
+  } = input
 
   const runGitMutation = useCallback(
     async (method: GitMutationMethod, item: MobileDiffReviewQueueItem) => {
@@ -26,15 +42,34 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
         setActionError('Waiting for desktop...')
         return
       }
+      // Discard is the only one of these that destroys something, so it is the only one that has to
+      // say what it believed it was destroying. Staging and unstaging move content between places
+      // that both survive, and a stale caller there costs nothing.
+      let discardAuthorization: DiscardAuthorization | null = null
+      if (method === 'git.discard') {
+        discardAuthorization = resolveDiscardAuthorization(item, hostEnforcesDiscardPrecondition)
+        if (discardAuthorization.kind !== 'ready') {
+          triggerError()
+          setActionError(discardAuthorization.reason)
+          return
+        }
+      }
       setBusyAction(`${method}:${item.filePath}`)
       setActionError(null)
       try {
         const response = await client.sendRequest(method, {
           worktree: `id:${worktreeId}`,
-          filePath: item.filePath
+          filePath: item.filePath,
+          ...(discardAuthorization?.kind === 'ready'
+            ? { expectedContent: discardAuthorization.expectedContent }
+            : {})
         })
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Source control action failed')
+          throw new Error(
+            discardConflictMessage(response.error?.code) ||
+              response.error?.message ||
+              'Source control action failed'
+          )
         }
         triggerSuccess()
         await loadReviewData()
@@ -45,7 +80,15 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
         setBusyAction(null)
       }
     },
-    [client, connState, loadReviewData, setActionError, setBusyAction, worktreeId]
+    [
+      client,
+      connState,
+      hostEnforcesDiscardPrecondition,
+      loadReviewData,
+      setActionError,
+      setBusyAction,
+      worktreeId
+    ]
   )
 
   const stageReviewedFiles = useCallback(async () => {

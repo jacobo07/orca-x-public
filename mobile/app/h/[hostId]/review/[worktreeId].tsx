@@ -8,6 +8,8 @@ import {
 import { normalizeReviewAreaParam } from '../../../../src/session/mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from '../../../../src/session/use-mobile-diff-review-controller'
 import { useForceReconnect, useHostClient } from '../../../../src/transport/client-context'
+import { useHostProtocolGates } from '../../../../src/components/HostProtocolGate'
+import { hostEnforcesDiscardPrecondition } from '../../../../src/source-control/discard-authorization'
 
 export default function MobileDiffReviewScreen() {
   const params = useLocalSearchParams<{
@@ -39,10 +41,12 @@ export default function MobileDiffReviewScreen() {
     )
   }, [hostId, name, router, worktreeId])
 
+  const { hostCapabilities } = useHostProtocolGates()
   const controller = useMobileDiffReviewController({
     client,
     connState,
     hostId,
+    hostEnforcesDiscardPrecondition: hostEnforcesDiscardPrecondition(hostCapabilities),
     worktreeId,
     name,
     initialFilter,

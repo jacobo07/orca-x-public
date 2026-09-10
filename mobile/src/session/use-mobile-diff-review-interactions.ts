@@ -48,6 +48,9 @@ type InteractionInput = {
   loadReviewData: () => Promise<void>
   onOpenSession: () => void
   onReconnect: (hostId: string) => void | Promise<void>
+  /** Whether the host refuses a discard whose stated content no longer matches. Defaults to false,
+   *  which claims nothing rather than assuming a protection the host may not have. */
+  hostEnforcesDiscardPrecondition?: boolean
 }
 
 export function useMobileDiffReviewInteractions(input: InteractionInput) {
@@ -55,6 +58,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     client,
     connState,
     hostId,
+    hostEnforcesDiscardPrecondition = false,
     worktreeId,
     screenState,
     diffState,
@@ -118,7 +122,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     queue,
     setActionError,
     setBusyAction,
-    loadReviewData
+    loadReviewData,
+    hostEnforcesDiscardPrecondition
   })
 
   const { clearSentNotes, copyNotes, createTerminalAndSend, openSendSheet, sendPromptToTerminal } =

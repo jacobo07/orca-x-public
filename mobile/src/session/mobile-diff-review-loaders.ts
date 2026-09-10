@@ -68,7 +68,12 @@ export async function loadMobileDiffReviewSnapshot(
   client: RpcClient,
   worktreeId: string
 ): Promise<ReviewScreenState> {
-  const statusResponse = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
+  const statusResponse = await client.sendRequest('git.status', {
+    worktree: `id:${worktreeId}`,
+    // This snapshot is what the reviewer acts on, so a discard from here has to cite the content it
+    // showed them. Ignored by hosts that predate it.
+    worktreeContentIdentity: true
+  })
   if (!statusResponse.ok) {
     if (isMobileGitUnavailable(statusResponse.error?.code, statusResponse.error?.message)) {
       return { kind: 'unavailable', message: 'Update Orca X desktop to review changes on mobile.' }

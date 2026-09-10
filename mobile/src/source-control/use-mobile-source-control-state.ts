@@ -24,6 +24,7 @@ import {
   getUnstageablePaths,
   type MobileGitStatusEntry
 } from './mobile-git-status'
+import { resolveDiscardAuthorization } from './discard-authorization'
 import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
 import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
 import {
@@ -46,6 +47,10 @@ export type MobileSourceControlStateParams = {
   // When the panel runs inside the hub, "History" switches the segment instead of
   // pushing the standalone route. Absent for the standalone/dock usage.
   onOpenHistory?: () => void
+  /** Whether the host refuses a discard whose stated content no longer matches. Defaults to false,
+   *  which is the careful answer: a caller that has not been taught to resolve this claims nothing
+   *  rather than assuming a protection the host may not have. */
+  hostEnforcesDiscardPrecondition?: boolean
 }
 
 export function useMobileSourceControlState(params: MobileSourceControlStateParams) {
@@ -58,7 +63,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     onRequestClose,
     onFileOpenStart,
     onOpenedFileDiff,
-    onOpenHistory
+    onOpenHistory,
+    hostEnforcesDiscardPrecondition = false
   } = params
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
@@ -254,6 +260,28 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     ]
   )
 
+  /**
+   * Discard the change the user was shown, and only that one.
+   *
+   * The entry held in `discardTarget` is the row they looked at, so its identity is their
+   * authorization. When it cannot be stated the action does not silently fall back to an unchecked
+   * discard -- it refuses and says which of the two fixes applies.
+   */
+  const discardChange = useCallback(
+    async (entry: MobileGitStatusEntry) => {
+      const authorization = resolveDiscardAuthorization(entry, hostEnforcesDiscardPrecondition)
+      if (authorization.kind !== 'ready') {
+        setActionError(authorization.reason)
+        return false
+      }
+      return await runners.runGitAction(`discard:${entry.path}`, 'git.discard', {
+        filePath: entry.path,
+        expectedContent: authorization.expectedContent
+      })
+    },
+    [hostEnforcesDiscardPrecondition, runners, setActionError]
+  )
+
   return {
     client,
     connState,
@@ -262,6 +290,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     router,
     setRootRef,
     worktreeLabel,
+    discardChange,
+    hostEnforcesDiscardPrecondition,
     // screen state
     screenState,
     branchCompareState,

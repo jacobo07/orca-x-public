@@ -38,6 +38,9 @@ type ControllerInput = {
   initialTarget: MobileDiffReviewInitialTarget | null
   onOpenSession: () => void
   onReconnect: (hostId: string) => void | Promise<void>
+  /** Whether the host refuses a discard whose stated content no longer matches. Defaults to false,
+   *  which claims nothing rather than assuming a protection the host may not have. */
+  hostEnforcesDiscardPrecondition?: boolean
 }
 
 export function useMobileDiffReviewController(input: ControllerInput) {
@@ -45,6 +48,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     client,
     connState,
     hostId,
+    hostEnforcesDiscardPrecondition = false,
     worktreeId,
     name,
     initialFilter,
@@ -226,6 +230,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     client,
     connState,
     hostId,
+    hostEnforcesDiscardPrecondition,
     worktreeId,
     screenState,
     diffState,

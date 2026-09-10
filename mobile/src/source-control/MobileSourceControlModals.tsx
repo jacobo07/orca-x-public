@@ -18,6 +18,8 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
     setShowActionSheet,
     discardTarget,
     setDiscardTarget,
+    discardChange,
+    hostEnforcesDiscardPrecondition,
     showBranchPicker,
     setShowBranchPicker,
     localBranches,
@@ -45,8 +47,11 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
         onClose={() => setShowActionSheet(false)}
       />
 
+      {/* Two modals rather than one with a warning line, because on a host that cannot check there
+          is no safe destructive action to offer -- and an enabled Discard button that then refuses
+          is worse than not offering it. The Close button does exactly what it says. */}
       <ConfirmModal
-        visible={discardTarget !== null}
+        visible={discardTarget !== null && hostEnforcesDiscardPrecondition}
         title="Discard Change"
         message={
           discardTarget
@@ -57,13 +62,26 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
         destructive
         onConfirm={() => {
           if (discardTarget) {
-            void runGitAction(`discard:${discardTarget.path}`, 'git.discard', {
-              filePath: discardTarget.path
-            })
+            // Not runGitAction directly: the request has to carry the state this row was showing,
+            // and refusing is better than discarding unchecked when it cannot.
+            void discardChange(discardTarget)
           }
           // Modal visibility is derived from discardTarget — clear it so it dismisses.
           setDiscardTarget(null)
         }}
+        onCancel={() => setDiscardTarget(null)}
+      />
+
+      <ConfirmModal
+        visible={discardTarget !== null && !hostEnforcesDiscardPrecondition}
+        title="Can't Discard Safely"
+        message={
+          discardTarget
+            ? `This Orca host is too old to check whether "${discardTarget.path}" changed since you looked, so discarding here could destroy work you haven't seen. Update the host, or discard from the desktop.`
+            : undefined
+        }
+        confirmLabel="Close"
+        onConfirm={() => setDiscardTarget(null)}
         onCancel={() => setDiscardTarget(null)}
       />
 

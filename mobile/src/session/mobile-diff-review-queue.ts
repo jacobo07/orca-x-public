@@ -40,6 +40,18 @@ export type MobileDiffReviewQueueItem = {
   canUnstage: boolean
   canDiscard: boolean
   isGeneratedOrLockFile: boolean
+  /**
+   * The content this row was showing, for a discard that must not destroy anything newer.
+   *
+   * Not `diffIdentity` below, and the difference is the whole point. That one is built from the
+   * path, the status letter and the line counts, so it detects "this row is about something else
+   * now" -- and stays identical when one line is replaced by another, which is the edit a stale
+   * discard loses. Two values that look interchangeable and are not.
+   *
+   * Absent on branch rows, which are committed and have no working-tree state to protect, and on
+   * any row a host that predates this served.
+   */
+  worktreeContentId?: string
   diffIdentity: string
   noteCount: number
   unsentNoteCount: number
@@ -190,6 +202,9 @@ function statusEntryToQueueItem(
     canUnstage: entry.area === 'staged',
     canDiscard: isMobileGitDiscardableEntry(entry) && entry.area !== 'staged',
     isGeneratedOrLockFile: isGeneratedOrLockFile(entry.path),
+    ...(entry.worktreeContentId === undefined
+      ? {}
+      : { worktreeContentId: entry.worktreeContentId }),
     diffIdentity,
     ...counts,
     reviewedAt: reviewFileState?.reviewedAt,

@@ -176,6 +176,34 @@ function webClientPathForEndpoint(pathname: string): string {
   return `${pathname.replace(/\/$/, '')}/web-index.html`
 }
 
+export const MOBILE_DISCARD_NEEDS_OBSERVED_STATE =
+  'Discarding from a paired client requires a newer Orca. Update the app, or discard from the desktop.'
+
+/**
+ * A paired client that cannot say what it was looking at may not destroy uncommitted work.
+ *
+ * This is the "old client, new host" answer, and it is deliberately a refusal rather than a
+ * fallback to the previous behaviour. A phone can hold a view of a repository for hours across a
+ * dead connection; reconnecting restores the transport and not the client's knowledge. Every other
+ * mutation it can reach is recoverable from the object graph, so they keep working -- this is the
+ * one whose stale case destroys bytes no object describes.
+ *
+ * Deliberately NOT applied to the local renderer: it goes through the same method, and it is not a
+ * client that can be an hour behind. Bringing it under the same contract is worth doing and is a
+ * separate change; refusing it here would break discard on the desktop for no safety gained today.
+ */
+function mobileDiscardMissingObservedState(request: { method: string; params?: unknown }): boolean {
+  if (request.method !== 'git.discard') {
+    return false
+  }
+  const params = request.params
+  if (typeof params !== 'object' || params === null) {
+    return true
+  }
+  const expected = (params as Record<string, unknown>).expectedContent
+  return typeof expected !== 'string' || expected.length === 0
+}
+
 const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.list',
   'accounts.consumeCodexResetCredit',
@@ -1661,6 +1689,14 @@ export class OrcaRuntimeRpcServer {
             'forbidden',
             `Method '${request.method}' is not available to mobile clients`
           )
+        )
+      )
+      return
+    }
+    if (device.scope === 'mobile' && mobileDiscardMissingObservedState(request)) {
+      reply(
+        JSON.stringify(
+          this.buildError(request.id, 'stale_worktree_state', MOBILE_DISCARD_NEEDS_OBSERVED_STATE)
         )
       )
       return

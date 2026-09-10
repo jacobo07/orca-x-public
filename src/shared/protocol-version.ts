@@ -105,6 +105,12 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // history survived when it did not. This says the host reports the fact, so absence means resumed.
 export const AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY =
   'agent-session.resume-provenance.v1' as const
+// Why a capability rather than just an optional param: a discard is unrecoverable, and an older host
+// silently ignores a field it does not know. So a client that sent its observed state to a host
+// which does not enforce it would believe it was protected while the host discarded whatever was
+// there. This says the host both stamps the identity on status rows and refuses a discard whose
+// stated content no longer matches -- absence means the client must not offer the safe operation.
+export const GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY = 'git.discard-stale-state.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -148,6 +154,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY,
+  GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,

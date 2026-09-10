@@ -19,6 +19,8 @@ import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-c
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
+import { useHostProtocolGates } from '../components/HostProtocolGate'
+import { hostEnforcesDiscardPrecondition } from './discard-authorization'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
@@ -79,6 +81,9 @@ export function MobileSourceControlPanel({
   const openHistoryTab = useCallback(() => selectTab('history'), [selectTab])
   const openPrTab = useCallback(() => selectTab('pr'), [selectTab])
 
+  // Read here rather than deeper: this is the highest point in the Source Control subtree that is
+  // always inside <HostProtocolGate>, and the leaves below stay renderable on their own.
+  const { hostCapabilities } = useHostProtocolGates()
   const state = useMobileSourceControlState({
     hostId,
     worktreeId,
@@ -88,7 +93,8 @@ export function MobileSourceControlPanel({
     onRequestClose,
     onFileOpenStart,
     onOpenedFileDiff,
-    onOpenHistory: openHistoryTab
+    onOpenHistory: openHistoryTab,
+    hostEnforcesDiscardPrecondition: hostEnforcesDiscardPrecondition(hostCapabilities)
   })
   const actionSheetActions = useMobileSourceControlActionSheet(state)
   const {

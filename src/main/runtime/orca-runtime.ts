@@ -604,6 +604,7 @@ import {
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION,
@@ -5904,7 +5905,12 @@ export class OrcaRuntimeService {
         (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||
           capability !== REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
         (process.env.ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING !== '1' ||
-          capability !== TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)
+          capability !== TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY) &&
+        // Why: lets a test stand this host in for one that predates discard stale-state checking,
+        // so "new client, old host" can be exercised rather than only asserted. It can only
+        // withdraw a capability, which moves a client toward caution, never away from it.
+        (process.env.ORCA_E2E_DISABLE_GIT_DISCARD_STALE_STATE !== '1' ||
+          capability !== GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY)
     )
     if (hasOffscreen) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)

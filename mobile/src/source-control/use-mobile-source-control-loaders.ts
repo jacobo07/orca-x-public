@@ -196,7 +196,13 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         try {
           for (let attempt = 0; attempt <= SELECTOR_RETRY_COUNT; attempt += 1) {
             const response = await client.sendRequest('git.status', {
-              worktree: `id:${worktreeId}`
+              worktree: `id:${worktreeId}`,
+              // Why every refresh and not only before a discard: the row the user acts on IS this
+              // response, so the identity has to be the one they were looking at. Fetching it at
+              // press time would describe the file as it is then, which is the state a stale client
+              // cannot see and precisely what this exists to catch. Hosts that predate it ignore
+              // the flag.
+              worktreeContentIdentity: true
             })
             if (!isCurrentLoad()) {
               return false
