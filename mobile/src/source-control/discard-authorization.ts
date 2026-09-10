@@ -1,4 +1,7 @@
-import { GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE,
+  GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import type { MobileGitStatusEntry } from './mobile-git-status'
 
 /**
@@ -59,13 +62,25 @@ export function canDiscardSafely(authorization: DiscardAuthorization): boolean {
   return authorization.kind === 'ready'
 }
 
+const OBSERVED_STATE_REQUIRED =
+  'This version of the app cannot discard safely, so nothing was discarded. Update the app, or discard from the desktop.'
+
 /**
- * What a refused discard should say, or null when the host simply reported a conflict.
+ * What a refused discard should say, or null to leave the host's own message alone.
  *
  * A conflict is not a failure and should not read like one: the user's newer work was kept, which
  * is the outcome they would have chosen. It asks them to look again, and never mentions a hash.
+ *
+ * The second case is its opposite and must never borrow the first's words. A conflict means the file
+ * DID change; this means it did not, and the client simply could not say what it had seen. While
+ * both shared one code, a user with an outdated app was told their file had changed and their newer
+ * edits were still there -- two false statements, sending them to look for work that was never at
+ * risk instead of updating the app.
  */
 export function discardConflictMessage(errorCode: string | undefined): string | null {
+  if (errorCode === GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE) {
+    return OBSERVED_STATE_REQUIRED
+  }
   return errorCode === 'stale_worktree_state'
     ? 'This file changed after you opened it, so nothing was discarded. Your newer changes are still here — review them and try again.'
     : null

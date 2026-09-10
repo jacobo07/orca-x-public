@@ -111,6 +111,12 @@ export const AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY =
 // there. This says the host both stamps the identity on status rows and refuses a discard whose
 // stated content no longer matches -- absence means the client must not offer the safe operation.
 export const GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY = 'git.discard-stale-state.v1' as const
+// Why its own code rather than reusing stale_worktree_state: the two refusals are opposites. A stale
+// state means the file DID change and the user's newer work was kept; this means nothing changed and
+// the client could not say what it saw. Sharing one code made the client tell a user with an
+// outdated app that their file had changed and their newer edits were safe -- two false statements,
+// and it hid the one sentence that says what to actually do about it.
+export const GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE = 'discard_observed_state_required' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =

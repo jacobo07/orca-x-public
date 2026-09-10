@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE,
+  GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import type { MobileGitStatusEntry } from './mobile-git-status'
 import {
   canDiscardSafely,
@@ -82,6 +85,19 @@ describe('what a refused discard tells the user', () => {
     // No hashes, no oids, no protocol words -- the user gets the outcome and the next step.
     expect(message).not.toMatch(/sha256|oid|precondition|expectedContent/i)
     expect(message).toMatch(/still here/i)
+  })
+
+  it('does not tell a client that could not state what it saw that its file changed', () => {
+    // The two refusals are opposites, and this one used to borrow the other's code. A user whose app
+    // is too old was told their file had changed and their newer edits were preserved -- neither
+    // true, and it buried the only sentence that says what to do.
+    const message = discardConflictMessage(GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE)
+
+    expect(message).toBeTruthy()
+    expect(message).not.toMatch(/still here|changed after you opened/i)
+    expect(message).toMatch(/update/i)
+    expect(message).not.toMatch(/sha256|oid|precondition|expectedContent/i)
+    expect(message).not.toBe(discardConflictMessage('stale_worktree_state'))
   })
 
   it('leaves every other failure to the message the host sent', () => {

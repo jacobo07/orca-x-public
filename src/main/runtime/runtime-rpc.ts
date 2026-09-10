@@ -48,6 +48,7 @@ import type {
   PairingProvisionRelayParams
 } from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE } from '../../shared/protocol-version'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   decodeTerminalStreamFrame,
@@ -1696,7 +1697,11 @@ export class OrcaRuntimeRpcServer {
     if (device.scope === 'mobile' && mobileDiscardMissingObservedState(request)) {
       reply(
         JSON.stringify(
-          this.buildError(request.id, 'stale_worktree_state', MOBILE_DISCARD_NEEDS_OBSERVED_STATE)
+          this.buildError(
+            request.id,
+            GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE,
+            MOBILE_DISCARD_NEEDS_OBSERVED_STATE
+          )
         )
       )
       return
