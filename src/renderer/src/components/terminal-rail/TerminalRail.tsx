@@ -19,6 +19,7 @@ import {
 } from '../tab-bar/terminal-tab-activity-status'
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { buildTerminalRailRows, findActiveTerminalRailRow } from './terminal-rail-rows'
+import { TerminalPreviewHoverTrigger } from '../terminal-preview/TerminalPreviewHoverTrigger'
 import { TerminalRailPaneRow, TerminalRailTabRow } from './TerminalRailRow'
 import { useTerminalRailResize } from './use-terminal-rail-resize'
 
@@ -272,16 +273,22 @@ export default function TerminalRail({
                 return null
               }
               return (
-                <TerminalRailTab
+                <TerminalPreviewHoverTrigger
                   key={`tab-${row.tabId}`}
-                  tab={tab}
-                  paneCount={row.paneCount}
-                  isActive={activeRow === row}
-                  onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
-                  actions={tabActions}
-                  tabIndex={tabIds.indexOf(row.tabId)}
-                  tabCount={tabIds.length}
-                />
+                  tabId={row.tabId}
+                  leafId={row.leafId}
+                  title={tab.customTitle ?? tab.title}
+                >
+                  <TerminalRailTab
+                    tab={tab}
+                    paneCount={row.paneCount}
+                    isActive={activeRow === row}
+                    onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
+                    actions={tabActions}
+                    tabIndex={tabIds.indexOf(row.tabId)}
+                    tabCount={tabIds.length}
+                  />
+                </TerminalPreviewHoverTrigger>
               )
             }
             // Why: makePaneKey rejects legacy numeric leaf ids, and a pane whose key cannot be
@@ -290,18 +297,24 @@ export default function TerminalRail({
               ? (agentStatusByPaneKey?.[makePaneKey(row.tabId, row.leafId)]?.state ?? null)
               : null
             const customTitle = layoutsByTabId?.[row.tabId]?.titlesByLeafId?.[row.leafId]
+            const paneLabel =
+              customTitle ??
+              `${translate('auto.components.terminal.rail.TerminalRail.pane', 'Pane')} ${row.position}`
             return (
-              <TerminalRailPaneRow
+              <TerminalPreviewHoverTrigger
                 key={`pane-${row.leafId}`}
-                label={
-                  customTitle ??
-                  `${translate('auto.components.terminal.rail.TerminalRail.pane', 'Pane')} ${row.position}`
-                }
-                agentState={agentState}
-                isActive={activeRow === row}
-                onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
-                onContextMenu={(event) => event.preventDefault()}
-              />
+                tabId={row.tabId}
+                leafId={row.leafId}
+                title={paneLabel}
+              >
+                <TerminalRailPaneRow
+                  label={paneLabel}
+                  agentState={agentState}
+                  isActive={activeRow === row}
+                  onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
+                  onContextMenu={(event) => event.preventDefault()}
+                />
+              </TerminalPreviewHoverTrigger>
             )
           })}
       </div>
