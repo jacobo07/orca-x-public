@@ -21,7 +21,13 @@
 #
 # What remains is the destructive one: a git operation a client can issue against a file it last
 # saw some time ago.
+#
+# Four more arrived on 2026-09-10, emptying the unknown list. Read that as one number moving between
+# two columns, not as progress: the unresolved total the gate prints is unchanged at five. What DID
+# change is that every remaining row now names a gap someone can act on, and only one of them still
+# blocks a release.
 authority.stale-client-cannot-overwrite-current-state
 drafts.user-invested-input-survives-process-death
 runtime.command-acts-on-the-window-that-owns-the-target
+terminal.launch-profile-identity
 voice.transcript-target-ownership

@@ -13,4 +13,8 @@
 # authority.stale-client-cannot-overwrite-current-state and session.lifecycle-vocabulary. Both had
 # been measured and written up while still labelled "nobody checked". They are no less open for
 # having moved -- the unresolved total the gate prints is unchanged at seven.
-terminal.launch-profile-identity
+#
+# Empty as of 2026-09-10. Every capability in the manifest now has a disposition somebody measured,
+# so this list has done its job and holds nothing. It stays here rather than being deleted: the gate
+# reads it in both directions, and an empty allow-list is what makes the NEXT unclassified capability
+# fail immediately instead of joining a queue.

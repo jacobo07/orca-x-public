@@ -95,8 +95,15 @@
     {
       "id": "terminal.launch-profile-identity",
       "title": "A terminal can say which launch profile it came from, and tell recorded from inferred",
-      "disposition": "unknown",
-      "notes": "Distinct from terminal.launch-profile-offer, which is closed: this is what an ALREADY RUNNING terminal can say about its own origin, and mobile still infers agent identity from a title glyph. src/shared/terminal-launch-profile-identity.ts is pure TypeScript with type-only imports, so it is portable as-is. The earlier note here claimed mobile was blocked on wire aperture; that was measured on the registry module rather than the capability and was wrong -- the launch verb was reachable all along. What is genuinely unmeasured is whether the recorded/inferred distinction survives to a mobile session tab."
+      "disposition": "measured-open",
+      "severity": "P2",
+      "evidence": [
+        "src/shared/terminal-launch-profile-identity.ts",
+        "src/shared/runtime-types.ts",
+        "mobile/src/session/mobile-terminal-tab-agent.ts"
+      ],
+      "reason": "Traced 2026-09-10, and this is the one capability on this list where the fact genuinely does not reach the client -- the opposite of the four before it. The identity is a pure derivation over three tab fields: launchProfileId, launchAgent and shellOverride. launchAgent rides on the runtime session-tab row and mobile already consumes it, preferring it over the title (resolveMobileTerminalTabAgentId reads hook status, then launchAgent, and only then falls back to a glyph -- so the old note here, that mobile infers identity from a title glyph, understated what mobile does). launchProfileId is the ONLY field that yields source:'recorded', it exists on TerminalTab and in the persisted session schema, and it appears nowhere under src/main/runtime and nowhere in mobile/. So the boundary it disappears at is the HOST PROJECTION: the runtime never picks it up onto the row it publishes, and mobile can therefore produce 'inferred' but never 'recorded'. P2, not higher, because no mobile surface consumes the distinction: there is no relaunch-from-this-tab affordance anywhere in mobile/src or mobile/app, so nothing currently presents an inference as a fact. That is what makes this a gap to close BEFORE mobile grows such an affordance, rather than before release. What closes it: carry launchProfileId on the published row and derive on the client, since the derivation module is pure TypeScript with type-only imports and is portable as-is.",
+      "notes": "Two instrument failures worth keeping, because the first nearly produced a confident wrong answer. A repo-wide ripgrep over src/ TIMED OUT and returned a PARTIAL result WITHOUT saying so -- it omitted a file I had already read and knew contained the token, which is the only reason the truncation was caught. The same search then failed loudly on a retry. Every claim above was re-taken with a different instrument carrying a positive control against a file known to contain the term. An absence is only worth what the instrument that found it is worth."
     },
     {
       "id": "session.lifecycle-vocabulary",
