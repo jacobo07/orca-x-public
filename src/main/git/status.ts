@@ -7,6 +7,7 @@ import * as path from 'node:path'
 import {
   assertWorktreeStateUnchanged,
   readWorktreeContentIdentity,
+  WORKTREE_CONTENT_IDENTITY_CONCURRENCY,
   type DiscardPrecondition
 } from '../../shared/worktree-content-identity'
 export {
@@ -14,6 +15,7 @@ export {
   StaleWorktreeStateError,
   type DiscardPrecondition
 } from '../../shared/worktree-content-identity'
+import { forEachWithConcurrency } from '../../shared/map-with-concurrency'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareResult,
@@ -493,7 +495,7 @@ async function runGetStatus(
  * entry that cannot be read is left unstamped rather than stamped with a guess — absence means
  * "not computed", so a client simply cannot claim protection for it.
  */
-async function attachWorktreeContentIdentities(
+export async function attachWorktreeContentIdentities(
   worktreePath: string,
   entries: GitStatusEntry[]
 ): Promise<void> {
@@ -503,16 +505,18 @@ async function attachWorktreeContentIdentities(
   if (targets.length === 0) {
     return
   }
-  await Promise.all(
-    targets.map(async (entry) => {
-      try {
-        entry.worktreeContentId = await readWorktreeContentIdentity(worktreePath, entry.path)
-      } catch {
-        // Unreadable is not empty and not absent. Leaving it off is the safe answer: the client
-        // cannot then authorize a discard it could not describe.
-      }
-    })
-  )
+  // Bounded because each read pulls the whole file into memory, so the fan-out is a memory budget
+  // rather than a speed knob: measured, RSS tracks file size exactly, and starting all of these at
+  // once turned 24 ordinary 8MB files into a 128MB burst on one refresh. Unbounded, the peak is the
+  // SUM of every changed file.
+  await forEachWithConcurrency(targets, WORKTREE_CONTENT_IDENTITY_CONCURRENCY, async (entry) => {
+    try {
+      entry.worktreeContentId = await readWorktreeContentIdentity(worktreePath, entry.path)
+    } catch {
+      // Unreadable is not empty and not absent. Leaving it off is the safe answer: the client
+      // cannot then authorize a discard it could not describe.
+    }
+  })
 }
 
 /** Undefined — and therefore zero extra work — unless the caller asked for a total we can know exact. */

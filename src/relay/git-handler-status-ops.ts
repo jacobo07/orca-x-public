@@ -19,7 +19,11 @@ import {
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
 import { resolveGitStatusLimit } from '../shared/git-status-limit'
-import { readWorktreeContentIdentity } from '../shared/worktree-content-identity'
+import {
+  readWorktreeContentIdentity,
+  WORKTREE_CONTENT_IDENTITY_CONCURRENCY
+} from '../shared/worktree-content-identity'
+import { forEachWithConcurrency } from '../shared/map-with-concurrency'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
@@ -224,24 +228,27 @@ export async function getStatusOp(
       // worktree can be computed. Skipped for submodule-internal rows and unresolved conflicts,
       // which no client can discard from here; an unreadable file is left unstamped rather than
       // guessed, because absence means "not computed" and claims nothing.
-      await Promise.all(
-        entries
-          .filter(
-            (entry) =>
-              entry.submoduleRoot === undefined &&
-              entry.conflictStatus !== 'unresolved' &&
-              typeof entry.path === 'string'
-          )
-          .map(async (entry) => {
-            try {
-              entry.worktreeContentId = await readWorktreeContentIdentity(
-                worktreePath,
-                entry.path as string
-              )
-            } catch {
-              // Unreadable is neither empty nor absent; leaving it off is the safe answer.
-            }
-          })
+      // Bounded for the same reason as the local host: each read holds a whole file in memory, so
+      // an unbounded fan-out peaks at the SUM of every changed file. It matters more here -- this
+      // process serves a remote worktree and does not get to assume a desktop's headroom.
+      await forEachWithConcurrency(
+        entries.filter(
+          (entry) =>
+            entry.submoduleRoot === undefined &&
+            entry.conflictStatus !== 'unresolved' &&
+            typeof entry.path === 'string'
+        ),
+        WORKTREE_CONTENT_IDENTITY_CONCURRENCY,
+        async (entry) => {
+          try {
+            entry.worktreeContentId = await readWorktreeContentIdentity(
+              worktreePath,
+              entry.path as string
+            )
+          } catch {
+            // Unreadable is neither empty nor absent; leaving it off is the safe answer.
+          }
+        }
       )
     }
   } else {

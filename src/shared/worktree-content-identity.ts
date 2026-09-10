@@ -63,6 +63,17 @@ export async function readWorktreeContentIdentity(
   }
 }
 
+/**
+ * How many of these may run at once when stamping a status snapshot.
+ *
+ * A memory budget, not a speed knob: each call holds a whole file, so RSS tracks file size exactly
+ * (measured: an 8MB file costs 8MB) and an unbounded fan-out peaks at the SUM of every changed file
+ * -- 24 ordinary 8MB files produced a 128MB burst on one refresh. Lives here with the identity for
+ * the same reason the identity does: the relay computes it for SSH worktrees, and two numbers would
+ * be two budgets.
+ */
+export const WORKTREE_CONTENT_IDENTITY_CONCURRENCY = 8
+
 /** What the caller believed it was destroying, from `readWorktreeContentIdentity`. */
 export type DiscardPrecondition = {
   expectedContent?: string | null
