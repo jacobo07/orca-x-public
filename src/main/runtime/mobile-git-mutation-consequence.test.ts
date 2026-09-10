@@ -47,8 +47,8 @@ const MUTATIONS: Record<string, { protection: Protection; why: string }> = {
   'git.rebaseFromBase': { protection: 'recoverable', why: 'Rewrites the branch, but every pre-rebase commit stays reachable through the reflog. Worth a precondition eventually; not work loss.' },
   'git.commit': { protection: 'recoverable', why: 'A stale caller can commit changes it never saw, which is wrong but undoable -- nothing is destroyed.' },
   'git.discard': {
-    protection: 'unprotected',
-    why: 'Destroys uncommitted changes to a named path with no statement of what the caller believed that path contained. Uncommitted work is not in the object graph, so this is the one entry here whose stale case is unrecoverable. The ENFORCEMENT now exists -- discardChanges takes a working-tree content precondition and refuses a stale one, proved against real git in discard-stale-worktree-state.test.ts -- but no wire carries it yet, so a mobile caller still cannot supply one and this stays unprotected. Deliberately not half-landed: the identity has to ride on the status payload, because one of the two mobile discard surfaces acts from a list row without opening a diff, and a status shape change plus a negotiated capability plus enforcement for negotiated clients is one slice or none.'
+    protection: 'compare-and-swap',
+    why: 'Destroys uncommitted changes at a path, and uncommitted work is in no object anywhere -- the one entry here whose stale case is unrecoverable, which is why it is the one that had to be fenced rather than merely classified. The caller states the content it observed (expectedContent, from the status row it acted on) and the host re-reads the bytes immediately before destroying them, refusing if they moved. Deliberately NOT the blob oids status prints for free: those describe HEAD and the index, and a discard leaves the index alone, so they identify states this does not destroy. A paired client that states nothing is refused outright at the mobile aperture rather than falling back to the old behaviour, so an older app loses this one operation instead of quietly keeping the unsafe one.'
   },
   'worktree.create': { protection: 'operation-id', why: 'clientMutationId dedupes a retry into the in-flight create.' },
   'worktree.prefetchCreateBase': { protection: 'converges-on-repeat', why: 'A prefetch warms a cache and changes no user state.' },
@@ -86,10 +86,17 @@ const READS = new Set([
 /**
  * Mobile-reachable repository mutations with no stale-state protection.
  *
- * This list may only SHRINK. An entry here is an operation a client can issue against a world that
- * has moved, with a consequence the matrix above states in full.
+ * This list may only SHRINK, and as of 2026-09-10 it is empty. That is a claim about an APERTURE,
+ * not about git in general: it means every method in MOBILE_RPC_METHOD_ALLOWLIST that changes a
+ * repository has an answer to "what if the caller is describing a world that no longer exists".
+ * `git.bulkDiscard` has no such answer and is not on the allowlist -- if it is ever added, it
+ * belongs here until it does, and the sweep below will say so.
+ *
+ * Empty is the dangerous state for a list like this, because an empty expectation matches an empty
+ * reality for the wrong reason just as happily as the right one. The sweep is driven from the
+ * allowlist rather than from this file, and the test below drives its red branch.
  */
-const UNPROTECTED = ['git.discard']
+const UNPROTECTED: string[] = []
 
 function mobileRepositoryMethods(): string[] {
   const source = readFileSync(join(process.cwd(), 'src/main/runtime/runtime-rpc.ts'), 'utf8')
@@ -131,6 +138,25 @@ describe('mobile repository mutations are classified by what a stale caller can 
       .sort()
 
     expect(unprotected).toEqual(UNPROTECTED)
+  })
+
+  it('would notice a new unprotected mutation now that the list is empty', () => {
+    // An empty expectation is satisfied by an empty reality whether or not the check still works,
+    // so drive the red branch explicitly. The day this matters is the day someone classifies a
+    // mutation as unprotected and expects the gate to stop them.
+    const withOneUnprotected = { 'git.rewriteEverything': { protection: 'unprotected' as const } }
+
+    expect(
+      Object.entries(withOneUnprotected)
+        .filter(([, entry]) => entry.protection === 'unprotected')
+        .map(([name]) => name)
+    ).not.toEqual(UNPROTECTED)
+  })
+
+  it('does not let git.bulkDiscard reach mobile while it cannot say what it destroys', () => {
+    // The single-path discard is fenced; the bulk one is not. The honest way to hold that line is
+    // to assert the aperture, not to write a reassuring comment about it.
+    expect(mobileRepositoryMethods()).not.toContain('git.bulkDiscard')
   })
 
   it('does not let a method be called both a read and a mutation', () => {
