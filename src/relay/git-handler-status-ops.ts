@@ -19,6 +19,7 @@ import {
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
 import { resolveGitStatusLimit } from '../shared/git-status-limit'
+import { readWorktreeContentIdentity } from '../shared/worktree-content-identity'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
@@ -218,6 +219,31 @@ export async function getStatusOp(
       recompute: () => attachLineStats(git, worktreePath, entries, options.signal),
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     }))
+    if (params.worktreeContentIdentity === true) {
+      // The remote host is where the bytes are, so this is the only place the identity for an SSH
+      // worktree can be computed. Skipped for submodule-internal rows and unresolved conflicts,
+      // which no client can discard from here; an unreadable file is left unstamped rather than
+      // guessed, because absence means "not computed" and claims nothing.
+      await Promise.all(
+        entries
+          .filter(
+            (entry) =>
+              entry.submoduleRoot === undefined &&
+              entry.conflictStatus !== 'unresolved' &&
+              typeof entry.path === 'string'
+          )
+          .map(async (entry) => {
+            try {
+              entry.worktreeContentId = await readWorktreeContentIdentity(
+                worktreePath,
+                entry.path as string
+              )
+            } catch {
+              // Unreadable is neither empty nor absent; leaving it off is the safe answer.
+            }
+          })
+      )
+    }
   } else {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }

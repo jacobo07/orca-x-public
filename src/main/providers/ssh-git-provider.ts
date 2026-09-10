@@ -143,18 +143,25 @@ export class SshGitProvider implements IGitProvider {
       options?.branchLineTotalMergeBase === undefined
         ? {}
         : { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
+    const contentIdentityArgs = options?.worktreeContentIdentity
+      ? { worktreeContentIdentity: true }
+      : {}
     const request = {
       worktreePath,
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs,
       ...lineStatsReuseArgs,
-      ...branchLineTotalArgs
+      ...branchLineTotalArgs,
+      ...contentIdentityArgs
     }
     const key = stableInFlightKey([
       worktreePath,
       options?.includeIgnored === true,
       options?.bypassEffectiveUpstreamNegativeCache === true,
       options?.reuseLineStats === true,
+      // Why: a caller that needs the identity must never be served a shared read that omitted it --
+      // absence reads as "not computed", which would silently disable the protection.
+      options?.worktreeContentIdentity === true,
       // Why: the result carries a total only for callers who asked, and only for
       // this fork point, so a shared lease must never serve one to the other.
       options?.branchLineTotalMergeBase ?? ''

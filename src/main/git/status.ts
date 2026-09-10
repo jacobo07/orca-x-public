@@ -6,6 +6,7 @@ import * as path from 'node:path'
 // worktree; two copies would be two definitions of "unchanged".
 import {
   assertWorktreeStateUnchanged,
+  readWorktreeContentIdentity,
   type DiscardPrecondition
 } from '../../shared/worktree-content-identity'
 export {
@@ -234,6 +235,17 @@ export type GetStatusOptions = GitRuntimeOptions & {
    *  repo's rule is directory-only (`node_modules/`), but they are Orca's own
    *  artifacts, not user work. */
   sharedLinkPaths?: readonly string[]
+  /** Stamp each entry with the identity of its working-tree bytes, so a client that may later ask
+   *  to discard one can say which content it authorized destroying.
+   *
+   *  Off by default because it is a per-file read nothing else on this path needs. Measured on this
+   *  repo's own shapes: ~2 ms over 5 changed files and ~8 ms over 25, which is 1-4% of the git work
+   *  a refresh already pays; ~78-93 ms in the 100-400 file tail, where git's own subprocesses are
+   *  already costing 250-550 ms. Cheap where it is common, and only paid by the surfaces that can
+   *  act destructively. If the tail ever matters, the line-stats cache above is the place to put a
+   *  stat-keyed memo -- a stale one can only cause a false conflict, never a false authorization,
+   *  because the destructive check never reads through a cache. */
+  worktreeContentIdentity?: boolean
 }
 
 /**
@@ -265,7 +277,10 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     options.bypassEffectiveUpstreamNegativeCache === true,
     limit,
     // Why: this changes which entries survive, so it must not share a cache slot.
-    options.sharedLinkPaths ?? []
+    options.sharedLinkPaths ?? [],
+    // Why: a caller that needs the identity must never be served a shared read that omitted it --
+    // absence would read as "not computed" and silently disable the protection.
+    options.worktreeContentIdentity === true
   ])
 }
 
@@ -431,6 +446,9 @@ async function runGetStatus(
       ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
     })
     branchLineTotal = lineStats.branchLineTotal
+    if (options.worktreeContentIdentity) {
+      await attachWorktreeContentIdentities(worktreePath, entries)
+    }
   } else {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
@@ -465,6 +483,36 @@ async function runGetStatus(
         }
       : {})
   }
+}
+
+/**
+ * Stamp entries with the identity of the bytes a discard would destroy.
+ *
+ * Only the entries a discard can actually target: a row inside a submodule is not discardable from
+ * the parent, and an entry with unresolved conflict markers is not a stable file to act on. An
+ * entry that cannot be read is left unstamped rather than stamped with a guess — absence means
+ * "not computed", so a client simply cannot claim protection for it.
+ */
+async function attachWorktreeContentIdentities(
+  worktreePath: string,
+  entries: GitStatusEntry[]
+): Promise<void> {
+  const targets = entries.filter(
+    (entry) => entry.submoduleRoot === undefined && entry.conflictStatus !== 'unresolved'
+  )
+  if (targets.length === 0) {
+    return
+  }
+  await Promise.all(
+    targets.map(async (entry) => {
+      try {
+        entry.worktreeContentId = await readWorktreeContentIdentity(worktreePath, entry.path)
+      } catch {
+        // Unreadable is not empty and not absent. Leaving it off is the safe answer: the client
+        // cannot then authorize a discard it could not describe.
+      }
+    })
+  )
 }
 
 /** Undefined — and therefore zero extra work — unless the caller asked for a total we can know exact. */

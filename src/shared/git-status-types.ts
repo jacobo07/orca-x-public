@@ -48,6 +48,20 @@ export type GitUncommittedEntry = {
   // as additions. Undefined for binary files and when the diff is unavailable.
   added?: number
   removed?: number
+  // Identity of the bytes on disk when this status was taken, for a client that
+  // may later ask to destroy them. Present only when the caller asked for it
+  // (see `worktreeContentIdentity` in GetStatusOptions) — most status reads
+  // never discard anything and should not pay for it.
+  //
+  // NOT a change-detection value. `added`/`removed` and `diffIdentity`-style
+  // composites look similar and are not interchangeable: replacing one line with
+  // a different line leaves those constant. This is the only field here that
+  // distinguishes two different contents of the same shape, which is what a
+  // destructive precondition needs.
+  //
+  // Absent means "not computed", never "unchanged". A consumer that cannot see
+  // one must not claim protection it does not have.
+  worktreeContentId?: string
 }
 
 export type GitStatusEntry = GitUncommittedEntry

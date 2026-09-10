@@ -32,6 +32,7 @@ export const GIT_METHODS: RpcMethod[] = [
         params.bypassEffectiveUpstreamNegativeCache === undefined &&
         params.reuseLineStats === undefined &&
         params.branchLineTotalMergeBase === undefined &&
+        params.worktreeContentIdentity === undefined &&
         signal === undefined
           ? undefined
           : {
@@ -45,6 +46,9 @@ export const GIT_METHODS: RpcMethod[] = [
               ...(params.branchLineTotalMergeBase === undefined
                 ? {}
                 : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),
+              ...(params.worktreeContentIdentity === true
+                ? { worktreeContentIdentity: true }
+                : {}),
               ...(signal ? { signal } : {})
             }
       return options === undefined

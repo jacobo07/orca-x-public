@@ -12,7 +12,10 @@ export const GitStatusParams = WorktreeSelector.extend({
   bypassEffectiveUpstreamNegativeCache: z.boolean().optional(),
   reuseLineStats: z.boolean().optional(),
   // Shape is re-validated host-side before it reaches a git argv.
-  branchLineTotalMergeBase: z.string().optional()
+  branchLineTotalMergeBase: z.string().optional(),
+  // Asked for by clients whose Source Control can discard, so the row the user acts on can say what
+  // it was. A per-file read, so it stays opt-in.
+  worktreeContentIdentity: z.boolean().optional()
 })
 
 export const GitCheckIgnored = WorktreeSelector.extend({
