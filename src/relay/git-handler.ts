@@ -674,25 +674,37 @@ export class GitHandler {
    * destruction. Silence would have been the dangerous answer.
    */
   private async discardIfUnchanged(params: Record<string, unknown>) {
-    const worktreePath = params.worktreePath as string
-    const filePath = params.filePath as string
     const expectedContent = params.expectedContent
     if (typeof expectedContent !== 'string' || expectedContent.length === 0) {
       throw new Error('git.discardIfUnchanged requires the content the caller expects')
     }
-    this.assertInWorktree(worktreePath, filePath)
-    if ((await readWorktreeContentIdentity(worktreePath, filePath)) !== expectedContent) {
-      const error = new Error(
-        `"${filePath}" changed since it was last read, so the discard was not applied`
-      )
-      // Matches the local host's code so one client branch handles both.
-      ;(error as Error & { code?: string }).code = 'stale_worktree_state'
-      throw error
-    }
-    return this.discard(params)
+    // Checked inside `discard`, not here: this used to assert and then hand off to a method that
+    // redid containment and spent a whole remote `ls-files` round-trip before destroying anything,
+    // and every bit of that was a window a write could land in.
+    return this.discard(params, expectedContent)
   }
 
-  private async discard(params: Record<string, unknown>) {
+  /** Immediately before the destructive command, so nothing can land between the two. */
+  private async assertUnchanged(
+    worktreePath: string,
+    filePath: string,
+    expectedContent: string | undefined
+  ): Promise<void> {
+    if (expectedContent === undefined) {
+      return
+    }
+    if ((await readWorktreeContentIdentity(worktreePath, filePath)) === expectedContent) {
+      return
+    }
+    const error = new Error(
+      `"${filePath}" changed since it was last read, so the discard was not applied`
+    )
+    // Matches the local host's code so one client branch handles both.
+    ;(error as Error & { code?: string }).code = 'stale_worktree_state'
+    throw error
+  }
+
+  private async discard(params: Record<string, unknown>, expectedContent?: string) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
@@ -709,6 +721,8 @@ export class GitHandler {
       } catch {
         // untracked
       }
+
+      await this.assertUnchanged(worktreePath, filePath, expectedContent)
 
       if (tracked) {
         await this.git(

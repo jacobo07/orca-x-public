@@ -74,6 +74,13 @@ export type DiscardPrecondition = {
  * A client-side "nothing changed" check would be worthless: the stale client is precisely the party
  * that cannot know. Any gap between this read and the mutation is a gap an edit can land in, so this
  * sits as close to the destruction as the code allows.
+ *
+ * That last sentence was untrue when it was first written, which is the reason it is now spelled out
+ * as a constraint on callers rather than a description of them: both hosts ran a tracked/untracked
+ * `ls-files` probe between this check and the write, and the relay additionally re-entered a second
+ * method that redid containment over a remote shell. Anything a caller needs before destroying --
+ * probes, containment, cache invalidation -- belongs ABOVE this call, because none of it is a write
+ * and all of it is time. `discard-precondition-ordering.test.ts` fails if that order is reversed.
  */
 export async function assertWorktreeStateUnchanged(
   worktreePath: string,

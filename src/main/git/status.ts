@@ -2201,8 +2201,9 @@ export async function discardChanges(
     if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
-    await assertWorktreeStateUnchanged(worktreePath, filePath, precondition)
-
+    // Probed BEFORE the precondition, not after: this is a pure read of the index, and every
+    // millisecond it spent between the check and the write was a window an edit could land in --
+    // which is precisely the state the precondition exists to refuse.
     let tracked = false
     try {
       await gitExecFileAsync(
@@ -2215,6 +2216,8 @@ export async function discardChanges(
     } catch {
       // File is not tracked by git
     }
+
+    await assertWorktreeStateUnchanged(worktreePath, filePath, precondition)
 
     if (tracked) {
       await gitExecFileAsync(
