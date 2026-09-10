@@ -39,7 +39,13 @@ export type IGitProvider = {
   unstageFile(worktreePath: string, filePath: string): Promise<void>
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void>
-  discardChanges(worktreePath: string, filePath: string): Promise<void>
+  /** `precondition` states what the caller believed it was destroying; a provider that cannot
+   *  enforce it must fail the call rather than discard without checking. */
+  discardChanges(
+    worktreePath: string,
+    filePath: string,
+    precondition?: { expectedContent?: string | null }
+  ): Promise<void>
   bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   abortMerge(worktreePath: string): Promise<void>

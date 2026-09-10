@@ -11,6 +11,7 @@ import {
   parseWorktreeList
 } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
+import { readWorktreeContentIdentity } from '../shared/worktree-content-identity'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -223,6 +224,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.checkout', (p) => this.checkout(p))
     this.dispatcher.onRequest('git.localBranches', (p) => this.localBranches(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
+    this.dispatcher.onRequest('git.discardIfUnchanged', (p) => this.discardIfUnchanged(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
@@ -662,6 +664,32 @@ export class GitHandler {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
     return resolved
+  }
+
+  /**
+   * Discard, but only if the file is still the one the caller says it read.
+   *
+   * A separate request name rather than an extra field on `git.discard`: a relay that predates this
+   * has no handler, so a client that needs the check gets an error instead of an unchecked
+   * destruction. Silence would have been the dangerous answer.
+   */
+  private async discardIfUnchanged(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+    const expectedContent = params.expectedContent
+    if (typeof expectedContent !== 'string' || expectedContent.length === 0) {
+      throw new Error('git.discardIfUnchanged requires the content the caller expects')
+    }
+    this.assertInWorktree(worktreePath, filePath)
+    if ((await readWorktreeContentIdentity(worktreePath, filePath)) !== expectedContent) {
+      const error = new Error(
+        `"${filePath}" changed since it was last read, so the discard was not applied`
+      )
+      // Matches the local host's code so one client branch handles both.
+      ;(error as Error & { code?: string }).code = 'stale_worktree_state'
+      throw error
+    }
+    return this.discard(params)
   }
 
   private async discard(params: Record<string, unknown>) {

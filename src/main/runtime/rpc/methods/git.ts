@@ -8,6 +8,7 @@ import {
   GitCheckout,
   GitCommit,
   GitCommitCompare,
+  GitDiscardFilePath,
   GitFilePath,
   GitForkSync,
   GitHistory,
@@ -199,9 +200,15 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.discard',
-    params: GitFilePath,
+    params: GitDiscardFilePath,
+    // Why the two shapes: a caller that stated nothing must reach the runtime exactly as it always
+    // did, so "no precondition" stays one thing rather than becoming two that behave alike today.
     handler: async (params, { runtime }) =>
-      runtime.discardRuntimeGitPath(params.worktree, params.filePath)
+      params.expectedContent === undefined
+        ? runtime.discardRuntimeGitPath(params.worktree, params.filePath)
+        : runtime.discardRuntimeGitPath(params.worktree, params.filePath, {
+            expectedContent: params.expectedContent
+          })
   }),
   defineMethod({
     name: 'git.bulkDiscard',

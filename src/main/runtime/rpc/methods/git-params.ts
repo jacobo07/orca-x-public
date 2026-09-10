@@ -42,6 +42,20 @@ export const GitFilePath = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing file path'))
 })
 
+/**
+ * Discard carries what the caller believed it was destroying.
+ *
+ * Kept off `GitFilePath` on purpose: stage and unstage move content between places that both
+ * survive, so a stale caller there costs nothing. Discard is the one path where being wrong about
+ * the current state is unrecoverable, and it is the only one that should pay for saying so.
+ *
+ * Optional because an un-upgraded client cannot produce it. Absence is a protocol fact -- what the
+ * host may do with it is decided by capability negotiation, not here.
+ */
+export const GitDiscardFilePath = GitFilePath.extend({
+  expectedContent: z.string().min(1).max(200).optional()
+})
+
 export const GitDiff = GitFilePath.extend({
   staged: z.boolean(),
   compareAgainstHead: z.boolean().optional()

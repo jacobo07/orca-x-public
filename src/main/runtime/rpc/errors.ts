@@ -74,6 +74,9 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  // A refused discard is a conflict, not a fault: the client has to be able to say "the file
+  // changed, look again" rather than showing the same message it shows when git falls over.
+  'stale_worktree_state',
   'worktree_id_requires_full_path',
   'run_not_found',
   'run_required',

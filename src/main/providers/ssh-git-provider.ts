@@ -457,9 +457,25 @@ export class SshGitProvider implements IGitProvider {
     })
   }
 
-  async discardChanges(worktreePath: string, filePath: string): Promise<void> {
+  async discardChanges(
+    worktreePath: string,
+    filePath: string,
+    precondition?: { expectedContent?: string | null }
+  ): Promise<void> {
+    const expectedContent = precondition?.expectedContent
     await this.runWithGitReadInvalidation(async () => {
-      await this.mux.request('git.discard', { worktreePath, filePath })
+      if (expectedContent === undefined || expectedContent === null) {
+        await this.mux.request('git.discard', { worktreePath, filePath })
+        return
+      }
+      // A separate request name rather than an extra field, so this is fail-closed against an older
+      // relay by construction: it has no handler for this, so the call errors and nothing is
+      // destroyed. An added field would have been ignored, and the file would be gone.
+      await this.mux.request('git.discardIfUnchanged', {
+        worktreePath,
+        filePath,
+        expectedContent
+      })
     })
   }
 

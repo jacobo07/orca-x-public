@@ -36,6 +36,7 @@ import {
   commitChanges,
   detectConflictOperation,
   discardChanges,
+  type DiscardPrecondition,
   getBranchCompare,
   getBranchDiff,
   getCommitCompare,
@@ -975,7 +976,17 @@ export class RuntimeGitCommands {
     return { ok: true }
   }
 
-  async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
+  /**
+   * `precondition` is what the caller says it was looking at. Absent means it said nothing, which is
+   * the shape every client sent before this existed -- so absence cannot be treated as a claim that
+   * nothing changed. Whether an unstated request is allowed to proceed is a negotiation question,
+   * answered above this layer; here it simply means there is no authorization to check.
+   */
+  async discardRuntimeGitPath(
+    worktreeSelector: string,
+    filePath: string,
+    precondition?: DiscardPrecondition
+  ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
@@ -983,10 +994,18 @@ export class RuntimeGitCommands {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.discardChanges(target.worktree.path, relativePath)
+      // The bytes are on the far host, so the local read below would be measuring the wrong disk.
+      // The provider routes a stated precondition to a request an older relay does not implement,
+      // which fails the call instead of quietly discarding without the check.
+      await provider.discardChanges(target.worktree.path, relativePath, precondition)
       return { ok: true }
     }
-    await discardChanges(target.worktree.path, relativePath, localGitOptionsForTarget(target))
+    await discardChanges(
+      target.worktree.path,
+      relativePath,
+      localGitOptionsForTarget(target),
+      precondition
+    )
     return { ok: true }
   }
 
