@@ -63,7 +63,15 @@ export function TerminalPreviewHoverTrigger({
           and silently dropping the trigger handlers onto it would leave a dead affordance. Focus
           bubbles out of the button, so keyboard users still open the card. */}
       <HoverCardTrigger asChild>
-        <div data-terminal-preview-trigger={tabId}>{children}</div>
+        {/* Why the leaf as well as the tab: two panes of one tab are two different terminals, so a
+            trigger identified by tab alone names something that is not the subject. */}
+        <div
+          data-terminal-preview-trigger=""
+          data-terminal-preview-tab-id={tabId}
+          data-terminal-preview-leaf-id={leafId}
+        >
+          {children}
+        </div>
       </HoverCardTrigger>
       <HoverCardContent side="left" align="start" sideOffset={8} className="w-auto p-2">
         {subject ? <TerminalPreviewCard subject={subject} title={title} /> : null}
