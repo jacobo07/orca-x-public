@@ -171,8 +171,10 @@
     {
       "id": "drafts.user-invested-input-survives-process-death",
       "title": "Text the user composed and has not sent survives the app being killed",
-      "disposition": "unknown",
-      "notes": "Mobile has an editable file preview with dirty-draft tracking and no persistence site was found, so process death discards it silently. Needs a durability tier in config/durability-contracts.jsonc rather than a mobile-only taxonomy."
+      "disposition": "measured-open",
+      "severity": "P1",
+      "evidence": ["mobile/src/files/MobileFilePreviewScreen.tsx"],
+      "reason": "Confirmed 2026-09-10 with an instrument wide enough to answer it. The earlier note said 'no persistence site was found', which is only worth something if the search could have found one -- mobile/src/storage exists, so the check was re-run across every source in mobile/src/files for an import of that module as well as for the storage APIs themselves. There are none. The draft lives in useState with two refs mirroring it, and the screen's only protection is an in-session guard that warns before navigating away, which is a different hazard from the one this capability names. Process death discards composed, unsent text with no notice. P1 rather than P0: it takes the OS killing the app, and what is lost is the user's own unsent input rather than a file on disk. What closes it: a durability tier in config/durability-contracts.jsonc naming the state and its consequence, then a write that satisfies it -- not a mobile-only draft taxonomy, since 'what does this write owe if it is lost' already has an owner in this repository."
     },
     {
       "id": "runtime.mutation-carries-its-own-context",
@@ -184,8 +186,14 @@
     {
       "id": "runtime.command-acts-on-the-window-that-owns-the-target",
       "title": "A remote command reaches the workspace it named, not a representative one",
-      "disposition": "unknown",
-      "notes": "Narrowed, not closed. The inbound half is measured under runtime.mutation-carries-its-own-context; what remains is the OUTBOUND half, where orca-runtime.ts notifiersFor delivers to every bound window when a target cannot be placed. That fallback is deliberate and defended in its own comment -- dropping a command silently would be worse -- and for a notification it is likely right. Unknown because nobody has checked what a mobile-initiated command looks like to the wrong window when it arrives there, not because the routing is unexamined."
+      "disposition": "measured-open",
+      "severity": "P1",
+      "evidence": [
+        "src/main/runtime/runtime-notifier-router.ts",
+        "src/main/runtime/runtime-graph-owners.ts"
+      ],
+      "reason": "Measured 2026-09-10, and the answer is a disagreement between two adjacent layers rather than a missing check. runtime-graph-owners resolves an unplaced worktree or tab to the SOLE window when there is exactly one, and to null when there are several -- its comment says refusing to guess is the safe direction, and it is right. orca-runtime notifiersFor then turns that null into every window, defended by its own comment on the grounds that dropping a command silently would be worse than delivering it widely. Both are reasonable; composed, the second inverts the first. For a notification the wide delivery is likely still correct. What makes this open is that four entries past that point do not notify, they ACT, and each takes the first window off that fallback list: revealTerminalSession, readMobileMarkdownTab, saveMobileMarkdownTab and closeTerminalTab. So with two or more windows and a target no window has placed, a mobile-initiated markdown save or terminal-tab close is performed by whichever window happens to be enumerated first. P1, not P0: it needs a second window plus an unplaced target, and the blast radius past that point is bounded by whether the chosen window can find the tab at all -- which is exactly what nobody has measured. What closes it: separate the no-op branch from the broadcast branch, so a verb that acts refuses an unplaceable target instead of inheriting a fallback designed for verbs that inform.",
+      "notes": "The general shape is the one in scoped-side-effect-authority: composing two safety inputs requires writing down each gate's no-op branch, because a gate that only fires in one state switches OFF rather than tightening when the state changes. Here the graph-owner layer's safe answer is null, and null is precisely the value the next layer reads as 'everyone'."
     },
     {
       "id": "authority.repository-mutations-are-classified-by-stale-consequence",
