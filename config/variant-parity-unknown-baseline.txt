@@ -14,7 +14,6 @@
 # been measured and written up while still labelled "nobody checked". They are no less open for
 # having moved -- the unresolved total the gate prints is unchanged at seven.
 drafts.user-invested-input-survives-process-death
-navigation.reversible-navigation-preserves-context
 runtime.command-acts-on-the-window-that-owns-the-target
 terminal.launch-profile-identity
 voice.transcript-target-ownership

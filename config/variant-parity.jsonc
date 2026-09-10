@@ -157,8 +157,9 @@
     {
       "id": "navigation.reversible-navigation-preserves-context",
       "title": "Leaving a work surface and coming back preserves the scene rather than recreating it",
-      "disposition": "unknown",
-      "notes": "Mobile screens survive navigation only because no screen sets unmountOnBlur or freezeOnBlur. The capability is real and nothing protects it, so one future flag deletes it with a green suite."
+      "disposition": "shared-already",
+      "evidence": ["mobile/src/navigation/screen-context-preservation.test.ts"],
+      "notes": "Re-measured 2026-09-10 and unchanged: no screen or layout under mobile/app sets unmountOnBlur, freezeOnBlur, unmountOnExit or detachInactiveScreens, so mobile holds this the same way desktop does. What was missing was never the capability, only the proof -- and the proof had to read mobile/app from disk, because vitest.config.ts includes src/**/*.test.ts and collects nothing from that tree at all. A property held by ABSENCE cannot fail a suite while it is true, so the sweep asserts a floor of screens found and drives its own matcher against a synthetic source; a sweep that stopped matching would otherwise report exactly what a clean one reports."
     },
     {
       "id": "drafts.user-invested-input-survives-process-death",
