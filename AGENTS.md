@@ -56,6 +56,14 @@ The same circularity silently disables overflow guards. `AppMenuStrip` collapses
 
 Two habits follow. Header content width is often **localized**, so a layout defect can exist in one language and not another; a gap that reproduces in Spanish may be invisible in English. And diagnose voids by measuring the rendered gap between two *named* surfaces in the running app — a generic "large element with no children" scan flags legitimate cases such as `xterm-viewport`. `tests/e2e/workspace-left-column-geometry.spec.ts` is the worked example.
 
+## Terminal Preview Observers
+
+A surface that *shows* a terminal without being it — a hover card, a thumbnail, an inspector — reads
+the main-process headless emulator, never a second ANSI interpreter and never a screen capture. It
+must not call `terminalPreview.fit` (which resizes the PTY and parks the host pane), must not route
+input, and must not take focus. See [`docs/reference/terminal-preview-observers.md`](./docs/reference/terminal-preview-observers.md),
+which also records why the Windows taskbar thumbnail is out of scope.
+
 ## Durable State
 
 If a feature persists state that a crash or power loss could destroy, it needs a contract in [`config/durability-contracts.jsonc`](./config/durability-contracts.jsonc), not just a working write. Say what the state is, what breaks if it disappears, and its tier.
