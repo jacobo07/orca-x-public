@@ -108,16 +108,44 @@ the visible rows from the main-side headless model — which is correct while mi
 because it never depended on the renderer — rasterize them in the main process, and hand the result
 to DWM when DWM asks. That keeps the throttling behaviour the 330-second minimize gate protects.
 
-Still unverified, and not to be assumed: DWM's behaviour under the Windows 11 taskbar (no doc
-addresses it either way), what it does with an aspect-ratio mismatch, alpha semantics, and the
-numeric message values — Microsoft publishes only the symbolic names, so those come from the SDK
-headers. One trap worth naming: an **elevated** process never receives these messages unless it
-admits them through the message filter, and the symptom is silence, not an error — the feature would
-simply look unimplemented.
+One trap worth naming: an **elevated** process never receives these messages unless it admits them
+through the message filter, and the symptom is silence, not an error — the feature would simply look
+unimplemented. Both messages sit below `WM_USER`, which the `ChangeWindowMessageFilterEx` docs place
+in the always-passed category, so this is expected to be moot here; it has not been tested under
+elevation.
+
+### What was measured, rather than read
+
+A probe built against this contract answered the four questions the documentation could not. It ran
+as a real Electron 43 main process on Windows 11 26200, owning its own `BrowserWindow`, opting that
+window in through a Node-API addon and observing demand through `hookWindowMessage`.
+
+| Question | Docs said | Observed |
+|---|---|---|
+| Do the messages reach an Electron-owned window? | — | **Yes.** `WM_DWMSENDICONICTHUMBNAIL` delivered, reproduced across runs |
+| lParam packing | HIWORD is max-**X**, LOWORD max-**Y** | `0xfa0094` → 250×148 for a landscape window; portrait if read the conventional way |
+| Bitmap format | "32-bit color depth", nothing more | 32bpp **top-down** DIB section, opaque alpha → `S_OK` |
+| May the reply be deferred? | NOT STATED | **Yes.** Answered 334 ms after the window procedure returned → `S_OK` |
+
+The deferred-reply result is the one the architecture rests on: rasterizing is asynchronous, so a
+contract requiring an answer inside the window procedure would have forced a pre-rendered cache.
+It does not.
+
+Two honest limits on that evidence. `S_OK` means DWM *accepted* the bitmap, which is not the same as
+a user seeing those pixels — the live-preview page documents a case that returns success and discards
+the bitmap — so acceptance is not yet Product Reality. And `WM_DWMSENDICONICLIVEPREVIEWBITMAP` has
+never fired in any run, because nothing has invoked Peek; that half of the protocol is still unproven.
+
+The demand also did not arrive on every run. One run recorded none at all, and its log shows why:
+`WINDOW_MINIMIZED_AT_END=false`. The ALT+TAB used to provoke the switcher had selected the probe's own
+window, and releasing ALT restored it — a restored window has a live representation again, so DWM had
+no reason to ask. That run is **inconclusive about delivery**, not evidence against it, and the fix
+was to cancel the switcher with ESC rather than to retry. A stimulus that can destroy the precondition
+it depends on will otherwise report a working mechanism as broken.
 
 Nothing above is shipped yet. The in-app preview does not depend on any of it, because it reads the
 main-side model rather than the compositor — which is also why the same model is the right source for
-the taskbar if and when that adapter is built.
+the taskbar adapter.
 
 ## Proving a preview, rather than asserting one
 
