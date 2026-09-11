@@ -28,10 +28,7 @@ import {
   type TaskbarPreviewDiagnostic,
   type TaskbarPreviewMessageWindow
 } from './taskbar-preview-controller'
-import {
-  loadTaskbarPreviewNative,
-  type TaskbarPreviewNativeLoad
-} from './taskbar-preview-native'
+import { loadTaskbarPreviewNative, type TaskbarPreviewNativeLoad } from './taskbar-preview-native'
 import {
   resolveTaskbarPreviewSubject,
   type TaskbarPreviewSessionView,

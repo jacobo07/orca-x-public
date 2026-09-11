@@ -199,7 +199,14 @@ export function createTaskbarPreviewController(
       lines = describeUnavailableSubject(subject.reason)
     }
 
-    const decision = ledger.commitSupply({ generation, incarnation: drawnFor })
+    const decision = ledger.commitSupply({
+      generation,
+      incarnation: drawnFor,
+      // Two independent bitmaps at two different sizes. Fencing them together meant answering the
+      // taskbar thumbnail marked the window-sized live preview as already satisfied, so Peek was
+      // never supplied at all.
+      channel: livePreview ? 'live-preview' : 'thumbnail'
+    })
     if (decision !== 'accept') {
       report({ kind: 'dropped', reason: decision })
       return
@@ -230,7 +237,13 @@ export function createTaskbarPreviewController(
       report({ kind: 'dropped', reason: 'no-size' })
       return
     }
-    report({ kind: 'demand', livePreview, width: size.width, height: size.height, generation: ledger.generation })
+    report({
+      kind: 'demand',
+      livePreview,
+      width: size.width,
+      height: size.height,
+      generation: ledger.generation
+    })
     // Deliberately not awaited on the message path. DWM accepts a late answer, so the window
     // procedure returns immediately and the raster runs on its own.
     void answer(livePreview, size).catch(() => {

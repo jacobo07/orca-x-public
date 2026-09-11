@@ -24,10 +24,18 @@
 
 export type TaskbarPreviewIncarnation = symbol
 
+/**
+ * The shell holds two unrelated bitmaps for one window and asks for them separately: a small
+ * taskbar thumbnail and a window-sized live preview. They are different pictures at different
+ * sizes, so they need different fences — one counter across both means answering either one marks
+ * the other as already satisfied, and the shell never gets the one it asked for.
+ */
+export type TaskbarPreviewChannel = 'thumbnail' | 'live-preview'
+
 export type SupplyDecision =
   /** This result describes the newest terminal state and the current window. Use it. */
   | 'accept'
-  /** A newer generation has already been supplied. Dropping this is the monotonicity law. */
+  /** A newer generation has already been supplied on this channel. Dropping this is the law. */
   | 'superseded'
   /** Rasterized for a window incarnation that no longer exists. */
   | 'foreign-incarnation'
@@ -35,7 +43,7 @@ export type SupplyDecision =
 export class TaskbarPreviewSupplyLedger {
   /** Generation 0 means "nothing has been observed yet", so a first supply is never superseded. */
   private currentGeneration = 0
-  private lastSuppliedGeneration = 0
+  private suppliedByChannel = new Map<TaskbarPreviewChannel, number>()
   private lastInvalidatedAtMs: number | null = null
   private incarnation: TaskbarPreviewIncarnation = Symbol('taskbar-preview-incarnation')
 
@@ -49,13 +57,22 @@ export class TaskbarPreviewSupplyLedger {
     return this.currentGeneration
   }
 
+  /** The newest generation any channel has been given, which is what staleness is measured against. */
   get suppliedGeneration(): number {
-    return this.lastSuppliedGeneration
+    let newest = 0
+    for (const generation of this.suppliedByChannel.values()) {
+      newest = Math.max(newest, generation)
+    }
+    return newest
+  }
+
+  suppliedGenerationFor(channel: TaskbarPreviewChannel): number {
+    return this.suppliedByChannel.get(channel) ?? 0
   }
 
   /** True while Windows holds something older than what the terminal now shows. */
   get isStale(): boolean {
-    return this.currentGeneration > this.lastSuppliedGeneration
+    return this.currentGeneration > this.suppliedGeneration
   }
 
   get currentIncarnation(): TaskbarPreviewIncarnation {
@@ -71,7 +88,7 @@ export class TaskbarPreviewSupplyLedger {
    */
   adoptIncarnation(): TaskbarPreviewIncarnation {
     this.incarnation = Symbol('taskbar-preview-incarnation')
-    this.lastSuppliedGeneration = 0
+    this.suppliedByChannel.clear()
     return this.incarnation
   }
 
@@ -81,18 +98,27 @@ export class TaskbarPreviewSupplyLedger {
    * Incarnation is checked before generation on purpose: a result from a destroyed window is wrong
    * regardless of how new its content was, and reporting it as merely superseded would suggest the
    * content was the problem.
+   *
+   * The generation test is strict: only a raster *older* than what this channel already holds is
+   * refused. A raster at the same generation is a fresh answer to a fresh demand, and the shell asks
+   * again for reasons that have nothing to do with the terminal — a different surface, a resize, a
+   * cache it dropped. Refusing those was a real freeze: the first thumbnail was supplied and every
+   * later demand was turned away until a terminal write happened to bump the counter, which for an
+   * idle terminal is never. The fence exists to stop a late render walking the picture backwards,
+   * not to decide which requests deserve an answer.
    */
   commitSupply(result: {
     generation: number
     incarnation: TaskbarPreviewIncarnation
+    channel: TaskbarPreviewChannel
   }): SupplyDecision {
     if (result.incarnation !== this.incarnation) {
       return 'foreign-incarnation'
     }
-    if (result.generation <= this.lastSuppliedGeneration) {
+    if (result.generation < this.suppliedGenerationFor(result.channel)) {
       return 'superseded'
     }
-    this.lastSuppliedGeneration = result.generation
+    this.suppliedByChannel.set(result.channel, result.generation)
     return 'accept'
   }
 

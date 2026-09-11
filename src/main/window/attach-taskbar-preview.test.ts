@@ -133,7 +133,10 @@ describe('attachTaskbarPreview', () => {
     expect(attachment).toBeNull()
     expect(window.hooks.size).toBe(0)
     expect(diagnostics).toEqual([
-      { kind: 'native', load: { status: 'unavailable', reason: 'not-built', detail: 'C:\\missing' } }
+      {
+        kind: 'native',
+        load: { status: 'unavailable', reason: 'not-built', detail: 'C:\\missing' }
+      }
     ])
   })
 
@@ -224,8 +227,18 @@ describe('attachTaskbarPreview', () => {
     claimWorkspaceForWindow(a.windowId, { repoId: 'r', worktreeId: 'wt-local' })
     claimWorkspaceForWindow(b.windowId, { repoId: 'r', worktreeId: 'wt-ssh' })
 
-    const attachA = attachTaskbarPreview({ window: windowA, store, runtime, loadAddon: available(addon) })
-    const attachB = attachTaskbarPreview({ window: windowB, store, runtime, loadAddon: available(addon) })
+    const attachA = attachTaskbarPreview({
+      window: windowA,
+      store,
+      runtime,
+      loadAddon: available(addon)
+    })
+    const attachB = attachTaskbarPreview({
+      window: windowB,
+      store,
+      runtime,
+      loadAddon: available(addon)
+    })
 
     expect(attachA?.resolveSubject()).toMatchObject({ ptyId: 'pty-local' })
     expect(attachB?.resolveSubject()).toMatchObject({ ptyId: 'pty-ssh' })
