@@ -7,12 +7,15 @@ export function ActionButton({
   icon: Icon,
   title,
   onClick,
-  disabled
+  disabled,
+  testId
 }: {
   icon: React.ComponentType<{ className?: string }>
   title: string
   onClick: (event: React.MouseEvent) => void
   disabled?: boolean
+  /** For controls a test must find in any locale: every other handle here is a translated string. */
+  testId?: string
 }): React.JSX.Element {
   // Why: use Radix Tooltip (not native title) to match sidebar chrome.
   // Why (no local TooltipProvider): reuse App.tsx's single one so Radix's adjacent-trigger delay-skip handoff still works.
@@ -30,6 +33,7 @@ export function ActionButton({
           )}
           aria-label={title}
           aria-disabled={disabled}
+          {...(testId ? { 'data-testid': testId } : {})}
           onClick={(event) => {
             if (disabled) {
               event.preventDefault()

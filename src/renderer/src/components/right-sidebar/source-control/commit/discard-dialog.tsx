@@ -119,6 +119,10 @@ export function SourceControlDiscardDialog({
           </Button>
           <Button
             ref={confirmButtonRef}
+            // Why a testid on this one: its label is translated AND varies by row kind, and the dialog's
+            // last button is the content's close X rather than this. A test reaching for either found
+            // cancel, which leaves the file intact -- indistinguishable from a refusal working.
+            data-testid="source-control-discard-confirm"
             type="button"
             variant="destructive"
             autoFocus
