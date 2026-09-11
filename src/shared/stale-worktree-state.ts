@@ -7,7 +7,37 @@
  * an error object. Nothing here touches either.
  */
 
+import { GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE } from './protocol-version'
+
 export const STALE_WORKTREE_STATE_CODE = 'stale_worktree_state'
+
+/**
+ * The caller could not say what it was destroying, so nothing was.
+ *
+ * The opposite refusal to the stale one below and it must never borrow its words: this means the file
+ * did NOT change and the client simply had no record of what it had shown. Sharing one code once told a
+ * user their file had changed and their newer edits were preserved -- two false statements, and it hid
+ * the only sentence that said what to do.
+ *
+ * Reuses the code mobile already uses for the same situation. One vocabulary across clients beats a
+ * locally convenient name, and the two clients' hosts are the same hosts.
+ */
+export class DiscardObservedStateRequiredError extends Error {
+  readonly code = GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE
+  constructor(readonly filePath: string) {
+    super(`No observed content was stated for "${filePath}", so the discard was not applied`)
+    this.name = 'DiscardObservedStateRequiredError'
+  }
+}
+
+/** Did this rejection mean "I could not describe what I was destroying"? */
+export function isDiscardObservedStateRequiredError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE
+  )
+}
 
 /**
  * A marker inside the refusal's own message, because a `code` property does not survive every hop.

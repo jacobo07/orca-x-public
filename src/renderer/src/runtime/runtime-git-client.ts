@@ -25,6 +25,7 @@ import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/c
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { DiscardObservedStateRequiredError } from '../../../shared/stale-worktree-state'
 import type { DiscardPrecondition } from '../../../shared/worktree-content-identity'
 import {
   assertRuntimeEnvironmentCapability,
@@ -939,33 +940,40 @@ export async function bulkDiscardRuntimeGitPaths(
 export async function discardRuntimeGitPath(
   context: RuntimeGitContext,
   filePath: string,
-  precondition?: DiscardPrecondition
+  precondition: DiscardPrecondition | undefined
 ): Promise<void> {
   const expectedContent = precondition?.expectedContent
+  // Why a refusal rather than the old unprotected call: a row without an identity is not a row whose
+  // content is unchanged, and the rows that lack one are reachable -- a status listing past its entry
+  // cap is stamped with nothing, and the huge-repository state is a banner rather than a replacement
+  // for the list, so those rows still render a working discard button. Letting them through would fence
+  // the ordinary path and leave the degraded one open, which is a gate built beside a hole. Here rather
+  // than in the hook that calls it today, so the next caller inherits it without remembering to.
+  if (typeof expectedContent !== 'string' || expectedContent.length === 0) {
+    throw new DiscardObservedStateRequiredError(filePath)
+  }
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
     await window.api.git.discard({
       worktreePath: resolveLocalWorktreePath(context),
       filePath,
       connectionId: context.connectionId,
-      ...(expectedContent === undefined || expectedContent === null ? {} : { expectedContent })
+      expectedContent
     })
     return
   }
-  if (expectedContent !== undefined && expectedContent !== null) {
-    await assertRuntimeEnvironmentCapability(
-      target.environmentId,
-      GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
-      DISCARD_HOST_CANNOT_CHECK_MESSAGE
-    )
-  }
+  await assertRuntimeEnvironmentCapability(
+    target.environmentId,
+    GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
+    DISCARD_HOST_CANNOT_CHECK_MESSAGE
+  )
   await callRuntimeRpc(
     target,
     'git.discard',
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       filePath,
-      ...(expectedContent === undefined || expectedContent === null ? {} : { expectedContent })
+      expectedContent
     },
     { timeoutMs: 15_000 }
   )

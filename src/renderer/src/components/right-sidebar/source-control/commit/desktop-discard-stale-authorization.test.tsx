@@ -7,7 +7,10 @@ import * as path from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { StaleWorktreeStateError } from '../../../../../../shared/stale-worktree-state'
+import {
+  DiscardObservedStateRequiredError,
+  StaleWorktreeStateError
+} from '../../../../../../shared/stale-worktree-state'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 
 /**
@@ -257,9 +260,32 @@ describe('what the desktop tells the host it is authorizing the destruction of',
     })
   })
 
-  it('says nothing rather than guessing when the row carries no identity', async () => {
-    // A capped listing, an unreadable file, a host that does not stamp. Absence has to travel as
-    // absence: inventing a value here would authorize destroying whatever is on disk.
+  it('tells the user it could not tell, in different words from a conflict', async () => {
+    const worktree = await createFixtureWorktree()
+    await write(worktree, 'note.txt', 'whatever\n')
+    hostMocks.discardRuntimeGitPath.mockImplementation((): Promise<void> => {
+      const running = Promise.reject(new DiscardObservedStateRequiredError('note.txt'))
+      inFlightDiscard = running.then(
+        () => {},
+        () => {}
+      )
+      return running
+    })
+
+    await discardThroughDialog(worktree, row())
+
+    const said = String(toastMocks.message.mock.calls[0]?.[0] ?? '')
+    expect(said).toContain('could not tell')
+    // The opposite of a conflict: this file did NOT change, so saying it did would send the user hunting
+    // for work that was never at risk instead of refreshing.
+    expect(said).not.toContain('changed after you opened it')
+  })
+
+  it('passes absence as absence rather than guessing, when the row carries no identity', async () => {
+    // A capped listing, an unreadable file, a host that does not stamp. Absence must travel as absence:
+    // inventing a value here would authorize destroying whatever happens to be on disk. The transport
+    // refuses it outright -- proven in runtime-git-discard-observed-state.test.ts -- and this pins that
+    // the hook does not paper over the gap on the way there.
     const worktree = await createFixtureWorktree()
     await write(worktree, 'note.txt', 'whatever\n')
     resolveTransportWith('accepts')
