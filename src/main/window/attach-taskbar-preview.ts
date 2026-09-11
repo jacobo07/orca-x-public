@@ -57,6 +57,16 @@ export type TaskbarPreviewTerminalRuntime = {
   getTerminalSize(ptyId: string): { cols: number; rows: number } | null
 }
 
+export type TaskbarPreviewAttachDiagnostic =
+  | TaskbarPreviewDiagnostic
+  | { kind: 'native'; load: TaskbarPreviewNativeLoad }
+  /**
+   * Iconic state, reported because a thumbnail is only demanded while the window is iconic. A run
+   * that lost that state mid-flight produces the same reading as a platform that never delivers —
+   * no demands — so the edges belong in the record beside them.
+   */
+  | { kind: 'window'; state: 'minimize' | 'restore' }
+
 export type TaskbarPreviewAttachment = {
   dispose(): void
   /** Test seam: lets a caller assert the subject without driving a native demand. */
@@ -119,7 +129,7 @@ export function attachTaskbarPreview(args: {
   store: TaskbarPreviewSessionStore
   runtime: TaskbarPreviewTerminalRuntime
   loadAddon?: () => TaskbarPreviewNativeLoad
-  onDiagnostic?: (event: TaskbarPreviewDiagnostic | { kind: 'native'; load: TaskbarPreviewNativeLoad }) => void
+  onDiagnostic?: (event: TaskbarPreviewAttachDiagnostic) => void
 }): TaskbarPreviewAttachment | null {
   try {
     return attachOrNull(args)
@@ -144,7 +154,7 @@ function attachOrNull(args: {
   store: TaskbarPreviewSessionStore
   runtime: TaskbarPreviewTerminalRuntime
   loadAddon?: () => TaskbarPreviewNativeLoad
-  onDiagnostic?: (event: TaskbarPreviewDiagnostic | { kind: 'native'; load: TaskbarPreviewNativeLoad }) => void
+  onDiagnostic?: (event: TaskbarPreviewAttachDiagnostic) => void
 }): TaskbarPreviewAttachment | null {
   const load = loadOnce(args.loadAddon ?? defaultLoadAddon)
   if (load.status !== 'available') {
@@ -192,8 +202,14 @@ function attachOrNull(args: {
   // Minimize and restore bracket exactly the interval in which the thumbnail matters, and the user
   // cannot change panes in a window they cannot see — so these two edges are enough to keep the
   // output subscription pointed at the right pane without polling anything.
-  args.window.on('minimize', () => controller.retarget())
-  args.window.on('restore', () => controller.retarget())
+  args.window.on('minimize', () => {
+    args.onDiagnostic?.({ kind: 'window', state: 'minimize' })
+    controller.retarget()
+  })
+  args.window.on('restore', () => {
+    args.onDiagnostic?.({ kind: 'window', state: 'restore' })
+    controller.retarget()
+  })
   args.window.on('closed', () => controller.dispose())
 
   return { dispose: () => controller.dispose(), resolveSubject, controller }

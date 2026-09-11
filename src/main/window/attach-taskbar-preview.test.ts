@@ -262,6 +262,31 @@ describe('attachTaskbarPreview', () => {
     expect(runtime).not.toHaveProperty('registerRawTerminalViewSubscriber')
   })
 
+  // A demand only arrives while the window is iconic, so a run that lost that state mid-flight
+  // reads exactly like a platform that never delivers. The log has to be able to say which.
+  it('records the iconic edges around the demands, so a zero can be read', () => {
+    const addon = createAddon()
+    const window = createWindow(19)
+    const record = registerWorkspaceWindow({ browserWindowId: 9, rendererWebContentsId: 19 })
+    claimWorkspaceForWindow(record.windowId, { repoId: 'r', worktreeId: 'wt-local' })
+    const diagnostics: { kind: string; state?: string }[] = []
+
+    attachTaskbarPreview({
+      window,
+      store: createStore(),
+      runtime: createRuntime(),
+      loadAddon: available(addon),
+      onDiagnostic: (event) => diagnostics.push(event)
+    })
+    window.emit('minimize')
+    window.hooks.get(0x323)?.(Buffer.alloc(4), Buffer.from([0x94, 0x00, 0xfa, 0x00]))
+    window.emit('restore')
+
+    expect(
+      diagnostics.map((event) => `${event.kind}${event.state ? `:${event.state}` : ''}`)
+    ).toEqual(['enabled', 'window:minimize', 'demand', 'window:restore'])
+  })
+
   // The caller wires permissions, the updater and the browser manager after this returns. An
   // enhancement that threw would leave a window that opened and does not work.
   it('gives the window back rather than throwing when loading blows up', () => {

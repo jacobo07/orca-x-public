@@ -13,12 +13,9 @@
  */
 import { appendFileSync } from 'node:fs'
 
-import type { TaskbarPreviewDiagnostic } from './taskbar-preview-controller'
-import type { TaskbarPreviewNativeLoad } from './taskbar-preview-native'
+import type { TaskbarPreviewAttachDiagnostic } from './attach-taskbar-preview'
 
-export type TaskbarPreviewLoggedEvent =
-  | TaskbarPreviewDiagnostic
-  | { kind: 'native'; load: TaskbarPreviewNativeLoad }
+export type TaskbarPreviewLoggedEvent = TaskbarPreviewAttachDiagnostic
 
 export const TASKBAR_PREVIEW_LOG_ENV = 'ORCA_TASKBAR_PREVIEW_LOG'
 
