@@ -3448,6 +3448,7 @@ const api = {
       bypassEffectiveUpstreamNegativeCache?: boolean
       reuseLineStats?: boolean
       branchLineTotalMergeBase?: string
+      worktreeContentIdentity?: boolean
       requestToken?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
     cancelStatus: (args: { requestToken: string }): Promise<void> =>
@@ -3619,6 +3620,7 @@ const api = {
       worktreePath: string
       filePath: string
       connectionId?: string
+      expectedContent?: string
     }): Promise<void> => ipcRenderer.invoke('git:discard', args),
     bulkDiscard: (args: {
       worktreePath: string

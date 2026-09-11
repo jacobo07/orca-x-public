@@ -1,126 +1,90 @@
 // @vitest-environment happy-dom
 
-import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { discardChanges, getStatus, invalidateGitReadCaches } from '../../../../../../main/git/status'
-import { findWindowsGitBinDirectory } from '../../../../../../main/windows-git-executable-path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { StaleWorktreeStateError } from '../../../../../../shared/stale-worktree-state'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 
 /**
- * Can the desktop user authorize a discard against state A and have it destroy newer state B?
+ * What the desktop hands the host when a user authorizes a discard.
  *
- * The mobile answer was yes, and the fix was a precondition the host checks. The desktop was left out
- * of that with the argument that it is local -- same machine, same process tree, low latency. This
- * file exists because that argument is about transport and the question is about time. There are three
- * windows between what the user saw and what git destroys, and the middle one is a modal waiting on a
- * human, which no amount of locality shortens.
+ * The mobile discard was fenced and the desktop was left out, on the argument that it is local -- same
+ * machine, same process tree, low latency. That argument is about transport and the question is about
+ * time. Three windows separate the row the user read from the bytes git destroys, and the middle one is
+ * a modal waiting on a human, which no amount of locality shortens. The producer of the newer state
+ * needs none of Orca's machinery either: an external editor, a formatter on save, a build step, an
+ * agent session, a second window.
  *
- * So the producer of state B here is the filesystem itself, written to directly, outside every store,
- * cache, watcher and editor buffer Orca owns. That is the case a local client cannot design away: an
- * external editor, a formatter on save, a build step, an agent session, a second Orca window.
+ * Scope, stated rather than implied. This file is about the half the renderer owns: that the observed
+ * state travels from the row the user acted on, through a confirmation dialog that used to drop it, to
+ * the transport -- and that a refusal comes back as a refusal. It deliberately does NOT import the
+ * main-process discard: the renderer project is not allowed to, and the first draft's doing so turned
+ * one boundary violation into twenty-one typecheck errors. The consequence on disk is proven where the
+ * destruction lives, against real git, in src/main/git/discard-stale-worktree-state.test.ts, and
+ * end-to-end through the running app in the e2e suite.
  *
- * What is real: the two Source Control hooks the UI actually composes, a git repository this test
- * created, the main-process discard, and the bytes on disk afterwards. What is replaced: the IPC hop,
- * whose job is to carry the arguments it is given -- so the transport mock forwards whatever the hooks
- * hand it and nothing more. A hook that states nothing therefore reaches the real host stating nothing,
- * which is exactly the production shape.
- *
- * Every fixture is a repository under the OS temp directory, deleted afterwards. Nothing here may ever
- * run against a real worktree.
+ * The sharpest assertion here is the third one: the file is changed AFTER the row is captured, and the
+ * identity the transport receives is still the one from the row. That is what distinguishes stating
+ * what the user saw from re-reading the file at confirm time -- the second would silently authorize
+ * destroying work the user never looked at, which is the race rather than the protection.
  */
 
 const hostMocks = vi.hoisted(() => ({
-  /** Calls the real main-process discard, forwarding the precondition the renderer supplied. */
   discardRuntimeGitPath: vi.fn(),
   bulkDiscardRuntimeGitPaths: vi.fn(),
   bulkUnstageRuntimeGitPaths: vi.fn(),
   stageRuntimeGitPath: vi.fn(),
-  unstageRuntimeGitPath: vi.fn()
+  unstageRuntimeGitPath: vi.fn(),
+  DISCARD_HOST_CANNOT_CHECK_MESSAGE: 'host too old'
 }))
 
-// React needs to be told it is inside a test environment or every act() call warns and the batching
-// this file depends on is not guaranteed.
+const toastMocks = vi.hoisted(() => ({ message: vi.fn(), error: vi.fn() }))
+
+// React warns on every act() and stops guaranteeing the batching this file depends on unless it is
+// told it is in a test environment.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('@/runtime/runtime-git-client', () => hostMocks)
-
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: () => undefined
-}))
-
+vi.mock('sonner', () => ({ toast: toastMocks }))
+vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
 vi.mock('@/components/editor/editor-autosave', () => ({
-  // The editor-side race is separately handled and separately tested; these are the awaits that sit
-  // between the confirm and the destruction, so they stay in the path as real awaits.
+  // The editor-side race is separately handled and separately tested; these are two of the awaits that
+  // sit between the confirm and the destruction, so they stay in the path as real awaits.
   requestEditorSaveQuiesce: async () => {},
   notifyEditorExternalFileChange: () => {}
 }))
-
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ settings: { activeRuntimeEnvironmentId: null } }) }
 }))
 
 const tempRoots: string[] = []
 
-/**
- * Git for Windows is often installed without the PATH option, and a bare `git` then fails with ENOENT
- * -- which reads as this suite being broken rather than as a missing binary. The app resolves this at
- * startup; a vitest process does not run that, so borrow the same resolver.
- */
-beforeAll(() => {
-  const gitBinDirectory = findWindowsGitBinDirectory()
-  if (!gitBinDirectory) {
-    return
-  }
-  const pathKey = Object.keys(process.env).find((name) => name.toLowerCase() === 'path') ?? 'PATH'
-  process.env[pathKey] = `${gitBinDirectory}${path.delimiter}${process.env[pathKey] ?? ''}`
-})
-
-function git(repo: string, args: string[]): string {
-  return execFileSync('git', args, {
-    cwd: repo,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  }).trim()
-}
-
-async function createFixtureRepo(): Promise<string> {
+/** A real directory with real bytes, so the identities below are of something rather than of a string. */
+async function createFixtureWorktree(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-desktop-discard-'))
   tempRoots.push(root)
-  const repo = path.join(root, 'repo')
-  execFileSync('git', ['init', '-q', repo])
-  git(repo, ['config', 'user.email', 'test@example.com'])
-  git(repo, ['config', 'user.name', 'Test User'])
-  git(repo, ['config', 'commit.gpgSign', 'false'])
-  // Why the fixture pins this: `restore --source=HEAD` writes through the checkout filters, so with
-  // autocrlf on a Windows host the restored bytes differ from the committed ones. Real behaviour, and
-  // the reason the identity hashes what is on disk -- but it would make these assertions about
-  // restored content host-dependent, which is noise.
-  git(repo, ['config', 'core.autocrlf', 'false'])
-  return repo
+  return root
 }
 
-async function write(repo: string, relativePath: string, contents: string): Promise<void> {
-  await writeFile(path.join(repo, relativePath), contents)
+/** The same definition both hosts use, kept here rather than imported so this file pulls in no
+ *  filesystem module from shared just to build a fixture. */
+async function contentIdentity(worktree: string, relativePath: string): Promise<string> {
+  const bytes = await readFile(path.join(worktree, relativePath))
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`
 }
 
-async function read(repo: string, relativePath: string): Promise<string> {
-  return readFile(path.join(repo, relativePath), 'utf8')
-}
-
-async function commitFile(repo: string, relativePath: string, contents: string): Promise<void> {
-  await write(repo, relativePath, contents)
-  git(repo, ['add', '-A'])
-  git(repo, ['commit', '-q', '-m', 'base'])
+async function write(worktree: string, relativePath: string, contents: string): Promise<void> {
+  await writeFile(path.join(worktree, relativePath), contents)
 }
 
 let root: Root | null = null
 let surface: DiscardSurface | null = null
-/** The promise the transport returned, so an assertion can wait for the host instead of guessing. */
+/** The promise the transport returned, so an assertion can wait for the dispatch instead of guessing. */
 let inFlightDiscard: Promise<void> | null = null
 
 afterEach(async () => {
@@ -131,37 +95,35 @@ afterEach(async () => {
   }
   surface = null
   inFlightDiscard = null
-  invalidateGitReadCaches()
   vi.clearAllMocks()
   await Promise.all(tempRoots.splice(0).map((each) => rm(each, { recursive: true, force: true })))
 })
 
-/** Route the renderer's transport at the real main-process discard, forwarding what it was given. */
-function wireRealDiscard(repo: string): void {
-  hostMocks.discardRuntimeGitPath.mockImplementation(
-    (
-      _context: unknown,
-      filePath: string,
-      precondition?: { expectedContent?: string | null }
-    ): Promise<void> => {
-      const running = discardChanges(repo, filePath, {}, precondition)
-      inFlightDiscard = running.then(
-        () => {},
-        () => {}
-      )
-      return running
-    }
-  )
+function resolveTransportWith(outcome: 'accepts' | 'refuses-as-stale' | 'refuses-as-old-host'): void {
+  hostMocks.discardRuntimeGitPath.mockImplementation((): Promise<void> => {
+    const running =
+      outcome === 'accepts'
+        ? Promise.resolve()
+        : Promise.reject(
+            outcome === 'refuses-as-stale'
+              ? new StaleWorktreeStateError('note.txt')
+              : new Error(hostMocks.DISCARD_HOST_CANNOT_CHECK_MESSAGE)
+          )
+    inFlightDiscard = running.then(
+      () => {},
+      () => {}
+    )
+    return running
+  })
 }
 
 /**
- * Wait for the destruction the confirm dispatched, and refuse to proceed if there wasn't one.
+ * Wait for the dispatch the confirm produced, and refuse to proceed if there wasn't one.
  *
- * A discard that was never attempted and a discard that was refused leave identical bytes on disk. So
- * a consequence assertion taken before the host ran reports "your work survived" for the wrong reason
- * -- which is exactly what the first draft of this file did: the stale case passed while the fresh
- * control proved nothing had run yet. The precondition is that something reached the transport, and
- * when it did not that is inconclusive, which has to be loud rather than green.
+ * A discard that was never attempted and a discard that was refused look identical from outside. So an
+ * assertion taken before the dispatch reports the right answer for the wrong reason -- which is exactly
+ * what the first draft of this file did, passing its stale case while a sibling control proved nothing
+ * had run. Not-attempted is inconclusive and has to be loud rather than green.
  */
 async function settleDiscard(): Promise<void> {
   for (let attempt = 0; attempt < 300 && !inFlightDiscard; attempt += 1) {
@@ -227,8 +189,8 @@ async function renderDiscardSurface(worktreePath: string): Promise<DiscardSurfac
   }
   // Why a forwarder rather than the object captured above: requesting a confirmation re-renders the
   // probe, and the confirm handler from the previous render closes over a pending state that is still
-  // null -- so calling it returns silently, nothing is dispatched, and a consequence assertion then
-  // reads a file nobody touched. Always call the latest closure.
+  // null -- so calling it returns silently, nothing is dispatched, and an assertion then reads a world
+  // nobody touched. Always call the latest closure.
   const current = (): DiscardSurface => {
     if (!surface) {
       throw new Error('discard surface was unmounted')
@@ -241,82 +203,110 @@ async function renderDiscardSurface(worktreePath: string): Promise<DiscardSurfac
   }
 }
 
-/** The row the panel rendered, read through the real status path the panel reads through. */
-async function observedEntry(repo: string, relativePath: string): Promise<GitStatusEntry> {
-  const status = await getStatus(repo, { worktreeContentIdentity: true })
-  const entry = status.entries.find((candidate) => candidate.path === relativePath)
-  if (!entry) {
-    const rows = status.entries.map((candidate) => candidate.path).join(', ')
-    throw new Error(`no status row for ${relativePath}; rows: ${rows}`)
-  }
-  return entry
+function row(overrides: Partial<GitStatusEntry> = {}): GitStatusEntry {
+  return { path: 'note.txt', status: 'modified', area: 'unstaged', ...overrides }
 }
 
-describe('a desktop discard authorized against one state and executed against another', () => {
-  it('keeps work that arrived after the user opened the confirmation', async () => {
-    const repo = await createFixtureRepo()
-    await commitFile(repo, 'note.txt', 'committed\n')
-
-    // What the panel rendered, and the state the user chose to throw away.
-    await write(repo, 'note.txt', 'the edit the user reviewed\n')
-    const entry = await observedEntry(repo, 'note.txt')
-    wireRealDiscard(repo)
-
-    const rendered = await renderDiscardSurface(repo)
-    await act(async () => rendered.requestDiscardEntry(entry))
-
-    // The window this test is about: the dialog is open, and something outside Orca writes. Not the
-    // editor, not a store, not a watcher -- the file, directly, the way a formatter or a second tool
-    // would. The user has seen none of this and is about to press a button that says Discard.
-    await write(repo, 'note.txt', 'work that landed while the dialog was open\n')
-
-    await act(async () => {
-      rendered.confirmPendingDiscard()
-    })
-    await settleDiscard()
-
-    expect(await read(repo, 'note.txt')).toBe('work that landed while the dialog was open\n')
+/** Request, then confirm, the way a user does: two separate acts with a dialog in between. */
+async function discardThroughDialog(
+  worktreePath: string,
+  entry: GitStatusEntry,
+  betweenRequestAndConfirm?: () => Promise<void>
+): Promise<void> {
+  const rendered = await renderDiscardSurface(worktreePath)
+  await act(async () => rendered.requestDiscardEntry(entry))
+  await betweenRequestAndConfirm?.()
+  await act(async () => {
+    rendered.confirmPendingDiscard()
   })
+  await settleDiscard()
+}
 
-  it('still discards when nothing moved, so the protection is not a disabled button', async () => {
-    const repo = await createFixtureRepo()
-    await commitFile(repo, 'note.txt', 'committed\n')
-    await write(repo, 'note.txt', 'the edit the user reviewed\n')
-    const entry = await observedEntry(repo, 'note.txt')
-    wireRealDiscard(repo)
+describe('what the desktop tells the host it is authorizing the destruction of', () => {
+  it('states the content the row was rendered from', async () => {
+    const worktree = await createFixtureWorktree()
+    await write(worktree, 'note.txt', 'the edit the user reviewed\n')
+    const observed = await contentIdentity(worktree, 'note.txt')
+    resolveTransportWith('accepts')
 
-    const rendered = await renderDiscardSurface(repo)
-    await act(async () => rendered.requestDiscardEntry(entry))
-    await act(async () => {
-      rendered.confirmPendingDiscard()
-    })
-    await settleDiscard()
-
-    expect(await read(repo, 'note.txt')).toBe('committed\n')
-  })
-
-  it('states the content it observed when it asks the host to destroy it', async () => {
-    // The consequence assertions above are the point, but each can pass for two reasons -- the
-    // precondition held, or the host was never told anything to hold it to. This names which, so a
-    // regression that silently stops sending the observed state cannot hide behind a surviving file.
-    const repo = await createFixtureRepo()
-    await commitFile(repo, 'note.txt', 'committed\n')
-    await write(repo, 'note.txt', 'the edit the user reviewed\n')
-    const entry = await observedEntry(repo, 'note.txt')
-    hostMocks.discardRuntimeGitPath.mockImplementation((): Promise<void> => {
-      inFlightDiscard = Promise.resolve()
-      return inFlightDiscard
-    })
-
-    const rendered = await renderDiscardSurface(repo)
-    await act(async () => rendered.requestDiscardEntry(entry))
-    await act(async () => {
-      rendered.confirmPendingDiscard()
-    })
-    await settleDiscard()
+    await discardThroughDialog(worktree, row({ worktreeContentId: observed }))
 
     expect(hostMocks.discardRuntimeGitPath).toHaveBeenCalledWith(expect.anything(), 'note.txt', {
-      expectedContent: entry.worktreeContentId
+      expectedContent: observed
     })
+  })
+
+  it('still states the observed content after the file has moved underneath it', async () => {
+    // The distinction that matters. Re-reading at confirm time would hand the host the NEW identity,
+    // the host would find it unchanged, and the discard would destroy work the user never saw -- a
+    // refresh-then-discard wearing the costume of a precondition. So the value must be the old one.
+    const worktree = await createFixtureWorktree()
+    await write(worktree, 'note.txt', 'the edit the user reviewed\n')
+    const observed = await contentIdentity(worktree, 'note.txt')
+    resolveTransportWith('accepts')
+
+    await discardThroughDialog(worktree, row({ worktreeContentId: observed }), async () => {
+      // Outside every store, cache, watcher and editor buffer Orca owns: the file, directly.
+      await write(worktree, 'note.txt', 'work that landed while the dialog was open\n')
+    })
+
+    const stated = await contentIdentity(worktree, 'note.txt')
+    expect(stated).not.toBe(observed)
+    expect(hostMocks.discardRuntimeGitPath).toHaveBeenCalledWith(expect.anything(), 'note.txt', {
+      expectedContent: observed
+    })
+  })
+
+  it('says nothing rather than guessing when the row carries no identity', async () => {
+    // A capped listing, an unreadable file, a host that does not stamp. Absence has to travel as
+    // absence: inventing a value here would authorize destroying whatever is on disk.
+    const worktree = await createFixtureWorktree()
+    await write(worktree, 'note.txt', 'whatever\n')
+    resolveTransportWith('accepts')
+
+    await discardThroughDialog(worktree, row())
+
+    expect(hostMocks.discardRuntimeGitPath).toHaveBeenCalledWith(
+      expect.anything(),
+      'note.txt',
+      undefined
+    )
+  })
+
+  it('tells the user their newer work was kept when the host refuses', async () => {
+    // This path used to swallow every rejection, because every rejection used to be a real failure. A
+    // refusal is not one: the file moved and nothing was destroyed, which is the outcome the user would
+    // have chosen. Silence here reads as a successful discard of work that is still there.
+    const worktree = await createFixtureWorktree()
+    await write(worktree, 'note.txt', 'the edit the user reviewed\n')
+    resolveTransportWith('refuses-as-stale')
+
+    await discardThroughDialog(worktree, row({ worktreeContentId: 'sha256:whatever' }))
+
+    expect(toastMocks.message).toHaveBeenCalledTimes(1)
+    const said = String(toastMocks.message.mock.calls[0]?.[0] ?? '')
+    expect(said).toContain('changed after you opened it')
+    // The user authorized destroying something they looked at. How that was recorded is not their
+    // problem, and a hash in this sentence would be a defect rather than detail.
+    expect(said).not.toMatch(/sha256|oid|[0-9a-f]{16}/)
+  })
+
+  it('says nothing when the rejection is an ordinary failure', async () => {
+    // The quiet control. A handler that announced every rejection would pass the test above while
+    // turning real errors into reassuring notices about work being safe.
+    const worktree = await createFixtureWorktree()
+    await write(worktree, 'note.txt', 'the edit the user reviewed\n')
+    hostMocks.discardRuntimeGitPath.mockImplementation((): Promise<void> => {
+      const running = Promise.reject(new Error('EPERM: operation not permitted'))
+      inFlightDiscard = running.then(
+        () => {},
+        () => {}
+      )
+      return running
+    })
+
+    await discardThroughDialog(worktree, row({ worktreeContentId: 'sha256:whatever' }))
+
+    expect(toastMocks.message).not.toHaveBeenCalled()
   })
 })

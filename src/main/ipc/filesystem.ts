@@ -1155,12 +1155,14 @@ export function registerFilesystemHandlers(
         bypassEffectiveUpstreamNegativeCache?: boolean
         reuseLineStats?: boolean
         branchLineTotalMergeBase?: string
+        worktreeContentIdentity?: boolean
         requestToken?: string
       }
     ): Promise<GitStatusResult> => {
       const controller = gitStatusCancellations.begin(event, args.requestToken)
       const options = {
         includeIgnored: args.includeIgnored ?? false,
+        ...(args.worktreeContentIdentity === true ? { worktreeContentIdentity: true } : {}),
         ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(args.branchLineTotalMergeBase === undefined
           ? {}
@@ -2210,14 +2212,26 @@ export function registerFilesystemHandlers(
     'git:discard',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePath: string
+        connectionId?: string
+        /** What the caller saw. Absent means it could not say -- never that nothing changed. */
+        expectedContent?: string
+      }
     ): Promise<void> => {
+      const precondition =
+        typeof args.expectedContent === 'string' && args.expectedContent.length > 0
+          ? { expectedContent: args.expectedContent }
+          : undefined
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.discardChanges(args.worktreePath, args.filePath)
+        // The provider picks a differently-named request when a precondition is present, so an older
+        // relay errors rather than ignoring it. Fail-closed without a capability table.
+        return provider.discardChanges(args.worktreePath, args.filePath, precondition)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
@@ -2226,7 +2240,7 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
-      await discardChanges(worktreePath, filePath, gitOptions)
+      await discardChanges(worktreePath, filePath, gitOptions, precondition)
     }
   )
 

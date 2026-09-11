@@ -6,14 +6,15 @@ import * as path from 'node:path'
  *  content -- least of all with empty, which is a different thing entirely. */
 export const ABSENT_WORKTREE_CONTENT = 'absent'
 
-/** The file at this path is no longer what the caller said it was when it authorized the discard. */
-export class StaleWorktreeStateError extends Error {
-  readonly code = 'stale_worktree_state'
-  constructor(readonly filePath: string) {
-    super(`"${filePath}" changed since it was last read, so the discard was not applied`)
-    this.name = 'StaleWorktreeStateError'
-  }
-}
+// Re-exported so the hosts keep one import for the identity and the refusal it produces, while a
+// renderer surface can take the refusal alone without pulling node:crypto and node:fs into its bundle.
+export {
+  isStaleWorktreeStateError,
+  StaleWorktreeStateError,
+  STALE_WORKTREE_STATE_CODE,
+  STALE_WORKTREE_STATE_MARKER
+} from './stale-worktree-state'
+import { StaleWorktreeStateError } from './stale-worktree-state'
 
 /** Shared by the two hosts that can execute a discard -- this process for a local worktree, the
  *  relay for one over SSH. One definition, because a precondition only means anything if both ends

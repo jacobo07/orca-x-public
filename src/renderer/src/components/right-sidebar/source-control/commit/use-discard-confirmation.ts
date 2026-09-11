@@ -9,6 +9,7 @@ import {
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
+import { discardRefusalMessage } from './discard-refusal-message'
 import type { PendingDiscardConfirmation } from './discard-dialog'
 import type { SourceControlEntryGroups } from '../listing/section-order'
 
@@ -32,7 +33,9 @@ export function useSourceControlDiscardConfirmation({
   setIsExecutingBulk: (value: boolean) => void
   clearSelection: () => void
   discardMany: (paths: string[]) => Promise<void>
-  discardSingle: (path: string) => Promise<void>
+  /** The second argument is the working-tree content the caller observed; omitting it means it could
+   *  not say, never that nothing changed. */
+  discardSingle: (path: string, expectedContent?: string) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -43,13 +46,25 @@ export function useSourceControlDiscardConfirmation({
     setPendingDiscard(null)
   }
 
+  // Why the entry rather than its path: the pending confirmation already holds the whole row, and the
+  // row is the only record of what the user actually looked at. Passing the path alone -- which is what
+  // this did -- discarded that record one frame before the destruction, so the host was asked to remove
+  // whatever happened to be at the path by then. A dialog waiting on a human is the longest of the
+  // windows between the two, and an external editor or formatter needs none of Orca's own machinery to
+  // land inside it.
   const handleDiscard = useCallback(
-    async (filePath: string) => {
+    async (entry: GitStatusEntry) => {
       try {
-        await discardSingle(filePath)
+        await discardSingle(entry.path, entry.worktreeContentId)
         await refreshActiveGitStatusAfterMutation()
-      } catch {
-        // Why: per-row discard is fire-and-forget; bulk callers use discardSingle directly to aggregate failures into one toast.
+      } catch (error) {
+        // Why not silent: this used to be fire-and-forget because every failure was a genuine error.
+        // A refusal is not a failure -- it means the file moved and the user's newer work was kept --
+        // and saying nothing would read as a successful discard of work that is still there.
+        const message = discardRefusalMessage(error)
+        if (message) {
+          toast.message(message)
+        }
       }
     },
     [discardSingle, refreshActiveGitStatusAfterMutation]
@@ -182,7 +197,7 @@ export function useSourceControlDiscardConfirmation({
     }
     setPendingDiscard(null)
     if (pending.kind === 'entry') {
-      void handleDiscard(pending.entry.path)
+      void handleDiscard(pending.entry)
       return
     }
     void handleRevertAllInArea(pending.area, pending.paths)

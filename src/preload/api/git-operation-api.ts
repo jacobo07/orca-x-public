@@ -116,6 +116,10 @@ export type GitOperationApi = {
     worktreePath: string
     filePath: string
     connectionId?: string
+    /** Identity of the working-tree bytes the caller observed, from the status row it acted on. The
+     *  host refuses when the file no longer matches. Omitted means the caller cannot say, not that
+     *  nothing changed. */
+    expectedContent?: string
   }) => Promise<void>
   bulkDiscard: (args: {
     worktreePath: string

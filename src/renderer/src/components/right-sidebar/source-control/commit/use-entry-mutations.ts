@@ -75,8 +75,12 @@ export function useSourceControlEntryMutations({
   )
 
   // Why: discardSingle throws so bulk callers can aggregate failures into one toast; handleDiscard swallows for per-row fire-and-forget.
+  // Why the second argument: the caller has to say which working-tree content it is authorizing the
+  // destruction of, and the only party that knows is the surface the user acted on. Taking it here
+  // rather than reading the file ourselves is the whole point -- a read taken now would describe state
+  // the user never saw, which is the race this protects against rather than the protection.
   const discardSingle = useCallback(
-    async (filePath: string) => {
+    async (filePath: string, expectedContent?: string) => {
       if (!worktreePath || !activeWorktreeId) {
         return
       }
@@ -98,7 +102,8 @@ export function useSourceControlEntryMutations({
           worktreePath,
           connectionId
         },
-        filePath
+        filePath,
+        expectedContent === undefined ? undefined : { expectedContent }
       )
       notifyEditorExternalFileChange({
         worktreeId: activeWorktreeId,

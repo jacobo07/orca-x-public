@@ -24,8 +24,24 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/so
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import type { DiscardPrecondition } from '../../../shared/worktree-content-identity'
+import {
+  assertRuntimeEnvironmentCapability,
+  callRuntimeRpc,
+  getActiveRuntimeTarget
+} from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+
+/**
+ * Shown when a discard cannot be made safe against the host on the other end.
+ *
+ * Not a stale-state conflict, and it must never borrow that wording: nothing changed and nothing was
+ * destroyed. The host simply predates the check, so there is one action that helps and it is not
+ * "look at your file again".
+ */
+export const DISCARD_HOST_CANNOT_CHECK_MESSAGE =
+  'This Orca host is too old to check whether the file changed since you looked, so nothing was discarded. Update the host and try again.'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -128,6 +144,11 @@ export async function getRuntimeGitStatus(
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
     branchLineTotalMergeBase?: string
+    /** Stamp each row with the identity of its working-tree bytes, so a surface that can later ask to
+     *  discard one is able to say what it observed. Only destructive surfaces should ask: the cost is
+     *  a read per changed file, unmeasurable against git's own variance below about a hundred of them
+     *  and roughly 3ms each above that. */
+    worktreeContentIdentity?: boolean
     signal?: AbortSignal
   }
 ): Promise<GitStatusResult> {
@@ -140,6 +161,9 @@ export async function getRuntimeGitStatus(
   const branchLineTotalArgs = options?.branchLineTotalMergeBase
     ? { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
     : {}
+  const contentIdentityArgs = options?.worktreeContentIdentity
+    ? { worktreeContentIdentity: true }
+    : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return callLocalGitStatus(
       {
@@ -148,7 +172,8 @@ export async function getRuntimeGitStatus(
         ...includeIgnoredArgs,
         ...upstreamCacheBypassArgs,
         ...lineStatsReuseArgs,
-        ...branchLineTotalArgs
+        ...branchLineTotalArgs,
+        ...contentIdentityArgs
       },
       options?.signal
     )
@@ -161,7 +186,8 @@ export async function getRuntimeGitStatus(
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs,
       ...lineStatsReuseArgs,
-      ...branchLineTotalArgs
+      ...branchLineTotalArgs,
+      ...contentIdentityArgs
     },
     {
       timeoutMs: 15_000,
@@ -896,23 +922,51 @@ export async function bulkDiscardRuntimeGitPaths(
   )
 }
 
+/**
+ * Discard one path, optionally stating the working-tree content the caller observed.
+ *
+ * The precondition is checked by whichever host owns the worktree, never here: the caller is the party
+ * that cannot know whether the file still holds what it saw. Each transport answers version skew
+ * differently, and the differences are the point rather than an inconsistency --
+ *
+ *   local IPC: preload and main ship in one bundle, so no skew exists and the extra field is safe.
+ *   SSH relay: the provider sends a differently-named request, which an older relay cannot handle, so
+ *              it errors instead of destroying. Fail-closed by construction, no negotiation table.
+ *   remote runtime: an older runtime would parse the field and ignore it, which is fail-OPEN and the
+ *              worst case -- the caller believes it is protected and the file is gone. So the
+ *              capability is asserted BEFORE the request, because a response cannot un-destroy a file.
+ */
 export async function discardRuntimeGitPath(
   context: RuntimeGitContext,
-  filePath: string
+  filePath: string,
+  precondition?: DiscardPrecondition
 ): Promise<void> {
+  const expectedContent = precondition?.expectedContent
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
     await window.api.git.discard({
       worktreePath: resolveLocalWorktreePath(context),
       filePath,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...(expectedContent === undefined || expectedContent === null ? {} : { expectedContent })
     })
     return
+  }
+  if (expectedContent !== undefined && expectedContent !== null) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
+      DISCARD_HOST_CANNOT_CHECK_MESSAGE
+    )
   }
   await callRuntimeRpc(
     target,
     'git.discard',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath },
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      filePath,
+      ...(expectedContent === undefined || expectedContent === null ? {} : { expectedContent })
+    },
     { timeoutMs: 15_000 }
   )
 }
