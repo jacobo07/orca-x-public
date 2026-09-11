@@ -2357,24 +2357,44 @@ export async function bulkDiscardChanges(
     }
 
     const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const { authorized, refused } = await partitionByObservedState(
-      worktreePath,
-      filePaths,
-      observed
-    )
+    const { authorized } = await partitionByObservedState(worktreePath, filePaths, observed)
     const trackedPaths = authorized.filter((filePath) =>
       isTrackedPathSpec(filePath, trackedPathSpecs)
     )
     const untrackedPaths = authorized.filter(
       (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
     )
+    // A batch cannot share one authorization moment: tracked files are destroyed before untracked ones,
+    // and each group is chunked, so a member's authorization is already one whole destruction old when
+    // its own turn comes. Re-checking per destructive call is the same reasoning that makes the untracked
+    // path re-validate containment here -- that recheck covered path safety and not state authorization,
+    // which is how a member deleted after it moved was also reported as discarded.
+    const destroyed = new Set<string>()
+    const stillAuthorized = async (candidates: readonly string[]): Promise<string[]> => {
+      if (!observed) {
+        return [...candidates]
+      }
+      return (await partitionByObservedState(worktreePath, candidates, observed)).authorized
+    }
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
-      (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
+      async (targetPaths) => {
+        const fresh = await stillAuthorized(targetPaths)
+        if (fresh.length === 0) {
+          return
+        }
+        await cleanUntrackedPaths(worktreePath, fresh, options)
+        for (const filePath of fresh) {
+          destroyed.add(filePath)
+        }
+      },
       async () => {
         for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-          const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+          const chunk = await stillAuthorized(trackedPaths.slice(i, i + BULK_CHUNK_SIZE))
+          if (chunk.length === 0) {
+            continue
+          }
           await gitExecFileAsync(
             [
               'restore',
@@ -2387,10 +2407,18 @@ export async function bulkDiscardChanges(
               ...gitOptionsForWorktree(worktreePath, options)
             }
           )
+          for (const filePath of chunk) {
+            destroyed.add(filePath)
+          }
         }
       }
     )
-    return { discarded: authorized, refused }
+    // Reported from what the destructions actually covered, never from what was requested: a member kept
+    // back late is exactly the one an aggregate built from the request would have counted as discarded.
+    return {
+      discarded: filePaths.filter((filePath) => destroyed.has(filePath)),
+      refused: filePaths.filter((filePath) => !destroyed.has(filePath))
+    }
   } finally {
     invalidateGitReadCaches()
   }

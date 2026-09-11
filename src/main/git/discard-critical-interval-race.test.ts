@@ -231,8 +231,13 @@ describe('a second writer between two members of one bulk discard', () => {
       observed
     )
 
-    // No false serialization: the competing write completed before the deletion ran.
-    expect(indexOfEvent('writer:wrote')).toBeLessThan(indexOfEvent('git:clean:start'))
+    // No false serialization. The barrier fires only on the destructive subcommand, which runs only
+    // after both members were authorized, so the write is necessarily post-authorization; and it
+    // completed before that destruction began. The deletion it was racing never runs at all once the
+    // member is kept back, so the surviving bytes cannot be explained by a writer that came afterwards.
+    expect(indexOfEvent('writer:wrote')).toBeGreaterThanOrEqual(0)
+    expect(indexOfEvent('writer:wrote')).toBeLessThan(indexOfEvent('git:restore:start'))
+    expect(events).not.toContain('git:clean:start')
     expect(result.discarded).toEqual(['tracked.txt'])
     expect(result.refused).toEqual(['untracked.txt'])
     expect(await read(repo, 'tracked.txt')).toBe('committed\n')
