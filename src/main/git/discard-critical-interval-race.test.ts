@@ -30,7 +30,7 @@ import {
  * reading the file; status is not evidence about content.
  */
 vi.mock('./runner', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./runner')>()),
+  ...((await importOriginal()) as Record<string, unknown>),
   gitExecFileAsync: vi.fn()
 }))
 
@@ -47,7 +47,10 @@ beforeAll(async () => {
     const pathKey = Object.keys(process.env).find((name) => name.toLowerCase() === 'path') ?? 'PATH'
     process.env[pathKey] = `${gitBinDirectory}${path.delimiter}${process.env[pathKey] ?? ''}`
   }
-  realExec = (await vi.importActual<typeof import('./runner')>('./runner')).gitExecFileAsync
+  // The unmocked module, so the destruction the barrier lets through is the real one.
+  realExec = (
+    (await vi.importActual('./runner')) as { gitExecFileAsync: typeof gitExecFileAsync }
+  ).gitExecFileAsync
 })
 
 afterEach(async () => {
