@@ -89,8 +89,11 @@ const READS = new Set([
  * This list may only SHRINK, and as of 2026-09-10 it is empty. That is a claim about an APERTURE,
  * not about git in general: it means every method in MOBILE_RPC_METHOD_ALLOWLIST that changes a
  * repository has an answer to "what if the caller is describing a world that no longer exists".
- * `git.bulkDiscard` has no such answer and is not on the allowlist -- if it is ever added, it
- * belongs here until it does, and the sweep below will say so.
+ * `git.bulkDiscard` is still off the allowlist, but the reason changed on 2026-09-11 and the
+ * distinction is worth keeping straight: it was held out because it could not say what it destroyed,
+ * and it now can -- per member, refusing the ones that moved. What keeps it out today is that no
+ * mobile surface performs a bulk discard, which is an argument about aperture minimalism rather than
+ * about safety. Adding it would need the classification below and nothing else.
  *
  * Empty is the dangerous state for a list like this, because an empty expectation matches an empty
  * reality for the wrong reason just as happily as the right one. The sweep is driven from the
@@ -153,9 +156,10 @@ describe('mobile repository mutations are classified by what a stale caller can 
     ).not.toEqual(UNPROTECTED)
   })
 
-  it('does not let git.bulkDiscard reach mobile while it cannot say what it destroys', () => {
-    // The single-path discard is fenced; the bulk one is not. The honest way to hold that line is
-    // to assert the aperture, not to write a reassuring comment about it.
+  it('keeps git.bulkDiscard out of the mobile aperture while no mobile surface performs one', () => {
+    // Both discards are fenced now, so this is no longer a safety line -- it is the narrower claim that
+    // the allowlist holds what mobile's UI actually reaches. Asserted rather than commented, because the
+    // day someone adds the method is the day this file should have an opinion.
     expect(mobileRepositoryMethods()).not.toContain('git.bulkDiscard')
   })
 
