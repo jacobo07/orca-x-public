@@ -69,6 +69,11 @@ import {
   releaseTccPromptClaimFor,
   type WindowServiceHandlers
 } from './window-service-ipc-router'
+import { attachTaskbarPreview } from './attach-taskbar-preview'
+import {
+  createTaskbarPreviewDiagnosticsLog,
+  TASKBAR_PREVIEW_LOG_ENV
+} from './taskbar-preview-diagnostics-log'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -207,6 +212,19 @@ export function attachMainWindowServices(
   const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
   updaterSetupFallback.unref?.()
   registerRuntimeWindowLifecycle(mainWindow, runtime)
+  // Why here: one attachment per window, beside the other window-coupled registrars, so the
+  // controller's lifetime is the native window's. Returns null off Windows or without the addon,
+  // and disposes itself on 'closed'.
+  const taskbarPreviewDiagnostics = createTaskbarPreviewDiagnosticsLog({
+    ...(process.env[TASKBAR_PREVIEW_LOG_ENV] ? { path: process.env[TASKBAR_PREVIEW_LOG_ENV] } : {}),
+    windowLabel: String(mainWindow.id)
+  })
+  attachTaskbarPreview({
+    window: mainWindow,
+    store,
+    runtime,
+    ...(taskbarPreviewDiagnostics ? { onDiagnostic: taskbarPreviewDiagnostics } : {})
+  })
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
