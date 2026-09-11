@@ -4483,7 +4483,7 @@ async function mutateGitPath(
   await callRuntimeResult(method, {
     worktree: toRuntimeWorktreeSelector(file.worktree.id),
     filePath: file.relativePath,
-    ...(extra ?? {})
+    ...extra
   })
 }
 
