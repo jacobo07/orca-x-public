@@ -24,7 +24,7 @@ export function SourceControlSectionFileList({
   isExecutingBulk,
   collapsedTreeDirs,
   toggleTreeDir,
-  requestDiscardPaths,
+  requestDiscardEntries,
   handleStageAllPaths,
   handleUnstagePaths,
   expandedSubmoduleKeys,
@@ -51,7 +51,7 @@ export function SourceControlSectionFileList({
   isExecutingBulk: boolean
   collapsedTreeDirs: Set<string>
   toggleTreeDir: (key: string) => void
-  requestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
+  requestDiscardEntries: (area: DiscardAllArea, entries: readonly GitStatusEntry[]) => void
   handleStageAllPaths: (paths: readonly string[]) => Promise<void>
   handleUnstagePaths: (paths: readonly string[]) => Promise<void>
   expandedSubmoduleKeys: Set<string>
@@ -96,7 +96,7 @@ export function SourceControlSectionFileList({
               isExecutingBulk={isExecutingBulk}
               isCollapsed={collapsedTreeDirs.has(node.key)}
               onToggle={() => toggleTreeDir(node.key)}
-              onRequestDiscardPaths={requestDiscardPaths}
+              onRequestDiscardEntries={requestDiscardEntries}
               onStagePaths={handleStageAllPaths}
               onUnstagePaths={handleUnstagePaths}
             />

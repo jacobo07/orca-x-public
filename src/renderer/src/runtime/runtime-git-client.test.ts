@@ -542,7 +542,14 @@ describe('runtime git client', () => {
     }
 
     await bulkStageRuntimeGitPaths(context, ['a.ts', 'b.ts'])
-    await bulkDiscardRuntimeGitPaths(context, ['c.ts', 'd.ts'])
+    await bulkDiscardRuntimeGitPaths(
+      context,
+      ['c.ts', 'd.ts'],
+      new Map([
+        ['c.ts', 'sha256:c'],
+        ['d.ts', 'sha256:d']
+      ])
+    )
     await commitRuntimeGit(context, 'feat: test')
     await generateRuntimeCommitMessage(context)
     await cancelRuntimeGenerateCommitMessage(context)
@@ -563,7 +570,16 @@ describe('runtime git client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'git.bulkDiscard',
-      params: { worktree: 'id:wt-1', filePaths: ['c.ts', 'd.ts'] },
+      params: {
+        worktree: 'id:wt-1',
+        filePaths: ['c.ts', 'd.ts'],
+        // A list, not a Map: a Map does not survive this serialization boundary, and observed state that
+        // arrived as `{}` would make the host refuse the whole set.
+        observed: [
+          { filePath: 'c.ts', expectedContent: 'sha256:c' },
+          { filePath: 'd.ts', expectedContent: 'sha256:d' }
+        ]
+      },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {

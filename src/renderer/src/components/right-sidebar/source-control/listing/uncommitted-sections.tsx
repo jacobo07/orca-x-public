@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import {
-  getDiscardAllPaths,
+  getDiscardAllEntries,
   getUnstageAllPaths,
   isStageableStatusEntry,
   type DiscardAllArea
@@ -56,7 +56,7 @@ export function SourceControlUncommittedSections(props: {
   toggleSection: (id: string) => void
   onViewSection: (action: SourceControlSectionViewAction) => void
   isExecutingBulk: boolean
-  requestDiscardAllInArea: (area: DiscardAllArea, paths?: readonly string[]) => void
+  requestDiscardAllInArea: (area: DiscardAllArea, entries?: readonly GitStatusEntry[]) => void
   handleStageAllPaths: (paths: readonly string[]) => Promise<void>
   handleUnstagePaths: (paths: readonly string[]) => Promise<void>
   sourceControlViewMode: SourceControlViewMode
@@ -69,7 +69,7 @@ export function SourceControlUncommittedSections(props: {
   fileListScrollElement: HTMLDivElement | null
   collapsedTreeDirs: Set<string>
   toggleTreeDir: (key: string) => void
-  requestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
+  requestDiscardEntries: (area: DiscardAllArea, entries: readonly GitStatusEntry[]) => void
   expandedSubmoduleKeys: Set<string>
   toggleSubmodule: (entry: Pick<GitStatusEntry, 'area' | 'path'>) => void
   currentWorktreeId: string
@@ -97,10 +97,10 @@ export function SourceControlUncommittedSections(props: {
         const actionItems = actionSection.items
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)
         const unstageAllPaths = getUnstageAllPaths(actionItems)
-        const discardAllPaths = getDiscardAllPaths(actionItems, area)
+        const discardAllEntries = getDiscardAllEntries(actionItems, area)
         const canStageAll = !props.normalizedFilter && stageAllPaths.length > 0
         const canUnstageAll = !props.normalizedFilter && unstageAllPaths.length > 0
-        const canRevertAll = !props.normalizedFilter && discardAllPaths.length > 0
+        const canRevertAll = !props.normalizedFilter && discardAllEntries.length > 0
         const sectionLabel = id === 'conflicts' ? CONFLICTS_SECTION_LABEL : SECTION_LABELS[area]
         const sectionViewAction = getSourceControlSectionViewAction(actionSection)
         return (
@@ -131,7 +131,7 @@ export function SourceControlUncommittedSections(props: {
                         }
                         onClick={(event) => {
                           event.stopPropagation()
-                          props.requestDiscardAllInArea(area, discardAllPaths)
+                          props.requestDiscardAllInArea(area, discardAllEntries)
                         }}
                         disabled={props.isExecutingBulk}
                       />
@@ -199,7 +199,7 @@ export function SourceControlUncommittedSections(props: {
                 isExecutingBulk={props.isExecutingBulk}
                 collapsedTreeDirs={props.collapsedTreeDirs}
                 toggleTreeDir={props.toggleTreeDir}
-                requestDiscardPaths={props.requestDiscardPaths}
+                requestDiscardEntries={props.requestDiscardEntries}
                 handleStageAllPaths={props.handleStageAllPaths}
                 handleUnstagePaths={props.handleUnstagePaths}
                 expandedSubmoduleKeys={props.expandedSubmoduleKeys}

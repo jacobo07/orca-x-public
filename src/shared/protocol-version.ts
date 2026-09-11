@@ -111,6 +111,12 @@ export const AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY =
 // there. This says the host both stamps the identity on status rows and refuses a discard whose
 // stated content no longer matches -- absence means the client must not offer the safe operation.
 export const GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY = 'git.discard-stale-state.v1' as const
+// Why a second capability rather than reusing the one above: a host can enforce the single-path check and
+// know nothing about the bulk one, and an already-deployed host advertising the first is exactly that
+// host. One flag for both would tell a client the bulk call was fenced when it was not, which is the
+// fail-open it exists to prevent.
+export const GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY =
+  'git.bulk-discard-stale-state.v1' as const
 // Why its own code rather than reusing stale_worktree_state: the two refusals are opposites. A stale
 // state means the file DID change and the user's newer work was kept; this means nothing changed and
 // the client could not say what it saw. Sharing one code made the client tell a user with an
@@ -161,6 +167,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY,
   GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
+  GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,

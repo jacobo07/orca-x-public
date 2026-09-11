@@ -79,6 +79,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { isStaleWorktreeStateError } from '../../../shared/stale-worktree-state'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { callAbortableRuntimeEnvironment } from '../runtime/abortable-runtime-environment-call'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
@@ -2306,12 +2307,42 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkUnstage', worktreePath, filePaths),
-    discard: async ({ worktreePath, filePath }) =>
-      mutateGitPath('git.discard', worktreePath, filePath),
-    bulkDiscard: async ({ worktreePath, filePaths }) => {
+    // Why these forward expectedContent: this is a third client reaching the same destructive host, and a
+    // request that arrives without the observed state is one the host cannot fence. Dropping the field
+    // here would have left the web client on the unprotected path while the desktop and mobile ones were
+    // fenced -- the aperture that gets forgotten because its file lives somewhere else.
+    discard: async ({ worktreePath, filePath, expectedContent }) =>
+      mutateGitPath(
+        'git.discard',
+        worktreePath,
+        filePath,
+        expectedContent === undefined ? undefined : { expectedContent }
+      ),
+    bulkDiscard: async ({ worktreePath, filePaths, observed }) => {
+      // One request per path rather than the bulk method: this loop predates the bulk RPC and each hop
+      // already costs a round trip, so per-path is what the wire does either way -- and it lets a single
+      // refused member be reported as refused instead of failing the set.
+      const stated = new Map((observed ?? []).map((each) => [each.filePath, each.expectedContent]))
+      const discarded: string[] = []
+      const refused: string[] = []
       for (const filePath of filePaths) {
-        await mutateGitPath('git.discard', worktreePath, filePath)
+        const expectedContent = stated.get(filePath)
+        try {
+          await mutateGitPath(
+            'git.discard',
+            worktreePath,
+            filePath,
+            expectedContent === undefined ? undefined : { expectedContent }
+          )
+          discarded.push(filePath)
+        } catch (error) {
+          if (!isStaleWorktreeStateError(error)) {
+            throw error
+          }
+          refused.push(filePath)
+        }
       }
+      return { discarded, refused }
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -4445,12 +4476,14 @@ async function resolveRuntimeFilePath(
 async function mutateGitPath(
   method: string,
   worktreePath: string,
-  filePath: string
+  filePath: string,
+  extra?: Record<string, unknown>
 ): Promise<void> {
   const file = await resolveRuntimeFilePath(filePath, worktreePath)
   await callRuntimeResult(method, {
     worktree: toRuntimeWorktreeSelector(file.worktree.id),
-    filePath: file.relativePath
+    filePath: file.relativePath,
+    ...(extra ?? {})
   })
 }
 

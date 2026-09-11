@@ -415,19 +415,30 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('normalizes git file paths for bulk discard requests', async () => {
-    bulkDiscardChangesMock.mockResolvedValue(undefined)
+    bulkDiscardChangesMock.mockResolvedValue({ discarded: [], refused: [] })
 
     registerFilesystemHandlers(store as never)
 
     await handlers.get('git:bulkDiscard')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH,
-      filePaths: ['./src/../src/file.ts', 'nested//child.ts']
+      filePaths: ['./src/../src/file.ts', 'nested//child.ts'],
+      observed: [
+        { filePath: './src/../src/file.ts', expectedContent: 'sha256:a' },
+        { filePath: 'nested//child.ts', expectedContent: 'sha256:b' }
+      ]
     })
 
+    // Why the fourth argument matters here: normalization rewrites the paths, so the observed map has to
+    // be re-keyed the same way. Keyed by the caller's spelling every lookup would miss and the host would
+    // refuse the whole set for a reason nobody could see.
     expect(bulkDiscardChangesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
-      {}
+      {},
+      new Map([
+        [path.join('src', 'file.ts'), 'sha256:a'],
+        [path.join('nested', 'child.ts'), 'sha256:b']
+      ])
     )
   })
 

@@ -24,7 +24,10 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/so
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
+  GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { DiscardObservedStateRequiredError } from '../../../shared/stale-worktree-state'
 import type { DiscardPrecondition } from '../../../shared/worktree-content-identity'
 import {
@@ -902,23 +905,49 @@ export async function bulkUnstageRuntimeGitPaths(
   )
 }
 
+/**
+ * Discard many paths, stating the working-tree content the caller observed for each.
+ *
+ * `observed` must cover every path, for the same reason the single-path call refuses an undescribed one:
+ * authorizing a subset would perform the unprotected operation on the remainder, inside the protected
+ * one. The host reports which paths it destroyed and which it kept back, and that answer is returned
+ * unchanged -- a caller that substituted the requested list would be claiming something no host said.
+ */
 export async function bulkDiscardRuntimeGitPaths(
   context: RuntimeGitContext,
-  filePaths: string[]
-): Promise<void> {
+  filePaths: string[],
+  observed: ReadonlyMap<string, string>
+): Promise<{ discarded: string[]; refused: string[] }> {
+  const undescribed = filePaths.filter((filePath) => !observed.has(filePath))
+  if (undescribed.length > 0) {
+    throw new DiscardObservedStateRequiredError(undescribed.join(', '))
+  }
+  // A list rather than a Map, because a Map does not survive either serialization boundary below.
+  const targets = filePaths.map((filePath) => ({
+    filePath,
+    expectedContent: observed.get(filePath) as string
+  }))
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
-    await window.api.git.bulkDiscard({
+    return window.api.git.bulkDiscard({
       worktreePath: resolveLocalWorktreePath(context),
       filePaths,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      observed: targets
     })
-    return
   }
-  await callRuntimeRpc(
+  // Fail-closed before the request, not after: an older runtime parses the field, ignores it, destroys
+  // everything and reports success. Its own capability, because a host can enforce the single-path check
+  // and know nothing about this one.
+  await assertRuntimeEnvironmentCapability(
+    target.environmentId,
+    GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
+    DISCARD_HOST_CANNOT_CHECK_MESSAGE
+  )
+  return callRuntimeRpc<{ discarded: string[]; refused: string[] }>(
     target,
     'git.bulkDiscard',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePaths },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePaths, observed: targets },
     { timeoutMs: 15_000 }
   )
 }

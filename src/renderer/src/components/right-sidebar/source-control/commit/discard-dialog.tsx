@@ -20,7 +20,13 @@ import { translate } from '@/i18n/i18n'
 
 export type PendingDiscardConfirmation =
   | { kind: 'entry'; entry: GitStatusEntry }
-  | { kind: 'area'; area: DiscardAllArea; paths: readonly string[] }
+  /**
+   * Rows rather than paths, because this is the record of what the user was looking at when they asked.
+   * Looking the rows back up at confirm time would read the store as it is THEN -- and if a file moved
+   * while the dialog was open, that is the newer state, which the user never saw. Authorization is
+   * anchored where the click was.
+   */
+  | { kind: 'area'; area: DiscardAllArea; entries: readonly GitStatusEntry[] }
 
 export function focusDiscardDialogConfirmButton(
   event: Event,
@@ -51,7 +57,7 @@ export function SourceControlDiscardDialog({
     if (pendingDiscard.kind === 'entry') {
       return getDiscardEntryConfirmationCopy(pendingDiscard.entry)
     }
-    return getDiscardAreaConfirmationCopy(pendingDiscard.area, pendingDiscard.paths.length)
+    return getDiscardAreaConfirmationCopy(pendingDiscard.area, pendingDiscard.entries.length)
   }, [pendingDiscard])
   const PendingDiscardIcon = pendingDiscardCopy?.confirmLabel.startsWith('Delete') ? Trash : Undo2
 
@@ -88,8 +94,8 @@ export function SourceControlDiscardDialog({
         </DialogHeader>
         {pendingDiscard?.kind === 'area' ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
-            {pendingDiscard.paths.length}{' '}
-            {pendingDiscard.paths.length === 1
+            {pendingDiscard.entries.length}{' '}
+            {pendingDiscard.entries.length === 1
               ? translate(
                   'auto.components.right.sidebar.source.control.discard.dialog.e7611dca35',
                   'file'

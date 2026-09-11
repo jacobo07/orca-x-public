@@ -125,5 +125,8 @@ export type GitOperationApi = {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
-  }) => Promise<void>
+    /** One entry per requested path, naming the working-tree content the caller observed. A list rather
+     *  than a map because a Map does not survive the IPC boundary. */
+    observed: readonly { filePath: string; expectedContent: string }[]
+  }) => Promise<{ discarded: string[]; refused: string[] }>
 }

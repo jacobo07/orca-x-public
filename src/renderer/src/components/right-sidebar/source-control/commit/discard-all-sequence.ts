@@ -1,4 +1,8 @@
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import {
+  isDiscardObservedStateRequiredError,
+  isStaleWorktreeStateError
+} from '../../../../../../shared/stale-worktree-state'
 
 export type DiscardAllArea = 'staged' | 'unstaged' | 'untracked'
 
@@ -11,14 +15,27 @@ export function getDiscardAllPaths(
   entries: readonly GitStatusEntry[],
   area: DiscardAllArea
 ): string[] {
-  return entries
-    .filter(
-      (entry) =>
-        entry.area === area &&
-        entry.conflictStatus !== 'unresolved' &&
-        entry.conflictStatus !== 'resolved_locally'
-    )
-    .map((entry) => entry.path)
+  return getDiscardAllEntries(entries, area).map((entry) => entry.path)
+}
+
+/**
+ * The same selection, kept as rows.
+ *
+ * Why both exist: a path is enough to label a button or count a confirmation, and it is not enough to
+ * authorize a destruction -- the row carries the identity of the bytes it was rendered from, and dropping
+ * to paths anywhere between the user's click and the host throws that away. The path form stays for the
+ * places that only need to count.
+ */
+export function getDiscardAllEntries(
+  entries: readonly GitStatusEntry[],
+  area: DiscardAllArea
+): GitStatusEntry[] {
+  return entries.filter(
+    (entry) =>
+      entry.area === area &&
+      entry.conflictStatus !== 'unresolved' &&
+      entry.conflictStatus !== 'resolved_locally'
+  )
 }
 
 export type StageAllArea = 'unstaged' | 'untracked'
@@ -67,24 +84,32 @@ export type DiscardAllDeps = {
   /** Unstage the given paths in one IPC round-trip. Only called for 'staged'. */
   bulkUnstage: (paths: string[]) => Promise<void>
   /**
-   * Discard the given paths in one IPC round-trip. Callers may omit this to
-   * keep the legacy per-file sequence in tests or older surfaces.
+   * Discard the given paths in one IPC round-trip, reporting per path what the host actually did.
+   * Callers may omit this to keep the legacy per-file sequence in tests or older surfaces.
    */
-  discardMany?: (paths: string[]) => Promise<void>
+  discardMany?: (paths: string[]) => Promise<{ discarded: string[]; refused: string[] }>
   /** Discard a single path (restore working-tree to HEAD, or rm if untracked). */
   discardOne: (path: string) => Promise<void>
   /**
    * Called when either the pre-step (bulkUnstage) rejects OR an individual
    * `discardOne` rejects. Invoked once per failure so callers can surface
    * each error (e.g. a toast per stuck file) rather than swallowing them.
+   *
+   * A REFUSAL is not routed here. The file moved and nothing was destroyed, which is the outcome the user
+   * would have chosen; announcing it as an error sends them looking for a fault instead of at their work.
    */
   onError?: (error: unknown) => void
 }
 
 export type DiscardAllResult = {
-  /** Paths whose `discardOne` call resolved successfully. */
+  /** Paths the host confirmed it destroyed. Never the requested set on the host's behalf. */
   discarded: string[]
-  /** Paths whose `discardOne` call rejected. Best-effort: the loop continues past these. */
+  /**
+   * Paths the host kept back because their content no longer matched what the user was shown. Not a
+   * failure: their newer work is still there, and it needs different words from `failed`.
+   */
+  refused: string[]
+  /** Paths whose discard rejected for a real reason. Best-effort: the loop continues past these. */
   failed: string[]
   /**
    * True only when the pre-step (bulk unstage for the 'staged' area) failed
@@ -116,7 +141,7 @@ export async function runDiscardAllForArea(
   deps: DiscardAllDeps
 ): Promise<DiscardAllResult> {
   if (paths.length === 0) {
-    return { discarded: [], failed: [], aborted: false }
+    return { discarded: [], refused: [], failed: [], aborted: false }
   }
 
   if (area === 'staged') {
@@ -124,21 +149,38 @@ export async function runDiscardAllForArea(
       await deps.bulkUnstage([...paths])
     } catch (error) {
       deps.onError?.(error)
-      return { discarded: [], failed: [], aborted: true }
+      return { discarded: [], refused: [], failed: [], aborted: true }
     }
   }
 
   if (deps.discardMany) {
     try {
-      await deps.discardMany([...paths])
-      return { discarded: [...paths], failed: [], aborted: false }
-    } catch {
-      // Why: older SSH relays may not support the bulk discard RPC yet. Fall
-      // back to the long-standing per-file path so the action still completes.
+      // The host says which paths it destroyed. Returning the requested set instead -- which this did --
+      // claims something the host never said, and once it can keep a member back that claim is false in
+      // the one case that matters: the survivor then looks like a defect rather than the protection.
+      const outcome = await deps.discardMany([...paths])
+      return {
+        discarded: outcome.discarded,
+        refused: outcome.refused,
+        failed: [],
+        aborted: false
+      }
+    } catch (error) {
+      // Why this catch is narrow now: it exists for an older SSH relay that never learned the bulk
+      // request, and it used to swallow EVERY rejection and replay the same paths one at a time. A
+      // refusal is a rejection, so the moment the host could refuse, this line turned "your file moved,
+      // nothing was destroyed" into "destroy it one file at a time" -- a fail-open fallback, which is
+      // worse than no protection because the user was told they were protected. A host that refused has
+      // already answered; only a host that could not understand the request gets asked again.
+      if (isDiscardRefusal(error)) {
+        deps.onError?.(error)
+        return { discarded: [], refused: [], failed: [...paths], aborted: false }
+      }
     }
   }
 
   const discarded: string[] = []
+  const refused: string[] = []
   const failed: string[] = []
   for (const path of paths) {
     try {
@@ -146,10 +188,20 @@ export async function runDiscardAllForArea(
       discarded.push(path)
     } catch (error) {
       // Best-effort: record and continue so one stuck file doesn't block the
-      // rest of the bulk action.
-      failed.push(path)
-      deps.onError?.(error)
+      // rest of the bulk action. A refusal is recorded apart from a failure because both leave the file
+      // alone and only one of them is a problem.
+      if (isDiscardRefusal(error)) {
+        refused.push(path)
+      } else {
+        failed.push(path)
+        deps.onError?.(error)
+      }
     }
   }
-  return { discarded, failed, aborted: false }
+  return { discarded, refused, failed, aborted: false }
+}
+
+/** A host declining to destroy, rather than failing to. */
+function isDiscardRefusal(error: unknown): boolean {
+  return isStaleWorktreeStateError(error) || isDiscardObservedStateRequiredError(error)
 }

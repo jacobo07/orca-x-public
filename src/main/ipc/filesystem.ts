@@ -2248,23 +2248,57 @@ export function registerFilesystemHandlers(
     'git:bulkDiscard',
     async (
       _event,
-      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
-    ): Promise<void> => {
+      args: {
+        worktreePath: string
+        filePaths: string[]
+        connectionId?: string
+        observed: readonly { filePath: string; expectedContent: string }[]
+      }
+    ): Promise<{ discarded: string[]; refused: string[] }> => {
+      const observed = new Map(
+        (args.observed ?? []).map((target) => [target.filePath, target.expectedContent])
+      )
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.bulkDiscardChanges(args.worktreePath, args.filePaths)
+        return provider.bulkDiscardChanges(args.worktreePath, args.filePaths, observed)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      // Validation rewrites each path into its canonical relative form, so the observed map has to be
+      // re-keyed the same way. Keyed by the caller's spelling it would miss every lookup, and the host
+      // would refuse the whole set for a reason nobody could see.
+      const validated = args.filePaths.map((filePath) => ({
+        requested: filePath,
+        canonical: validateGitRelativeFilePath(worktreePath, filePath)
+      }))
+      const canonicalObserved = new Map<string, string>()
+      for (const { requested, canonical } of validated) {
+        const expectedContent = observed.get(requested)
+        if (expectedContent !== undefined) {
+          canonicalObserved.set(canonical, expectedContent)
+        }
+      }
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
-      await bulkDiscardChanges(worktreePath, filePaths, gitOptions)
+      const result = await bulkDiscardChanges(
+        worktreePath,
+        validated.map((each) => each.canonical),
+        gitOptions,
+        canonicalObserved
+      )
+      // Answer in the caller's own path vocabulary; it has no idea what canonicalization did.
+      const requestedFor = new Map(
+        validated.map(({ requested, canonical }) => [canonical, requested])
+      )
+      return {
+        discarded: result.discarded.map((each) => requestedFor.get(each) ?? each),
+        refused: result.refused.map((each) => requestedFor.get(each) ?? each)
+      }
     }
   )
 

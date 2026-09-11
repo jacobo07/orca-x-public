@@ -604,6 +604,7 @@ import {
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -5910,7 +5911,12 @@ export class OrcaRuntimeService {
         // so "new client, old host" can be exercised rather than only asserted. It can only
         // withdraw a capability, which moves a client toward caution, never away from it.
         (process.env.ORCA_E2E_DISABLE_GIT_DISCARD_STALE_STATE !== '1' ||
-          capability !== GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY)
+          capability !== GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY) &&
+        // Same for the bulk variant, and separately, because the two are separate claims: a host can
+        // enforce the single-path check and know nothing about the bulk one, and standing in for that
+        // host is the only way to exercise it rather than reason about it.
+        (process.env.ORCA_E2E_DISABLE_GIT_BULK_DISCARD_STALE_STATE !== '1' ||
+          capability !== GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY)
     )
     if (hasOffscreen) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)

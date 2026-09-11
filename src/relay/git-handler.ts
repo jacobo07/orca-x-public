@@ -11,7 +11,11 @@ import {
   parseWorktreeList
 } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
-import { readWorktreeContentIdentity } from '../shared/worktree-content-identity'
+import { forEachWithConcurrency } from '../shared/map-with-concurrency'
+import {
+  readWorktreeContentIdentity,
+  WORKTREE_CONTENT_IDENTITY_CONCURRENCY
+} from '../shared/worktree-content-identity'
 import {
   computeDiff,
   branchCompare as branchCompareOp,
@@ -226,6 +230,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.discardIfUnchanged', (p) => this.discardIfUnchanged(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
+    this.dispatcher.onRequest('git.bulkDiscardIfUnchanged', (p) => this.bulkDiscardIfUnchanged(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
     this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
@@ -740,16 +745,48 @@ export class GitHandler {
     }
   }
 
-  private async bulkDiscard(params: Record<string, unknown>) {
+  /**
+   * Bulk discard, but only the members still holding what the caller says it read.
+   *
+   * A separate request name rather than an extra field on `git.bulkDiscard`, for exactly the reason the
+   * single-path variant has one: a relay that predates this has no handler, so a client needing the check
+   * gets an error. An added field would have been parsed, ignored, and every file in the set destroyed.
+   */
+  private async bulkDiscardIfUnchanged(params: Record<string, unknown>) {
+    const observed = params.observed
+    if (!Array.isArray(observed) || observed.length === 0) {
+      throw new Error('git.bulkDiscardIfUnchanged requires the content the caller expects per path')
+    }
+    const stated = new Map<string, string>()
+    for (const target of observed as { filePath?: unknown; expectedContent?: unknown }[]) {
+      if (typeof target?.filePath === 'string' && typeof target?.expectedContent === 'string') {
+        stated.set(target.filePath, target.expectedContent)
+      }
+    }
+    return this.bulkDiscard(params, stated)
+  }
+
+  private async bulkDiscard(
+    params: Record<string, unknown>,
+    observed?: ReadonlyMap<string, string>
+  ): Promise<{ discarded: string[]; refused: string[] } | undefined> {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const filePaths = params.filePaths as string[]
     if (filePaths.length === 0) {
-      return
+      return observed ? { discarded: [], refused: [] } : undefined
     }
     try {
       for (const filePath of filePaths) {
         this.assertInWorktree(worktreePath, filePath)
+      }
+      if (observed) {
+        const undescribed = filePaths.filter((filePath) => !observed.has(filePath))
+        if (undescribed.length > 0) {
+          throw new Error(
+            `No observed content was stated for ${undescribed.join(', ')}, so nothing was discarded`
+          )
+        }
       }
 
       const trackedPathSpecs: string[] = []
@@ -767,10 +804,15 @@ export class GitHandler {
         }
       }
 
-      const trackedPaths = filePaths.filter((filePath) =>
+      // After the probe and immediately before both destructions, for the reason on
+      // assertWorktreeStateUnchanged: everything between the check and the write is a window an edit can
+      // land in, and a remote ls-files round-trip is a wide one.
+      const refused = observed ? await this.findMovedPaths(worktreePath, filePaths, observed) : []
+      const authorized = filePaths.filter((filePath) => !refused.includes(filePath))
+      const trackedPaths = authorized.filter((filePath) =>
         this.isTrackedPathSpec(filePath, trackedPathSpecs)
       )
-      const untrackedPaths = filePaths.filter(
+      const untrackedPaths = authorized.filter(
         (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
       )
       await removeSafeUntrackedDiscardTargets(
@@ -793,9 +835,38 @@ export class GitHandler {
           }
         }
       )
+      return observed ? { discarded: authorized, refused } : undefined
     } finally {
       this.clearGitMutationReadCaches()
     }
+  }
+
+  /**
+   * Which of these no longer hold what the caller described.
+   *
+   * A path whose content cannot be read at all counts as moved rather than as authorized: the read could
+   * not prove a match, and the safe answer to "I cannot tell" is never "remove it".
+   */
+  private async findMovedPaths(
+    worktreePath: string,
+    filePaths: readonly string[],
+    observed: ReadonlyMap<string, string>
+  ): Promise<string[]> {
+    const moved: string[] = []
+    await forEachWithConcurrency(
+      [...filePaths],
+      WORKTREE_CONTENT_IDENTITY_CONCURRENCY,
+      async (filePath) => {
+        try {
+          if ((await readWorktreeContentIdentity(worktreePath, filePath)) !== observed.get(filePath)) {
+            moved.push(filePath)
+          }
+        } catch {
+          moved.push(filePath)
+        }
+      }
+    )
+    return filePaths.filter((filePath) => moved.includes(filePath))
   }
 
   private literalPathspec(filePath: string): string {

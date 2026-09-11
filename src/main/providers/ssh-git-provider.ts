@@ -486,9 +486,29 @@ export class SshGitProvider implements IGitProvider {
     })
   }
 
-  async bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void> {
-    await this.runWithGitReadInvalidation(async () => {
-      await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
+  async bulkDiscardChanges(
+    worktreePath: string,
+    filePaths: string[],
+    observed?: ReadonlyMap<string, string>
+  ): Promise<{ discarded: string[]; refused: string[] }> {
+    return this.runWithGitReadInvalidation(async () => {
+      if (!observed || observed.size === 0) {
+        await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
+        return { discarded: [...filePaths], refused: [] }
+      }
+      // A separate request name rather than an extra field, for the same reason the single-path call uses
+      // one: an older relay has no handler for this, so the call errors and nothing is destroyed. An added
+      // field would have been ignored and every file in the set would be gone. Fail-closed by
+      // construction, with no capability table to keep in sync.
+      const result = (await this.mux.request('git.bulkDiscardIfUnchanged', {
+        worktreePath,
+        filePaths,
+        observed: filePaths.map((filePath) => ({
+          filePath,
+          expectedContent: observed.get(filePath)
+        }))
+      })) as { discarded?: string[]; refused?: string[] } | undefined
+      return { discarded: result?.discarded ?? [], refused: result?.refused ?? [] }
     })
   }
 
