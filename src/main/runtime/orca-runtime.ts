@@ -13192,6 +13192,21 @@ export class OrcaRuntimeService {
     return lines.length > 0 ? buildPreview(lines, '') : preview
   }
 
+  /**
+   * The terminal's visible rows, for a surface that shows a terminal without being one.
+   *
+   * Public so the Windows taskbar adapter reads the same headless screen the hover preview reads,
+   * rather than standing up a second ANSI interpreter or capturing pixels. Null means there is no
+   * readable state — never an empty screen, which is a different fact.
+   *
+   * `sequence` and `generation` come back with the lines on purpose: an observer that rasterizes
+   * asynchronously needs to know which output position and which PTY lifetime it drew, or a slow
+   * render of an older screen can overwrite a newer one.
+   */
+  readVisibleTerminalLines(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
+    return this.readVisibleTerminalState(ptyId)
+  }
+
   private async readVisibleTerminalState(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null> {
