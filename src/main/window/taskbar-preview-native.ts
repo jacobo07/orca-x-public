@@ -69,21 +69,49 @@ export type TaskbarPreviewNativeLocation = {
   fileExists: (path: string) => boolean
 }
 
-export function resolveTaskbarPreviewAddonPath(location: TaskbarPreviewNativeLocation): string {
-  return location.isPackaged
-    ? location.join(
-        location.resourcesPath,
-        TASKBAR_PREVIEW_PACKAGED_DIRNAME,
-        TASKBAR_PREVIEW_ADDON_FILENAME
-      )
-    : location.join(
-        location.projectRoot,
+/**
+ * How far above the reported app path to look for the checkout in development.
+ *
+ * Electron's idea of "the app path" depends on how it was started: running the built entry directly
+ * reports the entry's own directory (`out/main`), a dev server reports the project, and a packaged
+ * build does not use this branch at all. Rather than encode one launcher's answer, walk up a few
+ * levels for the directory the addon is actually built into. Bounded because an unbounded walk would
+ * eventually find a same-named directory belonging to some unrelated project above the checkout.
+ */
+const DEV_ADDON_SEARCH_DEPTH = 4
+
+function developmentAddonCandidates(location: TaskbarPreviewNativeLocation): string[] {
+  const candidates: string[] = []
+  let root = location.projectRoot
+  for (let level = 0; level <= DEV_ADDON_SEARCH_DEPTH; level += 1) {
+    candidates.push(
+      location.join(
+        root,
         'native',
         'orca-taskbar-preview',
         'build',
         'Release',
         TASKBAR_PREVIEW_ADDON_FILENAME
       )
+    )
+    root = location.join(root, '..')
+  }
+  return candidates
+}
+
+/** The path the addon is expected at; in development, the first candidate that exists. */
+export function resolveTaskbarPreviewAddonPath(location: TaskbarPreviewNativeLocation): string {
+  if (location.isPackaged) {
+    return location.join(
+      location.resourcesPath,
+      TASKBAR_PREVIEW_PACKAGED_DIRNAME,
+      TASKBAR_PREVIEW_ADDON_FILENAME
+    )
+  }
+  const candidates = developmentAddonCandidates(location)
+  // The first candidate when none exists, so the "not built" detail names the path a developer
+  // would expect rather than the last one tried.
+  return candidates.find((candidate) => location.fileExists(candidate)) ?? candidates[0]!
 }
 
 function hasExpectedSurface(candidate: unknown): candidate is TaskbarPreviewNativeAddon {

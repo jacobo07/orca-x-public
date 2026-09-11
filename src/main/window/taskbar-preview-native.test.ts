@@ -45,6 +45,40 @@ describe('resolveTaskbarPreviewAddonPath', () => {
       `C:/repo/native/orca-taskbar-preview/build/Release/${TASKBAR_PREVIEW_ADDON_FILENAME}`
     )
   })
+
+  // Measured against a real Orca start, which is the only thing that could have shown it: launching
+  // the built entry directly makes Electron report `out/main` as the app path, so anchoring the
+  // search there looks under the build output for a directory that only exists in the checkout.
+  it('finds the checkout when the app path is the built entry\u2019s own directory', () => {
+    const built = `C:/repo/native/orca-taskbar-preview/build/Release/${TASKBAR_PREVIEW_ADDON_FILENAME}`
+    expect(
+      resolveTaskbarPreviewAddonPath(
+        location({
+          projectRoot: 'C:/repo/out/main',
+          // Normalizing the walk is the resolver's job only insofar as it asks; this stands in for a
+          // real filesystem, where `C:/repo/out/main/../..` and `C:/repo` are the same directory.
+          join: (...segments: string[]) => {
+            const parts: string[] = []
+            for (const segment of segments.join('/').split('/')) {
+              if (segment === '..') {
+                parts.pop()
+              } else if (segment !== '') {
+                parts.push(segment)
+              }
+            }
+            return parts.join('/')
+          },
+          fileExists: (candidate: string) => candidate === built
+        })
+      )
+    ).toBe(built)
+  })
+
+  it('names the expected path, not the last one tried, when the addon is absent', () => {
+    expect(resolveTaskbarPreviewAddonPath(location({ fileExists: () => false }))).toBe(
+      `C:/repo/native/orca-taskbar-preview/build/Release/${TASKBAR_PREVIEW_ADDON_FILENAME}`
+    )
+  })
 })
 
 describe('loadTaskbarPreviewNative', () => {
