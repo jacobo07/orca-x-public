@@ -339,6 +339,13 @@ module.exports = {
         from: 'native/computer-use-windows/runtime.ps1',
         to: 'computer-use-windows/runtime.ps1'
       },
+      // Why a resource and not app.asar: a .node cannot be dlopen'd from inside the archive, and
+      // native/ is excluded from it anyway. Keep this path in step with
+      // src/main/window/taskbar-preview-native.ts, which resolves the packaged copy by it.
+      {
+        from: 'native/orca-taskbar-preview/build/Release/orca_taskbar_preview.node',
+        to: 'taskbar-preview/orca_taskbar_preview.node'
+      },
       featureWallResources
     ]
   },

@@ -1,0 +1,8 @@
+{
+  "name": "orca-taskbar-preview",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Windows-only in-process DWM iconic-representation adapter for Orca windows. Built by config/scripts/build-taskbar-preview-addon.mjs; loaded by src/main/window/taskbar-preview-native.ts. Not a published package and not part of the root dependency graph.",
+  "os": ["win32"],
+  "gypfile": true
+}

@@ -1,0 +1,3 @@
+# node-gyp output. Built per platform by config/scripts/build-taskbar-preview-addon.mjs and copied
+# into the packaged app by electron-builder; a committed binary would ship one machine's toolchain.
+build/
