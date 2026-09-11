@@ -807,21 +807,47 @@ export class GitHandler {
       // After the probe and immediately before both destructions, for the reason on
       // assertWorktreeStateUnchanged: everything between the check and the write is a window an edit can
       // land in, and a remote ls-files round-trip is a wide one.
-      const refused = observed ? await this.findMovedPaths(worktreePath, filePaths, observed) : []
-      const authorized = filePaths.filter((filePath) => !refused.includes(filePath))
+      const movedUpFront = observed
+        ? await this.findMovedPaths(worktreePath, filePaths, observed)
+        : []
+      const authorized = filePaths.filter((filePath) => !movedUpFront.includes(filePath))
       const trackedPaths = authorized.filter((filePath) =>
         this.isTrackedPathSpec(filePath, trackedPathSpecs)
       )
       const untrackedPaths = authorized.filter(
         (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
       )
+      // One authorization moment cannot cover a batch: tracked files are destroyed before untracked ones
+      // and each group is chunked, so a member's authorization is a whole destruction old by its own
+      // turn -- and here each destruction is a remote round-trip, which makes the gap wider than it is
+      // locally rather than narrower.
+      const destroyed = new Set<string>()
+      const stillAuthorized = async (candidates: readonly string[]): Promise<string[]> => {
+        if (!observed) {
+          return [...candidates]
+        }
+        const moved = await this.findMovedPaths(worktreePath, candidates, observed)
+        return candidates.filter((filePath) => !moved.includes(filePath))
+      }
       await removeSafeUntrackedDiscardTargets(
         worktreePath,
         untrackedPaths,
-        (targetPaths) => this.cleanUntrackedPaths(worktreePath, targetPaths),
+        async (targetPaths) => {
+          const fresh = await stillAuthorized(targetPaths)
+          if (fresh.length === 0) {
+            return
+          }
+          await this.cleanUntrackedPaths(worktreePath, fresh)
+          for (const filePath of fresh) {
+            destroyed.add(filePath)
+          }
+        },
         async () => {
           for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-            const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+            const chunk = await stillAuthorized(trackedPaths.slice(i, i + BULK_CHUNK_SIZE))
+            if (chunk.length === 0) {
+              continue
+            }
             await this.git(
               [
                 'restore',
@@ -832,10 +858,20 @@ export class GitHandler {
               ],
               worktreePath
             )
+            for (const filePath of chunk) {
+              destroyed.add(filePath)
+            }
           }
         }
       )
-      return observed ? { discarded: authorized, refused } : undefined
+      // From what the destructions covered, never from the request: a member kept back late is exactly
+      // the one a request-shaped aggregate would have reported as discarded.
+      return observed
+        ? {
+            discarded: filePaths.filter((filePath) => destroyed.has(filePath)),
+            refused: filePaths.filter((filePath) => !destroyed.has(filePath))
+          }
+        : undefined
     } finally {
       this.clearGitMutationReadCaches()
     }
