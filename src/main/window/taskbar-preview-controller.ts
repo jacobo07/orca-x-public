@@ -37,19 +37,30 @@ const DEFAULT_FOREGROUND = 0xd4_d4_d4
  */
 export const DEFAULT_INVALIDATE_INTERVAL_MS = 250
 
+/** Last resort for a live preview whose window will not report usable geometry. DWM rescales. */
+const FALLBACK_LIVE_PREVIEW_WIDTH = 1280
+const FALLBACK_LIVE_PREVIEW_HEIGHT = 800
+
 export type TaskbarPreviewMessageWindow = {
   hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void
   getNativeWindowHandle(): Buffer
   isDestroyed(): boolean
   /** Used for the Peek bitmap, which is window-sized rather than thumbnail-sized. */
   getContentSize(): number[]
+  /** Fallback geometry: a minimized window may report no content size, and that is when it is asked. */
+  getBounds?(): { width: number; height: number }
 }
 
 export type TaskbarPreviewDiagnostic =
   | { kind: 'enabled'; hresult: number }
   | { kind: 'demand'; livePreview: boolean; width: number; height: number; generation: number }
   | { kind: 'supplied'; livePreview: boolean; hresult: number; generation: number; rows: number }
-  | { kind: 'dropped'; reason: SupplyDecision | 'window-gone' | 'no-size' | 'read-failed' }
+  | {
+      kind: 'dropped'
+      reason: SupplyDecision | 'window-gone' | 'no-size' | 'read-failed'
+      /** Which channel the drop belongs to; absent when the drop is not attributable to one. */
+      livePreview?: boolean
+    }
   | { kind: 'invalidated'; hresult: number; generation: number }
 
 export type TaskbarPreviewControllerDeps = {
@@ -234,7 +245,10 @@ export function createTaskbarPreviewController(
     }
     const size = livePreview ? contentSize() : decodeIconicThumbnailSize(lParam)
     if (!size) {
-      report({ kind: 'dropped', reason: 'no-size' })
+      // Which channel could not be sized is the whole diagnostic: a thumbnail whose lParam decoded
+      // to nothing and a live preview whose window would not report its geometry are different
+      // faults with different fixes, and one reason string told them apart from neither.
+      report({ kind: 'dropped', reason: 'no-size', livePreview })
       return
     }
     report({
@@ -253,14 +267,38 @@ export function createTaskbarPreviewController(
     })
   }
 
+  /**
+   * The size to rasterize a live-preview bitmap at.
+   *
+   * A minimized window is exactly when this is asked and exactly when the content size can come back
+   * unusable — measured against the real shell, where a demand arriving after minimize was dropped
+   * for having no size at all, which is the one demand the whole feature exists to answer. So the
+   * window's restored bounds stand in, and a fixed size stands in after that: DWM scales whatever it
+   * is given, and a preview at an imperfect aspect ratio is worth incomparably more than none.
+   */
   const contentSize = (): { width: number; height: number } | null => {
     if (disposed || deps.window.isDestroyed()) {
       return null
     }
-    const [width, height] = deps.window.getContentSize()
-    return typeof width === 'number' && typeof height === 'number' && width > 0 && height > 0
-      ? { width, height }
-      : null
+    const usable = (width: unknown, height: unknown): { width: number; height: number } | null =>
+      typeof width === 'number' && typeof height === 'number' && width > 0 && height > 0
+        ? { width: Math.round(width), height: Math.round(height) }
+        : null
+    try {
+      const [contentWidth, contentHeight] = deps.window.getContentSize()
+      const fromContent = usable(contentWidth, contentHeight)
+      if (fromContent) {
+        return fromContent
+      }
+      const bounds = deps.window.getBounds?.()
+      const fromBounds = usable(bounds?.width, bounds?.height)
+      if (fromBounds) {
+        return fromBounds
+      }
+    } catch {
+      // Geometry reads can throw on a window that is being torn down; the fallback covers it.
+    }
+    return { width: FALLBACK_LIVE_PREVIEW_WIDTH, height: FALLBACK_LIVE_PREVIEW_HEIGHT }
   }
 
   return {

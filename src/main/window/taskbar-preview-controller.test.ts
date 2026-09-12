@@ -109,6 +109,82 @@ function harness(
   }
 }
 
+describe('live preview sizing', () => {
+  // Measured against the real shell: the live-preview demand that arrives *after* minimize is the
+  // one this feature exists to answer, and it was dropped for having no size at all.
+  it('falls back to the restored bounds when a minimized window reports no content size', async () => {
+    const handlers = new Map<number, (wParam: Buffer, lParam: Buffer) => void>()
+    const test = harness()
+    test.deps.window = {
+      hookWindowMessage: (message, callback) => handlers.set(message, callback),
+      getNativeWindowHandle: () => Buffer.alloc(8, 7),
+      isDestroyed: () => false,
+      getContentSize: () => [0, 0],
+      getBounds: () => ({ width: 1530, height: 913 })
+    } as TaskbarPreviewControllerDeps['window']
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+
+    handlers.get(LIVE_PREVIEW_MESSAGE)?.(Buffer.alloc(4), Buffer.alloc(4))
+    await vi.waitFor(() => expect(test.addon.drawIconicText).toHaveBeenCalled())
+
+    expect(test.diagnostics.find((event) => event.kind === 'dropped')).toBeUndefined()
+    expect(vi.mocked(test.addon.drawIconicText).mock.calls[0]?.[1]).toMatchObject({
+      width: 1530,
+      height: 913,
+      livePreview: true
+    })
+    controller.dispose()
+  })
+
+  it('still draws when neither content size nor bounds can be had', async () => {
+    const handlers = new Map<number, (wParam: Buffer, lParam: Buffer) => void>()
+    const test = harness()
+    test.deps.window = {
+      hookWindowMessage: (message, callback) => handlers.set(message, callback),
+      getNativeWindowHandle: () => Buffer.alloc(8, 7),
+      isDestroyed: () => false,
+      getContentSize: () => [0, 0]
+    } as TaskbarPreviewControllerDeps['window']
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+
+    handlers.get(LIVE_PREVIEW_MESSAGE)?.(Buffer.alloc(4), Buffer.alloc(4))
+    await vi.waitFor(() => expect(test.addon.drawIconicText).toHaveBeenCalled())
+
+    // A preview at an imperfect size is worth incomparably more than no preview: DWM rescales.
+    const request = vi.mocked(test.addon.drawIconicText).mock.calls[0]?.[1]
+    expect(request?.width).toBeGreaterThan(0)
+    expect(request?.height).toBeGreaterThan(0)
+    controller.dispose()
+  })
+
+  // A thumbnail whose lParam decodes to nothing and a live preview whose window will not report
+  // geometry are different faults with different fixes; one reason string told them apart from
+  // neither, which is why the real log could not say which had happened.
+  it('says which channel could not be sized', () => {
+    const handlers = new Map<number, (wParam: Buffer, lParam: Buffer) => void>()
+    const test = harness()
+    test.deps.window = {
+      hookWindowMessage: (message, callback) => handlers.set(message, callback),
+      getNativeWindowHandle: () => Buffer.alloc(8, 7),
+      isDestroyed: () => false,
+      getContentSize: () => [1200, 800]
+    } as TaskbarPreviewControllerDeps['window']
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+
+    handlers.get(THUMBNAIL_MESSAGE)?.(Buffer.alloc(4), packSize(0, 0))
+
+    expect(test.diagnostics).toContainEqual({
+      kind: 'dropped',
+      reason: 'no-size',
+      livePreview: false
+    })
+    controller.dispose()
+  })
+})
+
 describe('decodeIconicThumbnailSize', () => {
   it('reads width from the high word, as a real demand showed', () => {
     // 0x00fa0094 arrived from DWM for a landscape window and meant 250x148. Reading the words the

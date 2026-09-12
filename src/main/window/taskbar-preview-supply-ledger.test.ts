@@ -72,6 +72,23 @@ describe('TaskbarPreviewSupplyLedger', () => {
     )
   })
 
+  // Both channels answered at one generation is the shape the real shell produced once the fence
+  // stopped treating a request as a result: thumbnail then live preview, neither superseding the
+  // other, with no terminal write between them.
+  it('serves both channels from one unchanged generation', () => {
+    const ledger = new TaskbarPreviewSupplyLedger()
+    const incarnation = ledger.currentIncarnation
+    const generation = ledger.advance()
+
+    const decisions = [
+      ledger.commitSupply({ generation, incarnation, channel: 'thumbnail' }),
+      ledger.commitSupply({ generation, incarnation, channel: 'live-preview' }),
+      ledger.commitSupply({ generation, incarnation, channel: 'thumbnail' })
+    ]
+
+    expect(decisions).toEqual(['accept', 'accept', 'accept'])
+  })
+
   it('refuses a result rasterized for a window that no longer exists', () => {
     const ledger = new TaskbarPreviewSupplyLedger()
     const closedWindow = ledger.currentIncarnation
