@@ -49,10 +49,28 @@ export type TaskbarPreviewMessageWindow = {
   getContentSize(): number[]
   /** Fallback geometry: a minimized window may report no content size, and that is when it is asked. */
   getBounds?(): { width: number; height: number }
+  /**
+   * Whether the window is already minimized when the preview attaches.
+   *
+   * A window restored from a minimized topology is in the state the thumbnail is for, and its
+   * minimize edge happened before anything here was listening — so the posture cannot be decided by
+   * the edge alone. Optional: a host that cannot answer is treated as visible, which is the posture
+   * that changes nothing.
+   */
+  isMinimized?(): boolean
 }
 
 export type TaskbarPreviewDiagnostic =
+  /** The takeover is engaged: DWM now serves what this window supplies instead of compositing it. */
   | { kind: 'enabled'; hresult: number }
+  /**
+   * The takeover is released and DWM composites the window itself again.
+   *
+   * Its own kind rather than an `enabled` with a flag, because the two are opposite postures and a
+   * log that cannot tell them apart cannot answer the only question worth asking of this feature:
+   * which surface was the user actually shown.
+   */
+  | { kind: 'released'; hresult: number }
   | { kind: 'demand'; livePreview: boolean; width: number; height: number; generation: number }
   | {
       kind: 'supplied'
@@ -106,6 +124,15 @@ export type TaskbarPreviewController = {
   start(): void
   /** Re-resolve the subject; called when the window's active pane may have changed. */
   retarget(): void
+  /**
+   * Engage the takeover while the window is minimized, release it when it is not.
+   *
+   * Scoped rather than held for the window's lifetime because forcing the iconic representation
+   * REPLACES DWM's own composition of the window with a bitmap capped at the size the shell asked
+   * for. While the window is visible that trade buys nothing and costs resolution, so the default
+   * posture is the platform's.
+   */
+  setWindowMinimized(minimized: boolean): void
   /** Release the hint subscription and hand the window back to DWM's own compositing. */
   dispose(): void
   /** Test seam: the generation ledger this controller fences against. */
@@ -370,6 +397,37 @@ export function createTaskbarPreviewController(
     return { width: FALLBACK_LIVE_PREVIEW_WIDTH, height: FALLBACK_LIVE_PREVIEW_HEIGHT }
   }
 
+  /**
+   * The posture the window is currently in, mirrored so a repeated edge costs nothing.
+   *
+   * Electron emits `restore` for windows that were never minimized, and `minimize` can arrive more
+   * than once; a DwmSetWindowAttribute pair per event would be native work for no change of state.
+   */
+  let minimized = false
+
+  const setWindowMinimized = (next: boolean): void => {
+    if (disposed || next === minimized) {
+      return
+    }
+    const handle = nativeHandle()
+    if (!handle) {
+      return
+    }
+    minimized = next
+    if (next) {
+      // HAS_ICONIC_BITMAP and FORCE_ICONIC_REPRESENTATION together: from here DWM asks this window
+      // for its thumbnail instead of compositing a surface it can no longer see. That is the one
+      // state in which a supplied bitmap beats the platform's own answer, because the platform's
+      // answer here is frozen at the moment of minimize.
+      report({ kind: 'enabled', hresult: deps.addon.enableIconicRepresentation(handle, true) })
+      return
+    }
+    // Both attributes cleared, which is what hands the window back. DWM's composition of a visible
+    // window is live, full-resolution and free; a supplied bitmap is capped at the size the shell
+    // asked for and can therefore never be sharper than the thing it replaced.
+    report({ kind: 'released', hresult: deps.addon.disableIconicRepresentation(handle) })
+  }
+
   return {
     start(): void {
       const handle = nativeHandle()
@@ -377,9 +435,9 @@ export function createTaskbarPreviewController(
         return
       }
       incarnation = ledger.adoptIncarnation()
-      const hresult = deps.addon.enableIconicRepresentation(handle, true)
-      report({ kind: 'enabled', hresult })
 
+      // Hooked before the posture is decided, because the hooks are how a demand arrives: a window
+      // that attaches already minimized has to be able to answer the one that follows immediately.
       deps.window.hookWindowMessage(deps.addon.messages.sendIconicThumbnail, (_wParam, lParam) =>
         onDemand(false, lParam)
       )
@@ -388,12 +446,15 @@ export function createTaskbarPreviewController(
         (_wParam, lParam) => onDemand(true, lParam)
       )
 
+      setWindowMinimized(deps.window.isMinimized?.() ?? false)
+
       // There is something worth showing before a single new byte arrives, so the first demand must
       // not be refused as superseded.
       ledger.advance()
       retarget()
     },
     retarget,
+    setWindowMinimized,
     dispose(): void {
       if (disposed) {
         return

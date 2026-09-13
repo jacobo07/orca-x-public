@@ -258,10 +258,14 @@ function attachOrNull(args: {
   // output subscription pointed at the right pane without polling anything.
   args.window.on('minimize', () => {
     args.onDiagnostic?.({ kind: 'window', state: 'minimize' })
+    controller.setWindowMinimized(true)
     controller.retarget()
   })
   args.window.on('restore', () => {
     args.onDiagnostic?.({ kind: 'window', state: 'restore' })
+    // Released here, not held until teardown. These two edges are what scope the takeover to the
+    // only state that profits by it, and the addon's own contract names this the restore call.
+    controller.setWindowMinimized(false)
     controller.retarget()
   })
   args.window.on('closed', () => controller.dispose())

@@ -96,7 +96,7 @@ afterEach(() => {
 })
 
 describe('attachTaskbarPreview', () => {
-  it('opts the window in and answers from its own worktree', () => {
+  it('hooks the demand messages and answers from its own worktree', () => {
     const addon = createAddon()
     const window = createWindow(11)
     const record = registerWorkspaceWindow({ browserWindowId: 1, rendererWebContentsId: 11 })
@@ -109,7 +109,10 @@ describe('attachTaskbarPreview', () => {
       loadAddon: available(addon)
     })
 
-    expect(addon.enableIconicRepresentation).toHaveBeenCalledOnce()
+    // The opt-in is the pair of message hooks. The DWM attribute is a posture rather than a
+    // registration, and a visible window's posture is the platform's own composition of it.
+    expect(window.hooks.size).toBe(2)
+    expect(addon.enableIconicRepresentation).not.toHaveBeenCalled()
     expect(attachment?.resolveSubject()).toMatchObject({
       status: 'available',
       ptyId: 'pty-local',
@@ -298,7 +301,7 @@ describe('attachTaskbarPreview', () => {
 
     expect(
       diagnostics.map((event) => `${event.kind}${event.state ? `:${event.state}` : ''}`)
-    ).toEqual(['enabled', 'window:minimize', 'demand', 'window:restore'])
+    ).toEqual(['window:minimize', 'enabled', 'demand', 'window:restore', 'released'])
   })
 
   // The caller wires permissions, the updater and the browser manager after this returns. An
