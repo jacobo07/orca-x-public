@@ -236,25 +236,65 @@ export function assertPackagedArtifactIsNotStale(
   )
 }
 
-/** How much of the built main bundle must appear verbatim inside the archive. */
-const MAIN_BUNDLE_SIGNATURE_BYTES = 512
+/** Enough of the entry to characterise it without reading ten megabytes on every launch. */
+const MAIN_BUNDLE_COMPARE_BYTES = 4096
+
+type AsarEntry = { offset: string; size: number }
+
+/**
+ * The archive's own index, so an entry can be read at the offset the runtime will read it from.
+ *
+ * Header layout: a 4-byte pickle length, the pickle size, the payload size, then the JSON length,
+ * then the JSON itself; file bodies begin at 8 + pickleSize and entry offsets are relative to that.
+ * Returns null for anything unparseable — an archive this cannot read is not an archive this may
+ * pass judgement on.
+ */
+function readAsarMainEntry(handle: number): { entry: AsarEntry; filesStart: number } | null {
+  try {
+    const head = Buffer.alloc(16)
+    if (readSync(handle, head, 0, 16, 0) < 16) {
+      return null
+    }
+    const pickleSize = head.readUInt32LE(4)
+    const jsonSize = head.readUInt32LE(12)
+    if (jsonSize <= 0 || jsonSize > 64 * 1024 * 1024) {
+      return null
+    }
+    const json = Buffer.alloc(jsonSize)
+    readSync(handle, json, 0, jsonSize, 16)
+    const index = JSON.parse(json.toString('utf8')) as {
+      files?: Record<string, { files?: Record<string, unknown> }>
+    }
+    const entry = (
+      index.files?.out?.files?.main as { files?: Record<string, AsarEntry> } | undefined
+    )?.files?.['index.js']
+    if (!entry || typeof entry.offset !== 'string') {
+      return null
+    }
+    return { entry, filesStart: 8 + pickleSize }
+  } catch {
+    return null
+  }
+}
 
 /**
  * Refuse an artifact that is current and still does not contain the build.
  *
- * Freshness and integrity are different properties, and the check above only has the first. Measured
- * here: a packaged `app.asar` produced minutes after the build, holding an `out/main/index.js` of
- * byte-for-byte the same LENGTH as the built one, whose first 51 bytes were a fragment of the
- * preload bundle and whose tail was 52 bytes short. The app exited 1 before opening a window; every
- * timestamp said the artifact was current, because it was. It simply was not the file.
+ * Freshness and integrity are different properties and the check above only has the first. Measured
+ * here: a packaged `app.asar` produced minutes after the build, holding an `out/main/index.js` whose
+ * first 52 bytes were a fragment of the preload bundle — the tail of `contextBridge.executeInMainWorld`
+ * — with 52 bytes missing from its end. The app exited 1 before opening a window. Every timestamp
+ * said the artifact was current, because it was; it simply was not the file. Length agreed too.
  *
- * The cause is ordinary on a shared checkout — the packer read `out/` while another process rewrote
- * it — so this belongs in the precondition rather than in a rule about who may build when.
+ * The cause is ordinary on a shared checkout: the packer read `out/` while another process rewrote
+ * it. That is a hazard to detect rather than a rule to ask people to obey.
  *
- * An asar stores its entries as raw concatenated bytes, so the built file's opening bytes appear
- * verbatim in a correct archive. That is enough to catch a head that was overwritten, needs no asar
- * parser, and reads the archive in chunks rather than holding 130MB in memory. A missing asar or
- * missing build output says nothing either way and must not manufacture a verdict.
+ * The entry is read at its indexed offset and compared byte for byte, because the corruption that
+ * motivated this PREPENDED rather than replaced: the built bytes were still present in the archive,
+ * merely shifted. A search for "the built bytes appear somewhere" therefore passed it — the first
+ * version of this guard did exactly that and had to be measured against the real artifact before
+ * the hole showed. A missing archive, unreadable index or missing build output says nothing either
+ * way and must not manufacture a verdict.
  */
 export function assertPackagedMainMatchesBuild(
   executablePath: string,
@@ -265,43 +305,35 @@ export function assertPackagedMainMatchesBuild(
   if (!existsSync(builtMain) || !existsSync(archive)) {
     return
   }
-  const signature = Buffer.from(
-    readFileSync(builtMain, 'utf8').slice(0, MAIN_BUNDLE_SIGNATURE_BYTES),
-    'utf8'
-  )
-  if (signature.length === 0) {
-    return
-  }
 
   const handle = openSync(archive, 'r')
+  let packed: Buffer
+  let packedSize: number
   try {
-    // Overlapping chunks, so a signature straddling a boundary is still found.
-    const chunk = Buffer.alloc(1 << 20)
-    const carry = signature.length - 1
-    let offset = 0
-    let pending = Buffer.alloc(0)
-    for (;;) {
-      const read = readSync(handle, chunk, 0, chunk.length, offset)
-      if (read <= 0) {
-        break
-      }
-      const window = Buffer.concat([pending, chunk.subarray(0, read)])
-      if (window.includes(signature)) {
-        return
-      }
-      pending = window.subarray(Math.max(0, window.length - carry))
-      offset += read
+    const located = readAsarMainEntry(handle)
+    if (!located) {
+      return
     }
+    packedSize = located.entry.size
+    const want = Math.min(MAIN_BUNDLE_COMPARE_BYTES, packedSize)
+    packed = Buffer.alloc(want)
+    readSync(handle, packed, 0, want, located.filesStart + Number(located.entry.offset))
   } finally {
     closeSync(handle)
   }
 
+  const built = readFileSync(builtMain)
+  const mismatch =
+    built.length !== packedSize || !built.subarray(0, packed.length).equals(packed)
+  if (!mismatch) {
+    return
+  }
   throw new Error(
     `${PRECONDITION_FAILURE_MARKER} the packaged artifact at ${path.dirname(executablePath)} ` +
-      `does not contain the built main bundle. Its app.asar holds a different out/main/index.js than ` +
-      `${builtMain}, so this run would measure code nobody built. A concurrent writer touching out/ ` +
-      `during packaging produces exactly this, at an identical file length. Repackage with nothing ` +
-      `else building.`
+      `does not contain the built main bundle: its app.asar entry for out/main/index.js is ` +
+      `${packedSize} bytes against ${built.length} on disk, and its opening bytes differ. This run ` +
+      `would measure code nobody built. A concurrent writer touching out/ during packaging produces ` +
+      `exactly this, at an identical length. Repackage with nothing else building.`
   )
 }
 

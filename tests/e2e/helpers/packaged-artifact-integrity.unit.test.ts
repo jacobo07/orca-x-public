@@ -1,15 +1,16 @@
 /**
  * An artifact can be current and still not contain the build.
  *
- * Measured on this machine: a packaged `app.asar` whose `out/main/index.js` was byte-for-byte the
- * same SIZE as the built one, produced minutes after it, and corrupt — the first 51 bytes had been
- * overwritten with a fragment of the preload bundle, and 52 bytes were missing from the tail. The
- * app exited 1 before opening a window, and every check aimed at freshness passed, because the file
- * was fresh. It was simply not the file.
+ * Measured on this machine: a packaged `app.asar` produced minutes after the build, holding an
+ * `out/main/index.js` whose first 52 bytes were a fragment of the preload bundle — the tail of
+ * `contextBridge.executeInMainWorld({ func: installBrowserWindowCloseGuard })` — with 52 bytes
+ * missing from its end. The app exited 1 before opening a window, and every check aimed at freshness
+ * passed, because the file was fresh. It was simply not the file.
  *
- * The cause was a reader and a writer in one working tree: the packer read `out/` while another
- * process rewrote it. That is a normal hazard on a shared checkout, so the defence belongs in the
- * precondition rather than in a rule nobody can enforce.
+ * The corruption PREPENDS rather than replaces, which is the detail that matters: the built bytes
+ * are still in the archive, merely shifted. The first version of this guard searched the archive for
+ * those bytes and therefore passed the real artifact — it was measured against it before being
+ * believed. The fixture below reproduces the real shape rather than the one that was easy to invent.
  */
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -18,7 +19,39 @@ import { describe, expect, it } from 'vitest'
 
 import { assertPackagedMainMatchesBuild } from './packaged-orca-app'
 
-const BUILT_MAIN = `\n;(() => {\n  const guardKey = "__ORCA_BOOTSTRAP_FATAL_EXIT_GUARD__"\n${'x'.repeat(2048)}\n})()\n`
+const BUILT_MAIN = `\n;(() => {\n  const guardKey = "__ORCA_BOOTSTRAP_FATAL_EXIT_GUARD__"\n${'x'.repeat(6000)}\n})()\n`
+
+/**
+ * A real asar, because the guard reads the archive's index to find the entry's offset.
+ *
+ * Header: a 4-byte pickle length, the pickle size, the payload size, the JSON length, then the JSON
+ * padded to a 4-byte boundary. File bodies start at 8 + pickleSize.
+ */
+function buildAsar(entryBody: Buffer): Buffer {
+  const index = {
+    files: {
+      out: { files: { main: { files: { 'index.js': { offset: '0', size: entryBody.length } } } } }
+    }
+  }
+  const json = Buffer.from(JSON.stringify(index), 'utf8')
+  const padding = (4 - (json.length % 4)) % 4
+  // The pickle at offset 8 spans to the end of the padded JSON, so bodies begin at 8 + pickleSize,
+  // which must land exactly on the end of this header. Declaring it four bytes short reads every
+  // entry four bytes early — which makes the correct-artifact case fail and the corrupted cases pass
+  // for the wrong reason, so the happy path is what catches it.
+  const header = Buffer.alloc(16 + json.length + padding)
+  const pickleSize = 8 + json.length + padding
+  header.writeUInt32LE(4, 0)
+  header.writeUInt32LE(pickleSize, 4)
+  header.writeUInt32LE(pickleSize - 4, 8)
+  header.writeUInt32LE(json.length, 12)
+  json.copy(header, 16)
+  const built = Buffer.concat([header, entryBody])
+  if (8 + pickleSize !== header.length) {
+    throw new Error('asar fixture header is self-inconsistent; every case built on it is void')
+  }
+  return built
+}
 
 function stage(packedMain: string | null): { executablePath: string; projectRoot: string } {
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-integrity-'))
@@ -31,11 +64,9 @@ function stage(packedMain: string | null): { executablePath: string; projectRoot
   const executablePath = path.join(appDir, 'Orca X.exe')
   writeFileSync(executablePath, 'exe')
   if (packedMain !== null) {
-    // An asar stores its entries as raw concatenated bytes, so the built file's opening bytes appear
-    // verbatim inside the archive when the packed copy is the built copy.
     writeFileSync(
       path.join(appDir, 'resources', 'app.asar'),
-      `${'   HEADERJUNK{"files":{}}'}${packedMain}${'TRAILINGJUNK'}`
+      buildAsar(Buffer.from(packedMain, 'utf8'))
     )
   }
   return { executablePath, projectRoot }
@@ -48,27 +79,49 @@ describe('assertPackagedMainMatchesBuild', () => {
     expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).not.toThrow()
   })
 
-  // The measured corruption, reproduced: same length, same age, different first bytes. Every
-  // freshness check passes on this file and the app will not start.
-  it('refuses a packed main bundle whose head was overwritten, at identical length', () => {
-    // Derived rather than counted: a hardcoded slice length drifts from the prefix, which is how
-    // the first version of this fixture came out one byte long and failed its own length check.
-    const overwrittenHead = 'MainWorld({ func: installBrowserWindowCloseGuard });\n'
-    const overwritten = `${overwrittenHead}${BUILT_MAIN.slice(overwrittenHead.length)}`
-    expect(overwritten.length, 'the fixture must hold length constant or it proves nothing').toBe(
+  // The measured corruption in its real shape: a preload fragment prepended, the tail truncated by
+  // the same amount, total length unchanged. Freshness and size checks both pass on this.
+  it('refuses a packed bundle with a foreign head prepended, at identical length', () => {
+    // Derived rather than counted: a hardcoded slice length drifts from the prefix, which is how the
+    // first version of this fixture came out one byte long and failed its own length check.
+    const foreignHead = 'MainWorld({ func: installBrowserWindowCloseGuard });\n'
+    const corrupted = `${foreignHead}${BUILT_MAIN.slice(foreignHead.length)}`
+    expect(corrupted.length, 'the fixture must hold length constant or it proves nothing').toBe(
       BUILT_MAIN.length
     )
-    const { executablePath, projectRoot } = stage(overwritten)
+    // The property that defeated the previous guard: the built bytes are still in there.
+    expect(corrupted).toContain(BUILT_MAIN.slice(200, 400))
+
+    const { executablePath, projectRoot } = stage(corrupted)
 
     expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).toThrow(
       /does not contain the built main bundle/
     )
   })
 
-  // Absence is a different answer from mismatch: with nothing to compare, this check must not
-  // manufacture a verdict about the artifact.
+  it('refuses a packed bundle of a different length', () => {
+    const { executablePath, projectRoot } = stage(`${BUILT_MAIN}// extra\n`)
+
+    expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).toThrow(
+      /does not contain the built main bundle/
+    )
+  })
+
+  // Absence is a different answer from mismatch: with nothing to compare, this must not manufacture
+  // a verdict about the artifact.
   it('says nothing when there is no asar to inspect', () => {
     const { executablePath, projectRoot } = stage(null)
+
+    expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).not.toThrow()
+  })
+
+  // An archive it cannot parse is not an archive it may judge.
+  it('says nothing when the archive is not a readable asar', () => {
+    const { executablePath, projectRoot } = stage(BUILT_MAIN)
+    writeFileSync(
+      path.join(path.dirname(executablePath), 'resources', 'app.asar'),
+      Buffer.from('not an asar at all')
+    )
 
     expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).not.toThrow()
   })
