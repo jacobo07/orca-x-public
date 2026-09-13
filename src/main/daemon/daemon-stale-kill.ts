@@ -11,6 +11,7 @@ import {
 } from './daemon-endpoint-probe'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 import { inspectDaemonProcessIdentity, isNoSuchProcessError } from './daemon-pid-identity'
+import { getAliveDaemonSessionCount } from './daemon-live-session-count'
 import { PROTOCOL_VERSION } from './types'
 
 const KILL_WAIT_MS = 3_000
@@ -34,14 +35,26 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boole
   }
 }
 
-/**
- * Direct-construction-only seam. Which errno a non-socket path yields is platform-specific
- * (macOS ENOTSOCK vs Linux refused), so the decision rule below cannot be driven portably
- * through real syscalls. The probe itself is covered separately; this injects its verdict.
- */
-export type StaleDaemonKillTestHooks = {
+export type StaleDaemonKillOptions = {
+  /**
+   * Direct-construction-only seam. Which errno a non-socket path yields is platform-specific
+   * (macOS ENOTSOCK vs Linux refused), so the decision rule below cannot be driven portably
+   * through real syscalls. The probe itself is covered separately; this injects its verdict.
+   */
   probeEndpoint?: (socketPath: string) => Promise<SocketProbeOutcome>
+  /**
+   * Set by callers whose destruction was authorized on the belief that no live work exists —
+   * automatic replacement — so the belief is re-taken immediately before the signal.
+   *
+   * Deliberately opt-in. A restart or a quit destroys sessions the user asked to end, and
+   * giving those the same refusal would turn an authorized action into an unkillable daemon.
+   * Authorized destruction and automatic safe replacement are different contracts.
+   */
+  preserveLiveWork?: boolean
 }
+
+/** @deprecated Use StaleDaemonKillOptions; kept so the name change is not a silent break. */
+export type StaleDaemonKillTestHooks = StaleDaemonKillOptions
 
 export type StaleDaemonKillOutcome = {
   /** A daemon was positively confirmed gone. Drives replacement telemetry. */
@@ -59,9 +72,9 @@ export async function killStaleDaemon(
   socketPath: string,
   tokenPath: string,
   protocolVersion = PROTOCOL_VERSION,
-  testHooks?: StaleDaemonKillTestHooks
+  options?: StaleDaemonKillOptions
 ): Promise<StaleDaemonKillOutcome> {
-  const probeEndpoint = testHooks?.probeEndpoint ?? probeSocketConnect
+  const probeEndpoint = options?.probeEndpoint ?? probeSocketConnect
   const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
   let killedDaemon = false
   let liveOwnerSurvived = false
@@ -96,6 +109,31 @@ export async function killStaleDaemon(
     }
     if (parsedPid && identity === 'match') {
       const { pid, startedAtMs } = parsedPid
+      // Why here and not at the caller: everything above this line is evidence-gathering, and
+      // the identity query alone costs a subprocess (300-800ms on Windows). A session admitted
+      // during that gap is invisible to the count that authorized this kill, and the daemon has
+      // no idea it is being replaced, so its own admission fence stays open throughout. Re-take
+      // the authorization against the state that exists now.
+      //
+      // Only a positive count refuses. null means the daemon could not be asked, a different
+      // question already settled upstream with a grace-retry budget (#8689); turning unknown
+      // into a refusal here would make a genuinely wedged daemon unreplaceable.
+      //
+      // This narrows the window to one round trip. It does not close it: nothing makes a check
+      // and a signal atomic against a peer that answers a socket.
+      if (options?.preserveLiveWork) {
+        const liveSessionCount = await getAliveDaemonSessionCount(
+          socketPath,
+          tokenPath,
+          protocolVersion
+        )
+        if (liveSessionCount !== null && liveSessionCount > 0) {
+          console.warn(
+            `[daemon] Preserving daemon that acquired live work before the replacement signal: reason=live_work_admitted_after_authorization, liveSessions=${liveSessionCount}`
+          )
+          return { killed: false, liveOwnerSurvived: true }
+        }
+      }
       try {
         process.kill(pid, 'SIGTERM')
       } catch (error) {

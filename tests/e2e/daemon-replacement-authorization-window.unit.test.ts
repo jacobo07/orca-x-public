@@ -132,7 +132,11 @@ function startDestruction(generation: DaemonGeneration): {
     runtime.daemonDir,
     generation.socketPath,
     generation.tokenPath,
-    generation.protocolVersion
+    generation.protocolVersion,
+    // Why: the contract under test is automatic replacement, which is the caller that promises
+    // to preserve live work. That daemon-init's automatic branch actually asks for it is a
+    // separate claim, pinned in daemon-init-live-session-preservation.test.ts.
+    { preserveLiveWork: true }
   ).then(
     (outcome) => {
       settled = true
@@ -192,10 +196,19 @@ describe('daemon replacement: a destructive authorization must still hold at the
 
     // Why: the negative control. Without it, a guard that refuses everything would satisfy
     // every safety assertion in this file and read as a working fix.
+    //
+    // Why liveOwnerSurvived is not asserted: after a confirmed kill it carries the tail
+    // endpoint probe, which is connect-only. On Windows a just-killed daemon's named pipe
+    // still accepts a connect for a short window, so the value is legitimately
+    // non-deterministic here (measured: 1 of 3 runs). It is not dead weight in production --
+    // daemon-health.test.ts pins it true for a real handover, where a replacement daemon takes
+    // the endpoint during the kill -- so the remnant case cannot be closed by ranking a
+    // confirmed exit above the probe. Separating the two needs a protocol round trip; that is
+    // recorded as open debt rather than guessed at here.
     expect({
-      ...run.outcome,
+      killed: run.outcome.killed,
       daemonStillAlive: await processIdentityIsAlive(generation.identity)
-    }).toEqual({ killed: true, liveOwnerSurvived: false, daemonStillAlive: false })
+    }).toEqual({ killed: true, daemonStillAlive: false })
   }, 120_000)
 
   it('refuses to replace a daemon that already owns live work', async () => {

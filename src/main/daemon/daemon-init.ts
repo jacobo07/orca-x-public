@@ -35,6 +35,7 @@ import {
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { killStaleDaemon } from './daemon-stale-kill'
+import { getAliveDaemonSessionCount } from './daemon-live-session-count'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import {
   collectPinnedDaemonVersions,
@@ -170,23 +171,6 @@ function probeSocket(socketPath: string): Promise<boolean> {
     sock.on('connect', onConnect)
     sock.on('error', onError)
   })
-}
-
-async function getAliveDaemonSessionCount(
-  socketPath: string,
-  tokenPath: string,
-  protocolVersion = PROTOCOL_VERSION
-): Promise<number | null> {
-  const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
-  try {
-    await client.ensureConnected()
-    const result = await client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions.filter((session) => session.isAlive).length
-  } catch {
-    return null
-  } finally {
-    client.disconnect()
-  }
 }
 
 function createPreservedDaemonHandle(
@@ -622,7 +606,15 @@ function createOutOfProcessLauncher(
       // Why: a raw socket can outlive a broken daemon; kill by PID before respawn so the new daemon doesn't race the stale one.
       adoptionClient?.disconnect()
       adoptionClient = null
-      const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath)
+      // Why preserveLiveWork: this branch is automatic replacement, which promises not to
+      // destroy live work — and the session count that authorized it was read before a
+      // process-identity query costing a subprocess. Another client can admit a session in
+      // that gap, so the authorization is re-taken at the effect itself. The user-authorized
+      // paths (restart, quit) go through cleanupDaemonForProtocol and must NOT acquire this
+      // refusal: there the user asked for the sessions to end.
+      const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath, undefined, {
+        preserveLiveWork: true
+      })
       if (killOutcome.liveOwnerSurvived) {
         // Why: forking beside a daemon we could not prove dead is precisely how the endpoint
         // owner and the session host diverge. But refusing outright would leave the user with
