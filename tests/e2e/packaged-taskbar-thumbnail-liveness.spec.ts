@@ -126,12 +126,33 @@ test('a minimized packaged window keeps its taskbar thumbnail whole and current 
         'the mirror produced no frames, so neither claim below was evaluated'
       ).toBe(SAMPLE_FRAMES)
 
-      // SPATIAL. Mirror background surviving into a frame is a region the thumbnail did not cover.
+      // SPATIAL, half one. Mirror background surviving into a frame is a region DWM never covered.
       const worstUnpainted = Math.max(...measured.frames.map((frame) => frame.unpaintedPct))
       expect(
         worstUnpainted,
         `the thumbnail left ${worstUnpainted}% of its box undrawn — the window does not fill its own preview`
       ).toBeLessThan(1)
+
+      // SPATIAL, half two — the half that matches the reported defect, which the check above is
+      // blind to because black is a colour DWM did draw. Thresholds bracketed by measurement on the
+      // development gate: a solid-black minimized window scores 30 quantised colours and 92.05%
+      // near-black, a correct one 79-109 colours and 0%. See the sibling spec for the full account.
+      const poorestFrame = measured.frames.reduce((worst, frame) =>
+        frame.distinctColours < worst.distinctColours ? frame : worst
+      )
+      const blankest = measured.frames.reduce((worst, frame) =>
+        frame.nearBlackPct > worst.nearBlackPct ? frame : worst
+      )
+      expect(
+        poorestFrame.distinctColours,
+        `the taskbar thumbnail carries almost no colour (${poorestFrame.distinctColours} quantised, ` +
+          `${poorestFrame.nearBlackPct}% near-black) — it is a blank rectangle, not a picture of the window`
+      ).toBeGreaterThan(48)
+      expect(
+        blankest.nearBlackPct,
+        `the taskbar thumbnail is ${blankest.nearBlackPct}% near-black over ` +
+          `${blankest.distinctColours} quantised colours — the window is not in its own preview`
+      ).toBeLessThan(85)
 
       // TEMPORAL. The terminal advanced, the window stayed minimized: the picture must have moved.
       expect(

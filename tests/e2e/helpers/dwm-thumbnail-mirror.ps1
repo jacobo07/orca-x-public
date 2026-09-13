@@ -94,12 +94,29 @@ for ($f = 0; $f -lt $Frames; $f++) {
     $bmp.Save((Join-Path $OutDir "thumbnail-$f.png"), [System.Drawing.Imaging.ImageFormat]::Png)
   }
 
-  $hash = 0; $unpainted = 0; $sampled = 0
+  # Three quantities, because "blank" has three different shapes and one measure catches only one.
+  #
+  # `unpainted` finds mirror background DWM never drew over. It cannot see an all-black thumbnail,
+  # because black is a colour DWM did draw -- so a check built on it alone passes the exact failure
+  # it exists to catch.
+  #
+  # `nearBlack` closes that, but only loosely: a dark theme is legitimately dark, and a fixed
+  # darkness threshold sits uncomfortably close to the value a correct dark window produces. It is
+  # reported for diagnosis rather than trusted as a gate.
+  #
+  # `distinctColours` is the one that cannot be fooled by a theme. A real window preview -- light or
+  # dark -- carries text, chrome and edges worth thousands of quantised colours; an empty surface
+  # carries one, whatever its brightness. Quantised to 5 bits per channel so JPEG-ish gradients and
+  # subpixel antialiasing do not inflate the count.
+  $hash = 0; $unpainted = 0; $nearBlack = 0; $sampled = 0
+  $palette = New-Object 'System.Collections.Generic.HashSet[int]'
   for ($y = 0; $y -lt $Height; $y += 4) {
     for ($x = 0; $x -lt $Width; $x += 4) {
       $c = $bmp.GetPixel($x, $y)
       $sampled++
       if ($c.R -gt 240 -and $c.G -lt 20 -and $c.B -gt 240) { $unpainted++ }
+      elseif ($c.R -lt 24 -and $c.G -lt 24 -and $c.B -lt 24) { $nearBlack++ }
+      [void]$palette.Add((([int]$c.R -shr 3) -shl 10) -bor (([int]$c.G -shr 3) -shl 5) -bor ([int]$c.B -shr 3))
       $hash = ($hash * 31 + $c.R * 3 + $c.G * 5 + $c.B * 7) % 1000003
     }
   }
@@ -108,6 +125,8 @@ for ($f = 0; $f -lt $Frames; $f++) {
     index = $f
     hash = $hash
     unpaintedPct = [math]::Round(100 * $unpainted / $sampled, 2)
+    nearBlackPct = [math]::Round(100 * $nearBlack / $sampled, 2)
+    distinctColours = $palette.Count
     iconic = [bool][D.W]::IsIconic($source)
   }
 }

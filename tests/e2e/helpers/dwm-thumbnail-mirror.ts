@@ -18,6 +18,24 @@ export type DwmThumbnailFrame = {
   hash: number
   /** Mirror background that DWM never drew over. Non-zero means the thumbnail did not fill its box. */
   unpaintedPct: number
+  /**
+   * How much of the thumbnail is essentially black.
+   *
+   * Separate from `unpaintedPct` because they catch opposite halves of "blank": that one sees a box
+   * DWM never drew into, and cannot see a box DWM filled with black. The reported defect is the
+   * second kind — a preview that is one dark rectangle — so a check built only on the first passes
+   * the exact failure it exists to catch.
+   */
+  nearBlackPct: number
+  /**
+   * Quantised colours present in the sampled thumbnail.
+   *
+   * The theme-proof measure of "is this a picture of anything". A real window preview carries text,
+   * chrome and edges worth thousands of quantised colours whether it is light or dark; an empty
+   * surface carries one, at any brightness. Unlike a darkness threshold, this cannot be satisfied by
+   * a legitimately dark window nor fooled by one.
+   */
+  distinctColours: number
   iconic: boolean
 }
 
