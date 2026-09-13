@@ -11,6 +11,101 @@
   },
   "gates": [
     {
+      "id": "window-representation.a-takeover-must-beat-the-default-it-displaces",
+      "title": "A window may replace its own OS representation only in the state where the platform's answer is the worse one",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-windows",
+      "layer": "main-window-native",
+      "surfaces": [
+        "Windows taskbar thumbnail",
+        "Windows taskbar live preview (Peek)",
+        "ALT+TAB representation"
+      ],
+      "platforms": ["windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Windows only because DWM iconic representation is a Windows capability; on macOS and Linux there is no takeover to scope. The unit cases pin the posture transitions, which is what regresses silently -- an HRESULT of zero is returned whether the window was handed back or not. They cannot see which surface DWM actually served, so the OS-level reading is carried as a manual evidence run rather than claimed by the automated ones.",
+      "motivatingLinks": ["docs/reference/terminal-preview-observers.md"],
+      "invariant": "Forcing an iconic representation does not ADD a preview, it REPLACES the one the compositor builds from the window's own surface -- and a supplied bitmap is capped at the size the shell asked for, so it can never be sharper than what it displaced. The takeover is therefore engaged only while the window is minimized, which is the one state where the platform's own answer is worse (sharp and complete, but frozen at the moment of minimize). A visible window is left to the platform. A posture change is reported, because engaged and released are indistinguishable on every other field.",
+      "oracle": "Drive the posture transitions against a fake addon and require the DWM calls that correspond to them: nothing forced at start for a visible window, HAS+FORCE on minimize, both cleared on restore, engaged at start for a window that attaches already minimized, and no native call repeated for a state the window is already in. Separately, and this is the half no unit test can reach: register a DWM thumbnail against every visible top-level window and read DwmQueryThumbnailSourceSize, which returns the real window rect when the compositor is compositing the window and the supplied bitmap's size when the app has taken over. The subject must report its real rect while visible and the iconic size while minimized, in a sample where unrelated windows report their real rect -- that is the control proving the reading is about the takeover rather than about the instrument.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/window/taskbar-preview-controller.test.ts src/main/window/attach-taskbar-preview.test.ts",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/helpers/dwm-thumbnail-source-size.ps1"
+      ],
+      "testFiles": [
+        "src/main/window/taskbar-preview-controller.test.ts",
+        "src/main/window/attach-taskbar-preview.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/window/taskbar-preview-controller.test.ts",
+          "assertions": [
+            "leaves a visible window to DWM at start",
+            "engages the takeover when the window is minimized",
+            "hands the window back to DWM on restore",
+            "engages at start for a window that is already minimized",
+            "records which posture the window is in"
+          ]
+        },
+        {
+          "file": "src/main/window/attach-taskbar-preview.test.ts",
+          "assertions": [
+            "hooks the demand messages and answers from its own worktree",
+            "records the iconic edges around the demands, so a zero can be read"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-13",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/window/taskbar-preview-controller.test.ts src/main/window/attach-taskbar-preview.test.ts",
+          "durationSeconds": 3,
+          "summary": "55 passed across the four taskbar files. The five posture cases were driven RED first at 5 failed / 21 passed, so the green is attributable to the fix rather than to the assertions being unreachable."
+        },
+        {
+          "date": "2026-09-13",
+          "runner": "manual",
+          "platform": "windows",
+          "result": "passed",
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/helpers/dwm-thumbnail-source-size.ps1",
+          "durationSeconds": 60,
+          "summary": "A build carrying the fix, launched on its own profile, reported thumbnail source 1927x1142 (its real rect) while visible and 250x148 while minimized -- the same process giving two different answers. In both samples the previously installed build reported 250x148 while NOT minimized, and five unrelated windows reported their real rect, so the reading is differential rather than absolute. Iconic state was asserted at both ends of each observation window."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "The two unit files. The OS-level reading is manual and costs about a minute, most of it waiting for a window to exist."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Landed 2026-09-13; no soak has run. The unit half has no timing in it. The manual half depends on a window appearing, which is bounded by a poll rather than a fixed wait."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "RED at 2e46a6bfe (5 failed / 21 passed, _logs/w2-red-203728.log), GREEN at a49dfe9fb (55 passed, _logs/w2-green-204039.log). The OS-level half is red-by-construction against the previous build, which is present in the same sample as the fixed one and still reports 250x148 while visible."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The posture change is two DwmSetWindowAttribute calls on a window edge, and the guard means a repeated edge issues none. Nothing here is on the message path or on a frame budget."
+      },
+      "promotionCriteria": [
+        "The packaged taskbar liveness gate runs against an artifact it can verify, so the minimized half is proven on the build a user installs rather than on a local one.",
+        "The OS-level reading is automated behind a spec rather than invoked by hand.",
+        "A soak establishes that the window-appears poll does not flake on a loaded host."
+      ],
+      "demotionRule": "Demote to protection none if the posture assertions are weakened to counting native calls without checking the forceIconic argument, or if the OS-level evidence run is dropped: the unit half alone cannot tell a window DWM is compositing from one being served a bitmap, because both return HRESULT zero.",
+      "knownGaps": [
+        "tests/e2e/packaged-taskbar-thumbnail-liveness.spec.ts cannot currently run: its precondition refuses a packaged artifact whose app.asar entry for out/main/index.js differs from the built one, which is the state the last repack left. So the minimized half is unproven on a packaged build.",
+        "The live-preview (Peek) channel is sized to the window and was not re-measured after this change.",
+        "Whether a supplied 250x148 bitmap is actually preferable to the platform's sharp-but-frozen thumbnail while minimized is a product judgement this gate does not make; it only holds that the visible case is not a judgement call."
+      ]
+    },
+    {
       "id": "workspace-presentation.information-survives-rendering",
       "title": "A surface cannot drop information the user needs, to geometry or to a collapsed state",
       "maturity": "experimental",
