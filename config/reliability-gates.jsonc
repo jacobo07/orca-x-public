@@ -1,3 +1,33 @@
+// Reliability gates: what this estate claims to protect, and what backs each claim.
+//
+// This file disciplines CLAIMS. Its siblings cover adjacent concerns -- durability-contracts.jsonc
+// says what a write owes if state is lost, variant-parity.jsonc says what a variant inherits.
+//
+// A gate's evidence chain has levels, and they are not interchangeable. Do not promote one using
+// evidence from the level below it:
+//
+//   testFiles       the file exists                     CHECKED (fs.stat)
+//   assertionRefs   the assertion exists                CHECKED (substring, see below)
+//   commands        every testFile appears in a command CHECKED
+//   evidenceRuns    the run actually happened           NOT CHECKED -- hand-written, see below
+//
+// assertionRefs.assertions must be VERBATIM TEST TITLES -- the exact string passed to it()/test(),
+// copied, so a machine can find the test. It is a pointer, not a summary.
+//
+// It has not always been used that way. Measured 2026-09-13 across 1598 assertions, the field held
+// two conventions from the commit that introduced it: verbatim titles, and faithful paraphrases of
+// what a test asserts. Both read alike, and nothing distinguishes an honest paraphrase from a
+// pointer that rotted -- which is the whole job of the field. The paraphrased gates are recorded in
+// reliability-assertion-baseline.txt as a shrink-only ratchet: their tests exist and do assert what
+// is claimed, so this is unproven evidence rather than absent protection. A gate not in that list
+// must resolve every assertion it names. Four shapes resist rewording and need the test restructured
+// or the claim re-cut, not a looser matcher: a claim merging several it() blocks, an it.each table
+// whose title is generated, a paraphrase sharing no tokens with the title, and a title split across
+// source lines.
+//
+// evidenceRuns is DECLARED, not verified. Its date, result, duration and summary are hand-written
+// and nothing joins them to a real run -- no reporter output, no artifact, no CI run id is recorded
+// anywhere in this file. Read a run as a developer's note that they ran it, never as provenance.
 {
   "schemaVersion": 1,
   "updatedAt": "2026-08-14",
