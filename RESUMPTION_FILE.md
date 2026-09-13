@@ -1,3 +1,56 @@
+# RESUMPTION — Orca X full-estate product solidity closure
+
+> Everything below the `W5/W6` heading is earlier history for this branch and is still accurate
+> about what it describes. This block is the current mission.
+
+Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branch
+`orca-x/w0-durability-repros`, HEAD `95ffcfce2` (5 commits this session from `341c19d96`).
+
+## Sealed 2026-09-13 — the taskbar takeover is state-scoped
+
+`start()` forced the iconic representation for the window's whole life, so DWM stopped compositing
+Orca's own surface at attach and did not resume until close. A supplied bitmap is capped at the size
+the shell asks for, so while the window is VISIBLE the takeover bought nothing and cost resolution.
+Now: minimized engages, restore releases, already-minimized engages at start. No native rebuild —
+the addon already took the flag and its docstring already said "Called on restore".
+
+Proven at the OS boundary and differentially: a build with the fix reported thumbnail source
+**1927x1142 visible / 250x148 minimized**, while the still-running older install reported 250x148
+**not minimized** in the same two samples, beside five unrelated windows at their real rect.
+Registered as gate `window-representation.a-takeover-must-beat-the-default-it-displaces` (92 gates,
+CONTRACT VALID).
+
+## The three registries are the Product Solidity Ledger — do not build a fourth
+
+`reliability-gates.jsonc` (claims, 92), `durability-contracts.jsonc` (what a write owes, 13 + 19 + 38
+grandfathered), `variant-parity.jsonc` (cross-variant inheritance; unresolved=4, all measured-open,
+release-critical=0). All three green at HEAD. `variant-parity.jsonc` already implements
+"knowing more is not the same as having built it" in its own prose.
+
+## Measured, open, and the highest-ROI next action
+
+**The claim registry never opens the file it cites.** `validateAssertionRef` checks `ref.file` is in
+`testFiles` and that `assertions` is a non-empty string array — it never reads the file. Swept all 92
+gates with absent- and present-string controls: **everyAssertionFound=12, someFound=12,
+noneFound=55, noAssertionRefs=13**. Bimodal (0/30, 0/40, 0/49, never partial), so it is two
+conventions in one field, not drift. One cited file's only test is `test.skipIf(...)` with a
+generated title, i.e. evidence gated off by default. Do NOT add a literal-match check — 55 gates go
+red and the gate gets disabled. Ratchet it, with a synthetic subject for the red branch. Full
+account: memory `trap-a-claim-registry-that-never-opens-the-file-it-cites`.
+
+**The packaged taskbar gate still cannot judge its subject.** `app.asar`'s entry for
+`out/main/index.js` differs from the built one at an identical length. That is a verifier failure,
+not a subject failure, and it is recorded as a knownGap on the new gate.
+
+## Running things here, learned this session
+
+- A `Start-Process` child does NOT survive the end of a tool call. Launch, measure and tear down
+  inside ONE invocation.
+- `ORCA_USER_DATA_PATH=<temp>` gives an independent instance despite the single-instance lock, so a
+  second Orca can be measured without disturbing the user's running one.
+- `pnpm exec` is mangled by the RTK hook here — use `node node_modules/vitest/vitest.mjs`.
+- oxlint prints nothing when clean; drive a synthetic offender before trusting an empty exit 0.
+
 # RESUMPTION — Orca X true multi-window workspace (W5/W6)
 
 Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branch `orca-x/w0-durability-repros`.
