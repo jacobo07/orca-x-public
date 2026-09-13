@@ -110,6 +110,101 @@ function harness(
   }
 }
 
+/**
+ * Which representation DWM serves for this window, and for how long.
+ *
+ * Forcing the iconic representation does not ADD a preview — it REPLACES the one DWM composites from
+ * the window's own surface, and a supplied bitmap can never exceed the size the shell asked for. So
+ * the takeover buys liveness while minimized and pays resolution in every state, including the
+ * visible one where it buys nothing at all.
+ *
+ * Measured on the running app with `tests/e2e/helpers/dwm-thumbnail-source-size.ps1`: Orca reported a
+ * 250x148 thumbnail source while `Iconic=False`, and six other visible windows reported their real
+ * rect in the same sample — which is the control proving the reading is about the takeover and not
+ * about the instrument.
+ */
+describe('iconic takeover scope', () => {
+  it('leaves a visible window to DWM at start', () => {
+    const test = harness()
+
+    createTaskbarPreviewController(test.deps).start()
+
+    expect(test.addon.enableIconicRepresentation).not.toHaveBeenCalled()
+  })
+
+  it('engages the takeover when the window is minimized', () => {
+    const test = harness()
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+
+    controller.setWindowMinimized(true)
+
+    expect(test.addon.enableIconicRepresentation).toHaveBeenCalledTimes(1)
+    expect(test.addon.enableIconicRepresentation).toHaveBeenLastCalledWith(expect.anything(), true)
+  })
+
+  it('hands the window back to DWM on restore', () => {
+    const test = harness()
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+    controller.setWindowMinimized(true)
+
+    controller.setWindowMinimized(false)
+
+    expect(test.addon.disableIconicRepresentation).toHaveBeenCalledTimes(1)
+  })
+
+  // A window restored from a minimized topology attaches in the state the thumbnail is for, so the
+  // posture cannot be decided by the minimize EDGE alone -- that edge already happened.
+  it('engages at start for a window that is already minimized', () => {
+    const handlers = new Map<number, (wParam: Buffer, lParam: Buffer) => void>()
+    const test = harness({
+      window: {
+        hookWindowMessage: (message, callback) => handlers.set(message, callback),
+        getNativeWindowHandle: () => Buffer.alloc(8, 7),
+        isDestroyed: () => false,
+        getContentSize: () => [1200, 800],
+        isMinimized: () => true
+      }
+    })
+
+    createTaskbarPreviewController(test.deps).start()
+
+    expect(test.addon.enableIconicRepresentation).toHaveBeenLastCalledWith(expect.anything(), true)
+  })
+
+  // Electron emits `restore` for a window that was never minimized (a show, a focus on some
+  // platforms). Releasing a takeover that was never engaged would issue a native call per event.
+  it('does not re-issue native calls for a state the window is already in', () => {
+    const test = harness()
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+
+    controller.setWindowMinimized(false)
+    controller.setWindowMinimized(true)
+    controller.setWindowMinimized(true)
+    controller.setWindowMinimized(false)
+    controller.setWindowMinimized(false)
+
+    expect(test.addon.enableIconicRepresentation).toHaveBeenCalledTimes(1)
+    expect(test.addon.disableIconicRepresentation).toHaveBeenCalledTimes(1)
+  })
+
+  // The negative control for the two above: a posture change must be REPORTED, or a log cannot tell
+  // a window DWM is compositing from one being served our bitmap -- and those look identical on
+  // every other field.
+  it('records which posture the window is in', () => {
+    const test = harness()
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+
+    controller.setWindowMinimized(true)
+    controller.setWindowMinimized(false)
+
+    expect(test.diagnostics.map((event) => event.kind)).toEqual(['enabled', 'released'])
+  })
+})
+
 describe('live preview sizing', () => {
   /**
    * DWM composites the live preview at the WINDOW's rectangle, so a bitmap sized to the content
