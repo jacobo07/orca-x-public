@@ -12,6 +12,7 @@
  * those bytes and therefore passed the real artifact — it was measured against it before being
  * believed. The fixture below reproduces the real shape rather than the one that was easy to invent.
  */
+import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -27,10 +28,24 @@ const BUILT_MAIN = `\n;(() => {\n  const guardKey = "__ORCA_BOOTSTRAP_FATAL_EXIT
  * Header: a 4-byte pickle length, the pickle size, the payload size, the JSON length, then the JSON
  * padded to a 4-byte boundary. File bodies start at 8 + pickleSize.
  */
-function buildAsar(entryBody: Buffer): Buffer {
+function buildAsar(entryBody: Buffer, integrityHash?: string): Buffer {
   const index = {
     files: {
-      out: { files: { main: { files: { 'index.js': { offset: '0', size: entryBody.length } } } } }
+      out: {
+        files: {
+          main: {
+            files: {
+              'index.js': {
+                offset: '0',
+                size: entryBody.length,
+                ...(integrityHash
+                  ? { integrity: { algorithm: 'SHA256', hash: integrityHash } }
+                  : {})
+              }
+            }
+          }
+        }
+      }
     }
   }
   const json = Buffer.from(JSON.stringify(index), 'utf8')
@@ -53,7 +68,10 @@ function buildAsar(entryBody: Buffer): Buffer {
   return built
 }
 
-function stage(packedMain: string | null): { executablePath: string; projectRoot: string } {
+function stage(
+  packedMain: string | null,
+  integrityHash?: string
+): { executablePath: string; projectRoot: string } {
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-integrity-'))
   const appDir = path.join(root, 'win-unpacked')
   const projectRoot = path.join(root, 'repo')
@@ -66,11 +84,14 @@ function stage(packedMain: string | null): { executablePath: string; projectRoot
   if (packedMain !== null) {
     writeFileSync(
       path.join(appDir, 'resources', 'app.asar'),
-      buildAsar(Buffer.from(packedMain, 'utf8'))
+      buildAsar(Buffer.from(packedMain, 'utf8'), integrityHash)
     )
   }
   return { executablePath, projectRoot }
 }
+
+const sha256 = (value: string): string =>
+  createHash('sha256').update(Buffer.from(value, 'utf8')).digest('hex')
 
 describe('assertPackagedMainMatchesBuild', () => {
   it('accepts an artifact whose packed main bundle is the built one', () => {
@@ -104,6 +125,42 @@ describe('assertPackagedMainMatchesBuild', () => {
 
     expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).toThrow(
       /does not contain the built main bundle/
+    )
+  })
+
+  /**
+   * The two mismatches are fixed in different places, so the refusal has to say which one it is.
+   *
+   * Both cases below fail identically on content — same wrong bytes, same length — and differ only
+   * in whether the archive agrees with the hash the packer recorded for them. That is the whole
+   * discrimination, and asserting the shared prefix alone would not exercise it.
+   */
+  it('says the archive holds a different build when it agrees with its own index', () => {
+    const other = `${BUILT_MAIN.slice(0, 100)}// a different build entirely\n${BUILT_MAIN.slice(130)}`
+    const { executablePath, projectRoot } = stage(other, sha256(other))
+
+    expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).toThrow(
+      /contains a different build/
+    )
+  })
+
+  it('says the archive contradicts its own index when the recorded hash does not hold', () => {
+    const other = `${BUILT_MAIN.slice(0, 100)}// a different build entirely\n${BUILT_MAIN.slice(130)}`
+    // The packer recorded the built bundle and something else sits at that offset: exactly the shape
+    // a file shrinking mid-pack produces, and the case where repackaging alone cannot help.
+    const { executablePath, projectRoot } = stage(other, sha256(BUILT_MAIN))
+
+    expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).toThrow(
+      /contradicts its own index/
+    )
+  })
+
+  // Without a recorded hash the two cannot be told apart, and saying so beats guessing.
+  it('declines to attribute the mismatch when the archive records no hash', () => {
+    const { executablePath, projectRoot } = stage(`${BUILT_MAIN}// extra\n`)
+
+    expect(() => assertPackagedMainMatchesBuild(executablePath, projectRoot)).toThrow(
+      /records no integrity hash/
     )
   })
 

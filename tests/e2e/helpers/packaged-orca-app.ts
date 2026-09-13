@@ -17,7 +17,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   closeSync,
   existsSync,
@@ -239,7 +239,12 @@ export function assertPackagedArtifactIsNotStale(
 /** Enough of the entry to characterise it without reading ten megabytes on every launch. */
 const MAIN_BUNDLE_COMPARE_BYTES = 4096
 
-type AsarEntry = { offset: string; size: number }
+/**
+ * `integrity` is what the packer recorded for the bytes it meant to write, so it is the only thing
+ * that can tell an archive which disagrees with ITSELF from an archive which merely holds a
+ * different build. Optional, because not every packer writes it and its absence is not a verdict.
+ */
+type AsarEntry = { offset: string; size: number; integrity?: { hash?: string } }
 
 /**
  * The archive's own index, so an entry can be read at the offset the runtime will read it from.
@@ -309,12 +314,14 @@ export function assertPackagedMainMatchesBuild(
   const handle = openSync(archive, 'r')
   let packed: Buffer
   let packedSize: number
+  let recordedHash: string | null
   try {
     const located = readAsarMainEntry(handle)
     if (!located) {
       return
     }
     packedSize = located.entry.size
+    recordedHash = located.entry.integrity?.hash ?? null
     const want = Math.min(MAIN_BUNDLE_COMPARE_BYTES, packedSize)
     packed = Buffer.alloc(want)
     readSync(handle, packed, 0, want, located.filesStart + Number(located.entry.offset))
@@ -332,8 +339,60 @@ export function assertPackagedMainMatchesBuild(
     `${PRECONDITION_FAILURE_MARKER} the packaged artifact at ${path.dirname(executablePath)} ` +
       `does not contain the built main bundle: its app.asar entry for out/main/index.js is ` +
       `${packedSize} bytes against ${built.length} on disk, and its opening bytes differ. This run ` +
-      `would measure code nobody built. A concurrent writer touching out/ during packaging produces ` +
-      `exactly this, at an identical length. Repackage with nothing else building.`
+      `would measure code nobody built. ${diagnoseArchiveMismatch(archive, recordedHash)}`
+  )
+}
+
+/**
+ * Which of the two failures this is, because they are fixed in different places.
+ *
+ * Reading the entry's bytes and hashing them answers it against the packer's own record:
+ *
+ *   they agree     -> the archive is internally sound and simply holds a DIFFERENT build. Repackage.
+ *   they disagree  -> the archive contradicts its own index, so it was corrupted while being
+ *                     written, and repackaging without removing the cause will reproduce it.
+ *
+ * The mechanism behind the second, measured 2026-09-13: electron-builder records an entry's length
+ * from a stat and writes its bytes afterwards, so a packed file that SHRINKS in between leaves every
+ * later entry sitting earlier than the index says, by exactly the difference. A Stop hook rewrote
+ * `BLOCKED_DELIVERY.md` from 9,619 bytes to 1,089 mid-pack and shifted the rest of the archive
+ * 8,530 bytes — `out/main/index.js` verified perfectly at `offset - 8530` and was garbage at
+ * `offset`. Nothing in the build reported it: the packager had finished, signed and exited 0.
+ *
+ * Only reached on the failure path, so hashing ten megabytes costs nothing on a healthy launch.
+ */
+function diagnoseArchiveMismatch(archive: string, recordedHash: string | null): string {
+  if (!recordedHash) {
+    return (
+      'The archive records no integrity hash for that entry, so this cannot tell a corrupted ' +
+      'archive from one holding a different build. Repackage with nothing else writing to the tree.'
+    )
+  }
+  const handle = openSync(archive, 'r')
+  let actualHash: string | null = null
+  try {
+    const located = readAsarMainEntry(handle)
+    if (located) {
+      const whole = Buffer.alloc(located.entry.size)
+      readSync(handle, whole, 0, whole.length, located.filesStart + Number(located.entry.offset))
+      actualHash = createHash('sha256').update(whole).digest('hex')
+    }
+  } catch {
+    actualHash = null
+  } finally {
+    closeSync(handle)
+  }
+  if (actualHash === recordedHash) {
+    return (
+      'The archive agrees with its own index, so it is sound and simply contains a different ' +
+      'build than out/ currently holds. Rebuild and repackage.'
+    )
+  }
+  return (
+    'The bytes at that offset do not match the hash the packer recorded for them, so the archive ' +
+    'contradicts its own index: something rewrote a packed file while the packer was reading it, ' +
+    'shifting every later entry. Repackaging alone will reproduce this — find the writer first ' +
+    '(agent session artifacts at the repo root are the usual one) and exclude it from `files`.'
   )
 }
 
