@@ -19,7 +19,14 @@ function makeTempRoot(manifest) {
   const configDir = path.join(root, 'config')
   mkdirSync(configDir, { recursive: true })
   writeFileSync(path.join(configDir, 'reliability-gates.jsonc'), manifest, 'utf8')
-  writeFileSync(path.join(root, 'some.test.ts'), '', 'utf8')
+  // The fixture test file has to CONTAIN the assertion the fixture gate claims. It was empty for as
+  // long as nothing dereferenced assertionRefs, which is precisely how an empty file came to satisfy
+  // every claim in this suite.
+  writeFileSync(
+    path.join(root, 'some.test.ts'),
+    "it('stale liveness snapshots do not close newer PTY bindings', () => {})\n",
+    'utf8'
+  )
   return root
 }
 
@@ -530,21 +537,78 @@ describe('check-reliability-gates', () => {
 })
 
 /**
- * Characterization, not endorsement. The manifest's only link from a protection claim to a real
- * assertion is assertionRefs, and nothing has ever compared those strings to anything -- the shared
- * fixture above writes some.test.ts EMPTY and every case in this file still passes, so an empty
- * file satisfies every assertion a gate can claim. Pinned here under its own name so the commit
- * that closes it inverts a stated behaviour rather than quietly changing an incidental green.
+ * The subject in every case below is a SYNTHETIC gate, never a real one. A drill aimed at a real
+ * offender has an interest in that offender surviving and asserts nothing the day it is fixed --
+ * and this baseline is meant to shrink to empty, which would leave such a drill with no subject.
  */
-describe('assertion evidence is declared, not verified', () => {
-  it('accepts a gate whose claimed assertion appears nowhere in the file it cites', async () => {
+function withBaseline(root, text) {
+  writeFileSync(path.join(root, 'config', 'reliability-assertion-baseline.txt'), text, 'utf8')
+  return root
+}
+
+function citingAnUnrelatedTest(root) {
+  writeFileSync(
+    path.join(root, 'some.test.ts'),
+    "it('an entirely different test', () => {})\n",
+    'utf8'
+  )
+  return root
+}
+
+describe('assertion evidence must name something that exists', () => {
+  it('refuses a gate whose claimed assertion appears nowhere in the file it cites', async () => {
+    const root = citingAnUnrelatedTest(makeTempRoot(validManifest()))
+
+    await expect(main(root)).resolves.toBe(1)
+  })
+
+  // The green half. Without it a resolver that flagged everything would pass every red case here
+  // and read exactly like a working detector.
+  it('accepts a gate whose claimed assertion is present', async () => {
     const root = makeTempRoot(validManifest())
-    writeFileSync(
-      path.join(root, 'some.test.ts'),
-      "it('an entirely different test', () => {})\n",
-      'utf8'
+
+    await expect(main(root)).resolves.toBe(0)
+  })
+
+  it('accepts recorded legacy debt so the gate is not red on arrival', async () => {
+    const root = withBaseline(
+      citingAnUnrelatedTest(makeTempRoot(validManifest())),
+      '# legacy\nterminal-session.snapshot-freshness 1\n'
     )
 
     await expect(main(root)).resolves.toBe(0)
+  })
+
+  it('refuses debt that grew beyond its recorded count', async () => {
+    const root = withBaseline(
+      citingAnUnrelatedTest(
+        makeTempRoot(
+          validManifest({
+            assertionRefs: [
+              { file: 'some.test.ts', assertions: ['one missing claim', 'a second missing claim'] }
+            ]
+          })
+        )
+      ),
+      'terminal-session.snapshot-freshness 1\n'
+    )
+
+    await expect(main(root)).resolves.toBe(1)
+  })
+
+  it('refuses a baseline entry for a gate that now resolves, so the list cannot outlive its debt', async () => {
+    const root = withBaseline(
+      makeTempRoot(validManifest()),
+      'terminal-session.snapshot-freshness 1\n'
+    )
+
+    await expect(main(root)).resolves.toBe(1)
+  })
+
+  it('separates a baseline it cannot parse from a manifest it rejected', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = withBaseline(makeTempRoot(validManifest()), 'this is not an entry\n')
+
+    await expect(main(root)).resolves.toBe(2)
   })
 })
