@@ -140,6 +140,31 @@ module.exports = {
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
+    // Why: coding-agent session artifacts land in the working tree and are rewritten by editor and
+    // hook processes that know nothing about a packaging run. Two separate harms, and the second is
+    // the one that cost a day.
+    //
+    // They are shipped: this list's absence put `.claude/cache/learnings/`, `_audit_cache/`,
+    // `_logs/` and `memory/` inside app.asar, which is both a bloat and a privacy problem — those
+    // trees hold transcripts of the developer's own sessions.
+    //
+    // And they corrupt the archive. electron-builder records an entry's length from a stat and
+    // writes the bytes afterwards, so a file that shrinks in between leaves every later entry
+    // shifted by the difference, with the index still describing the original layout. Measured
+    // 2026-09-13: a Stop hook rewrote `BLOCKED_DELIVERY.md` from 9,619 bytes to 1,089 mid-pack, and
+    // every entry after it — `out/main/index.js` included — sat exactly 8,530 bytes before where
+    // the index said. The archive verified nowhere past that point, the packaged app died before
+    // its first window, and nothing in the build reported a problem: the packager had already
+    // finished, signed the artifact and exited 0.
+    //
+    // Excluding them is the fix that holds. Asking people not to write to their own working tree
+    // during a twenty-minute build is not a mechanism.
+    '!{BLOCKED_DELIVERY.md,LEARNINGS_PENDING.md,.pp-pending-spec.json,NUL}',
+    '!.claude{,/**/*}',
+    '!.local{,/**/*}',
+    '!_audit_cache{,/**/*}',
+    '!_logs{,/**/*}',
+    '!memory{,/**/*}',
     // Why explicitly: electron-builder auto-excludes only its OWN output directory, so a build
     // with directories.output overridden packs every other build's output into app.asar — the
     // previous win-unpacked tree and installer included. Observed: 1169 MB instead of 125 MB.
