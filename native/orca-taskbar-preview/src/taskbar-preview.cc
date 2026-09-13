@@ -320,6 +320,87 @@ napi_value DrawIconicText(napi_env env, napi_callback_info info) {
   return MakeInt32(env, static_cast<int32_t>(hr));
 }
 
+/**
+ * Hand DWM a real rendering of the window instead of drawn text.
+ *
+ * Args: (hwndBuffer, { width, height, pixels, livePreview })
+ *
+ * `pixels` is BGRA, top-down, exactly width*height*4 bytes -- the layout Electron's NativeImage
+ * produces, which is also the layout a top-down 32bpp DIB wants, so the transfer is a straight copy
+ * rather than a per-pixel swizzle.
+ *
+ * This exists because the text rasterizer above can only ever produce two colours and one font: it
+ * is legible, and it looks nothing like the window it claims to represent. Windows' own thumbnail
+ * looks right precisely because it IS the window, which is what this restores -- while keeping the
+ * refresh that forcing the iconic representation buys.
+ */
+napi_value DrawIconicBitmap(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value argv[2];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  if (argc < 2) {
+    return MakeInt32(env, static_cast<int32_t>(E_INVALIDARG));
+  }
+
+  HWND hwnd = HwndFromBuffer(env, argv[0]);
+  int32_t width = 0;
+  int32_t height = 0;
+  if (hwnd == nullptr || !ReadInt32Property(env, argv[1], "width", &width) ||
+      !ReadInt32Property(env, argv[1], "height", &height) || width <= 0 || height <= 0 ||
+      width > kMaxThumbnailEdge || height > kMaxThumbnailEdge) {
+    return MakeInt32(env, static_cast<int32_t>(E_INVALIDARG));
+  }
+
+  napi_value pixelsValue;
+  void* pixels = nullptr;
+  size_t pixelBytes = 0;
+  if (napi_get_named_property(env, argv[1], "pixels", &pixelsValue) != napi_ok ||
+      napi_get_buffer_info(env, pixelsValue, &pixels, &pixelBytes) != napi_ok ||
+      pixels == nullptr) {
+    return MakeInt32(env, static_cast<int32_t>(E_INVALIDARG));
+  }
+
+  // Refused rather than cropped or padded. A buffer shorter than the declared size would read past
+  // the end of the caller's memory; a longer one means the two sides disagree about the dimensions,
+  // and silently trusting either would turn a caller bug into a corrupt frame or a crash.
+  const size_t required = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+  if (pixelBytes != required) {
+    return MakeInt32(env, static_cast<int32_t>(E_INVALIDARG));
+  }
+
+  const bool livePreview = ReadBoolProperty(env, argv[1], "livePreview", false);
+
+  BITMAPINFO bmi = {};
+  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bmi.bmiHeader.biWidth = width;
+  bmi.bmiHeader.biHeight = -height;  // negative => top-down, matching the source layout
+  bmi.bmiHeader.biPlanes = 1;
+  bmi.bmiHeader.biBitCount = 32;
+  bmi.bmiHeader.biCompression = BI_RGB;
+
+  void* bits = nullptr;
+  HBITMAP bitmap = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+  if (bitmap == nullptr || bits == nullptr) {
+    if (bitmap != nullptr) {
+      DeleteObject(bitmap);
+    }
+    return MakeInt32(env, static_cast<int32_t>(E_OUTOFMEMORY));
+  }
+
+  CopyMemory(bits, pixels, required);
+  // A captured frame normally carries opaque alpha already, but a page with any transparency would
+  // hand DWM a partly invisible thumbnail, and that failure looks exactly like a broken feature.
+  MakeOpaque(bits, width, height);
+
+  HRESULT hr = livePreview ? DwmSetIconicLivePreviewBitmap(hwnd, bitmap, nullptr, 0)
+                           : DwmSetIconicThumbnail(hwnd, bitmap, 0);
+
+  // DWM copies what it accepts, so this bitmap is ours to release -- once per demand, for the life
+  // of the window.
+  DeleteObject(bitmap);
+  return MakeInt32(env, static_cast<int32_t>(hr));
+}
+
 void SetNamedInt(napi_env env, napi_value target, const char* name, uint32_t value) {
   napi_value number;
   napi_create_uint32(env, value, &number);
@@ -345,6 +426,7 @@ napi_value Init(napi_env env, napi_value exports) {
   SetNamedFn(env, exports, "disableIconicRepresentation", DisableIconicRepresentation);
   SetNamedFn(env, exports, "invalidateIconicBitmaps", InvalidateIconicBitmaps);
   SetNamedFn(env, exports, "drawIconicText", DrawIconicText);
+  SetNamedFn(env, exports, "drawIconicBitmap", DrawIconicBitmap);
   return exports;
 }
 

@@ -41,7 +41,16 @@ describe('taskbar preview diagnostics log', () => {
       }
     })
 
-    expect(() => log?.({ kind: 'supplied', livePreview: false, hresult: 0, generation: 1, rows: 5 })).not.toThrow()
+    expect(() =>
+      log?.({
+        kind: 'supplied',
+        livePreview: false,
+        hresult: 0,
+        generation: 1,
+        rows: 5,
+        source: 'text'
+      })
+    ).not.toThrow()
   })
 
   // The privacy contract is structural, not a filter: the event type has nowhere to put a row of
@@ -55,9 +64,18 @@ describe('taskbar preview diagnostics log', () => {
       append
     })
 
-    log?.({ kind: 'supplied', livePreview: false, hresult: 0, generation: 3, rows: 5 })
+    log?.({
+      kind: 'supplied',
+      livePreview: false,
+      hresult: 0,
+      generation: 3,
+      rows: 5,
+      source: 'text'
+    })
 
     const written = vi.mocked(append).mock.calls[0]?.[1] ?? ''
+    // 'source' names WHICH renderer answered, never what it drew. Listed explicitly so a field that
+    // could carry terminal content cannot be added without this assertion being edited on purpose.
     expect(Object.keys(JSON.parse(written))).toEqual([
       'at',
       'window',
@@ -65,7 +83,8 @@ describe('taskbar preview diagnostics log', () => {
       'livePreview',
       'hresult',
       'generation',
-      'rows'
+      'rows',
+      'source'
     ])
   })
 })

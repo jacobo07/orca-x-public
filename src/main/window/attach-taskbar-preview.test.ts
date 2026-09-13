@@ -24,7 +24,8 @@ function createAddon(): TaskbarPreviewNativeAddon {
     enableIconicRepresentation: vi.fn(() => 0),
     disableIconicRepresentation: vi.fn(() => 0),
     invalidateIconicBitmaps: vi.fn(() => 0),
-    drawIconicText: vi.fn(() => 0)
+    drawIconicText: vi.fn(() => 0),
+    drawIconicBitmap: vi.fn(() => 0)
   }
 }
 

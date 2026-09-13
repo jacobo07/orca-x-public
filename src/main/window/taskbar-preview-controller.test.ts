@@ -68,7 +68,8 @@ function harness(
     enableIconicRepresentation: vi.fn(() => 0),
     disableIconicRepresentation: vi.fn(() => 0),
     invalidateIconicBitmaps: vi.fn(() => 0),
-    drawIconicText: vi.fn(() => 0)
+    drawIconicText: vi.fn(() => 0),
+    drawIconicBitmap: vi.fn(() => 0)
   }
 
   const deps: TaskbarPreviewControllerDeps = {
@@ -203,6 +204,63 @@ describe('decodeIconicThumbnailSize', () => {
 })
 
 describe('createTaskbarPreviewController', () => {
+  /**
+   * A captured frame and drawn text both end as "supplied, hresult 0", so the diagnostics cannot
+   * tell them apart without `source` — and on screen they look nothing alike. These three pin the
+   * choice itself: which renderer answered, that the fallback is reachable, and that the fallback is
+   * NOT reached when a frame exists. Without the third, a capture path that silently never ran would
+   * pass the other two.
+   */
+  const frame = (width: number, height: number) => ({
+    width,
+    height,
+    pixels: Buffer.alloc(width * height * 4, 0x7f)
+  })
+
+  it('shows a real rendering of the window when one can be captured', async () => {
+    const test = harness({ captureWindowImage: vi.fn(async () => frame(250, 148)) })
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+    test.demand()
+    await vi.waitFor(() => expect(test.addon.drawIconicBitmap).toHaveBeenCalled())
+
+    expect(test.addon.drawIconicBitmap).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({ width: 250, height: 148 })
+    )
+    // The quiet half: a frame must DISPLACE the text rasterizer, not race it.
+    expect(test.addon.drawIconicText).not.toHaveBeenCalled()
+    expect(test.diagnostics).toContainEqual(expect.objectContaining({ source: 'window' }))
+    controller.dispose()
+  })
+
+  it('falls back to drawn text rather than showing nothing when no frame can be captured', async () => {
+    const test = harness({ captureWindowImage: vi.fn(async () => null) })
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+    test.demand()
+    await vi.waitFor(() => expect(test.addon.drawIconicText).toHaveBeenCalled())
+
+    expect(test.addon.drawIconicBitmap).not.toHaveBeenCalled()
+    expect(test.diagnostics).toContainEqual(expect.objectContaining({ source: 'text' }))
+    controller.dispose()
+  })
+
+  it('reports the frame s own size, so a resize that lands short cannot corrupt the bitmap', async () => {
+    // The addon refuses a buffer whose length disagrees with the size beside it. Echoing the
+    // REQUESTED size here instead of the captured one is what would produce that mismatch.
+    const test = harness({ captureWindowImage: vi.fn(async () => frame(249, 147)) })
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+    test.demand({ width: 250, height: 148 })
+    await vi.waitFor(() => expect(test.addon.drawIconicBitmap).toHaveBeenCalled())
+
+    const request = vi.mocked(test.addon.drawIconicBitmap).mock.calls[0]?.[1]
+    expect(request).toMatchObject({ width: 249, height: 147 })
+    expect(request?.pixels.length).toBe(249 * 147 * 4)
+    controller.dispose()
+  })
+
   it('answers a demand with the subject terminal s own rows', async () => {
     const test = harness()
     const controller = createTaskbarPreviewController(test.deps)

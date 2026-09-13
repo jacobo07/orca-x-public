@@ -36,8 +36,28 @@ import {
 } from './taskbar-preview-subject'
 import { getWorkspaceWindowForRenderer } from './workspace-window-registry'
 
+/**
+ * The slice of Electron's NativeImage this needs, named structurally so this module keeps its
+ * no-electron-import property and stays unit-testable with a plain object.
+ */
+export type TaskbarPreviewCapturedImage = {
+  isEmpty(): boolean
+  getSize(): { width: number; height: number }
+  resize(options: {
+    width?: number
+    height?: number
+    quality?: 'good' | 'better' | 'best'
+  }): TaskbarPreviewCapturedImage
+  /** BGRA, top-down — the layout a 32bpp top-down DIB wants, so the addon copies it straight in. */
+  toBitmap(): Buffer
+}
+
 export type TaskbarPreviewHostWindow = TaskbarPreviewMessageWindow & {
-  readonly webContents: { readonly id: number }
+  readonly webContents: {
+    readonly id: number
+    /** Optional: a host that cannot capture keeps the drawn-text thumbnail rather than losing one. */
+    capturePage?: () => Promise<TaskbarPreviewCapturedImage>
+  }
   on(event: 'minimize' | 'restore' | 'closed', listener: () => void): unknown
 }
 
@@ -191,6 +211,43 @@ function attachOrNull(args: {
     // moved — holding the bytes would give the thumbnail its own copy of the user's terminal.
     subscribeToTerminalOutput: (ptyId, onOutput) =>
       args.runtime.subscribeToTerminalData(ptyId, () => onOutput()),
+    /**
+     * A real picture of the window, which is what a window thumbnail is supposed to be.
+     *
+     * Measured before being relied on: capturePage on a minimized window neither restores it nor
+     * returns a stale frame — eight consecutive passes stayed minimized and seven produced a
+     * different image. That mattered because a preview that un-minimized the window every refresh
+     * would have been a far worse regression than a dull-looking one.
+     *
+     * Every failure resolves to null so the caller falls back to drawn text. An exception here would
+     * reach the window procedure's continuation, and a thumbnail is never worth that.
+     */
+    captureWindowImage: async (size) => {
+      try {
+        const capture = args.window.webContents.capturePage
+        if (typeof capture !== 'function') {
+          return null
+        }
+        const image = await capture.call(args.window.webContents)
+        if (!image || image.isEmpty()) {
+          return null
+        }
+        const resized = image.resize({ width: size.width, height: size.height, quality: 'good' })
+        const { width, height } = resized.getSize()
+        if (width <= 0 || height <= 0) {
+          return null
+        }
+        const pixels = resized.toBitmap()
+        // The addon refuses a mismatch, so catching it here keeps the refusal attributable to the
+        // capture rather than surfacing as an opaque E_INVALIDARG from native code.
+        if (pixels.length !== width * height * 4) {
+          return null
+        }
+        return { width, height, pixels }
+      } catch {
+        return null
+      }
+    },
     ...(args.onDiagnostic ? { onDiagnostic: args.onDiagnostic } : {})
   })
 

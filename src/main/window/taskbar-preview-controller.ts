@@ -54,7 +54,19 @@ export type TaskbarPreviewMessageWindow = {
 export type TaskbarPreviewDiagnostic =
   | { kind: 'enabled'; hresult: number }
   | { kind: 'demand'; livePreview: boolean; width: number; height: number; generation: number }
-  | { kind: 'supplied'; livePreview: boolean; hresult: number; generation: number; rows: number }
+  | {
+      kind: 'supplied'
+      livePreview: boolean
+      hresult: number
+      generation: number
+      rows: number
+      /**
+       * Which of the two renderers answered. Worth recording because they look completely different
+       * on screen, and "supplied, hresult 0" is identical for both — so without this the diagnostics
+       * cannot distinguish a real picture of the window from the fallback that replaced it.
+       */
+      source: 'window' | 'text'
+    }
   | {
       kind: 'dropped'
       reason: SupplyDecision | 'window-gone' | 'no-size' | 'read-failed'
@@ -72,6 +84,17 @@ export type TaskbarPreviewControllerDeps = {
   readViewportLines: (ptyId: string) => Promise<readonly string[] | null>
   /** Fires when the subject produced output. Carries no data: this surface wants state, not bytes. */
   subscribeToTerminalOutput: (ptyId: string, onOutput: () => void) => () => void
+  /**
+   * A real rendering of the window, at most the requested size, as BGRA top-down pixels.
+   *
+   * Null means no frame could be captured, which is a normal state rather than a failure — and the
+   * text rasterizer answers instead. Optional so a caller that cannot capture keeps the old
+   * behaviour rather than losing its thumbnail.
+   */
+  captureWindowImage?: (size: {
+    width: number
+    height: number
+  }) => Promise<{ width: number; height: number; pixels: Buffer } | null>
   theme?: { background?: number; foreground?: number; fontFace?: string }
   now?: () => number
   invalidateIntervalMs?: number
@@ -192,22 +215,30 @@ export function createTaskbarPreviewController(
     const generation = ledger.generation
     const drawnFor = incarnation
 
-    const subject = deps.resolveSubject()
-    let lines: readonly string[]
-    if (subject.status === 'available') {
-      const viewport = await deps.readViewportLines(subject.ptyId)
-      if (viewport === null) {
-        report({ kind: 'dropped', reason: 'read-failed' })
-        return
+    // A real rendering of the window first. Drawn text can only ever be two colours and one font,
+    // which is legible but looks nothing like Orca — and looking like the window is the whole point
+    // of a window thumbnail. Windows' own thumbnail gets this right for free precisely because it is
+    // the window; forcing the iconic representation is what took that away, so this gives it back.
+    const frame = deps.captureWindowImage ? await deps.captureWindowImage(size) : null
+
+    let lines: readonly string[] = []
+    if (!frame) {
+      const subject = deps.resolveSubject()
+      if (subject.status === 'available') {
+        const viewport = await deps.readViewportLines(subject.ptyId)
+        if (viewport === null) {
+          report({ kind: 'dropped', reason: 'read-failed' })
+          return
+        }
+        lines = selectThumbnailLines({
+          viewportLines: viewport,
+          requestedHeight: size.height
+        }).lines
+      } else {
+        // Words, not a blank frame: "starting" and "closed" are opposite advice, and an empty
+        // rectangle is also what a broken feature looks like.
+        lines = describeUnavailableSubject(subject.reason)
       }
-      lines = selectThumbnailLines({
-        viewportLines: viewport,
-        requestedHeight: size.height
-      }).lines
-    } else {
-      // Words, not a blank frame: "starting" and "closed" are opposite advice, and an empty
-      // rectangle is also what a broken feature looks like.
-      lines = describeUnavailableSubject(subject.reason)
     }
 
     const decision = ledger.commitSupply({
@@ -227,6 +258,27 @@ export function createTaskbarPreviewController(
       report({ kind: 'dropped', reason: 'window-gone' })
       return
     }
+    if (frame) {
+      // The frame reports its OWN dimensions rather than echoing the request: it was resized to fit,
+      // and the addon refuses a buffer whose length disagrees with the size beside it. Echoing the
+      // request here would turn a rounding difference into a refused frame, or a corrupt one.
+      const captured = deps.addon.drawIconicBitmap(handle, {
+        width: frame.width,
+        height: frame.height,
+        pixels: frame.pixels,
+        livePreview
+      })
+      report({
+        kind: 'supplied',
+        livePreview,
+        hresult: captured,
+        generation,
+        rows: 0,
+        source: 'window'
+      })
+      return
+    }
+
     const hresult = deps.addon.drawIconicText(handle, {
       width: size.width,
       height: size.height,
@@ -236,7 +288,14 @@ export function createTaskbarPreviewController(
       ...(deps.theme?.fontFace ? { fontFace: deps.theme.fontFace } : {}),
       livePreview
     })
-    report({ kind: 'supplied', livePreview, hresult, generation, rows: lines.length })
+    report({
+      kind: 'supplied',
+      livePreview,
+      hresult,
+      generation,
+      rows: lines.length,
+      source: 'text'
+    })
   }
 
   const onDemand = (livePreview: boolean, lParam: Buffer): void => {

@@ -18,7 +18,8 @@ const WORKING_ADDON = {
   enableIconicRepresentation: () => 0,
   disableIconicRepresentation: () => 0,
   invalidateIconicBitmaps: () => 0,
-  drawIconicText: () => 0
+  drawIconicText: () => 0,
+  drawIconicBitmap: () => 0
 }
 
 function location(overrides: Partial<TaskbarPreviewNativeLocation> = {}) {
@@ -119,6 +120,17 @@ describe('loadTaskbarPreviewNative', () => {
     // A stale binary beside a newer app: it loads fine, and the call that does not exist would
     // otherwise throw somewhere far from the cause.
     const { drawIconicText: _dropped, ...stale } = WORKING_ADDON
+    expect(loadTaskbarPreviewNative(location(), () => stale)).toMatchObject({
+      status: 'unavailable',
+      reason: 'incompatible'
+    })
+  })
+
+  it('refuses an addon built before the window-rendering entry point existed', () => {
+    // Not hypothetical: every addon compiled before that change is exactly this shape, and one is
+    // sitting in the build tree right now. Refusing here costs the thumbnail; not refusing would
+    // call a function that does not exist, from inside a window procedure's continuation.
+    const { drawIconicBitmap: _dropped, ...stale } = WORKING_ADDON
     expect(loadTaskbarPreviewNative(location(), () => stale)).toMatchObject({
       status: 'unavailable',
       reason: 'incompatible'

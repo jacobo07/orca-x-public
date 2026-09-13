@@ -42,6 +42,22 @@ export type TaskbarPreviewNativeAddon = {
       livePreview?: boolean
     }
   ): number
+  /**
+   * Supply a real rendering of the window. Returns an HRESULT.
+   *
+   * `pixels` is BGRA, top-down, exactly width*height*4 bytes. This is what makes the thumbnail look
+   * like Orca rather than like two colours of text; `drawIconicText` stays as the fallback for when
+   * no frame can be captured, because a takeover with nothing behind it is worse than a dull one.
+   */
+  drawIconicBitmap(
+    nativeWindowHandle: Buffer,
+    request: {
+      width: number
+      height: number
+      pixels: Buffer
+      livePreview?: boolean
+    }
+  ): number
 }
 
 export type TaskbarPreviewNativeUnavailableReason =
@@ -124,6 +140,7 @@ function hasExpectedSurface(candidate: unknown): candidate is TaskbarPreviewNati
     typeof addon.disableIconicRepresentation === 'function' &&
     typeof addon.invalidateIconicBitmaps === 'function' &&
     typeof addon.drawIconicText === 'function' &&
+    typeof addon.drawIconicBitmap === 'function' &&
     typeof addon.messages?.sendIconicThumbnail === 'number' &&
     typeof addon.messages?.sendIconicLivePreviewBitmap === 'number'
   )
