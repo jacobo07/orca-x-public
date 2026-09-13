@@ -114,11 +114,12 @@ export function sampleDwmThumbnail(options: {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10 * 60_000
     })
+    // findLast, not find: PowerShell can emit its own notices before the payload, and the mirror
+    // prints its single JSON object last. Taking the first brace-leading line would parse a notice.
     const line = stdout
       .split(/\r?\n/)
       .map((value) => value.trim())
-      .filter((value) => value.startsWith('{'))
-      .pop()
+      .findLast((value) => value.startsWith('{'))
     return line ? (JSON.parse(line) as DwmThumbnailSample) : null
   } catch {
     return null
