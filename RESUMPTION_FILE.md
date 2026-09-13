@@ -4,7 +4,38 @@
 > about what it describes. This block is the current mission.
 
 Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branch
-`orca-x/w0-durability-repros`, HEAD `95ffcfce2` (5 commits this session from `341c19d96`).
+`orca-x/w0-durability-repros`, HEAD `17cb2838c` (session 2 added 3 commits from `da5c005e9`).
+
+## Sealed 2026-09-13 (session 2) — the claim-to-evidence pointer is now dereferenced
+
+`b210c98f2` pinned the hole, `15f4adf5f` closed it, `17cb2838c` wrote the contract down. The checker
+now resolves every `assertionRefs` string against the source it cites, ratcheted through
+`config/reliability-assertion-baseline.txt` (67 gates frozen with counts; counts may only shrink; a
+gate absent from the list must resolve everything; an entry whose gate now resolves is REFUSED so the
+list cannot outlive its debt; `--prune` rewrites downward and refuses to record anything new).
+**92 gates still CONTRACT VALID — nothing turned red.** Six drills on a synthetic gate, green half
+included. Checker runtime ~1s (was 49.8s before whole-file normalization was measured and removed —
+it rescued zero assertions).
+
+The 55 were NOT stale. They are faithful paraphrases of real tests. Both conventions appear in
+`5b5ce6cef`, the commit that introduced the field, and `git log -S` with a working control proves the
+non-matching strings never existed in source. Four shapes; three cannot be reworded (a claim merging
+several `it()` blocks, an `it.each` generated title, a paraphrase sharing no tokens).
+
+## W-1 daemon safety — the inherited premise was wrong; read this before planning it
+
+`src/main/daemon/` is ~150 files and already implements three-state process evidence
+(present/gone/unknown + reasons + evidence sources), live-session gating before replacement,
+pid-recycle recheck between SIGTERM and SIGKILL, confirmed-kill, incarnation-fenced pid unlink, and
+degraded adoption instead of forking beside an unprovable daemon. **An atomic idle admission fence
+EXISTS and was never rejected** (`daemon-idle-shutdown.test.ts`, 28 tests, #9277/#12882) — it rejects
+create/attach once shutdown is pending and aborts shutdown for a create that started before the
+fence. Wrong-owner fallback routing is already closed in `degraded-daemon-session-routing.ts`.
+
+The one open gap, measured: between the last live-session observation and SIGTERM sits a Windows
+`Get-CimInstance` spawn — **median 592 ms, range 522–835** over five runs on this host. Nothing
+re-authorizes inside it and no test drives a session appearing there. Full account: memory
+`orca-daemon-destructive-authority-is-already-built`.
 
 ## Sealed 2026-09-13 — the taskbar takeover is state-scoped
 
