@@ -185,18 +185,33 @@ function mtimeOrNull(target: string): number | null {
  * product defect, reproducibly, and the checks that would rule it out (is the symbol in the asar, is
  * the call in the emitted chunk) all pass, because they are aimed at a build nobody is running.
  *
- * `out/` is what the packaging step consumes, so `out/` newer than the executable means the artifact
- * cannot contain the current build. This is a precondition: it says the run could not judge the
- * product, not that the product is wrong.
+ * `out/` is what the packaging step consumes, so `out/` newer than the artifact means it cannot
+ * contain the current build. This is a precondition: it says the run could not judge the product,
+ * not that the product is wrong.
+ *
+ * Which file inside the artifact answers "when was this last built" is load-bearing, and the
+ * executable alone is the wrong answer. It carries Electron; the asar carries the application code
+ * every one of these specs is about, and restaging just the asar is a normal way to refresh the
+ * artifact — it leaves the executable's timestamp untouched. Judging by the executable therefore
+ * refuses a current artifact and sends you into a full repackage to answer a question the asar had
+ * already answered. So the artifact's age is the newest of its two carriers, and a missing asar
+ * falls back to the executable rather than becoming a refusal of its own.
  */
-export function assertPackagedArtifactIsNotStale(executablePath: string): void {
-  const builtAt = mtimeOrNull(executablePath)
-  if (builtAt === null) {
+export function assertPackagedArtifactIsNotStale(
+  executablePath: string,
+  projectRoot: string = process.cwd()
+): void {
+  const carriers = [
+    mtimeOrNull(executablePath),
+    mtimeOrNull(path.join(path.dirname(executablePath), 'resources', 'app.asar'))
+  ].filter((value): value is number => value !== null)
+  if (carriers.length === 0) {
     return
   }
+  const builtAt = Math.max(...carriers)
   const sources = [
-    path.join(process.cwd(), 'out', 'main', 'index.js'),
-    path.join(process.cwd(), 'out', 'renderer', 'index.html')
+    path.join(projectRoot, 'out', 'main', 'index.js'),
+    path.join(projectRoot, 'out', 'renderer', 'index.html')
   ]
     .map(mtimeOrNull)
     .filter((value): value is number => value !== null)
@@ -209,7 +224,9 @@ export function assertPackagedArtifactIsNotStale(executablePath: string): void {
     return
   }
   throw new Error(
-    `${PRECONDITION_FAILURE_MARKER} the packaged artifact at ${PACKAGED_ORCA_APP_DIR} was built ` +
+    // The directory actually judged, not the module default: a caller pointing elsewhere with
+    // ORCA_E2E_PACKAGED_APP_DIR would otherwise be sent to rebuild a directory nobody launched.
+    `${PRECONDITION_FAILURE_MARKER} the packaged artifact at ${path.dirname(executablePath)} was built ` +
       `${new Date(builtAt).toISOString()}, before the current build output ` +
       `(${new Date(newestSource).toISOString()}). It cannot contain the change under test. Rebuild ` +
       `into that directory, or point ORCA_E2E_PACKAGED_APP_DIR at the build you mean to exercise.`
