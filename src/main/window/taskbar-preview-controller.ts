@@ -344,15 +344,25 @@ export function createTaskbarPreviewController(
         ? { width: Math.round(width), height: Math.round(height) }
         : null
     try {
-      const [contentWidth, contentHeight] = deps.window.getContentSize()
-      const fromContent = usable(contentWidth, contentHeight)
-      if (fromContent) {
-        return fromContent
-      }
+      // The WINDOW rect, not the content rect, and the order matters.
+      //
+      // DWM composites the live preview at the window's own rectangle. A bitmap smaller than that
+      // rectangle is drawn at its natural size inside it, so the preview renders slightly small with
+      // slack around it rather than filling the space. Measured on a real window: rect 1544x920,
+      // client 1529x912 — supplying the content size put the picture 14px narrow and 7px short,
+      // which is visible as "a bit smaller" and reads as a broken preview rather than a sizing bug.
+      //
+      // Content size stays as the fallback because it is the better wrong answer: a window that will
+      // not report bounds still gets a correctly-shaped preview, just inset.
       const bounds = deps.window.getBounds?.()
       const fromBounds = usable(bounds?.width, bounds?.height)
       if (fromBounds) {
         return fromBounds
+      }
+      const [contentWidth, contentHeight] = deps.window.getContentSize()
+      const fromContent = usable(contentWidth, contentHeight)
+      if (fromContent) {
+        return fromContent
       }
     } catch {
       // Geometry reads can throw on a window that is being torn down; the fallback covers it.

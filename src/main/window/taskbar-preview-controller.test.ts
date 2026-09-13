@@ -111,9 +111,41 @@ function harness(
 }
 
 describe('live preview sizing', () => {
+  /**
+   * DWM composites the live preview at the WINDOW's rectangle, so a bitmap sized to the content
+   * rectangle is drawn at its natural size inside a larger space — the preview renders slightly
+   * small with slack around it. Measured on a real window: rect 1544x920, client 1529x912, and the
+   * user's report was "it should show in full, not a bit smaller".
+   *
+   * Both sizes are plausible and only one is right, so the case has to supply BOTH and differ them;
+   * a fixture where content is missing passes whichever order the code happens to try.
+   */
+  it('sizes the live preview to the window rect, not the content rect', async () => {
+    const handlers = new Map<number, (wParam: Buffer, lParam: Buffer) => void>()
+    const test = harness()
+    test.deps.window = {
+      hookWindowMessage: (message, callback) => handlers.set(message, callback),
+      getNativeWindowHandle: () => Buffer.alloc(8, 7),
+      isDestroyed: () => false,
+      getContentSize: () => [1529, 912],
+      getBounds: () => ({ width: 1544, height: 920 })
+    } as TaskbarPreviewControllerDeps['window']
+    const controller = createTaskbarPreviewController(test.deps)
+    controller.start()
+
+    handlers.get(LIVE_PREVIEW_MESSAGE)?.(Buffer.alloc(4), Buffer.alloc(4))
+    await vi.waitFor(() => expect(test.addon.drawIconicText).toHaveBeenCalled())
+
+    expect(vi.mocked(test.addon.drawIconicText).mock.calls[0]?.[1]).toMatchObject({
+      width: 1544,
+      height: 920
+    })
+    controller.dispose()
+  })
+
   // Measured against the real shell: the live-preview demand that arrives *after* minimize is the
   // one this feature exists to answer, and it was dropped for having no size at all.
-  it('falls back to the restored bounds when a minimized window reports no content size', async () => {
+  it('uses the restored bounds when a minimized window reports no content size', async () => {
     const handlers = new Map<number, (wParam: Buffer, lParam: Buffer) => void>()
     const test = harness()
     test.deps.window = {
