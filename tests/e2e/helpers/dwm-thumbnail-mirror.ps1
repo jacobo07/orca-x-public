@@ -5,9 +5,9 @@
 # the real taskbar button would measure the same surface but requires exclusive control of the mouse,
 # which is not available on a machine somebody is using -- and a synthetic pointer fights them.
 #
-# Prints one JSON object. Frames carry a content hash and the source window's iconic state, so a run
-# that stopped being minimized is reported as such rather than as a frozen preview: those two produce
-# identical readings and only one of them is about the product.
+# Prints one JSON object. Frames carry a content hash, the source window's iconic state, and the
+# thumbnail's source size, so a run that stopped being minimized is reported as such rather than as a
+# frozen preview: those two produce identical readings and only one of them is about the product.
 
 param(
   [Parameter(Mandatory = $true)][long]$Hwnd,
@@ -63,8 +63,19 @@ if ($registerHr -ne 0) {
   exit 0
 }
 
-$srcSize = New-Object D.W+SIZE
-[void][D.W]::DwmQueryThumbnailSourceSize($thumb, [ref]$srcSize)
+# The source size is the one-call discriminator between the two things a preview can be: the real
+# window rect means DWM is compositing the window's own surface, and 250x148 means DWM is handing
+# back the iconic bitmap the app supplied. It is therefore the measurement that decides RED A, and
+# it must not be sampled only at registration -- before any thumbnail has been supplied, a window
+# that will be served from an iconic bitmap still reports its real size, so an early reading
+# describes a moment the verdict is not about. Sampled per frame, and reported at both ends.
+function Read-SourceSize($id) {
+  $s = New-Object D.W+SIZE
+  [void][D.W]::DwmQueryThumbnailSourceSize($id, [ref]$s)
+  return $s
+}
+
+$srcSizeAtStart = Read-SourceSize $thumb
 
 $props = New-Object D.W+PROPS
 $rect = New-Object D.W+RECT
@@ -121,6 +132,7 @@ for ($f = 0; $f -lt $Frames; $f++) {
     }
   }
   $bmp.Dispose()
+  $frameSize = Read-SourceSize $thumb
   $captured += [ordered]@{
     index = $f
     hash = $hash
@@ -128,18 +140,23 @@ for ($f = 0; $f -lt $Frames; $f++) {
     nearBlackPct = [math]::Round(100 * $nearBlack / $sampled, 2)
     distinctColours = $palette.Count
     iconic = [bool][D.W]::IsIconic($source)
+    sourceWidth = $frameSize.cx
+    sourceHeight = $frameSize.cy
   }
 }
 $iconicAtEnd = [D.W]::IsIconic($source)
+$srcSizeAtEnd = Read-SourceSize $thumb
 
 [void][D.W]::DwmUnregisterThumbnail($thumb)
 $form.Close()
 
 Write-Output (@{
-  registerHresult = $registerHr
-  sourceWidth     = $srcSize.cx
-  sourceHeight    = $srcSize.cy
-  iconicAtStart   = [bool]$iconicAtStart
-  iconicAtEnd     = [bool]$iconicAtEnd
-  frames          = $captured
+  registerHresult   = $registerHr
+  sourceWidth       = $srcSizeAtStart.cx
+  sourceHeight      = $srcSizeAtStart.cy
+  sourceWidthAtEnd  = $srcSizeAtEnd.cx
+  sourceHeightAtEnd = $srcSizeAtEnd.cy
+  iconicAtStart     = [bool]$iconicAtStart
+  iconicAtEnd       = [bool]$iconicAtEnd
+  frames            = $captured
 } | ConvertTo-Json -Depth 4 -Compress)

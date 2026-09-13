@@ -37,12 +37,27 @@ export type DwmThumbnailFrame = {
    */
   distinctColours: number
   iconic: boolean
+  /**
+   * What DWM holds as the SOURCE of this thumbnail, sampled with the frame.
+   *
+   * The one-call discriminator between the two things a blank preview can be, which have different
+   * causes and different fixes: the window's own rect means DWM composited the window and that
+   * surface was blank, and 250x148 means DWM handed back the iconic bitmap the app supplied, so the
+   * blank is ours. Sampled per frame rather than once at registration, because before any bitmap has
+   * been supplied a window that will be served from one still reports its real rect — an early
+   * reading describes a moment the verdict is not about.
+   */
+  sourceWidth: number
+  sourceHeight: number
 }
 
 export type DwmThumbnailSample = {
   registerHresult: number
   sourceWidth?: number
   sourceHeight?: number
+  /** The same reading at the end of the window, for the reason `iconicAtEnd` exists. */
+  sourceWidthAtEnd?: number
+  sourceHeightAtEnd?: number
   iconicAtStart?: boolean
   iconicAtEnd?: boolean
   frames: DwmThumbnailFrame[]

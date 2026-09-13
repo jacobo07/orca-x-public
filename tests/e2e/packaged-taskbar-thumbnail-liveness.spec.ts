@@ -126,6 +126,17 @@ test('a minimized packaged window keeps its taskbar thumbnail whole and current 
         'the mirror produced no frames, so neither claim below was evaluated'
       ).toBe(SAMPLE_FRAMES)
 
+      // Which surface was measured. A blank thumbnail has two causes that look identical here and
+      // are fixed in different files, so the verdict says which one it is rather than leaving the
+      // reader to run the whole gate again to find out.
+      const first = measured.frames[0]
+      const servedFrom =
+        first && first.sourceWidth <= 256 && first.sourceHeight <= 256
+          ? `served from the app's own iconic bitmap (${first.sourceWidth}x${first.sourceHeight}), ` +
+            'so anything wrong with it was drawn by captureWindowImage/answer'
+          : `composited by DWM from the window surface (${first?.sourceWidth}x${first?.sourceHeight}), ` +
+            'so the takeover is not engaged and the window itself is what looks like this'
+
       // SPATIAL, half one. Mirror background surviving into a frame is a region DWM never covered.
       const worstUnpainted = Math.max(...measured.frames.map((frame) => frame.unpaintedPct))
       expect(
@@ -146,12 +157,14 @@ test('a minimized packaged window keeps its taskbar thumbnail whole and current 
       expect(
         poorestFrame.distinctColours,
         `the taskbar thumbnail carries almost no colour (${poorestFrame.distinctColours} quantised, ` +
-          `${poorestFrame.nearBlackPct}% near-black) — it is a blank rectangle, not a picture of the window`
+          `${poorestFrame.nearBlackPct}% near-black) — it is a blank rectangle, not a picture of the ` +
+          `window. It was ${servedFrom}`
       ).toBeGreaterThan(48)
       expect(
         blankest.nearBlackPct,
         `the taskbar thumbnail is ${blankest.nearBlackPct}% near-black over ` +
-          `${blankest.distinctColours} quantised colours — the window is not in its own preview`
+          `${blankest.distinctColours} quantised colours — the window is not in its own preview. ` +
+          `It was ${servedFrom}`
       ).toBeLessThan(85)
 
       // TEMPORAL. The terminal advanced, the window stayed minimized: the picture must have moved.
