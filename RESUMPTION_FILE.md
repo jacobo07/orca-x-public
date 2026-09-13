@@ -4,7 +4,32 @@
 > about what it describes. This block is the current mission.
 
 Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branch
-`orca-x/w0-durability-repros`, HEAD `17cb2838c` (session 2 added 3 commits from `da5c005e9`).
+`orca-x/w0-durability-repros`. Session 3 ended at `c7e111b19`, having added 3 commits
+(`8b93a5e0d`, `dfc7dfcf9`, `c7e111b19`) on top of another pane's packaging work.
+
+## Sealed 2026-09-13 (session 3) — the destruction authority now outlives its own evidence check
+
+**The 592 ms window was enterable and destructive.** Against a real owned daemon, a second real
+client admitted a session through the production `createOrAttach` route while the destruction was
+in flight, and that session was killed. The daemon's admission fence could not help: it is keyed to
+`idleShutdownState`, which belongs to *self*-retirement, and a client-driven kill never sets it — so
+the fence is open for the whole window by construction. **Two authorities, one fence.**
+
+Why no test had seen it: every unit test of the replacement decision declares
+`vi.mock('./daemon-stale-kill')`, so the race sat exactly in the span the double replaced.
+
+Closed by re-taking the count immediately before the signal, from a new shared
+`daemon-live-session-count.ts` rather than a second copy. **Opt-in** (`preserveLiveWork`): restart
+and quit reach the same primitive via `cleanupDaemonForProtocol`, and that refusal there would make
+a wedged daemon unkillable after the user asked for it. Only a positive count refuses; `null`
+proceeds, because unknown is the #8689 question already answered upstream by the grace-retry budget.
+Mutation-proven in both directions (remove the guard → the two safety cases red; make it refuse on
+unknown → only the unknown control red). **Narrowed to one round trip, not closed** — nothing makes
+a check and a signal atomic against a peer answering a socket.
+
+Gate: `tests/e2e/daemon-replacement-authorization-window.unit.test.ts`, 4/4, a Vitest file (not
+Playwright — `tests/e2e/**/*.unit.test.ts` is in the main vitest project). Fixture traps that each
+return a confident wrong answer are in memory `orca-daemon-generation-fixture-recipe`.
 
 ## Sealed 2026-09-13 (session 2) — the claim-to-evidence pointer is now dereferenced
 
@@ -33,9 +58,17 @@ create/attach once shutdown is pending and aborts shutdown for a create that sta
 fence. Wrong-owner fallback routing is already closed in `degraded-daemon-session-routing.ts`.
 
 The one open gap, measured: between the last live-session observation and SIGTERM sits a Windows
-`Get-CimInstance` spawn — **median 592 ms, range 522–835** over five runs on this host. Nothing
-re-authorizes inside it and no test drives a session appearing there. Full account: memory
+`Get-CimInstance` spawn — **median 592 ms, range 522–835** over five runs on this host. **Closed in
+session 3 — see the block above.** Full account: memory
 `orca-daemon-destructive-authority-is-already-built`.
+
+Still open in that file, found while closing the above and deliberately NOT changed: after a
+*confirmed* kill, the tail endpoint probe is connect-only, and on Windows a just-killed daemon's
+named pipe still accepts a connect for a short window (measured 1 of 3 runs), so `killStaleDaemon`
+can report `liveOwnerSurvived: true` for a daemon it proved dead — which costs the user a daemon for
+that launch. It cannot be fixed by ranking a confirmed exit above the probe: `daemon-health.test.ts`
+pins that same `true` for a real handover, where a replacement daemon took the endpoint during the
+kill. Separating a remnant from a live successor needs a protocol round trip.
 
 ## Sealed 2026-09-13 — the taskbar takeover is state-scoped
 
