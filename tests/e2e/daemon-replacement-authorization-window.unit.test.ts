@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -209,6 +209,29 @@ describe('daemon replacement: a destructive authorization must still hold at the
       killed: run.outcome.killed,
       daemonStillAlive: await processIdentityIsAlive(generation.identity)
     }).toEqual({ killed: true, daemonStillAlive: false })
+  }, 120_000)
+
+  it('still replaces a daemon whose session state cannot be read, even with live work', async () => {
+    const generation = await launchOwnedDaemon('unreadable-sessions')
+    const client = openClient(generation)
+    await admitSession(client, 'unreadable')
+    expect(await observeLiveSessionCount(client)).toBeGreaterThan(0)
+
+    // Why: removing the token leaves the daemon running and identifiable by command line,
+    // but no NEW client can authenticate, so the session count reads as unknown rather than
+    // zero. The already-connected client keeps the daemon from retiring.
+    rmSync(generation.tokenPath, { force: true })
+
+    const run = await startDestruction(generation).promise
+    assertDestructionPathWasConclusive(run)
+
+    // Why this must NOT refuse: unknown is a different question from "no live work", and it
+    // was already answered upstream -- daemon-init spends 11 grace retries on a daemon that
+    // cannot be asked (#8689) before it ever gets here. Re-deciding it at the effect would
+    // make a genuinely wedged daemon unreplaceable, which is the failure this guard must not
+    // introduce. The rule it does enforce is narrower: a count that positively reports work.
+    expect(run.outcome.killed).toBe(true)
+    expect(await processIdentityIsAlive(generation.identity)).toBe(false)
   }, 120_000)
 
   it('refuses to replace a daemon that already owns live work', async () => {
