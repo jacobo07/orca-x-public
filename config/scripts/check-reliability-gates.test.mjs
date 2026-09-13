@@ -528,3 +528,23 @@ describe('check-reliability-gates', () => {
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('UNREADABLE INPUT'))
   })
 })
+
+/**
+ * Characterization, not endorsement. The manifest's only link from a protection claim to a real
+ * assertion is assertionRefs, and nothing has ever compared those strings to anything -- the shared
+ * fixture above writes some.test.ts EMPTY and every case in this file still passes, so an empty
+ * file satisfies every assertion a gate can claim. Pinned here under its own name so the commit
+ * that closes it inverts a stated behaviour rather than quietly changing an incidental green.
+ */
+describe('assertion evidence is declared, not verified', () => {
+  it('accepts a gate whose claimed assertion appears nowhere in the file it cites', async () => {
+    const root = makeTempRoot(validManifest())
+    writeFileSync(
+      path.join(root, 'some.test.ts'),
+      "it('an entirely different test', () => {})\n",
+      'utf8'
+    )
+
+    await expect(main(root)).resolves.toBe(0)
+  })
+})
