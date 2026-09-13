@@ -19,10 +19,13 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readSync,
   rmSync,
   statSync,
   writeFileSync
@@ -233,6 +236,75 @@ export function assertPackagedArtifactIsNotStale(
   )
 }
 
+/** How much of the built main bundle must appear verbatim inside the archive. */
+const MAIN_BUNDLE_SIGNATURE_BYTES = 512
+
+/**
+ * Refuse an artifact that is current and still does not contain the build.
+ *
+ * Freshness and integrity are different properties, and the check above only has the first. Measured
+ * here: a packaged `app.asar` produced minutes after the build, holding an `out/main/index.js` of
+ * byte-for-byte the same LENGTH as the built one, whose first 51 bytes were a fragment of the
+ * preload bundle and whose tail was 52 bytes short. The app exited 1 before opening a window; every
+ * timestamp said the artifact was current, because it was. It simply was not the file.
+ *
+ * The cause is ordinary on a shared checkout — the packer read `out/` while another process rewrote
+ * it — so this belongs in the precondition rather than in a rule about who may build when.
+ *
+ * An asar stores its entries as raw concatenated bytes, so the built file's opening bytes appear
+ * verbatim in a correct archive. That is enough to catch a head that was overwritten, needs no asar
+ * parser, and reads the archive in chunks rather than holding 130MB in memory. A missing asar or
+ * missing build output says nothing either way and must not manufacture a verdict.
+ */
+export function assertPackagedMainMatchesBuild(
+  executablePath: string,
+  projectRoot: string = process.cwd()
+): void {
+  const builtMain = path.join(projectRoot, 'out', 'main', 'index.js')
+  const archive = path.join(path.dirname(executablePath), 'resources', 'app.asar')
+  if (!existsSync(builtMain) || !existsSync(archive)) {
+    return
+  }
+  const signature = Buffer.from(
+    readFileSync(builtMain, 'utf8').slice(0, MAIN_BUNDLE_SIGNATURE_BYTES),
+    'utf8'
+  )
+  if (signature.length === 0) {
+    return
+  }
+
+  const handle = openSync(archive, 'r')
+  try {
+    // Overlapping chunks, so a signature straddling a boundary is still found.
+    const chunk = Buffer.alloc(1 << 20)
+    const carry = signature.length - 1
+    let offset = 0
+    let pending = Buffer.alloc(0)
+    for (;;) {
+      const read = readSync(handle, chunk, 0, chunk.length, offset)
+      if (read <= 0) {
+        break
+      }
+      const window = Buffer.concat([pending, chunk.subarray(0, read)])
+      if (window.includes(signature)) {
+        return
+      }
+      pending = window.subarray(Math.max(0, window.length - carry))
+      offset += read
+    }
+  } finally {
+    closeSync(handle)
+  }
+
+  throw new Error(
+    `${PRECONDITION_FAILURE_MARKER} the packaged artifact at ${path.dirname(executablePath)} ` +
+      `does not contain the built main bundle. Its app.asar holds a different out/main/index.js than ` +
+      `${builtMain}, so this run would measure code nobody built. A concurrent writer touching out/ ` +
+      `during packaging produces exactly this, at an identical file length. Repackage with nothing ` +
+      `else building.`
+  )
+}
+
 export async function launchPackagedOrca({
   executablePath,
   repoPath,
@@ -243,6 +315,10 @@ export async function launchPackagedOrca({
   testInfo: TestInfo
 }): Promise<PackagedOrcaRun> {
   assertPackagedArtifactIsNotStale(executablePath)
+  // Freshness first, then integrity. They are different properties and the first cannot see the
+  // second: a packed main bundle can be newer than the build, the same length as the build, and
+  // still not be the build.
+  assertPackagedMainMatchesBuild(executablePath)
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-packaged-userdata-'))
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
