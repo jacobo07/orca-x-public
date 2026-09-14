@@ -70,6 +70,7 @@ import {
   type WindowServiceHandlers
 } from './window-service-ipc-router'
 import { attachTaskbarPreview } from './attach-taskbar-preview'
+import { attachRendererLivenessWatch } from './attach-renderer-liveness-watch'
 import {
   createTaskbarPreviewDiagnosticsLog,
   TASKBAR_PREVIEW_LOG_ENV
@@ -225,6 +226,9 @@ export function attachMainWindowServices(
     runtime,
     ...(taskbarPreviewDiagnostics ? { onDiagnostic: taskbarPreviewDiagnostics } : {})
   })
+  // Why here: the hang watchdog covers the main thread only, so a renderer that stops answering
+  // while its window stays alive is the one freeze nothing in the app could see.
+  attachRendererLivenessWatch(mainWindow)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
