@@ -12,6 +12,7 @@ import {
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 import { inspectDaemonProcessIdentity, isNoSuchProcessError } from './daemon-pid-identity'
 import { getAliveDaemonSessionCount } from './daemon-live-session-count'
+import { requestAtomicRetirement } from './daemon-atomic-retirement'
 import { PROTOCOL_VERSION } from './types'
 
 const KILL_WAIT_MS = 3_000
@@ -119,19 +120,37 @@ export async function killStaleDaemon(
       // question already settled upstream with a grace-retry budget (#8689); turning unknown
       // into a refusal here would make a genuinely wedged daemon unreplaceable.
       //
-      // This narrows the window to one round trip. It does not close it: nothing makes a check
-      // and a signal atomic against a peer that answers a socket.
+      // Ask the daemon to retire itself first. It is the only party that can prove it owns no
+      // work and stop admitting in the same event-loop turn; a count taken here is already
+      // stale by the time the signal below is sent, and a session created in that gap dies.
+      //
+      // Only a positive count refuses in the fallback. null means the daemon could not be
+      // asked, a different question already settled upstream with a grace-retry budget
+      // (#8689); turning unknown into a refusal here would make a wedged daemon unreplaceable.
       if (options?.preserveLiveWork) {
-        const liveSessionCount = await getAliveDaemonSessionCount(
-          socketPath,
-          tokenPath,
-          protocolVersion
-        )
-        if (liveSessionCount !== null && liveSessionCount > 0) {
+        const retirement = await requestAtomicRetirement(socketPath, tokenPath, protocolVersion)
+        if (!retirement.retiring && retirement.reason !== 'unsupported') {
           console.warn(
-            `[daemon] Preserving daemon that acquired live work before the replacement signal: reason=live_work_admitted_after_authorization, liveSessions=${liveSessionCount}`
+            `[daemon] Preserving daemon that owns live work: reason=${retirement.reason}`
           )
           return { killed: false, liveOwnerSurvived: true }
+        }
+        if (!retirement.retiring) {
+          // Why the old path survives: a daemon that predates this request rejects it, and an
+          // unreachable one cannot answer. Neither is evidence about live work, so we fall back
+          // to the count -- narrower than nothing, and still racy, which is exactly why the
+          // request above exists for every daemon that understands it.
+          const liveSessionCount = await getAliveDaemonSessionCount(
+            socketPath,
+            tokenPath,
+            protocolVersion
+          )
+          if (liveSessionCount !== null && liveSessionCount > 0) {
+            console.warn(
+              `[daemon] Preserving daemon that acquired live work before the replacement signal: reason=live_work_admitted_after_authorization, liveSessions=${liveSessionCount}`
+            )
+            return { killed: false, liveOwnerSurvived: true }
+          }
         }
       }
       try {
