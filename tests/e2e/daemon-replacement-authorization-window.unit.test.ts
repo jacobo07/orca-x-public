@@ -207,8 +207,16 @@ describe('daemon replacement: a destructive authorization must still hold at the
     // recorded as open debt rather than guessed at here.
     expect({
       killed: run.outcome.killed,
-      daemonStillAlive: await processIdentityIsAlive(generation.identity)
-    }).toEqual({ killed: true, daemonStillAlive: false })
+      daemonStillAlive: await processIdentityIsAlive(generation.identity),
+      // Why "not a live-work refusal" rather than "no reason at all": the same connect-only
+      // tail probe described above can legitimately report endpoint_still_serving after a
+      // confirmed kill, so asserting undefined here would be flaky for a reason unrelated to
+      // the control. What must never happen is a live-work guard firing on an empty daemon --
+      // that is the shape a refuse-everything fix would take, and this is what excludes it.
+      refusedForLiveWork:
+        run.outcome.preservedBy === 'atomic_retirement_refused' ||
+        run.outcome.preservedBy === 'live_work_admitted_after_authorization'
+    }).toEqual({ killed: true, daemonStillAlive: false, refusedForLiveWork: false })
   }, 120_000)
 
   it('still replaces a daemon whose session state cannot be read, even with live work', async () => {
@@ -245,6 +253,14 @@ describe('daemon replacement: a destructive authorization must still hold at the
 
     expect(run.outcome.killed).toBe(false)
     expect(await processIdentityIsAlive(generation.identity)).toBe(true)
+
+    // THE COMPOSITION CLAIM. "Nothing was killed" is produced by BOTH guards in this path, so
+    // asserting it proves only that something refused -- delete the daemon-side request
+    // entirely and this test stays green on the legacy count. 'atomic_retirement_refused' is
+    // reachable ONLY through that request, so it names which authority answered; and the
+    // daemon's own verdict rides in the log, which the legacy branch cannot spell.
+    expect(run.outcome.preservedBy).toBe('atomic_retirement_refused')
+    expect(run.warnings.some((line) => line.includes('reason=live_sessions'))).toBe(true)
   }, 120_000)
 
   it('does not destroy a session admitted between the last observation and the signal', async () => {
@@ -284,5 +300,12 @@ describe('daemon replacement: a destructive authorization must still hold at the
     // The claim: work admitted after the authorization was taken must not be destroyed by it.
     expect(run.outcome.killed).toBe(false)
     expect(await processIdentityIsAlive(generation.identity)).toBe(true)
+
+    // And it must be the DAEMON that refused. This is the case the client-side count provably
+    // cannot save -- Session 4 measured a true count of 0, a session admitted after it, and a
+    // confirmed kill -- so a refusal credited to the legacy branch here would be the old defect
+    // wearing the new fix's result.
+    expect(run.outcome.preservedBy).toBe('atomic_retirement_refused')
+    expect(run.warnings.some((line) => line.includes('reason=live_sessions'))).toBe(true)
   }, 120_000)
 })

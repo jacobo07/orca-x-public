@@ -57,6 +57,22 @@ export type StaleDaemonKillOptions = {
 /** @deprecated Use StaleDaemonKillOptions; kept so the name change is not a silent break. */
 export type StaleDaemonKillTestHooks = StaleDaemonKillOptions
 
+/**
+ * Which authority kept the daemon alive. Preservation is not one outcome: refusing because the
+ * daemon itself proved it owns work, and refusing because we could not identify the process at
+ * all, are opposite evidence about live work, and only one of them is the safety property.
+ *
+ * 'atomic_retirement_refused' is reachable ONLY through the daemon-side request, so it is what
+ * distinguishes the fenced authority from the legacy count that cannot fence anything.
+ */
+export type StaleDaemonPreservedBy =
+  | 'atomic_retirement_refused'
+  | 'live_work_admitted_after_authorization'
+  | 'identity_unverifiable'
+  | 'signal_refused'
+  | 'unconfirmed_exit'
+  | 'endpoint_still_serving'
+
 export type StaleDaemonKillOutcome = {
   /** A daemon was positively confirmed gone. Drives replacement telemetry. */
   killed: boolean
@@ -66,6 +82,12 @@ export type StaleDaemonKillOutcome = {
    * daemons end up alive with one owning the socket and the other hosting the sessions.
    */
   liveOwnerSurvived: boolean
+  /**
+   * Why it survived. Absent when nothing survived. Callers that merely need "may I fork?" keep
+   * reading liveOwnerSurvived; this says which guard answered, which the log line alone could
+   * not be trusted for -- prose is not a contract.
+   */
+  preservedBy?: StaleDaemonPreservedBy
 }
 
 export async function killStaleDaemon(
@@ -106,7 +128,7 @@ export async function killStaleDaemon(
       console.warn(
         '[daemon] Preserving daemon that could not be inspected: reason=identity_probe_failed'
       )
-      return { killed: false, liveOwnerSurvived: true }
+      return { killed: false, liveOwnerSurvived: true, preservedBy: 'identity_unverifiable' }
     }
     if (parsedPid && identity === 'match') {
       const { pid, startedAtMs } = parsedPid
@@ -115,10 +137,6 @@ export async function killStaleDaemon(
       // during that gap is invisible to the count that authorized this kill, and the daemon has
       // no idea it is being replaced, so its own admission fence stays open throughout. Re-take
       // the authorization against the state that exists now.
-      //
-      // Only a positive count refuses. null means the daemon could not be asked, a different
-      // question already settled upstream with a grace-retry budget (#8689); turning unknown
-      // into a refusal here would make a genuinely wedged daemon unreplaceable.
       //
       // Ask the daemon to retire itself first. It is the only party that can prove it owns no
       // work and stop admitting in the same event-loop turn; a count taken here is already
@@ -133,7 +151,11 @@ export async function killStaleDaemon(
           console.warn(
             `[daemon] Preserving daemon that owns live work: reason=${retirement.reason}`
           )
-          return { killed: false, liveOwnerSurvived: true }
+          return {
+            killed: false,
+            liveOwnerSurvived: true,
+            preservedBy: 'atomic_retirement_refused'
+          }
         }
         if (!retirement.retiring) {
           // Why the old path survives: a daemon that predates this request rejects it, and an
@@ -149,7 +171,11 @@ export async function killStaleDaemon(
             console.warn(
               `[daemon] Preserving daemon that acquired live work before the replacement signal: reason=live_work_admitted_after_authorization, liveSessions=${liveSessionCount}`
             )
-            return { killed: false, liveOwnerSurvived: true }
+            return {
+              killed: false,
+              liveOwnerSurvived: true,
+              preservedBy: 'live_work_admitted_after_authorization'
+            }
           }
         }
       }
@@ -160,7 +186,7 @@ export async function killStaleDaemon(
         // another user) means it is alive and we cannot stop it — falling through to the
         // blanket catch would report "nothing alive" and authorize a duplicate beside it.
         if (!isNoSuchProcessError(error)) {
-          return { killed: false, liveOwnerSurvived: true }
+          return { killed: false, liveOwnerSurvived: true, preservedBy: 'signal_refused' }
         }
       }
       const deadline = Date.now() + KILL_WAIT_MS
@@ -195,7 +221,10 @@ export async function killStaleDaemon(
             console.warn(
               '[daemon] Preserving daemon that could not be identified: reason=identity_probe_failed'
             )
-            liveOwnerSurvived = true
+            // Why return rather than set the flag: the flag path below short-circuits the
+            // pid-file unlink anyway, so this is the same behaviour — and it lets the reason
+            // separate "could not identify" from "would not die", which are not the same news.
+            return { killed: false, liveOwnerSurvived: true, preservedBy: 'identity_unverifiable' }
           }
         } else {
           try {
@@ -217,7 +246,7 @@ export async function killStaleDaemon(
       killedDaemon = exited
       // Why: SIGTERM and SIGKILL both failed to produce an exit, so the daemon is still out
       // there holding the endpoint. Treat it as the owner rather than racing it.
-      liveOwnerSurvived = liveOwnerSurvived || !exited
+      liveOwnerSurvived = !exited
     }
   } catch {
     // PID file missing or process already dead
@@ -227,7 +256,7 @@ export async function killStaleDaemon(
     // Why: removing the record of a daemon we failed to kill is what let a replacement
     // publish its own ownership beside it. Leaving it intact keeps the exclusive PID claim
     // held, so a duplicate cannot take the endpoint.
-    return { killed: killedDaemon, liveOwnerSurvived }
+    return { killed: killedDaemon, liveOwnerSurvived, preservedBy: 'unconfirmed_exit' }
   }
 
   // Why: remove only the record belonging to the daemon we just dealt with. An unfenced
@@ -251,7 +280,7 @@ export async function killStaleDaemon(
   // will not overwrite anything it cannot prove dead, which makes this judgement a hint
   // rather than a correctness dependency.
   if ((await probeEndpoint(socketPath)) === 'connected') {
-    return { killed: killedDaemon, liveOwnerSurvived: true }
+    return { killed: killedDaemon, liveOwnerSurvived: true, preservedBy: 'endpoint_still_serving' }
   }
   return { killed: killedDaemon, liveOwnerSurvived }
 }
