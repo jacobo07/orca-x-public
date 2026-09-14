@@ -162,6 +162,16 @@ export async function killStaleDaemon(
           // unreachable one cannot answer. Neither is evidence about live work, so we fall back
           // to the count -- narrower than nothing, and still racy, which is exactly why the
           // request above exists for every daemon that understands it.
+          //
+          // Why it says so out loud: this is a downgrade from an atomic, admission-fencing
+          // authority to a count that cannot fence anything, and a safety property that
+          // degrades silently is indistinguishable from one that holds. Which v35 daemons
+          // understand the request cannot be decided from the version number, because the
+          // request was added without bumping it -- so this line is the only way the degraded
+          // path can be observed at all. See RESUMPTION_FILE.md (session 5).
+          console.warn(
+            '[daemon] Falling back to the racy pre-signal count: reason=atomic_retirement_unsupported'
+          )
           const liveSessionCount = await getAliveDaemonSessionCount(
             socketPath,
             tokenPath,
