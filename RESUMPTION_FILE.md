@@ -4,8 +4,36 @@
 > about what it describes. This block is the current mission.
 
 Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branch
-`orca-x/w0-durability-repros`. Session 3 ended at `c7e111b19`, having added 3 commits
-(`8b93a5e0d`, `dfc7dfcf9`, `c7e111b19`) on top of another pane's packaging work.
+`orca-x/w0-durability-repros`. Session 3 ended at `85c15d6da`, having added 4 commits
+(`8b93a5e0d`, `dfc7dfcf9`, `c7e111b19`, `85c15d6da`) on top of another pane's packaging work.
+
+## Sealed 2026-09-14 (session 4) — the destruction decision now belongs to the daemon
+
+**Session 3's fix narrowed the window and the residual was still destructive.** Measured by
+positioning a real second client between the real count RESOLVING and `process.kill`: the guard
+acted on a true count of 0, a session was admitted after it, and the daemon was killed. So the
+residual was never an external limit — **a peer that answers a socket CAN make this atomic, because
+it is the peer**. `daemon-server.ts` already said so twice in its own comments.
+
+`shutdownIfIdle` could not be reused: it also demands the caller be the daemon's **only** client,
+which is right for quit and wrong for replacement — an attached second window is exactly when a
+stale empty daemon must still be replaced. New request `retireIfNoLiveWork`: the same emptiness
+proof minus sole-client, committing to `shutting-down` in the **same event-loop turn**, so the proof
+and the admission fence are one event. A new method NAME, not a new optional field, so an old daemon
+throws `Unknown request type` and mixed versions fail closed; `'unsupported'` is deliberately
+distinct from a refusal and falls back to the (still racy, now legacy-only) count path.
+
+Gate: `tests/e2e/daemon-atomic-retirement.unit.test.ts`, 3/3 — empty retires (negative control),
+live session refuses, and **a daemon that agreed to retire refuses the next create**. Mutation:
+remove the fence while still replying `retiring: true` → the fence test goes red and the reply-only
+control stays green. Deliberately narrow: it never enters `killStaleDaemon`, so it spawns no Windows
+process-identity query, which needs a subprocess inside 3s and misses when the host is short of
+memory.
+
+**Owed:** the end-to-end gate through `killStaleDaemon` is INCONCLUSIVE on this host (4% free RAM →
+the identity probe degrades to `unknown`), so **that `killStaleDaemon` calls the new request is
+not yet pinned by a test**. Re-run `daemon-replacement-authorization-window.unit.test.ts` with
+headroom and assert the refusal warning names `reason=live_sessions`.
 
 ## Sealed 2026-09-13 (session 3) — the destruction authority now outlives its own evidence check
 
