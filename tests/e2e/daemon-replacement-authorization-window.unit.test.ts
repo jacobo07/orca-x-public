@@ -6,6 +6,7 @@ import {
   type StaleDaemonKillOutcome
 } from '../../src/main/daemon/daemon-stale-kill'
 import { getDaemonPidPath, serializeDaemonPidFile } from '../../src/main/daemon/daemon-spawner'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/daemon-protocol-version'
 import { DaemonPtyAdapter } from '../../src/main/daemon/daemon-pty-adapter'
 import {
   createDaemonGenerationRuntime,
@@ -24,7 +25,13 @@ import {
 // 'daemon-entry' (daemon-pid-identity.ts). Naming the fixture bundle to satisfy that
 // predicate is what lets this test drive the REAL identity check rather than stub it.
 const FIXTURE_ENTRY_FILE = 'orca-w1-daemon-entry.cjs'
-const PROTOCOL_VERSION_UNDER_TEST = 1
+// Why the real generation and not an arbitrary one: this was 1, chosen for isolation back when
+// every generation answered the retirement request identically. It no longer does — atomic
+// retirement begins at a stated generation, and automatic replacement only ever targets the
+// current one. A fixture at generation 1 was therefore proving atomic composition in a scenario
+// the product cannot reach, and after the boundary landed it measured the refusal for old peers
+// instead. Isolation comes from the fixture's own temp runtime namespace, not from the number.
+const PROTOCOL_VERSION_UNDER_TEST = PROTOCOL_VERSION
 const WORKTREE_ID = 'orca-w1-window'
 
 let runtime: DaemonGenerationRuntime

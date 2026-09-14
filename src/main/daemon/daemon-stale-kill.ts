@@ -12,7 +12,11 @@ import {
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 import { inspectDaemonProcessIdentity, isNoSuchProcessError } from './daemon-pid-identity'
 import { getAliveDaemonSessionCount } from './daemon-live-session-count'
-import { requestAtomicRetirement } from './daemon-atomic-retirement'
+import {
+  atomicRetirementWasAnswered,
+  requestAtomicRetirement
+} from './daemon-atomic-retirement'
+import { supportsAtomicRetirement } from './daemon-protocol-version'
 import { PROTOCOL_VERSION } from './types'
 
 const KILL_WAIT_MS = 3_000
@@ -67,6 +71,7 @@ export type StaleDaemonKillTestHooks = StaleDaemonKillOptions
  */
 export type StaleDaemonPreservedBy =
   | 'atomic_retirement_refused'
+  | 'atomic_retirement_unsupported_generation'
   | 'live_work_admitted_after_authorization'
   | 'identity_unverifiable'
   | 'signal_refused'
@@ -146,8 +151,31 @@ export async function killStaleDaemon(
       // asked, a different question already settled upstream with a grace-retry budget
       // (#8689); turning unknown into a refusal here would make a wedged daemon unreplaceable.
       if (options?.preserveLiveWork) {
+        // Why decide from the generation before asking: a peer that predates the request answers
+        // the same way an unreachable one does, so its reply is not evidence about live work and
+        // must never license the count below. Support is a property of the target incarnation,
+        // and the generation is the only thing that states it BEFORE the irreversible step —
+        // a reply arrives too late to be a safety mechanism.
+        //
+        // Today the only caller that sets preserveLiveWork targets the current generation, so
+        // this cannot fire in production. It is here so the property is structural rather than a
+        // coincidence of one call site: the next caller to ask for safe replacement of an older
+        // daemon gets a refusal, not a silent downgrade to the racy path.
+        if (!supportsAtomicRetirement(protocolVersion)) {
+          console.warn(
+            `[daemon] Preserving daemon whose generation predates atomic retirement: reason=atomic_retirement_unsupported_generation, protocolVersion=${protocolVersion}`
+          )
+          return {
+            killed: false,
+            liveOwnerSurvived: true,
+            preservedBy: 'atomic_retirement_unsupported_generation'
+          }
+        }
         const retirement = await requestAtomicRetirement(socketPath, tokenPath, protocolVersion)
-        if (!retirement.retiring && retirement.reason !== 'unsupported') {
+        // Why a positive test rather than excluding the non-answers one by one: the next
+        // non-answer added to that union would silently become a live-work refusal here, and a
+        // refusal on an unreachable daemon makes a wedged one unreplaceable.
+        if (atomicRetirementWasAnswered(retirement) && !retirement.retiring) {
           console.warn(
             `[daemon] Preserving daemon that owns live work: reason=${retirement.reason}`
           )
@@ -158,19 +186,17 @@ export async function killStaleDaemon(
           }
         }
         if (!retirement.retiring) {
-          // Why the old path survives: a daemon that predates this request rejects it, and an
-          // unreachable one cannot answer. Neither is evidence about live work, so we fall back
-          // to the count -- narrower than nothing, and still racy, which is exactly why the
-          // request above exists for every daemon that understands it.
+          // What is left after the generation guard above: a peer that DOES advertise the
+          // capability and still could not answer -- a wedged or mid-flight transport fault.
+          // That is not evidence about live work either, so the count is all there is. It is
+          // racy, and refusing instead would make a wedged daemon unreplaceable, so the trade
+          // is deliberate and narrow: it no longer covers any daemon that is merely old.
           //
           // Why it says so out loud: this is a downgrade from an atomic, admission-fencing
           // authority to a count that cannot fence anything, and a safety property that
-          // degrades silently is indistinguishable from one that holds. Which v35 daemons
-          // understand the request cannot be decided from the version number, because the
-          // request was added without bumping it -- so this line is the only way the degraded
-          // path can be observed at all. See RESUMPTION_FILE.md (session 5).
+          // degrades silently is indistinguishable from one that holds.
           console.warn(
-            '[daemon] Falling back to the racy pre-signal count: reason=atomic_retirement_unsupported'
+            `[daemon] Falling back to the racy pre-signal count: reason=atomic_retirement_${retirement.reason}`
           )
           const liveSessionCount = await getAliveDaemonSessionCount(
             socketPath,

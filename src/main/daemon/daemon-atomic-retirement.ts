@@ -13,10 +13,24 @@ export type RetireIfNoLiveWorkResult = {
   reason: RetireIfNoLiveWorkReason
 }
 
-/** What the daemon said, or 'unsupported' when it could not be asked at all. */
+/**
+ * What the daemon said, or why it could not be asked.
+ *
+ * 'unsupported' and 'unreachable' are both non-answers and neither may license destruction, but
+ * they are different facts about the world and only one of them is fixed by updating a peer.
+ * Collapsing them once made a daemon nobody could connect to read as an old daemon.
+ */
 export type AtomicRetirementOutcome =
   | RetireIfNoLiveWorkResult
   | { retiring: false; reason: 'unsupported' }
+  | { retiring: false; reason: 'unreachable' }
+
+/** Whether the daemon itself answered. Only an answer is evidence about live work. */
+export function atomicRetirementWasAnswered(
+  outcome: AtomicRetirementOutcome
+): outcome is RetireIfNoLiveWorkResult {
+  return outcome.reason !== 'unsupported' && outcome.reason !== 'unreachable'
+}
 
 /**
  * Asks the daemon to retire itself if and only if it owns no live work.
@@ -39,9 +53,23 @@ export async function requestAtomicRetirement(
   const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
   try {
     await client.ensureConnected()
-    return await client.request<RetireIfNoLiveWorkResult>('retireIfNoLiveWork', undefined)
   } catch {
-    return { retiring: false, reason: 'unsupported' }
+    // Nothing answered, so nothing was refused: this says nothing about the peer's age.
+    client.disconnect()
+    return { retiring: false, reason: 'unreachable' }
+  }
+  try {
+    return await client.request<RetireIfNoLiveWorkResult>('retireIfNoLiveWork', undefined)
+  } catch (error) {
+    // Measured against the real pre-atomic build 85c15d6da: the daemon's own dispatch throws
+    // 'Unknown request type: retireIfNoLiveWork'. Anything else reached a peer that knows the
+    // request and failed mid-flight, which is a transport fault, not an old daemon.
+    return {
+      retiring: false,
+      reason: String(error instanceof Error ? error.message : error).includes('Unknown request type')
+        ? 'unsupported'
+        : 'unreachable'
+    }
   } finally {
     client.disconnect()
   }
