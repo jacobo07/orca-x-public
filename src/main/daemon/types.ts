@@ -187,6 +187,17 @@ export type ShutdownIfIdleRequest = {
   type: 'shutdownIfIdle'
 }
 
+/**
+ * Retire only if the daemon owns no live work, proved and fenced in one event-loop turn.
+ * Unlike shutdownIfIdle it does not require the caller to be the only client -- right for quit,
+ * wrong for replacement, where another attached window is exactly when a stale empty daemon must
+ * still go. A client cannot answer this itself: its count is stale before it can act on it.
+ */
+export type RetireIfNoLiveWorkRequest = {
+  id: string
+  type: 'retireIfNoLiveWork'
+}
+
 export type DetachRequest = {
   id: string
   type: 'detach'
@@ -312,6 +323,7 @@ export type DaemonRequest =
   | SignalRequest
   | ListSessionsRequest
   | ShutdownIfIdleRequest
+  | RetireIfNoLiveWorkRequest
   | DetachRequest
   | GetCwdRequest
   | GetForegroundProcessRequest
@@ -355,6 +367,8 @@ export type ListSessionsResult = {
 export type ShutdownIfIdleResult = {
   retiring: boolean
 }
+
+// RetireIfNoLiveWorkResult lives in daemon-atomic-retirement.ts, beside its only consumer.
 
 export type SystemResolverHealth = 'healthy' | 'unhealthy' | 'unknown'
 
