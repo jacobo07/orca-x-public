@@ -7,6 +7,54 @@ Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branc
 `orca-x/w0-durability-repros`. Session 3 ended at `85c15d6da`, having added 4 commits
 (`8b93a5e0d`, `dfc7dfcf9`, `c7e111b19`, `85c15d6da`) on top of another pane's packaging work.
 
+## Sealed 2026-09-14 (session 5) — the product actually calls the daemon-side authority
+
+Session 4 proved the atomic authority at its own boundary and refused to call W-1 complete
+because nothing pinned that `killStaleDaemon` reached it. That refusal was right, and the reason
+is sharper than "untested": **the composed gate could not have failed.** It asserted
+`killed === false` and "daemon still alive", which BOTH guards produce — so severing the link
+left every pre-existing assertion green. Measured, not argued: the mutation run's only failures
+were the assertions added this session.
+
+Closed by making the outcome say *which* guard answered. `killStaleDaemon` now returns
+`preservedBy`; `'atomic_retirement_refused'` is reachable only through the daemon-side request
+and is disjoint from the legacy `'live_work_admitted_after_authorization'`. The same taxonomy
+lets `daemon-init` say why it enters DEGRADED MODE, which it previously could not.
+
+**Evidence.** `tests/e2e/daemon-replacement-authorization-window.unit.test.ts` 4/4 **conclusive**
+(no `identity_probe_failed`) on a real owned daemon with a real second client: live work
+survives and the refusal names `reason=live_sessions`; an empty daemon still replaces
+(`killed: true`) with no live-work guard firing. Mutating the LINK — not the primitive — turns
+exactly the two discriminating tests red with the reason flipped to the legacy path, controls
+green, tree restored byte-exact (SHA verified). `daemon-atomic-retirement.unit.test.ts` 3/3.
+Typecheck 0, oxlint 0.
+
+**Reachable residual, recorded rather than fixed.** `retireIfNoLiveWork` landed **without a
+`PROTOCOL_VERSION` bump** (still 35). The pipe name is protocol-versioned, so a daemon from an
+older build reporting v35 shares the endpoint, rejects the request, and is replaced under the
+racy count. Worse, this is unanswerable by inspection: **a capability added without a version
+boundary cannot be negotiated** — no `supports*` predicate can exist for it.
+`daemon-protocol-version.ts` documents this exact hazard for `getSize` and its remedy is a
+feature constant. Measured remedy: bump to 36, add `ATOMIC_RETIREMENT_DAEMON_PROTOCOL_VERSION`,
+append 35 to `PREVIOUS_DAEMON_PROTOCOL_VERSIONS` — `createLegacyDaemonAdapters` **adopts**
+previous-version daemons rather than replacing them, so the bump moves old daemons out of the
+automatic-replacement path entirely. Deferred only because it is a wire-compatibility change
+under `docs/reference/remote-wire-compatibility.md`. Interim: the downgrade now announces itself
+(`reason=atomic_retirement_unsupported`); that branch is **not reachable by any test here**,
+because every daemon in this repo is current code.
+
+**Host measurement, and it is a product reading too.** The Windows identity probe spawns
+`powershell.exe` under a 3 s cap. Measured at idle on 2026-09-14 with ~1–3.5 % free RAM:
+median 2237 ms, worst 3106 ms, **1 failure in 6**; warm spawns cost the same as cold, so
+warming is not a mitigation. Two of five composed runs were INCONCLUSIVE for this reason — never
+"safe". In production the same degradation sends automatic replacement to
+`identity_probe_failed` → preserve → DEGRADED MODE, i.e. a memory-starved user silently loses
+daemon persistence. Not filed as a wave; recorded as a candidate.
+
+One harness fault classified: a run where test 1 died on `EPERM` creating its temp dir never
+terminated its daemon, so tests 2–4 all failed `EADDRINUSE` on the pipe. Cascade from one
+fixture fault; zero leftover fixture daemons afterwards. Verifier failure, not subject failure.
+
 ## Sealed 2026-09-14 (session 4) — the destruction decision now belongs to the daemon
 
 **Session 3's fix narrowed the window and the residual was still destructive.** Measured by
