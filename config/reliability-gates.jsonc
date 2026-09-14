@@ -1007,6 +1007,101 @@
       "demotionRule": "Keep experimental or demote if any activity trigger shortens the rejection window, a transient burst reaches resolver retirement authority, sustained dead-session evidence no longer converges, shutdown permits late retirement, or the focused gate flakes without an identified product or harness fault."
     },
     {
+      "id": "daemon-replacement.atomic-retirement-is-version-negotiated",
+      "title": "A daemon generation that predates atomic retirement is adopted, never replaced under the racy count",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "daemon-terminal",
+      "layer": "daemon-protocol-generation",
+      "surfaces": [
+        "automatic stale-daemon replacement",
+        "previous-generation daemon adoption",
+        "local PTY survival across an app update"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Real Electron daemons with real PTY sessions in a disposable runtime namespace, driving the real adoption authority and the real killStaleDaemon path including its process-identity check. Run on Windows only. The Playwright daemon-generation suites have not been run against this boundary, and the transport-fault fallback for a v36-or-later peer is not reachable from any fixture here because every daemon in this repo is current code.",
+      "motivatingLinks": [
+        "RESUMPTION_FILE.md, sealed 2026-09-14 session 6 — the capability can now be negotiated",
+        "docs/reference/remote-wire-compatibility.md — Not covered here: the local daemon protocol",
+        "85c15d6da — the last daemon build advertising generation 35 without the retirement request"
+      ],
+      "invariant": "Atomic safe retirement begins at daemon protocol generation 36. Every generation below it is adoptable and its live sessions stay reachable through its own adapter, the current generation is never adoptable so a genuinely stale daemon stays replaceable, and a request for safe replacement of a pre-boundary generation is refused by name rather than downgraded to the pre-signal session count.",
+      "oracle": "Launch a real daemon at generation 35 with a real live PTY session and require createLegacyDaemonAdapters to return exactly one adapter that still lists that session, with the daemon alive. Launch a real daemon at the current generation with a live session and require zero adapters, so the adoption rule cannot swallow every generation. Drive killStaleDaemon with preserveLiveWork against the pre-boundary daemon and require preservedBy to name the generation guard, not the daemon's answer; classify a run whose process-identity probe degraded as inconclusive by raising rather than passing.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/daemon-version-skew-adoption.unit.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-protocol-version.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "tests/e2e/daemon-version-skew-adoption.unit.test.ts",
+        "src/main/daemon/daemon-protocol-version.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/daemon-version-skew-adoption.unit.test.ts",
+          "assertions": [
+            "declares the capability boundary above every previously shipped generation",
+            "adopts a pre-atomic daemon and keeps its live session reachable",
+            "leaves the current generation out of the adoptable population",
+            "refuses safe replacement of a pre-atomic daemon instead of falling back to the count"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-protocol-version.test.ts",
+          "assertions": ["withholds atomic retirement from every generation that predates it"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-14",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/daemon-version-skew-adoption.unit.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 49,
+          "summary": "4/4 conclusive at 881 MB free physical memory, so the process-identity probe genuinely answered rather than the inconclusive branch being taken. Two earlier attempts at 1046 MB and below were classified resource-confounded and discarded: the whole file failed at suite level on a failed PowerShell process-table spawn, including a constants-only test. Run without --reporter=dot; the reporter does not change what is exercised."
+        },
+        {
+          "date": "2026-09-14",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-protocol-version.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "The generation boundary and its exhaustive predicate sweep over every previous generation. Taken inside a same-scope differential over 136 files of src/main/daemon and src/main/local-builds: at 0016eabb1, 5 files and 10 tests failed with 1410 passed; at 6dbd58898, the identical 5 files and 10 tests failed with 1411 passed. No attributable new red; the one red the change produced was the generation pin in daemon-foreground-confirmation-protocol.test.ts, updated deliberately in its own commit."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "four real Electron daemons with real PTY sessions, including the Windows process-identity probe"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Not flaky by product behaviour, but resource-sensitive by construction: the Windows process-identity query spawns powershell.exe under a 3-second cap and fails outright below roughly 1 GB free physical memory. The gate raises INCONCLUSIVE rather than passing when that happens, so a green always means the probe answered."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Mutating ATOMIC_RETIREMENT_DAEMON_PROTOCOL_VERSION from 36 to 35 flips the refusal from atomic_retirement_unsupported_generation to atomic_retirement_refused while the daemon survives in BOTH worlds with killed false and liveOwnerSurvived true. An assertion on the outcome alone would have stayed green with the negotiation severed, which is why the gate names the decider. The two adoption cases stayed green under the mutation, and the file was restored byte-exact by SHA-256."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The generation check is an integer comparison taken before the retirement request, so the safe path makes strictly fewer round trips than before: a pre-boundary peer is now refused without a connect at all. No timer, listener, poll or retained payload was added."
+      },
+      "promotionCriteria": [
+        "Run the Playwright daemon-generation suites against the boundary on at least one platform.",
+        "Exercise the same oracle on macOS or Linux, where the identity probe does not spawn PowerShell.",
+        "Replace the pre-boundary subject with a daemon built from a real pre-atomic commit rather than current source at an older generation number."
+      ],
+      "knownGaps": [
+        "The pre-boundary subject is built from current source and therefore DOES implement the retirement request; the gate proves the caller decides from the generation rather than from the peer's answer, which is the property that matters, but it is not a historically faithful peer. A real pre-atomic daemon built from 85c15d6da was run out-of-band this session and answered `Unknown request type: retireIfNoLiveWork`; that observation is recorded in RESUMPTION_FILE.md and is not pinned by any committed test.",
+        "The generation guard cannot fire in production today, because the only caller that requests preserveLiveWork targets the current generation. It is a structural backstop for the next such caller, not a path under load.",
+        "Windows only. The Playwright daemon-generation suites were not run."
+      ],
+      "demotionRule": "Keep experimental or demote if a preserveLiveWork caller is added for a non-current generation without extending this oracle, if the adoptable population ever includes the current generation, if a pre-boundary refusal stops naming its own guard, or if the gate reports green on a run whose identity probe degraded."
+    },
+    {
       "id": "ssh-filesystem.stream-inactivity-lifecycle",
       "title": "SSH file streams bound inactivity without counting host sleep",
       "maturity": "experimental",
