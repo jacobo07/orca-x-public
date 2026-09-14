@@ -7,6 +7,54 @@ Repo: `C:\Users\User\Desktop\Cursor Projects\Vibe Coding Projects\Orca X`, branc
 `orca-x/w0-durability-repros`. Session 3 ended at `85c15d6da`, having added 4 commits
 (`8b93a5e0d`, `dfc7dfcf9`, `c7e111b19`, `85c15d6da`) on top of another pane's packaging work.
 
+## Sealed 2026-09-14 (session 6) — the capability can now be negotiated
+
+Session 5 left one software residual and named it correctly: the racy fallback was reachable
+because `retireIfNoLiveWork` shipped into v35 without moving the number. **That is now measured
+rather than argued.** `85c15d6da` is a real pre-atomic build — `PROTOCOL_VERSION` 35, the request
+absent from all of `src/` — and a daemon built from it connects and answers
+`Unknown request type: retireIfNoLiveWork`, which the client collapsed into "could not ask" and
+then fell through to the pre-signal count.
+
+Closed by the convention this file already used fourteen times: `PROTOCOL_VERSION` is **36**,
+`ATOMIC_RETIREMENT_DAEMON_PROTOCOL_VERSION` is 36, 35 joins `PREVIOUS_DAEMON_PROTOCOL_VERSIONS`.
+The remedy is **relocation, not repair** — the endpoint name carries the generation, so the whole
+ambiguous population now sits behind its own pipe where `createLegacyDaemonAdapters` adopts it
+and automatic replacement can never target it.
+
+Two smaller defects closed with it. `killStaleDaemon` now decides from the generation **before**
+asking, so an unsupported peer is refused rather than downgraded — a reply arrives too late to be
+a safety mechanism. And `unsupported` and `unreachable` are no longer one value: both are
+non-answers, but only one is fixed by updating a peer, and collapsing them made a daemon nobody
+could connect to read as an old daemon. The caller's predicate became a positive test, because
+excluding non-answers one by one meant the next one added would silently have become a live-work
+refusal.
+
+**Evidence.** `tests/e2e/daemon-version-skew-adoption.unit.test.ts` 4/4 conclusive on a real
+daemon with a real live PTY: a v35 daemon is adopted and its session is still listed *by the
+adopted adapter*, the current generation stays out of the adoptable population (the liveness
+control), and safe replacement of a pre-boundary daemon is refused by name. Mutating the boundary
+36→35 flips that last outcome from `atomic_retirement_unsupported_generation` to
+`atomic_retirement_refused` — **the daemon survives in both worlds**, so an assertion on the
+outcome alone would have stayed green with the negotiation severed. Byte-exact restore, SHA
+verified. Composed gate 4/4 conclusive, primitive gate 3/3, typecheck 0, oxlint 0.
+
+**The composed gate was fixed, not just re-run.** It pinned its fixture to generation 1, chosen
+for isolation back when every generation answered identically — so it was proving atomic
+composition in a scenario the product cannot reach. It now runs at the real generation.
+
+**Same-scope differential, the debt session 5 left open.** `src/main/daemon` + `src/main/local-builds`,
+same runner and config, at `0016eabb1`: 5 files / 10 tests failed, 1410 passed. At `6dbd58898`:
+the identical 5 files and 10 tests, 1411 passed. Zero attributable new reds. The one red the
+change did produce was `daemon-foreground-confirmation-protocol.test.ts` pinning the generation —
+the ratchet working — and it was updated deliberately in its own commit.
+
+**Still open, and it is software debt, not an external limit.** The Playwright
+`daemon-generation-*.spec.ts` suites were not run (they need a packaged build and this host had
+between 0.5 and 4 GB free all session). The identity probe still costs a `powershell.exe` spawn
+under a 3 s cap; three runs this session were classified INCONCLUSIVE for it, and in production
+that same degradation drops a memory-starved user into DEGRADED MODE silently.
+
 ## Sealed 2026-09-14 (session 5) — the product actually calls the daemon-side authority
 
 Session 4 proved the atomic authority at its own boundary and refused to call W-1 complete
