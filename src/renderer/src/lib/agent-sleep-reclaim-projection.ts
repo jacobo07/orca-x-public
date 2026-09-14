@@ -32,7 +32,8 @@ export type SleepReclaimFootprint =
   | { known: false; reason: ReclaimUnknownReason }
 
 export type SleepReclaimEstimate = {
-  metric: ProcessMemoryMetric
+  /** null when no snapshot exists yet, so the unit is genuinely unknowable. */
+  metric: ProcessMemoryMetric | null
   /** Sum over candidates we actually measured. Never includes an unknown as 0. */
   knownBytes: number
   knownCount: number
@@ -96,7 +97,7 @@ export function projectCandidateFootprint(
 
 export function summarizeReclaimEstimate(
   footprints: readonly SleepReclaimFootprint[],
-  metric: ProcessMemoryMetric
+  metric: ProcessMemoryMetric | null
 ): SleepReclaimEstimate {
   let knownBytes = 0
   let knownCount = 0
