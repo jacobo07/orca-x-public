@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { decodeIconicThumbnailSize } from './taskbar-preview-bitmap-size'
 import {
   createTaskbarPreviewController,
-  decodeIconicThumbnailSize,
   type TaskbarPreviewControllerDeps,
   type TaskbarPreviewDiagnostic
 } from './taskbar-preview-controller'
@@ -579,6 +579,135 @@ describe('createTaskbarPreviewController', () => {
     // A thumbnail is made of whatever is on screen, which routinely includes secrets. Diagnostics
     // may carry sizes, decisions and reasons — never the rows themselves.
     expect(JSON.stringify(test.diagnostics)).not.toContain('hunter2')
+    controller.dispose()
+  })
+})
+
+/**
+ * Keeping a minimized preview current when the terminal is silent.
+ *
+ * The subject of the invalidation signal is ONE pty — the active pane of the active tab. The subject
+ * of the picture has been the whole window since the renderer started supplying it. Those are not
+ * the same thing, and the gap is the defect: an agent panel streaming, a diff opening, a second
+ * pane's output, or any view that is not that terminal all change the window and invalidate nothing.
+ * The thumbnail then holds whatever was captured when the pane last wrote, which for an idle pane is
+ * the moment of minimize, indefinitely.
+ *
+ * Every case below runs with `subscribeToTerminalOutput` never fired, because the whole point is
+ * what happens with no terminal output at all.
+ */
+describe('minimized refresh ticker', () => {
+  function ticking(overrides: Partial<TaskbarPreviewControllerDeps> = {}) {
+    let tick: (() => void) | null = null
+    let stopped = 0
+    const test = harness({
+      scheduleRefresh: (fn) => {
+        tick = fn
+        return () => {
+          stopped += 1
+          tick = null
+        }
+      },
+      refreshIntervalMs: 400,
+      ...overrides
+    })
+    return {
+      test,
+      run: () => tick?.(),
+      armed: () => tick !== null,
+      stops: () => stopped
+    }
+  }
+
+  it('offers a newer picture while the shell keeps asking, with no terminal output', () => {
+    const rig = ticking()
+    const controller = createTaskbarPreviewController(rig.test.deps)
+    controller.start()
+    controller.setWindowMinimized(true)
+    rig.test.demand()
+
+    for (let i = 0; i < 3; i += 1) {
+      rig.test.clock.value += 400
+      rig.run()
+    }
+
+    // Three ticks, three invalidations: the shell is told its copy is old on every one of them.
+    expect(rig.test.addon.invalidateIconicBitmaps).toHaveBeenCalledTimes(3)
+    expect(rig.test.outputListeners.get('pty-a')).toBeTypeOf('function')
+    controller.dispose()
+  })
+
+  it('goes quiet once the shell stops asking', () => {
+    const rig = ticking()
+    const controller = createTaskbarPreviewController(rig.test.deps)
+    controller.start()
+    controller.setWindowMinimized(true)
+    rig.test.demand()
+
+    // Past the window in which a demand is evidence that a preview is on screen. Without this test
+    // the ticker sustains itself — invalidate, DWM asks, the ask looks recent, invalidate — and
+    // captures the window forever behind a flyout that closed.
+    rig.test.clock.value += 5_000
+    rig.run()
+    rig.run()
+
+    expect(rig.test.addon.invalidateIconicBitmaps).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('never invalidates before the shell has asked even once', () => {
+    const rig = ticking()
+    const controller = createTaskbarPreviewController(rig.test.deps)
+    controller.start()
+    controller.setWindowMinimized(true)
+
+    rig.test.clock.value += 400
+    rig.run()
+
+    expect(rig.test.addon.invalidateIconicBitmaps).not.toHaveBeenCalled()
+    controller.dispose()
+  })
+
+  it('does not arm while the window is visible', () => {
+    const rig = ticking()
+    const controller = createTaskbarPreviewController(rig.test.deps)
+
+    controller.start()
+
+    // DWM composites a visible window itself, live and at full resolution. A tick here would be a
+    // capture per interval buying nothing.
+    expect(rig.armed()).toBe(false)
+    controller.dispose()
+  })
+
+  it('releases the ticker on restore and again on dispose', () => {
+    const rig = ticking()
+    const controller = createTaskbarPreviewController(rig.test.deps)
+    controller.start()
+    controller.setWindowMinimized(true)
+    expect(rig.armed()).toBe(true)
+
+    controller.setWindowMinimized(false)
+    expect(rig.armed()).toBe(false)
+    expect(rig.stops()).toBe(1)
+
+    controller.setWindowMinimized(true)
+    controller.dispose()
+    expect(rig.armed()).toBe(false)
+    expect(rig.stops()).toBe(2)
+  })
+
+  it('still invalidates immediately on terminal output', () => {
+    const rig = ticking()
+    const controller = createTaskbarPreviewController(rig.test.deps)
+    controller.start()
+    controller.setWindowMinimized(true)
+
+    // The tick is a floor under liveness, not a replacement for the fast path: a write should reach
+    // the shell without waiting for the next interval.
+    rig.test.outputListeners.get('pty-a')?.()
+
+    expect(rig.test.addon.invalidateIconicBitmaps).toHaveBeenCalledTimes(1)
     controller.dispose()
   })
 })

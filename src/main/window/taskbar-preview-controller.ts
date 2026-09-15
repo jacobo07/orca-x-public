@@ -19,6 +19,11 @@ import { describeUnavailableSubject, selectThumbnailLines } from './taskbar-prev
 import type { TaskbarPreviewNativeAddon } from './taskbar-preview-native'
 import type { TaskbarPreviewSubject } from './taskbar-preview-subject'
 import {
+  decodeIconicThumbnailSize,
+  resolveLivePreviewSize
+} from './taskbar-preview-bitmap-size'
+import { createTaskbarPreviewRefreshTicker } from './taskbar-preview-refresh-ticker'
+import {
   TaskbarPreviewSupplyLedger,
   type SupplyDecision,
   type TaskbarPreviewIncarnation
@@ -36,10 +41,6 @@ const DEFAULT_FOREGROUND = 0xd4_d4_d4
  * newest generation regardless of how many hints were skipped.
  */
 export const DEFAULT_INVALIDATE_INTERVAL_MS = 250
-
-/** Last resort for a live preview whose window will not report usable geometry. DWM rescales. */
-const FALLBACK_LIVE_PREVIEW_WIDTH = 1280
-const FALLBACK_LIVE_PREVIEW_HEIGHT = 800
 
 export type TaskbarPreviewMessageWindow = {
   hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void
@@ -116,6 +117,15 @@ export type TaskbarPreviewControllerDeps = {
   theme?: { background?: number; foreground?: number; fontFace?: string }
   now?: () => number
   invalidateIntervalMs?: number
+  /**
+   * Arms a repeating tick and returns the call that stops it.
+   *
+   * A seam rather than a direct `setInterval` so the refresh behaviour can be driven a tick at a
+   * time against the same manual clock the rest of this controller is tested with. The default
+   * unrefs, because a thumbnail must never be the reason a process refuses to exit.
+   */
+  scheduleRefresh?: (tick: () => void, intervalMs: number) => () => void
+  refreshIntervalMs?: number
   onDiagnostic?: (event: TaskbarPreviewDiagnostic) => void
 }
 
@@ -137,23 +147,6 @@ export type TaskbarPreviewController = {
   dispose(): void
   /** Test seam: the generation ledger this controller fences against. */
   readonly ledger: TaskbarPreviewSupplyLedger
-}
-
-/**
- * The shell packs the largest acceptable thumbnail size into lParam: width in the high word, height
- * in the low one. Measured against a real demand (0x00fa0094 for a landscape window => 250x148)
- * rather than taken from prose, because the documentation names the fields and not the order.
- */
-export function decodeIconicThumbnailSize(
-  lParam: Buffer
-): { width: number; height: number } | null {
-  if (lParam.length < 4) {
-    return null
-  }
-  const packed = lParam.readUInt32LE(0)
-  const width = (packed >>> 16) & 0xff_ff
-  const height = packed & 0xff_ff
-  return width > 0 && height > 0 ? { width, height } : null
 }
 
 export function createTaskbarPreviewController(
@@ -194,7 +187,27 @@ export function createTaskbarPreviewController(
     subscribedPtyId = null
   }
 
-  const onOutput = (): void => {
+  /**
+   * The window-subject freshness floor, armed only while the takeover is engaged.
+   *
+   * `hintStale` is referenced lazily because it is declared below; the ticker cannot fire before
+   * this function has finished building the controller.
+   */
+  const refresh = createTaskbarPreviewRefreshTicker({
+    onStale: () => hintStale(),
+    now,
+    ...(deps.scheduleRefresh ? { schedule: deps.scheduleRefresh } : {}),
+    ...(deps.refreshIntervalMs === undefined ? {} : { intervalMs: deps.refreshIntervalMs })
+  })
+
+  /**
+   * Declare the shell's copy out of date and, if the rate limit allows, tell it so.
+   *
+   * Shared by both things that can make the picture stale: bytes arriving in the subject terminal,
+   * and time passing while a minimized window is on display. They differ only in what prompted
+   * them — the generation, the fence and the rate limit are the same machinery either way.
+   */
+  const hintStale = (): void => {
     if (disposed) {
       return
     }
@@ -213,6 +226,8 @@ export function createTaskbarPreviewController(
     ledger.recordInvalidated(at)
     report({ kind: 'invalidated', hresult, generation: ledger.generation })
   }
+
+  const onOutput = (): void => hintStale()
 
   const retarget = (): void => {
     if (disposed) {
@@ -329,6 +344,10 @@ export function createTaskbarPreviewController(
     if (disposed) {
       return
     }
+    // Recorded before anything can reject the demand. A demand the shell made and this controller
+    // then failed to size is still evidence that the shell is displaying the preview, and that is
+    // the only question this timestamp answers.
+    refresh.recordDemand()
     const size = livePreview ? contentSize() : decodeIconicThumbnailSize(lParam)
     if (!size) {
       // Which channel could not be sized is the whole diagnostic: a thumbnail whose lParam decoded
@@ -353,49 +372,9 @@ export function createTaskbarPreviewController(
     })
   }
 
-  /**
-   * The size to rasterize a live-preview bitmap at.
-   *
-   * A minimized window is exactly when this is asked and exactly when the content size can come back
-   * unusable — measured against the real shell, where a demand arriving after minimize was dropped
-   * for having no size at all, which is the one demand the whole feature exists to answer. So the
-   * window's restored bounds stand in, and a fixed size stands in after that: DWM scales whatever it
-   * is given, and a preview at an imperfect aspect ratio is worth incomparably more than none.
-   */
-  const contentSize = (): { width: number; height: number } | null => {
-    if (disposed || deps.window.isDestroyed()) {
-      return null
-    }
-    const usable = (width: unknown, height: unknown): { width: number; height: number } | null =>
-      typeof width === 'number' && typeof height === 'number' && width > 0 && height > 0
-        ? { width: Math.round(width), height: Math.round(height) }
-        : null
-    try {
-      // The WINDOW rect, not the content rect, and the order matters.
-      //
-      // DWM composites the live preview at the window's own rectangle. A bitmap smaller than that
-      // rectangle is drawn at its natural size inside it, so the preview renders slightly small with
-      // slack around it rather than filling the space. Measured on a real window: rect 1544x920,
-      // client 1529x912 — supplying the content size put the picture 14px narrow and 7px short,
-      // which is visible as "a bit smaller" and reads as a broken preview rather than a sizing bug.
-      //
-      // Content size stays as the fallback because it is the better wrong answer: a window that will
-      // not report bounds still gets a correctly-shaped preview, just inset.
-      const bounds = deps.window.getBounds?.()
-      const fromBounds = usable(bounds?.width, bounds?.height)
-      if (fromBounds) {
-        return fromBounds
-      }
-      const [contentWidth, contentHeight] = deps.window.getContentSize()
-      const fromContent = usable(contentWidth, contentHeight)
-      if (fromContent) {
-        return fromContent
-      }
-    } catch {
-      // Geometry reads can throw on a window that is being torn down; the fallback covers it.
-    }
-    return { width: FALLBACK_LIVE_PREVIEW_WIDTH, height: FALLBACK_LIVE_PREVIEW_HEIGHT }
-  }
+  /** Null only for a window that is going away; the sizing itself always has an answer. */
+  const contentSize = (): { width: number; height: number } | null =>
+    disposed || deps.window.isDestroyed() ? null : resolveLivePreviewSize(deps.window)
 
   /**
    * The posture the window is currently in, mirrored so a repeated edge costs nothing.
@@ -420,8 +399,12 @@ export function createTaskbarPreviewController(
       // state in which a supplied bitmap beats the platform's own answer, because the platform's
       // answer here is frozen at the moment of minimize.
       report({ kind: 'enabled', hresult: deps.addon.enableIconicRepresentation(handle, true) })
+      // Armed with the takeover and released with it, so the cost exists only in the state that
+      // buys something. A visible window is composited by DWM and needs no help staying current.
+      refresh.arm()
       return
     }
+    refresh.disarm()
     // Both attributes cleared, which is what hands the window back. DWM's composition of a visible
     // window is live, full-resolution and free; a supplied bitmap is capped at the size the shell
     // asked for and can therefore never be sharper than the thing it replaced.
@@ -465,6 +448,9 @@ export function createTaskbarPreviewController(
       const handle = nativeHandle()
       disposed = true
       releaseSubscription()
+      // A ticker outliving its window would capture a destroyed one every interval, and the handle
+      // guard would quietly turn each attempt into a dropped supply rather than anything anyone sees.
+      refresh.disarm()
       if (handle) {
         deps.addon.disableIconicRepresentation(handle)
       }
