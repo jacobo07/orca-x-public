@@ -144,6 +144,7 @@ import {
   resolveDictationDelivery,
   type DictationTarget
 } from '../../../../src/dictation/mobile-dictation-delivery'
+import { dispatchDictationDelivery } from '../../../../src/dictation/mobile-dictation-transcript-dispatch'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
@@ -1117,39 +1118,23 @@ export default function SessionScreen() {
       // the captured terminal behind for the next recording to pick up.
       const target = dictationRouteContextRef.current
       dictationRouteContextRef.current = null
-      const delivery = resolveDictationDelivery(text, target)
-      if (delivery.kind === 'refused') {
-        // Why: a transcript that never had a destination is not a transcript that went somewhere quietly.
-        showToast('Dictation had no target — nothing was inserted')
-        return
-      }
-      // Why: dictation belongs to the composer that started it — native chat consumes it locally, terminal mode keeps live-input routing.
-      if (delivery.kind === 'native-chat') {
+      // Why: dictation belongs to the composer that started it — native chat consumes it
+      // locally, terminal mode keeps live-input routing, and the dispatch itself is
+      // behaviourally pinned rather than only readable as source.
+      dispatchDictationDelivery(resolveDictationDelivery(text, target), appendBufferedDictation, {
         // Why: the captured draft key, never the current one — the user can switch
         // tabs while ASR runs and both tabs can be in chat view.
-        nativeChatController.appendDictationToDraft(delivery.draftKey, (current) =>
-          appendBufferedDictation(current, delivery.text)
-        )
-        showToast('Dictation inserted')
-        return
-      }
-      // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
-      if (delivery.kind === 'terminal-live') {
-        const insertHandle = delivery.handle
-        void (async () => {
+        appendToCapturedChatDraft: nativeChatController.appendDictationToDraft,
+        // Live mode inserts the transcript into its PTY as text (no Return).
+        insertIntoLiveTerminal: async (insertHandle, insertText) => {
           const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
-          if (!flushedPendingInput) {
-            return
-          }
-          const sent = await sendLiveTerminalInput(insertHandle, delivery.text)
-          if (sent) {
-            showToast('Dictation inserted')
-          }
-        })()
-        return
-      }
-      setInput((current) => appendBufferedDictation(current, delivery.text))
-      showToast('Dictation inserted')
+          return flushedPendingInput ? await sendLiveTerminalInput(insertHandle, insertText) : false
+        },
+        appendToCommandField: setInput,
+        notifyInserted: () => showToast('Dictation inserted'),
+        // Why: a transcript that never had a destination is not a transcript that went somewhere quietly.
+        notifyNoTarget: () => showToast('Dictation had no target — nothing was inserted')
+      })
     },
     onError: (err) => {
       dictationRouteContextRef.current = null

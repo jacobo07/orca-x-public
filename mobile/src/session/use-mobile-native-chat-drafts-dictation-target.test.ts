@@ -70,18 +70,23 @@ describe('a chat transcript and the tab that was speaking', () => {
     )
   }
 
-  it('the session route delivers a chat transcript through the CAPTURED key', () => {
-    // The hook assertions prove the law; this one proves the only production
-    // caller obeys it. Without it, reverting [worktreeId].tsx to the ambient
-    // writer leaves every other test in this file green -- the composition gap
-    // that let the original defect ship under a passing suite.
-    // Keyed on the value the fix REMOVED, so a revert cannot pass quietly.
+  it('the session route hands the CAPTURED-key writer to the dispatcher', () => {
+    // What this still covers, and what it no longer has to. The dispatch itself --
+    // resolved delivery in, captured composer out -- is now driven behaviourally in
+    // mobile-dictation-transcript-dispatch.test.ts, where severing the captured key
+    // reds two cases rather than only this string. What remains readable ONLY as
+    // source is the wiring: that the route passes the drafts hook's captured-key
+    // writer rather than an ambient one. Keyed on the value the fix REMOVED, so a
+    // revert cannot pass quietly.
     const sessionRouteSource = readFileSync(
       new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
       'utf8'
     )
 
-    expect(sessionRouteSource).toContain('appendDictationToDraft(delivery.draftKey')
+    expect(sessionRouteSource).toContain('dispatchDictationDelivery(')
+    expect(sessionRouteSource).toContain(
+      'appendToCapturedChatDraft: nativeChatController.appendDictationToDraft'
+    )
     expect(sessionRouteSource).not.toContain('setChatComposerText((current) =>')
   })
 
