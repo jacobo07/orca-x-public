@@ -102,6 +102,7 @@ docs/**
 !docs/mobile-presence-lock.md
 !docs/mobile-relay-bootstrap-spec.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/mobile-workstation-runtime-spec.md
 !docs/reference/
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
