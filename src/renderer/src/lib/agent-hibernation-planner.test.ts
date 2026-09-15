@@ -5,6 +5,7 @@ import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
+  classifyAgentHibernationPanes,
   getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
   type AgentHibernationPlannerSnapshot
@@ -665,5 +666,95 @@ describe('agent sleep planner', () => {
     expect(getEffectiveAgentHibernationIdleMs(DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
       DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
     )
+  })
+})
+
+function reasonFor(input: AgentHibernationPlannerSnapshot, paneKey = `tab-1:${LEAF}`): string | null {
+  const found = classifyAgentHibernationPanes(input).find((pane) => pane.paneKey === paneKey)
+  return found ? found.reason : 'pane-absent'
+}
+
+describe('agent sleep exclusion reasons', () => {
+  // The one-authority proof: the classifier's eligible set must be exactly what
+  // the planner admits. If these ever diverge, a second eligibility authority exists.
+  it('admits exactly the panes the planner admits', () => {
+    const inputs: AgentHibernationPlannerSnapshot[] = [
+      snapshot(),
+      snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ state: 'working' }) } }),
+      snapshot({ mobileLockedPtyIds: ['pty-1'] }),
+      snapshot({ foregroundTerminalTabIds: ['tab-1'] }),
+      snapshot({ activeWorktreeId: 'wt-bg' }),
+      snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } })
+    ]
+    for (const input of inputs) {
+      const admitted = classifyAgentHibernationPanes(input)
+        .filter((pane) => pane.eligible)
+        .map((pane) => pane.paneKey)
+        .sort()
+      expect(admitted).toEqual(plannedPaneKeys(input).sort())
+    }
+  })
+
+  it('reports an eligible pane with no reason', () => {
+    const classified = classifyAgentHibernationPanes(snapshot())
+    expect(classified).toHaveLength(1)
+    expect(classified[0].eligible).toBe(true)
+    expect(classified[0].reason).toBeNull()
+    expect(classified[0].worktreeId).toBe('wt-bg')
+  })
+
+  it('separates a busy agent from an interrupted one', () => {
+    expect(
+      reasonFor(snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ state: 'working' }) } }))
+    ).toBe('agent-busy')
+    expect(
+      reasonFor(snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ interrupted: true }) } }))
+    ).toBe('agent-interrupted')
+  })
+
+  it('names a mobile-locked pane rather than calling it dead', () => {
+    expect(reasonFor(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toBe('mobile-locked')
+  })
+
+  // Why: this guard came from a real lost-draft class; it must stay legible as itself.
+  it('names recent input as its own reason', () => {
+    expect(reasonFor(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }))).toBe(
+      'recent-input'
+    )
+  })
+
+  it('names an already-sleeping pane', () => {
+    const sleeping = snapshot({
+      sleepingAgentSessionsByPaneKey: {
+        [`tab-1:${LEAF}`]: {
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          worktreeId: 'wt-bg',
+          sleptAt: OLD
+        } as never
+      }
+    })
+    expect(reasonFor(sleeping)).toBe('already-sleeping')
+  })
+
+  it('names a pane that has not been idle long enough', () => {
+    expect(
+      reasonFor(snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ updatedAt: NOW }) } }))
+    ).toBe('not-idle-long-enough')
+  })
+
+  it('names a foreground tab and an active worktree distinctly', () => {
+    expect(reasonFor(snapshot({ foregroundTerminalTabIds: ['tab-1'] }))).toBe('tab-foreground')
+    expect(reasonFor(snapshot({ activeWorktreeId: 'wt-bg' }))).toBe('worktree-active')
+  })
+
+  it('reports the feature being off as its own reason, not as ineligibility', () => {
+    const off = snapshot({
+      settings: {
+        experimentalAgentHibernation: false,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
+      }
+    })
+    expect(reasonFor(off)).toBe('feature-disabled')
   })
 })

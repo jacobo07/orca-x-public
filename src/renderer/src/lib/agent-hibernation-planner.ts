@@ -117,7 +117,44 @@ const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boo
     ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
     : false
 
-function getEligiblePane(args: {
+/**
+ * Why a pane was not admitted. One evaluation produces both this and the
+ * candidate list, so the planner stays the single eligibility authority — a
+ * surface that re-derived these would be a second one.
+ */
+export type AgentHibernationExclusionReason =
+  | 'feature-disabled'
+  | 'worktree-active'
+  | 'runtime-liveness-unknown'
+  | 'tab-foreground'
+  | 'agent-busy'
+  | 'agent-interrupted'
+  | 'has-subagents'
+  | 'dispatch-unsettled'
+  | 'already-sleeping'
+  | 'pane-mismatch'
+  | 'not-resumable-agent'
+  | 'not-idle-long-enough'
+  | 'recent-input'
+  | 'no-live-pane'
+  | 'mobile-locked'
+
+export type AgentHibernationPaneClassification = {
+  paneKey: string
+  worktreeId: string
+  tabId: string
+  eligible: boolean
+  /** null exactly when eligible. */
+  reason: AgentHibernationExclusionReason | null
+}
+
+type PaneVerdict = { eligible: true; pane: EligiblePane } | { eligible: false; reason: AgentHibernationExclusionReason }
+
+function excluded(reason: AgentHibernationExclusionReason): PaneVerdict {
+  return { eligible: false, reason }
+}
+
+function classifyPane(args: {
   entry: AgentStatusEntry
   tab: TerminalTab
   layout: TerminalLayoutSnapshot | undefined
@@ -128,7 +165,7 @@ function getEligiblePane(args: {
   mobileLockedPtyIds: Set<string>
   now: number
   idleMs: number
-}): EligiblePane | null {
+}): PaneVerdict {
   const {
     entry,
     tab,
@@ -144,26 +181,33 @@ function getEligiblePane(args: {
   // recovery checkpoint must not make the pane look already hibernated.
   const hasOnlyLivePiCompatibleRecoveryIdentity =
     isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, sleepingRecord, tab.worktreeId)
-  if (
-    entry.state !== 'done' ||
-    entry.interrupted === true ||
-    Boolean(entry.subagents?.length) ||
-    hasUnsettledOrUnknownDispatch(entry) ||
-    (sleepingRecord && !hasOnlyLivePiCompatibleRecoveryIdentity)
-  ) {
-    return null
+  // Split in the original short-circuit order, so the admitted set is unchanged.
+  if (entry.state !== 'done') {
+    return excluded('agent-busy')
+  }
+  if (entry.interrupted === true) {
+    return excluded('agent-interrupted')
+  }
+  if (Boolean(entry.subagents?.length)) {
+    return excluded('has-subagents')
+  }
+  if (hasUnsettledOrUnknownDispatch(entry)) {
+    return excluded('dispatch-unsettled')
+  }
+  if (sleepingRecord && !hasOnlyLivePiCompatibleRecoveryIdentity) {
+    return excluded('already-sleeping')
   }
   if (
     getEntryTabId(entry) !== tab.id ||
     (entry.worktreeId && entry.worktreeId !== tab.worktreeId)
   ) {
-    return null
+    return excluded('pane-mismatch')
   }
   if (!entry.agentType || !isResumableTuiAgent(entry.agentType) || !entry.providerSession) {
-    return null
+    return excluded('not-resumable-agent')
   }
   if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
-    return null
+    return excluded('not-resumable-agent')
   }
   // Why: returning to the containing terminal tab should restart sleep even
   // without pane input; sibling tabs in the worktree should keep their age.
@@ -175,7 +219,7 @@ function getEligiblePane(args: {
       : 0
   )
   if (args.now - effectiveIdleStart < args.idleMs) {
-    return null
+    return excluded('not-idle-long-enough')
   }
   const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
   // Why: killing the PTY discards the TUI composer's draft and any queued
@@ -186,28 +230,36 @@ function getEligiblePane(args: {
     Number.isFinite(inputAt) &&
     lastInputBlocksHibernation(entry, inputAt)
   ) {
-    return null
+    return excluded('recent-input')
   }
   const livePane = getPaneLivePtyId(entry, layout)
   if (!livePane) {
-    return null
+    return excluded('no-live-pane')
   }
   const { leafId, ptyId } = livePane
   const runtimePtyId = toRuntimePtyId(ptyId)
-  if (!livePtyIds.has(runtimePtyId) || mobileLockedPtyIds.has(runtimePtyId)) {
-    return null
+  if (!livePtyIds.has(runtimePtyId)) {
+    return excluded('no-live-pane')
+  }
+  // Why: a pane Mobile is holding is not dead; naming it as such would send the
+  // user looking for a crash instead of at their phone.
+  if (mobileLockedPtyIds.has(runtimePtyId)) {
+    return excluded('mobile-locked')
   }
   return {
-    paneKey: entry.paneKey,
-    tabId: tab.id,
-    leafId,
-    ptyId,
-    runtimePtyId,
-    providerSessionId: entry.providerSession.id,
-    state: entry.state,
-    updatedAt: entry.updatedAt,
-    effectiveIdleStart,
-    inputAt: typeof inputAt === 'number' && Number.isFinite(inputAt) ? inputAt : 0
+    eligible: true,
+    pane: {
+      paneKey: entry.paneKey,
+      tabId: tab.id,
+      leafId,
+      ptyId,
+      runtimePtyId,
+      providerSessionId: entry.providerSession.id,
+      state: entry.state,
+      updatedAt: entry.updatedAt,
+      effectiveIdleStart,
+      inputAt: typeof inputAt === 'number' && Number.isFinite(inputAt) ? inputAt : 0
+    }
   }
 }
 
@@ -248,32 +300,49 @@ function getAgentEntriesByTabId(
   return entriesByTabId
 }
 
-export function planAgentHibernationCandidates(
-  snapshot: AgentHibernationPlannerSnapshot
-): AgentHibernationCandidate[] {
-  if (snapshot.settings?.experimentalAgentHibernation !== true) {
-    return []
-  }
-  const idleMs = getEffectiveAgentHibernationIdleMs(snapshot.settings.agentHibernationIdleMs)
+type WalkedPane = {
+  worktreeId: string
+  tabId: string
+  paneKey: string
+  verdict: PaneVerdict
+}
+
+/**
+ * The single evaluation. Both the candidate list and the exclusion report are
+ * views of this walk, so they cannot disagree about who may sleep.
+ */
+function walkPanes(snapshot: AgentHibernationPlannerSnapshot): WalkedPane[] {
+  const featureEnabled = snapshot.settings?.experimentalAgentHibernation === true
+  const idleMs = getEffectiveAgentHibernationIdleMs(snapshot.settings?.agentHibernationIdleMs)
   const mobileLockedPtyIds = new Set(snapshot.mobileLockedPtyIds.map(toRuntimePtyId))
   const foregroundTerminalTabIds = new Set(snapshot.foregroundTerminalTabIds)
   const runtimeLivenessRequiredWorktreeIds = new Set(
     snapshot.runtimeLivenessRequiredWorktreeIds ?? []
   )
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
-  const candidates: AgentHibernationCandidate[] = []
+  const walked: WalkedPane[] = []
+
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
-    if (!worktreeId || worktreeId === snapshot.activeWorktreeId || tabs.length === 0) {
-      continue
-    }
-    if (
+    let worktreeReason: AgentHibernationExclusionReason | null = null
+    if (!featureEnabled) {
+      worktreeReason = 'feature-disabled'
+    } else if (!worktreeId || worktreeId === snapshot.activeWorktreeId || tabs.length === 0) {
+      worktreeReason = 'worktree-active'
+    } else if (
       runtimeLivenessRequiredWorktreeIds.has(worktreeId) &&
       !Object.hasOwn(snapshot.runtimeLivePtyIdsByWorktreeId ?? {}, worktreeId)
     ) {
-      continue
+      worktreeReason = 'runtime-liveness-unknown'
     }
+
     for (const tab of tabs) {
-      if (foregroundTerminalTabIds.has(tab.id)) {
+      const entries = agentEntriesByTabId.get(tab.id) ?? []
+      const tabReason =
+        worktreeReason ?? (foregroundTerminalTabIds.has(tab.id) ? 'tab-foreground' : null)
+      if (tabReason) {
+        for (const entry of entries) {
+          walked.push({ worktreeId, tabId: tab.id, paneKey: entry.paneKey, verdict: excluded(tabReason) })
+        }
         continue
       }
       const tabLivePtyIds = getLivePtyIdsForTab(
@@ -283,39 +352,76 @@ export function planAgentHibernationCandidates(
         runtimeLivenessRequiredWorktreeIds.has(worktreeId)
       )
       if (tabLivePtyIds.length === 0) {
+        for (const entry of entries) {
+          walked.push({
+            worktreeId,
+            tabId: tab.id,
+            paneKey: entry.paneKey,
+            verdict: excluded('no-live-pane')
+          })
+        }
         continue
       }
       const layout = snapshot.terminalLayoutsByTabId[tab.id]
-      for (const entry of agentEntriesByTabId.get(tab.id) ?? []) {
-        const eligible = getEligiblePane({
-          entry,
-          tab,
-          layout,
-          livePtyIds: new Set(tabLivePtyIds),
-          sleepingAgentSessionsByPaneKey: snapshot.sleepingAgentSessionsByPaneKey,
-          lastTerminalInputAtByPaneKey: snapshot.lastTerminalInputAtByPaneKey,
-          foregroundTerminalLastSeenAtByTabId: snapshot.foregroundTerminalLastSeenAtByTabId,
-          mobileLockedPtyIds,
-          now: snapshot.now,
-          idleMs
-        })
-        if (eligible) {
-          candidates.push({
-            id: candidateIdFor(worktreeId, eligible.paneKey),
-            worktreeId,
-            paneKey: eligible.paneKey,
-            tabId: eligible.tabId,
-            leafId: eligible.leafId,
-            paneKeys: [eligible.paneKey],
-            targetPtyIds: [eligible.ptyId],
-            expectedRuntimePtyIds: [eligible.runtimePtyId],
-            signature: signatureFor(worktreeId, [eligible])
+      for (const entry of entries) {
+        walked.push({
+          worktreeId,
+          tabId: tab.id,
+          paneKey: entry.paneKey,
+          verdict: classifyPane({
+            entry,
+            tab,
+            layout,
+            livePtyIds: new Set(tabLivePtyIds),
+            sleepingAgentSessionsByPaneKey: snapshot.sleepingAgentSessionsByPaneKey,
+            lastTerminalInputAtByPaneKey: snapshot.lastTerminalInputAtByPaneKey,
+            foregroundTerminalLastSeenAtByTabId: snapshot.foregroundTerminalLastSeenAtByTabId,
+            mobileLockedPtyIds,
+            now: snapshot.now,
+            idleMs
           })
-        }
+        })
       }
     }
   }
-  return candidates.sort(
+  return walked.sort(
     (a, b) => a.worktreeId.localeCompare(b.worktreeId) || a.paneKey.localeCompare(b.paneKey)
   )
+}
+
+/** Every known pane with its verdict — the planner's reasons, not a re-derivation. */
+export function classifyAgentHibernationPanes(
+  snapshot: AgentHibernationPlannerSnapshot
+): AgentHibernationPaneClassification[] {
+  return walkPanes(snapshot).map((walked) => ({
+    paneKey: walked.paneKey,
+    worktreeId: walked.worktreeId,
+    tabId: walked.tabId,
+    eligible: walked.verdict.eligible,
+    reason: walked.verdict.eligible ? null : walked.verdict.reason
+  }))
+}
+
+export function planAgentHibernationCandidates(
+  snapshot: AgentHibernationPlannerSnapshot
+): AgentHibernationCandidate[] {
+  const candidates: AgentHibernationCandidate[] = []
+  for (const walked of walkPanes(snapshot)) {
+    if (!walked.verdict.eligible) {
+      continue
+    }
+    const eligible = walked.verdict.pane
+    candidates.push({
+      id: candidateIdFor(walked.worktreeId, eligible.paneKey),
+      worktreeId: walked.worktreeId,
+      paneKey: eligible.paneKey,
+      tabId: eligible.tabId,
+      leafId: eligible.leafId,
+      paneKeys: [eligible.paneKey],
+      targetPtyIds: [eligible.ptyId],
+      expectedRuntimePtyIds: [eligible.runtimePtyId],
+      signature: signatureFor(walked.worktreeId, [eligible])
+    })
+  }
+  return candidates
 }
