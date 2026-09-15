@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mobileNativeChatScopeKey } from '../session/mobile-native-chat-scope-key'
 import { useMobileNativeChatDrafts } from '../session/use-mobile-native-chat-drafts'
-import { appendBufferedDictation } from '../terminal/terminal-live-dictation-routing'
+import { appendBufferedDictation } from './mobile-dictation-buffered-append'
 import { resolveDictationDelivery, type DictationTarget } from './mobile-dictation-delivery'
 import {
   dispatchDictationDelivery,

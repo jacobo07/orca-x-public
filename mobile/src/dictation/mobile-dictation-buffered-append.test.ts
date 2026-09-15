@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendBufferedDictation } from './terminal-live-dictation-routing'
+import { appendBufferedDictation } from './mobile-dictation-buffered-append'
 
 describe('buffered dictation append', () => {
   it('replaces an empty or whitespace-only buffered field', () => {

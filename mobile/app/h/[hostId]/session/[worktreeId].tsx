@@ -138,7 +138,7 @@ import {
   getTerminalLiveInputKeyboardType
 } from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
-import { appendBufferedDictation } from '../../../../src/terminal/terminal-live-dictation-routing'
+import { appendBufferedDictation } from '../../../../src/dictation/mobile-dictation-buffered-append'
 import {
   captureDictationTarget,
   resolveDictationDelivery,

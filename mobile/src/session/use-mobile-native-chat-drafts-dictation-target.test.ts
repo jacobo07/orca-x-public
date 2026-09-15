@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { appendBufferedDictation } from '../terminal/terminal-live-dictation-routing'
+import { appendBufferedDictation } from '../dictation/mobile-dictation-buffered-append'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
