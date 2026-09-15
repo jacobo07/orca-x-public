@@ -138,10 +138,8 @@ import {
   getTerminalLiveInputKeyboardType
 } from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
-import {
-  appendBufferedDictation,
-  routeDictationTranscript
-} from '../../../../src/terminal/terminal-live-dictation-routing'
+import { appendBufferedDictation } from '../../../../src/terminal/terminal-live-dictation-routing'
+import { resolveDictationDelivery } from '../../../../src/dictation/mobile-dictation-delivery'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
@@ -1113,39 +1111,39 @@ export default function SessionScreen() {
     client,
     enabled: canSend,
     onTranscript: (text) => {
+      const delivery = resolveDictationDelivery(text, dictationRouteContextRef.current, {
+        nativeChatVisible: showNativeChatRef.current,
+        liveInputEnabled,
+        activeHandle: activeHandleRef.current
+      })
       // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
-      if (showNativeChatRef.current) {
+      if (delivery.kind === 'native-chat') {
         nativeChatController.setChatComposerText((current) =>
-          appendBufferedDictation(current, text)
+          appendBufferedDictation(current, delivery.text)
         )
         showToast('Dictation inserted')
         return
       }
-      // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
-      const routeContext = dictationRouteContextRef.current
       dictationRouteContextRef.current = null
-      const route = routeDictationTranscript(
-        text,
-        routeContext?.liveInputEnabled ?? liveInputEnabled
-      )
-      if (route.kind === 'live-insert') {
-        const insertHandle = routeContext?.handle ?? activeHandleRef.current
-        if (!insertHandle) {
-          return
-        }
+      if (delivery.kind === 'dropped') {
+        return
+      }
+      // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
+      if (delivery.kind === 'terminal-live') {
+        const insertHandle = delivery.handle
         void (async () => {
           const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
           if (!flushedPendingInput) {
             return
           }
-          const sent = await sendLiveTerminalInput(insertHandle, route.text)
+          const sent = await sendLiveTerminalInput(insertHandle, delivery.text)
           if (sent) {
             showToast('Dictation inserted')
           }
         })()
         return
       }
-      setInput((current) => appendBufferedDictation(current, route.text))
+      setInput((current) => appendBufferedDictation(current, delivery.text))
       showToast('Dictation inserted')
     },
     onError: (err) => {
