@@ -1,44 +1,62 @@
 // Decides which surface a finished transcript is inserted into.
 //
-// CHARACTERIZATION of the behaviour that shipped in the session screen. It is
-// extracted here unchanged, retargets included, so the defect is testable before
-// it is fixed. `current` is the mutable state read at delivery time; every field
-// on it is a retarget path, and the next commit removes them.
+// The decision is made once, when recording starts, and this module is the only
+// thing that reads it. resolveDictationDelivery deliberately takes no current
+// surface state: a transcript cannot be retargeted by anything the user does
+// while ASR is still running, because nothing that moves is in scope here.
+//
+// Subject validity is NOT decided here. A captured terminal that has since gone
+// away is the send path's answer to give -- it already reports whether the bytes
+// landed -- and a second liveness oracle here could only disagree with it.
 
-export type DictationCapturedTarget = {
-  readonly handle: string
-  readonly liveInputEnabled: boolean
-} | null
-
-export type DictationCurrentSurfaces = {
-  readonly nativeChatVisible: boolean
-  readonly liveInputEnabled: boolean
-  readonly activeHandle: string | null
-}
+export type DictationTarget =
+  | { readonly surface: 'native-chat' }
+  | {
+      readonly surface: 'terminal'
+      readonly handle: string
+      readonly liveInputEnabled: boolean
+    }
 
 export type DictationDelivery =
   | { readonly kind: 'native-chat'; readonly text: string }
   | { readonly kind: 'terminal-live'; readonly handle: string; readonly text: string }
   | { readonly kind: 'command-field'; readonly text: string }
-  // The screen returns without a toast when it has no handle, so a dropped
-  // transcript is indistinguishable from an inserted one at the call site.
-  | { readonly kind: 'dropped'; readonly reason: 'no-terminal-handle' }
+  // Nothing was captured when recording started, so there is no subject to
+  // deliver to. Distinct from a delivery that reached a surface and failed:
+  // this one never had a destination, and the caller must say so rather than
+  // choosing one now.
+  | { readonly kind: 'refused'; readonly reason: 'no-target-captured' }
+
+export function captureDictationTarget(surfaces: {
+  readonly nativeChatVisible: boolean
+  readonly activeHandle: string | null
+  readonly liveInputEnabled: boolean
+}): DictationTarget | null {
+  if (surfaces.nativeChatVisible) {
+    return { surface: 'native-chat' }
+  }
+  if (!surfaces.activeHandle) {
+    return null
+  }
+  return {
+    surface: 'terminal',
+    handle: surfaces.activeHandle,
+    liveInputEnabled: surfaces.liveInputEnabled
+  }
+}
 
 export function resolveDictationDelivery(
   text: string,
-  captured: DictationCapturedTarget,
-  current: DictationCurrentSurfaces
+  target: DictationTarget | null
 ): DictationDelivery {
-  if (current.nativeChatVisible) {
+  if (!target) {
+    return { kind: 'refused', reason: 'no-target-captured' }
+  }
+  if (target.surface === 'native-chat') {
     return { kind: 'native-chat', text }
   }
-  const liveInputEnabled = captured?.liveInputEnabled ?? current.liveInputEnabled
-  if (!liveInputEnabled) {
-    return { kind: 'command-field', text }
+  if (target.liveInputEnabled) {
+    return { kind: 'terminal-live', handle: target.handle, text }
   }
-  const handle = captured?.handle ?? current.activeHandle
-  if (!handle) {
-    return { kind: 'dropped', reason: 'no-terminal-handle' }
-  }
-  return { kind: 'terminal-live', handle, text }
+  return { kind: 'command-field', text }
 }

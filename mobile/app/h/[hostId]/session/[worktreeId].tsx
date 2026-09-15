@@ -139,7 +139,11 @@ import {
 } from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import { appendBufferedDictation } from '../../../../src/terminal/terminal-live-dictation-routing'
-import { resolveDictationDelivery } from '../../../../src/dictation/mobile-dictation-delivery'
+import {
+  captureDictationTarget,
+  resolveDictationDelivery,
+  type DictationTarget
+} from '../../../../src/dictation/mobile-dictation-delivery'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
@@ -913,10 +917,8 @@ export default function SessionScreen() {
     typeof Keyboard.addListener
   > | null>(null)
   const sessionTabActionSheetRequestSeqRef = useRef(0)
-  const dictationRouteContextRef = useRef<{
-    readonly handle: string | null
-    readonly liveInputEnabled: boolean
-  } | null>(null)
+  // Why: the surface a dictation belongs to is decided when recording starts; nothing read at delivery may change it.
+  const dictationRouteContextRef = useRef<DictationTarget | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   // Why: a lease-only subscribe never renders, so the reconciler needs to tell it apart
@@ -1111,21 +1113,22 @@ export default function SessionScreen() {
     client,
     enabled: canSend,
     onTranscript: (text) => {
-      const delivery = resolveDictationDelivery(text, dictationRouteContextRef.current, {
-        nativeChatVisible: showNativeChatRef.current,
-        liveInputEnabled,
-        activeHandle: activeHandleRef.current
-      })
-      // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
+      // Clear first and in every path: a transcript the chat consumed used to leave
+      // the captured terminal behind for the next recording to pick up.
+      const target = dictationRouteContextRef.current
+      dictationRouteContextRef.current = null
+      const delivery = resolveDictationDelivery(text, target)
+      if (delivery.kind === 'refused') {
+        // Why: a transcript that never had a destination is not a transcript that went somewhere quietly.
+        showToast('Dictation had no target — nothing was inserted')
+        return
+      }
+      // Why: dictation belongs to the composer that started it — native chat consumes it locally, terminal mode keeps live-input routing.
       if (delivery.kind === 'native-chat') {
         nativeChatController.setChatComposerText((current) =>
           appendBufferedDictation(current, delivery.text)
         )
         showToast('Dictation inserted')
-        return
-      }
-      dictationRouteContextRef.current = null
-      if (delivery.kind === 'dropped') {
         return
       }
       // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
@@ -1159,9 +1162,12 @@ export default function SessionScreen() {
   })
 
   const startDictation = useCallback(() => {
-    const routeContext = activeHandle
-      ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
-      : null
+    // Why: the owning surface is captured before any async work — the chat overlay can open or close while ASR is still running.
+    const routeContext = captureDictationTarget({
+      nativeChatVisible: showNativeChatRef.current,
+      activeHandle,
+      liveInputEnabled: activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+    })
     dictationRouteContextRef.current = routeContext
     void dictation.start().catch((err) => {
       if (dictationRouteContextRef.current === routeContext) {
