@@ -146,6 +146,14 @@ describe('dispatching a resolved transcript to the surface that was captured', (
 
     expect(h.insertIntoLiveTerminal).toHaveBeenCalledTimes(1)
     expect(h.notifyInserted).not.toHaveBeenCalled()
+
+    // And it goes NOWHERE ELSE. This is the whole safety property when a captured
+    // subject dies mid-ASR: the words are refused, not re-aimed at whatever surface
+    // happens to be in front of the user now. What the product still owes is a way
+    // to GET THEM BACK -- tracked as voice.unclaimed-transcript-recovery, which is a
+    // different capability from owning the target.
+    expect(state?.composerText).toBe('')
+    expect(commandField).toBe('')
   })
 
   it('a buffered terminal transcript appends to the command field, not to a chat draft', async () => {
