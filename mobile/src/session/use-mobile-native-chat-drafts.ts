@@ -19,6 +19,7 @@ import {
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-pending-echo'
+import { useCapturedDraftWrites } from './mobile-native-chat-captured-draft-writes'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
@@ -55,6 +56,10 @@ export function useMobileNativeChatDrafts(args: {
    *  optimistic echo, keyed by authoritative message id. */
   imagePreviewsByMessageId: Record<string, string[]>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  /** Append into a composer captured earlier rather than the current one.
+   *  Dictation records its draft key when recording starts; delivering through
+   *  setComposerText after a tab switch lands the words on another agent. */
+  appendDictationToDraft: (capturedDraftKey: string, append: (current: string) => string) => void
   /** Launch-context text still believed to be parked on the agent's TUI input
    *  line, or null once it has been declined or retired. Send paths size their
    *  pre-clear from it, since one Ctrl+U clears only one logical line. */
@@ -144,23 +149,8 @@ export function useMobileNativeChatDrafts(args: {
     [draftKey, pendingKey]
   )
 
-  // Why: over relay the send RPC can take seconds (or lose only its ack), and a
-  // composer that waits for settlement to empty reads as "my prompt didn't
-  // send". Clear at send time; a definite rejection restores the text below.
-  const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    setDrafts((previous) =>
-      (previous[origin.draftKey] ?? '').trim() === text.trim()
-        ? { ...previous, [origin.draftKey]: '' }
-        : previous
-    )
-  }, [])
-
-  const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    // Why: never clobber text the user typed while the rejection was in flight.
-    setDrafts((previous) =>
-      (previous[origin.draftKey] ?? '') === '' ? { ...previous, [origin.draftKey]: text } : previous
-    )
-  }, [])
+  const { clearDraftForSend, restoreRejectedDraft, appendDictationToDraft } =
+    useCapturedDraftWrites(setDrafts)
 
   const acceptSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
@@ -332,6 +322,7 @@ export function useMobileNativeChatDrafts(args: {
       ? (imagePreviewsBySession[pendingKey] ?? NO_IMAGE_PREVIEWS)
       : NO_IMAGE_PREVIEWS,
     captureSendOrigin,
+    appendDictationToDraft,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
     clearDraftForSend,

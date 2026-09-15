@@ -1125,7 +1125,9 @@ export default function SessionScreen() {
       }
       // Why: dictation belongs to the composer that started it — native chat consumes it locally, terminal mode keeps live-input routing.
       if (delivery.kind === 'native-chat') {
-        nativeChatController.setChatComposerText((current) =>
+        // Why: the captured draft key, never the current one — the user can switch
+        // tabs while ASR runs and both tabs can be in chat view.
+        nativeChatController.appendDictationToDraft(delivery.draftKey, (current) =>
           appendBufferedDictation(current, delivery.text)
         )
         showToast('Dictation inserted')
@@ -1162,9 +1164,11 @@ export default function SessionScreen() {
   })
 
   const startDictation = useCallback(() => {
-    // Why: the owning surface is captured before any async work — the chat overlay can open or close while ASR is still running.
+    // Why: the owning surface INSTANCE is captured before any async work — the chat
+    // overlay can open or close, and the active tab can change, while ASR still runs.
     const routeContext = captureDictationTarget({
       nativeChatVisible: showNativeChatRef.current,
+      nativeChatDraftKey: nativeChatScopeKey,
       activeHandle,
       liveInputEnabled: activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
     })
@@ -1176,7 +1180,14 @@ export default function SessionScreen() {
       triggerError()
       showToast(err instanceof Error ? err.message : String(err))
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+  }, [
+    activeHandle,
+    dictation,
+    liveInputTerminalHandles,
+    nativeChatScopeKey,
+    triggerError,
+    showToast
+  ])
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null

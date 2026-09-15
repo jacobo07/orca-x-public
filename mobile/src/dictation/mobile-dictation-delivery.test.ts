@@ -11,14 +11,18 @@ import {
 //
 // Parity ledger: voice.transcript-target-ownership.
 
+const TAB_A_CHAT = 'host\0worktree\0tab-a'
+
 const SPEAKING_INTO_A_TERMINAL = {
   nativeChatVisible: false,
+  nativeChatDraftKey: TAB_A_CHAT,
   activeHandle: 'pty-a',
   liveInputEnabled: true
 } as const
 
 const SPEAKING_INTO_THE_CHAT = {
   nativeChatVisible: true,
+  nativeChatDraftKey: TAB_A_CHAT,
   activeHandle: 'pty-a',
   liveInputEnabled: true
 } as const
@@ -27,7 +31,31 @@ describe('capturing the surface that owns a dictation', () => {
   it('captures the chat when the chat is what the user is speaking into', () => {
     // RED if capture ignores nativeChatVisible: it would record the terminal
     // underneath, which is the surface the user is NOT dictating into.
-    expect(captureDictationTarget(SPEAKING_INTO_THE_CHAT)).toEqual({ surface: 'native-chat' })
+    expect(captureDictationTarget(SPEAKING_INTO_THE_CHAT)).toEqual({
+      surface: 'native-chat',
+      draftKey: TAB_A_CHAT
+    })
+  })
+
+  it('captures WHICH chat composer, not merely that it was the chat', () => {
+    // The instance, not the kind. Recording only the kind leaves the tab to be
+    // re-derived at delivery, and a tab switch during ASR then carries the words
+    // into another agent's composer.
+    const onTabA = captureDictationTarget(SPEAKING_INTO_THE_CHAT)
+    const onTabB = captureDictationTarget({
+      ...SPEAKING_INTO_THE_CHAT,
+      nativeChatDraftKey: 'host\0worktree\0tab-b'
+    })
+
+    expect(onTabA).not.toEqual(onTabB)
+  })
+
+  it('captures nothing when the chat composer cannot be named', () => {
+    // Fail closed. A chat with no draft key is a composer we cannot address, and
+    // capturing it as "the chat" would hand the tab back to delivery-time state.
+    expect(
+      captureDictationTarget({ ...SPEAKING_INTO_THE_CHAT, nativeChatDraftKey: null })
+    ).toBeNull()
   })
 
   it('captures the exact terminal and its live-input state', () => {
@@ -42,6 +70,7 @@ describe('capturing the surface that owns a dictation', () => {
     expect(
       captureDictationTarget({
         nativeChatVisible: false,
+        nativeChatDraftKey: null,
         activeHandle: null,
         liveInputEnabled: false
       })
@@ -65,6 +94,7 @@ describe('delivery follows the capture, not what moved during ASR', () => {
     })
     expect(resolveDictationDelivery('delete the old branches', startedInChat)).toEqual({
       kind: 'native-chat',
+      draftKey: TAB_A_CHAT,
       text: 'delete the old branches'
     })
   })
@@ -86,7 +116,11 @@ describe('delivery follows the capture, not what moved during ASR', () => {
       captureDictationTarget(SPEAKING_INTO_THE_CHAT)
     )
 
-    expect(delivery).toEqual({ kind: 'native-chat', text: 'delete the old branches' })
+    expect(delivery).toEqual({
+      kind: 'native-chat',
+      draftKey: TAB_A_CHAT,
+      text: 'delete the old branches'
+    })
     expect(delivery.kind).not.toBe('terminal-live')
   })
 
@@ -95,6 +129,21 @@ describe('delivery follows the capture, not what moved during ASR', () => {
       kind: 'refused',
       reason: 'no-target-captured'
     })
+  })
+
+  it('WAS RETARGET 4 — a chat transcript names the composer it was spoken into', () => {
+    // Guards the re-derivation the caller used to perform: delivering through the
+    // ambient setChatComposerText put the words in whichever tab was current when
+    // ASR finished. The destination now travels with the delivery.
+    const startedOnTabA = captureDictationTarget(SPEAKING_INTO_THE_CHAT)
+    const delivery = resolveDictationDelivery('summarize the diff', startedOnTabA)
+
+    expect(delivery).toEqual({
+      kind: 'native-chat',
+      draftKey: TAB_A_CHAT,
+      text: 'summarize the diff'
+    })
+    expect(JSON.stringify(delivery)).not.toContain('tab-switched-to-during-asr')
   })
 
   it('appends to the command field when the captured terminal was not in live mode', () => {
