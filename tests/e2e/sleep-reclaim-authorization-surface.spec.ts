@@ -7,7 +7,15 @@
  * the collector's own figure for the pane once it is eligible, while displaying
  * it destroys nothing. Then the explicit action sleeps that pane through the
  * coordinator: the host stops listing its terminal, a resume record exists, the
- * result says one slept, and an unrelated terminal is untouched.
+ * result says one slept, and an unrelated terminal is untouched. Finally the
+ * follow-up sweep: the real main-process probe is observed at its IPC boundary,
+ * it must be asked exactly once about exactly the baseline pids, and every
+ * number on screen must be the one its answer implies. With
+ * ORCA_E2E_SLEEP_PROBE_FAULT=1 that probe answers "sweep failed", and the
+ * result must still say one slept while claiming no memory.
+ *
+ * A pane whose descendants outlive it could not be staged: on Windows the
+ * sleep ends a detached grandchild too, so "still running" is proven in units.
  *
  * Not proven here: a pane going stale between display and click. Every store
  * change re-renders the section first, so that interleaving is driven in
@@ -18,7 +26,7 @@
  * store only. The automatic coordinator needs two confirming 60 s ticks after
  * eligibility, so it cannot act inside this spec's window.
  */
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
   ensureTerminalVisible,
@@ -78,7 +86,8 @@ function formatMemory(bytes: number): string {
 
 test.describe('Sleep reclaim authorization surface', () => {
   test('projects the live plan for a real background pane, then sleeps only that pane', async ({
-    orcaPage
+    orcaPage,
+    electronApp
   }) => {
     test.setTimeout(180_000)
     await waitForSessionReady(orcaPage)
@@ -208,6 +217,22 @@ test.describe('Sleep reclaim authorization surface', () => {
       resumeRecorded: false,
       homePtyLive: true
     })
+    // The baseline the plan was rendered from, read in the same frame as the click target.
+    const baseline = await orcaPage.evaluate((paneKey) => {
+      const state = window.__store!.getState()
+      const session = state.memorySnapshot?.worktrees
+        .flatMap((worktree) => worktree.sessions)
+        .find((candidate) => candidate.paneKey === paneKey)
+      return {
+        metric: state.memorySnapshot?.processMemoryMetric ?? null,
+        processes: session?.processes ?? []
+      }
+    }, pane.paneKey)
+    expect(baseline.processes.length).toBeGreaterThanOrEqual(1)
+
+    // Observe the real main-process probe at its IPC boundary: a renderer that reports
+    // reclaim without asking main cannot move this count, whatever numbers it shows.
+    await installProbeSpy(electronApp, PROBE_FAULT)
     await orcaPage.getByTestId('sleep-reclaim-action').click()
     const result = orcaPage.getByTestId('sleep-reclaim-result')
     await expect(result).toHaveAttribute('data-slept-count', '1', { timeout: 30_000 })
@@ -216,8 +241,97 @@ test.describe('Sleep reclaim authorization surface', () => {
     await expect
       .poll(() => readEffect(orcaPage, pane, agentWorktreeId, homePtyId), { timeout: 15_000 })
       .toEqual({ ptyLive: false, hostTerminalCount: 0, resumeRecorded: true, homePtyLive: true })
+
+    // 5. What the follow-up sweep proved, not what the estimate said.
+    const observed = orcaPage.getByTestId('sleep-reclaim-observed')
+    await expect(observed).not.toHaveAttribute('data-status', 'pending', { timeout: 30_000 })
+    const spy = await readProbeSpy(electronApp)
+    expect(spy.calls, 'the renderer never asked main for the follow-up sweep').toHaveLength(1)
+    const baselinePids = baseline.processes.map(({ pid }) => pid)
+    expect([...spy.calls[0].pids].sort()).toEqual([...baselinePids].sort())
+
+    if (PROBE_FAULT) {
+      // The central defect, through the real UI: a failed sweep is not "every process gone".
+      await expect(observed).toHaveAttribute('data-status', 'unmeasured')
+      await expect(observed).toHaveAttribute('data-reason', 'sweep-failed')
+      await expect(observed).not.toContainText(/\d+(\.\d+)? (KB|MB|GB)/)
+      await expect(result).toHaveAttribute('data-slept-count', '1')
+      await expect(result).toHaveAttribute('data-failed-count', '0')
+    } else {
+      const answer = spy.calls[0].answer
+      expect(answer?.sweep, 'the real host sweep failed; this run cannot judge reclaim').toBe(
+        'measured'
+      )
+      const present = new Set(answer?.presentPids ?? [])
+      // Every number on screen must be the one main's answer implies for this baseline.
+      const expectedBytes = baseline.processes
+        .filter(({ pid }) => !present.has(pid))
+        .reduce((sum, process) => sum + process.memory, 0)
+      await expect(observed).toHaveAttribute('data-status', 'measured')
+      await expect(observed).toHaveAttribute('data-measured-panes', '1')
+      await expect(observed).toHaveAttribute('data-unmeasured-panes', '0')
+      await expect(observed).toHaveAttribute('data-metric', baseline.metric ?? '')
+      await expect(observed).toHaveAttribute('data-bytes', String(expectedBytes))
+      await expect(observed).toHaveAttribute('data-still-running', String(present.size))
+      // The host already stopped listing the terminal, so at least its process is gone.
+      expect(present.size).toBeLessThan(baselinePids.length)
+      await expect(observed).toContainText(baseline.metric === 'working-set' ? 'Σ WS' : 'Σ RSS')
+    }
+    // The section's pane is gone; the whole outcome must still be on screen.
+    await expect(orcaPage.getByTestId('sleep-reclaim-action')).toHaveCount(0)
+    await expect(result).toBeVisible()
   })
 })
+
+// Run once plain and once with this set: the fault run makes the real probe answer "sweep failed".
+const PROBE_FAULT = process.env.ORCA_E2E_SLEEP_PROBE_FAULT === '1'
+const PROBE_CHANNEL = 'memory:probeProcessPresence'
+
+type ProbeSpy = {
+  calls: {
+    pids: number[]
+    answer: { sweep: string; presentPids?: number[] } | null
+  }[]
+}
+
+async function installProbeSpy(electronApp: ElectronApplication, fault: boolean): Promise<void> {
+  const installed = await electronApp.evaluate(
+    ({ ipcMain }, { channel, injectFault }) => {
+      type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>
+      const handlers = (ipcMain as unknown as { _invokeHandlers?: Map<string, Handler> })
+        ._invokeHandlers
+      const real = handlers?.get(channel)
+      if (!handlers || !real) {
+        return false
+      }
+      const spy: ProbeSpy = { calls: [] }
+      ;(globalThis as { __sleepProbeSpy?: ProbeSpy }).__sleepProbeSpy = spy
+      handlers.set(channel, async (event, pids) => {
+        const call: ProbeSpy['calls'][number] = { pids: pids as number[], answer: null }
+        spy.calls.push(call)
+        const now = Date.now()
+        const answer = injectFault
+          ? { sweep: 'failed', requestedAt: now, sweepStartedAt: now }
+          : ((await real(event, pids)) as ProbeSpy['calls'][number]['answer'])
+        call.answer = answer
+        return answer
+      })
+      return true
+    },
+    { channel: PROBE_CHANNEL, injectFault: fault }
+  )
+  if (!installed) {
+    throw new Error(
+      `ORCA-E2E-PRECONDITION-FAILED [probe-spy] no invoke handler for ${PROBE_CHANNEL}`
+    )
+  }
+}
+
+async function readProbeSpy(electronApp: ElectronApplication): Promise<ProbeSpy> {
+  return electronApp.evaluate(
+    () => (globalThis as { __sleepProbeSpy?: ProbeSpy }).__sleepProbeSpy ?? { calls: [] }
+  )
+}
 
 type EffectReading = {
   ptyLive: boolean
