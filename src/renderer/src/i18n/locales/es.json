@@ -3497,6 +3497,12 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "terminalHost": {
+              "label": "Host de terminal",
+              "unattributedLabel": "Procesos de terminal sin atribuir",
+              "unmeasured": "Sin medir",
+              "unmeasuredDescription": "El barrido de procesos falló, así que la memoria por proceso es desconocida, no cero."
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "Suma del conjunto de trabajo (WS). Las páginas compartidas pueden aparecer en más de un proceso.",

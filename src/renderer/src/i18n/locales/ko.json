@@ -3477,6 +3477,12 @@
             "updatedOne": "1개 서버 업데이트 완료"
           },
           "resource": {
+            "terminalHost": {
+              "label": "터미널 호스트",
+              "unattributedLabel": "소속을 알 수 없는 터미널 프로세스",
+              "unmeasured": "측정 안 됨",
+              "unmeasuredDescription": "프로세스 스캔에 실패하여 프로세스별 메모리를 알 수 없습니다(0이 아닙니다)."
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "합산된 워킹 세트(WS). 공유 페이지가 둘 이상의 프로세스에 나타날 수 있습니다.",

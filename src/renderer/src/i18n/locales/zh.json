@@ -3489,6 +3489,12 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "terminalHost": {
+              "label": "终端宿主",
+              "unattributedLabel": "未归属的终端进程",
+              "unmeasured": "未测量",
+              "unmeasuredDescription": "进程扫描失败,因此各进程内存未知,而非为零。"
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",

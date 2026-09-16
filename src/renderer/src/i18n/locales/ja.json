@@ -3477,6 +3477,12 @@
             "updatedOne": "1台のサーバーを更新完了"
           },
           "resource": {
+            "terminalHost": {
+              "label": "ターミナルホスト",
+              "unattributedLabel": "帰属先不明のターミナルプロセス",
+              "unmeasured": "未計測",
+              "unmeasuredDescription": "プロセスの走査に失敗したため、プロセスごとのメモリは不明です(ゼロではありません)。"
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",

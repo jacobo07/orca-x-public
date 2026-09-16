@@ -3735,6 +3735,12 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "terminalHost": {
+              "label": "Terminal host",
+              "unattributedLabel": "Unattributed terminal processes",
+              "unmeasured": "Unmeasured",
+              "unmeasuredDescription": "The process sweep failed, so per-process memory is unknown, not zero."
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "Summed working set (WS). Shared pages can appear in more than one process.",
