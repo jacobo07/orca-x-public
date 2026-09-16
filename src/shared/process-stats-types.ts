@@ -20,11 +20,13 @@ export type ProcessMemoryMetric = 'rss' | 'working-set'
 
 export type HostAvailableMemorySource = 'memory-pressure' | 'proc-meminfo' | 'free-memory'
 
-/** The top-level cpu/memory are the sum of main + renderer + other. */
+/** The top-level cpu/memory are the sum of main + renderer + other + terminalHost. */
 export type AppMemory = UsageValues & {
   main: UsageValues
   renderer: UsageValues
   other: UsageValues
+  /** The terminal daemon process itself; it is detached, so Electron's metrics never list it. Absent from older hosts. */
+  terminalHost?: UsageValues
   /** Oldest-first memory samples (bytes) for the whole Orca app; empty before the first snapshot. */
   history: number[]
 }
@@ -70,5 +72,14 @@ export type MemorySnapshot = {
   totalCpu: number
   /** Sum of per-process samples. Shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number
+  /**
+   * Daemon descendants no registered PTY claimed (ConPTY hosts, sessions without a published pid).
+   * Counted in totalMemory but not in app: the owner cannot be named. Absent from older hosts.
+   */
+  terminalHostDescendants?: UsageValues
+  /** 'failed' when the host process sweep returned nothing, so every per-process value is unmeasured, not zero. */
+  processSweep?: ProcessSweepOutcome
   collectedAt: number
 }
+
+export type ProcessSweepOutcome = 'measured' | 'failed'

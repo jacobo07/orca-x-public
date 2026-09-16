@@ -395,6 +395,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.lastAuthenticatedIdentity ? { ...this.lastAuthenticatedIdentity } : null
   }
 
+  /** Attribution only: a live socket pins the pid, but a self-reported pid never authorizes a signal. */
+  getConnectedDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.client.isConnected() ? this.client.getDaemonIdentity() : null
+  }
+
   getLastAuditObservation(): DaemonAuditObservation | null {
     return this.lastAuditObservation
   }

@@ -37,6 +37,10 @@ vi.mock('./pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
+vi.mock('./terminal-host-daemon-pids', () => ({
+  listConnectedDaemonPids: () => []
+}))
+
 async function loadCollector() {
   vi.resetModules()
   return await import('./collector')
