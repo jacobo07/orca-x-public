@@ -89,6 +89,22 @@ revalidation, bypass reservation, reusable override.
 Every slice is additive and path-scoped; reverting a commit removes its behaviour. The Class A
 preflight is a new IPC/RPC method name, so an older peer fails closed rather than skipping it.
 
+## Status (2026-09-16)
+
+| Slice                                                          | State                                                            |
+| -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Presence projection, reader, claim-key identity                | landed `326a31df5`, `20db169ad`                                  |
+| `agentSession:readLivePresence` (renderer read)                | landed `26d0fb75c`                                               |
+| Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; no renderer consumer yet                     |
+| Class A gate on AI Vault resume (Back / Continue / revalidate) | landed `9ae0aecf8`, copy `b8030f2b4`                             |
+| Class A gate on Sleep launch and cold restore                  | not started — those paths are being changed by another pane      |
+| Reservation for simultaneous Class A resumes                   | not started — two concurrent attempts can both pass today        |
+| Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt |
+| Shared-live rail indicator, go-to-open-session                 | not started                                                      |
+| Real-provider product reality                                  | not run                                                          |
+
+Measured: Claude Code 2.1.273 `-p --resume <id>` returns the same session id.
+
 ## Known limits
 
 - An agent exit Orca does not detect (shells without OSC 133) leaves a hook row that can read as
