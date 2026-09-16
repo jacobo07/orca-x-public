@@ -55,7 +55,7 @@ export type RestorePlanEntry = {
 }
 
 export type RestorePlanBlocker =
-  /** The target workspace already has terminals; W4 restores only into an empty one. */
+  /** The target workspace already has tabs of any kind; W4 restores only into an empty one. */
   'current-work-present' | 'scope-mismatch' | 'host-unavailable'
 
 export type RestorePlanSummary = {
@@ -87,7 +87,8 @@ export type WorkingSetRestorePlan = {
 export type RestorePlanTarget = {
   executionHostId: string
   ownerKey: string
-  terminalTabCount: number
+  /** Terminal and unified tabs (editors, browsers) the workspace holds now. */
+  openTabCount: number
   hostAvailability: 'available' | 'unavailable' | 'unknown'
 }
 
@@ -138,7 +139,7 @@ export function planWorkingSetRestore(
   ) {
     blockers.push('scope-mismatch')
   }
-  if (target.terminalTabCount > 0) {
+  if (target.openTabCount > 0) {
     blockers.push('current-work-present')
   }
   if (target.hostAvailability === 'unavailable') {

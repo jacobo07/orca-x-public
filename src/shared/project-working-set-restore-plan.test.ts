@@ -44,7 +44,7 @@ function inputs(
     target: {
       executionHostId: manifest.scope.executionHostId,
       ownerKey: manifest.scope.ownerKey,
-      terminalTabCount: 0,
+      openTabCount: 0,
       hostAvailability: 'available'
     },
     presence: { [PANE_A]: 'no-live-owner', [PANE_B]: 'no-live-owner' },
@@ -164,7 +164,7 @@ describe('planWorkingSetRestore', () => {
       planWorkingSetRestore(manifest, inputs(manifest, { target: { ...target, ...patch } }))
         .blockers
     expect(blockersFor({})).toEqual([])
-    expect(blockersFor({ terminalTabCount: 1 })).toEqual(['current-work-present'])
+    expect(blockersFor({ openTabCount: 1 })).toEqual(['current-work-present'])
     expect(blockersFor({ ownerKey: 'repo-1::C:/elsewhere' })).toEqual(['scope-mismatch'])
     expect(blockersFor({ hostAvailability: 'unavailable' })).toEqual(['host-unavailable'])
     expect(blockersFor({ hostAvailability: 'unknown' })).toEqual([])
