@@ -36,6 +36,7 @@ import { registerComputerUsePermissionHandlers } from './computer-use-permission
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from './browser'
 import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { registerSessionHandlers } from './session'
+import { registerProjectWorkingSetHandlers } from './project-working-set'
 import { registerWorkspaceWindowClaimHandlers } from './workspace-window-claim'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -202,6 +203,7 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store)
+  registerProjectWorkingSetHandlers()
   registerWorkspaceWindowClaimHandlers({
     openNewWindow: lifecycleOptions.onOpenNewWindow,
     onTopologyChanged: lifecycleOptions.onWindowTopologyChanged

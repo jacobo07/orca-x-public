@@ -23,6 +23,7 @@ const {
   registerShellHandlersMock,
   registerPetHandlersMock,
   registerSessionHandlersMock,
+  registerProjectWorkingSetHandlersMock,
   registerWorkspaceWindowClaimHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
@@ -89,6 +90,7 @@ const {
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
+  registerProjectWorkingSetHandlersMock: vi.fn(),
   registerWorkspaceWindowClaimHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
@@ -264,6 +266,10 @@ vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
 
+vi.mock('./project-working-set', () => ({
+  registerProjectWorkingSetHandlers: registerProjectWorkingSetHandlersMock
+}))
+
 vi.mock('./workspace-window-claim', () => ({
   registerWorkspaceWindowClaimHandlers: registerWorkspaceWindowClaimHandlersMock
 }))
@@ -415,6 +421,7 @@ describe('registerCoreHandlers', () => {
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
+    registerProjectWorkingSetHandlersMock.mockReset()
     registerWorkspaceWindowClaimHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
@@ -541,6 +548,7 @@ describe('registerCoreHandlers', () => {
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerOrcaProfileHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerProjectWorkingSetHandlersMock).toHaveBeenCalledOnce()
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store, {
       isDashboardPopoutRenderer: isDashboardPopoutRendererMock
     })

@@ -60,6 +60,7 @@ import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
+import type { ProjectWorkingSetApi } from './api/project-working-set-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
 // Flattens contracts that share one PreloadApi key: an intersection is not type-identical to the flat shape.
@@ -123,6 +124,7 @@ export type PreloadApi = {
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
   remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
+  workingSet: ProjectWorkingSetApi['workingSet']
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   stats: StatsApi

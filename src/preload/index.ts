@@ -3175,6 +3175,12 @@ const api = {
     }
   } satisfies PreloadApi['session'],
 
+  workingSet: {
+    save: (candidate) => ipcRenderer.invoke('workingSet:save', candidate),
+    list: (scope) => ipcRenderer.invoke('workingSet:list', scope),
+    read: (args) => ipcRenderer.invoke('workingSet:read', args)
+  } satisfies PreloadApi['workingSet'],
+
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
     setForConnectedTargets: (args) =>

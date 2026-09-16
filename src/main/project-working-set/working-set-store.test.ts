@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { representativeManifest } from '../../shared/project-working-set-test-fixtures'
+import type { WorkingSetScopeKey } from '../../shared/project-working-set-store-types'
 import type { ProjectWorkingSetManifest } from '../../shared/project-working-set-types'
-import type { WorkingSetScopeKey } from './working-set-store'
 
 type Fault = 'write' | 'sync' | 'link' | 'read' | 'drift' | null
 let fault: Fault = null

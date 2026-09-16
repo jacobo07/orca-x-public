@@ -1,14 +1,15 @@
 import { mkdir, readdir, readFile, rename, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import {
-  readProjectWorkingSetManifest,
-  type WorkingSetCorruptReason
-} from '../../shared/project-working-set-schema'
+import { readProjectWorkingSetManifest } from '../../shared/project-working-set-schema'
 import type {
-  ProjectWorkingSetManifest,
-  ProjectWorkingSetScope
-} from '../../shared/project-working-set-types'
+  WorkingSetArtifactOutcome,
+  WorkingSetHistory,
+  WorkingSetHistoryItem,
+  WorkingSetSaveOutcome,
+  WorkingSetScopeKey
+} from '../../shared/project-working-set-store-types'
+import type { ProjectWorkingSetManifest } from '../../shared/project-working-set-types'
 import {
   DurablePublishError,
   durableWriteTempPath,
@@ -32,39 +33,6 @@ import {
 
 /** Far above any real manifest; bounds what one listing can hold in memory. */
 export const WORKING_SET_ARTIFACT_BYTE_LIMIT = 4 * 1024 * 1024
-
-export type WorkingSetScopeKey = Pick<ProjectWorkingSetScope, 'executionHostId' | 'ownerKey'>
-
-export type WorkingSetStoreCorruptReason =
-  | WorkingSetCorruptReason
-  | 'unparseable'
-  | 'oversize'
-  /** Valid content whose id or scope does not belong at this path. */
-  | 'misplaced'
-
-export type WorkingSetArtifactOutcome =
-  | { status: 'valid'; manifest: ProjectWorkingSetManifest }
-  | { status: 'unsupported-version'; manifestVersion: number }
-  | { status: 'corrupt'; reason: WorkingSetStoreCorruptReason; detail: string }
-  | { status: 'unreadable'; code: string }
-  | { status: 'missing' }
-
-export type WorkingSetSaveOutcome =
-  | { status: 'saved'; workingSetId: string; bytes: number }
-  | {
-      status: 'refused-invalid'
-      reason: WorkingSetCorruptReason | 'non-canonical-id'
-      detail: string
-    }
-  | { status: 'refused-unsupported-version'; manifestVersion: number }
-  | { status: 'identity-collision'; workingSetId: string }
-  | { status: 'write-failed'; code: string | null }
-  | { status: 'durability-failed'; code: string | null }
-  | { status: 'publish-failed'; code: string | null }
-  /** Published, but this operation could not prove it; a later listing may still find it valid. */
-  | { status: 'read-back-failed'; workingSetId: string; artifact: WorkingSetArtifactOutcome }
-  /** Published and read, but not what was submitted; moved aside so history never lists it. */
-  | { status: 'verify-failed'; workingSetId: string; quarantined: boolean }
 
 function errorCode(error: unknown): string {
   const code = (error as NodeJS.ErrnoException | null)?.code
@@ -176,23 +144,6 @@ export async function saveProjectWorkingSet(
     .catch(() => false)
   return { status: 'verify-failed', workingSetId, quarantined }
 }
-
-export type WorkingSetHistoryItem =
-  | { workingSetId: string; outcome: WorkingSetArtifactOutcome }
-  | { workingSetId: string; outcome: { status: 'unverified' } }
-  | { fileName: string; outcome: { status: 'unrecognized' } }
-
-export type WorkingSetHistory =
-  | {
-      status: 'listed'
-      /** Valid manifests, newest first; ties broken by id so the order never depends on readdir. */
-      valid: ProjectWorkingSetManifest[]
-      latestWorkingSetId: string | null
-      /** Everything that is not a valid manifest, named only by what its path proves. */
-      problems: WorkingSetHistoryItem[]
-      tempArtifactCount: number
-    }
-  | { status: 'unreadable'; code: string }
 
 export function compareWorkingSetsNewestFirst(
   a: ProjectWorkingSetManifest,
