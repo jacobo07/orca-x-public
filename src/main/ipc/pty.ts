@@ -234,6 +234,9 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../../shared/setup-agent-sequencing'
 import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
+import type { LiveSessionResumeRefusal } from '../../shared/live-agent-session-presence-types'
+import { getResumeSpawnGate, type ResumeSpawnSender } from '../agent-hooks/resume-spawn-gate-slot'
+import { withoutAgentResume } from './pty-resume-spawn-refusal'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
 import {
@@ -6142,6 +6145,8 @@ export function registerPtyHandlers(
       let snapshotKittyFlagsCoverReconciledSeq = true
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
+      let agentResumeRefused: LiveSessionResumeRefusal | undefined
+      let releaseResumeSpawnGrant: (() => void) | undefined
       try {
         if (!earlyStablePaneOwner) {
           await assertFolderWorkspacePtyPathUsable(args.worktreeId)
@@ -6164,6 +6169,35 @@ export function registerPtyHandlers(
         spawnTiming.mark('stable_adoption')
         if (earlyStablePaneOwner && !preAdoptedStablePane) {
           await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+        }
+        // Why: every local Orca-selected resume crosses here, whatever asked for it; the
+        // session may already be live or starting elsewhere, so the effect is decided now.
+        const resumeSpawnGate = preAdoptedStablePane ? null : getResumeSpawnGate()
+        if (
+          resumeSpawnGate &&
+          !args.connectionId &&
+          args.resumeProviderSession &&
+          initialLeafId &&
+          initialPaneKey &&
+          typeof args.worktreeId === 'string' &&
+          typeof args.tabId === 'string'
+        ) {
+          const sender = (spawnEvent?.sender ?? null) as ResumeSpawnSender | null
+          const decision = await resumeSpawnGate.decide({
+            sender,
+            worktreeId: args.worktreeId,
+            tabId: args.tabId,
+            leafId: initialLeafId,
+            agent: args.launchAgent,
+            providerSession: args.resumeProviderSession
+          })
+          if (decision.outcome === 'refused') {
+            agentResumeRefused = decision.reason
+            args = withoutAgentResume(args)
+          } else if (decision.operationId) {
+            const operationId = decision.operationId
+            releaseResumeSpawnGrant = () => resumeSpawnGate.release(operationId, sender)
+          }
         }
         if (!preAdoptedStablePane) {
           // Why: reattach needs exact cwd, SSH cannot probe locally, and successful stable-pane adoption needs no launch preflight.
@@ -7164,7 +7198,10 @@ export function registerPtyHandlers(
           // renderer can say so, and a reattach never ran this launch command.
           ...(codexResumeLaunch.notifyResumeUnavailable && !result.isReattach
             ? { agentResumeUnavailable: true as const }
-            : {})
+            : {}),
+          // Why: the pane asked to resume a session that is live or starting elsewhere; it got a
+          // plain shell and its recovery record must survive for a later explicit resume.
+          ...(agentResumeRefused ? { agentResumeRefused } : {})
         }
         // Why claimed here: the renderer that asked for this terminal is the one its output
         // belongs to, and this is the first point where the pty id and the requester are both
@@ -7213,6 +7250,8 @@ export function registerPtyHandlers(
         // for this pane awaits a promise that never resolves. reject is a
         // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(paneSpawnReservationKey, paneSpawnReservation, err)
+        // Why: a spawn that failed never materialized; the session is free for the next attempt.
+        releaseResumeSpawnGrant?.()
         throw err
       } finally {
         releaseWorktreeSpawn?.()
