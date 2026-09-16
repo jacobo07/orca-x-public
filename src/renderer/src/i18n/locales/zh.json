@@ -1,4 +1,12 @@
 {
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "已恢复，未运行",
+      "resumeBody": "打开后将恢复 {{agent}} 会话。",
+      "freshBody": "打开后将在其文件夹中启动新终端。",
+      "open": "打开"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误。",

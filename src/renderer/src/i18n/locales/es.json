@@ -1,4 +1,12 @@
 {
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "Restaurada, sin ejecutar",
+      "resumeBody": "Al abrirla se reanuda la sesión de {{agent}}.",
+      "freshBody": "Al abrirla se inicia una terminal nueva en su carpeta.",
+      "open": "Abrir"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca tuvo un error de renderizado.",

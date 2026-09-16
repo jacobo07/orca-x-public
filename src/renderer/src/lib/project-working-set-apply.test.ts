@@ -9,6 +9,8 @@ import {
   SHARED_LABEL
 } from '../../../shared/project-working-set-test-fixtures'
 import type { ProjectWorkingSetManifest } from '../../../shared/project-working-set-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createTestStore, makeTab, makeWorktree } from '../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
@@ -33,8 +35,9 @@ const { applyWorkingSetRestorePlan, countWorkspaceOpenTabs } =
   await import('./project-working-set-apply')
 const { canWatcherCoverParkedTerminalTab } =
   await import('../components/terminal-pane/terminal-parked-tab-watchers')
-const { planColdActivationTabDeferral, shouldMountBackgroundWorktreeTab } =
+const { decideTerminalTabMount, isTerminalTabDormant, planColdActivationTabDeferral } =
   await import('../components/terminal/background-terminal-worktree-mount')
+const { buildWorkspaceSessionPayload } = await import('./workspace-session')
 
 const OWNER = 'repo-1::C:/work/orca'
 const PROFILES = [{ id: 'agent:claude' }, { id: 'agent:codex' }, { id: 'shell:wsl.exe' }]
@@ -279,14 +282,17 @@ describe('applyWorkingSetRestorePlan', () => {
 })
 
 /**
- * Characterization, not a goal: opening the workspace would mount every restored row.
+ * Opening the restored workspace. Until W6 this block pinned that every restored row mounted: a
+ * row has no PTY, so parked byte watchers cannot cover it, so cold activation did not defer it,
+ * and a mount of a pane with a sleeping record cold-restores and resumes.
  *
- * A restored row has no PTY, so parked byte watchers cannot cover it, so cold activation does not
- * defer it, so it mounts — and a mount of a pane with a sleeping record cold-restores and resumes.
- * This is the W6 boundary: the rail comes back without processes, and activation brings them all.
+ * Now rows whose policy waits to be opened carry positive dormancy and are held back by the mount
+ * decision, while auto-restore rows still mount with their workspace.
  */
-describe('restored rows at workspace activation (W6 boundary)', () => {
-  function mountDecision(tabIds: string[], deferrable: (tabId: string) => boolean) {
+describe('restored rows at workspace activation (W6)', () => {
+  type Row = Pick<TerminalTab, 'id' | 'dormancy' | 'dormantOpenRequested'>
+  function mountDecision(tabs: Row[], deferrable: (tabId: string) => boolean) {
+    const tabIds = tabs.map((tab) => tab.id)
     const restrictions = new Map<string, ReadonlySet<string>>()
     planColdActivationTabDeferral({
       restrictions,
@@ -298,21 +304,91 @@ describe('restored rows at workspace activation (W6 boundary)', () => {
       immediateTabIds: new Set([tabIds[0]])
     })
     const restricted = restrictions.get(OWNER) ?? null
-    return tabIds.filter((tabId) => shouldMountBackgroundWorktreeTab(restricted, tabId))
+    return tabs
+      .filter((tab) => decideTerminalTabMount(restricted, tab) === 'mount')
+      .map((tab) => tab.id)
   }
 
-  it('mounts every restored row, because none can be covered while parked', () => {
+  function restoredRows() {
     const { store, deps, plan } = setup()
-    applyWorkingSetRestorePlan(plan(), deps)
+    const restore = plan()
+    applyWorkingSetRestorePlan(restore, deps)
     const rows = store.getState().tabsByWorktree[OWNER]
+    const bySource = (source: string) =>
+      restore.entries.find((entry) => entry.sourceTabId === source)!.targetTabId
+    return { store, restore, rows, bySource }
+  }
+
+  it('mounts only the auto-restore rows; the rest stay dormant with no process', () => {
+    const { rows, restore, bySource } = restoredRows()
     const covered = rows.filter((row) => canWatcherCoverParkedTerminalTab(OWNER, row))
     expect(covered).toEqual([])
-    const ids = rows.map((row) => row.id)
-    expect(mountDecision(ids, (id) => covered.some((row) => row.id === id))).toEqual(ids)
+    const automatic = restore.entries
+      .filter((entry) => entry.wake === 'automatic')
+      .map((entry) => entry.targetTabId)
+    expect(automatic.sort()).toEqual([bySource('tab-a'), bySource('tab-b')].sort())
+    const mounted = mountDecision(rows, (id) => covered.some((row) => row.id === id))
+    expect(mounted.sort()).toEqual(automatic.sort())
+    expect(rows.filter((row) => row.dormancy).map((row) => row.id)).toHaveLength(3)
+  })
+
+  it('keeps the restored selection dormant when its policy waits to be opened', () => {
+    const { store, rows } = restoredRows()
+    const selected = store.getState().activeTabIdByWorktree[OWNER]
+    const dormantIds = rows.filter((row) => row.dormancy).map((row) => row.id)
+    const target = dormantIds[0]
+    // Order the selected row first, which is what the render pass treats as immediate.
+    const ordered = [
+      ...rows.filter((row) => row.id === target),
+      ...rows.filter((row) => row.id !== target)
+    ]
+    expect(mountDecision(ordered, () => false)).not.toContain(target)
+    expect(selected).toBeTruthy()
+  })
+
+  it('opening one dormant row mounts it and none of its dormant siblings', () => {
+    const { store, rows } = restoredRows()
+    const dormantIds = rows.filter((row) => row.dormancy).map((row) => row.id)
+    expect(store.getState().requestDormantTerminalTabOpen(dormantIds[1])).toBe(true)
+    // A repeat request changes nothing.
+    const afterFirst = store.getState().tabsByWorktree[OWNER]
+    expect(store.getState().requestDormantTerminalTabOpen(dormantIds[1])).toBe(false)
+    expect(store.getState().tabsByWorktree[OWNER]).toBe(afterFirst)
+    const mounted = mountDecision(afterFirst, () => false)
+    expect(mounted.filter((id) => dormantIds.includes(id))).toEqual([dormantIds[1]])
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('ends dormancy only when a PTY binds, and a request alone does not persist', () => {
+    const { store, rows } = restoredRows()
+    const id = rows.find((row) => row.dormancy)!.id
+    store.getState().requestDormantTerminalTabOpen(id)
+    const requested = () => store.getState().tabsByWorktree[OWNER].find((row) => row.id === id)!
+    expect(requested().dormancy).toEqual({ reason: 'working-set-restore' })
+    expect(requested().dormantOpenRequested).toBe(true)
+    store.getState().updateTabPtyId(id, 'pty-opened')
+    expect(requested().dormancy).toBeUndefined()
+    expect(requested().dormantOpenRequested).toBeUndefined()
+    expect(requested().ptyId).toBe('pty-opened')
+  })
+
+  it('a failed open leaves the row dormant for the next session', () => {
+    const { store, rows } = restoredRows()
+    const id = rows.find((row) => row.dormancy)!.id
+    store.getState().requestDormantTerminalTabOpen(id)
+    // No PTY ever bound. What a restart reads back is the persisted row, not the request.
+    const persisted = parseWorkspaceSession(buildWorkspaceSessionPayload(store.getState()))
+    expect(persisted.ok).toBe(true)
+    const row = persisted.ok
+      ? persisted.value.tabsByWorktree[OWNER].find((candidate) => candidate.id === id)!
+      : null
+    expect(row?.dormancy).toEqual({ reason: 'working-set-restore' })
+    expect(row?.dormantOpenRequested).toBeUndefined()
+    expect(isTerminalTabDormant(row!)).toBe(true)
   })
 
   it('positive control: coverable rows would stay unmounted past the first', () => {
-    const ids = Array.from({ length: 12 }, (_, index) => `tab-${index}`)
-    expect(mountDecision(ids, () => true)).toEqual(['tab-0'])
+    const tabs = Array.from({ length: 12 }, (_, index) => ({ id: `tab-${index}` }))
+    expect(mountDecision(tabs, () => true)).toEqual(['tab-0'])
   })
 })

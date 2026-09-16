@@ -1,4 +1,12 @@
 {
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "Restored, not running",
+      "resumeBody": "Opening it resumes the {{agent}} session.",
+      "freshBody": "Opening it starts a new terminal in its folder.",
+      "open": "Open"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",

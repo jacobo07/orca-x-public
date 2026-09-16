@@ -7,7 +7,7 @@ import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
-import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
+import { decideTerminalTabMount } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
@@ -132,40 +132,45 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
 
   return (
     <>
-      {terminalTabs
-        .filter((terminalTab) =>
-          shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)
+      {terminalTabs.map((terminalTab) => {
+        const decision = decideTerminalTabMount(backgroundMountTabIds, terminalTab)
+        if (decision === 'render-deferred') {
+          return null
+        }
+        const assignment = assignments.get(terminalTab.id)
+        const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
+        const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
+        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
+          worktreeId,
+          tabId: terminalTab.id
+        })
+        // Why: a hidden dormant tab renders nothing at all; a shown one gets the placeholder.
+        if (decision === 'dormant' && !isVisible && !activityTerminalPortal) {
+          return null
+        }
+        if (parkedTerminalTabIds.has(terminalTab.id)) {
+          return null
+        }
+        return (
+          <TerminalOverlaySlot
+            key={terminalTab.id}
+            terminalTabId={terminalTab.id}
+            terminalGeneration={terminalTab.generation}
+            worktreeId={worktreeId}
+            worktreePath={worktreePath}
+            startupCwd={terminalTab.startupCwd}
+            groupId={assignment?.groupId}
+            isWorktreeActive={isWorktreeActive}
+            isVisible={isVisible}
+            isActive={isActive}
+            activityTerminalPortal={activityTerminalPortal}
+            onFocusOwningGroup={focusOwningGroup}
+            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+            dormant={decision === 'dormant'}
+          />
         )
-        .map((terminalTab) => {
-          const assignment = assignments.get(terminalTab.id)
-          const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
-          const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
-          const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-            worktreeId,
-            tabId: terminalTab.id
-          })
-          if (parkedTerminalTabIds.has(terminalTab.id)) {
-            return null
-          }
-          return (
-            <TerminalOverlaySlot
-              key={terminalTab.id}
-              terminalTabId={terminalTab.id}
-              terminalGeneration={terminalTab.generation}
-              worktreeId={worktreeId}
-              worktreePath={worktreePath}
-              startupCwd={terminalTab.startupCwd}
-              groupId={assignment?.groupId}
-              isWorktreeActive={isWorktreeActive}
-              isVisible={isVisible}
-              isActive={isActive}
-              activityTerminalPortal={activityTerminalPortal}
-              onFocusOwningGroup={focusOwningGroup}
-              consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-              leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
-            />
-          )
-        })}
+      })}
     </>
   )
 })

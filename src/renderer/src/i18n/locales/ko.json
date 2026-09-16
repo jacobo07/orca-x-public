@@ -1,4 +1,12 @@
 {
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "복원됨, 실행 안 함",
+      "resumeBody": "열면 {{agent}} 세션을 재개합니다.",
+      "freshBody": "열면 해당 폴더에서 새 터미널을 시작합니다.",
+      "open": "열기"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",

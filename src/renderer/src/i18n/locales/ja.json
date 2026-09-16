@@ -1,4 +1,12 @@
 {
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "復元済み・未実行",
+      "resumeBody": "開くと {{agent}} のセッションを再開します。",
+      "freshBody": "開くとそのフォルダーで新しいターミナルを起動します。",
+      "open": "開く"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca でレンダラーエラーが発生しました。",
