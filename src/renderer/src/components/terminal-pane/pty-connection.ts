@@ -5224,6 +5224,53 @@ export function connectPanePty(
       }
     }
 
+    let startupSpawnSettledReported = false
+    const reportStartupSpawnSettled = (
+      spawnedRaw: unknown,
+      tracked: Promise<string | null>
+    ): void => {
+      const report = deps.onStartupSpawnSettled
+      // Why once: a fallback spawn after a failed reattach is not the startup the caller awaited.
+      if (!report || startupSpawnSettledReported) {
+        return
+      }
+      startupSpawnSettledReported = true
+      void Promise.all([Promise.resolve(spawnedRaw).catch(() => null), tracked]).then(
+        ([raw, ptyId]) => {
+          const connect =
+            raw && typeof raw === 'object' && 'id' in raw ? (raw as PtyConnectResult) : null
+          report(
+            ptyId
+              ? {
+                  kind: 'spawned',
+                  ptyId,
+                  reattached: connect?.isReattach === true,
+                  ...(connect?.agentResumeRefused
+                    ? { agentResumeRefused: connect.agentResumeRefused }
+                    : {})
+                }
+              : { kind: 'failed' }
+          )
+        }
+      )
+    }
+    // Why: a connection that adopts an existing PTY never ran its own startup; say so rather
+    // than leave an in-place respawn waiting for a spawn that will not happen.
+    const reportStartupAdopted = (ptyId: string | null | Promise<string | null>): void => {
+      const report = deps.onStartupSpawnSettled
+      if (!report || startupSpawnSettledReported) {
+        return
+      }
+      startupSpawnSettledReported = true
+      void Promise.resolve(ptyId)
+        .catch(() => null)
+        .then((adopted) =>
+          report(
+            adopted ? { kind: 'spawned', ptyId: adopted, reattached: true } : { kind: 'failed' }
+          )
+        )
+    }
+
     const startFreshSpawn = (
       startupOverride?: PendingStartupCommand | null,
       options: FreshSpawnOptions = {}
@@ -5439,6 +5486,7 @@ export function connectPanePty(
             pendingSpawnByPaneKey.delete(pendingSpawnKey)
           }
         })
+      reportStartupSpawnSettled(spawnedRaw, trackedPromise)
       armDirectSshPaneRetryTimeout(trackedPromise, directSshRetryAttempt)
       void trackedPromise.then((spawnedPtyId) => {
         if (spawnedPtyId) {
@@ -8971,6 +9019,7 @@ export function connectPanePty(
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
       recordPtyConnectDiagnostic(`pane=${pane.id} -> REATTACH ${deferredReattachSessionId}`)
+      reportStartupAdopted(deferredReattachSessionId)
       prepaintParkedSshSnapshot(deferredReattachSessionId)
 
       // Why: pre-signal (declare) before the reattach connect so the cooperation gate suppresses the daemon seed for this paneKey; Electron preserves IPC order.
@@ -9122,6 +9171,7 @@ export function connectPanePty(
       const attachPtyId =
         legacyAttachOnlyPtyId ?? detachedRemoteLeafPtyId ?? detachedLivePtyId ?? eagerLivePtyId!
       recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${attachPtyId}`)
+      reportStartupAdopted(attachPtyId)
       allowInitialIdleCacheSeed = false
       if (legacyAttachOnlyPtyId) {
         if (attachRetainedLegacyPty(legacyAttachOnlyPtyId) && connectionId) {
@@ -9166,6 +9216,7 @@ export function connectPanePty(
               return
             }
             if (transport.getPtyId()) {
+              reportStartupAdopted(transport.getPtyId())
               return
             }
             if (!spawnedPtyId) {
@@ -9186,6 +9237,7 @@ export function connectPanePty(
             if (!canAdoptCapturedDirectSshRetryPty(spawnedPtyId)) {
               return
             }
+            reportStartupAdopted(spawnedPtyId)
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
             const outputCallbacks = captureTransportOutputCallbacks(reportError)
