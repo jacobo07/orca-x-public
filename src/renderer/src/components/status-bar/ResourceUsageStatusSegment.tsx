@@ -80,6 +80,7 @@ import {
 } from './resource-terminal-host-copy'
 import { formatMemory } from './resource-memory-byte-format'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
+import { SleepReclaimAuthorizationPanel } from './SleepReclaimAuthorizationPanel'
 import {
   countUnboundDaemonSessions,
   selectUnboundDaemonSessions,
@@ -1448,6 +1449,8 @@ export function ResourceUsageStatusSegment({
           )}
 
           <div className="flex-1 overflow-y-auto scrollbar-sleek">
+            {resourceSnapshot && <SleepReclaimAuthorizationPanel />}
+
             {unifiedRepos.length > 0 && (
               <ResourceTree
                 repos={unifiedRepos}
