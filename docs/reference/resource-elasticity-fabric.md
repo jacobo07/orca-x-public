@@ -1,5 +1,17 @@
 ---
-covers: [resource-elasticity, resource-census, terminal-host-attribution, density-lab, observation-budget, stream-taxonomy, pressure-model, resource-governor]
+covers:
+  [
+    resource-elasticity,
+    resource-census,
+    terminal-host-attribution,
+    density-lab,
+    observation-budget,
+    stream-taxonomy,
+    pressure-model,
+    resource-governor,
+    recurring-work-inventory,
+    recurring-work-ratchet
+  ]
 status: active
 ---
 
@@ -11,13 +23,13 @@ from the 2026-09-16 program plan.
 
 ## Owners this spec composes, and does not replace
 
-| Concern | Canonical owner |
-|---|---|
-| Presentation eviction | cold parking (`terminal-hidden-view-parking.ts`), force-park retention (`terminal-hidden-worktree-retention.ts`), hidden WebGL LRU (`terminal-webgl-hidden-retention.ts`) |
+| Concern                | Canonical owner                                                                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Presentation eviction  | cold parking (`terminal-hidden-view-parking.ts`), force-park retention (`terminal-hidden-worktree-retention.ts`), hidden WebGL LRU (`terminal-webgl-hidden-retention.ts`)                                    |
 | Terminal output bounds | main pending/in-flight windows and producer flow control (`src/main/ipc/pty.ts`), daemon batcher and keep-tail (`src/main/daemon/daemon-stream-*`), renderer scheduler (`pane-terminal-output-scheduler.ts`) |
-| Destructive reclaim | the agent hibernation coordinator and its authorization plan; the governor only ever requests |
-| Dormant composition | the project working-set program (W1–W6) |
-| Resource census | `src/main/memory/collector.ts` |
+| Destructive reclaim    | the agent hibernation coordinator and its authorization plan; the governor only ever requests                                                                                                                |
+| Dormant composition    | the project working-set program (W1–W6)                                                                                                                                                                      |
+| Resource census        | `src/main/memory/collector.ts`                                                                                                                                                                               |
 
 ## Invariants
 
@@ -36,6 +48,7 @@ before R1 the collector walked only registered PTY subtrees. On Windows the ConP
 children of the daemon, not of the shell, so they were invisible too.
 
 Acceptance:
+
 - The snapshot carries the connected daemon process's own usage as a terminal-host bucket, included
   in the Orca app total.
 - The daemon's descendants not claimed by any registered PTY are reported separately as
@@ -50,3 +63,44 @@ Acceptance:
 
 Out of scope for R1: the overhead/workload split in the UI copy (R2) and remote hosts (each host
 reports its own truth).
+
+R2 needed no code: R1's layout already separates Orca overhead (the Orca group, including the
+terminal host), workload (project groups) and unattributed memory.
+
+## R4 — recurring work is inventoried, and the debt list only shrinks
+
+A timer that costs nothing with three panes is structural debt at a hundred. R4 makes every
+recurring producer in `src/` name what multiplies it.
+
+- `config/recurring-work-inventory.jsonc` classifies every site the sweep finds: intervals,
+  self-rescheduling timeouts and animation frames, watchers, workers and child processes, and the
+  call sites of scheduler helpers that take a callback. Each entry records cadence, lifetime,
+  scaling, hidden and dormant behaviour, spawned binaries and a disposition.
+- `pnpm check:recurring-work` (part of `pnpm lint`) fails on an unclassified site, a stale entry, a
+  multiplicative producer marked justified without a stated `bound`, a spawn reached from a
+  callback declared as spawning nothing, a `debt` responsibility missing from
+  `config/recurring-work-debt-baseline.txt`, a baseline line that is no longer debt, and a sweep that
+  finds less than its floor.
+- Site keys are file, kind and enclosing symbol. Renaming or moving a producer re-keys it, so debt
+  cannot be renamed away; it has to be classified again.
+- Cardinality is proven per responsibility with a runtime test, not by the gate. The first is
+  `agent-completion-coordinator-cardinality.test.ts`.
+
+What the sweep cannot see, by construction (it is a text scan; the repo declares no JS parser):
+
+- a timer reached through an alias or an undeclared helper;
+- a reschedule that crosses modules, or needs more than three same-file calls to come back;
+- a spawn more than one call away from the callback (the `spawns` field is declared, not proven);
+- recurring work outside `src/` (for example `mobile/`);
+- whether a stated `bound` is true. Turning `debt` into `justified` with an invented bound passes
+  the gate; that edit is caught only in review, which is why dispositions live in one diffable file.
+
+Findings from the first inventory:
+
+- The agent-completion process backstop polls once per connected live pane, not per remembered
+  session: slept panes, non-live panes and hidden panes without agent evidence cost nothing, and
+  cold parking bounds the mounted set. The per-window queue caps volume at 8 starts per second, so
+  past that the cost becomes detection latency. A queued inspection used to run after its pane was
+  disposed; fixed in R4.
+- It stays listed as debt: every pane still makes its own IPC round trip, and the Windows
+  process-table cache only merges scans that happen to land within 500 ms of each other.

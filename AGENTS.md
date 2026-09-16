@@ -80,6 +80,12 @@ A state file also owes a rule about its own backup: never spend the last known-g
 
 `pnpm check:durability-contracts` enforces this. Modules that stage a temp file and rename it into place but carry no contract are ratcheted in `config/durability-unclassified-baseline.txt`: the existing ones are grandfathered and the list may only shrink, so a **new** unclassified publisher fails the gate. Prune with `--prune` after classifying one.
 
+## Recurring Work
+
+A timer, poll, watcher, worker or retry loop must say what multiplies it. `pnpm check:recurring-work` finds every recurring producer in `src/` and fails until it is classified in [`config/recurring-work-inventory.jsonc`](./config/recurring-work-inventory.jsonc) with its cadence, lifetime, scaling, hidden/dormant behaviour and spawned binaries.
+
+Cost should follow the live or visible set, not everything the user has ever opened. A producer that multiplies with panes, rows, worktrees, hosts or subscriptions and never stops on its own needs a stated `bound`, or it is `debt` — and the debt list in `config/recurring-work-debt-baseline.txt` only shrinks. Prefer one shared producer over one per consumer, and an existing event over a poll; but a safety check at the moment of a destructive action keeps its own fresh read. Renaming a producer re-keys it, so it must be classified again. See [`docs/reference/resource-elasticity-fabric.md`](./docs/reference/resource-elasticity-fabric.md) (R4).
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
