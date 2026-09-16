@@ -301,6 +301,10 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
+  isAgentExitedResumeBlock,
+  isLegacyWorkerResumeBlock
+} from '../../../../shared/agent-resume-block-precedence'
+import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
@@ -1265,8 +1269,9 @@ export function connectPanePty(
     return { paneKey, record }
   }
   const isLegacyWorkerAutomaticResumeBlocked = (): boolean =>
-    getSleepingRecordForPane(useAppStore.getState())?.record.automaticResumeBlockedBy ===
-    'legacy-orchestration-worker'
+    isLegacyWorkerResumeBlock(
+      getSleepingRecordForPane(useAppStore.getState())?.record.automaticResumeBlockedBy
+    )
   const clearSleepingRecordProviderDuplicates = (
     state: ReturnType<typeof useAppStore.getState>,
     consumed: { paneKey: string; record: SleepingAgentSessionRecord }
@@ -5003,7 +5008,7 @@ export function connectPanePty(
       }
       const useLiveEntry = entry && entry.state !== 'done'
       // Why: the user left this agent; restore the shell only, keeping the identity for a manual resume.
-      if (!useLiveEntry && sleepingRecord?.automaticResumeBlockedBy === 'agent-exited') {
+      if (!useLiveEntry && isAgentExitedResumeBlock(sleepingRecord?.automaticResumeBlockedBy)) {
         return null
       }
       const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent

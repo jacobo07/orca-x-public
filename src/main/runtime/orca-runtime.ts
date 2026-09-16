@@ -368,6 +368,10 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
+import {
+  isLegacyWorkerResumeBlock,
+  withLegacyWorkerFence
+} from '../../shared/agent-resume-block-precedence'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -4160,7 +4164,7 @@ export class OrcaRuntimeService {
         if (
           !record ||
           !runtimeWorktreeIdsEqual(record.worktreeId, blocked.worktreeId) ||
-          record.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+          isLegacyWorkerResumeBlock(record.automaticResumeBlockedBy)
         ) {
           continue
         }
@@ -4168,7 +4172,8 @@ export class OrcaRuntimeService {
           ...state.next.sleepingAgentSessionsByPaneKey,
           [blocked.paneKey]: {
             ...record,
-            automaticResumeBlockedBy: 'legacy-orchestration-worker'
+            // Why: fencing an exited pane must keep the exit for when the fence is released.
+            automaticResumeBlockedBy: withLegacyWorkerFence(record.automaticResumeBlockedBy)
           }
         }
         changedHostIds.add(hostId)

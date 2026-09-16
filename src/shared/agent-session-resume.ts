@@ -63,8 +63,12 @@ export type SleepingAgentSessionRecord = {
   origin?: 'worktree-sleep' | 'quit' | 'live'
   /** Prevents provider-session relaunch. `legacy-orchestration-worker`: main is
    *  reconciling a durable orchestration assignment (attach-only). `agent-exited`:
-   *  the agent exited to its shell, so restore brings back the shell, not the agent. */
-  automaticResumeBlockedBy?: 'legacy-orchestration-worker' | 'agent-exited'
+   *  the agent exited to its shell, so restore brings back the shell, not the agent.
+   *  `legacy-orchestration-worker-exited`: both. Read through agent-resume-block-precedence. */
+  automaticResumeBlockedBy?:
+    | 'legacy-orchestration-worker'
+    | 'agent-exited'
+    | 'legacy-orchestration-worker-exited'
   /** Set on a finished pane captured by an explicit workspace sleep. Its
    *  `--resume` is issued by the pane's own cold restore when its tab is
    *  opened, so a mobile wake must not background-mount every such tab and

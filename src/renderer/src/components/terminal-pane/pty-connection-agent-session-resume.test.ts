@@ -399,75 +399,79 @@ describe('connectPanePty', () => {
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
   })
 
-  it('does not resume a live provider session while legacy worker recovery owns the pane', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const retainedPtyId = 'wt-1@@lost-pty'
-    const transport = createMockTransport()
-    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
-      sessionId
-        ? {
-            id: 'fresh-pty',
-            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+  // W3.0: a fenced worker that also exited carries the combined block and stays attach-only.
+  it.each(['legacy-orchestration-worker', 'legacy-orchestration-worker-exited'] as const)(
+    'does not resume a live provider session while legacy worker recovery owns the pane (%s)',
+    async (blockedBy) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const retainedPtyId = 'wt-1@@lost-pty'
+      const transport = createMockTransport()
+      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
+        sessionId
+          ? {
+              id: 'fresh-pty',
+              coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+            }
+          : 'fresh-pty'
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', ptyId: retainedPtyId }]
+        },
+        settings: {
+          ...mockStoreState.settings,
+          agentCmdOverrides: {}
+        },
+        agentStatusByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            state: 'working',
+            prompt: 'finish the task',
+            agentType: 'codex',
+            providerSession: { key: 'session_id', id: 'codex-session-1' }
           }
-        : 'fresh-pty'
-    )
-    transportFactoryQueue.push(transport)
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: retainedPtyId }]
-      },
-      settings: {
-        ...mockStoreState.settings,
-        agentCmdOverrides: {}
-      },
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          state: 'working',
-          prompt: 'finish the task',
-          agentType: 'codex',
-          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        },
+        sleepingAgentSessionsByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'codex-session-1' },
+            prompt: 'finish the task',
+            state: 'working',
+            capturedAt: 1,
+            updatedAt: 1,
+            automaticResumeBlockedBy: blockedBy
+          }
         }
-      },
-      sleepingAgentSessionsByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          agent: 'codex',
-          providerSession: { key: 'session_id', id: 'codex-session-1' },
-          prompt: 'finish the task',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1,
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
-        }
-      }
-    } as StoreState
+      } as StoreState
 
-    connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: retainedPtyId }
-      }) as never
-    )
-    await flushAsyncTicks(20)
-    await new Promise((resolve) => setTimeout(resolve, 70))
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({
+          restoredLeafId: LEAF_1,
+          restoredPtyIdByLeafId: { [LEAF_1]: retainedPtyId }
+        }) as never
+      )
+      await flushAsyncTicks(20)
+      await new Promise((resolve) => setTimeout(resolve, 70))
 
-    expect(transport.connect).not.toHaveBeenCalled()
-    expect(transport.attach).toHaveBeenCalledWith(
-      expect.objectContaining({ existingPtyId: retainedPtyId })
-    )
-    const attachOptions = transport.attach.mock.calls[0]?.[0] as Record<string, unknown>
-    expect(attachOptions).not.toHaveProperty('cols')
-    expect(attachOptions).not.toHaveProperty('rows')
-    expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
-    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-  })
+      expect(transport.connect).not.toHaveBeenCalled()
+      expect(transport.attach).toHaveBeenCalledWith(
+        expect.objectContaining({ existingPtyId: retainedPtyId })
+      )
+      const attachOptions = transport.attach.mock.calls[0]?.[0] as Record<string, unknown>
+      expect(attachOptions).not.toHaveProperty('cols')
+      expect(attachOptions).not.toHaveProperty('rows')
+      expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not replace a missing retained legacy worker over direct SSH', async () => {
     const { connectPanePty } = await import('./pty-connection')
