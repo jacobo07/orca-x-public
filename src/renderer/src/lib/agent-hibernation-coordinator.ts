@@ -1,21 +1,19 @@
 import { useAppStore } from '@/store'
 import {
   planAgentHibernationCandidates,
-  type AgentHibernationCandidate,
-  type AgentHibernationPlannerSnapshot
+  type AgentHibernationCandidate
 } from './agent-hibernation-planner'
 import {
   confirmAgentHibernationCandidates,
   type AgentHibernationConfirmationState
 } from './agent-hibernation-confirmation'
 import type { AppState } from '@/store/types'
-import { getAllDrivers } from './pane-manager/mobile-driver-state'
 import {
-  getForegroundTerminalTabIds,
-  getForegroundTerminalTabLastSeenAtById
-} from './foreground-terminal-tabs'
+  buildAgentHibernationPlannerSnapshot,
+  getRuntimeLivenessTargetWorktrees,
+  type RuntimePtyLivenessSample
+} from './agent-hibernation-planner-snapshot'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
-import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -47,50 +45,6 @@ const coordinator: AgentHibernationCoordinatorState = {
   tickInFlight: false,
   shuttingDownCandidateIds: new Set(),
   now: () => Date.now()
-}
-
-type RuntimePtyLivenessSample = {
-  runtimeLivePtyIdsByWorktreeId: Record<string, string[]>
-  runtimeLivenessRequiredWorktreeIds: string[]
-}
-
-function snapshotFromState(
-  state: AppState,
-  now: number,
-  runtimeLiveness: RuntimePtyLivenessSample
-): AgentHibernationPlannerSnapshot {
-  return {
-    settings: state.settings,
-    activeWorktreeId: state.activeWorktreeId,
-    foregroundTerminalTabIds: getForegroundTerminalTabIds(),
-    tabsByWorktree: state.tabsByWorktree,
-    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-    ptyIdsByTabId: state.ptyIdsByTabId,
-    runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
-    runtimeLivenessRequiredWorktreeIds: runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
-    mobileLockedPtyIds: [...getAllDrivers()]
-      .filter(([, driver]) => driver.kind === 'mobile')
-      .map(([ptyId]) => ptyId),
-    agentStatusByPaneKey: state.agentStatusByPaneKey,
-    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
-    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
-      state.lastTerminalInputAtByPaneKey
-    ),
-    foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
-    now
-  }
-}
-
-function getRuntimeLivenessTargetWorktrees(state: AppState): Map<string, string> {
-  const targets = new Map<string, string>()
-  for (const worktreeId of Object.keys(state.tabsByWorktree)) {
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    if (runtimeEnvironmentId) {
-      targets.set(worktreeId, runtimeEnvironmentId)
-    }
-  }
-  return targets
 }
 
 function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
@@ -147,7 +101,9 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
 async function currentCandidates(now: number) {
   const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState())
   const freshState = useAppStore.getState()
-  return planAgentHibernationCandidates(snapshotFromState(freshState, now, runtimeLiveness))
+  return planAgentHibernationCandidates(
+    buildAgentHibernationPlannerSnapshot(freshState, now, runtimeLiveness)
+  )
     .filter((candidate) => {
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         freshState,
