@@ -1,10 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { getDaemonPidPath } from './daemon-spawner'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import {
-  getPsProcessIdentityAsync,
-  queryWindowsProcessIdentity
-} from './daemon-process-identity-query'
+import { getPsProcessIdentityAsync } from './daemon-process-identity-query'
+import { queryWindowsProcess } from './daemon-process-inspection'
 import {
   START_TIME_TOLERANCE_MS,
   startTimeMatches,
@@ -36,12 +34,19 @@ export function isNoSuchProcessError(error: unknown): boolean {
 }
 
 /**
- * 'unknown' is load-bearing: a failed inspection is not evidence that the recorded PID is
- * someone else's. `ps` runs under a 2s budget and PowerShell CIM under 3s, and a loaded
- * machine blows both — reading that as "not our daemon" is what authorized reclaiming a live
- * daemon's ownership in the first place.
+ * Four answers, and three of them are positive observations.
+ *
+ * 'mismatch' — a process holds the pid and it is not our daemon.
+ * 'absent'   — nothing holds the pid. The OS answered; this is evidence, not a shrug.
+ * 'unknown'  — the instrument could not tell us. Load-bearing: a failed inspection is not
+ *   evidence that the recorded pid is someone else's. `ps` runs under a 2s budget and
+ *   PowerShell CIM under 3s, and a loaded machine blows both — reading that as "not our
+ *   daemon" is what authorized reclaiming a live daemon's ownership in the first place.
+ *
+ * 'absent' and 'mismatch' happen to lead to the same destructive decision today (neither may
+ * be signalled), but they are different facts and the logs must not claim one for the other.
  */
-export type DaemonProcessIdentity = 'match' | 'mismatch' | 'unknown'
+export type DaemonProcessIdentity = 'match' | 'mismatch' | 'absent' | 'unknown'
 
 /**
  * The verdict together with the command line it was computed from.
@@ -65,10 +70,11 @@ async function observeDaemonProcessIdentity(
   try {
     process.kill(pid, 0)
   } catch (error) {
-    // Why: only ESRCH proves the process is gone. EPERM means it exists and belongs to
-    // another user — reading that as absence deletes a live daemon's ownership.
+    // Why: only ESRCH proves the process is gone — and "gone" is absence, not a process that
+    // turned out to be someone else's. EPERM means it exists and belongs to another user;
+    // reading that as absence deletes a live daemon's ownership.
     return {
-      verdict: isNoSuchProcessError(error) ? 'mismatch' : 'unknown',
+      verdict: isNoSuchProcessError(error) ? 'absent' : 'unknown',
       commandLine: null
     }
   }
@@ -79,8 +85,18 @@ async function observeDaemonProcessIdentity(
   })
 
   if (process.platform === 'win32') {
-    const identity = await queryWindowsProcessIdentity(pid)
-    if (identity === null) {
+    // Why this query and not the lighter sibling: on Windows a terminated process keeps its pid
+    // reserved while any handle to it survives, so the liveness check above can pass for a
+    // process Win32_Process no longer lists. Only a query that reports absence separately from
+    // its own failure can tell those apart, and the difference decides whether a daemon is
+    // replaced or preserved into degraded mode.
+    const identity = await queryWindowsProcess(pid)
+    if (identity.status === 'missing') {
+      return { verdict: 'absent', commandLine: null }
+    }
+    if (identity.status !== 'present' || identity.commandLine === null) {
+      // Present-but-unreadable is still unknown: without the command line there is nothing to
+      // bind this pid to our daemon, and an unbound pid must never be signalled.
       return { verdict: 'unknown', commandLine: null }
     }
     // Why: image names are too broad after PID reuse. Match the daemon entry

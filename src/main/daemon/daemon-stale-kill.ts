@@ -242,7 +242,13 @@ export async function killStaleDaemon(
         // daemon died during the wait. Without this, we'd SIGKILL an unrelated
         // process that happens to now own the same pid.
         const recheck = await inspectDaemonProcessIdentity(pid, socketPath, tokenPath, startedAtMs)
-        if (recheck === 'mismatch') {
+        if (recheck === 'absent') {
+          // Why separate from the recycle case below: both stop the SIGKILL, but one says the
+          // pid is now someone else's and this one says nothing holds it at all. Logging the
+          // recycle reason for a process that simply exited describes a race that never happened.
+          console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=process_gone')
+          exited = true
+        } else if (recheck === 'mismatch') {
           // Why: the pid provably no longer belongs to our daemon, so it is gone regardless
           // of what the endpoint says.
           console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
