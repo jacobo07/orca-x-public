@@ -104,3 +104,51 @@ Findings from the first inventory:
   disposed; fixed in R4.
 - It stays listed as debt: every pane still makes its own IPC round trip, and the Windows
   process-table cache only merges scans that happen to land within 500 ms of each other.
+
+## First shrink — worktree polls share one clock and slow down when quiet
+
+`worktree-base-and-git-common-stat-poll` was the first debt removed from the baseline (4 → 3).
+
+- **What actually multiplied.** Base targets are keyed by workspace root, so repos sharing the
+  global workspace directory already shared one poll. The multiplier was git-common: one target
+  per repo, each with its own 2 s timer and about 7 + 6×(linked worktrees) stats per tick, running
+  for every repo in the store.
+- **Owner.** `src/main/ipc/worktree-observation-clock.ts`. Every local worktree poll (base,
+  git-common, the macOS primary poll and existence poll) registers a run instead of scheduling
+  itself. There is one timer per interval, at most 4 runs at once, and no target overlaps itself.
+  One target's failure is isolated. The timer disarms when every target is parked (hidden
+  window) or gone.
+- **Freshness contract.**
+  - A target runs every 2 s if it emitted an event in the last 2 minutes, holds the active
+    git-status upstream ref, or has just been woken by its window becoming visible.
+  - Otherwise it runs every 10 s. Any change it sees puts it back on 2 s.
+  - Orca's own worktree operations still notify directly.
+- **Measured** by `worktree-observation-cardinality.test.ts`: real target builder, 3 linked
+  worktrees per repo, 20 s window.
+
+  | repos | timers before → after | idle stat calls before → after |
+  | ----- | --------------------- | ------------------------------ |
+  | 1     | 2 → 1                 | 266 → 52                       |
+  | 10    | 11 → 1                | 2570 → 502                     |
+  | 50    | 51 → 1                | 12810 → 2502                   |
+
+  Active-cadence work is unchanged by design. The slope is still linear in repos; the constant is
+  five times smaller when they are idle.
+- **External changes stay observed.**
+  - `worktree-external-change-golden.test.ts` runs real `git worktree add` and `remove` from
+    outside the watcher, while the repo is active and after it has gone quiet.
+  - `tests/e2e/worktree-external-change-observation.spec.ts` does the same in the running app,
+    with no explicit fetch, and reads the clock through an e2e-only hook.
+- **Regression proof.** Ten mutations each turn a test or the gate red:
+  - a clock per target, and a planted per-target timer;
+  - no quiet tier, and no quiet fallback;
+  - no reactivation;
+  - a skipped worktrees listing;
+  - a zero-target timer leak;
+  - overlapping runs, and one failure halting all;
+  - un-deduplicated targets.
+  Disabling the git-common run in the built app turns the e2e spec red.
+- **Still open.**
+  - A base-root listing error other than ENOENT still reads as "every worktree deleted". The
+    cost is one wasted structure refresh, because the renderer re-lists from git, not lost data.
+  - The quiet tier also stretches the 15-run index backstop to 150 s for idle repos.
