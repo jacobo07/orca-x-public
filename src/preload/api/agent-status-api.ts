@@ -9,7 +9,9 @@ import type { ComputerAwakeStatus } from '../../shared/computer-awake-mode'
 import type {
   LiveAgentSessionPresenceRequest,
   LiveAgentSessionPresenceResponse,
-  LiveSessionCollisionNotice
+  LiveSessionCollisionNotice,
+  LiveSessionMaterializationRequest,
+  LiveSessionMaterializationResponse
 } from '../../shared/live-agent-session-presence-types'
 
 export type AgentStatusApi = {
@@ -37,6 +39,14 @@ export type AgentStatusApi = {
   readLivePresence: (
     request: LiveAgentSessionPresenceRequest
   ) => Promise<LiveAgentSessionPresenceResponse>
+  /** Checks presence and, when clear or accepted, reserves the right to materialize. */
+  reserveMaterialization: (
+    request: LiveSessionMaterializationRequest
+  ) => Promise<LiveSessionMaterializationResponse>
+  /** Names the tab a granted materialization opened, so its runtime can hand off. */
+  attachMaterializationTab: (args: { operationId: string; tabId: string }) => Promise<boolean>
+  /** Gives back a reservation whose materialization will not happen. */
+  releaseMaterialization: (args: { operationId: string }) => Promise<void>
   /** A pane began reporting a provider session already live in another pane. */
   onLiveCollision: (callback: (notice: LiveSessionCollisionNotice) => void) => () => void
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */

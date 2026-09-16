@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { LiveAgentSessionPresenceReaderDeps } from '../agent-hooks/live-agent-session-presence-reader'
+import { LiveSessionMaterializationReservations } from '../agent-hooks/live-session-materialization-reservation'
 
 const { handleMock, removeHandlerMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -163,6 +164,22 @@ describe('preload bridge', () => {
       `ipcRenderer.removeListener('${LIVE_SESSION_COLLISION_CHANNEL}', listener)`
     )
   })
+
+  it('invokes the materialization channels the main process handles', async () => {
+    const { readFileSync } = await import('node:fs')
+    const channels = await import('../../shared/live-agent-session-presence-types')
+    const preload = readFileSync(new URL('../../preload/index.ts', import.meta.url), 'utf8')
+
+    expect(preload).toContain(
+      `ipcRenderer.invoke('${channels.LIVE_SESSION_MATERIALIZATION_RESERVE_CHANNEL}', request)`
+    )
+    expect(preload).toContain(
+      `ipcRenderer.invoke('${channels.LIVE_SESSION_MATERIALIZATION_ATTACH_CHANNEL}', args)`
+    )
+    expect(preload).toContain(
+      `ipcRenderer.invoke('${channels.LIVE_SESSION_MATERIALIZATION_RELEASE_CHANNEL}', args)`
+    )
+  })
 })
 
 describe('registerAgentSessionLivePresenceHandlers', () => {
@@ -171,9 +188,31 @@ describe('registerAgentSessionLivePresenceHandlers', () => {
     removeHandlerMock.mockReset()
   })
 
+  function register() {
+    const reservations = new LiveSessionMaterializationReservations({
+      now: () => 0,
+      hasBoundPty: () => false
+    })
+    const resolveDeps = vi.fn(() => deps({ listHookRows: () => [] }))
+    registerAgentSessionLivePresenceHandlers(resolveDeps, () => reservations)
+    const handler = (channel: string) =>
+      handleMock.mock.calls.find(([name]) => name === channel)?.[1] as (
+        event: unknown,
+        value: unknown
+      ) => Promise<unknown>
+    const destroyedListeners = new Map<number, () => void>()
+    const sender = (id: number) => ({
+      id,
+      once: (_event: 'destroyed', listener: () => void) => destroyedListeners.set(id, listener)
+    })
+    return { reservations, resolveDeps, handler, sender, destroyedListeners }
+  }
+
   it('registers the channel without first removing another owner of it', async () => {
     const resolveDeps = vi.fn(() => deps())
-    registerAgentSessionLivePresenceHandlers(resolveDeps)
+    registerAgentSessionLivePresenceHandlers(resolveDeps, () => {
+      throw new Error('presence reads never touch reservations')
+    })
 
     expect(removeHandlerMock).not.toHaveBeenCalled()
     expect(handleMock).toHaveBeenCalledWith('agentSession:readLivePresence', expect.any(Function))
@@ -183,5 +222,42 @@ describe('registerAgentSessionLivePresenceHandlers', () => {
     ) => Promise<unknown>
     await expect(handler({}, request())).resolves.toMatchObject({ kind: 'live-elsewhere' })
     expect(resolveDeps).toHaveBeenCalledTimes(1)
+  })
+
+  it("drops a destroyed window's reservations and ignores another window's release", async () => {
+    const { reservations, handler, sender, destroyedListeners } = register()
+    const reserve = handler('agentSession:reserveMaterialization')
+    const release = handler('agentSession:releaseMaterialization')
+    const attach = handler('agentSession:attachMaterializationTab')
+
+    await expect(
+      reserve({ sender: sender(7) }, { ...request(), operationId: 'op-a' })
+    ).resolves.toMatchObject({ outcome: 'granted' })
+    await expect(
+      Promise.resolve(attach({ sender: sender(8) }, { operationId: 'op-a', tabId: 'tab-a' }))
+    ).resolves.toBe(false)
+    await expect(
+      Promise.resolve(attach({ sender: sender(7) }, { operationId: 'op-a', tabId: 'tab:bad' }))
+    ).resolves.toBe(false)
+    await release({ sender: sender(8) }, { operationId: 'op-a' })
+    expect(reservations.size).toBe(1)
+
+    destroyedListeners.get(7)?.()
+    expect(reservations.size).toBe(0)
+  })
+
+  it('lets the owning window release its own reservation', async () => {
+    const { reservations, handler, sender } = register()
+
+    await handler('agentSession:reserveMaterialization')(
+      { sender: sender(7) },
+      { ...request(), operationId: 'op-a' }
+    )
+    await handler('agentSession:releaseMaterialization')(
+      { sender: sender(7) },
+      { operationId: 'op-a' }
+    )
+
+    expect(reservations.size).toBe(0)
   })
 })

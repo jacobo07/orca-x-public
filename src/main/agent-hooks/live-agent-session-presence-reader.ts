@@ -46,6 +46,8 @@ function sameRawIdentity(
 export type LiveAgentSessionPresenceReading = LiveAgentSessionPresence & {
   /** PTY behind each live owner, so a replaced runtime in the same pane reads as a new owner. */
   incarnationByPane: Record<string, string>
+  /** Canonical claim key of the subject; null when this host cannot place it. */
+  subjectKey: string | null
 }
 
 async function probePaneLiveness(
@@ -79,15 +81,6 @@ export async function readLiveAgentSessionPresence(
 ): Promise<LiveAgentSessionPresenceReading> {
   const { subject } = args
   const rows = deps.listHookRows().filter((row) => sameRawIdentity(row, subject))
-  if (rows.length === 0) {
-    return {
-      ...projectLiveAgentSessionPresence({
-        requestingPaneKey: args.requestingPaneKey,
-        candidates: []
-      }),
-      incarnationByPane: {}
-    }
-  }
   const ptyIdByPane = new Map<string, string>()
   const keyCache = new Map<string, Promise<string | null>>()
   const keyFor = (
@@ -141,5 +134,5 @@ export async function readLiveAgentSessionPresence(
       incarnationByPane[paneKey] = ptyId
     }
   }
-  return { ...presence, incarnationByPane }
+  return { ...presence, incarnationByPane, subjectKey }
 }

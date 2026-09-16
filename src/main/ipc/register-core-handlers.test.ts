@@ -332,7 +332,8 @@ vi.mock('./agent-session-live-presence-ipc', () => ({
 }))
 
 vi.mock('./agent-session-live-presence-deps', () => ({
-  createLiveAgentSessionPresenceDeps: vi.fn()
+  createLiveAgentSessionPresenceDeps: vi.fn(),
+  getLiveSessionMaterializationReservations: vi.fn()
 }))
 
 vi.mock('./agent-trust', () => ({

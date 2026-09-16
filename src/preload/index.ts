@@ -238,7 +238,9 @@ import type {
 import type {
   LiveAgentSessionPresenceRequest,
   LiveAgentSessionPresenceResponse,
-  LiveSessionCollisionNotice
+  LiveSessionCollisionNotice,
+  LiveSessionMaterializationRequest,
+  LiveSessionMaterializationResponse
 } from '../shared/live-agent-session-presence-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
@@ -5009,6 +5011,14 @@ const api = {
       request: LiveAgentSessionPresenceRequest
     ): Promise<LiveAgentSessionPresenceResponse> =>
       ipcRenderer.invoke('agentSession:readLivePresence', request),
+    reserveMaterialization: (
+      request: LiveSessionMaterializationRequest
+    ): Promise<LiveSessionMaterializationResponse> =>
+      ipcRenderer.invoke('agentSession:reserveMaterialization', request),
+    attachMaterializationTab: (args: { operationId: string; tabId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('agentSession:attachMaterializationTab', args),
+    releaseMaterialization: (args: { operationId: string }): Promise<void> =>
+      ipcRenderer.invoke('agentSession:releaseMaterialization', args),
     onLiveCollision: (callback: (notice: LiveSessionCollisionNotice) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, notice: LiveSessionCollisionNotice) =>
         callback(notice)

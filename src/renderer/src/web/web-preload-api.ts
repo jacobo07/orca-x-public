@@ -954,6 +954,20 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           unknownCount: 0,
           staleCount: 0
         }),
+      // Why: web launches are runtime-routed; the host's claim registry owns duplicates there.
+      reserveMaterialization: () =>
+        Promise.resolve({
+          outcome: 'blocked',
+          presence: {
+            kind: 'unknown',
+            liveElsewhere: [],
+            ownersRevision: '',
+            unknownCount: 0,
+            staleCount: 0
+          }
+        }),
+      attachMaterializationTab: () => Promise.resolve(false),
+      releaseMaterialization: () => Promise.resolve(),
       onLiveCollision: () => noopUnsubscribe,
       drop: () => {},
       dropByTabPrefix: () => {},

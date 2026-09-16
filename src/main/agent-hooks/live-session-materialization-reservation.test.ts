@@ -28,7 +28,11 @@ describe('LiveSessionMaterializationReservations', () => {
 
     expect(reservations.tryAcquire('key-s', 'op-a', 1)).toBe('granted')
     expect(reservations.tryAcquire('key-s', 'op-b', 2)).toBe('contended')
-    expect(reservations.holder('key-s')).toEqual({ operationId: 'op-a', phase: 'reserved' })
+    expect(reservations.holder('key-s')).toEqual({
+      operationId: 'op-a',
+      ownerId: 1,
+      phase: 'reserved'
+    })
   })
 
   it('keeps unrelated keys independent', () => {
@@ -77,7 +81,11 @@ describe('LiveSessionMaterializationReservations', () => {
     boundTabs.add('tab-a')
     advance(MATERIALIZATION_UNBOUND_CEILING_MS + 1)
 
-    expect(reservations.holder('key-s')).toEqual({ operationId: 'op-a', phase: 'bound' })
+    expect(reservations.holder('key-s')).toEqual({
+      operationId: 'op-a',
+      ownerId: 1,
+      phase: 'bound'
+    })
     reservations.releaseForTab('tab-a')
     expect(reservations.holder('key-s')).toBeNull()
   })

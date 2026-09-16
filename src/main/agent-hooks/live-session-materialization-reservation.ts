@@ -11,6 +11,7 @@ export type MaterializationAcquireResult = 'granted' | 'held-by-self' | 'contend
 
 export type MaterializationHolder = {
   operationId: string
+  ownerId: number
   phase: 'reserved' | 'bound'
 }
 
@@ -44,6 +45,7 @@ export class LiveSessionMaterializationReservations {
     }
     return {
       operationId: entry.operationId,
+      ownerId: entry.ownerId,
       phase: entry.boundAt === undefined ? 'reserved' : 'bound'
     }
   }

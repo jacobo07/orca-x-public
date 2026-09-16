@@ -357,6 +357,16 @@ export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
 }
 
+export function hasPtyForTabId(tabId: string): boolean {
+  const prefix = `${tabId}:`
+  for (const paneKey of paneKeyPtyId.keys()) {
+    if (paneKey.startsWith(prefix)) {
+      return true
+    }
+  }
+  return false
+}
+
 // Why: let consumers tear down paneKey-scoped state on PTY exit so their timers can't leak; a callback registry keeps the cross-module dependency narrow.
 type PaneKeyTeardownListener = (paneKey: string) => void
 const paneKeyTeardownListeners = new Set<PaneKeyTeardownListener>()

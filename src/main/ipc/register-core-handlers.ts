@@ -59,7 +59,10 @@ import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentSessionLivePresenceHandlers } from './agent-session-live-presence-ipc'
-import { createLiveAgentSessionPresenceDeps } from './agent-session-live-presence-deps'
+import {
+  createLiveAgentSessionPresenceDeps,
+  getLiveSessionMaterializationReservations
+} from './agent-session-live-presence-deps'
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
 import { registerAgentTrustHandlers } from './agent-trust'
@@ -150,7 +153,10 @@ export function registerCoreHandlers(
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
-  registerAgentSessionLivePresenceHandlers(() => createLiveAgentSessionPresenceDeps(store, runtime))
+  registerAgentSessionLivePresenceHandlers(
+    () => createLiveAgentSessionPresenceDeps(store, runtime),
+    getLiveSessionMaterializationReservations
+  )
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
