@@ -91,18 +91,18 @@ preflight is a new IPC/RPC method name, so an older peer fails closed rather tha
 
 ## Status (2026-09-16)
 
-| Slice                                                          | State                                                            |
-| -------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Presence projection, reader, claim-key identity                | landed `326a31df5`, `20db169ad`                                  |
-| `agentSession:readLivePresence` (renderer read)                | landed `26d0fb75c`                                               |
-| Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; owning-window warning toast `fc7307fe2`      |
-| Class A gate on AI Vault resume (Back / Continue / revalidate) | landed `9ae0aecf8`, copy `b8030f2b4`                             |
-| Class A gate on Sleep launch and cold restore                  | not started — those paths are being changed by another pane      |
+| Slice                                                          | State                                                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Presence projection, reader, claim-key identity                | landed `326a31df5`, `20db169ad`                                                  |
+| `agentSession:readLivePresence` (renderer read)                | landed `26d0fb75c`                                                               |
+| Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; owning-window warning toast `fc7307fe2`                      |
+| Class A gate on AI Vault resume (Back / Continue / revalidate) | landed `9ae0aecf8`, copy `b8030f2b4`                                             |
+| Class A gate on Sleep launch and cold restore                  | landed at the spawn: RED `143013dbc`, `175c81eb4`, `6352d715c`                   |
 | Reservation for simultaneous Class A resumes                   | landed `123c07615` (RED), `38a5137ed`, `f539fa099`, `08d9b2933`, e2e `1737c642a` |
-| Class A gate on working-set (snapshot) restore                 | not started — restore landed in `9d16417a0` by another pane      |
-| Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt |
-| Shared-live rail indicator, go-to-open-session                 | not started                                                      |
-| Real-provider product reality                                  | not run                                                          |
+| Class A gate on working-set (snapshot) restore                 | landed at the spawn (revival is a pane cold restore)                             |
+| Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt                 |
+| Shared-live rail indicator, go-to-open-session                 | not started                                                                      |
+| Real-provider product reality                                  | not run                                                                          |
 
 Measured: Claude Code 2.1.273 `-p --resume <id>` returns the same session id.
 
@@ -121,9 +121,43 @@ sets a reservation in `LiveSessionMaterializationReservations` (main, one per pr
   owner release (launch threw or turned runtime-routed), window destroyed, never spawned within
   30 s, or spawned but never reported within 120 s. Expiry is evaluated on read; no timer.
 
-Limits: spawns that carry no reservation (Sleep, cold restore, working-set restore) are not
-fenced; SSH (no claim key) proceeds unreserved; a tab attached after the 30 s ceiling runs
+Limits: SSH (no claim key) proceeds unreserved; a tab attached after the 30 s ceiling runs
 unprotected; the reservation is per tab, so a split pane exiting in the same tab releases it.
+
+## Resume spawn gate (one authority for every Orca-selected resume)
+
+Rule: any Orca-owned path that turns an existing provider session into a new runtime must
+cross the same presence check and the same claim-keyed reservation before the effect. The
+reason (vault, sleep, restore, working set) is provenance, never part of the key.
+
+Every local desktop resume ends in `pty:spawn` carrying `resumeProviderSession`, so the gate
+lives there (`decideResumeSpawn`, installed by `registerAgentSessionLivePresenceHandlers`):
+
+- presence is read for the spawning pane, then, with nothing awaited, the reservation decides;
+- a hold already attached to the spawning tab (the vault's own operation) proceeds;
+- a one-shot permit, recorded only when the vault dialog's Continue was granted and bound to
+  the tab it attached, proceeds once; automatic spawns can never create or consume one;
+- otherwise live / multiple / unknown / starting elsewhere is refused, and a free session is
+  reserved for the spawning tab (released on spawn throw, PTY teardown, window close, handoff);
+- a refusal spawns a plain shell (no command, launch config, agent or sequenced startup) and
+  replies `agentResumeRefused`; it never falls back to launching a fresh provider session;
+- expiry is cleanup, not proof: every decision re-reads presence first.
+
+| Materializer                                     | Initiated | Class | Status                                                       |
+| ------------------------------------------------ | --------- | ----- | ------------------------------------------------------------ |
+| AI Vault resume                                  | user      | A     | guarded (dialog + reservation + spawn gate)                  |
+| Sleep launch into a new tab (activation, mobile) | automatic | A     | guarded at spawn; limit: record cleared before spawn         |
+| Pane cold restore                                | automatic | A     | guarded at spawn; limit: pane handling of refusal pending    |
+| In-place hibernation wake                        | automatic | A     | guarded at spawn (same path as cold restore)                 |
+| Working-set row revival                          | automatic | A     | guarded at spawn (lazy sleep record → cold restore)          |
+| Runtime-routed ensure (web, mobile, CLI)         | remote    | A     | not integrated: own `ClaimedAgentPtyOwnerRegistry` authority |
+| Provider `/resume` picker                        | provider  | B     | post-effect notice to the owning window                      |
+| SSH                                              | any       | —     | unsupported: no claim key, proceeds unreserved               |
+
+Limits: the renderer does not yet act on `agentResumeRefused` (pty-connection.ts was being
+edited by another pane), so a refused cold restore still shows "restored" and clears its sleep
+record; a refused sleep launch leaves a plain-shell tab. No duplicate runtime is created in
+either case. The transcript remains resumable from AI Vault.
 
 ## Known limits
 
