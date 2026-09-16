@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
@@ -10,11 +10,16 @@ const { handlers, profileDir } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  app: { getPath: () => profileDir.path },
   ipcMain: {
     handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     }
   }
+}))
+
+vi.mock('../persistence/loading-store/user-data-path', () => ({
+  getDataFile: () => join(profileDir.path, 'orca-data.json')
 }))
 
 vi.mock('../orca-profiles/profile-index-store', () => ({
@@ -23,6 +28,7 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
 
 profileDir.path = mkdtempSync(join(tmpdir(), 'orca-working-set-ipc-'))
 const { registerProjectWorkingSetHandlers } = await import('./project-working-set')
+const { makeTerminalScrollbackSnapshotRef } = await import('../terminal-scrollback-snapshots')
 registerProjectWorkingSetHandlers()
 
 const invoke = (channel: string, ...args: unknown[]) => handlers.get(channel)!({}, ...args)
@@ -35,7 +41,18 @@ describe('project working-set IPC', () => {
 
   it('saves under the active profile and serves the same artifact back', async () => {
     const manifest = representativeManifest()
-    expect(await invoke('workingSet:save', manifest)).toMatchObject({ status: 'saved' })
+    // The handler must seal from the same profile scrollback directory the session store writes.
+    const liveRoot = join(profileDir.path, 'terminal-scrollback')
+    mkdirSync(liveRoot, { recursive: true })
+    const leaf = manifest.entries[0].panes[0].leafId
+    writeFileSync(
+      join(liveRoot, `${makeTerminalScrollbackSnapshotRef(manifest.entries[0].tabId, leaf)}.bin`),
+      'history'
+    )
+    expect(await invoke('workingSet:save', manifest)).toMatchObject({
+      status: 'saved',
+      scrollback: { sealed: 1 }
+    })
     expect(existsSync(join(profileDir.path, 'project-working-sets'))).toBe(true)
     expect(await invoke('workingSet:list', scope)).toMatchObject({
       status: 'listed',

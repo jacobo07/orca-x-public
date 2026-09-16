@@ -100,6 +100,13 @@ describe('project working-set store', () => {
     return history
   }
 
+  const scrollbackRoot = () => join(root, '..', 'terminal-scrollback')
+  const save = (candidate: unknown) =>
+    store.saveProjectWorkingSet(root, candidate, {
+      snapshotRoot: scrollbackRoot(),
+      fallbackSnapshotRoot: null
+    })
+
   beforeEach(() => {
     fault = null
     root = join(mkdtempSync(join(tmpdir(), 'orca-working-set-')), 'profile', 'project-working-sets')
@@ -111,7 +118,7 @@ describe('project working-set store', () => {
   })
 
   async function saveValidA(): Promise<void> {
-    expect(await store.saveProjectWorkingSet(root, manifestWith(ID_A, 1000))).toMatchObject({
+    expect(await save(manifestWith(ID_A, 1000))).toMatchObject({
       status: 'saved',
       workingSetId: ID_A
     })
@@ -129,7 +136,7 @@ describe('project working-set store', () => {
   }
 
   it('seals a manifest that reads back from disk exactly as submitted', async () => {
-    const outcome = await store.saveProjectWorkingSet(root, manifestWith(ID_A, 1000))
+    const outcome = await save(manifestWith(ID_A, 1000))
     expect(outcome).toMatchObject({ status: 'saved', workingSetId: ID_A })
     const onDisk = JSON.parse(readFileSync(join(partition(), `${ID_A}.json`), 'utf-8'))
     expect(onDisk).toEqual(manifestWith(ID_A, 1000))
@@ -141,16 +148,17 @@ describe('project working-set store', () => {
     const invalid = manifestWith(ID_A, 1000, (m) => {
       m.revivalOrder = ['tab-c']
     })
-    expect(await store.saveProjectWorkingSet(root, invalid)).toEqual({
+    expect(await save(invalid)).toEqual({
       status: 'refused-invalid',
       reason: 'revival-order',
       detail: 'tab-c'
     })
-    expect(
-      await store.saveProjectWorkingSet(root, { ...manifestWith(ID_A, 1000), manifestVersion: 2 })
-    ).toEqual({ status: 'refused-unsupported-version', manifestVersion: 2 })
+    expect(await save({ ...manifestWith(ID_A, 1000), manifestVersion: 2 })).toEqual({
+      status: 'refused-unsupported-version',
+      manifestVersion: 2
+    })
     const smuggled = { ...manifestWith(ID_A, 1000), agentEnv: { TOKEN: 'secret' } }
-    expect(await store.saveProjectWorkingSet(root, smuggled)).toMatchObject({
+    expect(await save(smuggled)).toMatchObject({
       status: 'refused-invalid',
       reason: 'shape'
     })
@@ -164,7 +172,7 @@ describe('project working-set store', () => {
     const intruder = manifestWith(ID_A, 5000, (m) => {
       m.label = 'intruder'
     })
-    expect(await store.saveProjectWorkingSet(root, intruder)).toEqual({
+    expect(await save(intruder)).toEqual({
       status: 'identity-collision',
       workingSetId: ID_A
     })
@@ -174,7 +182,7 @@ describe('project working-set store', () => {
 
   it('refuses an id that would alias another on a case-insensitive filesystem', async () => {
     const upper = manifestWith(ID_A.toUpperCase(), 1000)
-    expect(await store.saveProjectWorkingSet(root, upper)).toEqual({
+    expect(await save(upper)).toEqual({
       status: 'refused-invalid',
       reason: 'non-canonical-id',
       detail: ID_A.toUpperCase()
@@ -188,9 +196,7 @@ describe('project working-set store', () => {
       [ID_A, 1000],
       [ID_B, 2000]
     ] as const) {
-      expect((await store.saveProjectWorkingSet(root, manifestWith(id, createdAt))).status).toBe(
-        'saved'
-      )
+      expect((await save(manifestWith(id, createdAt))).status).toBe('saved')
     }
     const history = await listed()
     expect(history.valid.map((m) => m.workingSetId)).toEqual([ID_B, ID_C, ID_A])
@@ -199,8 +205,8 @@ describe('project working-set store', () => {
 
   it('keeps two concurrent saves of one scope as two readable artifacts', async () => {
     const outcomes = await Promise.all([
-      store.saveProjectWorkingSet(root, manifestWith(ID_A, 1000)),
-      store.saveProjectWorkingSet(root, manifestWith(ID_B, 1000))
+      save(manifestWith(ID_A, 1000)),
+      save(manifestWith(ID_B, 1000))
     ])
     expect(outcomes.map((o) => o.status)).toEqual(['saved', 'saved'])
     expect(readdirSync(partition()).sort()).toEqual([`${ID_A}.json`, `${ID_B}.json`])
@@ -211,8 +217,8 @@ describe('project working-set store', () => {
     const localFolder = { executionHostId: 'local', ownerKey: 'folder:fw-1' } as const
     const sshFolder = { executionHostId: 'ssh:target-1', ownerKey: 'folder:fw-1' } as const
     await saveValidA()
-    await store.saveProjectWorkingSet(root, manifestWith(ID_B, 2000, asFolder('local')))
-    await store.saveProjectWorkingSet(root, manifestWith(ID_C, 3000, asFolder('ssh:target-1')))
+    await save(manifestWith(ID_B, 2000, asFolder('local')))
+    await save(manifestWith(ID_C, 3000, asFolder('ssh:target-1')))
 
     expect((await listed()).valid.map((m) => m.workingSetId)).toEqual([ID_A])
     expect((await listed(localFolder)).valid.map((m) => m.workingSetId)).toEqual([ID_B])
@@ -293,7 +299,7 @@ describe('project working-set store', () => {
     it(`reports a ${injectedFault} fault as ${status} and leaves the earlier snapshot intact`, async () => {
       await saveValidA()
       fault = injectedFault
-      const outcome = await store.saveProjectWorkingSet(root, manifestWith(ID_B, 2000))
+      const outcome = await save(manifestWith(ID_B, 2000))
       fault = null
       expect(outcome).toEqual({ status, code: 'EIO' })
       expect(readdirSync(partition())).toEqual([`${ID_A}.json`])
@@ -304,7 +310,7 @@ describe('project working-set store', () => {
   it('does not report saved when the published file cannot be read back', async () => {
     await saveValidA()
     fault = 'read'
-    const outcome = await store.saveProjectWorkingSet(root, manifestWith(ID_B, 2000))
+    const outcome = await save(manifestWith(ID_B, 2000))
     fault = null
     expect(outcome).toEqual({
       status: 'read-back-failed',
@@ -318,7 +324,7 @@ describe('project working-set store', () => {
   it('does not report saved when the read-back differs, and keeps the drifted file out of history', async () => {
     await saveValidA()
     fault = 'drift'
-    const outcome = await store.saveProjectWorkingSet(root, manifestWith(ID_B, 2000))
+    const outcome = await save(manifestWith(ID_B, 2000))
     fault = null
     expect(outcome).toEqual({ status: 'verify-failed', workingSetId: ID_B, quarantined: true })
     const history = await listed()

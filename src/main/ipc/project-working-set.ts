@@ -7,6 +7,8 @@ import type {
   WorkingSetScopeKey
 } from '../../shared/project-working-set-store-types'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import { getDataFile } from '../persistence/loading-store/user-data-path'
+import { getProfileTerminalScrollbackSnapshotRoot } from '../terminal-scrollback-snapshots'
 import {
   getProfileWorkingSetRoot,
   isCanonicalWorkingSetId
@@ -33,14 +35,22 @@ function parseScopeKey(value: unknown): WorkingSetScopeKey | null {
 export function registerProjectWorkingSetHandlers(): void {
   // Why resolved once: the Store is bound to the profile active at startup, and a profile switch
   // relaunches; resolving per call could file a save under a profile this process is not serving.
-  const root = getProfileWorkingSetRoot(ensureActiveOrcaProfile().dataFile)
+  const { dataFile } = ensureActiveOrcaProfile()
+  const root = getProfileWorkingSetRoot(dataFile)
+  // Same roots the session store reads scrollback from, legacy fallback included.
+  const snapshotRoot = getProfileTerminalScrollbackSnapshotRoot(dataFile)
+  const legacyRoot = getProfileTerminalScrollbackSnapshotRoot(getDataFile())
+  const scrollbackStorage = {
+    snapshotRoot,
+    fallbackSnapshotRoot: legacyRoot === snapshotRoot ? null : legacyRoot
+  }
 
   // Why the candidate is unknown: main re-reads it through the sealed-manifest reader and trusts
   // nothing about the renderer's object beyond what that reader accepts.
   ipcMain.handle(
     'workingSet:save',
     (_event, candidate: unknown): Promise<WorkingSetSaveOutcome> =>
-      saveProjectWorkingSet(root, candidate)
+      saveProjectWorkingSet(root, candidate, scrollbackStorage)
   )
 
   // Why a refusal and not an outcome: a malformed request says nothing about what is stored.

@@ -7,9 +7,11 @@ import type {
   WorkingSetHistory,
   WorkingSetHistoryItem,
   WorkingSetSaveOutcome,
-  WorkingSetScopeKey
+  WorkingSetScopeKey,
+  WorkingSetScrollbackSealReport
 } from '../../shared/project-working-set-store-types'
 import type { ProjectWorkingSetManifest } from '../../shared/project-working-set-types'
+import type { TerminalScrollbackSnapshotStorage } from '../terminal-scrollback-snapshots'
 import {
   DurablePublishError,
   durableWriteTempPath,
@@ -24,6 +26,10 @@ import {
   workingSetPartitionDir,
   workingSetPartitionName
 } from './working-set-store-layout'
+import {
+  discardWorkingSetScrollback,
+  sealWorkingSetScrollback
+} from './working-set-scrollback-seal'
 
 /**
  * The durable owner of sealed working sets. Saving never touches a terminal: it persists
@@ -96,9 +102,22 @@ function publishFailure(error: unknown, workingSetId: string): WorkingSetSaveOut
     : { status: 'publish-failed', code: error.code }
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
 export async function saveProjectWorkingSet(
   root: string,
-  candidate: unknown
+  candidate: unknown,
+  scrollbackStorage: TerminalScrollbackSnapshotStorage
 ): Promise<WorkingSetSaveOutcome> {
   const validated = readProjectWorkingSetManifest(candidate)
   if (validated.status === 'unsupported-version') {
@@ -116,25 +135,36 @@ export async function saveProjectWorkingSet(
   const finalPath = join(partitionDir, workingSetArtifactName(workingSetId))
   // Why the validated copy: strict parsing already dropped nothing, so this is exactly what was checked.
   const payload = JSON.stringify(manifest)
+  let scrollback: WorkingSetScrollbackSealReport
   try {
+    // Why before sealing: copies filed under an id another manifest owns would be discarded with ours.
+    if (await pathExists(finalPath)) {
+      return { status: 'identity-collision', workingSetId }
+    }
     const created = await mkdir(partitionDir, { recursive: true, mode: 0o700 })
     if (created) {
       // Why: a freshly created directory's own entry must survive too, or the file goes with it.
       await syncDirectory(dirname(partitionDir))
       await syncDirectory(dirname(root))
     }
+    // Why first: the manifest is the durable pointer and these copies are its referents.
+    scrollback = await sealWorkingSetScrollback(root, manifest, scrollbackStorage)
     await writeFileDurableExclusive(durableWriteTempPath(finalPath), finalPath, payload, {
       mode: 0o600
     })
   } catch (error) {
-    return publishFailure(error, workingSetId)
+    const failure = publishFailure(error, workingSetId)
+    if (failure.status !== 'identity-collision') {
+      await discardWorkingSetScrollback(root, scope, workingSetId)
+    }
+    return failure
   }
   const readBack = await readWorkingSetArtifact(root, scope, workingSetId)
   if (readBack.status === 'unreadable' || readBack.status === 'missing') {
     return { status: 'read-back-failed', workingSetId, artifact: readBack }
   }
   if (readBack.status === 'valid' && isDeepStrictEqual(readBack.manifest, manifest)) {
-    return { status: 'saved', workingSetId, bytes: Buffer.byteLength(payload) }
+    return { status: 'saved', workingSetId, bytes: Buffer.byteLength(payload), scrollback }
   }
   const quarantined = await rename(
     finalPath,
@@ -142,6 +172,9 @@ export async function saveProjectWorkingSet(
   )
     .then(() => true)
     .catch(() => false)
+  if (quarantined) {
+    await discardWorkingSetScrollback(root, scope, workingSetId)
+  }
   return { status: 'verify-failed', workingSetId, quarantined }
 }
 

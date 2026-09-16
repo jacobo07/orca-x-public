@@ -19,8 +19,21 @@ export type WorkingSetArtifactOutcome =
   | { status: 'unreadable'; code: string }
   | { status: 'missing' }
 
+/** Per-pane scrollback copies taken at save; a failed copy never fails the save. */
+export type WorkingSetScrollbackSealReport = {
+  sealed: number
+  /** No persisted scrollback existed for the pane. */
+  absent: number
+  failed: { tabId: string; leafId: string; code: string }[]
+}
+
 export type WorkingSetSaveOutcome =
-  | { status: 'saved'; workingSetId: string; bytes: number }
+  | {
+      status: 'saved'
+      workingSetId: string
+      bytes: number
+      scrollback: WorkingSetScrollbackSealReport
+    }
   | {
       status: 'refused-invalid'
       reason: WorkingSetCorruptReason | 'non-canonical-id'
