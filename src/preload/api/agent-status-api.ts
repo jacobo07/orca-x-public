@@ -8,7 +8,8 @@ import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-q
 import type { ComputerAwakeStatus } from '../../shared/computer-awake-mode'
 import type {
   LiveAgentSessionPresenceRequest,
-  LiveAgentSessionPresenceResponse
+  LiveAgentSessionPresenceResponse,
+  LiveSessionCollisionNotice
 } from '../../shared/live-agent-session-presence-types'
 
 export type AgentStatusApi = {
@@ -36,6 +37,8 @@ export type AgentStatusApi = {
   readLivePresence: (
     request: LiveAgentSessionPresenceRequest
   ) => Promise<LiveAgentSessionPresenceResponse>
+  /** A pane began reporting a provider session already live in another pane. */
+  onLiveCollision: (callback: (notice: LiveSessionCollisionNotice) => void) => () => void
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
   drop: (paneKey: string) => void
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */

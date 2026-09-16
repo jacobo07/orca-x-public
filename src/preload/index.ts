@@ -237,7 +237,8 @@ import type {
 } from '../shared/agent-status-types'
 import type {
   LiveAgentSessionPresenceRequest,
-  LiveAgentSessionPresenceResponse
+  LiveAgentSessionPresenceResponse,
+  LiveSessionCollisionNotice
 } from '../shared/live-agent-session-presence-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
@@ -5007,6 +5008,12 @@ const api = {
       request: LiveAgentSessionPresenceRequest
     ): Promise<LiveAgentSessionPresenceResponse> =>
       ipcRenderer.invoke('agentSession:readLivePresence', request),
+    onLiveCollision: (callback: (notice: LiveSessionCollisionNotice) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, notice: LiveSessionCollisionNotice) =>
+        callback(notice)
+      ipcRenderer.on('agentSession:liveCollision', listener)
+      return () => ipcRenderer.removeListener('agentSession:liveCollision', listener)
+    },
     /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)

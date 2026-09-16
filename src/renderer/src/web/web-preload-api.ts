@@ -947,6 +947,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       // Why: the web client sees no host hook rows, so it cannot rule an owner out.
       readLivePresence: () =>
         Promise.resolve({ kind: 'unknown', liveElsewhere: [], unknownCount: 0, staleCount: 0 }),
+      onLiveCollision: () => noopUnsubscribe,
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},

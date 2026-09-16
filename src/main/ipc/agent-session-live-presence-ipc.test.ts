@@ -125,12 +125,16 @@ describe('handleLiveAgentSessionPresenceRequest', () => {
 describe('preload bridge', () => {
   it('invokes the same channel the main process handles', async () => {
     const { readFileSync } = await import('node:fs')
-    const { LIVE_AGENT_SESSION_PRESENCE_CHANNEL } =
+    const { LIVE_AGENT_SESSION_PRESENCE_CHANNEL, LIVE_SESSION_COLLISION_CHANNEL } =
       await import('../../shared/live-agent-session-presence-types')
     const preload = readFileSync(new URL('../../preload/index.ts', import.meta.url), 'utf8')
 
     expect(preload).toContain(
       `ipcRenderer.invoke('${LIVE_AGENT_SESSION_PRESENCE_CHANNEL}', request)`
+    )
+    expect(preload).toContain(`ipcRenderer.on('${LIVE_SESSION_COLLISION_CHANNEL}', listener)`)
+    expect(preload).toContain(
+      `ipcRenderer.removeListener('${LIVE_SESSION_COLLISION_CHANNEL}', listener)`
     )
   })
 })

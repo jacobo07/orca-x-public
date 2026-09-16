@@ -7,6 +7,14 @@ import {
 import { parsePaneKey } from './stable-pane-id'
 
 export const LIVE_AGENT_SESSION_PRESENCE_CHANNEL = 'agentSession:readLivePresence'
+export const LIVE_SESSION_COLLISION_CHANNEL = 'agentSession:liveCollision'
+
+export type LiveSessionCollisionNotice = {
+  /** Pane that just started reporting a session already live elsewhere. */
+  paneKey: string
+  kind: 'live-elsewhere' | 'multiple-live-owners'
+  liveElsewhere: string[]
+}
 
 export type LiveAgentSessionPresenceRequest = {
   /** Pane about to materialize the session. */

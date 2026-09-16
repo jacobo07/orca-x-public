@@ -231,7 +231,10 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
-import { getPrimaryAppWindowRenderer } from './ipc/app-window-renderer-registry'
+import {
+  broadcastToAppWindowRenderers,
+  getPrimaryAppWindowRenderer
+} from './ipc/app-window-renderer-registry'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -288,6 +291,12 @@ import { StarNagService } from './star-nag/service'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { createHookStatusSessionTabsInvalidator } from './agent-hooks/hook-status-session-tabs-invalidation'
+import {
+  createLiveSessionCollisionDetector,
+  LIVE_SESSION_COLLISION_CHANNEL
+} from './agent-hooks/live-session-collision-detector'
+import { readLiveAgentSessionPresence } from './agent-hooks/live-agent-session-presence-reader'
+import { createLiveAgentSessionPresenceDeps } from './ipc/agent-session-live-presence-deps'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
@@ -2492,10 +2501,28 @@ void app.whenReady().then(async () => {
   // nothing else republishes `session.tabs` when one changes — so a paired client
   // would keep the pane's last projection until an unrelated PTY touch came along.
   const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
+  // Why: a resume chosen inside the provider's own picker is only visible here, after the fact.
+  const liveSessionCollisions = createLiveSessionCollisionDetector({
+    readPresence: async (args) => {
+      if (!store || !runtime) {
+        throw new Error('runtime_unavailable')
+      }
+      return readLiveAgentSessionPresence(createLiveAgentSessionPresenceDeps(store, runtime), args)
+    },
+    notify: (notice) => broadcastToAppWindowRenderers(LIVE_SESSION_COLLISION_CHANNEL, [notice])
+  })
   const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
     if (hookStatusChangedSessionTabs(enriched)) {
       runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
     }
+    void liveSessionCollisions.onEvent({
+      paneKey: enriched.paneKey,
+      worktreeId: enriched.worktreeId,
+      agentType: enriched.payload.agentType,
+      providerSession: enriched.providerSession,
+      isReplay: enriched.isReplay,
+      restoredUnconfirmed: enriched.restoredUnconfirmed
+    })
   })
   // Teardown: agent exit, pane close, and the SSH transient-disconnect batch all land
   // here. Without it the live state published above becomes a zombie question card.
@@ -2506,6 +2533,7 @@ void app.whenReady().then(async () => {
         : hookStatusChangedSessionTabs.forgetConnection(clear.connectionId)
     for (const paneKey of clearedPaneKeys) {
       hookStatusChangedSessionTabs.forgetPane(paneKey)
+      liveSessionCollisions.forgetPane(paneKey)
       runtime?.touchMobileSessionTabsForPane(paneKey)
     }
   })
