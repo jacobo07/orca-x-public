@@ -89,11 +89,71 @@ async function readProcessRows(): Promise<ProcessRow[]> {
   return process.platform === 'win32' ? readWindowsProcessRows() : readPosixProcessRows()
 }
 
+/**
+ * The same row, for ONE pid, asked of the OS as a question about one pid.
+ *
+ * Why this exists: the whole-table enumeration above cannot finish inside its own 5s timeout on a
+ * loaded Windows host — measured 5/5 killed at 5.4-6.9s with 1.3-2.0 GB free, and the same for a
+ * lean projection, so it is the full CIM walk rather than memory or the shaping. Because every
+ * real-daemon fixture reaches it through recordProcessIdentity, a single slow host took out the
+ * whole family before any of them could assert anything. Production asks about one pid with a
+ * filter (daemon-process-inspection.ts) and answers in ~1.8s.
+ *
+ * The date expression is byte-identical to the table query's on purpose: startedAtMs is compared
+ * for EXACT equality by processIdentityIsAlive, so two paths that formatted it differently would
+ * make a live process look like a recycled pid.
+ */
+async function readWindowsProcessRow(pid: number): Promise<ProcessRow | null> {
+  const command = [
+    '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false);',
+    `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}";`,
+    'if (-not $p) { Write-Output "null" } else {',
+    '  [PSCustomObject]@{',
+    '    pid = [int]$p.ProcessId;',
+    '    parentPid = [int]$p.ParentProcessId;',
+    "    startedAt = if ($null -eq $p.CreationDate) { $null } else { $p.CreationDate.ToUniversalTime().ToString('O', [System.Globalization.CultureInfo]::InvariantCulture) }",
+    '  } | ConvertTo-Json -Compress',
+    '}'
+  ].join(' ')
+  const { stdout } = await execFileAsync(
+    'powershell.exe',
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
+    processQueryOptions
+  )
+  const parsed = JSON.parse(stdout.trim() || 'null') as {
+    pid?: unknown
+    parentPid?: unknown
+    startedAt?: unknown
+  } | null
+  if (!parsed) {
+    return null
+  }
+  const rowPid = Number(parsed.pid)
+  const parentPid = Number(parsed.parentPid)
+  const startedAtMs = typeof parsed.startedAt === 'string' ? Date.parse(parsed.startedAt) : Number.NaN
+  return Number.isInteger(rowPid) && Number.isInteger(parentPid) && Number.isFinite(startedAtMs)
+    ? { pid: rowPid, parentPid, startedAtMs }
+    : null
+}
+
+async function readProcessRow(pid: number): Promise<ProcessRow | null> {
+  // The pid is interpolated into a CIM filter, so only a validated integer may reach it.
+  if (process.platform === 'win32' && Number.isInteger(pid) && pid > 0) {
+    try {
+      return await readWindowsProcessRow(pid)
+    } catch {
+      // Fall through to the table scan: a filtered query that failed is not evidence of absence,
+      // and the slower path is still the more capable one.
+    }
+  }
+  return (await readProcessRows()).find((candidate) => candidate.pid === pid) ?? null
+}
+
 export async function recordProcessIdentity(pid: number): Promise<RecordedProcessIdentity> {
   if (!Number.isInteger(pid) || pid <= 0) {
     throw new Error(`Cannot record invalid fixture pid ${pid}`)
   }
-  const row = (await readProcessRows()).find((candidate) => candidate.pid === pid)
+  const row = await readProcessRow(pid)
   if (!row) {
     throw new Error(`Could not record process-start identity for fixture pid ${pid}`)
   }
@@ -101,13 +161,30 @@ export async function recordProcessIdentity(pid: number): Promise<RecordedProces
 }
 
 export async function processIdentityIsAlive(identity: RecordedProcessIdentity): Promise<boolean> {
-  const current = (await readProcessRows()).find((row) => row.pid === identity.pid)
-  return current !== undefined && current.startedAtMs === identity.startedAtMs
+  const current = await readProcessRow(identity.pid)
+  return current !== null && current.startedAtMs === identity.startedAtMs
 }
+
+/**
+ * One table scan amortises across many pids, but teardown polls this in a loop over a handful of
+ * them — and on a host where the scan cannot finish inside its timeout, that loop never converges
+ * and cleanup fails with EPERM on a directory whose processes are in fact gone. Below the
+ * crossover, ask per pid.
+ */
+const TARGETED_LIVENESS_MAX_PIDS = 4
 
 export async function processIdentityLiveness(
   identities: readonly RecordedProcessIdentity[]
 ): Promise<Map<number, boolean>> {
+  if (process.platform === 'win32' && identities.length <= TARGETED_LIVENESS_MAX_PIDS) {
+    const entries = await Promise.all(
+      identities.map(async (identity): Promise<[number, boolean]> => {
+        const current = await readProcessRow(identity.pid)
+        return [identity.pid, current !== null && current.startedAtMs === identity.startedAtMs]
+      })
+    )
+    return new Map(entries)
+  }
   const rowsByPid = new Map((await readProcessRows()).map((row) => [row.pid, row]))
   return new Map(
     identities.map((identity) => {
