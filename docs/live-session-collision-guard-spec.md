@@ -98,12 +98,32 @@ preflight is a new IPC/RPC method name, so an older peer fails closed rather tha
 | Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; no renderer consumer yet                     |
 | Class A gate on AI Vault resume (Back / Continue / revalidate) | landed `9ae0aecf8`, copy `b8030f2b4`                             |
 | Class A gate on Sleep launch and cold restore                  | not started — those paths are being changed by another pane      |
-| Reservation for simultaneous Class A resumes                   | not started — two concurrent attempts can both pass today        |
+| Reservation for simultaneous Class A resumes                   | landed `123c07615` (RED), `38a5137ed`, `f539fa099`, `08d9b2933`, e2e `1737c642a` |
+| Class A gate on working-set (snapshot) restore                 | not started — restore landed in `9d16417a0` by another pane      |
 | Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt |
 | Shared-live rail indicator, go-to-open-session                 | not started                                                      |
 | Real-provider product reality                                  | not run                                                          |
 
 Measured: Claude Code 2.1.273 `-p --resume <id>` returns the same session id.
+
+## Materialization reservation
+
+Presence sees a session only once its provider reports SessionStart, so the unprotected interval
+was the whole launch (tab mount, spawn, provider boot), not an IPC round-trip.
+`agentSession:reserveMaterialization` reads presence and then, with nothing awaited, checks and
+sets a reservation in `LiveSessionMaterializationReservations` (main, one per process):
+
+- key: the canonical claim key; owner: one operation id in one window (`webContents` id);
+- reported to others as `materializing`, which live, multiple and unknown owners outrank;
+- Continue sends back the exact collision it answered (`accept`); granted only if unchanged;
+  an accepted in-flight collision is an unreserved one-shot duplicate and does not displace it;
+- ends on: live owner seen in the reserved tab (handoff, read-time), PTY teardown of that tab,
+  owner release (launch threw or turned runtime-routed), window destroyed, never spawned within
+  30 s, or spawned but never reported within 120 s. Expiry is evaluated on read; no timer.
+
+Limits: spawns that carry no reservation (Sleep, cold restore, working-set restore) are not
+fenced; SSH (no claim key) proceeds unreserved; a tab attached after the 30 s ceiling runs
+unprotected; the reservation is per tab, so a split pane exiting in the same tab releases it.
 
 ## Known limits
 
