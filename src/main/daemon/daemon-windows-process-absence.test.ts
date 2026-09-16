@@ -68,7 +68,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, execFile: fakeExecFile }
 })
 
-const { inspectDaemonProcessIdentity, readVerifiedDaemonPid } = await import('./daemon-pid-identity')
+const { inspectDaemonProcessIdentity } = await import('./daemon-pid-identity')
 const { killStaleDaemon } = await import('./daemon-stale-kill')
 const { PROTOCOL_VERSION } = await import('./types')
 
@@ -214,51 +214,20 @@ describe('what absence means to the destructive path', () => {
   })
 
   /**
-   * The case above primes with inspectDaemonProcessIdentity, which memoizes NOTHING -- the memo
-   * lives in observeRecordedDaemonPid and is keyed on the pid record's own bytes. So that case
-   * proves the destructive path asks *something*, and cannot tell a fresh ask from a memo hit:
-   * routed through the memoized reader it still spawns, because it would be the first read of
-   * that key. Measured: with the destructive path mutated to read through readVerifiedDaemonPid,
-   * that case stays GREEN and this one goes red.
+   * MEMO REUSE IS NOT TESTED HERE, DELIBERATELY. The case above primes with
+   * inspectDaemonProcessIdentity, which memoizes nothing, so it proves the destructive path asks
+   * something and cannot tell a fresh ask from a memo hit. That gap is real -- but it is already
+   * closed, in daemon-windows-identity-spawn-budget.test.ts: "never serves the destructive probe
+   * from a memo, however recently one ran" primes through getDaemonLaunchIdentity, which does
+   * populate the memo, and asserts the destructive path spends EXACTLY one further spawn.
    *
-   * The distinction is the whole safety property. Between a read-only observation and the signal,
-   * the daemon can die and its pid be recycled, so evidence that was true when the memo cached it
-   * is not evidence that the pid is still ours at the effect boundary. Priming the memo with the
-   * SAME key the destructive path would hit is the only way to make the reuse observable.
+   * A case was added here that primed the memo and asserted "more than zero". Driving the same
+   * mutation -- killStaleDaemon reading through readVerifiedDaemonPid -- reds the spawn-budget
+   * case on "expected +0 to be 1", so the property was covered before this file existed and the
+   * addition was a weaker second copy. It was removed rather than kept: a looser duplicate does
+   * not merely add noise, it can satisfy the stricter gate's subject and disarm the drill that
+   * proves the stricter copy still works, while every suite stays green.
+   *
+   * If that sibling case is ever deleted, this comment is the pointer to what went with it.
    */
-  it('does not authorize a signal from evidence the memo is already holding', async () => {
-    if (process.platform !== 'win32') {
-      return
-    }
-    // Why 'different-process' and not the broken-query world the sibling case uses: the memo
-    // deliberately FORGETS 'unknown', because a loaded machine blowing the inspection budget must
-    // not be remembered as a fact about the daemon. So a broken query primes nothing and this case
-    // would prove nothing. 'expected' is the other wrong choice -- it would make killStaleDaemon
-    // SIGTERM the pid in the record, which is this test process. A mismatch is remembered AND
-    // signals nothing, so it is the only world in which reuse is observable and safe.
-    stub.world = 'different-process'
-    // Prime the memo on the exact key killStaleDaemon would reach: same runtime dir, socket,
-    // token, protocol version and -- critically -- the same pid-record bytes. beforeEach rewrites
-    // the record with a fresh startedAtMs, so no earlier test's entry can answer for this one.
-    await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath)
-    const primed = stub.powershell.length
-    expect(primed, 'the memo was never populated, so this case proves nothing').toBeGreaterThan(0)
-
-    // Same key again inside the TTL: this must be answered from the memo, or the priming above
-    // is not doing what the test claims and the assertion below would pass for the wrong reason.
-    await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath)
-    expect(
-      stub.powershell.length,
-      'the memo did not answer a repeat read, so it cannot demonstrate reuse'
-    ).toBe(primed)
-
-    await killStaleDaemon(runtimeDir, socketPath, tokenPath, undefined, {
-      probeEndpoint: inconclusiveEndpoint
-    })
-
-    expect(
-      stub.powershell.length - primed,
-      'the destructive path was answered from memoized identity evidence'
-    ).toBeGreaterThan(0)
-  })
 })
