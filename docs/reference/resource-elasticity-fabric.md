@@ -134,6 +134,7 @@ Findings from the first inventory:
 
   Active-cadence work is unchanged by design. The slope is still linear in repos; the constant is
   five times smaller when they are idle.
+
 - **External changes stay observed.**
   - `worktree-external-change-golden.test.ts` runs real `git worktree add` and `remove` from
     outside the watcher, while the repo is active and after it has gone quiet.
@@ -147,7 +148,8 @@ Findings from the first inventory:
   - a zero-target timer leak;
   - overlapping runs, and one failure halting all;
   - un-deduplicated targets.
-  Disabling the git-common run in the built app turns the e2e spec red.
+- **Real-app regression proof.** Disabling the git-common run in the built app turns the e2e spec
+  red.
 - **Still open.**
   - A base-root listing error other than ENOENT still reads as "every worktree deleted". The
     cost is one wasted structure refresh, because the renderer re-lists from git, not lost data.
