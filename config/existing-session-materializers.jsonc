@@ -83,6 +83,14 @@
       "guard": "resume-spawn-gate",
       "carrier": "src/renderer/src/components/terminal-pane/pty-connection.ts",
       "reason": "Pane cold restore, in-place hibernation wake and working-set row revival."
+    },
+    {
+      "file": "src/renderer/src/lib/pane-session-resume-capability.ts",
+      "planner": "planRecordedAgentResume",
+      "count": 1,
+      "guard": "resume-spawn-gate",
+      "carrier": "src/renderer/src/components/terminal-pane/pty-connection.ts",
+      "reason": "Per-pane 'Resume this session': collision dialog and reservation attached to the tab, then an in-place respawn whose startup carries the session to the gated spawn."
     }
   ]
 }
