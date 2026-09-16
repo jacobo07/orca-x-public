@@ -14679,5 +14679,17 @@
         "unknown": "Restart Orca to try again."
       }
     }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "Esta sesión ya está abierta",
+      "activeInPane": "Ya está activa en otro pane.",
+      "activeInPanes": "Ya está activa en {{count}} panes más.",
+      "unknownTitle": "Puede que esta sesión ya esté abierta",
+      "unknownDescription": "Orca no pudo confirmar si está activa en otro pane.",
+      "continueRisk": "Si continúas, se abrirá una segunda copia activa. Orca no puede garantizar que ambas funcionen bien a la vez.",
+      "back": "Atrás",
+      "continue": "Continuar"
+    }
   }
 }

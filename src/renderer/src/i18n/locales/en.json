@@ -16486,5 +16486,17 @@
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
     }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "This session is already open",
+      "activeInPane": "It is already active in another pane.",
+      "activeInPanes": "It is already active in {{count}} other panes.",
+      "unknownTitle": "This session may already be open",
+      "unknownDescription": "Orca could not confirm whether it is active in another pane.",
+      "continueRisk": "Continuing opens a second live copy. Orca can't guarantee both copies work correctly at the same time.",
+      "back": "Back",
+      "continue": "Continue"
+    }
   }
 }

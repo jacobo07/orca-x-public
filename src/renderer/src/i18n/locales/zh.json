@@ -14679,5 +14679,17 @@
         "unknown": "请重启 Orca 以重试。"
       }
     }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "此会话已打开",
+      "activeInPane": "它已在另一个窗格中处于活动状态。",
+      "activeInPanes": "它已在其他 {{count}} 个窗格中处于活动状态。",
+      "unknownTitle": "此会话可能已打开",
+      "unknownDescription": "Orca 无法确认它是否在另一个窗格中处于活动状态。",
+      "continueRisk": "继续将打开第二个活动副本。Orca 无法保证两个副本能同时正常工作。",
+      "back": "返回",
+      "continue": "继续"
+    }
   }
 }
