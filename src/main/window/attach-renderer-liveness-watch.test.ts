@@ -14,6 +14,7 @@ function wire(startAt = 5_000) {
     onClosed: []
   }
   const recorded: Recorded[] = []
+  const timers: { run: () => void; cancelled: boolean }[] = []
   let clock = startAt
 
   recordRendererLiveness({
@@ -21,6 +22,15 @@ function wire(startAt = 5_000) {
     webContentsId: 42,
     now: () => clock,
     record: (name, data) => recorded.push({ name, data }),
+    schedule: (run) => {
+      const timer = { run, cancelled: false }
+      timers.push(timer)
+      return {
+        cancel: () => {
+          timer.cancelled = true
+        }
+      }
+    },
     subscriptions: {
       onUnresponsive: (listener) => listeners.onUnresponsive.push(listener),
       onResponsive: (listener) => listeners.onResponsive.push(listener),
@@ -40,6 +50,13 @@ function wire(startAt = 5_000) {
     listeners,
     advance: (ms: number) => {
       clock += ms
+    },
+    settle: () => {
+      for (const timer of timers.splice(0)) {
+        if (!timer.cancelled) {
+          timer.run()
+        }
+      }
     }
   }
 }
@@ -57,11 +74,12 @@ describe('renderer liveness recording', () => {
   })
 
   it('records a stall and its recovery, attributed to the window and renderer', () => {
-    const { recorded, fire, advance } = wire()
+    const { recorded, fire, advance, settle } = wire()
 
     fire('onUnresponsive')
     advance(2_400)
     fire('onResponsive')
+    settle()
 
     expect(recorded).toEqual([
       { name: 'renderer_unresponsive', data: { windowId: 7, webContentsId: 42 } },
@@ -85,6 +103,30 @@ describe('renderer liveness recording', () => {
     })
     // The two names must not collide, or a search cannot tell a survivable stall from this one.
     expect(recorded[1]?.name).not.toBe('renderer_responsive')
+  })
+
+  it('records a frozen window torn down by quit as abandoned, not recovered', () => {
+    const { recorded, fire, advance, settle } = wire()
+
+    // Orca's frozen-quit path: close is vetoed, the renderer never acks, destroy() follows, and
+    // Electron emits 'responsive' ~20 ms before 'closed' while the renderer is still busy.
+    fire('onUnresponsive')
+    advance(10_000)
+    fire('onResponsive')
+    advance(20)
+    fire('onClosed')
+    settle()
+
+    expect(recorded.map((entry) => entry.name)).toEqual([
+      'renderer_unresponsive',
+      'renderer_unresponsive_abandoned'
+    ])
+    expect(recorded[1]?.data).toEqual({
+      windowId: 7,
+      webContentsId: 42,
+      unresponsiveMs: 10_020,
+      reason: 'closed'
+    })
   })
 
   it('attributes an abandoned stall to a dead renderer when that is what ended it', () => {

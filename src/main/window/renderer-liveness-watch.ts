@@ -26,14 +26,38 @@ export type RendererLivenessWatch = {
   readonly unresponsiveSince: number | null
 }
 
+export type ScheduledSettle = { cancel: () => void }
+
+/**
+ * Why: Electron emits 'responsive' when a window it judged hung is closed or destroyed —
+ * measured 2-3 ms into teardown and 18-22 ms before 'closed', renderer still busy (Electron 43).
+ * Holding the recovery this long (~45x that gap) keeps teardown from passing as recovery.
+ */
+export const RENDERER_RESPONSIVE_SETTLE_MS = 1_000
+
 export function createRendererLivenessWatch(deps: {
   now: () => number
   onObservation: (observation: RendererLivenessObservation) => void
+  schedule: (run: () => void, delayMs: number) => ScheduledSettle
 }): RendererLivenessWatch {
   let unresponsiveSince: number | null = null
+  let heldRecovery: { at: number; unresponsiveMs: number; settle: ScheduledSettle } | null = null
+
+  const commitHeldRecovery = (): void => {
+    if (heldRecovery === null) {
+      return
+    }
+    const { at, unresponsiveMs, settle } = heldRecovery
+    settle.cancel()
+    heldRecovery = null
+    unresponsiveSince = null
+    deps.onObservation({ kind: 'responsive', at, unresponsiveMs })
+  }
 
   return {
     markUnresponsive(): void {
+      // Why: the renderer answered in between, so a held recovery is real and precedes this stall.
+      commitHeldRecovery()
       // Why: Electron re-emits while a stall continues; re-anchoring would report the last
       // notification instead of the length of the stall, which is the only number worth having.
       if (unresponsiveSince !== null) {
@@ -46,18 +70,23 @@ export function createRendererLivenessWatch(deps: {
     markResponsive(): void {
       // Why: 'responsive' can arrive without a stall of ours to close; reporting one would
       // invent a recovery from a freeze that was never observed.
-      if (unresponsiveSince === null) {
+      if (unresponsiveSince === null || heldRecovery !== null) {
         return
       }
       const at = deps.now()
-      const unresponsiveMs = Math.max(0, at - unresponsiveSince)
-      unresponsiveSince = null
-      deps.onObservation({ kind: 'responsive', at, unresponsiveMs })
+      heldRecovery = {
+        at,
+        unresponsiveMs: Math.max(0, at - unresponsiveSince),
+        settle: deps.schedule(commitHeldRecovery, RENDERER_RESPONSIVE_SETTLE_MS)
+      }
     },
     markGone(reason: RendererGoneReason): void {
       if (unresponsiveSince === null) {
         return
       }
+      // Why: a 'responsive' this close to the window going away came from its teardown.
+      heldRecovery?.settle.cancel()
+      heldRecovery = null
       const at = deps.now()
       const unresponsiveMs = Math.max(0, at - unresponsiveSince)
       unresponsiveSince = null

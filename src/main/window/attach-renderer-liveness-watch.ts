@@ -7,7 +7,7 @@
  */
 import type { BrowserWindow } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { createRendererLivenessWatch } from './renderer-liveness-watch'
+import { createRendererLivenessWatch, type ScheduledSettle } from './renderer-liveness-watch'
 
 export type RendererLivenessSubscriptions = {
   onUnresponsive: (listener: () => void) => void
@@ -22,6 +22,14 @@ export type RendererLivenessRecorderDeps = {
   subscriptions: RendererLivenessSubscriptions
   now?: () => number
   record?: (name: string, data: Record<string, string | number | boolean | null>) => void
+  schedule?: (run: () => void, delayMs: number) => ScheduledSettle
+}
+
+function scheduleUnrefTimer(run: () => void, delayMs: number): ScheduledSettle {
+  const timer = setTimeout(run, delayMs)
+  // Why: a pending liveness record must never keep a quitting app alive.
+  timer.unref?.()
+  return { cancel: () => clearTimeout(timer) }
 }
 
 export function recordRendererLiveness(deps: RendererLivenessRecorderDeps): void {
@@ -29,6 +37,7 @@ export function recordRendererLiveness(deps: RendererLivenessRecorderDeps): void
   const identity = { windowId: deps.windowId, webContentsId: deps.webContentsId }
   const watch = createRendererLivenessWatch({
     now: deps.now ?? (() => Date.now()),
+    schedule: deps.schedule ?? scheduleUnrefTimer,
     onObservation: (observation) => {
       if (observation.kind === 'unresponsive') {
         record('renderer_unresponsive', identity)
