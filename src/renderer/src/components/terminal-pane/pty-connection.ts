@@ -4987,12 +4987,19 @@ export function connectPanePty(
       // upgrade — the pane would keep claiming a session it never got back.
       if (
         sessionRestoredBannerShown === reason ||
-        sessionRestoredBannerShown === 'resume-unavailable'
+        (sessionRestoredBannerShown !== null && sessionRestoredBannerShown !== 'restored')
       ) {
         return
       }
       sessionRestoredBannerShown = reason
       deps.onShowSessionRestoredBanner(pane.id, reason)
+    }
+    // Why: main started a plain shell because the session is live or starting elsewhere; the
+    // sleep record must survive for a later explicit resume and nothing may type the resume.
+    const acceptRefusedResume = (): void => {
+      showSessionRestoredBanner('resume-refused')
+      clearRegisteredStartupLaunchConfig()
+      pendingStartupCommand = null
     }
     const buildColdRestoreAgentResumeStartup = (): ColdRestoreAgentResumeStartup | null => {
       if (pendingStartupCommand) {
@@ -5346,7 +5353,13 @@ export function connectPanePty(
                 foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
               })
             }
-            if (
+            const resumeRefused =
+              spawnedPtyId && typeof spawnedPtyId === 'object'
+                ? spawnedPtyId.agentResumeRefused
+                : undefined
+            if (resumeRefused) {
+              acceptRefusedResume()
+            } else if (
               spawnedPtyId &&
               typeof spawnedPtyId === 'object' &&
               spawnedPtyId.agentResumeUnavailable
@@ -5357,7 +5370,9 @@ export function connectPanePty(
             } else if (coldRestoreOverride?.hasSleepingRecord) {
               showSessionRestoredBanner()
             }
-            clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+            if (!resumeRefused) {
+              clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+            }
           } else if (
             paneStartup?.launchConfig ||
             (startupOverride && 'launchConfig' in startupOverride)
@@ -8446,14 +8461,18 @@ export function connectPanePty(
           const preparedStartup = coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
           const didPrepareResume = applyColdRestoreAgentResumeStartup(preparedStartup)
           if (didPrepareResume) {
-            if (connectResult.agentResumeUnavailable) {
-              // Why: main dropped the resume argv, so this pane is a NEW session —
-              // the plain restored banner would claim the old one came back.
-              showSessionRestoredBanner('resume-unavailable')
-            } else if (preparedStartup?.hasSleepingRecord) {
-              showSessionRestoredBanner()
+            if (connectResult.agentResumeRefused) {
+              acceptRefusedResume()
+            } else {
+              if (connectResult.agentResumeUnavailable) {
+                // Why: main dropped the resume argv, so this pane is a NEW session —
+                // the plain restored banner would claim the old one came back.
+                showSessionRestoredBanner('resume-unavailable')
+              } else if (preparedStartup?.hasSleepingRecord) {
+                showSessionRestoredBanner()
+              }
+              clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
             }
-            clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
           }
           // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
           writeReplayData(POST_REPLAY_MODE_RESET)
