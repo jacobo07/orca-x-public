@@ -142,4 +142,64 @@ test.describe('live session materialization reservation', () => {
       )
       .toBe('granted')
   })
+
+  test('refuses a resume spawn of a session another operation is starting', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const { worktreeId } = await waitForActivePaneHookDescriptor(orcaPage)
+    const S = randomUUID()
+    // What a sleep launch, cold restore or working-set revival sends: an exact session.
+    const resumeSpawn = (tabId: string) =>
+      orcaPage.evaluate(
+        ({ worktreeId, sessionId, tabId, leafId }) =>
+          window.api.pty.spawn({
+            cols: 80,
+            rows: 24,
+            worktreeId,
+            tabId,
+            leafId,
+            command: 'echo resume-gate-probe',
+            launchAgent: 'claude',
+            resumeProviderSession: { key: 'session_id', id: sessionId }
+          }),
+        { worktreeId, sessionId: S, tabId, leafId: randomUUID() }
+      )
+    const spawned: string[] = []
+
+    try {
+      // An AI Vault resume holds S in another tab and has not reported yet.
+      expect(
+        (await reserve(orcaPage, { worktreeId, sessionId: S, operationId: 'op-vault' })).outcome
+      ).toBe('granted')
+      await orcaPage.evaluate((args) => window.api.agentStatus.attachMaterializationTab(args), {
+        operationId: 'op-vault',
+        tabId: `e2e-vault-${S}`
+      })
+
+      const refused = await resumeSpawn(`e2e-sleep-${S}`)
+      spawned.push(refused.id)
+      expect(refused.agentResumeRefused).toBe('materializing')
+      expect(refused.launchConfig).toBeUndefined()
+
+      await orcaPage.evaluate(
+        (operationId) => window.api.agentStatus.releaseMaterialization({ operationId }),
+        'op-vault'
+      )
+      const granted = await resumeSpawn(`e2e-restore-${S}`)
+      spawned.push(granted.id)
+      expect(granted.agentResumeRefused).toBeUndefined()
+
+      // The granted spawn now holds S against the vault path.
+      const vault = await reserve(orcaPage, { worktreeId, sessionId: S, operationId: 'op-vault-2' })
+      expect(vault).toMatchObject({ outcome: 'blocked', presence: { kind: 'materializing' } })
+    } finally {
+      for (const id of spawned) {
+        await orcaPage.evaluate((ptyId) => window.api.pty.kill(ptyId), id)
+      }
+    }
+  })
 })
