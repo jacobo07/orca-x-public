@@ -19,7 +19,12 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 const stub = vi.hoisted(() => ({
   powershell: [] as string[][],
   /** What the OS is being asked to report about the recorded pid. */
-  world: 'absent' as 'absent' | 'expected' | 'different-process' | 'query-broken',
+  world: 'absent' as
+    | 'absent'
+    | 'expected'
+    | 'different-process'
+    | 'query-broken'
+    | 'present-unreadable',
   matchingCommandLine: '',
   startedAtMs: 0
 }))
@@ -39,6 +44,13 @@ vi.mock('node:child_process', async (importOriginal) => {
     }
     if (stub.world === 'absent') {
       return canReportMissing ? JSON.stringify({ status: 'missing' }) : ''
+    }
+    // The query succeeded and the row exists, but Windows disclosed no command line. WMI ACLs and
+    // protected processes both produce this, and it is NOT the same as a failed query.
+    if (stub.world === 'present-unreadable') {
+      return canReportMissing
+        ? JSON.stringify({ status: 'present', cmd: null, start: stub.startedAtMs })
+        : JSON.stringify({ cmd: null, start: stub.startedAtMs })
     }
     const cmd =
       stub.world === 'expected'
@@ -133,6 +145,23 @@ describe('windows process absence is not an unknown observation', () => {
     // The control that matters most on a starved host: WMI down, timed out, access denied.
     stub.world = 'query-broken'
 
+    expect(
+      await inspectDaemonProcessIdentity(process.pid, socketPath, tokenPath, recordedStartedAtMs)
+    ).toBe('unknown')
+  })
+
+  it('keeps a present process with no readable command line unknown', async () => {
+    if (process.platform !== 'win32') {
+      return
+    }
+    // Why this case lives here and not in the real-host gate: no subject exists for it. Every
+    // process whose command line Windows withholds also denies OpenProcess, so a real-host attempt
+    // is settled by the liveness probe and never reaches this branch — established by mutation,
+    // which collapsed this return to 'mismatch' and left the whole real-daemon file green.
+    stub.world = 'present-unreadable'
+
+    // Nothing binds this pid to our daemon, so it must not be signalled; but the OS did not say it
+    // was gone either, so calling it absent would licence reclaiming a live stranger's pid.
     expect(
       await inspectDaemonProcessIdentity(process.pid, socketPath, tokenPath, recordedStartedAtMs)
     ).toBe('unknown')
