@@ -5,28 +5,37 @@ import type {
 } from '@/components/confirmation-dialog-context'
 import type {
   LiveAgentSessionPresenceRequest,
-  LiveAgentSessionPresenceResponse
+  LiveAgentSessionPresenceResponse,
+  LiveSessionMaterializationRequest,
+  LiveSessionMaterializationResponse
 } from '../../../shared/live-agent-session-presence-types'
 import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
 
-export type LiveSessionCollisionGateOutcome = 'proceed' | 'cancelled'
+/** `materialization` names the operation to attach the new tab to; null when the gate did
+ *  not run. Attaching is a no-op when main granted without reserving. */
+export type LiveSessionCollisionGateResult =
+  | { outcome: 'proceed'; materialization: { operationId: string } | null }
+  | { outcome: 'cancelled' }
+
+type Reserve = (
+  request: LiveSessionMaterializationRequest
+) => Promise<LiveSessionMaterializationResponse>
 
 // Why: owners that keep changing under an open dialog end in refusal, not an endless loop.
 const MAX_CONFIRMATION_ROUNDS = 3
 
-const UNREADABLE: LiveAgentSessionPresenceResponse = {
-  kind: 'unknown',
-  liveElsewhere: [],
-  ownersRevision: '',
-  unknownCount: 0,
-  staleCount: 0
-}
-
-function isClear(presence: LiveAgentSessionPresenceResponse): boolean {
-  return presence.kind === 'no-live-owner' || presence.kind === 'live-here'
+const UNREADABLE: LiveSessionMaterializationResponse = {
+  outcome: 'blocked',
+  presence: {
+    kind: 'unknown',
+    liveElsewhere: [],
+    ownersRevision: '',
+    unknownCount: 0,
+    staleCount: 0
+  }
 }
 
 function collisionDialog(presence: LiveAgentSessionPresenceResponse): ConfirmationDialogOptions {
@@ -38,6 +47,20 @@ function collisionDialog(presence: LiveAgentSessionPresenceResponse): Confirmati
     'agentSession.liveCollision.continueRisk',
     "Continuing opens a second live copy. Orca can't guarantee both copies work correctly at the same time."
   )
+  if (presence.kind === 'materializing') {
+    // Why: the other attempt has not started yet, so "already open" would be false.
+    return {
+      ...labels,
+      title: translate(
+        'agentSession.liveCollision.startingTitle',
+        'This session is already starting'
+      ),
+      description: `${translate(
+        'agentSession.liveCollision.startingDescription',
+        'Another resume of it is still opening.'
+      )} ${risk}`
+    }
+  }
   if (presence.kind === 'unknown') {
     return {
       ...labels,
@@ -69,16 +92,14 @@ function collisionDialog(presence: LiveAgentSessionPresenceResponse): Confirmati
   }
 }
 
-async function readOrUnknown(
-  readPresence: (
-    request: LiveAgentSessionPresenceRequest
-  ) => Promise<LiveAgentSessionPresenceResponse>,
-  request: LiveAgentSessionPresenceRequest
-): Promise<LiveAgentSessionPresenceResponse> {
+async function reserveOrUnknown(
+  reserve: Reserve,
+  request: LiveSessionMaterializationRequest
+): Promise<LiveSessionMaterializationResponse> {
   try {
-    return await readPresence(request)
+    return await reserve(request)
   } catch {
-    // Why: an unanswered question is uncertainty; reading it as "no owner" would skip the guard.
+    // Why: an unanswered question is uncertainty; reading it as a grant would skip the guard.
     return UNREADABLE
   }
 }
@@ -91,9 +112,9 @@ export function gateOrcaSelectedResume(args: {
   providerSession?: AgentProviderSessionMetadata
   launchesThroughRuntime: boolean
   confirm: ConfirmationDialogContextValue | null
-}): Promise<LiveSessionCollisionGateOutcome> {
+}): Promise<LiveSessionCollisionGateResult> {
   if (!args.providerSession || !isResumableTuiAgent(args.agent) || args.launchesThroughRuntime) {
-    return Promise.resolve('proceed')
+    return Promise.resolve({ outcome: 'proceed', materialization: null })
   }
   return gateLiveSessionMaterialization({
     request: {
@@ -101,38 +122,45 @@ export function gateOrcaSelectedResume(args: {
       agent: args.agent,
       providerSession: args.providerSession
     },
-    readPresence: (request) => window.api.agentStatus.readLivePresence(request),
-    confirm: args.confirm
+    reserve: (request) => window.api.agentStatus.reserveMaterialization(request),
+    confirm: args.confirm,
+    operationId: crypto.randomUUID()
   })
 }
 
-/** Decides whether an Orca-selected resume may materialize. Asks only when a live owner is
- *  proven or cannot be ruled out, revalidates after Continue, and stores nothing: every
- *  attempt asks afresh. */
+/** Decides whether an Orca-selected resume may materialize. Main grants at most one
+ *  unoverridden attempt per session; the user is asked only when a live owner, an
+ *  in-progress attempt or uncertainty stands in the way. Continue sends back exactly
+ *  the collision it answered, and main grants it only if that is still the collision.
+ *  Nothing is stored: every attempt asks afresh. */
 export async function gateLiveSessionMaterialization(args: {
   request: LiveAgentSessionPresenceRequest
-  readPresence: (
-    request: LiveAgentSessionPresenceRequest
-  ) => Promise<LiveAgentSessionPresenceResponse>
+  reserve: Reserve
   confirm: ConfirmationDialogContextValue | null
-}): Promise<LiveSessionCollisionGateOutcome> {
-  let observed = await readOrUnknown(args.readPresence, args.request)
-  if (isClear(observed)) {
-    return 'proceed'
+  operationId: string
+}): Promise<LiveSessionCollisionGateResult> {
+  const base = { ...args.request, operationId: args.operationId }
+  const proceed = (): LiveSessionCollisionGateResult => ({
+    outcome: 'proceed',
+    materialization: { operationId: args.operationId }
+  })
+  let observed = await reserveOrUnknown(args.reserve, base)
+  if (observed.outcome === 'granted') {
+    return proceed()
   }
   for (let round = 0; round < MAX_CONFIRMATION_ROUNDS; round += 1) {
-    if (!args.confirm || !(await args.confirm(collisionDialog(observed)))) {
-      return 'cancelled'
+    if (!args.confirm || !(await args.confirm(collisionDialog(observed.presence)))) {
+      return { outcome: 'cancelled' }
     }
-    const current = await readOrUnknown(args.readPresence, args.request)
-    if (isClear(current)) {
-      return 'proceed'
+    const current = await reserveOrUnknown(args.reserve, {
+      ...base,
+      accept: { kind: observed.presence.kind, ownersRevision: observed.presence.ownersRevision }
+    })
+    if (current.outcome === 'granted') {
+      return proceed()
     }
-    // Why: Continue answered the question the user saw; a different owner is a different question.
-    if (current.kind === observed.kind && current.ownersRevision === observed.ownersRevision) {
-      return 'proceed'
-    }
+    // Why: Continue answered the question the user saw; a different collision is a different question.
     observed = current
   }
-  return 'cancelled'
+  return { outcome: 'cancelled' }
 }

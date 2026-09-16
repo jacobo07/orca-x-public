@@ -14693,6 +14693,8 @@
       "activeInPanes": "它已在其他 {{count}} 个窗格中处于活动状态。",
       "unknownTitle": "此会话可能已打开",
       "unknownDescription": "Orca 无法确认它是否在另一个窗格中处于活动状态。",
+      "startingTitle": "此会话已在启动中",
+      "startingDescription": "此会话的另一个恢复仍在打开中。",
       "continueRisk": "继续将打开第二个活动副本。Orca 无法保证两个副本能同时正常工作。",
       "back": "返回",
       "continue": "继续"

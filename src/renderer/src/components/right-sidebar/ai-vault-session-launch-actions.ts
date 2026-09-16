@@ -128,14 +128,33 @@ export function useAiVaultSessionLaunchActions({
             launchesThroughRuntime: willLaunchAiVaultSessionThroughRuntime(targetId.worktreeId),
             confirm
           })
-          if (gate === 'cancelled') {
+          if (gate.outcome === 'cancelled') {
             return
           }
-          const launchResult = launchAiVaultSessionInNewTab({
-            agent: session.agent,
-            worktreeId: targetId.worktreeId,
-            ...startup
-          })
+          const operationId = gate.materialization?.operationId
+          let launchResult: ReturnType<typeof launchAiVaultSessionInNewTab>
+          try {
+            launchResult = launchAiVaultSessionInNewTab({
+              agent: session.agent,
+              worktreeId: targetId.worktreeId,
+              ...startup
+            })
+          } catch (error) {
+            if (operationId) {
+              void window.api.agentStatus.releaseMaterialization({ operationId })
+            }
+            throw error
+          }
+          if (operationId) {
+            // Why: the reservation holds until this tab's runtime reports or exits; a launch
+            // that turned runtime-routed is owned by the host registry instead.
+            void (launchResult.tabId !== null
+              ? window.api.agentStatus.attachMaterializationTab({
+                  operationId,
+                  tabId: launchResult.tabId
+                })
+              : window.api.agentStatus.releaseMaterialization({ operationId }))
+          }
           if (launchResult.tabId === null) {
             void launchResult.runtimeLaunch.then((outcome) => {
               if (outcome.status === 'failed') {

@@ -16500,6 +16500,8 @@
       "activeInPanes": "It is already active in {{count}} other panes.",
       "unknownTitle": "This session may already be open",
       "unknownDescription": "Orca could not confirm whether it is active in another pane.",
+      "startingTitle": "This session is already starting",
+      "startingDescription": "Another resume of it is still opening.",
       "continueRisk": "Continuing opens a second live copy. Orca can't guarantee both copies work correctly at the same time.",
       "back": "Back",
       "continue": "Continue"

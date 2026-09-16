@@ -14693,6 +14693,8 @@
       "activeInPanes": "Ya está activa en {{count}} panes más.",
       "unknownTitle": "Puede que esta sesión ya esté abierta",
       "unknownDescription": "Orca no pudo confirmar si está activa en otro pane.",
+      "startingTitle": "Esta sesión ya se está iniciando",
+      "startingDescription": "Otra reanudación de esta sesión todavía se está abriendo.",
       "continueRisk": "Si continúas, se abrirá una segunda copia activa. Orca no puede garantizar que ambas funcionen bien a la vez.",
       "back": "Atrás",
       "continue": "Continuar"

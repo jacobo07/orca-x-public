@@ -14673,6 +14673,8 @@
       "activeInPanes": "ほかの {{count}} 個のペインですでにアクティブです。",
       "unknownTitle": "このセッションはすでに開いている可能性があります",
       "unknownDescription": "別のペインでアクティブかどうかを Orca で確認できませんでした。",
+      "startingTitle": "このセッションはすでに起動中です",
+      "startingDescription": "このセッションの別の再開がまだ開いている途中です。",
       "continueRisk": "続行すると、2 つ目のコピーが起動します。両方が同時に正しく動作することは Orca では保証できません。",
       "back": "戻る",
       "continue": "続行"
