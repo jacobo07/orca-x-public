@@ -1154,6 +1154,7 @@ export function ResourceUsageStatusSegment({
             <button
               type="button"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
+              data-testid="resource-manager-trigger"
               className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={
                 daemonUnreachable

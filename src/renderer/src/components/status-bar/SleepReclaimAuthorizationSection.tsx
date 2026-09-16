@@ -130,6 +130,9 @@ export function SleepReclaimAuthorizationSection({
         'Idle agent memory'
       )}
       data-testid="sleep-reclaim-authorization"
+      // Why: locale-proof handles for E2E; both are read straight off the plan.
+      data-reclaimable-count={plan.reclaimable.length}
+      data-excluded-count={plan.excluded.length}
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-medium text-foreground">
