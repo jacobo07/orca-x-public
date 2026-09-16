@@ -68,6 +68,7 @@ import {
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
+import { formatMemory } from './resource-memory-byte-format'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import {
   countUnboundDaemonSessions,
@@ -88,16 +89,6 @@ const MEM_COLUMN_CLS = 'w-16 text-right'
 const ROW_TRAILING_GUTTER_CLS = 'w-5 shrink-0 flex items-center justify-end'
 
 // ─── Formatters ─────────────────────────────────────────────────────
-
-function formatMemory(bytes: number): string {
-  if (bytes < 1024 * 1024) {
-    return `${Math.round(bytes / 1024)} KB`
-  }
-  if (bytes < 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
 
 function formatCpu(percent: number): string {
   return `${percent.toFixed(1)}%`
