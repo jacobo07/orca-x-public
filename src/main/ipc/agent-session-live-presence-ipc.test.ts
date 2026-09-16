@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { LiveAgentSessionPresenceReaderDeps } from '../agent-hooks/live-agent-session-presence-reader'
 import { LiveSessionMaterializationReservations } from '../agent-hooks/live-session-materialization-reservation'
+import { getResumeSpawnGate, installResumeSpawnGate } from '../agent-hooks/resume-spawn-gate-slot'
 
 const { handleMock, removeHandlerMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -259,5 +260,37 @@ describe('registerAgentSessionLivePresenceHandlers', () => {
     )
 
     expect(reservations.size).toBe(0)
+  })
+
+  it('installs the spawn gate on the same reservations and window lifetimes', async () => {
+    installResumeSpawnGate(null)
+    const { reservations, sender, destroyedListeners } = register()
+    const gate = getResumeSpawnGate()
+    if (!gate) {
+      throw new Error('Expected registration to install the resume spawn gate')
+    }
+    const { worktreeId, agent, providerSession } = request()
+
+    const spawn = (tabId: string, id: number) =>
+      gate.decide({
+        sender: sender(id),
+        worktreeId,
+        tabId,
+        leafId: '11111111-1111-4111-8111-111111111111',
+        agent,
+        providerSession
+      })
+    const granted = await spawn('tab-a', 9)
+    expect(granted.outcome).toBe('proceed')
+    expect(await spawn('tab-b', 10)).toMatchObject({ outcome: 'refused' })
+
+    destroyedListeners.get(9)?.()
+    expect(reservations.size).toBe(0)
+    expect((await spawn('tab-b', 10)).outcome).toBe('proceed')
+    if (granted.outcome === 'proceed' && granted.operationId) {
+      gate.release(granted.operationId, sender(10))
+    }
+    expect(reservations.size).toBe(1)
+    installResumeSpawnGate(null)
   })
 })

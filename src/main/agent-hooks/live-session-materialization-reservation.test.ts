@@ -84,7 +84,8 @@ describe('LiveSessionMaterializationReservations', () => {
     expect(reservations.holder('key-s')).toEqual({
       operationId: 'op-a',
       ownerId: 1,
-      phase: 'bound'
+      phase: 'bound',
+      tabId: 'tab-a'
     })
     reservations.releaseForTab('tab-a')
     expect(reservations.holder('key-s')).toBeNull()

@@ -7,68 +7,27 @@ import {
   isMaterializationOperationId,
   parseLiveAgentSessionPresenceRequest,
   parseLiveSessionMaterializationRequest,
-  type LiveAgentSessionPresenceRequest,
   type LiveAgentSessionPresenceResponse,
   type LiveSessionMaterializationResponse
 } from '../../shared/live-agent-session-presence-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import {
-  readLiveAgentSessionPresence,
-  type LiveAgentSessionPresenceReaderDeps,
-  type LiveAgentSessionPresenceReading
-} from '../agent-hooks/live-agent-session-presence-reader'
+import type { LiveAgentSessionPresenceReaderDeps } from '../agent-hooks/live-agent-session-presence-reader'
 import type { LiveSessionMaterializationReservations } from '../agent-hooks/live-session-materialization-reservation'
-
-const UNREADABLE_REQUEST: LiveAgentSessionPresenceResponse = {
-  kind: 'unknown',
-  liveElsewhere: [],
-  ownersRevision: '',
-  unknownCount: 0,
-  staleCount: 0
-}
+import {
+  installResumeSpawnGate,
+  type ResumeSpawnSender
+} from '../agent-hooks/resume-spawn-gate-slot'
+import { decideResumeSpawn } from './agent-session-resume-spawn-gate'
+import {
+  UNREADABLE_PRESENCE as UNREADABLE_REQUEST,
+  isClearPresence as isClear,
+  readPresence,
+  toPresenceResponse as toResponse
+} from './live-agent-session-presence-response'
 
 const MAX_TAB_ID_LENGTH = 512
-
-function ownersRevision(
-  liveElsewhere: readonly string[],
-  incarnationByPane: Record<string, string>
-) {
-  return [...liveElsewhere]
-    .sort()
-    .map((paneKey) => `${paneKey}@${incarnationByPane[paneKey] ?? ''}`)
-    .join('|')
-}
-
-function toResponse(presence: LiveAgentSessionPresenceReading): LiveAgentSessionPresenceResponse {
-  return {
-    kind: presence.kind,
-    liveElsewhere: presence.liveElsewhere,
-    ownersRevision: ownersRevision(presence.liveElsewhere, presence.incarnationByPane),
-    unknownCount: presence.unknown.length,
-    staleCount: presence.stale.length
-  }
-}
-
-/** Null when the read failed; the caller answers `unknown`. */
-async function readPresence(
-  deps: LiveAgentSessionPresenceReaderDeps,
-  request: LiveAgentSessionPresenceRequest
-): Promise<LiveAgentSessionPresenceReading | null> {
-  try {
-    return await readLiveAgentSessionPresence(deps, {
-      subject: {
-        agent: request.agent,
-        providerSession: request.providerSession,
-        worktreeId: request.worktreeId
-      },
-      // Why: a pane that does not exist yet owns nothing, so no candidate may match it.
-      requestingPaneKey: request.paneKey ?? ''
-    })
-  } catch (err) {
-    console.warn('[agent-session] live presence read failed:', err)
-    return null
-  }
-}
+/** Owner of spawns main started itself; no window can release or outlive them. */
+const NO_SPAWN_OWNER = -1
 
 /** Answers where a provider session is live. A malformed request or a failed read is
  *  `unknown`, never `no-live-owner`: absence of an answer is not absence of an owner. */
@@ -83,11 +42,6 @@ export async function handleLiveAgentSessionPresenceRequest(
   const presence = await readPresence(deps, request)
   return presence ? toResponse(presence) : UNREADABLE_REQUEST
 }
-
-function isClear(kind: LiveAgentSessionPresenceResponse['kind']): boolean {
-  return kind === 'no-live-owner' || kind === 'live-here'
-}
-
 function materializing(
   base: LiveAgentSessionPresenceResponse,
   holderOperationId: string
@@ -138,13 +92,22 @@ export async function handleLiveSessionMaterializationRequest(
   if (!isClear(effective.kind) && !accepted) {
     return { outcome: 'blocked', presence: effective }
   }
-  if (!key || effective.kind === 'materializing') {
-    // Why: no canonical identity cannot be reserved, and an accepted in-flight
-    // collision is an explicit one-shot duplicate that must not displace the holder.
+  if (!key) {
     return { outcome: 'granted', presence: effective }
+  }
+  // Why: the spawn gate re-checks at the effect; the consent travels there as a one-shot permit.
+  const consented = !isClear(effective.kind)
+  if (effective.kind === 'materializing') {
+    // Why: an accepted in-flight collision is an explicit one-shot duplicate that must not displace the holder.
+    return reservations.grantPermit(key, request.operationId, ownerId)
+      ? { outcome: 'granted', presence: effective }
+      : { outcome: 'blocked', presence: UNREADABLE_REQUEST }
   }
   const acquired = reservations.tryAcquire(key, request.operationId, ownerId)
   if (acquired === 'granted' || acquired === 'held-by-self') {
+    if (consented) {
+      reservations.grantPermit(key, request.operationId, ownerId)
+    }
     return { outcome: 'granted', presence: effective }
   }
   if (acquired === 'contended' && foreignHolder) {
@@ -169,8 +132,6 @@ function parseAttach(value: unknown): { operationId: string; tabId: string } | n
   return { operationId: raw.operationId, tabId: raw.tabId }
 }
 
-type IpcSender = { id: number; once: (event: 'destroyed', listener: () => void) => unknown }
-
 export function registerAgentSessionLivePresenceHandlers(
   resolveDeps: () => LiveAgentSessionPresenceReaderDeps,
   resolveReservations: () => LiveSessionMaterializationReservations
@@ -180,7 +141,7 @@ export function registerAgentSessionLivePresenceHandlers(
     handleLiveAgentSessionPresenceRequest(resolveDeps(), value)
   )
   const watchedSenders = new Set<number>()
-  const ownerOf = (sender: IpcSender): number => {
+  const ownerOf = (sender: ResumeSpawnSender): number => {
     if (!watchedSenders.has(sender.id)) {
       watchedSenders.add(sender.id)
       // Why: a closed window's attempts can never hand off; drop them with it.
@@ -210,5 +171,15 @@ export function registerAgentSessionLivePresenceHandlers(
     if (isMaterializationOperationId(operationId)) {
       resolveReservations().release(operationId, ownerOf(event.sender))
     }
+  })
+  const spawnOwner = (sender: ResumeSpawnSender | null): number =>
+    sender ? ownerOf(sender) : NO_SPAWN_OWNER
+  installResumeSpawnGate({
+    decide: ({ sender, ...request }) =>
+      decideResumeSpawn(resolveDeps(), resolveReservations(), {
+        ...request,
+        ownerId: spawnOwner(sender)
+      }),
+    release: (operationId, sender) => resolveReservations().release(operationId, spawnOwner(sender))
   })
 }

@@ -59,6 +59,13 @@ export type LiveSessionMaterializationResponse = {
   presence: LiveAgentSessionPresenceResponse
 }
 
+/** Why a resume spawn started a plain shell instead of the provider session. */
+export type LiveSessionResumeRefusal =
+  | 'live-elsewhere'
+  | 'multiple-live-owners'
+  | 'materializing'
+  | 'unknown'
+
 const MAX_WORKTREE_ID_LENGTH = 1024
 const MAX_OPERATION_ID_LENGTH = 128
 const MAX_OWNERS_REVISION_LENGTH = 65_536
