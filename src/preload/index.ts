@@ -4413,7 +4413,11 @@ const api = {
   },
 
   memory: {
-    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
+    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot'),
+    probeProcessPresence: (
+      pids: number[]
+    ): Promise<import('../shared/process-stats-types').ProcessPresenceProbe> =>
+      ipcRenderer.invoke('memory:probeProcessPresence', pids)
   },
 
   claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),

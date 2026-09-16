@@ -899,7 +899,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }))
     },
     memory: {
-      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
+      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot()),
+      // Why: the web client sees no host process table; "could not look" is not "all gone".
+      probeProcessPresence: () => Promise.reject(new Error('process presence is unavailable here'))
     },
     aiVault: createAiVaultApi(),
     preflight: createPreflightApi(),

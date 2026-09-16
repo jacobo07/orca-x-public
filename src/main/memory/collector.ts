@@ -30,6 +30,7 @@ import { app } from 'electron'
 import type {
   AppMemory,
   MemorySnapshot,
+  ProcessMemorySample,
   SessionMemory,
   WorktreeMemory
 } from '../../shared/process-stats-types'
@@ -85,7 +86,7 @@ type ProcRow = {
 }
 
 /** Indexed view of a single host process sweep. */
-type ProcIndex = {
+export type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
 }
@@ -153,7 +154,8 @@ function sweepStaleHistory(now: number): void {
 
 // ─── Host process enumeration ───────────────────────────────────────
 
-async function enumerateProcesses(): Promise<ProcIndex> {
+/** One host process sweep. An empty index means the sweep failed, not that nothing runs. */
+export async function enumerateProcesses(): Promise<ProcIndex> {
   const rows = os.platform() === 'win32' ? await enumerateWindows() : await enumerateUnix()
 
   const byPid = new Map<number, ProcRow>()
@@ -344,6 +346,7 @@ function makeEmptyBucket(
 // ─── Main collection path ───────────────────────────────────────────
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
+  const sweepStartedAt = Date.now()
   const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
   // Why: when two PTYs share an ancestor in the process tree (e.g. a
   // supervisor, or a shell that re-execed), a naive walk would double-count
@@ -364,6 +367,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   for (const pty of ptys) {
     let sessionCpu = 0
     let sessionMemory = 0
+    const processes: ProcessMemorySample[] = []
 
     if (pty.pid != null) {
       for (const pid of collectSubtree(processIndex, pty.pid)) {
@@ -377,6 +381,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
         claimed.add(pid)
         sessionCpu += row.cpu
         sessionMemory += row.memory
+        processes.push({ pid, memory: clampNumber(row.memory) })
       }
     }
 
@@ -384,6 +389,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       sessionId: pty.sessionId ?? pty.ptyId,
       paneKey: pty.paneKey,
       pid: pty.pid ?? 0,
+      processes,
       cpu: clampNumber(sessionCpu),
       memory: clampNumber(sessionMemory)
     }
@@ -465,6 +471,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     totalMemory: appBuckets.memory + terminalHostDescendants.memory + sessionMemoryTotal,
     terminalHostDescendants,
     processSweep: processIndex.byPid.size > 0 ? 'measured' : 'failed',
+    sweepStartedAt,
     collectedAt: now
   }
 }

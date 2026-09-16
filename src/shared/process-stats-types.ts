@@ -35,7 +35,11 @@ export type SessionMemory = UsageValues & {
   sessionId: string
   paneKey: string | null
   pid: number
+  /** The processes this session claimed in this sweep, with their bytes. Absent from older hosts. */
+  processes?: ProcessMemorySample[]
 }
+
+export type ProcessMemorySample = { pid: number; memory: number }
 
 /** The top-level cpu/memory are the sum of sessions. */
 export type WorktreeMemory = UsageValues & {
@@ -79,7 +83,22 @@ export type MemorySnapshot = {
   terminalHostDescendants?: UsageValues
   /** 'failed' when the host process sweep returned nothing, so every per-process value is unmeasured, not zero. */
   processSweep?: ProcessSweepOutcome
+  /** When the process table read began. collectedAt is stamped after it, and merged callers share one sweep. */
+  sweepStartedAt?: number
   collectedAt: number
 }
 
 export type ProcessSweepOutcome = 'measured' | 'failed'
+
+/**
+ * Which of the asked pids a fresh host sweep still lists. Only 'measured' says
+ * anything: a failed sweep lists nothing, and that is not every process gone.
+ */
+export type ProcessPresenceProbe =
+  | {
+      sweep: 'measured'
+      sweepStartedAt: number
+      metric: ProcessMemoryMetric
+      presentPids: number[]
+    }
+  | { sweep: 'failed'; sweepStartedAt: number }
