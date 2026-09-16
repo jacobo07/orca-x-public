@@ -29,7 +29,8 @@
     "RemoteBrowserStreamRestartScheduler",
     "startWindowsTerminalCapabilityReprobe",
     "createTaskbarPreviewRefreshTicker",
-    "startRemoteRuntimeSocketLiveness"
+    "startRemoteRuntimeSocketLiveness",
+    "getWorktreeObservationClock"
   ],
   "sites": {
     "src/cli/handlers/orchestration.ts#interval#startCheckKeepalive": {
@@ -516,50 +517,64 @@
       "disposition": "justified",
       "note": "ssh.ts:839 - explicit RELAY_LOST_MAX_ATTEMPTS cap, gives up and surfaces a manual-reconnect error to the user"
     },
-    "src/main/ipc/worktree-base-directory-poller.ts#self-rescheduling-timeout#tick": {
-      "responsibility": "worktree-base-and-git-common-stat-poll",
-      "cadence": "2s, full rescan every 15 ticks",
-      "lifetime": "persistent",
-      "scaling": "per-project",
-      "hidden": "paused",
-      "dormant": "runs",
-      "spawns": "none",
-      "disposition": "debt",
-      "note": "one poller per watch target (worktree base dir) for every repo in the store, not only open ones; replaced recursive native watchers deliberately (worktree-base-directory-watcher.ts:73); nothing caps the target count"
-    },
-    "src/main/ipc/worktree-git-common-polling.ts#self-rescheduling-timeout#tick": {
-      "responsibility": "worktree-base-and-git-common-stat-poll",
-      "cadence": "2s, full rescan every 15 ticks",
-      "lifetime": "persistent",
-      "scaling": "per-project",
-      "hidden": "paused",
-      "dormant": "runs",
-      "spawns": "none",
-      "disposition": "debt",
-      "note": "one poller per common .git dir being watched, for every repo in the store; same trade-off and same uncapped count as the base-directory poller"
-    },
-    "src/main/ipc/worktree-git-common-primary-polling.ts#self-rescheduling-timeout#tick": {
-      "responsibility": "worktree-base-and-git-common-stat-poll",
-      "cadence": "2s",
-      "lifetime": "persistent",
-      "scaling": "per-project",
-      "hidden": "paused",
-      "dormant": "runs",
-      "spawns": "none",
-      "disposition": "debt",
-      "note": "primary-checkout half of the common .git poll; one per watched repo, uncapped"
-    },
-    "src/main/ipc/worktree-git-common-watch.ts#interval#armExistencePoll": {
-      "responsibility": "worktree-linked-worktrees-dir-existence-poll",
-      "cadence": "unknown (pollIntervalMs)",
+    "src/main/ipc/worktree-observation-clock.ts#self-rescheduling-timeout#runCycle": {
+      "responsibility": "worktree-observation-clock",
+      "cadence": "2s cycle",
       "lifetime": "while-active",
-      "scaling": "per-worktree",
+      "scaling": "per-process",
       "hidden": "paused",
       "dormant": "n/a",
       "spawns": "none",
       "disposition": "justified",
-      "bound": "one existence poll per repo's worktrees dir, stopped entirely once a narrow native watch subscribes or the window is hidden",
-      "note": "worktree-git-common-watch.ts:110 - unref'd, self-stops via stopExistencePoll() once tryUpgradeToNarrowWatch installs a subscription"
+      "note": "the one timer behind every local worktree poll (one per interval value; production uses only 2s); disarmed when every registration is parked or gone"
+    },
+    "src/main/ipc/worktree-base-directory-poller.ts#helper:getWorktreeObservationClock#startWorktreeBaseDirectoryPoller": {
+      "responsibility": "worktree-base-and-git-common-stat-poll",
+      "cadence": "2s while active, 10s quiet; full rescan every 15 runs",
+      "lifetime": "persistent",
+      "scaling": "per-project",
+      "hidden": "paused",
+      "dormant": "runs",
+      "spawns": "none",
+      "disposition": "justified",
+      "bound": "worst case per project (custom worktree base paths); targets are keyed by workspace root, so repos sharing one root share one run; runs ride the shared clock at the quiet cadence unless an event landed in the last 2 min",
+      "note": "measured by worktree-observation-cardinality.test.ts: 50 repos produce 1 base target"
+    },
+    "src/main/ipc/worktree-git-common-polling.ts#helper:getWorktreeObservationClock#startGitCommonPolling": {
+      "responsibility": "worktree-base-and-git-common-stat-poll",
+      "cadence": "2s while active, 10s quiet; index backstop every 15 runs",
+      "lifetime": "persistent",
+      "scaling": "per-project",
+      "hidden": "paused",
+      "dormant": "runs",
+      "spawns": "none",
+      "disposition": "justified",
+      "bound": "no own timer; quiet repos run once per 5 clock cycles, at most 4 targets run at once; 50 repos x 3 linked worktrees: 51 timers -> 1, idle stats 640/s -> 125/s",
+      "note": "worktree-observation-cardinality.test.ts asserts one timer and idle cost <= 1/4 of active at 1/10/50 repos; external add/remove stays observed (worktree-external-change-golden.test.ts)"
+    },
+    "src/main/ipc/worktree-git-common-primary-polling.ts#helper:getWorktreeObservationClock#startGitCommonPrimaryPolling": {
+      "responsibility": "worktree-base-and-git-common-stat-poll",
+      "cadence": "2s while active, 10s quiet",
+      "lifetime": "persistent",
+      "scaling": "per-project",
+      "hidden": "paused",
+      "dormant": "runs",
+      "spawns": "none",
+      "disposition": "justified",
+      "bound": "macOS half of the git-common poll; same shared clock, quiet tier and concurrency cap as startGitCommonPolling",
+      "note": "pinned to the full cadence only while it holds the active git-status upstream ref"
+    },
+    "src/main/ipc/worktree-git-common-watch.ts#helper:getWorktreeObservationClock#armExistencePoll": {
+      "responsibility": "worktree-linked-worktrees-dir-existence-poll",
+      "cadence": "2s while active, 10s quiet",
+      "lifetime": "while-active",
+      "scaling": "per-project",
+      "hidden": "paused",
+      "dormant": "n/a",
+      "spawns": "none",
+      "disposition": "justified",
+      "bound": "macOS only, one per repo without a worktrees dir; unregistered once the narrow native watch subscribes or the window hides, and rides the shared clock",
+      "note": "worktree-git-common-watch.ts armExistencePoll registers a run instead of its own setInterval"
     },
     "src/main/macos-tcc-prompt-watch.ts#self-rescheduling-timeout#handleUnexpectedTermination": {
       "responsibility": "macos-tcc-prompt-log-stream-restart",

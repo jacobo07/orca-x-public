@@ -3,6 +3,5 @@
 # This is a RATCHET: the list may only SHRINK. Do NOT add a line to get the gate green — share,
 # bound or remove the producer instead. After fixing one: pnpm check:recurring-work --prune
 agent-completion-process-backstop
-worktree-base-and-git-common-stat-poll
 worktree-card-hosted-review-poll
 worktree-card-linked-issue-poll

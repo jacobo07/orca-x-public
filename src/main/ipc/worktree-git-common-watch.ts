@@ -10,6 +10,10 @@ import type {
 } from './worktree-base-directory-poller'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { startGitCommonPrimaryPolling } from './worktree-git-common-primary-polling'
+import {
+  getWorktreeObservationClock,
+  type WorktreeObservationRegistration
+} from './worktree-observation-clock'
 
 // Watches a repo's `<common>/.git/worktrees` metadata plus the primary
 // checkout's shallow branch/index files — the only paths the git-common event
@@ -37,16 +41,14 @@ async function startGitCommonNarrowWatch(
   const worktreesDir = join(target.path, 'worktrees')
   let disposed = false
   let subscription: WorktreeBaseSubscription | null = null
-  let existenceTimer: ReturnType<typeof setInterval> | null = null
+  let existencePoll: WorktreeObservationRegistration | null = null
   let pollingFallbackPromise: Promise<void> | null = null
   let subscribing = false
   let parkedWhileHidden = false
 
   const stopExistencePoll = (): void => {
-    if (existenceTimer) {
-      clearInterval(existenceTimer)
-      existenceTimer = null
-    }
+    existencePoll?.unregister()
+    existencePoll = null
   }
 
   const shouldUsePollingFallback = (error: unknown): boolean =>
@@ -100,27 +102,27 @@ async function startGitCommonNarrowWatch(
   }
 
   const armExistencePoll = (): void => {
-    if (disposed || existenceTimer || subscription) {
+    if (disposed || existencePoll || subscription) {
       return
     }
     if (!visibility.isWindowVisible()) {
       parkedWhileHidden = true
       return
     }
-    existenceTimer = setInterval(() => {
+    existencePoll = getWorktreeObservationClock(pollIntervalMs).register(async () => {
       if (disposed) {
-        return
+        return 'observed'
       }
       // Why: a hidden window has nothing to refresh, so stop stat'ing the dir
       // entirely instead of burning a syscall per repo per tick in the background.
       if (!visibility.isWindowVisible()) {
         parkedWhileHidden = true
         stopExistencePoll()
-        return
+        return 'parked'
       }
       void tryUpgradeToNarrowWatch()
-    }, pollIntervalMs)
-    existenceTimer.unref?.()
+      return 'observed'
+    })
   }
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
