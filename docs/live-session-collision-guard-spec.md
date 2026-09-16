@@ -154,10 +154,24 @@ lives there (`decideResumeSpawn`, installed by `registerAgentSessionLivePresence
 | Provider `/resume` picker                        | provider  | B     | post-effect notice to the owning window                      |
 | SSH                                              | any       | —     | unsupported: no claim key, proceeds unreserved               |
 
-Limits: the renderer does not yet act on `agentResumeRefused` (pty-connection.ts was being
-edited by another pane), so a refused cold restore still shows "restored" and clears its sleep
-record; a refused sleep launch leaves a plain-shell tab. No duplicate runtime is created in
-either case. The transcript remains resumable from AI Vault.
+Pane handling (`be116a07e`): a refusal shows the `resume-refused` banner, clears the launch
+config it registered and keeps the sleep record. A refused dormant working-set row still becomes
+an ordinary live shell once its PTY binds.
+
+Evidence: 10 main-side mutations, 2 pane mutations, 3 inventory drills caught; real-app e2e
+`74c586368` fails with the gate bypassed.
+
+Inventory ratchet: `config/existing-session-materializers.jsonc`, enforced by
+`existing-session-materializer-inventory.test.ts` (`367378740`). A new resume-planner call, a
+changed count or a stale entry fails; a spawn-gate entry must name its carrier.
+
+Limits: a refused sleep launch leaves a plain-shell tab, and its record was already cleared
+before the spawn (reserving before tab creation touches twelve test files). The per-pane
+"Resume this session" being built in `pane-session-resume-capability.ts` types into a live
+shell, so it never crosses `pty:spawn`; it must reserve through the IPC authority itself and be
+classified in the inventory. The remote-host AI Vault path carries a session without
+`launchAgent`, so the gate treats it as having nothing to resume (it runs over a connection the
+gate skips anyway).
 
 ## Known limits
 
