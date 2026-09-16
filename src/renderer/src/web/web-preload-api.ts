@@ -938,6 +938,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       onLegacyWorkerTerminalRecovery: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
+      // Why: the web client sees no host hook rows, so it cannot rule an owner out.
+      readLivePresence: () =>
+        Promise.resolve({ kind: 'unknown', liveElsewhere: [], unknownCount: 0, staleCount: 0 }),
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},

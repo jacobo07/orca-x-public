@@ -327,6 +327,14 @@ vi.mock('./agent-hooks', () => ({
   registerAgentHookHandlers: registerAgentHookHandlersMock
 }))
 
+vi.mock('./agent-session-live-presence-ipc', () => ({
+  registerAgentSessionLivePresenceHandlers: vi.fn()
+}))
+
+vi.mock('./agent-session-live-presence-deps', () => ({
+  createLiveAgentSessionPresenceDeps: vi.fn()
+}))
+
 vi.mock('./agent-trust', () => ({
   registerAgentTrustHandlers: registerAgentTrustHandlersMock
 }))

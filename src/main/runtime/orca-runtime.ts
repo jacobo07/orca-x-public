@@ -26709,6 +26709,12 @@ export class OrcaRuntimeService {
     )
   }
 
+  /** Routed PTY liveness: true / false only when the owning provider can prove it. */
+  async probePtyLiveness(ptyId: string): Promise<boolean | null> {
+    const probe = this.ptyController?.probePtyLiveness
+    return probe ? await probe.call(this.ptyController, ptyId) : null
+  }
+
   private async executionOwnerSupportsAgentSessionOperation(
     workspace: TerminalWorkspaceLaunchScope,
     operation: 'resume' | 'create',

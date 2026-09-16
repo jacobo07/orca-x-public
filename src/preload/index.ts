@@ -235,6 +235,10 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
+import type {
+  LiveAgentSessionPresenceRequest,
+  LiveAgentSessionPresenceResponse
+} from '../shared/live-agent-session-presence-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
@@ -4999,6 +5003,10 @@ const api = {
     },
     getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
       ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
+    readLivePresence: (
+      request: LiveAgentSessionPresenceRequest
+    ): Promise<LiveAgentSessionPresenceResponse> =>
+      ipcRenderer.invoke('agentSession:readLivePresence', request),
     /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)

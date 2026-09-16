@@ -6,6 +6,10 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
 import type { ComputerAwakeStatus } from '../../shared/computer-awake-mode'
+import type {
+  LiveAgentSessionPresenceRequest,
+  LiveAgentSessionPresenceResponse
+} from '../../shared/live-agent-session-presence-types'
 
 export type AgentStatusApi = {
   /** Listen for agent status updates forwarded from native hook receivers. */
@@ -28,6 +32,10 @@ export type AgentStatusApi = {
     }) => void
   ) => () => void
   getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
+  /** Where this exact provider session is live right now, across every window. */
+  readLivePresence: (
+    request: LiveAgentSessionPresenceRequest
+  ) => Promise<LiveAgentSessionPresenceResponse>
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
   drop: (paneKey: string) => void
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
