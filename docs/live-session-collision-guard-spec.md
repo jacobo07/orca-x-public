@@ -146,8 +146,9 @@ lives there (`decideResumeSpawn`, installed by `registerAgentSessionLivePresence
 | Materializer                                     | Initiated | Class | Status                                                       |
 | ------------------------------------------------ | --------- | ----- | ------------------------------------------------------------ |
 | AI Vault resume                                  | user      | A     | guarded (dialog + reservation + spawn gate)                  |
+| Per-pane "Resume this session" (in progress)     | user      | A     | not integrated: types into a live shell, never spawns        |
 | Sleep launch into a new tab (activation, mobile) | automatic | A     | guarded at spawn; limit: record cleared before spawn         |
-| Pane cold restore                                | automatic | A     | guarded at spawn; limit: pane handling of refusal pending    |
+| Pane cold restore                                | automatic | A     | guarded at spawn; refusal keeps the record (`be116a07e`)     |
 | In-place hibernation wake                        | automatic | A     | guarded at spawn (same path as cold restore)                 |
 | Working-set row revival                          | automatic | A     | guarded at spawn (lazy sleep record → cold restore)          |
 | Runtime-routed ensure (web, mobile, CLI)         | remote    | A     | not integrated: own `ClaimedAgentPtyOwnerRegistry` authority |
