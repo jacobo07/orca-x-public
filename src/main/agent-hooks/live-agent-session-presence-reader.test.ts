@@ -58,6 +58,19 @@ describe('readLiveAgentSessionPresence', () => {
     expect(result.liveElsewhere).toEqual(['tab-a:leaf'])
   })
 
+  it('names the runtime behind each live owner so a replacement in the same pane is visible', async () => {
+    const result = await readLiveAgentSessionPresence(
+      deps([row('tab-a:leaf'), row('tab-c:leaf')], {
+        getBoundPtyIdForPaneKey: (paneKey) => (paneKey === 'tab-a:leaf' ? 'pty-a-2' : 'pty-c'),
+        probePtyLiveness: async (ptyId) => ptyId !== 'pty-c'
+      }),
+      { subject, requestingPaneKey: 'tab-z:leaf' }
+    )
+
+    expect(result.liveElsewhere).toEqual(['tab-a:leaf'])
+    expect(result.incarnationByPane).toEqual({ 'tab-a:leaf': 'pty-a-2' })
+  })
+
   it('never matches on anything but identity: same agent, worktree and cwd, other session', async () => {
     const result = await readLiveAgentSessionPresence(
       deps([

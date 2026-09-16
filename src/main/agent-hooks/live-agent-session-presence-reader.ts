@@ -43,27 +43,32 @@ function sameRawIdentity(
   )
 }
 
+export type LiveAgentSessionPresenceReading = LiveAgentSessionPresence & {
+  /** PTY behind each live owner, so a replaced runtime in the same pane reads as a new owner. */
+  incarnationByPane: Record<string, string>
+}
+
 async function probePaneLiveness(
   deps: LiveAgentSessionPresenceReaderDeps,
   paneKey: string
-): Promise<LiveAgentSessionPtyLiveness> {
+): Promise<{ liveness: LiveAgentSessionPtyLiveness; ptyId?: string }> {
   const boundPtyId = deps.getBoundPtyIdForPaneKey(paneKey)
   const ptyId = boundPtyId ?? deps.getPersistedPtyIdForPaneKey(paneKey)
   if (!ptyId) {
-    return 'unbound'
+    return { liveness: 'unbound' }
   }
   let live: boolean | null
   try {
     live = await deps.probePtyLiveness(ptyId)
   } catch {
     // Why: an unreachable provider says nothing about the process; absence needs proof.
-    return 'unknown'
+    return { liveness: 'unknown', ptyId }
   }
   if (deps.getBoundPtyIdForPaneKey(paneKey) !== boundPtyId) {
     // Why: a cold restore can rebind the pane while the probe is in flight.
-    return 'unknown'
+    return { liveness: 'unknown', ptyId }
   }
-  return live === true ? 'live' : live === false ? 'absent' : 'unknown'
+  return { liveness: live === true ? 'live' : live === false ? 'absent' : 'unknown', ptyId }
 }
 
 /** Reads where one provider session is live right now, across every window this
@@ -71,15 +76,19 @@ async function probePaneLiveness(
 export async function readLiveAgentSessionPresence(
   deps: LiveAgentSessionPresenceReaderDeps,
   args: { subject: LiveAgentSessionPresenceSubject; requestingPaneKey: string }
-): Promise<LiveAgentSessionPresence> {
+): Promise<LiveAgentSessionPresenceReading> {
   const { subject } = args
   const rows = deps.listHookRows().filter((row) => sameRawIdentity(row, subject))
   if (rows.length === 0) {
-    return projectLiveAgentSessionPresence({
-      requestingPaneKey: args.requestingPaneKey,
-      candidates: []
-    })
+    return {
+      ...projectLiveAgentSessionPresence({
+        requestingPaneKey: args.requestingPaneKey,
+        candidates: []
+      }),
+      incarnationByPane: {}
+    }
   }
+  const ptyIdByPane = new Map<string, string>()
   const keyCache = new Map<string, Promise<string | null>>()
   const keyFor = (
     worktreeId: string,
@@ -109,13 +118,28 @@ export async function readLiveAgentSessionPresence(
           : rowKey === subjectKey
             ? 'same'
             : 'different'
+      const probe = await probePaneLiveness(deps, row.paneKey)
+      if (probe.ptyId) {
+        ptyIdByPane.set(row.paneKey, probe.ptyId)
+      }
       return {
         paneKey: row.paneKey,
         identity,
         observedInCurrentRuntime: deps.isObservedInCurrentRuntime(row.paneKey),
-        ptyLiveness: await probePaneLiveness(deps, row.paneKey)
+        ptyLiveness: probe.liveness
       }
     })
   )
-  return projectLiveAgentSessionPresence({ requestingPaneKey: args.requestingPaneKey, candidates })
+  const presence = projectLiveAgentSessionPresence({
+    requestingPaneKey: args.requestingPaneKey,
+    candidates
+  })
+  const incarnationByPane: Record<string, string> = {}
+  for (const paneKey of presence.liveElsewhere) {
+    const ptyId = ptyIdByPane.get(paneKey)
+    if (ptyId) {
+      incarnationByPane[paneKey] = ptyId
+    }
+  }
+  return { ...presence, incarnationByPane }
 }

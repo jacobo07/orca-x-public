@@ -17,8 +17,8 @@ export type LiveSessionCollisionNotice = {
 }
 
 export type LiveAgentSessionPresenceRequest = {
-  /** Pane about to materialize the session. */
-  paneKey: string
+  /** Pane about to materialize the session; absent when the pane does not exist yet. */
+  paneKey?: string
   worktreeId: string
   agent: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
@@ -35,6 +35,8 @@ export type LiveAgentSessionPresenceWireKind =
 export type LiveAgentSessionPresenceResponse = {
   kind: LiveAgentSessionPresenceWireKind
   liveElsewhere: string[]
+  /** Changes whenever the set of live owners or the runtime behind any of them changes. */
+  ownersRevision: string
   unknownCount: number
   staleCount: number
 }
@@ -54,7 +56,7 @@ export function parseLiveAgentSessionPresenceRequest(
   }
   const raw = value as Record<string, unknown>
   if (
-    !isStablePaneKey(raw.paneKey) ||
+    (raw.paneKey !== undefined && !isStablePaneKey(raw.paneKey)) ||
     typeof raw.worktreeId !== 'string' ||
     raw.worktreeId.length === 0 ||
     raw.worktreeId.length > MAX_WORKTREE_ID_LENGTH ||
@@ -67,7 +69,7 @@ export function parseLiveAgentSessionPresenceRequest(
     return null
   }
   return {
-    paneKey: raw.paneKey,
+    ...(typeof raw.paneKey === 'string' ? { paneKey: raw.paneKey } : {}),
     worktreeId: raw.worktreeId,
     agent: raw.agent,
     providerSession

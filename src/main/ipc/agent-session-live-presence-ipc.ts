@@ -12,8 +12,19 @@ import {
 const UNREADABLE_REQUEST: LiveAgentSessionPresenceResponse = {
   kind: 'unknown',
   liveElsewhere: [],
+  ownersRevision: '',
   unknownCount: 0,
   staleCount: 0
+}
+
+function ownersRevision(
+  liveElsewhere: readonly string[],
+  incarnationByPane: Record<string, string>
+) {
+  return [...liveElsewhere]
+    .sort()
+    .map((paneKey) => `${paneKey}@${incarnationByPane[paneKey] ?? ''}`)
+    .join('|')
 }
 
 /** Answers where a provider session is live. A malformed request or a failed read is
@@ -33,11 +44,13 @@ export async function handleLiveAgentSessionPresenceRequest(
         providerSession: request.providerSession,
         worktreeId: request.worktreeId
       },
-      requestingPaneKey: request.paneKey
+      // Why: a pane that does not exist yet owns nothing, so no candidate may match it.
+      requestingPaneKey: request.paneKey ?? ''
     })
     return {
       kind: presence.kind,
       liveElsewhere: presence.liveElsewhere,
+      ownersRevision: ownersRevision(presence.liveElsewhere, presence.incarnationByPane),
       unknownCount: presence.unknown.length,
       staleCount: presence.stale.length
     }

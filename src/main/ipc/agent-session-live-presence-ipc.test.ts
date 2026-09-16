@@ -63,10 +63,30 @@ describe('handleLiveAgentSessionPresenceRequest', () => {
     expect(response).toEqual({
       kind: 'live-elsewhere',
       liveElsewhere: [OWNER_PANE],
+      ownersRevision: `${OWNER_PANE}@pty-1`,
       unknownCount: 0,
       staleCount: 0
     })
     expect(JSON.stringify(response)).not.toContain(SESSION_ID)
+  })
+
+  it('accepts a request for a pane that does not exist yet', async () => {
+    const { paneKey: _omitted, ...withoutPane } = request()
+
+    const response = await handleLiveAgentSessionPresenceRequest(deps(), withoutPane)
+
+    expect(response.kind).toBe('live-elsewhere')
+  })
+
+  it('changes the owners revision when the runtime behind the same pane is replaced', async () => {
+    const before = await handleLiveAgentSessionPresenceRequest(deps(), request())
+    const after = await handleLiveAgentSessionPresenceRequest(
+      deps({ getBoundPtyIdForPaneKey: () => 'pty-2' }),
+      request()
+    )
+
+    expect(after.liveElsewhere).toEqual(before.liveElsewhere)
+    expect(after.ownersRevision).not.toBe(before.ownersRevision)
   })
 
   it('counts stale and unknown panes without calling them owners', async () => {
@@ -79,7 +99,13 @@ describe('handleLiveAgentSessionPresenceRequest', () => {
       request()
     )
 
-    expect(response).toEqual({ kind: 'unknown', liveElsewhere: [], unknownCount: 1, staleCount: 1 })
+    expect(response).toEqual({
+      kind: 'unknown',
+      liveElsewhere: [],
+      ownersRevision: '',
+      unknownCount: 1,
+      staleCount: 1
+    })
   })
 
   it.each([
