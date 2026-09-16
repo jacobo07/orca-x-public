@@ -109,7 +109,7 @@ describe('connectPanePty startup spawn outcome', () => {
     // Why: an in-place respawn clears the tab's PTY first, so the pane spawns fresh.
     mockStoreState = {
       ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
       ptyIdsByTabId: {}
     } as StoreState
     installTerminalTestGlobals()
