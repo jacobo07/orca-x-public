@@ -53,7 +53,6 @@ export function SleepReclaimAuthorizationAction({
     const subjects = plan.reclaimable
     try {
       const results = await onSleep(authorizations)
-      const effectEndedAt = Date.now()
       if (!onObserve) {
         onOutcome({ results, reclaim: null })
         return
@@ -62,7 +61,8 @@ export function SleepReclaimAuthorizationAction({
       onOutcome({ results, reclaim: 'pending' })
       let reclaim: ObservedReclaim
       try {
-        reclaim = await onObserve({ subjects, results, effectEndedAt })
+        // Why: only after the coordinator returned — that ordering is what makes absence mean exit.
+        reclaim = await onObserve({ subjects, results })
       } catch (err) {
         console.warn('[sleep] post-effect observation failed', err)
         reclaim = {

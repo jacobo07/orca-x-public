@@ -179,7 +179,7 @@ describe('reclaim estimate', () => {
 })
 
 describe('observed reclaim', () => {
-  const EFFECT_ENDED_AT = 10_000
+  const REQUESTED_AT = 10_000
   const shell = { pid: 4242, memory: 300 * MB }
   const agent = { pid: 4243, memory: 200 * MB }
   const sleptPane: SleepReclaimFootprint = {
@@ -190,7 +190,8 @@ describe('observed reclaim', () => {
   }
   const probe = (presentPids: number[], overrides?: object): ProcessPresenceProbe => ({
     sweep: 'measured',
-    sweepStartedAt: EFFECT_ENDED_AT + 5,
+    requestedAt: REQUESTED_AT,
+    sweepStartedAt: REQUESTED_AT,
     metric: 'working-set',
     presentPids,
     ...overrides
@@ -200,8 +201,7 @@ describe('observed reclaim', () => {
     expect(
       measureObservedReclaim({
         slept: [sleptPane],
-        probe: probe([]),
-        effectEndedAt: EFFECT_ENDED_AT
+        probe: probe([])
       })
     ).toEqual({
       status: 'measured',
@@ -216,8 +216,7 @@ describe('observed reclaim', () => {
   it('does not count a process the sweep still lists, lingering or reused', () => {
     const observed = measureObservedReclaim({
       slept: [sleptPane],
-      probe: probe([agent.pid]),
-      effectEndedAt: EFFECT_ENDED_AT
+      probe: probe([agent.pid])
     })
     expect(observed).toMatchObject({
       status: 'measured',
@@ -229,8 +228,7 @@ describe('observed reclaim', () => {
   it('reports a measured zero when every baseline process is still listed', () => {
     const observed = measureObservedReclaim({
       slept: [sleptPane],
-      probe: probe([shell.pid, agent.pid]),
-      effectEndedAt: EFFECT_ENDED_AT
+      probe: probe([shell.pid, agent.pid])
     })
     expect(observed).toMatchObject({ status: 'measured', bytes: 0, stillRunningProcessCount: 2 })
   })
@@ -240,34 +238,33 @@ describe('observed reclaim', () => {
     expect(
       measureObservedReclaim({
         slept: [sleptPane],
-        probe: { sweep: 'failed', sweepStartedAt: EFFECT_ENDED_AT + 5 },
-        effectEndedAt: EFFECT_ENDED_AT
+        probe: { sweep: 'failed', requestedAt: REQUESTED_AT, sweepStartedAt: REQUESTED_AT }
       })
     ).toEqual({ status: 'unmeasured', reason: 'sweep-failed', sleptPaneCount: 1 })
   })
 
   it('refuses when the follow-up sweep could not be asked for', () => {
-    expect(
-      measureObservedReclaim({ slept: [sleptPane], probe: null, effectEndedAt: EFFECT_ENDED_AT })
-    ).toEqual({ status: 'unmeasured', reason: 'sweep-unavailable', sleptPaneCount: 1 })
+    expect(measureObservedReclaim({ slept: [sleptPane], probe: null })).toEqual({
+      status: 'unmeasured',
+      reason: 'sweep-unavailable',
+      sleptPaneCount: 1
+    })
   })
 
-  it('refuses a sweep that began before the effect finished', () => {
+  it('refuses a sweep that began before it was requested, as a reused one would', () => {
     expect(
       measureObservedReclaim({
         slept: [sleptPane],
-        probe: probe([], { sweepStartedAt: EFFECT_ENDED_AT - 1 }),
-        effectEndedAt: EFFECT_ENDED_AT
+        probe: probe([], { sweepStartedAt: REQUESTED_AT - 1 })
       })
-    ).toMatchObject({ status: 'unmeasured', reason: 'sweep-predates-effect' })
+    ).toMatchObject({ status: 'unmeasured', reason: 'sweep-predates-request' })
   })
 
   it('refuses to compare across per-process metrics', () => {
     expect(
       measureObservedReclaim({
         slept: [sleptPane],
-        probe: probe([], { metric: 'rss' }),
-        effectEndedAt: EFFECT_ENDED_AT
+        probe: probe([], { metric: 'rss' })
       })
     ).toMatchObject({ status: 'unmeasured', reason: 'metric-changed' })
   })
@@ -279,23 +276,23 @@ describe('observed reclaim', () => {
           { known: false, reason: 'snapshot-unusable' },
           { known: true, bytes: 1 * MB, metric: 'working-set' }
         ],
-        probe: probe([]),
-        effectEndedAt: EFFECT_ENDED_AT
+        probe: probe([])
       })
     ).toEqual({ status: 'unmeasured', reason: 'no-baseline', sleptPaneCount: 2 })
   })
 
   it('says nothing, and needs no sweep, when nothing slept', () => {
-    expect(
-      measureObservedReclaim({ slept: [], probe: null, effectEndedAt: EFFECT_ENDED_AT })
-    ).toEqual({ status: 'unmeasured', reason: 'nothing-slept', sleptPaneCount: 0 })
+    expect(measureObservedReclaim({ slept: [], probe: null })).toEqual({
+      status: 'unmeasured',
+      reason: 'nothing-slept',
+      sleptPaneCount: 0
+    })
   })
 
   it('counts unmeasured slept panes separately and adds no bytes for them', () => {
     const observed = measureObservedReclaim({
       slept: [sleptPane, { known: false, reason: 'no-pid' }],
-      probe: probe([]),
-      effectEndedAt: EFFECT_ENDED_AT
+      probe: probe([])
     })
     expect(observed).toMatchObject({
       status: 'measured',
@@ -309,8 +306,7 @@ describe('observed reclaim', () => {
   it('ignores processes outside the slept cohort, whatever they do', () => {
     const observed = measureObservedReclaim({
       slept: [sleptPane],
-      probe: probe([shell.pid, agent.pid]),
-      effectEndedAt: EFFECT_ENDED_AT
+      probe: probe([shell.pid, agent.pid])
     })
     expect(observed).toMatchObject({ bytes: 0 })
   })

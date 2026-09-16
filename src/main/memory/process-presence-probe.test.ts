@@ -45,4 +45,12 @@ describe('probeProcessPresence', () => {
     })
     expect(probe.sweepStartedAt).toBeLessThanOrEqual(startedAt)
   })
+
+  // Why: the caller judges ordering on these two only, so both come from this process's clock.
+  it('never reports a sweep that started before the request arrived', async () => {
+    const before = Date.now()
+    const probe = await probeProcessPresence([10], async () => indexOf([1]))
+    expect(probe.requestedAt).toBeGreaterThanOrEqual(before)
+    expect(probe.sweepStartedAt).toBeGreaterThanOrEqual(probe.requestedAt)
+  })
 })

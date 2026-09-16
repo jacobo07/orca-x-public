@@ -20,14 +20,14 @@ const PROBE_TIMEOUT_MS = 20_000
 
 export type ProbeProcessPresence = (pids: number[]) => Promise<ProcessPresenceProbe | null>
 
+/** Must be called only after the effects in `results` have returned; that order is the proof. */
 export type ObserveReclaimAfterSleep = (args: {
   subjects: readonly SleepAuthorizationSubject[]
   results: readonly AgentSleepResult[]
-  effectEndedAt: number
 }) => Promise<ObservedReclaim>
 
 export function createReclaimObserver(probe: ProbeProcessPresence): ObserveReclaimAfterSleep {
-  return async ({ subjects, results, effectEndedAt }) => {
+  return async ({ subjects, results }) => {
     const footprintByCandidate = new Map<string, SleepReclaimFootprint>()
     for (const subject of subjects) {
       if (subject.authorization) {
@@ -43,7 +43,7 @@ export function createReclaimObserver(probe: ProbeProcessPresence): ObserveRecla
     }
     const pids = listBaselinePids(slept)
     const observed = pids.length === 0 ? null : await probe(pids)
-    return measureObservedReclaim({ slept, probe: observed, effectEndedAt })
+    return measureObservedReclaim({ slept, probe: observed })
   }
 }
 

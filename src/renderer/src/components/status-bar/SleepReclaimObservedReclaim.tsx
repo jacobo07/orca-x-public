@@ -119,7 +119,7 @@ function describeUnmeasured(
         'auto.components.status.bar.resource.sleepReclaim.observed.reason.sweepFailed',
         'the follow-up reading failed'
       )
-    case 'sweep-predates-effect':
+    case 'sweep-predates-request':
       return translate(
         'auto.components.status.bar.resource.sleepReclaim.observed.reason.sweepTooEarly',
         'the follow-up reading started too early'

@@ -93,12 +93,15 @@ export type ProcessSweepOutcome = 'measured' | 'failed'
 /**
  * Which of the asked pids a fresh host sweep still lists. Only 'measured' says
  * anything: a failed sweep lists nothing, and that is not every process gone.
+ * Both times are main-process clock, so their order is comparable; the caller
+ * proves "request after effect" by control flow, never by comparing its own clock.
  */
 export type ProcessPresenceProbe =
   | {
       sweep: 'measured'
+      requestedAt: number
       sweepStartedAt: number
       metric: ProcessMemoryMetric
       presentPids: number[]
     }
-  | { sweep: 'failed'; sweepStartedAt: number }
+  | { sweep: 'failed'; requestedAt: number; sweepStartedAt: number }

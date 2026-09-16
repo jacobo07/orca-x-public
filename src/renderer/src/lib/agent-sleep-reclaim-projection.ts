@@ -59,8 +59,8 @@ export type ObservedReclaimUnmeasuredReason =
   | 'sweep-unavailable'
   /** The follow-up sweep ran and listed nothing — absence there proves nothing. */
   | 'sweep-failed'
-  /** The follow-up sweep began before the effect finished. */
-  | 'sweep-predates-effect'
+  /** The follow-up sweep began before it was asked for, so it may have read the table before the effect. */
+  | 'sweep-predates-request'
   /** Before and after were measured with different per-process metrics. */
   | 'metric-changed'
 
@@ -168,21 +168,23 @@ export function summarizeReclaimEstimate(
  * The one comparability authority for post-effect reclaim.
  *
  * `slept` must be the footprints the user was shown for panes whose effect
- * outcome was `slept` — never the whole plan. A pid is counted only when a
- * usable sweep that began after `effectEndedAt` does not list it: absence
- * there cannot be our process, whatever the pid is now. A listed pid may be
- * ours lingering or a reused number, so it is never counted either way.
+ * outcome was `slept` — never the whole plan — and `probe` must have been
+ * requested only after those effects returned. A pid is counted only when a
+ * usable sweep that began after that request does not list it: absence there
+ * cannot be our process, whatever the pid is now. A listed pid may be ours
+ * lingering or a reused number, so it is never counted either way.
+ * Ordering is judged on the probe's own clock only: renderer and main wall
+ * clocks are not comparable at millisecond scale (measured: a real sleep was
+ * once refused on that comparison alone).
  * Host identity is not compared: the collector and the probe are the same
  * local host by construction, and remote panes have no footprint to carry.
  */
 export function measureObservedReclaim({
   slept,
-  probe,
-  effectEndedAt
+  probe
 }: {
   slept: readonly SleepReclaimFootprint[]
   probe: ProcessPresenceProbe | null
-  effectEndedAt: number
 }): ObservedReclaim {
   const sleptPaneCount = slept.length
   const unmeasured = (reason: ObservedReclaimUnmeasuredReason): ObservedReclaim => ({
@@ -203,8 +205,8 @@ export function measureObservedReclaim({
   if (probe.sweep !== 'measured') {
     return unmeasured('sweep-failed')
   }
-  if (probe.sweepStartedAt < effectEndedAt) {
-    return unmeasured('sweep-predates-effect')
+  if (probe.sweepStartedAt < probe.requestedAt) {
+    return unmeasured('sweep-predates-request')
   }
   if (baseline.metrics.size !== 1 || !baseline.metrics.has(probe.metric)) {
     return unmeasured('metric-changed')

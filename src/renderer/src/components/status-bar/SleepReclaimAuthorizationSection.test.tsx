@@ -324,22 +324,28 @@ describe('SleepReclaimAuthorizationSection explicit sleep', () => {
       return container.querySelector('[data-testid="sleep-reclaim-observed"]')
     }
 
-    it('hands the observer the subjects that were shown, the results and the effect time', async () => {
+    // The ordering is the proof that absence means exit, so the observer must not start early.
+    it('observes only after the effect returns, with the subjects that were shown', async () => {
       const shown = plan()
-      const onObserve = vi.fn<ObserveReclaimAfterSleep>().mockResolvedValue({
-        status: 'unmeasured',
-        reason: 'nothing-slept',
-        sleptPaneCount: 0
+      const events: string[] = []
+      const onSleep: SleepAuthorizedPanes = async () => {
+        events.push('sleep-started')
+        await Promise.resolve()
+        events.push('sleep-returned')
+        return sleptA
+      }
+      const onObserve = vi.fn<ObserveReclaimAfterSleep>(async () => {
+        events.push('observe')
+        return { status: 'unmeasured', reason: 'nothing-slept', sleptPaneCount: 0 }
       })
-      const before = Date.now()
-      renderObserved(shown, vi.fn().mockResolvedValue(sleptA), onObserve)
+      renderObserved(shown, onSleep, onObserve)
 
       await click()
 
+      expect(events).toEqual(['sleep-started', 'sleep-returned', 'observe'])
       const args = onObserve.mock.calls[0]?.[0]
       expect(args?.subjects).toBe(shown.reclaimable)
       expect(args?.results).toEqual(sleptA)
-      expect(args?.effectEndedAt).toBeGreaterThanOrEqual(before)
     })
 
     it('shows the measured figure with the collector metric, read off the result', async () => {

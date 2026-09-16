@@ -27,6 +27,7 @@ function subject(id: string, pid: number | null, bytes = 100 * MB): SleepAuthori
 
 const measuredProbe = (presentPids: number[]): ProcessPresenceProbe => ({
   sweep: 'measured',
+  requestedAt: 2_000,
   sweepStartedAt: 2_000,
   metric: 'working-set',
   presentPids
@@ -46,8 +47,7 @@ describe('observeReclaimAfterSleep', () => {
 
     const observed = await observe({
       subjects: [subject('a', 11), subject('b', 12), subject('c', 13), subject('d', 14)],
-      results,
-      effectEndedAt: 1_000
+      results
     })
 
     expect(probe).toHaveBeenCalledWith([11])
@@ -58,8 +58,7 @@ describe('observeReclaimAfterSleep', () => {
     const probe = vi.fn(async () => measuredProbe([]))
     const observed = await createReclaimObserver(probe)({
       subjects: [subject('a', 11)],
-      results: [{ candidateId: 'cand-a', outcome: 'changed' }],
-      effectEndedAt: 1_000
+      results: [{ candidateId: 'cand-a', outcome: 'changed' }]
     })
     expect(probe).not.toHaveBeenCalled()
     expect(observed).toEqual({ status: 'unmeasured', reason: 'nothing-slept', sleptPaneCount: 0 })
@@ -69,8 +68,7 @@ describe('observeReclaimAfterSleep', () => {
     const probe = vi.fn(async () => measuredProbe([]))
     const observed = await createReclaimObserver(probe)({
       subjects: [subject('a', null)],
-      results: [{ candidateId: 'cand-a', outcome: 'slept' }],
-      effectEndedAt: 1_000
+      results: [{ candidateId: 'cand-a', outcome: 'slept' }]
     })
     expect(probe).not.toHaveBeenCalled()
     expect(observed).toEqual({ status: 'unmeasured', reason: 'no-baseline', sleptPaneCount: 1 })
@@ -79,8 +77,7 @@ describe('observeReclaimAfterSleep', () => {
   it('keeps the slept outcome and reports unavailable when the probe gives nothing', async () => {
     const observed = await createReclaimObserver(async () => null)({
       subjects: [subject('a', 11)],
-      results: [{ candidateId: 'cand-a', outcome: 'slept' }],
-      effectEndedAt: 1_000
+      results: [{ candidateId: 'cand-a', outcome: 'slept' }]
     })
     expect(observed).toEqual({
       status: 'unmeasured',
