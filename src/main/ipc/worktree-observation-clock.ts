@@ -43,7 +43,13 @@ export type WorktreeObservationClock = {
     options?: WorktreeObservationRegisterOptions
   ) => WorktreeObservationRegistration
   /** Test/diagnostic view: registered targets and whether the timer is armed. */
-  inspect: () => { registrations: number; parked: number; running: boolean; cycles: number }
+  inspect: () => {
+    registrations: number
+    parked: number
+    running: boolean
+    cycles: number
+    runs: number
+  }
 }
 
 type Entry = {
@@ -69,6 +75,7 @@ export function createWorktreeObservationClock(
   let queue: Entry[] = []
   let slotsInUse = 0
   let cycle = 0
+  let runs = 0
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const hasAwakeEntry = (): boolean => [...entries].some((entry) => !entry.parked)
@@ -88,6 +95,7 @@ export function createWorktreeObservationClock(
     entry.lastRunCycle = cycle
     entry.runStartedCycle = cycle
     slotsInUse++
+    runs++
     // Why: start synchronously, so a resume request begins its scan in the caller's turn.
     let running: Promise<WorktreeObservationRunResult>
     try {
@@ -238,12 +246,19 @@ export function createWorktreeObservationClock(
       registrations: entries.size,
       parked: [...entries].filter((entry) => entry.parked).length,
       running: timer !== null,
-      cycles: cycle
+      cycles: cycle,
+      runs
     })
   }
 }
 
 const sharedClocks = new Map<number, WorktreeObservationClock>()
+
+if (process.env.ORCA_E2E_USER_DATA_DIR) {
+  // Why: lets the e2e suite count the observation work of the running app.
+  ;(globalThis as { __orcaWorktreeObservation?: unknown }).__orcaWorktreeObservation = () =>
+    [...sharedClocks].map(([intervalMs, clock]) => ({ intervalMs, ...clock.inspect() }))
+}
 
 /** One clock per interval; production uses a single 2s interval, so this is one timer. */
 export function getWorktreeObservationClock(intervalMs: number): WorktreeObservationClock {
