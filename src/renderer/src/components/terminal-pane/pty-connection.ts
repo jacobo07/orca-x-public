@@ -285,13 +285,12 @@ import {
   getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  planRecordedAgentResume,
+  type RecordedAgentResumePlan
+} from '@/lib/recorded-agent-resume-plan'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -559,7 +558,7 @@ type FreshSpawnOptions = {
 type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
   resumeProviderSession: AgentProviderSessionMetadata
-  launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
+  launchConfig: RecordedAgentResumePlan['launchConfig']
   launchToken: string
   useLiveEntry: boolean
   hasSleepingRecord: boolean
@@ -5041,24 +5040,12 @@ export function connectPanePty(
         terminalWindowsShell: state.settings?.terminalWindowsShell,
         tabShellOverride: shellOverride
       })
-      const startupPlan = buildAgentResumeStartupPlan({
+      const startupPlan = planRecordedAgentResume({
         agent,
         providerSession,
-        cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-        agentArgs:
-          launchConfig !== undefined
-            ? launchConfig.agentArgs
-            : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-        agentEnv:
-          launchConfig !== undefined
-            ? launchConfig.agentEnv
-            : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
-        ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-        ...(launchConfig?.ompResumeFilePath
-          ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-          : {}),
-        platform: resumeTarget.platform,
-        shell: resumeTarget.shell
+        launchConfig,
+        settings: state.settings,
+        target: resumeTarget
       })
       if (!startupPlan) {
         return null
