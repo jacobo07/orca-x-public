@@ -35,6 +35,7 @@ import type {
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import {
   isNativeChatTabWideFallbackSafe,
+  leafOwnsTabLaunchProvenance,
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatActiveLayoutLeafId
 } from '../components/native-chat/native-chat-leaf-routing'
@@ -1954,6 +1955,13 @@ function buildMobileTerminalSurfaceTabs(
       leafId,
       leafIds
     })
+    // Why: the only field that lets a client answer "recorded" rather than "inferred".
+    // Gated on the same predicate as launchAgent because it is the same class of fact --
+    // a pane split off later was not launched from the tab's profile and must not claim
+    // it. Absent stays absent: a client reads that as unknown, never as the default.
+    const launchProfileId = leafOwnsTabLaunchProvenance({ launchAgentLeafId, leafId, leafIds })
+      ? terminal.launchProfileId?.trim()
+      : undefined
     const launchDraft = paneKey ? inputs.launchDraftByPaneKey.get(paneKey) : undefined
     const publishedLaunchDraft =
       launchDraft && launchDraft.agent === launchAgent && launchDraft.text.trim()
@@ -1972,6 +1980,7 @@ function buildMobileTerminalSurfaceTabs(
       ...(terminalTheme ? { terminalTheme } : {}),
       ...(agentStatus ? { agentStatus } : {}),
       ...(launchAgent ? { launchAgent } : {}),
+      ...(launchProfileId ? { launchProfileId } : {}),
       // Launch context that exists only as an unsent TUI-input draft; mobile
       // prefills its chat composer from it (desktop keeps its own seed store).
       ...(publishedLaunchDraft
