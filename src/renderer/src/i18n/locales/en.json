@@ -16531,6 +16531,26 @@
       "continueRisk": "Continuing opens a second live copy. Orca can't guarantee both copies work correctly at the same time.",
       "back": "Back",
       "continue": "Continue"
+    },
+    "paneResume": {
+      "ended": "Session ended",
+      "resume": "Resume this session",
+      "resuming": "Resuming…",
+      "waitForPrompt": "Available when the shell is back at its prompt.",
+      "failed": "Couldn't resume this session. Try again.",
+      "blocked": {
+        "open": "This session is open in another pane.",
+        "starting": "This session is already starting in another pane.",
+        "unknown": "Orca couldn't confirm this session is free."
+      },
+      "unavailable": {
+        "fenced": "Orca is recovering this worker.",
+        "remote": "Resume isn't available for remote terminals yet.",
+        "runtime": "Resume isn't available for this host yet.",
+        "missing": "This workspace is missing.",
+        "deleting": "This workspace is being deleted.",
+        "noPlan": "This session can't be resumed here."
+      }
     }
   }
 }

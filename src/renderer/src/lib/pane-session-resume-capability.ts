@@ -119,6 +119,11 @@ export function readPaneSessionResumeCapability(
   state: AppState,
   target: PaneSessionResumeTarget
 ): PaneSessionResumeCapability {
+  const record = state.sleepingAgentSessionsByPaneKey[target.paneKey]
+  // Why first: this runs as a per-pane store selector, and nearly every pane is hidden.
+  if (!record || !isAgentExitedResumeBlock(record.automaticResumeBlockedBy)) {
+    return { kind: 'hidden' }
+  }
   const worktree = state.getKnownWorktreeById(target.worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   const hostKind = parseExecutionHostId(

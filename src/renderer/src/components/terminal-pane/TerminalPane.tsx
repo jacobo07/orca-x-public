@@ -2,6 +2,7 @@
 import {
   forwardRef,
   useCallback,
+  useContext,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -101,6 +102,14 @@ import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
+import type { PtyConnectionDeps } from './pty-connection-types'
+import { PaneSessionResumeBannerPortals } from './PaneSessionResumeBannerPortals'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import {
+  resumePaneSession,
+  type PaneSessionRespawnResult,
+  type PaneSessionResumeResult
+} from '@/lib/pane-session-resume-intent'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
@@ -1560,12 +1569,17 @@ function TerminalPane(
     }
   }, [])
 
-  const handleRestartCodexPane = useCallback(
-    (paneId: number) => {
+  /** Replaces a pane's PTY in place with a fresh one running `startup`; false when the pane is gone. */
+  const respawnPaneWithStartup = useCallback(
+    (
+      paneId: number,
+      startup: NonNullable<PtyConnectionDeps['startup']>,
+      onStartupSpawnSettled?: PtyConnectionDeps['onStartupSpawnSettled']
+    ): boolean => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
-        return
+        return false
       }
 
       const transport = paneTransportsRef.current.get(paneId)
@@ -1591,7 +1605,8 @@ function TerminalPane(
         tabId,
         worktreeId,
         cwd,
-        startup: CODEX_ACCOUNT_RESTART_STARTUP,
+        startup,
+        ...(onStartupSpawnSettled ? { onStartupSpawnSettled } : {}),
         mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,
@@ -1625,6 +1640,7 @@ function TerminalPane(
       })
       panePtyBindingsRef.current.set(paneId, newPaneBinding)
       manager.setActivePane(paneId, { focus: true })
+      return true
     },
     [
       clearCodexRestartNotice,
@@ -1651,6 +1667,59 @@ function TerminalPane(
       updateTabTitle,
       worktreeId
     ]
+  )
+
+  const handleRestartCodexPane = useCallback(
+    (paneId: number) => {
+      respawnPaneWithStartup(paneId, CODEX_ACCOUNT_RESTART_STARTUP)
+    },
+    [respawnPaneWithStartup]
+  )
+
+  const confirmDialog = useContext(ConfirmationDialogContext)
+  const handleResumePaneSession = useCallback(
+    (paneId: number): Promise<PaneSessionResumeResult> => {
+      const pane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
+      if (!pane) {
+        return Promise.resolve({ outcome: 'unavailable', capability: { kind: 'hidden' } })
+      }
+      const paneKey = makePaneKey(tabId, pane.leafId)
+      return resumePaneSession({
+        target: { paneKey, tabId, worktreeId },
+        confirm: confirmDialog,
+        getState: useAppStore.getState,
+        respawn: (startup) =>
+          new Promise<PaneSessionRespawnResult>((resolve) => {
+            const store = useAppStore.getState()
+            const previousForeground = store.paneForegroundAgentByPaneKey[paneKey]
+            const previousPtyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
+            // Why: the spawn argv emits no command-start mark, so without this the prompt still
+            // reads idle and the action re-enables before the provider reports.
+            store.setPaneForegroundAgent(paneKey, {
+              agent: startup.launchAgent,
+              shellForeground: false
+            })
+            const settle = (result: PaneSessionRespawnResult): void => {
+              const started =
+                result.kind === 'spawned' &&
+                !result.agentResumeRefused &&
+                !result.reattached &&
+                result.ptyId !== result.previousPtyId
+              if (!started && previousForeground) {
+                useAppStore.getState().setPaneForegroundAgent(paneKey, previousForeground)
+              }
+              resolve(result)
+            }
+            const respawned = respawnPaneWithStartup(paneId, startup, (spawn) =>
+              settle(spawn.kind === 'failed' ? spawn : { ...spawn, previousPtyId })
+            )
+            if (!respawned) {
+              settle({ kind: 'failed' })
+            }
+          })
+      })
+    },
+    [confirmDialog, respawnPaneWithStartup, tabId, worktreeId]
   )
 
   // Why leaf bindings are a dep: a parked or deferred tab mounts with no
@@ -3093,6 +3162,12 @@ function TerminalPane(
       <SessionRestoredBannerPortals
         panes={managerRef.current?.getPanes() ?? []}
         paneIds={sessionRestoredBannerPaneIds}
+      />
+      <PaneSessionResumeBannerPortals
+        panes={managedPanes}
+        tabId={tabId}
+        worktreeId={worktreeId}
+        onResume={handleResumePaneSession}
       />
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(

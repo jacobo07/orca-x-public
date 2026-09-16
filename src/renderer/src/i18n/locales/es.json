@@ -14724,6 +14724,26 @@
       "continueRisk": "Si continúas, se abrirá una segunda copia activa. Orca no puede garantizar que ambas funcionen bien a la vez.",
       "back": "Atrás",
       "continue": "Continuar"
+    },
+    "paneResume": {
+      "ended": "Sesión finalizada",
+      "resume": "Reanudar esta sesión",
+      "resuming": "Reanudando…",
+      "waitForPrompt": "Disponible cuando el shell vuelva a su prompt.",
+      "failed": "No se pudo reanudar esta sesión. Inténtalo de nuevo.",
+      "blocked": {
+        "open": "Esta sesión está abierta en otro pane.",
+        "starting": "Esta sesión ya se está iniciando en otro pane.",
+        "unknown": "Orca no pudo confirmar que esta sesión esté libre."
+      },
+      "unavailable": {
+        "fenced": "Orca está recuperando este worker.",
+        "remote": "Reanudar aún no está disponible para terminales remotos.",
+        "runtime": "Reanudar aún no está disponible para este host.",
+        "missing": "Este espacio de trabajo no existe.",
+        "deleting": "Este espacio de trabajo se está eliminando.",
+        "noPlan": "Esta sesión no se puede reanudar aquí."
+      }
     }
   }
 }
