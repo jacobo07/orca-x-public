@@ -680,6 +680,8 @@ export type TerminalSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
+  /** Explicit open of one dormant tab; a no-op for any other tab. Returns whether it asked. */
+  requestDormantTerminalTabOpen: (tabId: string) => boolean
   updateTabPtyId: (
     tabId: string,
     ptyId: string,
@@ -2240,6 +2242,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
+  requestDormantTerminalTabOpen: (tabId) => {
+    let requested = false
+    set((s) => {
+      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const index = tabs.findIndex((t) => t.id === tabId)
+        if (index === -1) {
+          continue
+        }
+        const tab = tabs[index]
+        // Why: a repeat request (double click, lost response) must not change anything.
+        if (!tab.dormancy || tab.dormantOpenRequested) {
+          return s
+        }
+        requested = true
+        const nextTabs = [...tabs]
+        nextTabs[index] = { ...tab, dormantOpenRequested: true }
+        return { tabsByWorktree: { ...s.tabsByWorktree, [wId]: nextTabs } }
+      }
+      return s
+    })
+    return requested
+  },
+
   setTabColor: (tabId, color) => {
     set((s) => {
       const next = { ...s.tabsByWorktree }
@@ -2334,10 +2359,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const currentTabPtyId = tab.ptyId === replacementPtyId ? ptyId : tab.ptyId
         const nextTabPtyId = currentTabPtyId ?? nextPtyIds[0] ?? null
         const nextPendingActivationSpawn = consumePendingActivationSpawn(tab.pendingActivationSpawn)
-        if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
+        if (tab.pendingActivationSpawn || tab.dormancy || tab.ptyId !== nextTabPtyId) {
+          // Why here: a bound PTY is the only proof the open succeeded, so dormancy ends here.
+          const { dormancy: _dormancy, dormantOpenRequested: _requested, ...live } = rest
+          void _dormancy
+          void _requested
           const nextTabs = [...tabs]
           nextTabs[index] = {
-            ...rest,
+            ...live,
             ...(nextPendingActivationSpawn
               ? { pendingActivationSpawn: nextPendingActivationSpawn }
               : {}),

@@ -186,7 +186,9 @@ function buildPayload(
     ...(entry.launch.launchProfileId ? { launchProfileId: entry.launch.launchProfileId } : {}),
     ...(entry.launch.launchAgent ? { launchAgent: entry.launch.launchAgent } : {}),
     ...(entry.launch.shellOverride ? { shellOverride: entry.launch.shellOverride } : {}),
-    ...(entry.startupCwd ? { startupCwd: entry.startupCwd } : {})
+    ...(entry.startupCwd ? { startupCwd: entry.startupCwd } : {}),
+    // Why: only automatic entries may start with their workspace; the rest wait to be opened.
+    ...(entry.wake === 'automatic' ? {} : { dormancy: { reason: 'working-set-restore' } })
   }))
   const groups: TabGroup[] = plan.railGroups.map((tabOrder) => {
     const activeTabId =
