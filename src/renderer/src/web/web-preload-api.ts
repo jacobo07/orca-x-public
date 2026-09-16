@@ -856,6 +856,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         return next
       }
     },
+    // Why explicit: the fallback would answer list with [], which reads as "no snapshots".
+    workingSet: {
+      save: () => Promise.resolve({ status: 'unavailable' as const }),
+      list: () => Promise.resolve({ status: 'unavailable' as const }),
+      read: () => Promise.resolve({ status: 'unavailable' as const })
+    },
     cache: {
       getGitHub: () =>
         Promise.resolve(

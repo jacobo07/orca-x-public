@@ -3,7 +3,9 @@ import type { AppState } from '@/store/types'
 import { leafId } from '../../../shared/project-working-set-test-fixtures'
 import type { ProjectWorkingSetManifest } from '../../../shared/project-working-set-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import type { WorkingSetSaveResult } from '../../../shared/project-working-set-store-types'
 import { projectWorkingSetFromState } from './project-working-set-capture'
+import { saveWorkingSetManifest } from './project-working-set-client'
 import { saveProjectWorkingSet } from './project-working-set-save'
 
 const host = vi.hoisted(() => ({ id: 'local' }))
@@ -242,7 +244,8 @@ describe('saveProjectWorkingSet', () => {
     const state = baseState()
     let release!: (value: unknown) => void
     const save = vi.fn(
-      (_manifest: ProjectWorkingSetManifest) => new Promise((resolve) => (release = resolve))
+      (_manifest: ProjectWorkingSetManifest) =>
+        new Promise<WorkingSetSaveResult>((resolve) => (release = resolve as typeof release))
     )
     const d = deps(state, save)
     const pending = saveProjectWorkingSet({ ownerKey: OWNER, label: 'eod' }, d)
@@ -264,13 +267,12 @@ describe('saveProjectWorkingSet', () => {
   })
 
   it('reports a client without a store as such, not as a save', async () => {
+    const bridge = { save: vi.fn(async () => undefined), list: vi.fn(), read: vi.fn() }
     const d = deps(
       baseState(),
-      vi.fn(async () => undefined)
+      vi.fn((manifest) => saveWorkingSetManifest(manifest, bridge))
     )
-    expect(await saveProjectWorkingSet({ ownerKey: OWNER }, d)).toEqual({
-      status: 'store-unavailable'
-    })
-    expect(d.save).toHaveBeenCalledTimes(1)
+    expect(await saveProjectWorkingSet({ ownerKey: OWNER }, d)).toEqual({ status: 'unavailable' })
+    expect(bridge.save).toHaveBeenCalledTimes(1)
   })
 })

@@ -52,3 +52,24 @@ export type WorkingSetHistory =
       tempArtifactCount: number
     }
   | { status: 'unreadable'; code: string }
+
+/** The request itself was malformed; says nothing about what the store holds. */
+export type WorkingSetInvalidRequest = {
+  status: 'invalid-request'
+  field: 'scope' | 'workingSetId'
+}
+
+/** This client has no sealed store (the browser client). Never an empty store. */
+export type WorkingSetStoreUnavailable = { status: 'unavailable' }
+
+export type WorkingSetReadResult =
+  | WorkingSetArtifactOutcome
+  | WorkingSetInvalidRequest
+  | WorkingSetStoreUnavailable
+
+export type WorkingSetListResult =
+  | WorkingSetHistory
+  | WorkingSetInvalidRequest
+  | WorkingSetStoreUnavailable
+
+export type WorkingSetSaveResult = WorkingSetSaveOutcome | WorkingSetStoreUnavailable

@@ -1,13 +1,16 @@
 import { ipcMain } from 'electron'
 import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type {
-  WorkingSetArtifactOutcome,
-  WorkingSetHistory,
+  WorkingSetListResult,
+  WorkingSetReadResult,
   WorkingSetSaveOutcome,
   WorkingSetScopeKey
 } from '../../shared/project-working-set-store-types'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { getProfileWorkingSetRoot } from '../project-working-set/working-set-store-layout'
+import {
+  getProfileWorkingSetRoot,
+  isCanonicalWorkingSetId
+} from '../project-working-set/working-set-store-layout'
 import {
   listProjectWorkingSets,
   readWorkingSetArtifact,
@@ -40,18 +43,27 @@ export function registerProjectWorkingSetHandlers(): void {
       saveProjectWorkingSet(root, candidate)
   )
 
-  ipcMain.handle('workingSet:list', (_event, scope: unknown): Promise<WorkingSetHistory> => {
-    const key = parseScopeKey(scope)
-    return key
-      ? listProjectWorkingSets(root, key)
-      : Promise.resolve({ status: 'unreadable', code: 'EINVAL' })
-  })
+  // Why a refusal and not an outcome: a malformed request says nothing about what is stored.
+  ipcMain.handle(
+    'workingSet:list',
+    async (_event, scope: unknown): Promise<WorkingSetListResult> => {
+      const key = parseScopeKey(scope)
+      return key ? listProjectWorkingSets(root, key) : { status: 'invalid-request', field: 'scope' }
+    }
+  )
 
-  ipcMain.handle('workingSet:read', (_event, args: unknown): Promise<WorkingSetArtifactOutcome> => {
-    const { scope, workingSetId } = (args ?? {}) as Record<string, unknown>
-    const key = parseScopeKey(scope)
-    return key && typeof workingSetId === 'string'
-      ? readWorkingSetArtifact(root, key, workingSetId)
-      : Promise.resolve({ status: 'missing' })
-  })
+  ipcMain.handle(
+    'workingSet:read',
+    async (_event, args: unknown): Promise<WorkingSetReadResult> => {
+      const { scope, workingSetId } = (args ?? {}) as Record<string, unknown>
+      const key = parseScopeKey(scope)
+      if (!key) {
+        return { status: 'invalid-request', field: 'scope' }
+      }
+      if (typeof workingSetId !== 'string' || !isCanonicalWorkingSetId(workingSetId)) {
+        return { status: 'invalid-request', field: 'workingSetId' }
+      }
+      return readWorkingSetArtifact(root, key, workingSetId)
+    }
+  )
 }

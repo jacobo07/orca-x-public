@@ -1,29 +1,27 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { WorkingSetSaveOutcome } from '../../../shared/project-working-set-store-types'
+import type { WorkingSetSaveResult } from '../../../shared/project-working-set-store-types'
 import type { ProjectWorkingSetManifest } from '../../../shared/project-working-set-types'
 import {
   projectWorkingSetFromState,
   type WorkingSetCaptureResult
 } from './project-working-set-capture'
+import { saveWorkingSetManifest } from './project-working-set-client'
 
 export type WorkingSetSaveDeps = {
   readState: () => AppState
-  save: (manifest: ProjectWorkingSetManifest) => Promise<WorkingSetSaveOutcome | undefined>
+  save: (manifest: ProjectWorkingSetManifest) => Promise<WorkingSetSaveResult>
   now: () => number
   newId: () => string
 }
 
 export type WorkingSetSaveRequestResult =
   | Extract<WorkingSetCaptureResult, { status: 'not-capturable' }>
-  /** This client has no sealed store (the browser client); nothing was attempted. */
-  | { status: 'store-unavailable' }
-  | WorkingSetSaveOutcome
+  | WorkingSetSaveResult
 
 const defaultDeps: WorkingSetSaveDeps = {
   readState: () => useAppStore.getState(),
-  // The web client's fallback proxy resolves this to undefined.
-  save: (manifest) => window.api.workingSet.save(manifest),
+  save: (manifest) => saveWorkingSetManifest(manifest),
   now: () => Date.now(),
   newId: () => crypto.randomUUID()
 }
@@ -47,6 +45,5 @@ export async function saveProjectWorkingSet(
   if (captured.status !== 'captured') {
     return captured
   }
-  const outcome = await deps.save(captured.manifest)
-  return typeof outcome === 'object' && outcome !== null ? outcome : { status: 'store-unavailable' }
+  return deps.save(captured.manifest)
 }

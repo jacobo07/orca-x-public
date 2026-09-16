@@ -56,13 +56,25 @@ describe('project working-set IPC', () => {
       { executionHostId: 'nope', ownerKey: 'x' },
       { ...scope, ownerKey: '' }
     ]) {
-      expect(await invoke('workingSet:list', bad)).toEqual({ status: 'unreadable', code: 'EINVAL' })
+      expect(await invoke('workingSet:list', bad)).toEqual({
+        status: 'invalid-request',
+        field: 'scope'
+      })
       expect(await invoke('workingSet:read', { scope: bad, workingSetId: 'x' })).toEqual({
-        status: 'missing'
+        status: 'invalid-request',
+        field: 'scope'
       })
     }
-    expect(await invoke('workingSet:read', { scope, workingSetId: '../../escape' })).toEqual({
-      status: 'missing'
-    })
+    for (const workingSetId of ['../../escape', 42, undefined]) {
+      expect(await invoke('workingSet:read', { scope, workingSetId })).toEqual({
+        status: 'invalid-request',
+        field: 'workingSetId'
+      })
+    }
+  })
+
+  it('answers missing only for a well-formed id the store does not hold', async () => {
+    const workingSetId = '0b9e7d2c-4a1f-4e3b-8c6d-2f1a9e8b7c54'
+    expect(await invoke('workingSet:read', { scope, workingSetId })).toEqual({ status: 'missing' })
   })
 })
