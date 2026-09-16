@@ -143,17 +143,17 @@ lives there (`decideResumeSpawn`, installed by `registerAgentSessionLivePresence
   replies `agentResumeRefused`; it never falls back to launching a fresh provider session;
 - expiry is cleanup, not proof: every decision re-reads presence first.
 
-| Materializer                                     | Initiated | Class | Status                                                       |
-| ------------------------------------------------ | --------- | ----- | ------------------------------------------------------------ |
-| AI Vault resume                                  | user      | A     | guarded (dialog + reservation + spawn gate)                  |
-| Per-pane "Resume this session" (in progress)     | user      | A     | not integrated: types into a live shell, never spawns        |
-| Sleep launch into a new tab (activation, mobile) | automatic | A     | guarded at spawn; limit: record cleared before spawn         |
-| Pane cold restore                                | automatic | A     | guarded at spawn; refusal keeps the record (`be116a07e`)     |
-| In-place hibernation wake                        | automatic | A     | guarded at spawn (same path as cold restore)                 |
-| Working-set row revival                          | automatic | A     | guarded at spawn (lazy sleep record → cold restore)          |
-| Runtime-routed ensure (web, mobile, CLI)         | remote    | A     | not integrated: own `ClaimedAgentPtyOwnerRegistry` authority |
-| Provider `/resume` picker                        | provider  | B     | post-effect notice to the owning window                      |
-| SSH                                              | any       | —     | unsupported: no claim key, proceeds unreserved               |
+| Materializer                                     | Initiated | Class | Status                                                          |
+| ------------------------------------------------ | --------- | ----- | --------------------------------------------------------------- |
+| AI Vault resume                                  | user      | A     | guarded (dialog + reservation + spawn gate)                     |
+| Per-pane "Resume this session"                   | user      | A     | guarded: dialog + reservation, then gated respawn (`4f7fb4b8f`) |
+| Sleep launch into a new tab (activation, mobile) | automatic | A     | guarded at spawn; limit: record cleared before spawn            |
+| Pane cold restore                                | automatic | A     | guarded at spawn; refusal keeps the record (`be116a07e`)        |
+| In-place hibernation wake                        | automatic | A     | guarded at spawn (same path as cold restore)                    |
+| Working-set row revival                          | automatic | A     | guarded at spawn (lazy sleep record → cold restore)             |
+| Runtime-routed ensure (web, mobile, CLI)         | remote    | A     | not integrated: own `ClaimedAgentPtyOwnerRegistry` authority    |
+| Provider `/resume` picker                        | provider  | B     | post-effect notice to the owning window                         |
+| SSH                                              | any       | —     | unsupported: no claim key, proceeds unreserved                  |
 
 Pane handling (`be116a07e`): a refusal shows the `resume-refused` banner, clears the launch
 config it registered and keeps the sleep record. A refused dormant working-set row still becomes
@@ -167,10 +167,7 @@ Inventory ratchet: `config/existing-session-materializers.jsonc`, enforced by
 changed count or a stale entry fails; a spawn-gate entry must name its carrier.
 
 Limits: a refused sleep launch leaves a plain-shell tab, and its record was already cleared
-before the spawn (reserving before tab creation touches twelve test files). The per-pane
-"Resume this session" being built in `pane-session-resume-capability.ts` types into a live
-shell, so it never crosses `pty:spawn`; it must reserve through the IPC authority itself and be
-classified in the inventory. The remote-host AI Vault path carries a session without
+before the spawn (reserving before tab creation touches twelve test files). The remote-host AI Vault path carries a session without
 `launchAgent`, so the gate treats it as having nothing to resume (it runs over a connection the
 gate skips anyway).
 
