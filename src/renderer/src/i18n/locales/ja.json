@@ -3477,6 +3477,33 @@
             "updatedOne": "1台のサーバーを更新完了"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "アイドル中のエージェントのメモリ",
+              "idleOne": "アイドル中のエージェント1件をスリープできます",
+              "idleMany": "アイドル中のエージェント{{value0}}件をスリープできます",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "そのうち1件は未計測のため、この数値に含まれていません",
+              "unknownMany": "そのうち{{value0}}件は未計測のため、この数値に含まれていません",
+              "protectedOne": "1個のペインはスリープしません",
+              "protectedMany": "{{value0}}個のペインはスリープしません",
+              "reason": {
+                "featureDisabled": "エージェントのスリープはオフです",
+                "worktreeActive": "開いているワークスペース内です",
+                "runtimeLivenessUnknown": "リモートターミナルの状態を確認できません",
+                "tabForeground": "タブが前面に開いています",
+                "agentBusy": "エージェントが作業中です",
+                "agentInterrupted": "エージェントが中断されました",
+                "hasSubagents": "サブエージェントが実行中です",
+                "dispatchUnsettled": "ディスパッチが完了していません",
+                "alreadySleeping": "すでにスリープ中です",
+                "paneMismatch": "ペインが移動しました",
+                "notResumable": "再開できません",
+                "notIdleLongEnough": "アイドル時間が短すぎます",
+                "recentInput": "最近入力がありました",
+                "noLivePane": "稼働中のターミナルがありません",
+                "mobileLocked": "モバイルクライアントが保持しています"
+              }
+            },
             "terminalHost": {
               "label": "ターミナルホスト",
               "unattributedLabel": "帰属先不明のターミナルプロセス",

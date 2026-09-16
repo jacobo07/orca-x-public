@@ -3489,6 +3489,33 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "空闲智能体内存",
+              "idleOne": "1 个空闲智能体可以休眠",
+              "idleMany": "{{value0}} 个空闲智能体可以休眠",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "其中 1 个尚未测量,因此不计入此数值",
+              "unknownMany": "其中 {{value0}} 个尚未测量,因此不计入此数值",
+              "protectedOne": "1 个窗格保持唤醒",
+              "protectedMany": "{{value0}} 个窗格保持唤醒",
+              "reason": {
+                "featureDisabled": "智能体休眠已关闭",
+                "worktreeActive": "位于当前打开的工作区",
+                "runtimeLivenessUnknown": "远程终端状态未确认",
+                "tabForeground": "标签页在前台打开",
+                "agentBusy": "智能体仍在工作",
+                "agentInterrupted": "智能体已被中断",
+                "hasSubagents": "子智能体仍在运行",
+                "dispatchUnsettled": "调度尚未完成",
+                "alreadySleeping": "已在休眠",
+                "paneMismatch": "窗格已移动",
+                "notResumable": "无法恢复",
+                "notIdleLongEnough": "空闲时间太短",
+                "recentInput": "最近有输入",
+                "noLivePane": "没有运行中的终端",
+                "mobileLocked": "被移动客户端占用"
+              }
+            },
             "terminalHost": {
               "label": "终端宿主",
               "unattributedLabel": "未归属的终端进程",

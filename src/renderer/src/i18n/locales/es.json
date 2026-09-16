@@ -3497,6 +3497,33 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "Memoria de agentes inactivos",
+              "idleOne": "1 agente inactivo puede dormir",
+              "idleMany": "{{value0}} agentes inactivos pueden dormir",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "1 de ellos no se ha medido, así que no está en esta cifra",
+              "unknownMany": "{{value0}} de ellos no se han medido, así que no están en esta cifra",
+              "protectedOne": "1 panel se mantiene despierto",
+              "protectedMany": "{{value0}} paneles se mantienen despiertos",
+              "reason": {
+                "featureDisabled": "El reposo de agentes está desactivado",
+                "worktreeActive": "En el espacio de trabajo abierto",
+                "runtimeLivenessUnknown": "Estado del terminal remoto sin confirmar",
+                "tabForeground": "La pestaña está abierta en primer plano",
+                "agentBusy": "El agente sigue trabajando",
+                "agentInterrupted": "El agente fue interrumpido",
+                "hasSubagents": "Hay subagentes en ejecución",
+                "dispatchUnsettled": "Envío sin completar",
+                "alreadySleeping": "Ya está dormido",
+                "paneMismatch": "El panel se movió",
+                "notResumable": "No se podría reanudar",
+                "notIdleLongEnough": "Inactivo muy poco tiempo",
+                "recentInput": "Se escribió hace poco",
+                "noLivePane": "Sin terminal activo",
+                "mobileLocked": "Retenido por un cliente móvil"
+              }
+            },
             "terminalHost": {
               "label": "Host de terminal",
               "unattributedLabel": "Procesos de terminal sin atribuir",

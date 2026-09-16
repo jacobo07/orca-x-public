@@ -3477,6 +3477,33 @@
             "updatedOne": "1개 서버 업데이트 완료"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "유휴 에이전트 메모리",
+              "idleOne": "유휴 에이전트 1개를 절전할 수 있습니다",
+              "idleMany": "유휴 에이전트 {{value0}}개를 절전할 수 있습니다",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "그중 1개는 측정되지 않아 이 수치에 포함되지 않습니다",
+              "unknownMany": "그중 {{value0}}개는 측정되지 않아 이 수치에 포함되지 않습니다",
+              "protectedOne": "창 1개는 절전하지 않고 유지됩니다",
+              "protectedMany": "창 {{value0}}개는 절전하지 않고 유지됩니다",
+              "reason": {
+                "featureDisabled": "에이전트 절전이 꺼져 있습니다",
+                "worktreeActive": "열려 있는 워크스페이스에 있습니다",
+                "runtimeLivenessUnknown": "원격 터미널 상태를 확인하지 못했습니다",
+                "tabForeground": "탭이 앞에 열려 있습니다",
+                "agentBusy": "에이전트가 아직 작업 중입니다",
+                "agentInterrupted": "에이전트가 중단되었습니다",
+                "hasSubagents": "하위 에이전트가 실행 중입니다",
+                "dispatchUnsettled": "디스패치가 완료되지 않았습니다",
+                "alreadySleeping": "이미 절전 중입니다",
+                "paneMismatch": "창이 이동했습니다",
+                "notResumable": "재개할 수 없습니다",
+                "notIdleLongEnough": "유휴 시간이 너무 짧습니다",
+                "recentInput": "최근에 입력했습니다",
+                "noLivePane": "실행 중인 터미널이 없습니다",
+                "mobileLocked": "모바일 클라이언트가 사용 중입니다"
+              }
+            },
             "terminalHost": {
               "label": "터미널 호스트",
               "unattributedLabel": "소속을 알 수 없는 터미널 프로세스",

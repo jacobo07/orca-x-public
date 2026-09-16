@@ -3735,6 +3735,33 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "Idle agent memory",
+              "idleOne": "1 idle agent can sleep",
+              "idleMany": "{{value0}} idle agents can sleep",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "1 of them has not been measured, so it is not in this figure",
+              "unknownMany": "{{value0}} of them have not been measured, so they are not in this figure",
+              "protectedOne": "1 pane is kept awake",
+              "protectedMany": "{{value0}} panes are kept awake",
+              "reason": {
+                "featureDisabled": "Agent sleep is off",
+                "worktreeActive": "In the open workspace",
+                "runtimeLivenessUnknown": "Remote terminal state not confirmed",
+                "tabForeground": "Tab is open in front",
+                "agentBusy": "Agent still working",
+                "agentInterrupted": "Agent was interrupted",
+                "hasSubagents": "Subagents still running",
+                "dispatchUnsettled": "Dispatch not settled",
+                "alreadySleeping": "Already asleep",
+                "paneMismatch": "Pane moved",
+                "notResumable": "Could not be resumed",
+                "notIdleLongEnough": "Idle too briefly",
+                "recentInput": "Typed in recently",
+                "noLivePane": "No live terminal",
+                "mobileLocked": "Held by a mobile client"
+              }
+            },
             "terminalHost": {
               "label": "Terminal host",
               "unattributedLabel": "Unattributed terminal processes",
