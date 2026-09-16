@@ -1935,11 +1935,13 @@ export function connectPanePty(
       // Why: an Orca-started agent can exit before its first hook status. The
       // launch registry was still created up front, so clear it on command exit.
       state.clearAgentLaunchConfig(cacheKey)
+      state.markSleepingAgentExited(cacheKey)
       return
     }
     const current = state.agentStatusByPaneKey[cacheKey]
     if (!current) {
       state.clearAgentLaunchConfig(cacheKey)
+      state.markSleepingAgentExited(cacheKey)
       return
     }
     const unchanged =
@@ -1964,6 +1966,7 @@ export function connectPanePty(
       return
     }
     state.dropAgentStatus(cacheKey)
+    state.markSleepingAgentExited(cacheKey)
   }
   let pendingTerminalInputIntent: AgentInterruptInputIntent | null = null
   let clearPendingTerminalInputIntentTimer: ReturnType<typeof setTimeout> | null = null
@@ -4999,6 +5002,10 @@ export function connectPanePty(
         return null
       }
       const useLiveEntry = entry && entry.state !== 'done'
+      // Why: the user left this agent; restore the shell only, keeping the identity for a manual resume.
+      if (!useLiveEntry && sleepingRecord?.automaticResumeBlockedBy === 'agent-exited') {
+        return null
+      }
       const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
       if (!agent || !isResumableTuiAgent(agent)) {
         return null

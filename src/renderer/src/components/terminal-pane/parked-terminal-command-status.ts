@@ -87,11 +87,13 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       // Why: an Orca-started agent can exit before its first hook status; clear the launch
       // registry on command exit like the mounted path does.
       state.clearAgentLaunchConfig(paneKey)
+      state.markSleepingAgentExited(paneKey)
       return
     }
     const current = state.agentStatusByPaneKey[paneKey]
     if (!current) {
       state.clearAgentLaunchConfig(paneKey)
+      state.markSleepingAgentExited(paneKey)
       return
     }
     const unchanged =
@@ -104,6 +106,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       return
     }
     state.dropAgentStatus(paneKey)
+    state.markSleepingAgentExited(paneKey)
   }
 
   // Complete the row only while it is still this turn's command-code/working entry.

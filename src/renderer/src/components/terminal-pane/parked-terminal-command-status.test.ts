@@ -22,6 +22,7 @@ type MockStoreState = {
   runtimePaneTitlesByTabId: Record<string, Record<number, string | undefined>>
   setAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  markSleepingAgentExited: ReturnType<typeof vi.fn>
   clearAgentLaunchConfig: ReturnType<typeof vi.fn>
 }
 
@@ -53,6 +54,7 @@ function makeMockStoreState(): MockStoreState {
     runtimePaneTitlesByTabId: { [TAB_ID]: { [PANE_ID]: '✳ Build feature' } },
     setAgentStatus: vi.fn(),
     dropAgentStatus: vi.fn(),
+    markSleepingAgentExited: vi.fn(),
     clearAgentLaunchConfig: vi.fn()
   }
 }
@@ -364,11 +366,13 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     // Why: local drops need the mounted pane's foreground process-confirm ladder
     // (leaked nested-shell 133;D protection), so the watcher must not drop them.
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+    expect(mockStoreState.markSleepingAgentExited).not.toHaveBeenCalled()
     local.dispose()
 
     const ssh = await createPolicy(PTY_ID_SSH)
     ssh.onCommandFinished(0)
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
+    expect(mockStoreState.markSleepingAgentExited).toHaveBeenCalledWith(PANE_KEY)
     ssh.dispose()
   })
 
@@ -378,6 +382,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     ssh.onCommandFinished(0)
 
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(PANE_KEY)
+    expect(mockStoreState.markSleepingAgentExited).toHaveBeenCalledWith(PANE_KEY)
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
     ssh.dispose()
   })

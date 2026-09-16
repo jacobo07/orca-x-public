@@ -18,9 +18,8 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
-// Characterization (D1): the record an agent exit leaves behind is resumed by a
-// later cold restore, because nothing on the record says the agent exited.
-// W2 inverts the exited case; the control must stay green.
+// D1: cold restore must not relaunch an agent the user exited, while an
+// unblocked or quit-captured record still resumes its exact session.
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -141,11 +140,19 @@ async function coldRestoreWith(record: SleepingAgentSessionRecord): Promise<Mock
   return transport
 }
 
-function connectedCommand(transport: MockTransport): unknown {
+function coldRestoreConnect(transport: MockTransport): { command?: unknown } {
   const call = transport.connect.mock.calls.find(
     (args) => (args[0] as { sessionId?: string } | undefined)?.sessionId === 'lost-pty'
   )
-  return (call?.[0] as { command?: unknown } | undefined)?.command
+  // Why: "no resume command" is only evidence if the cold restore itself happened.
+  if (!call) {
+    throw new Error('cold restore never reconnected the lost pty')
+  }
+  return call[0] as { command?: unknown }
+}
+
+function connectedCommand(transport: MockTransport): unknown {
+  return coldRestoreConnect(transport).command
 }
 
 describe('cold restore of a pane whose agent exited', () => {
@@ -178,10 +185,26 @@ describe('cold restore of a pane whose agent exited', () => {
     expect(connectedCommand(transport)).toEqual(expect.stringContaining('claude-session-quit'))
   })
 
-  // CHARACTERIZATION: a deliberately exited agent is relaunched on cold restore.
-  it('resumes the exited agent because the record cannot say it exited', async () => {
+  it('control: an unblocked live record still resumes its exact session', async () => {
     const transport = await coldRestoreWith(exitShapedRecord())
 
     expect(connectedCommand(transport)).toEqual(expect.stringContaining('claude-session-exited'))
+  })
+
+  it('restores only the shell for a pane whose agent exited', async () => {
+    const transport = await coldRestoreWith(
+      exitShapedRecord({ automaticResumeBlockedBy: 'agent-exited' })
+    )
+
+    expect(connectedCommand(transport)).toBeUndefined()
+    // Why: the identity stays for a deliberate resume later.
+    const records = mockStoreState.sleepingAgentSessionsByPaneKey as Record<
+      string,
+      SleepingAgentSessionRecord | undefined
+    >
+    expect(records[PANE_KEY]?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'claude-session-exited'
+    })
   })
 })

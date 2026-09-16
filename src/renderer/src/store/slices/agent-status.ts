@@ -294,6 +294,8 @@ export type AgentStatusSlice = {
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
+  /** The pane's agent exited to its shell: keep its resume identity, stop automatic relaunch. */
+  markSleepingAgentExited: (paneKey: string) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
@@ -3122,11 +3124,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
       set((s) => {
         const current = s.sleepingAgentSessionsByPaneKey[paneKey]
+        // Why: releasing the legacy fence must not also lift an agent-exited block.
         if (
           !current ||
           (blocked
             ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            : current.automaticResumeBlockedBy === undefined)
+            : current.automaticResumeBlockedBy !== 'legacy-orchestration-worker')
         ) {
           return s
         }
@@ -3140,6 +3143,28 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           sleepingAgentSessionsByPaneKey: {
             ...s.sleepingAgentSessionsByPaneKey,
             [paneKey]: next
+          }
+        }
+      })
+    },
+
+    markSleepingAgentExited: (paneKey) => {
+      paneKey = resolveAgentPaneAuthorityKey(paneKey)
+      set((s) => {
+        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
+        // Why: the legacy fence is stricter (attach-only), so it keeps precedence.
+        if (!current || current.automaticResumeBlockedBy !== undefined) {
+          return s
+        }
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...s.sleepingAgentSessionsByPaneKey,
+            // Why: advancing updatedAt rejects a pre-exit provider-session report that would lift the block.
+            [paneKey]: {
+              ...current,
+              automaticResumeBlockedBy: 'agent-exited',
+              updatedAt: Math.max(current.updatedAt, Date.now())
+            }
           }
         }
       })
