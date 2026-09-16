@@ -6,6 +6,7 @@ import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-hos
 import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
+import { subscribeLiveSessionCollisionNotices } from '@/lib/live-session-collision-notice'
 import { activateAndRevealWorktree, activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
@@ -3606,6 +3607,7 @@ export function useIpcEvents(): void {
         enqueueLiveAgentStatus(data)
       })
     )
+    unsubs.push(subscribeLiveSessionCollisionNotices())
     const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
       (data: AgentStatusClearIpcPayload) => {
         if (typeof data !== 'object' || data === null) {

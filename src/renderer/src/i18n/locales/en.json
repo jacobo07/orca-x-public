@@ -16502,6 +16502,9 @@
       "unknownDescription": "Orca could not confirm whether it is active in another pane.",
       "startingTitle": "This session is already starting",
       "startingDescription": "Another resume of it is still opening.",
+      "resumedHereTitle": "This session is also open in another pane",
+      "resumedHereTitleMany": "This session is also open in {{count}} other panes",
+      "resumedHereDescription": "It was resumed here while it was already running. Both copies are live, and Orca can't guarantee they work correctly at the same time.",
       "continueRisk": "Continuing opens a second live copy. Orca can't guarantee both copies work correctly at the same time.",
       "back": "Back",
       "continue": "Continue"

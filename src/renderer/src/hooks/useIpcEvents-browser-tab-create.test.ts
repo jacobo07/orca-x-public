@@ -241,7 +241,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 

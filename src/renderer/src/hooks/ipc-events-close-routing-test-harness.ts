@@ -266,7 +266,7 @@ export async function useIpcEventsForCloseRouting({
         onTerminalDriverChanged: () => () => {},
         onBrowserDriverChanged: () => {}
       },
-      agentStatus: { onSet: () => () => {} }
+      agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
     }
   })
 

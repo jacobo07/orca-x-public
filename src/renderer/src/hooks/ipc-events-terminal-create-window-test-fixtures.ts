@@ -183,7 +183,7 @@ export function buildTerminalCreateWindow(args: {
         onDetectedPortsChanged: () => () => {},
         onCredentialResolved: () => () => {}
       },
-      agentStatus: { onSet: () => () => {} }
+      agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
     }
   }
 }

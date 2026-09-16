@@ -14675,6 +14675,9 @@
       "unknownDescription": "別のペインでアクティブかどうかを Orca で確認できませんでした。",
       "startingTitle": "このセッションはすでに起動中です",
       "startingDescription": "このセッションの別の再開がまだ開いている途中です。",
+      "resumedHereTitle": "このセッションは別のペインでも開いています",
+      "resumedHereTitleMany": "このセッションは他の {{count}} 個のペインでも開いています",
+      "resumedHereDescription": "すでに実行中の状態でここで再開されました。両方のコピーがアクティブで、Orca は同時に正しく動作することを保証できません。",
       "continueRisk": "続行すると、2 つ目のコピーが起動します。両方が同時に正しく動作することは Orca では保証できません。",
       "back": "戻る",
       "continue": "続行"

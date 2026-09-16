@@ -14695,6 +14695,9 @@
       "unknownDescription": "Orca no pudo confirmar si está activa en otro pane.",
       "startingTitle": "Esta sesión ya se está iniciando",
       "startingDescription": "Otra reanudación de esta sesión todavía se está abriendo.",
+      "resumedHereTitle": "Esta sesión también está abierta en otro pane",
+      "resumedHereTitleMany": "Esta sesión también está abierta en {{count}} panes más",
+      "resumedHereDescription": "Se reanudó aquí mientras ya estaba en ejecución. Ambas copias están activas y Orca no puede garantizar que funcionen correctamente a la vez.",
       "continueRisk": "Si continúas, se abrirá una segunda copia activa. Orca no puede garantizar que ambas funcionen bien a la vez.",
       "back": "Atrás",
       "continue": "Continuar"
