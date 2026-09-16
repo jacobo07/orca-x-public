@@ -3,6 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { LiveSessionResumeRefusal } from '../../shared/live-agent-session-presence-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
@@ -65,6 +66,8 @@ export type PtyApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    /** The session is live, starting or unconfirmed elsewhere; a plain shell started instead. */
+    agentResumeRefused?: LiveSessionResumeRefusal
   }>
   write: (id: string, data: string) => void
   writeAccepted: (id: string, data: string) => Promise<boolean>

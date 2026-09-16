@@ -240,7 +240,8 @@ import type {
   LiveAgentSessionPresenceResponse,
   LiveSessionCollisionNotice,
   LiveSessionMaterializationRequest,
-  LiveSessionMaterializationResponse
+  LiveSessionMaterializationResponse,
+  LiveSessionResumeRefusal
 } from '../shared/live-agent-session-presence-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
@@ -1038,6 +1039,7 @@ const api = {
       coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
       agentResumeUnavailable?: true
+      agentResumeRefused?: LiveSessionResumeRefusal
     }> => ipcRenderer.invoke('pty:spawn', opts),
 
     write: (id: string, data: string): void => {

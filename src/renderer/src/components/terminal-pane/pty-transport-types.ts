@@ -8,6 +8,7 @@ import type {
   AgentPromptDelivery
 } from '../../../../shared/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { LiveSessionResumeRefusal } from '../../../../shared/live-agent-session-presence-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
@@ -94,6 +95,8 @@ export type PtyConnectResult = {
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Main declined an unverifiable provider-session resume and launched fresh. */
   agentResumeUnavailable?: true
+  /** Main refused the resume because the session is live or starting elsewhere; plain shell. */
+  agentResumeRefused?: LiveSessionResumeRefusal
   /** Trailing partial escape the daemon emulator held mid-parse; the reattach
    *  replay writes it LAST (after the reset) so a racing live continuation
    *  completes it instead of rendering literally (#7329). */
