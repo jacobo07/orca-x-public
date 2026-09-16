@@ -110,6 +110,8 @@ export function gateOrcaSelectedResume(args: {
   worktreeId: string
   agent: string
   providerSession?: AgentProviderSessionMetadata
+  /** The existing pane that will hold the session; its own row then reads as live-here. */
+  paneKey?: string
   launchesThroughRuntime: boolean
   confirm: ConfirmationDialogContextValue | null
 }): Promise<LiveSessionCollisionGateResult> {
@@ -118,6 +120,7 @@ export function gateOrcaSelectedResume(args: {
   }
   return gateLiveSessionMaterialization({
     request: {
+      ...(args.paneKey ? { paneKey: args.paneKey } : {}),
       worktreeId: args.worktreeId,
       agent: args.agent,
       providerSession: args.providerSession

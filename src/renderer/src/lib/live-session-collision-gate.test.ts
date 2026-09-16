@@ -9,7 +9,10 @@ import type {
   ConfirmationDialogContextValue,
   ConfirmationDialogOptions
 } from '@/components/confirmation-dialog-context'
-import { gateLiveSessionMaterialization } from './live-session-collision-gate'
+import {
+  gateLiveSessionMaterialization,
+  gateOrcaSelectedResume
+} from './live-session-collision-gate'
 
 function confirmReturning(result: boolean) {
   return vi.fn(async (_options: ConfirmationDialogOptions) => result)
@@ -213,5 +216,29 @@ describe('gateLiveSessionMaterialization', () => {
 
     expect(confirm).toHaveBeenCalledTimes(2)
     expect(reserve.mock.calls[2][0].accept).toBeUndefined()
+  })
+})
+
+describe('gateOrcaSelectedResume', () => {
+  // Why: without the pane key, the resuming pane's own pre-exit row reads as live elsewhere.
+  it('names the pane that will hold the session', async () => {
+    const reserveMaterialization = replies(granted)
+    vi.stubGlobal('window', { api: { agentStatus: { reserveMaterialization } } })
+    try {
+      const result = await gateOrcaSelectedResume({
+        ...request,
+        paneKey: 'tab-1:leaf-1',
+        launchesThroughRuntime: false,
+        confirm: null
+      })
+
+      expect(result.outcome).toBe('proceed')
+      expect(reserveMaterialization.mock.calls[0][0]).toMatchObject({
+        paneKey: 'tab-1:leaf-1',
+        providerSession: request.providerSession
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
