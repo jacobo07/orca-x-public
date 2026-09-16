@@ -321,6 +321,152 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
   })
 
+  /**
+   * Two authorities describe the daemon incarnation: the authenticated hello, and the durable pid
+   * record. They can disagree, and the disagreement is EVIDENCE -- of a stale record, a recycled
+   * pid, a second daemon, or a leaked token. It is not the same event as having no record at all.
+   *
+   * Both took the same branch and printed the same line, so an operator reading the log could not
+   * tell "these two authorities contradicted each other" from "there was nothing to compare".
+   * Only one of those is worth investigating.
+   *
+   * This is classification, not authority: the repair behaviour is deliberately unchanged, and the
+   * hello gains nothing it did not already have. See the trust-boundary note in the reconciler.
+   */
+  it('names a contradicting PID record as a contradiction, not as an absent one', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const endpointIdentity = { pid: 101, startedAtMs: 1_000_000, launchNonce: 'socket-owner' }
+    daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        getDaemonIdentity: vi.fn(() => endpointIdentity),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+    readFileSyncMock.mockReturnValueOnce(
+      JSON.stringify({ pid: 202, startedAtMs: 2_000_000, launchNonce: 'stale-owner' })
+    )
+    readFileSyncMock.mockReturnValueOnce(JSON.stringify(endpointIdentity))
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string,
+      pidPath?: string,
+      launchNonce?: string
+    ) => Promise<{ releaseAdoptionLease?(): void; shutdown(): Promise<void> }>
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'unused')
+      const lines = warn.mock.calls.map((call) => String(call[0]))
+
+      expect(
+        lines.some((line) => line.includes('contradicts the authenticated endpoint')),
+        'a record naming a different incarnation was not reported as a contradiction'
+      ).toBe(true)
+      // The nonce is an incarnation identifier, not something to spray into a log the user may
+      // paste into an issue. Naming the disagreeing FIELDS is what an operator needs.
+      expect(lines.some((line) => line.includes('stale-owner'))).toBe(false)
+      expect(replaceDaemonPidFileMock).toHaveBeenCalledWith('/fake/daemon.pid', endpointIdentity)
+      handle.releaseAdoptionLease?.()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('does not call an unreadable PID record a contradiction', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const endpointIdentity = { pid: 101, startedAtMs: 1_000_000, launchNonce: 'socket-owner' }
+    daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        getDaemonIdentity: vi.fn(() => endpointIdentity),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+    // Nothing to compare against: this is an absent authority, not a conflicting one.
+    readFileSyncMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' })
+    })
+    readFileSyncMock.mockReturnValueOnce(JSON.stringify(endpointIdentity))
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string,
+      pidPath?: string,
+      launchNonce?: string
+    ) => Promise<{ releaseAdoptionLease?(): void; shutdown(): Promise<void> }>
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'unused')
+      const lines = warn.mock.calls.map((call) => String(call[0]))
+
+      expect(
+        lines.some((line) => line.includes('contradicts the authenticated endpoint')),
+        'an absent record was reported as two authorities disagreeing'
+      ).toBe(false)
+      expect(
+        lines.some((line) => line.includes('could not be read')),
+        'an absent record was not reported at all'
+      ).toBe(true)
+      // Behaviour is unchanged: the record is still published for the authenticated owner.
+      expect(replaceDaemonPidFileMock).toHaveBeenCalledWith('/fake/daemon.pid', endpointIdentity)
+      handle.releaseAdoptionLease?.()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('stays silent and repairs nothing when the two authorities agree', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const endpointIdentity = { pid: 101, startedAtMs: 1_000_000, launchNonce: 'socket-owner' }
+    daemonClientMock.mockImplementationOnce(function MockAdoptionClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        getDaemonIdentity: vi.fn(() => endpointIdentity),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+    // Not mockReturnValueOnce: the agreement claim must not depend on which read in the flow
+    // happens to consume the queue. Every read returns the agreeing record.
+    readFileSyncMock.mockReturnValue(JSON.stringify(endpointIdentity))
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string,
+      pidPath?: string,
+      launchNonce?: string
+    ) => Promise<{ releaseAdoptionLease?(): void; shutdown(): Promise<void> }>
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // initDaemonPtyProvider() publishes a record of its own before any reconciliation happens, so
+    // an absolute "never called" assertion fails on a precondition rather than on the claim. The
+    // claim is about what the RECONCILER did, so bracket the launcher call and measure the delta.
+    const republishedBeforeAdoption = replaceDaemonPidFileMock.mock.calls.length
+
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'unused')
+      const lines = warn.mock.calls.map((call) => String(call[0]))
+
+      // The healthy path must not acquire conflict handling it has no use for.
+      expect(lines.some((line) => line.includes('contradicts the authenticated endpoint'))).toBe(
+        false
+      )
+      expect(lines.some((line) => line.includes('could not be read'))).toBe(false)
+      expect(
+        replaceDaemonPidFileMock.mock.calls.length - republishedBeforeAdoption,
+        'agreeing authorities still rewrote the record'
+      ).toBe(0)
+      handle.releaseAdoptionLease?.()
+    } finally {
+      warn.mockRestore()
+      readFileSyncMock.mockReset()
+    }
+  })
+
   it('republishes the endpoint owner launch metadata into a repaired PID record', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
