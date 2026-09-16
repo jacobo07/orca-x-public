@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { observeSleepAuthorizationPlan } from '@/lib/observe-sleep-authorization-plan'
 import { sleepAuthorizedAgentPanes } from '@/lib/agent-hibernation-coordinator'
+import { observeReclaimAfterSleep } from '@/lib/agent-sleep-observed-reclaim'
 import { SleepReclaimAuthorizationSection } from './SleepReclaimAuthorizationSection'
 
 /**
@@ -29,5 +30,11 @@ export function SleepReclaimAuthorizationPanel(): React.JSX.Element | null {
     void signals
     return observeSleepAuthorizationPlan()
   }, [signals])
-  return <SleepReclaimAuthorizationSection plan={plan} onSleep={sleepAuthorizedAgentPanes} />
+  return (
+    <SleepReclaimAuthorizationSection
+      plan={plan}
+      onSleep={sleepAuthorizedAgentPanes}
+      onObserve={observeReclaimAfterSleep}
+    />
+  )
 }

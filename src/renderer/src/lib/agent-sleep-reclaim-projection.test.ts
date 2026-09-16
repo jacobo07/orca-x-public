@@ -167,7 +167,10 @@ describe('reclaim estimate', () => {
   })
 
   it('reports an all-unknown set as zero known and nothing claimed', () => {
-    const estimate = summarizeReclaimEstimate([{ known: false, reason: 'snapshot-unusable' }], 'rss')
+    const estimate = summarizeReclaimEstimate(
+      [{ known: false, reason: 'snapshot-unusable' }],
+      'rss'
+    )
     expect(estimate.knownBytes).toBe(0)
     expect(estimate.knownCount).toBe(0)
     expect(estimate.unknownCount).toBe(1)
@@ -216,7 +219,11 @@ describe('observed reclaim', () => {
       probe: probe([agent.pid]),
       effectEndedAt: EFFECT_ENDED_AT
     })
-    expect(observed).toMatchObject({ status: 'measured', bytes: 300 * MB, stillRunningProcessCount: 1 })
+    expect(observed).toMatchObject({
+      status: 'measured',
+      bytes: 300 * MB,
+      stillRunningProcessCount: 1
+    })
   })
 
   it('reports a measured zero when every baseline process is still listed', () => {

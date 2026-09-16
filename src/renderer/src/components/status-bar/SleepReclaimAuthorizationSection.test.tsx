@@ -13,6 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SleepReclaimAuthorizationSection } from './SleepReclaimAuthorizationSection'
 import type { SleepAuthorizedPanes } from './SleepReclaimAuthorizationAction'
 import type { AgentSleepResult } from '@/lib/agent-hibernation-coordinator'
+import type { ObserveReclaimAfterSleep } from '@/lib/agent-sleep-observed-reclaim'
+import type { ObservedReclaim } from '@/lib/agent-sleep-reclaim-projection'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
 import type {
   SleepAuthorizationPlan,
@@ -303,6 +305,176 @@ describe('SleepReclaimAuthorizationSection explicit sleep', () => {
     expect(action()).toBeNull()
   })
 
+  describe('observed reclaim after the effect', () => {
+    const sleptA: AgentSleepResult[] = [{ candidateId: 'wt-1|tab-1:a', outcome: 'slept' }]
+
+    function renderObserved(
+      value: SleepAuthorizationPlan,
+      onSleep: SleepAuthorizedPanes,
+      onObserve: ObserveReclaimAfterSleep
+    ): void {
+      act(() =>
+        root.render(
+          <SleepReclaimAuthorizationSection plan={value} onSleep={onSleep} onObserve={onObserve} />
+        )
+      )
+    }
+
+    function observedLine(): Element | null {
+      return container.querySelector('[data-testid="sleep-reclaim-observed"]')
+    }
+
+    it('hands the observer the subjects that were shown, the results and the effect time', async () => {
+      const shown = plan()
+      const onObserve = vi.fn<ObserveReclaimAfterSleep>().mockResolvedValue({
+        status: 'unmeasured',
+        reason: 'nothing-slept',
+        sleptPaneCount: 0
+      })
+      const before = Date.now()
+      renderObserved(shown, vi.fn().mockResolvedValue(sleptA), onObserve)
+
+      await click()
+
+      const args = onObserve.mock.calls[0]?.[0]
+      expect(args?.subjects).toBe(shown.reclaimable)
+      expect(args?.results).toEqual(sleptA)
+      expect(args?.effectEndedAt).toBeGreaterThanOrEqual(before)
+    })
+
+    it('shows the measured figure with the collector metric, read off the result', async () => {
+      const observed: ObservedReclaim = {
+        status: 'measured',
+        metric: 'working-set',
+        bytes: 123 * MB,
+        measuredPaneCount: 1,
+        unmeasuredPaneCount: 1,
+        stillRunningProcessCount: 2
+      }
+      // The plan says rss and 400 MB; the line must follow the observation, not the estimate.
+      renderObserved(plan(), vi.fn().mockResolvedValue(sleptA), async () => observed)
+
+      await click()
+
+      const line = observedLine()
+      expect(line?.getAttribute('data-status')).toBe('measured')
+      expect(line?.textContent).toContain('123.0 MB Σ WS')
+      expect(line?.textContent).not.toContain('400.0 MB')
+      expect(line?.textContent).toContain('2 of their processes still running')
+      expect(line?.textContent).toContain('1 slept without a measurement')
+    })
+
+    it('says a measured zero plainly rather than showing 0 B as freed', async () => {
+      renderObserved(plan(), vi.fn().mockResolvedValue(sleptA), async () => ({
+        status: 'measured',
+        metric: 'rss',
+        bytes: 0,
+        measuredPaneCount: 1,
+        unmeasuredPaneCount: 0,
+        stillRunningProcessCount: 1
+      }))
+
+      await click()
+
+      expect(observedLine()?.textContent).toBe('None of their measured processes has exited yet')
+    })
+
+    it('keeps the slept outcome and shows no number when the follow-up failed', async () => {
+      renderObserved(plan(), vi.fn().mockResolvedValue(sleptA), async () => ({
+        status: 'unmeasured',
+        reason: 'sweep-failed',
+        sleptPaneCount: 1
+      }))
+
+      await click()
+
+      const summary = container.querySelector('[data-testid="sleep-reclaim-result"]')
+      expect(summary?.getAttribute('data-slept-count')).toBe('1')
+      expect(observedLine()?.getAttribute('data-reason')).toBe('sweep-failed')
+      expect(observedLine()?.textContent).toContain('the follow-up reading failed')
+      expect(observedLine()?.textContent).not.toMatch(/\d+(\.\d+)? (B|KB|MB|GB)/)
+    })
+
+    it('reads an observer that throws as unavailable, not as a failed sleep', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      renderObserved(plan(), vi.fn().mockResolvedValue(sleptA), async () => {
+        throw new Error('ipc gone')
+      })
+
+      await click()
+
+      expect(
+        container
+          .querySelector('[data-testid="sleep-reclaim-result"]')
+          ?.getAttribute('data-failed-count')
+      ).toBe('0')
+      expect(observedLine()?.getAttribute('data-reason')).toBe('sweep-unavailable')
+    })
+
+    it('shows the effect while the observation is still running', async () => {
+      let finish: (value: ObservedReclaim) => void = () => {}
+      renderObserved(
+        plan(),
+        vi.fn().mockResolvedValue(sleptA),
+        () =>
+          new Promise<ObservedReclaim>((resolve) => {
+            finish = resolve
+          })
+      )
+
+      await click()
+
+      expect(
+        container
+          .querySelector('[data-testid="sleep-reclaim-result"]')
+          ?.getAttribute('data-slept-count')
+      ).toBe('1')
+      expect(observedLine()?.getAttribute('data-status')).toBe('pending')
+      expect(action()?.disabled).toBe(true)
+
+      await act(async () =>
+        finish({ status: 'unmeasured', reason: 'sweep-unavailable', sleptPaneCount: 1 })
+      )
+      expect(observedLine()?.getAttribute('data-status')).toBe('unmeasured')
+    })
+
+    it('keeps the measurement on screen after the sleep empties the plan', async () => {
+      const empty = plan({
+        reclaimable: [],
+        excluded: [],
+        estimate: {
+          metric: 'rss',
+          knownBytes: 0,
+          knownCount: 0,
+          unknownCount: 0,
+          unknownReasons: []
+        }
+      })
+      const onObserve: ObserveReclaimAfterSleep = async () => ({
+        status: 'measured',
+        metric: 'rss',
+        bytes: 5 * MB,
+        measuredPaneCount: 1,
+        unmeasuredPaneCount: 0,
+        stillRunningProcessCount: 0
+      })
+      const onSleep: SleepAuthorizedPanes = async () => {
+        root.render(
+          <SleepReclaimAuthorizationSection plan={empty} onSleep={onSleep} onObserve={onObserve} />
+        )
+        await Promise.resolve()
+        return sleptA
+      }
+      renderObserved(plan(), onSleep, onObserve)
+
+      await click()
+
+      expect(action()).toBeNull()
+      expect(observedLine()?.getAttribute('data-status')).toBe('measured')
+      expect(observedLine()?.textContent).toContain('5.0 MB Σ RSS')
+    })
+  })
+
   it('offers no action when nothing on the plan may sleep', () => {
     render(plan({ reclaimable: [] }), vi.fn())
     expect(action()).toBeNull()
@@ -331,7 +503,11 @@ describe('SleepReclaimAuthorizationSection explicit sleep', () => {
 // Why: a key missing from a catalog renders the English fallback silently, so
 // the section would read English on every locale with nothing turning red.
 describe('SleepReclaimAuthorizationSection copy catalogs', () => {
-  const source = ['SleepReclaimAuthorizationSection.tsx', 'SleepReclaimAuthorizationAction.tsx']
+  const source = [
+    'SleepReclaimAuthorizationSection.tsx',
+    'SleepReclaimAuthorizationAction.tsx',
+    'SleepReclaimObservedReclaim.tsx'
+  ]
     .map((file) => readFileSync(join(__dirname, file), 'utf8'))
     .join('\n')
   const calls = [...source.matchAll(/translate\(\s*'([^']+)',\s*'([^']+)'/g)].map(
@@ -349,8 +525,9 @@ describe('SleepReclaimAuthorizationSection copy catalogs', () => {
   }
 
   it('finds every translated string in the component', () => {
-    // Positive control: 8 summary strings, one per exclusion reason, 6 for the action.
-    expect(calls.length).toBeGreaterThanOrEqual(29)
+    // Positive control: 8 summary strings, one per exclusion reason, 6 for the action,
+    // 11 for the observed reclaim line.
+    expect(calls.length).toBeGreaterThanOrEqual(40)
     expect(calls.every(({ key }) => key.startsWith('auto.components.status.bar.'))).toBe(true)
   })
 

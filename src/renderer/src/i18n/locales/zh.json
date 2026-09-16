@@ -3504,6 +3504,21 @@
               "resultSlept": "{{value0}} 个已休眠",
               "resultKept": "{{value0}} 个在显示后已变化,保持唤醒",
               "resultFailed": "{{value0}} 个无法休眠",
+              "observed": {
+                "pending": "正在检查哪些进程已退出…",
+                "unmeasured": "未测量释放的内存：{{value0}}",
+                "released": "已退出的进程曾占用 {{value0}} {{value1}}",
+                "noneExited": "已测量的进程尚未退出",
+                "stillRunning": "{{value0}} 个进程仍在运行",
+                "unmeasuredPanes": "{{value0}} 个在未测量的情况下休眠",
+                "reason": {
+                  "noBaseline": "没有之前的进程读数",
+                  "sweepUnavailable": "后续读数不可用",
+                  "sweepFailed": "后续读数失败",
+                  "sweepTooEarly": "后续读数开始得太早",
+                  "metricChanged": "两次读数使用了不同的度量"
+                }
+              },
               "reason": {
                 "featureDisabled": "智能体休眠已关闭",
                 "worktreeActive": "位于当前打开的工作区",

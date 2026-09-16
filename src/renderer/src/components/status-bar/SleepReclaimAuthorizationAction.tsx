@@ -2,42 +2,76 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { SleepAuthorizationPlan } from '@/lib/agent-sleep-authorization-plan'
 import type { AgentSleepAuthorization, AgentSleepResult } from '@/lib/agent-hibernation-coordinator'
+import type { ObserveReclaimAfterSleep } from '@/lib/agent-sleep-observed-reclaim'
+import type { ObservedReclaim } from '@/lib/agent-sleep-reclaim-projection'
 import { translate } from '@/i18n/i18n'
+import { SleepReclaimObservedReclaim } from './SleepReclaimObservedReclaim'
 
 export type SleepAuthorizedPanes = (
   authorizations: AgentSleepAuthorization[]
 ) => Promise<AgentSleepResult[]>
 
+/** What one explicit sleep did, and — separately — what a later sweep proved about it. */
+export type SleepActionOutcome = {
+  results: AgentSleepResult[]
+  /** null when no observer is wired; 'pending' while the follow-up sweep runs. */
+  reclaim: ObservedReclaim | 'pending' | null
+}
+
 /**
  * The explicit "sleep these now" control. It forwards what the user was shown —
- * never a live re-read — and reports what the coordinator actually did. It says
- * nothing about memory freed: the figure above was an estimate made before.
+ * never a live re-read — and reports what the coordinator actually did. Memory
+ * is reported only from the observer's post-effect result, never from the
+ * estimate above.
  */
 export function SleepReclaimAuthorizationAction({
   plan,
   onSleep,
-  results,
-  onResults
+  onObserve,
+  outcome,
+  onOutcome
 }: {
   plan: SleepAuthorizationPlan
   onSleep: SleepAuthorizedPanes
+  onObserve?: ObserveReclaimAfterSleep
   /** Owned by the section, so it survives this control unmounting mid-sleep. */
-  results: AgentSleepResult[] | null
-  onResults: (results: AgentSleepResult[]) => void
+  outcome: SleepActionOutcome | null
+  onOutcome: (outcome: SleepActionOutcome) => void
 }): React.JSX.Element | null {
   const [pending, setPending] = useState(false)
 
   const authorizations = plan.reclaimable.flatMap((subject) =>
     subject.authorization ? [subject.authorization] : []
   )
-  if (authorizations.length === 0 && results === null) {
+  if (authorizations.length === 0 && outcome === null) {
     return null
   }
 
   const sleep = async (): Promise<void> => {
     setPending(true)
+    // Why: the subjects the user saw are the baseline; a re-render mid-sleep must not replace them.
+    const subjects = plan.reclaimable
     try {
-      onResults(await onSleep(authorizations))
+      const results = await onSleep(authorizations)
+      const effectEndedAt = Date.now()
+      if (!onObserve) {
+        onOutcome({ results, reclaim: null })
+        return
+      }
+      // Why: the effect is already true; show it before the slower observation lands.
+      onOutcome({ results, reclaim: 'pending' })
+      let reclaim: ObservedReclaim
+      try {
+        reclaim = await onObserve({ subjects, results, effectEndedAt })
+      } catch (err) {
+        console.warn('[sleep] post-effect observation failed', err)
+        reclaim = {
+          status: 'unmeasured',
+          reason: 'sweep-unavailable',
+          sleptPaneCount: results.filter((r) => r.outcome === 'slept').length
+        }
+      }
+      onOutcome({ results, reclaim })
     } finally {
       setPending(false)
     }
@@ -72,7 +106,13 @@ export function SleepReclaimAuthorizationAction({
                 )}
         </Button>
       )}
-      {results !== null && !pending && <SleepReclaimResultSummary results={results} />}
+      {/* Why: a previous outcome is hidden while a new sleep runs, but this sleep's own stays up while it is measured. */}
+      {outcome !== null && (!pending || outcome.reclaim === 'pending') && (
+        <>
+          <SleepReclaimResultSummary results={outcome.results} />
+          {outcome.reclaim !== null && <SleepReclaimObservedReclaim reclaim={outcome.reclaim} />}
+        </>
+      )}
     </div>
   )
 }

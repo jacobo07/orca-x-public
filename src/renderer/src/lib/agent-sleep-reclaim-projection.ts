@@ -136,9 +136,7 @@ export function projectCandidateFootprint(
     known: true,
     bytes: session.memory,
     metric: usable.processMemoryMetric,
-    ...(session.processes && session.processes.length > 0
-      ? { processes: session.processes }
-      : {})
+    ...(session.processes && session.processes.length > 0 ? { processes: session.processes } : {})
   }
 }
 

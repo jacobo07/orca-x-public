@@ -3512,6 +3512,21 @@
               "resultSlept": "{{value0}} dormidos",
               "resultKept": "{{value0}} siguen despiertos porque cambiaron desde que se mostraron",
               "resultFailed": "{{value0}} no se pudieron dormir",
+              "observed": {
+                "pending": "Comprobando qué procesos suyos terminaron…",
+                "unmeasured": "No se midió la memoria liberada: {{value0}}",
+                "released": "Sus procesos terminados usaban {{value0}} {{value1}}",
+                "noneExited": "Ninguno de sus procesos medidos ha terminado aún",
+                "stillRunning": "{{value0}} de sus procesos siguen en ejecución",
+                "unmeasuredPanes": "{{value0}} dormidos sin medición",
+                "reason": {
+                  "noBaseline": "no había una lectura previa de sus procesos",
+                  "sweepUnavailable": "la lectura posterior no estuvo disponible",
+                  "sweepFailed": "la lectura posterior falló",
+                  "sweepTooEarly": "la lectura posterior empezó demasiado pronto",
+                  "metricChanged": "las dos lecturas usaron medidas distintas"
+                }
+              },
               "reason": {
                 "featureDisabled": "El reposo de agentes está desactivado",
                 "worktreeActive": "En el espacio de trabajo abierto",

@@ -3492,6 +3492,21 @@
               "resultSlept": "{{value0}}件をスリープしました",
               "resultKept": "{{value0}}件は表示後に変化したためスリープしませんでした",
               "resultFailed": "{{value0}}件をスリープできませんでした",
+              "observed": {
+                "pending": "終了したプロセスを確認しています…",
+                "unmeasured": "解放されたメモリは測定されていません: {{value0}}",
+                "released": "終了したプロセスは {{value0}} {{value1}} を使用していました",
+                "noneExited": "測定したプロセスはまだ終了していません",
+                "stillRunning": "{{value0}}件のプロセスがまだ実行中です",
+                "unmeasuredPanes": "{{value0}}件は測定なしでスリープしました",
+                "reason": {
+                  "noBaseline": "事前のプロセスの測定がありませんでした",
+                  "sweepUnavailable": "事後の測定を取得できませんでした",
+                  "sweepFailed": "事後の測定に失敗しました",
+                  "sweepTooEarly": "事後の測定の開始が早すぎました",
+                  "metricChanged": "2回の測定で指標が異なりました"
+                }
+              },
               "reason": {
                 "featureDisabled": "エージェントのスリープはオフです",
                 "worktreeActive": "開いているワークスペース内です",

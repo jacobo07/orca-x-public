@@ -3492,6 +3492,21 @@
               "resultSlept": "{{value0}}개 절전됨",
               "resultKept": "{{value0}}개는 표시 후 변경되어 절전하지 않았습니다",
               "resultFailed": "{{value0}}개를 절전하지 못했습니다",
+              "observed": {
+                "pending": "종료된 프로세스를 확인하는 중…",
+                "unmeasured": "해제된 메모리를 측정하지 못했습니다: {{value0}}",
+                "released": "종료된 프로세스가 {{value0}} {{value1}}를 사용했습니다",
+                "noneExited": "측정된 프로세스 중 아직 종료된 것이 없습니다",
+                "stillRunning": "프로세스 {{value0}}개가 아직 실행 중입니다",
+                "unmeasuredPanes": "{{value0}}개는 측정 없이 절전되었습니다",
+                "reason": {
+                  "noBaseline": "이전 프로세스 측정값이 없었습니다",
+                  "sweepUnavailable": "사후 측정을 사용할 수 없었습니다",
+                  "sweepFailed": "사후 측정에 실패했습니다",
+                  "sweepTooEarly": "사후 측정이 너무 일찍 시작되었습니다",
+                  "metricChanged": "두 측정이 서로 다른 지표를 사용했습니다"
+                }
+              },
               "reason": {
                 "featureDisabled": "에이전트 절전이 꺼져 있습니다",
                 "worktreeActive": "열려 있는 워크스페이스에 있습니다",

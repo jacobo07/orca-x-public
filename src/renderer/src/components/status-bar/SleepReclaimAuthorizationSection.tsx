@@ -4,9 +4,10 @@ import type { AgentHibernationExclusionReason } from '@/lib/agent-hibernation-pl
 import type { SleepAuthorizationPlan } from '@/lib/agent-sleep-authorization-plan'
 import { translate } from '@/i18n/i18n'
 import { formatMemory } from './resource-memory-byte-format'
-import type { AgentSleepResult } from '@/lib/agent-hibernation-coordinator'
+import type { ObserveReclaimAfterSleep } from '@/lib/agent-sleep-observed-reclaim'
 import {
   SleepReclaimAuthorizationAction,
+  type SleepActionOutcome,
   type SleepAuthorizedPanes
 } from './SleepReclaimAuthorizationAction'
 
@@ -101,16 +102,19 @@ function describeExclusionReason(reason: AgentHibernationExclusionReason): strin
 
 export function SleepReclaimAuthorizationSection({
   plan,
-  onSleep
+  onSleep,
+  onObserve
 }: {
   plan: SleepAuthorizationPlan
   /** Absent means read-only: no control that can destroy anything is rendered. */
   onSleep?: SleepAuthorizedPanes
+  /** Post-effect observation; absent means the result claims nothing about memory. */
+  onObserve?: ObserveReclaimAfterSleep
 }): React.JSX.Element | null {
   const [showProtected, setShowProtected] = useState(false)
   // Why: held here, not in the action — a successful sleep can empty the plan,
   // which unmounts the action, and the user must still see what happened.
-  const [sleepResults, setSleepResults] = useState<AgentSleepResult[] | null>(null)
+  const [sleepOutcome, setSleepOutcome] = useState<SleepActionOutcome | null>(null)
 
   const protectedReasons = useMemo(() => {
     const counts = new Map<AgentHibernationExclusionReason, number>()
@@ -123,7 +127,7 @@ export function SleepReclaimAuthorizationSection({
     return [...counts].sort((a, b) => b[1] - a[1])
   }, [plan.excluded])
 
-  if (plan.reclaimable.length === 0 && plan.excluded.length === 0 && sleepResults === null) {
+  if (plan.reclaimable.length === 0 && plan.excluded.length === 0 && sleepOutcome === null) {
     return null
   }
 
@@ -193,8 +197,9 @@ export function SleepReclaimAuthorizationSection({
         <SleepReclaimAuthorizationAction
           plan={plan}
           onSleep={onSleep}
-          results={sleepResults}
-          onResults={setSleepResults}
+          onObserve={onObserve}
+          outcome={sleepOutcome}
+          onOutcome={setSleepOutcome}
         />
       )}
 
