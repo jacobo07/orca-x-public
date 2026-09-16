@@ -544,6 +544,11 @@ export function createAgentCompletionCoordinator(
     enqueueAgentProcessInspection({
       priority,
       run: async () => {
+        // Why: under a saturated queue a task can start long after its pane was disposed; skip the dead IPC.
+        if (disposed) {
+          inspectionInFlight = false
+          return
+        }
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
