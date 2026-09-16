@@ -143,7 +143,7 @@ async function coldRestoreWith(record: SleepingAgentSessionRecord): Promise<Mock
 
 function connectedCommand(transport: MockTransport): unknown {
   const call = transport.connect.mock.calls.find(
-    ([options]: [{ sessionId?: string }]) => options.sessionId === 'lost-pty'
+    (args) => (args[0] as { sessionId?: string } | undefined)?.sessionId === 'lost-pty'
   )
   return (call?.[0] as { command?: unknown } | undefined)?.command
 }
