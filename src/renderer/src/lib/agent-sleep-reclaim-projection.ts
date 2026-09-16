@@ -54,12 +54,16 @@ export type ObservedReclaim = {
 }
 
 /**
- * A live Electron app always reports some process memory, so a zero total means
- * the sweep failed and `collectMemorySnapshot` returned its empty fallback. A
- * failed instrument must not read as "nothing is using memory".
+ * A failed instrument must not read as "nothing is using memory". The collector
+ * names a failed sweep; app memory alone cannot, because Electron's own metrics
+ * survive it. The zero-app check still covers snapshots that predate the field.
  */
 export function isSnapshotUsable(snapshot: MemorySnapshot | null | undefined): boolean {
-  return Boolean(snapshot) && (snapshot as MemorySnapshot).app.memory > 0
+  return (
+    Boolean(snapshot) &&
+    (snapshot as MemorySnapshot).processSweep !== 'failed' &&
+    (snapshot as MemorySnapshot).app.memory > 0
+  )
 }
 
 function findSessionByPaneKey(snapshot: MemorySnapshot, paneKey: string): SessionMemory | null {

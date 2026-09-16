@@ -113,6 +113,22 @@ describe('sleep reclaim projection', () => {
     })
   })
 
+  // Why: app memory comes from Electron's own metrics, so a failed host sweep
+  // still reports it; only the collector's sweep outcome says the panes went unmeasured.
+  it('treats a failed sweep as unusable even while app memory is reported', () => {
+    const failed = makeSnapshot([{ ...measured, memory: 0 }], { processSweep: 'failed' })
+    expect(isSnapshotUsable(failed)).toBe(false)
+    expect(projectCandidateFootprint('tab:leaf', failed)).toEqual({
+      known: false,
+      reason: 'snapshot-unusable'
+    })
+  })
+
+  it('keeps a measured sweep and an older snapshot without the outcome usable', () => {
+    expect(isSnapshotUsable(makeSnapshot([measured], { processSweep: 'measured' }))).toBe(true)
+    expect(isSnapshotUsable(makeSnapshot([measured]))).toBe(true)
+  })
+
   it('treats an absent snapshot as unusable', () => {
     expect(isSnapshotUsable(null)).toBe(false)
     expect(projectCandidateFootprint('tab:leaf', null)).toEqual({
