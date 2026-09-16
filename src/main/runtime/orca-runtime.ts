@@ -77,6 +77,7 @@ import {
   createEphemeralAgentSessionClaimSigner,
   type AgentSessionClaimSigner
 } from './agent-session-claim-identity'
+import { agentSessionClaimKey } from '../../shared/claimed-agent-pty-owner-snapshot'
 import {
   hasCompatibleAgentTitleIdentity,
   normalizeCompatibleAgentStatusEntryForOwner,
@@ -26676,6 +26677,36 @@ export class OrcaRuntimeService {
       // never permit two TUIs to own one provider session.
       providerRoot: `profile-default:${agent}`
     }
+  }
+
+  /** Worktree-independent claim key for one provider session, or null when this host
+   *  cannot place the session in an execution namespace (SSH, unresolvable workspace,
+   *  non-resumable identity). Null is "cannot compare", never "different". */
+  async resolveAgentSessionPresenceKey(args: {
+    worktreeId: string
+    agent: TuiAgent
+    providerSession: AgentProviderSessionMetadata
+  }): Promise<string | null> {
+    let workspace: TerminalWorkspaceLaunchScope
+    let identity: ReturnType<typeof canonicalizeAgentSessionIdentity>
+    try {
+      workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${args.worktreeId}`)
+      identity = canonicalizeAgentSessionIdentity(args.agent, args.providerSession)
+    } catch {
+      // Why: a deleted worktree or an unreadable transcript leaves identity undetermined.
+      return null
+    }
+    const namespace = this.getAgentSessionExecutionNamespace(workspace, args.agent)
+    if (!namespace) {
+      return null
+    }
+    return agentSessionClaimKey(
+      this.agentSessionClaimSigner.createClaim({
+        namespace,
+        identity,
+        canonicalWorktreeId: workspace.id
+      })
+    )
   }
 
   private async executionOwnerSupportsAgentSessionOperation(
