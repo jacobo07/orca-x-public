@@ -1,6 +1,8 @@
 import type {
   MemorySnapshot,
   ProcessMemoryMetric,
+  ProcessMemorySample,
+  ProcessPresenceProbe,
   SessionMemory
 } from '../../../shared/process-stats-types'
 
@@ -28,7 +30,13 @@ export type ReclaimUnknownReason =
   | 'snapshot-unusable'
 
 export type SleepReclaimFootprint =
-  | { known: true; bytes: number; metric: ProcessMemoryMetric }
+  | {
+      known: true
+      bytes: number
+      metric: ProcessMemoryMetric
+      /** The exact processes behind `bytes`; absent when the host did not list them. */
+      processes?: ProcessMemorySample[]
+    }
   | { known: false; reason: ReclaimUnknownReason }
 
 export type SleepReclaimEstimate = {
@@ -42,16 +50,44 @@ export type SleepReclaimEstimate = {
   unknownReasons: ReclaimUnknownReason[]
 }
 
-export type ObservedReclaim = {
-  metric: ProcessMemoryMetric
-  /** Owned PTY-subtree bytes released. Positive means memory was given back. */
-  ownedProcessBytes: number
-  /** Orca's own Electron process set. */
-  appProcessBytes: number
-  /** Host availability delta, labelled by the source the collector used. */
-  hostAvailableBytes: number
-  hostAvailableSource: MemorySnapshot['host']['availableMemorySource']
-}
+export type ObservedReclaimUnmeasuredReason =
+  /** No pane was actually slept, so there is nothing to observe. */
+  | 'nothing-slept'
+  /** No slept pane had a measured process list before the effect. */
+  | 'no-baseline'
+  /** The follow-up sweep could not be asked for or did not answer. */
+  | 'sweep-unavailable'
+  /** The follow-up sweep ran and listed nothing — absence there proves nothing. */
+  | 'sweep-failed'
+  /** The follow-up sweep began before the effect finished. */
+  | 'sweep-predates-effect'
+  /** Before and after were measured with different per-process metrics. */
+  | 'metric-changed'
+
+/**
+ * What a follow-up sweep proved about the processes of panes that actually slept.
+ *
+ * `bytes` is the pre-effect footprint of those processes that a usable sweep,
+ * started after the effect, no longer lists. It is not a system free-memory
+ * change: other processes and the OS move that independently.
+ */
+export type ObservedReclaim =
+  | {
+      status: 'measured'
+      metric: ProcessMemoryMetric
+      bytes: number
+      /** Slept panes whose processes were compared. */
+      measuredPaneCount: number
+      /** Slept panes with no pre-effect process list; they contribute no bytes. */
+      unmeasuredPaneCount: number
+      /** Baseline processes the sweep still lists — lingering, or a reused pid. Never counted. */
+      stillRunningProcessCount: number
+    }
+  | {
+      status: 'unmeasured'
+      reason: ObservedReclaimUnmeasuredReason
+      sleptPaneCount: number
+    }
 
 /**
  * A failed instrument must not read as "nothing is using memory". The collector
@@ -96,7 +132,14 @@ export function projectCandidateFootprint(
   if (session.memory <= 0) {
     return { known: false, reason: 'process-not-found' }
   }
-  return { known: true, bytes: session.memory, metric: usable.processMemoryMetric }
+  return {
+    known: true,
+    bytes: session.memory,
+    metric: usable.processMemoryMetric,
+    ...(session.processes && session.processes.length > 0
+      ? { processes: session.processes }
+      : {})
+  }
 }
 
 export function summarizeReclaimEstimate(
@@ -124,29 +167,93 @@ export function summarizeReclaimEstimate(
 }
 
 /**
- * Three figures, never one. Summing owned-process bytes and host availability
- * would double-count, and Windows may trim or retain pages independently of
- * what a process released.
+ * The one comparability authority for post-effect reclaim.
+ *
+ * `slept` must be the footprints the user was shown for panes whose effect
+ * outcome was `slept` — never the whole plan. A pid is counted only when a
+ * usable sweep that began after `effectEndedAt` does not list it: absence
+ * there cannot be our process, whatever the pid is now. A listed pid may be
+ * ours lingering or a reused number, so it is never counted either way.
+ * Host identity is not compared: the collector and the probe are the same
+ * local host by construction, and remote panes have no footprint to carry.
  */
-export function measureObservedReclaim(
-  before: MemorySnapshot,
-  after: MemorySnapshot
-): ObservedReclaim {
-  const ownedBefore = sumWorktreeMemory(before)
-  const ownedAfter = sumWorktreeMemory(after)
+export function measureObservedReclaim({
+  slept,
+  probe,
+  effectEndedAt
+}: {
+  slept: readonly SleepReclaimFootprint[]
+  probe: ProcessPresenceProbe | null
+  effectEndedAt: number
+}): ObservedReclaim {
+  const sleptPaneCount = slept.length
+  const unmeasured = (reason: ObservedReclaimUnmeasuredReason): ObservedReclaim => ({
+    status: 'unmeasured',
+    reason,
+    sleptPaneCount
+  })
+  if (sleptPaneCount === 0) {
+    return unmeasured('nothing-slept')
+  }
+  const baseline = collectBaselineProcesses(slept)
+  if (baseline.paneCount === 0) {
+    return unmeasured('no-baseline')
+  }
+  if (probe === null) {
+    return unmeasured('sweep-unavailable')
+  }
+  if (probe.sweep !== 'measured') {
+    return unmeasured('sweep-failed')
+  }
+  if (probe.sweepStartedAt < effectEndedAt) {
+    return unmeasured('sweep-predates-effect')
+  }
+  if (baseline.metrics.size !== 1 || !baseline.metrics.has(probe.metric)) {
+    return unmeasured('metric-changed')
+  }
+  const present = new Set(probe.presentPids)
+  let bytes = 0
+  let stillRunningProcessCount = 0
+  for (const process of baseline.processes.values()) {
+    if (present.has(process.pid)) {
+      stillRunningProcessCount += 1
+    } else {
+      bytes += process.memory
+    }
+  }
   return {
-    metric: after.processMemoryMetric,
-    ownedProcessBytes: ownedBefore - ownedAfter,
-    appProcessBytes: before.app.memory - after.app.memory,
-    hostAvailableBytes: after.host.availableMemory - before.host.availableMemory,
-    hostAvailableSource: after.host.availableMemorySource
+    status: 'measured',
+    metric: probe.metric,
+    bytes,
+    measuredPaneCount: baseline.paneCount,
+    unmeasuredPaneCount: sleptPaneCount - baseline.paneCount,
+    stillRunningProcessCount
   }
 }
 
-function sumWorktreeMemory(snapshot: MemorySnapshot): number {
-  let total = 0
-  for (const worktree of snapshot.worktrees) {
-    total += worktree.memory
+/** Pids the follow-up sweep must be asked about. */
+export function listBaselinePids(slept: readonly SleepReclaimFootprint[]): number[] {
+  return [...collectBaselineProcesses(slept).processes.keys()]
+}
+
+function collectBaselineProcesses(slept: readonly SleepReclaimFootprint[]): {
+  processes: Map<number, ProcessMemorySample>
+  metrics: Set<ProcessMemoryMetric>
+  paneCount: number
+} {
+  const processes = new Map<number, ProcessMemorySample>()
+  const metrics = new Set<ProcessMemoryMetric>()
+  let paneCount = 0
+  for (const footprint of slept) {
+    if (!footprint.known || !footprint.processes || footprint.processes.length === 0) {
+      continue
+    }
+    paneCount += 1
+    metrics.add(footprint.metric)
+    for (const process of footprint.processes) {
+      // Why: the collector already claims each pid once; keying by pid keeps that if two plans overlap.
+      processes.set(process.pid, process)
+    }
   }
-  return total
+  return { processes, metrics, paneCount }
 }
