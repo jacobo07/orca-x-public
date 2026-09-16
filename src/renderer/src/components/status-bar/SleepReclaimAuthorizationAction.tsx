@@ -15,13 +15,17 @@ export type SleepAuthorizedPanes = (
  */
 export function SleepReclaimAuthorizationAction({
   plan,
-  onSleep
+  onSleep,
+  results,
+  onResults
 }: {
   plan: SleepAuthorizationPlan
   onSleep: SleepAuthorizedPanes
+  /** Owned by the section, so it survives this control unmounting mid-sleep. */
+  results: AgentSleepResult[] | null
+  onResults: (results: AgentSleepResult[]) => void
 }): React.JSX.Element | null {
   const [pending, setPending] = useState(false)
-  const [results, setResults] = useState<AgentSleepResult[] | null>(null)
 
   const authorizations = plan.reclaimable.flatMap((subject) =>
     subject.authorization ? [subject.authorization] : []
@@ -33,7 +37,7 @@ export function SleepReclaimAuthorizationAction({
   const sleep = async (): Promise<void> => {
     setPending(true)
     try {
-      setResults(await onSleep(authorizations))
+      onResults(await onSleep(authorizations))
     } finally {
       setPending(false)
     }

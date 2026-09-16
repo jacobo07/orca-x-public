@@ -281,6 +281,28 @@ describe('SleepReclaimAuthorizationSection explicit sleep', () => {
     expect(summary?.textContent).not.toMatch(/\d+(\.\d+)? (KB|MB|GB)/)
   })
 
+  it('keeps the result on screen after the sleep empties the plan', async () => {
+    const empty = plan({
+      reclaimable: [],
+      excluded: [],
+      estimate: { metric: 'rss', knownBytes: 0, knownCount: 0, unknownCount: 0, unknownReasons: [] }
+    })
+    const onSleep: SleepAuthorizedPanes = async () => {
+      // The shutdown lands in the store before the coordinator answers; the
+      // click's act() is still open, so render directly.
+      root.render(<SleepReclaimAuthorizationSection plan={empty} onSleep={onSleep} />)
+      await Promise.resolve()
+      return [{ candidateId: 'wt-1|tab-1:a', outcome: 'slept' }]
+    }
+    render(plan(), onSleep)
+
+    await click()
+
+    const summary = container.querySelector('[data-testid="sleep-reclaim-result"]')
+    expect(summary?.getAttribute('data-slept-count')).toBe('1')
+    expect(action()).toBeNull()
+  })
+
   it('offers no action when nothing on the plan may sleep', () => {
     render(plan({ reclaimable: [] }), vi.fn())
     expect(action()).toBeNull()

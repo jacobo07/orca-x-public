@@ -5,7 +5,13 @@
  * real collector measures it. The section must follow the canonical planner
  * through its states — agent sleep off, idle too briefly, eligible — and show
  * the collector's own figure for the pane once it is eligible, while displaying
- * it destroys nothing.
+ * it destroys nothing. Then the explicit action sleeps that pane through the
+ * coordinator: the host stops listing its terminal, a resume record exists, the
+ * result says one slept, and an unrelated terminal is untouched.
+ *
+ * Not proven here: a pane going stale between display and click. Every store
+ * change re-renders the section first, so that interleaving is driven in
+ * agent-hibernation-explicit-sleep.test.ts against the real planner instead.
  *
  * Supplied by this spec, so NOT proven here: the agent status entry (a plain
  * shell has no agent hooks), and the agent-sleep settings, set in the renderer
@@ -71,7 +77,7 @@ function formatMemory(bytes: number): string {
 }
 
 test.describe('Sleep reclaim authorization surface', () => {
-  test('projects the live plan for a real background pane and destroys nothing', async ({
+  test('projects the live plan for a real background pane, then sleeps only that pane', async ({
     orcaPage
   }) => {
     test.setTimeout(180_000)
@@ -82,6 +88,11 @@ test.describe('Sleep reclaim authorization surface', () => {
     if (!agentWorktreeId) {
       return
     }
+
+    // An unrelated live terminal, which the action must leave alone.
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const homePtyId = await waitForActivePanePtyId(orcaPage)
 
     // A real PTY in the worktree that will sit in the background.
     await switchToWorktree(orcaPage, agentWorktreeId)
@@ -189,5 +200,58 @@ test.describe('Sleep reclaim authorization surface', () => {
     expect(final.paneBytes, 'collector did not measure the live pane').not.toBeNull()
     expect(final.known).toMatch(/\d/)
     expect(final.ptyLive).toBe(true)
+
+    // 4. The explicit action: a real shutdown through the coordinator, reported as it happened.
+    expect(await readEffect(orcaPage, pane, agentWorktreeId, homePtyId)).toEqual({
+      ptyLive: true,
+      hostTerminalCount: 1,
+      resumeRecorded: false,
+      homePtyLive: true
+    })
+    await orcaPage.getByTestId('sleep-reclaim-action').click()
+    const result = orcaPage.getByTestId('sleep-reclaim-result')
+    await expect(result).toHaveAttribute('data-slept-count', '1', { timeout: 30_000 })
+    await expect(result).toHaveAttribute('data-failed-count', '0')
+    await expect(result).toHaveAttribute('data-kept-count', '0')
+    await expect
+      .poll(() => readEffect(orcaPage, pane, agentWorktreeId, homePtyId), { timeout: 15_000 })
+      .toEqual({ ptyLive: false, hostTerminalCount: 0, resumeRecorded: true, homePtyLive: true })
   })
 })
+
+type EffectReading = {
+  ptyLive: boolean
+  hostTerminalCount: number
+  resumeRecorded: boolean
+  homePtyLive: boolean
+}
+
+async function readEffect(
+  page: Page,
+  pane: { paneKey: string; tabId: string; ptyId: string },
+  worktreeId: string,
+  homePtyId: string
+): Promise<EffectReading> {
+  return (await page.evaluate(
+    async ({ paneKey, tabId, ptyId, agentWorktreeId, otherPtyId }) => {
+      const state = window.__store!.getState()
+      // The host's own view, so a renderer that merely forgot the pty cannot pass.
+      const listing = await window.api.runtime.call({
+        method: 'terminal.list',
+        params: { worktree: `id:${agentWorktreeId}`, requireFreshPtyLiveness: true }
+      })
+      if (!listing.ok) {
+        throw new Error(listing.error.message)
+      }
+      return {
+        ptyLive: (state.ptyIdsByTabId[tabId] ?? []).includes(ptyId),
+        hostTerminalCount: (listing.result as { totalCount: number }).totalCount,
+        resumeRecorded: state.sleepingAgentSessionsByPaneKey[paneKey] !== undefined,
+        homePtyLive: Object.values(state.ptyIdsByTabId).some((ids) =>
+          (ids ?? []).includes(otherPtyId)
+        )
+      }
+    },
+    { ...pane, agentWorktreeId: worktreeId, otherPtyId: homePtyId }
+  )) as EffectReading
+}

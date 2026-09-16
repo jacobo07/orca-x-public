@@ -4,6 +4,7 @@ import type { AgentHibernationExclusionReason } from '@/lib/agent-hibernation-pl
 import type { SleepAuthorizationPlan } from '@/lib/agent-sleep-authorization-plan'
 import { translate } from '@/i18n/i18n'
 import { formatMemory } from './resource-memory-byte-format'
+import type { AgentSleepResult } from '@/lib/agent-hibernation-coordinator'
 import {
   SleepReclaimAuthorizationAction,
   type SleepAuthorizedPanes
@@ -107,6 +108,9 @@ export function SleepReclaimAuthorizationSection({
   onSleep?: SleepAuthorizedPanes
 }): React.JSX.Element | null {
   const [showProtected, setShowProtected] = useState(false)
+  // Why: held here, not in the action — a successful sleep can empty the plan,
+  // which unmounts the action, and the user must still see what happened.
+  const [sleepResults, setSleepResults] = useState<AgentSleepResult[] | null>(null)
 
   const protectedReasons = useMemo(() => {
     const counts = new Map<AgentHibernationExclusionReason, number>()
@@ -119,7 +123,7 @@ export function SleepReclaimAuthorizationSection({
     return [...counts].sort((a, b) => b[1] - a[1])
   }, [plan.excluded])
 
-  if (plan.reclaimable.length === 0 && plan.excluded.length === 0) {
+  if (plan.reclaimable.length === 0 && plan.excluded.length === 0 && sleepResults === null) {
     return null
   }
 
@@ -185,7 +189,14 @@ export function SleepReclaimAuthorizationSection({
         </div>
       )}
 
-      {onSleep && <SleepReclaimAuthorizationAction plan={plan} onSleep={onSleep} />}
+      {onSleep && (
+        <SleepReclaimAuthorizationAction
+          plan={plan}
+          onSleep={onSleep}
+          results={sleepResults}
+          onResults={setSleepResults}
+        />
+      )}
 
       {protectedReasons.length > 0 && (
         <>
