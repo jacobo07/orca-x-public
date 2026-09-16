@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
 import type {
+  WorkingSetFactPresence,
   WorkingSetScopeKey,
   WorkingSetScrollbackSealReport
 } from '../../shared/project-working-set-store-types'
@@ -33,7 +34,7 @@ import { workingSetPartitionName } from './working-set-store-layout'
 const SEAL_DIR_NAME = 'sealed-scrollback'
 const SEAL_SUFFIX = '.bin'
 
-export type SealedScrollbackPresence = 'present' | 'absent' | 'unknown'
+export type SealedScrollbackPresence = WorkingSetFactPresence
 
 function sealDir(root: string, scope: WorkingSetScopeKey, workingSetId: string): string {
   return join(root, SEAL_DIR_NAME, workingSetPartitionName(scope), workingSetId)

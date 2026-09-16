@@ -86,3 +86,24 @@ export type WorkingSetListResult =
   | WorkingSetStoreUnavailable
 
 export type WorkingSetSaveResult = WorkingSetSaveOutcome | WorkingSetStoreUnavailable
+
+/** Absent only when the filesystem said so; anything unprovable is unknown. */
+export type WorkingSetFactPresence = 'present' | 'absent' | 'unknown'
+
+export type WorkingSetPaneRestoreFacts = {
+  sealedScrollback: WorkingSetFactPresence
+  /** Null for a pane with no captured provider session. */
+  transcript: WorkingSetFactPresence | null
+}
+
+export type WorkingSetRestoreEvidence = {
+  /** The worktree or folder directory the working set belongs to. */
+  location: WorkingSetFactPresence
+  startupCwdByTabId: Record<string, WorkingSetFactPresence>
+  /** Keyed `${tabId}:${leafId}`. */
+  panes: Record<string, WorkingSetPaneRestoreFacts>
+}
+
+export type WorkingSetRestoreEvidenceResult =
+  | { status: 'probed'; workingSetId: string; evidence: WorkingSetRestoreEvidence }
+  | Exclude<WorkingSetReadResult, { status: 'valid' }>

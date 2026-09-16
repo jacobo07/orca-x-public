@@ -3,9 +3,11 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../shared/executi
 import type {
   WorkingSetListResult,
   WorkingSetReadResult,
+  WorkingSetRestoreEvidenceResult,
   WorkingSetSaveOutcome,
   WorkingSetScopeKey
 } from '../../shared/project-working-set-store-types'
+import { gatherWorkingSetRestoreEvidence } from '../project-working-set/working-set-restore-evidence'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getDataFile } from '../persistence/loading-store/user-data-path'
 import { getProfileTerminalScrollbackSnapshotRoot } from '../terminal-scrollback-snapshots'
@@ -62,18 +64,34 @@ export function registerProjectWorkingSetHandlers(): void {
     }
   )
 
+  const readRequested = (args: unknown): Promise<WorkingSetReadResult> => {
+    const { scope, workingSetId } = (args ?? {}) as Record<string, unknown>
+    const key = parseScopeKey(scope)
+    if (!key) {
+      return Promise.resolve({ status: 'invalid-request', field: 'scope' })
+    }
+    if (typeof workingSetId !== 'string' || !isCanonicalWorkingSetId(workingSetId)) {
+      return Promise.resolve({ status: 'invalid-request', field: 'workingSetId' })
+    }
+    return readWorkingSetArtifact(root, key, workingSetId)
+  }
+
+  ipcMain.handle('workingSet:read', (_event, args: unknown) => readRequested(args))
+
+  // Why main reads the manifest itself: the renderer names a working set, never a path to probe.
   ipcMain.handle(
-    'workingSet:read',
-    async (_event, args: unknown): Promise<WorkingSetReadResult> => {
-      const { scope, workingSetId } = (args ?? {}) as Record<string, unknown>
-      const key = parseScopeKey(scope)
-      if (!key) {
-        return { status: 'invalid-request', field: 'scope' }
+    'workingSet:probeRestoreEvidence',
+    async (_event, args: unknown): Promise<WorkingSetRestoreEvidenceResult> => {
+      const artifact = await readRequested(args)
+      if (artifact.status !== 'valid') {
+        return artifact
       }
-      if (typeof workingSetId !== 'string' || !isCanonicalWorkingSetId(workingSetId)) {
-        return { status: 'invalid-request', field: 'workingSetId' }
+      const { manifest } = artifact
+      return {
+        status: 'probed',
+        workingSetId: manifest.workingSetId,
+        evidence: await gatherWorkingSetRestoreEvidence(root, manifest)
       }
-      return readWorkingSetArtifact(root, key, workingSetId)
     }
   )
 }

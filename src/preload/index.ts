@@ -3183,7 +3183,8 @@ const api = {
   workingSet: {
     save: (candidate) => ipcRenderer.invoke('workingSet:save', candidate),
     list: (scope) => ipcRenderer.invoke('workingSet:list', scope),
-    read: (args) => ipcRenderer.invoke('workingSet:read', args)
+    read: (args) => ipcRenderer.invoke('workingSet:read', args),
+    probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args)
   } satisfies PreloadApi['workingSet'],
 
   remoteWorkspace: {

@@ -18,6 +18,11 @@ vi.mock('electron', () => ({
   }
 }))
 
+// Why: the real search walks this machine's agent session directories.
+vi.mock('../native-chat/session-file-resolver', () => ({
+  resolveSessionFilePath: async () => null
+}))
+
 vi.mock('../persistence/loading-store/user-data-path', () => ({
   getDataFile: () => join(profileDir.path, 'orca-data.json')
 }))
@@ -88,6 +93,25 @@ describe('project working-set IPC', () => {
         field: 'workingSetId'
       })
     }
+  })
+
+  it('probes restore evidence only for a working set main can read itself', async () => {
+    expect(await invoke('workingSet:probeRestoreEvidence', { scope: null })).toEqual({
+      status: 'invalid-request',
+      field: 'scope'
+    })
+    const unknownId = '0b9e7d2c-4a1f-4e3b-8c6d-2f1a9e8b7c54'
+    expect(
+      await invoke('workingSet:probeRestoreEvidence', { scope, workingSetId: unknownId })
+    ).toEqual({ status: 'missing' })
+    const manifest = representativeManifest()
+    const probed = await invoke('workingSet:probeRestoreEvidence', {
+      scope,
+      workingSetId: manifest.workingSetId
+    })
+    expect(probed).toMatchObject({ status: 'probed', workingSetId: manifest.workingSetId })
+    const { evidence } = probed as { evidence: { panes: Record<string, unknown> } }
+    expect(Object.keys(evidence.panes)).toHaveLength(manifest.entries.length)
   })
 
   it('answers missing only for a well-formed id the store does not hold', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { representativeManifest } from '../../../shared/project-working-set-test-fixtures'
 import {
   listWorkingSets,
+  probeWorkingSetRestoreEvidence,
   readWorkingSet,
   saveWorkingSetManifest,
   type WorkingSetStoreBridge
@@ -12,7 +13,7 @@ const id = '6f1d3c1e-2b7a-4c1e-9a3b-0d5e8f7a6b21'
 
 function bridge(answer: unknown): WorkingSetStoreBridge {
   const reply = vi.fn(async () => answer)
-  return { save: reply, list: reply, read: reply }
+  return { save: reply, list: reply, read: reply, probeRestoreEvidence: reply }
 }
 
 describe('working-set store client', () => {
@@ -29,7 +30,21 @@ describe('working-set store client', () => {
     const noHandler = vi.fn(async () => {
       throw new Error('No handler registered')
     })
-    const rejecting: WorkingSetStoreBridge = { save: noHandler, list: noHandler, read: noHandler }
+    const rejecting: WorkingSetStoreBridge = {
+      save: noHandler,
+      list: noHandler,
+      read: noHandler,
+      probeRestoreEvidence: noHandler
+    }
+    expect(await probeWorkingSetRestoreEvidence(scope, id, rejecting)).toEqual({
+      status: 'unavailable'
+    })
+    expect(await probeWorkingSetRestoreEvidence(scope, id, bridge({ status: 'valid' }))).toEqual({
+      status: 'unavailable'
+    })
+    expect(await probeWorkingSetRestoreEvidence(scope, id, bridge({ status: 'probed' }))).toEqual({
+      status: 'unavailable'
+    })
     expect(await listWorkingSets(scope, rejecting)).toEqual({ status: 'unavailable' })
     expect(await readWorkingSet(scope, id, bridge({ status: 'ok' }))).toEqual({
       status: 'unavailable'

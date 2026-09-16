@@ -267,7 +267,12 @@ describe('saveProjectWorkingSet', () => {
   })
 
   it('reports a client without a store as such, not as a save', async () => {
-    const bridge = { save: vi.fn(async () => undefined), list: vi.fn(), read: vi.fn() }
+    const bridge = {
+      save: vi.fn(async () => undefined),
+      list: vi.fn(),
+      read: vi.fn(),
+      probeRestoreEvidence: vi.fn()
+    }
     const d = deps(
       baseState(),
       vi.fn((manifest) => saveWorkingSetManifest(manifest, bridge))

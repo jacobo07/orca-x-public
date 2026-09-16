@@ -860,7 +860,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     workingSet: {
       save: () => Promise.resolve({ status: 'unavailable' as const }),
       list: () => Promise.resolve({ status: 'unavailable' as const }),
-      read: () => Promise.resolve({ status: 'unavailable' as const })
+      read: () => Promise.resolve({ status: 'unavailable' as const }),
+      probeRestoreEvidence: () => Promise.resolve({ status: 'unavailable' as const })
     },
     cache: {
       getGitHub: () =>

@@ -1,6 +1,7 @@
 import type {
   WorkingSetListResult,
   WorkingSetReadResult,
+  WorkingSetRestoreEvidenceResult,
   WorkingSetSaveResult,
   WorkingSetScopeKey
 } from '../../../shared/project-working-set-store-types'
@@ -18,6 +19,10 @@ export type WorkingSetStoreBridge = {
   save: (candidate: unknown) => Promise<unknown>
   list: (scope: WorkingSetScopeKey) => Promise<unknown>
   read: (args: { scope: WorkingSetScopeKey; workingSetId: string }) => Promise<unknown>
+  probeRestoreEvidence: (args: {
+    scope: WorkingSetScopeKey
+    workingSetId: string
+  }) => Promise<unknown>
 }
 
 const READ_STATUSES = new Set([
@@ -97,4 +102,22 @@ export function readWorkingSet(
   bridge: WorkingSetStoreBridge = defaultBridge()
 ): Promise<WorkingSetReadResult> {
   return ask<WorkingSetReadResult>(() => bridge.read({ scope, workingSetId }), READ_STATUSES)
+}
+
+const PROBE_STATUSES = new Set([...READ_STATUSES].filter((s) => s !== 'valid').concat('probed'))
+
+export function probeWorkingSetRestoreEvidence(
+  scope: WorkingSetScopeKey,
+  workingSetId: string,
+  bridge: WorkingSetStoreBridge = defaultBridge()
+): Promise<WorkingSetRestoreEvidenceResult> {
+  return ask<WorkingSetRestoreEvidenceResult>(
+    () => bridge.probeRestoreEvidence({ scope, workingSetId }),
+    PROBE_STATUSES,
+    (answer) =>
+      answer.status !== 'probed' ||
+      (typeof answer.evidence === 'object' &&
+        answer.evidence !== null &&
+        typeof answer.evidence.panes === 'object')
+  )
 }
