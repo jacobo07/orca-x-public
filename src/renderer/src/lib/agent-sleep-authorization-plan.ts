@@ -9,6 +9,7 @@ import {
   type AgentHibernationExclusionReason,
   type AgentHibernationPlannerSnapshot
 } from './agent-hibernation-planner'
+import { withAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import { projectSleepReclaimPlan } from './agent-sleep-reclaim-plan'
 import {
   projectCandidateFootprint,
@@ -32,6 +33,11 @@ export type SleepAuthorizationSubject = {
   exclusionReason: AgentHibernationExclusionReason | null
   /** Shown for every subject; only reclaimable ones reach the estimate. */
   footprint: SleepReclaimFootprint
+  /**
+   * What the user saw, in the form the coordinator re-checks at the moment of
+   * effect. Present exactly when the subject is reclaimable.
+   */
+  authorization: { candidateId: string; signature: string } | null
 }
 
 export type SleepAuthorizationPlan = {
@@ -52,17 +58,28 @@ export function buildSleepAuthorizationPlan(
   const classifications = classifyAgentHibernationPanes(plannerSnapshot)
   // Why: both come from the planner's one walk, so the reclaimable set here and
   // the set execution will act on cannot disagree.
-  const reclaim = projectSleepReclaimPlan(planAgentHibernationCandidates(plannerSnapshot), memory)
+  const candidates = planAgentHibernationCandidates(plannerSnapshot)
+  const reclaim = projectSleepReclaimPlan(candidates, memory)
+  const candidateByPaneKey = new Map(
+    candidates.map((candidate) => [
+      candidate.paneKey,
+      withAgentHibernationOutputSignature(candidate)
+    ])
+  )
 
   const reclaimable: SleepAuthorizationSubject[] = []
   const excluded: SleepAuthorizationSubject[] = []
   for (const pane of classifications) {
+    const candidate = pane.eligible ? candidateByPaneKey.get(pane.paneKey) : undefined
     const subject: SleepAuthorizationSubject = {
       paneKey: pane.paneKey,
       worktreeId: pane.worktreeId,
       tabId: pane.tabId,
       exclusionReason: pane.reason,
-      footprint: projectCandidateFootprint(pane.paneKey, memory)
+      footprint: projectCandidateFootprint(pane.paneKey, memory),
+      authorization: candidate
+        ? { candidateId: candidate.id, signature: candidate.signature }
+        : null
     }
     if (pane.eligible) {
       reclaimable.push(subject)

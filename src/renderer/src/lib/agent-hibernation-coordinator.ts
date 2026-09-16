@@ -1,8 +1,5 @@
 import { useAppStore } from '@/store'
-import {
-  planAgentHibernationCandidates,
-  type AgentHibernationCandidate
-} from './agent-hibernation-planner'
+import { planAgentHibernationCandidates } from './agent-hibernation-planner'
 import {
   confirmAgentHibernationCandidates,
   type AgentHibernationConfirmationState
@@ -13,7 +10,7 @@ import {
   getRuntimeLivenessTargetWorktrees,
   type RuntimePtyLivenessSample
 } from './agent-hibernation-planner-snapshot'
-import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
+import { withAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -111,47 +108,82 @@ async function currentCandidates(now: number) {
       )
       return !runtimeEnvironmentId || candidate.expectedRuntimePtyIds.length === 1
     })
-    .map((candidate) => ({
-      ...candidate,
-      // Why: terminal output after the first stable tick can mean the session
-      // is still alive even when agent status remains done; require it to stay quiet.
-      signature: `${candidate.signature}|output:${getAgentHibernationOutputSignature(candidate.paneKeys)}`
-    }))
+    .map(withAgentHibernationOutputSignature)
 }
 
+/** A pane as it was when someone decided to sleep it: evidence, never authority. */
+export type AgentSleepAuthorization = { candidateId: string; signature: string }
+
+export type AgentSleepOutcome =
+  /** Re-planned on live state, still the pane that was authorized, and shut down. */
+  | 'slept'
+  /** Still a candidate, but not the one authorized (new PTY, input, output, state). */
+  | 'changed'
+  /** No longer a candidate at all: the planner now keeps it awake. */
+  | 'not-eligible'
+  /** Another sleep of this pane is already running. */
+  | 'in-progress'
+  /** Authorized and still eligible, but the shutdown itself threw. */
+  | 'failed'
+
+export type AgentSleepResult = { candidateId: string; outcome: AgentSleepOutcome }
+
 async function hibernatePaneIfStillEligible(
-  confirmedCandidate: AgentHibernationCandidate
-): Promise<void> {
-  const { id, worktreeId } = confirmedCandidate
+  authorization: AgentSleepAuthorization
+): Promise<AgentSleepOutcome> {
+  const id = authorization.candidateId
   if (coordinator.shuttingDownCandidateIds.has(id)) {
-    return
+    return 'in-progress'
   }
-  const candidates = await currentCandidates(coordinator.now())
-  const stillEligible = candidates.some(
-    (candidate) =>
-      candidate.id === confirmedCandidate.id && candidate.signature === confirmedCandidate.signature
+  const current = (await currentCandidates(coordinator.now())).find(
+    (candidate) => candidate.id === id
   )
-  if (!stillEligible) {
-    return
+  if (!current) {
+    return 'not-eligible'
+  }
+  // Why: the signature covers pty, runtime pty and provider session, so a match
+  // also proves the fresh candidate's shutdown targets are the authorized ones.
+  if (current.signature !== authorization.signature) {
+    return 'changed'
   }
   coordinator.shuttingDownCandidateIds.add(id)
   try {
     const state = useAppStore.getState()
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    await state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
-      paneKey: confirmedCandidate.paneKey,
-      tabId: confirmedCandidate.tabId,
-      leafId: confirmedCandidate.leafId,
-      ptyId: confirmedCandidate.targetPtyIds[0],
-      ...(runtimeEnvironmentId
-        ? { expectedRuntimePtyId: confirmedCandidate.expectedRuntimePtyIds[0] }
-        : {})
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, current.worktreeId)
+    await state.shutdownCompletedAgentPaneForHibernation(current.worktreeId, {
+      paneKey: current.paneKey,
+      tabId: current.tabId,
+      leafId: current.leafId,
+      ptyId: current.targetPtyIds[0],
+      ...(runtimeEnvironmentId ? { expectedRuntimePtyId: current.expectedRuntimePtyIds[0] } : {})
     })
+    return 'slept'
   } catch (err) {
     console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
+    return 'failed'
   } finally {
     coordinator.shuttingDownCandidateIds.delete(id)
   }
+}
+
+/**
+ * A user's explicit "sleep these now". The click replaces the two-tick wait and
+ * nothing else: each pane is re-planned on live state immediately before its own
+ * shutdown — setting, idle threshold and every exclusion included — and slept
+ * only if it is still exactly the pane that was shown.
+ */
+export async function sleepAuthorizedAgentPanes(
+  authorizations: readonly AgentSleepAuthorization[]
+): Promise<AgentSleepResult[]> {
+  const results: AgentSleepResult[] = []
+  // Why: sequential, so a later pane is judged after the earlier shutdown, not before it.
+  for (const authorization of authorizations) {
+    results.push({
+      candidateId: authorization.candidateId,
+      outcome: await hibernatePaneIfStillEligible(authorization)
+    })
+  }
+  return results
 }
 
 export async function runAgentHibernationTick(): Promise<void> {
@@ -166,7 +198,10 @@ export async function runAgentHibernationTick(): Promise<void> {
     )
     coordinator.confirmationState = plan.confirmationState
     for (const candidate of plan.candidates) {
-      void hibernatePaneIfStillEligible(candidate)
+      void hibernatePaneIfStillEligible({
+        candidateId: candidate.id,
+        signature: candidate.signature
+      })
     }
   } finally {
     coordinator.tickInFlight = false

@@ -9,8 +9,10 @@ import es from '../../i18n/locales/es.json'
 import ja from '../../i18n/locales/ja.json'
 import ko from '../../i18n/locales/ko.json'
 import zh from '../../i18n/locales/zh.json'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SleepReclaimAuthorizationSection } from './SleepReclaimAuthorizationSection'
+import type { SleepAuthorizedPanes } from './SleepReclaimAuthorizationAction'
+import type { AgentSleepResult } from '@/lib/agent-hibernation-coordinator'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
 import type {
   SleepAuthorizationPlan,
@@ -26,7 +28,8 @@ function measured(paneKey: string, bytes: number): SleepAuthorizationSubject {
     worktreeId: 'wt-1',
     tabId: 'tab-1',
     exclusionReason: null,
-    footprint: { known: true, bytes, metric: 'rss' }
+    footprint: { known: true, bytes, metric: 'rss' },
+    authorization: shownAs(paneKey)
   }
 }
 
@@ -36,8 +39,13 @@ function unmeasured(paneKey: string): SleepAuthorizationSubject {
     worktreeId: 'wt-1',
     tabId: 'tab-1',
     exclusionReason: null,
-    footprint: { known: false, reason: 'no-pid' }
+    footprint: { known: false, reason: 'no-pid' },
+    authorization: shownAs(paneKey)
   }
+}
+
+function shownAs(paneKey: string): { candidateId: string; signature: string } {
+  return { candidateId: `wt-1|${paneKey}`, signature: `seen:${paneKey}` }
 }
 
 function excluded(
@@ -50,7 +58,8 @@ function excluded(
     worktreeId: 'wt-2',
     tabId: 'tab-2',
     exclusionReason: reason,
-    footprint: { known: true, bytes, metric: 'rss' }
+    footprint: { known: true, bytes, metric: 'rss' },
+    authorization: null
   }
 }
 
@@ -198,19 +207,111 @@ describe('SleepReclaimAuthorizationSection', () => {
     expect(section?.textContent).toContain('1 pane is kept awake')
   })
 
-  it('exposes no control that could destroy anything', () => {
+  it('exposes no control that could destroy anything without a sleep handler', () => {
     render(plan())
-    // W3c is informational; the reclaim action ships with its executor in W4.
     const buttons = [...container.querySelectorAll('button')]
     expect(buttons).toHaveLength(1)
     expect(buttons[0]?.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-testid="sleep-reclaim-action"]')).toBeNull()
+  })
+})
+
+describe('SleepReclaimAuthorizationSection explicit sleep', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  function render(value: SleepAuthorizationPlan, onSleep: SleepAuthorizedPanes): void {
+    act(() => root.render(<SleepReclaimAuthorizationSection plan={value} onSleep={onSleep} />))
+  }
+
+  function action(): HTMLButtonElement | null {
+    return container.querySelector('[data-testid="sleep-reclaim-action"]')
+  }
+
+  async function click(): Promise<void> {
+    await act(async () => {
+      action()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+  }
+
+  it('forwards exactly what was shown for the reclaimable panes, excluded ones never', async () => {
+    const onSleep = vi.fn().mockResolvedValue([])
+    render(plan(), onSleep)
+    expect(action()?.textContent).toBe('Sleep 3 agents now')
+
+    await click()
+
+    expect(onSleep).toHaveBeenCalledTimes(1)
+    // The unmeasured pane is still an idle agent; the Mobile-held one is not offered.
+    expect(onSleep.mock.calls[0]?.[0]).toEqual([
+      shownAs('tab-1:a'),
+      shownAs('tab-1:b'),
+      shownAs('tab-1:c')
+    ])
+  })
+
+  it('reports what the coordinator did, not what was asked, and claims no memory', async () => {
+    const results: AgentSleepResult[] = [
+      { candidateId: 'wt-1|tab-1:a', outcome: 'slept' },
+      { candidateId: 'wt-1|tab-1:b', outcome: 'changed' },
+      { candidateId: 'wt-1|tab-1:c', outcome: 'failed' }
+    ]
+    render(plan(), vi.fn().mockResolvedValue(results))
+
+    await click()
+
+    const summary = container.querySelector('[data-testid="sleep-reclaim-result"]')
+    expect(summary?.getAttribute('data-slept-count')).toBe('1')
+    expect(summary?.getAttribute('data-kept-count')).toBe('1')
+    expect(summary?.getAttribute('data-failed-count')).toBe('1')
+    expect(summary?.textContent).toContain('1 put to sleep')
+    expect(summary?.textContent).toContain('1 kept awake')
+    expect(summary?.textContent).toContain('1 could not be put to sleep')
+    expect(summary?.textContent).not.toMatch(/\d+(\.\d+)? (KB|MB|GB)/)
+  })
+
+  it('offers no action when nothing on the plan may sleep', () => {
+    render(plan({ reclaimable: [] }), vi.fn())
+    expect(action()).toBeNull()
+  })
+
+  it('cannot be pressed twice while a sleep is running', async () => {
+    let finish: (value: AgentSleepResult[]) => void = () => {}
+    const onSleep = vi.fn(
+      () =>
+        new Promise<AgentSleepResult[]>((resolve) => {
+          finish = resolve
+        })
+    )
+    render(plan(), onSleep)
+
+    await click()
+    expect(action()?.disabled).toBe(true)
+    await click()
+    expect(onSleep).toHaveBeenCalledTimes(1)
+
+    await act(async () => finish([]))
+    expect(action()?.disabled).toBe(false)
   })
 })
 
 // Why: a key missing from a catalog renders the English fallback silently, so
 // the section would read English on every locale with nothing turning red.
 describe('SleepReclaimAuthorizationSection copy catalogs', () => {
-  const source = readFileSync(join(__dirname, 'SleepReclaimAuthorizationSection.tsx'), 'utf8')
+  const source = ['SleepReclaimAuthorizationSection.tsx', 'SleepReclaimAuthorizationAction.tsx']
+    .map((file) => readFileSync(join(__dirname, file), 'utf8'))
+    .join('\n')
   const calls = [...source.matchAll(/translate\(\s*'([^']+)',\s*'([^']+)'/g)].map(
     ([, key, fallback]) => ({ key, fallback })
   )
@@ -226,8 +327,8 @@ describe('SleepReclaimAuthorizationSection copy catalogs', () => {
   }
 
   it('finds every translated string in the component', () => {
-    // Positive control: 8 summary strings plus one per exclusion reason.
-    expect(calls.length).toBeGreaterThanOrEqual(23)
+    // Positive control: 8 summary strings, one per exclusion reason, 6 for the action.
+    expect(calls.length).toBeGreaterThanOrEqual(29)
     expect(calls.every(({ key }) => key.startsWith('auto.components.status.bar.'))).toBe(true)
   })
 

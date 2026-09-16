@@ -3506,6 +3506,12 @@
               "unknownMany": "{{value0}} de ellos no se han medido, así que no están en esta cifra",
               "protectedOne": "1 panel se mantiene despierto",
               "protectedMany": "{{value0}} paneles se mantienen despiertos",
+              "sleeping": "Durmiendo agentes…",
+              "sleepOne": "Dormir 1 agente ahora",
+              "sleepMany": "Dormir {{value0}} agentes ahora",
+              "resultSlept": "{{value0}} dormidos",
+              "resultKept": "{{value0}} siguen despiertos porque cambiaron desde que se mostraron",
+              "resultFailed": "{{value0}} no se pudieron dormir",
               "reason": {
                 "featureDisabled": "El reposo de agentes está desactivado",
                 "worktreeActive": "En el espacio de trabajo abierto",

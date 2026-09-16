@@ -3744,6 +3744,12 @@
               "unknownMany": "{{value0}} of them have not been measured, so they are not in this figure",
               "protectedOne": "1 pane is kept awake",
               "protectedMany": "{{value0}} panes are kept awake",
+              "sleeping": "Putting agents to sleep…",
+              "sleepOne": "Sleep 1 agent now",
+              "sleepMany": "Sleep {{value0}} agents now",
+              "resultSlept": "{{value0}} put to sleep",
+              "resultKept": "{{value0}} kept awake because they changed since shown",
+              "resultFailed": "{{value0}} could not be put to sleep",
               "reason": {
                 "featureDisabled": "Agent sleep is off",
                 "worktreeActive": "In the open workspace",

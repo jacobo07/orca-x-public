@@ -3486,6 +3486,12 @@
               "unknownMany": "そのうち{{value0}}件は未計測のため、この数値に含まれていません",
               "protectedOne": "1個のペインはスリープしません",
               "protectedMany": "{{value0}}個のペインはスリープしません",
+              "sleeping": "エージェントをスリープ中…",
+              "sleepOne": "エージェント1件を今すぐスリープ",
+              "sleepMany": "エージェント{{value0}}件を今すぐスリープ",
+              "resultSlept": "{{value0}}件をスリープしました",
+              "resultKept": "{{value0}}件は表示後に変化したためスリープしませんでした",
+              "resultFailed": "{{value0}}件をスリープできませんでした",
               "reason": {
                 "featureDisabled": "エージェントのスリープはオフです",
                 "worktreeActive": "開いているワークスペース内です",

@@ -3486,6 +3486,12 @@
               "unknownMany": "그중 {{value0}}개는 측정되지 않아 이 수치에 포함되지 않습니다",
               "protectedOne": "창 1개는 절전하지 않고 유지됩니다",
               "protectedMany": "창 {{value0}}개는 절전하지 않고 유지됩니다",
+              "sleeping": "에이전트를 절전 중…",
+              "sleepOne": "에이전트 1개 지금 절전",
+              "sleepMany": "에이전트 {{value0}}개 지금 절전",
+              "resultSlept": "{{value0}}개 절전됨",
+              "resultKept": "{{value0}}개는 표시 후 변경되어 절전하지 않았습니다",
+              "resultFailed": "{{value0}}개를 절전하지 못했습니다",
               "reason": {
                 "featureDisabled": "에이전트 절전이 꺼져 있습니다",
                 "worktreeActive": "열려 있는 워크스페이스에 있습니다",

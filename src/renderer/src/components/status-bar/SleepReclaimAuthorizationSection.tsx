@@ -4,6 +4,10 @@ import type { AgentHibernationExclusionReason } from '@/lib/agent-hibernation-pl
 import type { SleepAuthorizationPlan } from '@/lib/agent-sleep-authorization-plan'
 import { translate } from '@/i18n/i18n'
 import { formatMemory } from './resource-memory-byte-format'
+import {
+  SleepReclaimAuthorizationAction,
+  type SleepAuthorizedPanes
+} from './SleepReclaimAuthorizationAction'
 
 /**
  * What the canonical authorization plan says, rendered.
@@ -95,9 +99,12 @@ function describeExclusionReason(reason: AgentHibernationExclusionReason): strin
 }
 
 export function SleepReclaimAuthorizationSection({
-  plan
+  plan,
+  onSleep
 }: {
   plan: SleepAuthorizationPlan
+  /** Absent means read-only: no control that can destroy anything is rendered. */
+  onSleep?: SleepAuthorizedPanes
 }): React.JSX.Element | null {
   const [showProtected, setShowProtected] = useState(false)
 
@@ -177,6 +184,8 @@ export function SleepReclaimAuthorizationSection({
               )}
         </div>
       )}
+
+      {onSleep && <SleepReclaimAuthorizationAction plan={plan} onSleep={onSleep} />}
 
       {protectedReasons.length > 0 && (
         <>

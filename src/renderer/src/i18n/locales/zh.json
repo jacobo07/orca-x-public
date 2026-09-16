@@ -3498,6 +3498,12 @@
               "unknownMany": "其中 {{value0}} 个尚未测量,因此不计入此数值",
               "protectedOne": "1 个窗格保持唤醒",
               "protectedMany": "{{value0}} 个窗格保持唤醒",
+              "sleeping": "正在让智能体休眠…",
+              "sleepOne": "立即休眠 1 个智能体",
+              "sleepMany": "立即休眠 {{value0}} 个智能体",
+              "resultSlept": "{{value0}} 个已休眠",
+              "resultKept": "{{value0}} 个在显示后已变化,保持唤醒",
+              "resultFailed": "{{value0}} 个无法休眠",
               "reason": {
                 "featureDisabled": "智能体休眠已关闭",
                 "worktreeActive": "位于当前打开的工作区",
