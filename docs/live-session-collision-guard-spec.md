@@ -95,7 +95,7 @@ preflight is a new IPC/RPC method name, so an older peer fails closed rather tha
 | -------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Presence projection, reader, claim-key identity                | landed `326a31df5`, `20db169ad`                                  |
 | `agentSession:readLivePresence` (renderer read)                | landed `26d0fb75c`                                               |
-| Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; no renderer consumer yet                     |
+| Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; owning-window warning toast `fc7307fe2`      |
 | Class A gate on AI Vault resume (Back / Continue / revalidate) | landed `9ae0aecf8`, copy `b8030f2b4`                             |
 | Class A gate on Sleep launch and cold restore                  | not started — those paths are being changed by another pane      |
 | Reservation for simultaneous Class A resumes                   | landed `123c07615` (RED), `38a5137ed`, `f539fa099`, `08d9b2933`, e2e `1737c642a` |
