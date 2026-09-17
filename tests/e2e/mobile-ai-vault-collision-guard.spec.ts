@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
@@ -20,7 +28,11 @@ import {
 // device, contends with the desktop reservation for one session. A stand-in `claude` on PATH keeps
 // any granted resume away from a real provider; Claude has no preflight trust step.
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-mobile-vault-'))
+/** Where the stand-in agent reports the directory it was actually started in. */
+const agentCwdReport = path.join(fakeCliDir, 'agent-cwd.log')
 const fakeClaudeSource =
+  "const report = process.env.ORCA_E2E_AGENT_CWD_REPORT\n" +
+  "if (report) { require('node:fs').appendFileSync(report, process.cwd() + '\\n') }\n" +
   "process.stdout.write('fake claude ready\\n'); setInterval(() => {}, 60_000)\n"
 if (process.platform === 'win32') {
   writeFileSync(path.join(fakeCliDir, 'fake-claude.js'), fakeClaudeSource)
@@ -35,7 +47,13 @@ if (process.platform === 'win32') {
 }
 
 const test = base.extend({
-  launchEnv: [{ PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}` }, { option: true }]
+  launchEnv: [
+    {
+      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
+      ORCA_E2E_AGENT_CWD_REPORT: agentCwdReport
+    },
+    { option: true }
+  ]
 })
 
 test.afterAll(() => {
@@ -276,6 +294,23 @@ test('a mobile AI Vault resume contends with the desktop reservation before anyt
     expect(await outcomeOf(resume(again, V))).toBe('refused:materializing')
     expect(again.sent).not.toContain('terminal.send')
     await release(orcaPage, 'op-desktop-V')
+
+    // Execution-context fidelity: a session recorded in a subdirectory must start THERE. The
+    // stand-in reports the directory it actually ran in, so the workspace root cannot pass.
+    const W = randomUUID()
+    const subdirectory = path.join(workspacePath!, 'packages', 'app')
+    mkdirSync(subdirectory, { recursive: true })
+    const contextClient = pairedMobileClient(pairing)
+    const contextResume = await resume(contextClient, W, subdirectory)
+    expect(contextResume).toMatchObject({ path: 'structured' })
+    opened.push(contextResume.terminal)
+    expect(contextClient.sent).not.toContain('terminal.send')
+    await expect
+      .poll(
+        () => (existsSync(agentCwdReport) ? readFileSync(agentCwdReport, 'utf8').toLowerCase() : ''),
+        { timeout: 60_000, message: 'the resumed agent never reported a working directory' }
+      )
+      .toContain(subdirectory.toLowerCase())
   } finally {
     for (const handle of opened) {
       await host.call('terminal.close', { terminal: handle }).catch(() => {})
