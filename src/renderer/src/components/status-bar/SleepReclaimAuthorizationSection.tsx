@@ -237,7 +237,11 @@ export function SleepReclaimAuthorizationSection({
           {showProtected && (
             <ul className="mt-1 space-y-0.5 pl-4 text-muted-foreground">
               {protectedReasons.map(([reason, count]) => (
-                <li key={reason} className="flex items-baseline justify-between gap-2">
+                <li
+                  key={reason}
+                  className="flex items-baseline justify-between gap-2"
+                  data-reason={reason}
+                >
                   <span className="truncate">{describeExclusionReason(reason)}</span>
                   <span className="shrink-0 tabular-nums">{count}</span>
                 </li>
