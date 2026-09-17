@@ -23,6 +23,7 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { worktreeRowSurface } from './worktree-row-locators'
 
 type LocalScope = { executionHostId: 'local'; ownerKey: string }
 
@@ -154,17 +155,23 @@ async function expectHeldFor(
 
 /** The user's route: right-click the workspace in the sidebar, choose Snapshots…. */
 async function openSnapshotsDialog(page: Page, worktreeId: string) {
-  const card = page.locator(`[data-worktree-drag-id="${worktreeId}"]`).first()
+  // Layout precondition, as in sidebar-icon-only-collapse: docked left, the side panel and the
+  // project list are alternatives, so the panel yields before the list is the left surface.
+  await page.evaluate(() => {
+    const s = window.__store!.getState()
+    s.setRightSidebarOpen(false)
+    s.setSidebarOpen(true)
+  })
+  const card = worktreeRowSurface(page, worktreeId)
   await expect(card).toBeVisible({ timeout: 30_000 })
   await card.click({ button: 'right' })
   await page.getByTestId('worktree-menu-snapshots').click()
   const dialog = page.getByTestId('working-sets-dialog')
   await expect(dialog).toBeVisible({ timeout: 15_000 })
-  await expect(dialog.getByTestId('working-sets-state')).not.toHaveAttribute(
-    'data-working-sets-state',
-    'loading',
-    { timeout: 15_000 }
-  )
+  // The state line renders only while loading or when there is nothing to list.
+  await expect(dialog.locator('[data-working-sets-state="loading"]')).toHaveCount(0, {
+    timeout: 15_000
+  })
   return dialog
 }
 
@@ -268,8 +275,9 @@ test('saves and restores a workspace snapshot through its menu, starting nothing
       }
     )
 
-    // Save through the menu.
+    // Save through the menu. Titles are read here: the agent report retitles row 0 meanwhile.
     let dialog = await openSnapshotsDialog(page, worktreeId)
+    const savedLabels = (await readRows(page, worktreeId)).map((row) => row.title)
     await expect(dialog.getByTestId('working-sets-state')).toHaveAttribute(
       'data-working-sets-state',
       'listed'
@@ -287,7 +295,7 @@ test('saves and restores a workspace snapshot through its menu, starting nothing
       .getAttribute('data-working-set-id')
     expect(workingSetId).toBeTruthy()
     await closeDialog(page)
-    const savedLabels = created.map((row, index) => (index === 0 ? row.title : SHARED_LABEL))
+    expect(savedLabels.slice(1)).toEqual([SHARED_LABEL, SHARED_LABEL])
 
     await emptyWorkspace(page, worktreeId)
     await session.close(firstApp)
@@ -354,7 +362,9 @@ test('saves and restores a workspace snapshot through its menu, starting nothing
     await expect(page2.getByTestId('working-sets-dialog')).toHaveCount(0, { timeout: 60_000 })
 
     const rows = await readRows(page2, worktreeId)
-    expect(rows.map((row) => row.title)).toEqual(savedLabels)
+    // Row 0's title follows its agent record once activated, as it did before the save; the
+    // repeated label is the identity claim that matters here.
+    expect(rows.map((row) => row.title).slice(1)).toEqual(savedLabels.slice(1))
     expect(new Set(rows.map((row) => row.id)).size).toBe(3)
     expect(rows.map((row) => row.leafId)).toEqual(created.map((row) => row.leafId))
     const ids = rows.map((row) => row.id)
@@ -399,7 +409,7 @@ test('saves and restores a workspace snapshot through its menu, starting nothing
 
     // Leave, then come back through the sidebar card.
     await page2.evaluate(() => window.__store!.getState().setActiveWorktree(null))
-    await page2.locator(`[data-worktree-drag-id="${worktreeId}"]`).first().click()
+    await worktreeRowSurface(page2, worktreeId).click()
     await waitForActiveWorktree(page2)
     await ensureTerminalVisible(page2)
     await selectRow(page2, worktreeId, ids[1])
