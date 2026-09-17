@@ -26,11 +26,7 @@ export type WorktreeCardDecorationRefresh = {
   }
 }
 
-type InstallInterval = typeof installWindowVisibilityInterval
-
-export function createWorktreeCardDecorationRefresh(
-  installInterval: InstallInterval = installWindowVisibilityInterval
-): WorktreeCardDecorationRefresh {
+export function createWorktreeCardDecorationRefresh(): WorktreeCardDecorationRefresh {
   const families = Object.keys(
     WORKTREE_CARD_DECORATION_INTERVALS_MS
   ) as WorktreeCardDecorationFamily[]
@@ -89,7 +85,11 @@ export function createWorktreeCardDecorationRefresh(
       holders++
       if (!stopClock) {
         // Why: starting the clock runs every subject once, which covers this new one.
-        stopClock = installInterval({ run: tick, runOnVisible: runAll, intervalMs: baseIntervalMs })
+        stopClock = installWindowVisibilityInterval({
+          run: tick,
+          runOnVisible: runAll,
+          intervalMs: baseIntervalMs
+        })
       } else if (!existing && isWindowVisible()) {
         runSubject(subject)
       }

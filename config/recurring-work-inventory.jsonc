@@ -30,7 +30,8 @@
     "startWindowsTerminalCapabilityReprobe",
     "createTaskbarPreviewRefreshTicker",
     "startRemoteRuntimeSocketLiveness",
-    "getWorktreeObservationClock"
+    "getWorktreeObservationClock",
+    "getWorktreeCardDecorationRefresh"
   ],
   "sites": {
     "src/cli/handlers/orchestration.ts#interval#startCheckKeepalive": {
@@ -2057,27 +2058,40 @@
       "disposition": "justified",
       "note": "use-workspace-kanban-area-selection.ts:205-225 rAF loop self-stops when getAreaSelectionAutoScrollDelta returns 0"
     },
-    "src/renderer/src/components/sidebar/use-worktree-card-lifecycle-effects.ts#helper:installWindowVisibilityInterval#useWorktreeCardLifecycleEffects": {
-      "responsibility": "worktree-card-hosted-review-poll",
-      "cadence": "HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS",
+    "src/renderer/src/components/sidebar/worktree-card-decoration-refresh.ts#helper:installWindowVisibilityInterval#register": {
+      "responsibility": "worktree-card-decoration-refresh-clock",
+      "cadence": "60s tick; hosted review every tick, linked issues every 5th",
       "lifetime": "while-active",
-      "scaling": "per-sidebar-row",
+      "scaling": "per-window",
       "hidden": "paused",
       "dormant": "n/a",
       "spawns": "none",
-      "disposition": "debt",
-      "note": "use-worktree-card-lifecycle-effects.ts:74-94 each visible worktree card mounts its own independent poll timer (to discover externally-created PRs); multiplies with the number of visible worktree cards, not bounded, and could plausibly be coalesced into one shared per-window poll the way useNow/stale-conflict-operation-poll already do for similar per-row concerns"
+      "disposition": "justified",
+      "note": "the one timer behind every worktree card's decoration refresh in this renderer; armed on the first registration, disarmed on the last (worktree-card-decoration-refresh.test.ts)"
     },
-    "src/renderer/src/components/sidebar/use-worktree-card-lifecycle-effects.ts#helper:installWindowVisibilityInterval#useWorktreeCardLifecycleEffects#2": {
-      "responsibility": "worktree-card-linked-issue-poll",
-      "cadence": "5 minutes (5*60_000ms)",
+    "src/renderer/src/components/sidebar/use-worktree-card-lifecycle-effects.ts#helper:getWorktreeCardDecorationRefresh#useWorktreeCardLifecycleEffects": {
+      "responsibility": "worktree-card-hosted-review-poll",
+      "cadence": "60s on the shared window clock, plus once on register and on becoming visible",
       "lifetime": "while-active",
       "scaling": "per-sidebar-row",
       "hidden": "paused",
       "dormant": "n/a",
       "spawns": "none",
-      "disposition": "debt",
-      "note": "use-worktree-card-lifecycle-effects.ts:160-180 each visible worktree card with a linked issue mounts its own poll timer; multiplies with the number of such cards, not bounded, could plausibly be batched across cards like the coalesced conflict-badge poller"
+      "disposition": "justified",
+      "bound": "no own timer; one registration per mounted card, deduplicated by subject, so store lookups follow unique visible worktrees; hostedReview:forBranch IPC is one per stale subject and main's process-wide cache paces the git/gh lookups behind it (found 60s, none 15min)",
+      "note": "worktree-card-refresh-cardinality.test.ts: 50 cards 100 intervals -> 1; 50 cards over 25 worktrees 550 store lookups -> 275 per 10 min"
+    },
+    "src/renderer/src/components/sidebar/use-worktree-card-lifecycle-effects.ts#helper:getWorktreeCardDecorationRefresh#useWorktreeCardLifecycleEffects#2": {
+      "responsibility": "worktree-card-linked-issue-poll",
+      "cadence": "5 min on the shared window clock, plus once on register and on becoming visible",
+      "lifetime": "while-active",
+      "scaling": "per-sidebar-row",
+      "hidden": "paused",
+      "dormant": "n/a",
+      "spawns": "none",
+      "disposition": "justified",
+      "bound": "no own timer; deduplicated by repo and issue number, so gh:issue IPC is one per stale unique linked issue per window every 5 min; main spawns one gh per such call (no main-side cache), so two windows showing one issue still ask twice",
+      "note": "worktree-card-refresh-cardinality.test.ts pins the 5 min cadence and that a hung lookup is not re-asked per tick"
     },
     "src/renderer/src/components/sidebar/worktree-list/drag/use-native-autoscroll.ts#self-rescheduling-frame#runFrame": {
       "responsibility": "worktree-list-drag-native-autoscroll",
