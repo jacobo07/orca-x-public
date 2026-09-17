@@ -11,6 +11,8 @@ import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from '@/lib/agent-hibernation-plann
 import { hydrateDrivers, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
 import { SleepReclaimAuthorizationPanel } from './SleepReclaimAuthorizationPanel'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const MB = 1024 * 1024
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -194,5 +196,243 @@ describe('SleepReclaimAuthorizationPanel', () => {
       container.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(container.textContent).toContain('Agent sleep is off')
+  })
+})
+
+describe('SleepReclaimAuthorizationPanel with a runtime-backed pane', () => {
+  let container: HTMLDivElement
+  let root: Root
+  const call = vi.fn()
+
+  beforeEach(() => {
+    Object.assign(window, { api: { runtimeEnvironments: { call } } })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+    hydrateDrivers([])
+    call.mockReset()
+    clearRuntimeCompatibilityCacheForTests()
+  })
+
+  function mount(): void {
+    act(() => root.render(<SleepReclaimAuthorizationPanel />))
+  }
+
+  function known(): string | null {
+    return container.querySelector('[data-testid="reclaim-known"]')?.textContent ?? null
+  }
+
+  function listResult(ptyIds: string[]) {
+    return {
+      terminals: ptyIds.map((ptyId) => ({
+        handle: `handle-${ptyId}`,
+        ptyId,
+        worktreeId: 'wt-bg',
+        worktreePath: '/tmp/wt-bg',
+        branch: 'feature',
+        tabId: `pty:${ptyId}`,
+        leafId: `pty:${ptyId}`,
+        title: 'Agent',
+        connected: true,
+        writable: true,
+        lastOutputAt: null,
+        preview: ''
+      })),
+      totalCount: ptyIds.length,
+      truncated: false
+    }
+  }
+
+  /** Every terminal.list answers from `answer`; anything else is recorded and answered empty. */
+  function installRuntime(answer: () => Promise<ReturnType<typeof listResult>>): void {
+    call.mockImplementation((args: { method: string }) => {
+      const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (compatible) {
+        return Promise.resolve(compatible)
+      }
+      if (args.method === 'terminal.list') {
+        return answer().then((result) => ({
+          id: 'terminal-list',
+          ok: true,
+          result,
+          _meta: { runtimeId: 'runtime-1' }
+        }))
+      }
+      return Promise.resolve({
+        id: 'other',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    })
+  }
+
+  function installRuntimeState(): ReturnType<typeof vi.fn> {
+    const unmeasured = snapshot()
+    return installEligibleState({
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      worktreesByRepo: {
+        'fixture-repo': [
+          {
+            id: 'wt-bg',
+            repoId: 'fixture-repo',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'runtime-1'
+          }
+        ]
+      } as never,
+      ptyIdsByTabId: { 'tab-1': [] },
+      // A runtime pane has no row in the local collector.
+      memorySnapshot: { ...unmeasured, worktrees: [] }
+    })
+  }
+
+  function listCalls(): unknown[] {
+    return call.mock.calls.filter(([args]) => args.method === 'terminal.list')
+  }
+
+  function reasons(): string[] {
+    return [...container.querySelectorAll('[data-reason]')].map(
+      (node) => node.getAttribute('data-reason') ?? ''
+    )
+  }
+
+  async function settle(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+  }
+
+  function openReasons(): void {
+    const disclosure = container.querySelector('button[aria-expanded="false"]')
+    act(() => {
+      disclosure?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+  }
+
+  it('offers a proven-live runtime pane once its liveness is sampled, without a size', async () => {
+    installRuntime(() => Promise.resolve(listResult(['pty-1'])))
+    installRuntimeState()
+    mount()
+    await settle()
+
+    expect(container.textContent).toContain('1 idle agent can sleep')
+    expect(known()).toBeNull()
+    expect(listCalls()).toHaveLength(1)
+    expect(listCalls()[0]).toEqual([
+      expect.objectContaining({
+        params: expect.objectContaining({ requireFreshPtyLiveness: true })
+      })
+    ])
+  })
+
+  it('keeps the pane awake as unknown until the sample lands', async () => {
+    let answer!: (result: ReturnType<typeof listResult>) => void
+    installRuntime(() => new Promise((resolve) => (answer = resolve)))
+    installRuntimeState()
+    mount()
+    await settle()
+
+    expect(container.textContent).toContain('0 idle agents can sleep')
+    openReasons()
+    expect(reasons()).toEqual(['runtime-liveness-unknown'])
+
+    answer(listResult(['pty-1']))
+    await settle()
+    expect(container.textContent).toContain('1 idle agent can sleep')
+  })
+
+  it('keeps the pane awake as unknown when the runtime cannot answer', async () => {
+    const shutdown = installRuntimeState()
+    installRuntime(() => Promise.reject(new Error('runtime unreachable')))
+    mount()
+    await settle()
+
+    expect(container.textContent).toContain('0 idle agents can sleep')
+    openReasons()
+    expect(reasons()).toEqual(['runtime-liveness-unknown'])
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('does not offer a pane whose PTY a successful sample did not list', async () => {
+    installRuntime(() => Promise.resolve(listResult(['pty-other'])))
+    installRuntimeState()
+    mount()
+    await settle()
+
+    expect(container.textContent).toContain('0 idle agents can sleep')
+    openReasons()
+    expect(reasons()).toEqual(['no-live-pane'])
+  })
+
+  it('samples once per showing: the memory poll asks the runtime nothing more', async () => {
+    installRuntime(() => Promise.resolve(listResult(['pty-1'])))
+    installRuntimeState()
+    mount()
+    await settle()
+    for (let poll = 0; poll < 3; poll += 1) {
+      act(() => useAppStore.setState({ memorySnapshot: { ...snapshot(), worktrees: [] } }))
+      await settle()
+    }
+
+    expect(listCalls()).toHaveLength(1)
+    expect(container.textContent).toContain('1 idle agent can sleep')
+  })
+
+  it('observes only: showing the plan sends the runtime nothing but a liveness listing', async () => {
+    installRuntime(() => Promise.resolve(listResult(['pty-1'])))
+    const shutdown = installRuntimeState()
+    mount()
+    await settle()
+
+    const methods = call.mock.calls
+      .map(([args]) => args.method as string)
+      .filter((method) => method !== 'terminal.list' && !method.startsWith('status.'))
+    expect(methods).toEqual([])
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('re-samples when the pane gets a new PTY, and never offers the old one', async () => {
+    const answers: ((result: ReturnType<typeof listResult>) => void)[] = []
+    installRuntime(() => new Promise((resolve) => answers.push(resolve)))
+    installRuntimeState()
+    mount()
+    await settle()
+    act(() =>
+      useAppStore.setState({
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: LEAF },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF]: 'pty-2' }
+          }
+        }
+      })
+    )
+    await settle()
+    // Serialized per host: the newer listing waits for the superseded one.
+    expect(answers).toHaveLength(1)
+
+    // The superseded answer would offer pty-2; it must be dropped.
+    answers[0](listResult(['pty-1', 'pty-2']))
+    await settle()
+    expect(container.textContent).toContain('0 idle agents can sleep')
+    expect(answers).toHaveLength(2)
+
+    answers[1](listResult([]))
+    await settle()
+    expect(container.textContent).toContain('0 idle agents can sleep')
+    openReasons()
+    expect(reasons()).toEqual(['no-live-pane'])
   })
 })

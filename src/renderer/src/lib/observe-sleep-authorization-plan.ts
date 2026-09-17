@@ -1,7 +1,8 @@
 import { useAppStore } from '@/store'
 import {
   buildAgentHibernationPlannerSnapshot,
-  unsampledRuntimePtyLiveness
+  fenceRuntimePtyLivenessSample,
+  type SampledRuntimePtyLiveness
 } from './agent-hibernation-planner-snapshot'
 import {
   buildSleepAuthorizationPlan,
@@ -18,12 +19,19 @@ import {
  * state says, never permission to destroy anything later — the coordinator
  * re-authorizes against live state at the moment of effect.
  */
-export function observeSleepAuthorizationPlan(now: number = Date.now()): SleepAuthorizationPlan {
+export function observeSleepAuthorizationPlan(
+  runtimeLiveness: SampledRuntimePtyLiveness | null = null,
+  now: number = Date.now()
+): SleepAuthorizationPlan {
   const state = useAppStore.getState()
   return buildSleepAuthorizationPlan(
-    // Why unsampled: a render must not fire the coordinator's RPC liveness sweep,
-    // so runtime-backed worktrees fail closed rather than display a stale verdict.
-    buildAgentHibernationPlannerSnapshot(state, now, unsampledRuntimePtyLiveness(state)),
+    // Why: a render never samples; it applies the caller's last sample, and a
+    // runtime worktree that sample did not answer stays unknown.
+    buildAgentHibernationPlannerSnapshot(
+      state,
+      now,
+      fenceRuntimePtyLivenessSample(state, runtimeLiveness)
+    ),
     state.memorySnapshot
   )
 }
