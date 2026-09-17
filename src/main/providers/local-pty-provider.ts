@@ -77,6 +77,10 @@ import {
   type ShellPromptMarkerTrust,
   type ShellPromptStateTracker
 } from '../../shared/terminal-osc133-prompt-state'
+import {
+  createShellInputSincePromptTracker,
+  type ShellInputSincePromptTracker
+} from '../../shared/terminal-shell-input-since-prompt'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
@@ -125,7 +129,11 @@ const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 const ptyShellName = new Map<string, string>()
 const ptyPromptStates = new Map<
   string,
-  { tracker: ShellPromptStateTracker; trust: ShellPromptMarkerTrust }
+  {
+    tracker: ShellPromptStateTracker
+    trust: ShellPromptMarkerTrust
+    input: ShellInputSincePromptTracker
+  }
 >()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
@@ -948,9 +956,14 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
     const promptTrust = shellPromptMarkerTrust(shellPath, process.platform)
+    const promptInput = createShellInputSincePromptTracker()
     const promptState = {
-      tracker: createShellPromptStateTracker(() => promptTrust),
-      trust: promptTrust
+      tracker: createShellPromptStateTracker(
+        () => promptTrust,
+        (sequence) => promptInput.notePromptMarker(sequence)
+      ),
+      trust: promptTrust,
+      input: promptInput
     }
     ptyPromptStates.set(id, promptState)
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
@@ -1182,6 +1195,9 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!proc) {
       return false
     }
+    // Why after the query-reply return above: those never reach the shell, so they cannot be
+    // the line a respawn would destroy.
+    ptyPromptStates.get(id)?.input.noteWrite(data)
     proc.write(data)
     return true
   }
@@ -1374,7 +1390,14 @@ export class LocalPtyProvider implements IPtyProvider {
       foregroundProcess,
       hasChildProcesses,
       ...(promptState
-        ? { promptState: resolveShellPromptState(promptState.tracker, promptState.trust) }
+        ? {
+            promptState: resolveShellPromptState(promptState.tracker, promptState.trust),
+            // Why gated on trust: a shell Orca never instrumented emits no marker that could
+            // retire this, so it must answer unknown rather than claim an empty line.
+            ...(promptState.trust === 'none'
+              ? {}
+              : { inputSincePrompt: promptState.input.read() })
+          }
         : {})
     }
   }

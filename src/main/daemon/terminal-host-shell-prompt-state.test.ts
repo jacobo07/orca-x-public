@@ -69,8 +69,48 @@ describe('TerminalHost.inspectProcess prompt state', () => {
     expect(host.inspectProcess('s1')).toEqual({
       foregroundProcess: 'zsh',
       hasChildProcesses: false,
-      promptState: 'prompt'
+      promptState: 'prompt',
+      inputSincePrompt: 'clean'
     })
+  })
+
+  // Why the daemon answers this at all: the renderer's own record of a typed line dies with the
+  // renderer, and the shell holding that line does not.
+  it('remembers a line the user typed, across everything but the shell itself', async () => {
+    await start('/bin/zsh')
+    sub.emit('\x1b]133;A\x07% ')
+    expect(host.inspectProcess('s1').inputSincePrompt).toBe('clean')
+
+    host.write('s1', 'git comm')
+
+    expect(host.inspectProcess('s1').inputSincePrompt).toBe('typed')
+  })
+
+  it('forgets the line once the shell says it was submitted, and again at a fresh prompt', async () => {
+    await start('/bin/zsh')
+    sub.emit('\x1b]133;A\x07% ')
+    host.write('s1', 'ls\r')
+    sub.emit('\x1b]133;C\x07')
+    expect(host.inspectProcess('s1').inputSincePrompt).toBe('clean')
+
+    host.write('s1', 'next')
+    expect(host.inspectProcess('s1').inputSincePrompt).toBe('typed')
+    sub.emit('\x1b]133;D;0\x07\x1b]133;A\x07% ')
+    expect(host.inspectProcess('s1').inputSincePrompt).toBe('clean')
+  })
+
+  it('does not count the terminal answering a query as the user typing', async () => {
+    await start('/bin/zsh')
+    sub.emit('\x1b]133;A\x07% ')
+    host.write('s1', '\x1b[I')
+    expect(host.inspectProcess('s1').inputSincePrompt).toBe('clean')
+  })
+
+  it('says nothing about the line of a shell it never instrumented', async () => {
+    // Unknown, not clean: no marker from this shell could ever retire the state.
+    await start('/usr/bin/fish', 'fish')
+    host.write('s1', 'rm -rf something')
+    expect(host.inspectProcess('s1').inputSincePrompt).toBeUndefined()
   })
 
   it('reports a running command until the shell finishes it', async () => {

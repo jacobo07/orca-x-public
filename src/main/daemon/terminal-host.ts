@@ -196,7 +196,8 @@ export class TerminalHost {
     return {
       foregroundProcess,
       hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess),
-      promptState: session.shellPromptState.read()
+      promptState: session.shellPromptState.read(),
+      inputSincePrompt: session.shellPromptState.readInputSincePrompt()
     }
   }
 

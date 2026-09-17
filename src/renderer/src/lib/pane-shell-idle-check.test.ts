@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { checkPaneShellIdle } from './pane-shell-idle-check'
 import type { PtyProcessInspection } from '../../../shared/pty-process-inspection'
 
+// A current-generation host: it can vouch for the prompt AND for the line at it.
 const idleShell: PtyProcessInspection = {
   foregroundProcess: 'powershell.exe',
   hasChildProcesses: false,
-  promptState: 'prompt'
+  promptState: 'prompt',
+  inputSincePrompt: 'clean'
 }
 
 function check(
@@ -73,6 +75,36 @@ describe('checkPaneShellIdle', () => {
     await expect(check({ promptState: 'unknown' }, () => 'pty-1', () => true)).resolves.toBe(
       'unconfirmed'
     )
+  })
+
+  // Why these four: the renderer's own flag dies with the renderer, but the shell it protects
+  // does not. Only the host saw every byte the user typed, so the host is the authority and the
+  // renderer's flag may only ADD safety.
+  it('refuses a line the host saw typed, even when this renderer never saw it', async () => {
+    // The reload case: the store is empty after a reload, the shell still holds the text.
+    await expect(
+      check({ inputSincePrompt: 'typed' }, () => 'pty-1', () => false)
+    ).resolves.toBe('unsent-input')
+  })
+
+  it('refuses a line this renderer saw typed, even when the host believes it clean', async () => {
+    await expect(
+      check({ inputSincePrompt: 'clean' }, () => 'pty-1', () => true)
+    ).resolves.toBe('unsent-input')
+  })
+
+  it('will not call a prompt idle when no host could vouch for the line at it', async () => {
+    // A host old enough to track prompts but not input cannot say the line is empty, and
+    // "nobody told me" is not evidence of an empty line.
+    await expect(
+      check({ inputSincePrompt: undefined }, () => 'pty-1', () => false)
+    ).resolves.toBe('host-outdated')
+  })
+
+  it('resumes only when the host itself vouches the line is clean', async () => {
+    await expect(
+      check({ inputSincePrompt: 'clean' }, () => 'pty-1', () => false)
+    ).resolves.toBe('idle')
   })
 
   it('cannot confirm a pane with no PTY or one that moved to another PTY during the read', async () => {

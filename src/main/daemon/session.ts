@@ -139,6 +139,10 @@ export class Session {
       return
     }
 
+    // Why here: the query replies above never reach the shell, but everything from this point
+    // does — including data that only queues — so this is where a line starts existing.
+    this.shellPromptState.noteWrite(data)
+
     // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
     // direct write would race fresh input ahead of the buffered startup command.
     if (this.shellReady.tryEnqueue(data)) {

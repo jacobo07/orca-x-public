@@ -6,6 +6,13 @@ import { createOsc133CommandFinishedScanner } from './terminal-osc133-command-fi
  */
 export type ShellPromptState = 'prompt' | 'running' | 'unknown' | 'unsupported'
 
+/**
+ * Whether user input has reached the shell since its last prompt marker. `typed` is a line the
+ * respawn would destroy; `clean` is a prompt nobody has typed at since it was drawn. There is no
+ * third value: an authority that cannot tell omits the field, because unknown is not `clean`.
+ */
+export type ShellInputSincePrompt = 'typed' | 'clean'
+
 /** Appended to the A/D markers of a PowerShell whose commands also emit 133;C. */
 export const ORCA_PROMPT_MARKER_TAG = 'orca'
 
@@ -32,7 +39,13 @@ function isTagged(payload: string): boolean {
  * so only whoever saw every byte can say it is still sitting there.
  */
 export function createShellPromptStateTracker(
-  getTrust: () => ShellPromptMarkerTrust = () => 'any'
+  getTrust: () => ShellPromptMarkerTrust = () => 'any',
+  /**
+   * Called with the marker letter only when this tracker HONOURS it, so a caller that retires
+   * its own state on a prompt retires it on exactly the markers that moved this one — never on
+   * an untrusted prompt this tracker itself refused to believe.
+   */
+  onHonouredMarker?: (sequence: string) => void
 ): ShellPromptStateTracker {
   let state: Exclude<ShellPromptState, 'unsupported'> = 'unknown'
   // Why: any C means work may be running; only a trusted A/D may say it stopped.
@@ -40,6 +53,7 @@ export function createShellPromptStateTracker(
     const sequence = payload.split(';')[0]
     if (sequence === 'C') {
       state = 'running'
+      onHonouredMarker?.('C')
       return
     }
     if (sequence !== 'A' && sequence !== 'D') {
@@ -48,6 +62,7 @@ export function createShellPromptStateTracker(
     const trust = getTrust()
     if (trust === 'any' || (trust === 'tagged' && isTagged(payload))) {
       state = 'prompt'
+      onHonouredMarker?.(sequence)
     }
   }
   const scanner = createOsc133CommandFinishedScanner(() => {}, undefined, undefined, onMarker)

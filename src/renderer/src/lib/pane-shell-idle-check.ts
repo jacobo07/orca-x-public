@@ -49,5 +49,17 @@ export async function checkPaneShellIdle(args: {
   // Why after the prompt proof: a typed line only exists at a prompt, and a busy shell
   // has a louder reason to refuse. Markers cannot see the line editor, so this is
   // deliberately conservative — it refuses input the user may already have cleared.
-  return args.hasUnsentInput?.() === true ? 'unsent-input' : 'idle'
+  //
+  // Why two sources: the host saw every byte and still knows after this renderer reloaded,
+  // while the renderer knows about writes that never reached the host's own input path. So
+  // either may refuse, and the renderer's answer can only ADD safety, never withdraw it.
+  if (inspection.inputSincePrompt === 'typed' || args.hasUnsentInput?.() === true) {
+    return 'unsent-input'
+  }
+  // Why absent is not clean: a host that predates input tracking cannot see the line, and
+  // silence about a draft is not evidence there is none. Same remedy as any outdated host.
+  if (inspection.inputSincePrompt === undefined) {
+    return 'host-outdated'
+  }
+  return 'idle'
 }
