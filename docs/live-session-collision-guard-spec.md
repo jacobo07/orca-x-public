@@ -101,7 +101,8 @@ preflight is a new IPC/RPC method name, so an older peer fails closed rather tha
 | Reservation for simultaneous Class A resumes                   | landed `123c07615` (RED), `38a5137ed`, `f539fa099`, `08d9b2933`, e2e `1737c642a` |
 | Class A gate on working-set (snapshot) restore                 | landed at the spawn (revival is a pane cold restore)                             |
 | Runtime ensure (web, runtime panes) on the same reservation    | landed: RED `374888067`, `9ab2316c6`, `e0d52c924`, `c23065435`, `ca93d6d78`      |
-| Mobile AI Vault resume                                         | not guarded: typed command; inventory debt                                       |
+| Mobile AI Vault resume (current mobile + current host)         | landed: RED `657cb02f3`, `862da67bf`, `3a5e03911`, `f9f925335`, e2e `90a775c0e`  |
+| Mobile typed-command fallback                                  | unguarded compatibility leg, inventoried (`b1629058f`)                           |
 | Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt                 |
 | Shared-live rail indicator, go-to-open-session                 | not started                                                                      |
 | Real-provider product reality                                  | not run                                                                          |
@@ -145,21 +146,22 @@ lives there (`decideResumeSpawn`, installed by `registerAgentSessionLivePresence
   replies `agentResumeRefused`; it never falls back to launching a fresh provider session;
 - expiry is cleanup, not proof: every decision re-reads presence first.
 
-| Materializer                                          | Initiated | Class | Status                                                           |
-| ----------------------------------------------------- | --------- | ----- | ---------------------------------------------------------------- |
-| AI Vault resume                                       | user      | A     | guarded (dialog + reservation + spawn gate)                      |
-| Per-pane "Resume this session"                        | user      | A     | guarded: dialog + reservation, then gated respawn (`4f7fb4b8f`)  |
-| Sleep launch into a new tab (activation, mobile)      | automatic | A     | guarded at spawn; limit: record cleared before spawn             |
-| Pane cold restore                                     | automatic | A     | guarded at spawn; refusal keeps the record (`be116a07e`)         |
-| In-place hibernation wake                             | automatic | A     | guarded at spawn (same path as cold restore)                     |
-| Working-set row revival                               | automatic | A     | guarded at spawn (lazy sleep record → cold restore)              |
-| Runtime ensure: web AI Vault, runtime-hosted pane     | user/auto | A     | guarded: registry adopts, a new spawn crosses the gate           |
-| Host-side `terminal.create` with a recorded session   | any       | A     | guarded at the controller spawn (`c23065435`)                    |
-| Mobile AI Vault resume                                | user      | A     | **not guarded**: creates a plain pane, then types the command    |
-| Legacy text-command fallback (old host, `afterTabId`) | user      | A     | **not guarded**: the session travels only as command text        |
-| CLI                                                   | —         | —     | no Orca-selected resume; a typed `claude --resume` is the user's |
-| Provider `/resume` picker                             | provider  | B     | post-effect notice to the owning window                          |
-| SSH                                                   | any       | —     | unsupported: no claim key, proceeds unreserved                   |
+| Materializer                                            | Initiated | Class | Status                                                             |
+| ------------------------------------------------------- | --------- | ----- | ------------------------------------------------------------------ |
+| AI Vault resume                                         | user      | A     | guarded (dialog + reservation + spawn gate)                        |
+| Per-pane "Resume this session"                          | user      | A     | guarded: dialog + reservation, then gated respawn (`4f7fb4b8f`)    |
+| Sleep launch into a new tab (activation, mobile)        | automatic | A     | guarded at spawn; limit: record cleared before spawn               |
+| Pane cold restore                                       | automatic | A     | guarded at spawn; refusal keeps the record (`be116a07e`)           |
+| In-place hibernation wake                               | automatic | A     | guarded at spawn (same path as cold restore)                       |
+| Working-set row revival                                 | automatic | A     | guarded at spawn (lazy sleep record → cold restore)                |
+| Runtime ensure: web AI Vault, runtime-hosted pane       | user/auto | A     | guarded: registry adopts, a new spawn crosses the gate             |
+| Host-side `terminal.create` with a recorded session     | any       | A     | guarded at the controller spawn (`c23065435`)                      |
+| Mobile AI Vault resume (eligible session, current host) | user      | A     | guarded: `terminal.ensureAgentSession`, nothing created on refusal |
+| Mobile AI Vault typed-command fallback                  | user      | A     | **not guarded**: old host, legacy_required, Codex, cwd ≠ workspace |
+| Legacy text-command fallback (old host, `afterTabId`)   | user      | A     | **not guarded**: the session travels only as command text          |
+| CLI                                                     | —         | —     | no Orca-selected resume; a typed `claude --resume` is the user's   |
+| Provider `/resume` picker                               | provider  | B     | post-effect notice to the owning window                            |
+| SSH                                                     | any       | —     | unsupported: no claim key, proceeds unreserved                     |
 
 ## Runtime ensure (2026-09-17)
 
@@ -186,7 +188,45 @@ gets a plain shell plus `agentResumeRefused`, like desktop; the web AI Vault sho
 `paneResume.blocked` copy (`ca93d6d78`). No remote caller has a Continue override.
 
 Inventory: the ratchet sweeps `mobile/src` and counts `terminal.ensureAgentSession` requests
-(`559f424cb`); mobile's three planner calls are named, shrink-only debt.
+(`559f424cb`); since `b1629058f` it also sweeps typed-command launchers and has a `legacy-fallback`
+class (see the mobile section below).
+
+## Mobile AI Vault (2026-09-17)
+
+Mobile knew the exact session and still created a plain terminal and typed the resume command, so
+only the after-the-fact SessionStart notice saw it. `materializeMobileAiVaultResume`
+(`mobile/src/session/ai-vault-resume-materialization.ts`) now sends the selection to
+`terminal.ensureAgentSession`; mobile computes no claim key. A refusal throws before anything is
+created (the panel shows the desktop copy and does not navigate); created and adopted results
+activate the returned tab. Double tap and lost-response retry reach the host, whose registry adopts.
+
+The typed command remains, as an unguarded leg, only when:
+
+- the host does not advertise `agent-session.host-authority.v1` (plus the OMP path capability for
+  OMP), read from `status.get` before sending; an unreadable status counts as not advertised;
+- the host answers `agent_session_legacy_required` or `method_not_found`
+  (`src/shared/agent-session-legacy-fallback.ts`, shared with web);
+- the host launch cannot reproduce the command: Codex (the typed command sets or strips
+  `CODEX_HOME` per session, ensure does neither), a session cwd other than the workspace root
+  (ensure starts at the workspace), or no startup plan.
+
+Refusals, unknown replies, timeouts and other errors never fall back.
+
+| Mobile  | Host                                        | Result                                                 |
+| ------- | ------------------------------------------- | ------------------------------------------------------ |
+| current | current                                     | guarded for eligible sessions                          |
+| current | no ensure method                            | typed command, unguarded                               |
+| current | ensure, but predates the gate (`9ab2316c6`) | registry only: adopts its own owners, blind to desktop |
+| current | answers legacy_required                     | typed command, unguarded                               |
+| older   | any                                         | typed command, Class B only                            |
+
+Mobile only resumes into local targets, so SSH never reaches this path. The web AI Vault sends
+Codex and subdirectory sessions to ensure regardless; whether that resumes under the wrong home or
+directory is unmeasured (recorded, not changed).
+
+Evidence: 28 unit cases; 12 client mutations and 7 inventory mutations or plants caught; e2e
+`90a775c0e` drives the mobile module over the real E2EE socket as a `mobile`-scope device and is
+red with the old typed path and with "materializing" widened into the fallback.
 
 Pane handling (`be116a07e`): a refusal shows the `resume-refused` banner, clears the launch
 config it registered and keeps the sleep record. A refused dormant working-set row still becomes
