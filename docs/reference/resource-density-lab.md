@@ -141,6 +141,33 @@ result.
 Evidence classes: `deterministic-unit` · `dev-electron-e2e` · `packaged-product` ·
 `referenced-prior-curve` · `stand-in-agent` · `inconclusive`.
 
+## Recorded measurements
+
+**Fan-Out Factor, batched pane inspection** — `9c724c9d4`, dev unit subject, win32 (platform forced),
+scenario `batched pty inspection fan-out`, dimension *presentation/terminal runtime* swept at 1, 10
+and 50 panes, all other dimensions absent (no app, no window, no worktree). Outcome `measured`,
+evidence class `deterministic-unit`. One sample per point: every figure is a call count, which is
+load-independent, so no median is owed.
+
+| Panes | Transport requests | Provider inspections | Whole-process-table forks | Panes answered |
+| ----- | ------------------ | -------------------- | ------------------------- | -------------- |
+| 1     | 1                  | 1                    | 1                         | 1              |
+| 10    | 1                  | 10                   | 1                         | 10             |
+| 50    | 1                  | 50                   | 1                         | 50             |
+
+Reading: the transport is O(1) per due cycle and the census fork is O(1) per due cycle; the per-pane
+leg is an in-memory subtree walk over that one shared snapshot. So the local leg's Fan-Out Factor is
+**1 census per cycle at every scale**, and "50 panes means 50 process-table scans" is false for the
+local case. Falsified by construction: bypassing the shared reader yields 1/10/50 forks and reds the
+census assertion. Confounder: the local provider's own walk is stood in for, so this bounds the
+census leg and the batch composition, not the walk's cost.
+
+**The daemon, SSH and runtime legs are not covered by that number.** A daemon-backed pane is
+inspected by one RPC per session (`src/main/daemon/daemon-pty-adapter.ts:1562` sends
+`inspectProcess` with a single `sessionId`), so those legs are linear in panes by construction —
+code-read evidence, `unmeasured`, and deliberately left per-session because the daemon's protocol
+version is part of its endpoint.
+
 ## What this protocol cannot judge
 
 - Stand-in agents measure Orca's management cost. They are never evidence about real provider
