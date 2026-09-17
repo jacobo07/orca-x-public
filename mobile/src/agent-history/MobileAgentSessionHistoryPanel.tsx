@@ -10,13 +10,12 @@ import type { RpcClient } from '../transport/rpc-client'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
-  buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal,
   type MobileAiVaultResumeSettings
 } from '../session/ai-vault-resume-launch'
+import { materializeMobileAiVaultResume } from '../session/ai-vault-resume-materialization'
 import {
   prepareMobileAiVaultSessionResume,
   RESUME_RPC_TIMEOUT_MS
@@ -201,14 +200,13 @@ export function MobileAgentSessionHistoryPanel({
         }
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
-        const launch = buildMobileAiVaultResumeLaunch({
+        await materializeMobileAiVaultResume(client, {
           session: preparedSession,
+          worktreeId: target.worktreeId,
+          workspacePath: target.workspacePath,
           hostPlatform: platform,
           hostTerminalWindowsShell,
-          settings
-        })
-        await resumeAiVaultSessionInTerminal(client, target.worktreeId, {
-          ...launch,
+          settings,
           clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
         })
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
