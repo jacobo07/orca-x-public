@@ -13,9 +13,14 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   getWindowsTerminalCapabilityOwnerKey,
+  hasCachedWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities,
   type WindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import {
+  resolveTerminalLaunchProfileReadiness,
+  type TerminalLaunchProfileReadiness
+} from '@/lib/terminal-launch-profile-readiness'
 import {
   buildTabAgentLaunchOptions,
   orderTabLaunchAgents,
@@ -67,6 +72,8 @@ export function resolveWindowsPowerShellImplementationSetting(settings: GlobalSe
 }
 
 export type TerminalLaunchProfileModel = TerminalLaunchProfileSet & {
+  /** Whether `profiles` is the host's full answer; a partial set must not be read as absence. */
+  readiness: TerminalLaunchProfileReadiness
   /** Declared profiles this host cannot launch, each carrying the verdict that says why. */
   withheldUserProfiles: readonly UserTerminalProfileAvailability[]
   /** Declared entries that could not be read at all, so a typo surfaces instead of vanishing. */
@@ -124,7 +131,11 @@ export function useTerminalLaunchProfiles({
   })
 
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
-  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
+  const {
+    detectedIds,
+    isLoading: agentDetectionLoading,
+    detectionFailed
+  } = useDetectedAgents(agentDetectionTarget)
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(
@@ -231,8 +242,27 @@ export function useTerminalLaunchProfiles({
     [agentLaunchOptions, defaultAgent, shellMenuEntries, userTerminalProfiles.profiles]
   )
 
+  const readiness = resolveTerminalLaunchProfileReadiness({
+    windowsProbe: {
+      enabled: shouldProbeWindowsShellCapabilities,
+      // Why hostPlatform too: the cache entry expires while a successful answer is still on screen.
+      answered:
+        windowsTerminalCapabilities.hostPlatform !== null ||
+        hasCachedWindowsTerminalCapabilities(windowsTerminalCapabilityOwnerKey),
+      isLoading: windowsTerminalCapabilities.isLoading,
+      hostPlatform: windowsTerminalCapabilities.hostPlatform
+    },
+    agentDetection: {
+      detectedIds,
+      isLoading: agentDetectionLoading,
+      detectionFailed
+    },
+    userProfiles: userTerminalProfiles.entries
+  })
+
   return {
     ...profileSet,
+    readiness,
     // Why alongside and not inside the set: the registry's invariant is that everything in it
     // launches, and these do not. One derivation answers both questions; a surface that wants to
     // explain an absence reads this projection instead of inferring the reason from a short list.
