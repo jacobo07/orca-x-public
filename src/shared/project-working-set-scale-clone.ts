@@ -46,7 +46,7 @@ function cloneEntry(source: WorkingSetEntry, index: number, options: ScaleCloneO
     ...source,
     tabId: options.newId(),
     panes,
-    activeLeafId: activeIndex >= 0 ? panes[activeIndex].leafId : null
+    activeLeafId: activeIndex !== -1 ? panes[activeIndex].leafId : null
   }
   return { entry, sourceTabId: source.tabId, index }
 }
