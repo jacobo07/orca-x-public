@@ -1,6 +1,7 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { getAgentResumeArgv, isResumableTuiAgent } from '../../../../shared/agent-session-resume'
 import type { ParkKeepReason } from '../../../../shared/durable-exit-types'
+import type { PtyProcessInspection } from '../../../../shared/pty-process-inspection'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isTerminalTabDormant } from '@/components/terminal/background-terminal-worktree-mount'
@@ -19,8 +20,22 @@ export type ParkPlanSnapshot = Pick<
   | 'lastTerminalInputAtByPaneKey'
 >
 
-/** A shell's child-process probe answer; `unknown` when the host could not say. */
+/** Whether a shell is busy: true, proven idle: false, or `unknown` when nothing can prove it. */
 export type ChildProcessAnswer = boolean | 'unknown'
+
+/**
+ * Idle needs the shell's own word. Measured on Windows: a cmd.exe running `ping` reported no
+ * child processes, so "no children" alone would have let a park kill running work.
+ */
+export function childProcessAnswerFor(inspection: PtyProcessInspection): ChildProcessAnswer {
+  if (inspection.unavailable) {
+    return 'unknown'
+  }
+  if (inspection.hasChildProcesses || inspection.promptState === 'running') {
+    return true
+  }
+  return inspection.promptState === 'prompt' ? false : 'unknown'
+}
 
 export type ParkWorkspacePlan = {
   worktreeId: string

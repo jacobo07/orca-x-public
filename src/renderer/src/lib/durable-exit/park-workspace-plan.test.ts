@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { planParkWorkspaces, type ParkPlanSnapshot } from './park-workspace-plan'
+import {
+  childProcessAnswerFor,
+  planParkWorkspaces,
+  type ParkPlanSnapshot
+} from './park-workspace-plan'
 
 const WT = 'wt-1'
 const OLD = 1_000
@@ -78,6 +82,22 @@ function reasons(
     keepReasons: plan.keepReasons
   }))
 }
+
+describe('childProcessAnswerFor', () => {
+  const base = { foregroundProcess: 'pwsh.exe', hasChildProcesses: false } as const
+  it.each([
+    ['a shell at its prompt with no children', { ...base, promptState: 'prompt' }, false],
+    ['a shell running a command by its own marker', { ...base, promptState: 'running' }, true],
+    ['a reported child', { ...base, hasChildProcesses: true, promptState: 'prompt' }, true],
+    // Measured: cmd.exe running ping reported no children and has no markers.
+    ['cmd.exe with no markers', { ...base, promptState: 'unsupported' }, 'unknown'],
+    ['an older host with no prompt state', { ...base }, 'unknown'],
+    ['a shell whose marker state is unknown', { ...base, promptState: 'unknown' }, 'unknown'],
+    ['a terminal that is gone', { ...base, promptState: 'prompt', unavailable: true }, 'unknown']
+  ] as const)('%s', (_label, inspection, expected) => {
+    expect(childProcessAnswerFor(inspection)).toBe(expected)
+  })
+})
 
 describe('planParkWorkspaces', () => {
   it('releases a finished resumable agent and an idle shell, and ignores a workspace with no process', () => {

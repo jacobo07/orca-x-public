@@ -11,6 +11,7 @@ import { mergePendingTerminalInputActivity } from '../terminal-input-activity-co
 import { buildWorkspaceSessionPayload, shouldPersistWorkspaceSession } from '../workspace-session'
 import { buildWorkspaceSessionHostSnapshots } from '../workspace-session-host-persistence'
 import {
+  childProcessAnswerFor,
   collectParkSubjectPtyIds,
   planParkWorkspaces,
   tabLivePtyIds,
@@ -194,8 +195,7 @@ async function saveWorkspaceSessionNow(): Promise<void> {
 
 async function inspectChildren(ptyId: string): Promise<ChildProcessAnswer> {
   try {
-    const inspection = await window.api.pty.inspectProcess(ptyId)
-    return inspection.unavailable ? 'unknown' : inspection.hasChildProcesses
+    return childProcessAnswerFor(await window.api.pty.inspectProcess(ptyId))
   } catch {
     return 'unknown'
   }

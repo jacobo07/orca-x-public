@@ -58,7 +58,10 @@ and the idle threshold do not apply. These keep a workspace (with the reason):
 | `process-unknown`     | the child-process probe could not answer                           |
 | `pinned`              | a tab is pinned, unless the caller explicitly includes pinned tabs |
 
-Unknown is never safe. A workspace that gains a reason between plan and release is reported as
+Unknown is never safe. A shell is idle only when its own OSC 133 marker says it sits at a prompt
+and no child is reported: on Windows a cmd.exe running `ping` reported no child processes, so the
+child probe alone cannot prove idleness. cmd.exe has no markers, so a live cmd.exe tab always keeps
+its workspace (`process-unknown`). A workspace that gains a reason between plan and release is reported as
 `changed` and left running; one whose sleep throws is `failed`.
 
 ## Outcomes
