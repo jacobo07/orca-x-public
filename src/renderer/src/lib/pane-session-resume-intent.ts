@@ -127,7 +127,9 @@ export async function resumePaneSession(args: {
               ? 'shell-unsupported'
               : verdict === 'host-outdated'
                 ? 'host-outdated'
-                : 'shell-unconfirmed'
+                : verdict === 'unsent-input'
+                  ? 'shell-unsent-input'
+                  : 'shell-unconfirmed'
       }
     }
   }

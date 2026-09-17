@@ -10,11 +10,13 @@ const idleShell: PtyProcessInspection = {
 
 function check(
   inspection: Partial<PtyProcessInspection>,
-  getPtyId: () => string | null = () => 'pty-1'
+  getPtyId: () => string | null = () => 'pty-1',
+  hasUnsentInput?: () => boolean
 ) {
   return checkPaneShellIdle({
     getPtyId,
-    inspect: vi.fn(async () => ({ ...idleShell, ...inspection }))
+    inspect: vi.fn(async () => ({ ...idleShell, ...inspection })),
+    hasUnsentInput
   })
 }
 
@@ -53,6 +55,24 @@ describe('checkPaneShellIdle', () => {
         }
       })
     ).resolves.toBe('unconfirmed')
+  })
+
+  it('refuses a prompt that may still hold a line the user typed and never submitted', async () => {
+    await expect(check({}, () => 'pty-1', () => true)).resolves.toBe('unsent-input')
+  })
+
+  it('resumes a prompt the user left empty', async () => {
+    await expect(check({}, () => 'pty-1', () => false)).resolves.toBe('idle')
+  })
+
+  it('names the running command first, since that is what the user must deal with', async () => {
+    await expect(check({ promptState: 'running' }, () => 'pty-1', () => true)).resolves.toBe('busy')
+  })
+
+  it('leaves a shell it could not confirm unconfirmed, never unsent-input', async () => {
+    await expect(check({ promptState: 'unknown' }, () => 'pty-1', () => true)).resolves.toBe(
+      'unconfirmed'
+    )
   })
 
   it('cannot confirm a pane with no PTY or one that moved to another PTY during the read', async () => {

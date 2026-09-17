@@ -2267,8 +2267,14 @@ export function connectPanePty(
     // byte authority after this function explicitly revoked routing trust.
     sampleVisiblePaneForegroundAgent(true)
   }
+  // Why both markers: a command start means the line was submitted, and a fresh prompt
+  // means the shell reset it (Ctrl+C, or an empty Enter). Either way nothing is pending.
+  const consumeTerminalInputLine = (): void => {
+    useAppStore.getState().clearTerminalInputPending(cacheKey)
+  }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: () => {
+      consumeTerminalInputLine()
       // Why: a new command invalidates cleanup waiting on the previous D; only
       // a later confirmed shell boundary may retire this pane's live identity.
       deferredCommandFinishedStatusDrop = null
@@ -2279,12 +2285,16 @@ export function connectPanePty(
       paneForegroundAgentTracker.onCommandStarted(commandInferredPaneAgent)
     },
     onCommandFinished: handleCommandFinished,
-    onPromptShown: () => paneForegroundAgentTracker.onPromptShown()
+    onPromptShown: () => {
+      consumeTerminalInputLine()
+      paneForegroundAgentTracker.onPromptShown()
+    }
   })
   // Why: main's facts carry no foreground read, so a start only withdraws idle proof
   // and re-opens reveal sampling that a settled shell reading had closed.
   const handleCommandStartedFact = (): void => {
     visibleForegroundSampleSettled = false
+    consumeTerminalInputLine()
     paneForegroundAgentTracker.onCommandStartedFact()
   }
   // Why: the xterm OSC 133 swallow is rendering hygiene, not a side effect —
@@ -2401,7 +2411,10 @@ export function connectPanePty(
         onAgentExited,
         onCommandFinished: handleCommandFinished,
         onCommandStarted: handleCommandStartedFact,
-        onPromptShown: () => paneForegroundAgentTracker.onPromptShown(),
+        onPromptShown: () => {
+          consumeTerminalInputLine()
+          paneForegroundAgentTracker.onPromptShown()
+        },
         onPrLink: (link) =>
           useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link),
         // Why: the Command Code settle policy stays here — the done settle

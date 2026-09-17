@@ -1692,7 +1692,9 @@ function TerminalPane(
         checkShellIdle: async () => {
           const verdict = await checkPaneShellIdle({
             getPtyId: () => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null,
-            inspect: (ptyId) => window.api.pty.inspectProcess(ptyId)
+            inspect: (ptyId) => window.api.pty.inspectProcess(ptyId),
+            hasUnsentInput: () =>
+              useAppStore.getState().terminalInputPendingByPaneKey[paneKey] === true
           })
           const current = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]
           // Why: fresh evidence outranks an idle reading taken while the pane was hidden or parked.

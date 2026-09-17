@@ -1,6 +1,12 @@
 import type { PtyProcessInspection } from '../../../shared/pty-process-inspection'
 
-export type PaneShellIdleVerdict = 'idle' | 'busy' | 'unconfirmed' | 'unsupported' | 'host-outdated'
+export type PaneShellIdleVerdict =
+  | 'idle'
+  | 'busy'
+  | 'unconfirmed'
+  | 'unsupported'
+  | 'host-outdated'
+  | 'unsent-input'
 
 /**
  * Fresh check, just before a respawn destroys the pane's shell, that the shell is at its
@@ -10,6 +16,9 @@ export type PaneShellIdleVerdict = 'idle' | 'busy' | 'unconfirmed' | 'unsupporte
 export async function checkPaneShellIdle(args: {
   getPtyId: () => string | null
   inspect: (ptyId: string) => Promise<PtyProcessInspection>
+  /** True while the pane has taken user input that no command start or fresh prompt has
+   *  since consumed — so the shell's line may hold text the respawn would destroy. */
+  hasUnsentInput?: () => boolean
 }): Promise<PaneShellIdleVerdict> {
   const ptyId = args.getPtyId()
   if (!ptyId) {
@@ -34,5 +43,11 @@ export async function checkPaneShellIdle(args: {
   if (inspection.promptState === undefined) {
     return 'host-outdated'
   }
-  return inspection.promptState === 'prompt' ? 'idle' : 'unconfirmed'
+  if (inspection.promptState !== 'prompt') {
+    return 'unconfirmed'
+  }
+  // Why after the prompt proof: a typed line only exists at a prompt, and a busy shell
+  // has a louder reason to refuse. Markers cannot see the line editor, so this is
+  // deliberately conservative — it refuses input the user may already have cleared.
+  return args.hasUnsentInput?.() === true ? 'unsent-input' : 'idle'
 }

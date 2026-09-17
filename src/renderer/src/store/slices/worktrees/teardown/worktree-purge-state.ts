@@ -100,6 +100,7 @@ export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Par
     unreadTerminalPanes: omitByPaneKeyTabPrefix(s.unreadTerminalPanes),
     unreadAgentCompletionPanes: omitByPaneKeyTabPrefix(s.unreadAgentCompletionPanes),
     lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
+    terminalInputPendingByPaneKey: omitByPaneKeyTabPrefix(s.terminalInputPendingByPaneKey),
     // Delete state
     deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),

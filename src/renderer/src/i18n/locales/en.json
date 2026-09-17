@@ -16623,6 +16623,7 @@
       "waitForPrompt": "Available when the shell is back at its prompt.",
       "shellUnsupported": "This shell doesn't report its prompt, so Orca can't tell it's idle.",
       "shellBusy": "A command is still running in this shell.",
+      "shellUnsentInput": "This shell has something typed at its prompt. Submit or clear it, then resume.",
       "hostOutdated": "Restart terminals to resume here: this terminal service is older than Orca.",
       "failed": "Couldn't resume this session. Try again.",
       "blocked": {

@@ -805,6 +805,11 @@ export type TerminalSlice = {
   /** paneKey → wall-clock user input time; hibernation uses it to avoid sleeping a completed agent pane the user turned into a shell. */
   lastTerminalInputAtByPaneKey: Record<string, number>
   recordTerminalInput: (paneKey: string, timestamp?: number) => void
+  /** paneKey → the pane took input that no command start or fresh prompt has consumed, so
+   *  the shell's line may hold unsubmitted text. Never persisted: a restart cannot know. */
+  terminalInputPendingByPaneKey: Record<string, true>
+  /** Called on OSC 133 command-start (submitted) and prompt-shown (line reset, e.g. Ctrl+C). */
+  clearTerminalInputPending: (paneKey: string) => void
   /** Seed cache timers for idle Claude sessions missing one; called when the feature is enabled mid-session. */
   seedCacheTimersForIdleTabs: () => void
   /** SSH target IDs needing a passphrase; reconnect is deferred until the user focuses an affected terminal tab. */
@@ -1104,6 +1109,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   deferredSshSessionIdsByTabId: {},
   cacheTimerByKey: {},
   lastTerminalInputAtByPaneKey: {},
+  terminalInputPendingByPaneKey: {},
   recentQuickCommandIdByGroup: {},
 
   setRecentQuickCommandForGroup: (groupId, quickCommandId) => {
@@ -1214,9 +1220,27 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  clearTerminalInputPending: (paneKey) => {
+    set((s) => {
+      if (!paneKey || s.terminalInputPendingByPaneKey[paneKey] === undefined) {
+        return {}
+      }
+      const next = { ...s.terminalInputPendingByPaneKey }
+      delete next[paneKey]
+      return { terminalInputPendingByPaneKey: next }
+    })
+  },
+
   recordTerminalInput: (paneKey, timestamp = Date.now()) => {
     if (!paneKey || !Number.isFinite(timestamp)) {
       return
+    }
+    // Why outside the coalescer: the activity stamp may batch, but a resume click must
+    // never race ahead of the evidence that the line has something on it.
+    if (get().terminalInputPendingByPaneKey[paneKey] === undefined) {
+      set((s) => ({
+        terminalInputPendingByPaneKey: { ...s.terminalInputPendingByPaneKey, [paneKey]: true }
+      }))
     }
     recordTerminalInputActivity({
       paneKey,

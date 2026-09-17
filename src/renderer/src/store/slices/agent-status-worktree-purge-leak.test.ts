@@ -87,7 +87,8 @@ function seedPaneState(store: ReturnType<typeof createTestStore>): void {
     unreadTerminalTabs: { [TAB]: true },
     unreadTerminalPanes: { [PANE]: true },
     unreadAgentCompletionPanes: { [PANE]: true },
-    lastTerminalInputAtByPaneKey: { [PANE]: 123 }
+    lastTerminalInputAtByPaneKey: { [PANE]: 123 },
+    terminalInputPendingByPaneKey: { [PANE]: true }
   })
 }
 
@@ -114,6 +115,8 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.unreadTerminalPanes[PANE]).toBeUndefined()
     expect(s.unreadAgentCompletionPanes[PANE]).toBeUndefined()
     expect(s.lastTerminalInputAtByPaneKey[PANE]).toBeUndefined()
+    // Why: a surviving pending flag would refuse resume on a reused pane key forever.
+    expect(s.terminalInputPendingByPaneKey[PANE]).toBeUndefined()
   })
 
   it('keeps pane-scoped state for worktrees that are NOT removed', () => {
@@ -134,7 +137,8 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
       },
       agentStatusByPaneKey: { [PANE]: liveEntry(PANE), [OTHER_PANE]: liveEntry(OTHER_PANE) },
       unreadTerminalTabs: { [TAB]: true, [OTHER_TAB]: true },
-      lastTerminalInputAtByPaneKey: { [PANE]: 1, [OTHER_PANE]: 2 }
+      lastTerminalInputAtByPaneKey: { [PANE]: 1, [OTHER_PANE]: 2 },
+      terminalInputPendingByPaneKey: { [PANE]: true, [OTHER_PANE]: true }
     })
 
     store.getState().purgeWorktreeTerminalState([WT])
@@ -144,6 +148,8 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.agentStatusByPaneKey[OTHER_PANE]).toBeDefined()
     expect(s.unreadTerminalTabs[OTHER_TAB]).toBe(true)
     expect(s.lastTerminalInputAtByPaneKey[OTHER_PANE]).toBe(2)
+    expect(s.terminalInputPendingByPaneKey[OTHER_PANE]).toBe(true)
+    expect(s.terminalInputPendingByPaneKey[PANE]).toBeUndefined()
   })
 
   it('purgeWorktreeTerminalState forgets pane-authority aliases for the removed tabs', () => {

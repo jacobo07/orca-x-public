@@ -61,6 +61,12 @@ function failureText(result: PaneSessionResumeResult): string | null {
         'A command is still running in this shell.'
       )
     }
+    if (result.capability.reason === 'shell-unsent-input') {
+      return translate(
+        'agentSession.paneResume.shellUnsentInput',
+        'This shell has something typed at its prompt. Submit or clear it, then resume.'
+      )
+    }
     if (result.capability.reason === 'host-outdated') {
       return translate(
         'agentSession.paneResume.hostOutdated',

@@ -27,8 +27,13 @@ export type PaneSessionResumeCapability =
   | { kind: 'available' }
   | {
       kind: 'disabled'
-      /** host-outdated only comes from the click-time check, never from the store. */
-      reason: 'shell-busy' | 'shell-unconfirmed' | 'shell-unsupported' | 'host-outdated'
+      /** host-outdated and shell-unsent-input only come from the click-time check, never the store. */
+      reason:
+        | 'shell-busy'
+        | 'shell-unconfirmed'
+        | 'shell-unsupported'
+        | 'host-outdated'
+        | 'shell-unsent-input'
     }
   | { kind: 'unavailable'; reason: PaneSessionResumeUnavailableReason }
 

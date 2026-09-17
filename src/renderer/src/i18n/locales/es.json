@@ -14816,6 +14816,7 @@
       "waitForPrompt": "Disponible cuando el shell vuelva a su prompt.",
       "shellUnsupported": "Este shell no informa de su prompt, así que Orca no puede saber si está inactivo.",
       "shellBusy": "Todavía hay un comando en ejecución en este shell.",
+      "shellUnsentInput": "Este shell tiene algo escrito en el prompt. Envíalo o bórralo y luego reanuda.",
       "hostOutdated": "Reinicia los terminales para reanudar aquí: este servicio de terminal es anterior a Orca.",
       "failed": "No se pudo reanudar esta sesión. Inténtalo de nuevo.",
       "blocked": {
