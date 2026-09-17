@@ -3550,7 +3550,8 @@
                 "notIdleLongEnough": "Inactivo muy poco tiempo",
                 "recentInput": "Se escribió hace poco",
                 "noLivePane": "Sin terminal activo",
-                "mobileLocked": "Retenido por un cliente móvil"
+                "mobileLocked": "Retenido por un cliente móvil",
+                "tabPinned": "Pestaña fijada"
               }
             },
             "terminalHost": {

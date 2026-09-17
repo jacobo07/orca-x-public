@@ -3530,7 +3530,8 @@
                 "notIdleLongEnough": "유휴 시간이 너무 짧습니다",
                 "recentInput": "최근에 입력했습니다",
                 "noLivePane": "실행 중인 터미널이 없습니다",
-                "mobileLocked": "모바일 클라이언트가 사용 중입니다"
+                "mobileLocked": "모바일 클라이언트가 사용 중입니다",
+                "tabPinned": "고정된 탭"
               }
             },
             "terminalHost": {

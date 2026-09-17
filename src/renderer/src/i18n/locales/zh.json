@@ -3542,7 +3542,8 @@
                 "notIdleLongEnough": "空闲时间太短",
                 "recentInput": "最近有输入",
                 "noLivePane": "没有运行中的终端",
-                "mobileLocked": "被移动客户端占用"
+                "mobileLocked": "被移动客户端占用",
+                "tabPinned": "已固定的标签页"
               }
             },
             "terminalHost": {

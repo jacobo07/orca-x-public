@@ -3530,7 +3530,8 @@
                 "notIdleLongEnough": "アイドル時間が短すぎます",
                 "recentInput": "最近入力がありました",
                 "noLivePane": "稼働中のターミナルがありません",
-                "mobileLocked": "モバイルクライアントが保持しています"
+                "mobileLocked": "モバイルクライアントが保持しています",
+                "tabPinned": "ピン留めされたタブ"
               }
             },
             "terminalHost": {

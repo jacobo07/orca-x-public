@@ -44,6 +44,29 @@ export function unsampledRuntimePtyLiveness(state: AppState): RuntimePtyLiveness
   }
 }
 
+/**
+ * A terminal tab counts as pinned if either copy of the pin says so — the same
+ * rule the host close path applies — so a lagging mirror cannot un-pin it here.
+ */
+export function getPinnedTerminalTabIds(state: AppState): string[] {
+  const pinned = new Set<string>()
+  for (const tabs of Object.values(state.tabsByWorktree)) {
+    for (const tab of tabs ?? []) {
+      if (tab.isPinned === true) {
+        pinned.add(tab.id)
+      }
+    }
+  }
+  for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
+    for (const tab of tabs ?? []) {
+      if (tab.contentType === 'terminal' && tab.isPinned === true) {
+        pinned.add(tab.entityId)
+      }
+    }
+  }
+  return [...pinned].sort()
+}
+
 export function buildAgentHibernationPlannerSnapshot(
   state: AppState,
   now: number,
@@ -61,6 +84,7 @@ export function buildAgentHibernationPlannerSnapshot(
     mobileLockedPtyIds: [...getAllDrivers()]
       .filter(([, driver]) => driver.kind === 'mobile')
       .map(([ptyId]) => ptyId),
+    pinnedTerminalTabIds: getPinnedTerminalTabIds(state),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.

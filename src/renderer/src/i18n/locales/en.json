@@ -3788,7 +3788,8 @@
                 "notIdleLongEnough": "Idle too briefly",
                 "recentInput": "Typed in recently",
                 "noLivePane": "No live terminal",
-                "mobileLocked": "Held by a mobile client"
+                "mobileLocked": "Held by a mobile client",
+                "tabPinned": "Pinned tab"
               }
             },
             "terminalHost": {

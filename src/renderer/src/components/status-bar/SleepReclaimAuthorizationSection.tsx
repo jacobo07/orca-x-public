@@ -97,6 +97,11 @@ function describeExclusionReason(reason: AgentHibernationExclusionReason): strin
         'auto.components.status.bar.resource.sleepReclaim.reason.mobileLocked',
         'Held by a mobile client'
       )
+    case 'tab-pinned':
+      return translate(
+        'auto.components.status.bar.resource.sleepReclaim.reason.tabPinned',
+        'Pinned tab'
+      )
   }
 }
 
