@@ -200,7 +200,7 @@ export function MobileAgentSessionHistoryPanel({
         }
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
-        await materializeMobileAiVaultResume(client, {
+        const outcome = await materializeMobileAiVaultResume(client, {
           session: preparedSession,
           worktreeId: target.worktreeId,
           workspacePath: target.workspacePath,
@@ -211,9 +211,14 @@ export function MobileAgentSessionHistoryPanel({
         })
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
-        setResumeMessage('Agent session queued.')
+        setResumeMessage(
+          outcome.path === 'structured' && outcome.disposition === 'adopted'
+            ? 'This session was already running here. Opened it.'
+            : 'Agent session queued.'
+        )
+        // Why: a refused resume threw above, so navigation only follows a session that started.
         router.push(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
+          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(outcome.worktreeId)}` as Parameters<
             typeof router.push
           >[0]
         )
