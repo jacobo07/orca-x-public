@@ -203,6 +203,14 @@ remote-runtime-shaped id, so park-restorability is faithful but the transports u
 local PTYs — not a live remote runtime. Host bracket: 13.2 GB free before, 15.2 GB after, never near
 the 4 GB floor.
 
+Tree bracket: the dirty-path set moved during the window — a concurrent writer touched seven paths.
+Five landed after the bundle was built (mtime against the artifact) and two are test files outside
+the app's import closure, so they cannot be in what was measured. One was inside it:
+`worktree-purge-state.ts`, modified three minutes before the renderer bundle and reachable from the
+worktree store lookups this scenario exercises. The measured mechanism does not read purge state,
+and the run's own mount-count assertions (5 before, 1 after, decoy exemption held) behaved as
+specified — so this is recorded as **attributable with a named confounder**, not as a clean-tree run.
+
 **The daemon, SSH and runtime legs are not covered by that number.** A daemon-backed pane is
 inspected by one RPC per session (`src/main/daemon/daemon-pty-adapter.ts:1562` sends
 `inspectProcess` with a single `sessionId`), so those legs are linear in panes by construction —
