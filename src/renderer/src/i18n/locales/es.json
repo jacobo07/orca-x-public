@@ -63,6 +63,19 @@
         "failedRolledBack": "La restauración falló y se deshizo; el espacio de trabajo no ha cambiado.",
         "failedNotRolledBack": "La restauración falló y no se pudo deshacer por completo. Revisa las pestañas de este espacio de trabajo."
       }
+    },
+    "save": {
+      "action": "Guardar snapshot",
+      "saved": "Snapshot guardada.",
+      "savedWithoutSomeHistory": "Snapshot guardada; no se pudo copiar parte del historial de las terminales.",
+      "noTerminals": "Este espacio de trabajo no tiene terminales que guardar.",
+      "notCapturable": "No se pudieron capturar las terminales de este espacio de trabajo ({{reason}}).",
+      "refusedInvalid": "La snapshot se rechazó por no ser válida ({{reason}}).",
+      "unsupportedVersion": "Esta versión no puede escribir ese formato de snapshot.",
+      "identityCollision": "Ya existe una snapshot con este identificador. Inténtalo de nuevo.",
+      "writeFailed": "No se pudo escribir la snapshot ({{code}}).",
+      "readBackFailed": "Se guardó, pero no se pudo confirmar. Puede aparecer al actualizar.",
+      "verifyFailed": "La snapshot guardada no coincidía con lo enviado y se apartó."
     }
   },
   "app": {

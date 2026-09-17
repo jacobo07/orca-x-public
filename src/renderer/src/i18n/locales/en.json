@@ -63,6 +63,19 @@
         "failedRolledBack": "Restore failed and was undone; the workspace is unchanged.",
         "failedNotRolledBack": "Restore failed and couldn't be fully undone. Check this workspace's tabs."
       }
+    },
+    "save": {
+      "action": "Save current terminals",
+      "saved": "Snapshot saved.",
+      "savedWithoutSomeHistory": "Snapshot saved; some terminal history couldn't be copied.",
+      "noTerminals": "This workspace has no terminals to save.",
+      "notCapturable": "This workspace's terminals couldn't be captured ({{reason}}).",
+      "refusedInvalid": "The snapshot was rejected as invalid ({{reason}}).",
+      "unsupportedVersion": "This build can't write that snapshot version.",
+      "identityCollision": "A snapshot with this id already exists. Try again.",
+      "writeFailed": "The snapshot couldn't be written ({{code}}).",
+      "readBackFailed": "Saved, but it couldn't be confirmed. It may appear after refreshing.",
+      "verifyFailed": "The saved snapshot didn't match what was sent and was set aside."
     }
   },
   "app": {

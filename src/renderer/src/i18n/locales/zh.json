@@ -63,6 +63,19 @@
         "failedRolledBack": "恢复失败并已撤销；工作区未更改。",
         "failedNotRolledBack": "恢复失败且未能完全撤销。请检查此工作区的标签页。"
       }
+    },
+    "save": {
+      "action": "保存当前终端",
+      "saved": "快照已保存。",
+      "savedWithoutSomeHistory": "快照已保存；部分终端历史记录无法复制。",
+      "noTerminals": "此工作区没有可保存的终端。",
+      "notCapturable": "无法捕获此工作区的终端（{{reason}}）。",
+      "refusedInvalid": "快照因无效而被拒绝（{{reason}}）。",
+      "unsupportedVersion": "此版本无法写入该快照版本。",
+      "identityCollision": "已存在具有此 ID 的快照。请重试。",
+      "writeFailed": "无法写入快照（{{code}}）。",
+      "readBackFailed": "已保存，但无法确认。刷新后可能会出现。",
+      "verifyFailed": "保存的快照与发送的内容不一致，已被隔离。"
     }
   },
   "app": {

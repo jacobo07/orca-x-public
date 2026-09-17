@@ -63,6 +63,19 @@
         "failedRolledBack": "복원에 실패하여 되돌렸습니다. 작업 공간은 변경되지 않았습니다.",
         "failedNotRolledBack": "복원에 실패했고 완전히 되돌리지 못했습니다. 이 작업 공간의 탭을 확인하세요."
       }
+    },
+    "save": {
+      "action": "현재 터미널 저장",
+      "saved": "스냅샷을 저장했습니다.",
+      "savedWithoutSomeHistory": "스냅샷을 저장했지만 일부 터미널 기록을 복사하지 못했습니다.",
+      "noTerminals": "이 작업 공간에는 저장할 터미널이 없습니다.",
+      "notCapturable": "이 작업 공간의 터미널을 캡처할 수 없습니다({{reason}}).",
+      "refusedInvalid": "스냅샷이 유효하지 않아 거부되었습니다({{reason}}).",
+      "unsupportedVersion": "이 빌드는 해당 버전의 스냅샷을 쓸 수 없습니다.",
+      "identityCollision": "이 ID의 스냅샷이 이미 있습니다. 다시 시도하세요.",
+      "writeFailed": "스냅샷을 쓸 수 없습니다({{code}}).",
+      "readBackFailed": "저장했지만 확인하지 못했습니다. 새로 고치면 나타날 수 있습니다.",
+      "verifyFailed": "저장된 스냅샷이 보낸 내용과 일치하지 않아 따로 보관했습니다."
     }
   },
   "app": {

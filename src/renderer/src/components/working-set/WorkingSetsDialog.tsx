@@ -20,6 +20,7 @@ import type { WorkingSetScopeKey } from '../../../../shared/project-working-set-
 import { historyStateText, restoredToastText, restoreResultText } from './working-set-copy'
 import { WorkingSetHistoryList } from './WorkingSetHistoryList'
 import { WorkingSetPreviewPanel } from './WorkingSetPreviewPanel'
+import { WorkingSetSaveAction } from './WorkingSetSaveAction'
 import { useWorkingSetHistory } from './use-working-set-history'
 import { launchProfilesForRestore, useWorkingSetPreview } from './use-working-set-preview'
 
@@ -146,6 +147,11 @@ function WorkingSetsDialogBody({
       </div>
 
       <DialogFooter className="gap-2 sm:gap-2">
+        <WorkingSetSaveAction
+          ownerKey={scope.ownerKey}
+          disabled={view.kind === 'unavailable' || view.kind === 'invalid-request'}
+          onSaved={reload}
+        />
         <Button variant="outline" size="sm" onClick={onClose}>
           {translate('workingSet.history.close', 'Close')}
         </Button>

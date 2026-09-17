@@ -13,6 +13,7 @@ const holder = vi.hoisted(() => ({
   list: null as unknown as (scope: unknown) => Promise<unknown>,
   preview: null as unknown as (request: unknown) => Promise<unknown>,
   restore: null as unknown as (request: unknown) => Promise<unknown>,
+  save: null as unknown as (request: unknown) => Promise<unknown>,
   launch: { readiness: 'resolved', profiles: [] as { id: string }[] }
 }))
 
@@ -39,6 +40,9 @@ vi.mock('@/lib/project-working-set-restore', () => ({
 }))
 vi.mock('@/lib/project-working-set-product-restore', () => ({
   restoreWorkingSetFromProduct: (request: unknown) => holder.restore(request)
+}))
+vi.mock('@/lib/project-working-set-save', () => ({
+  saveProjectWorkingSet: (request: unknown) => holder.save(request)
 }))
 vi.mock('@/hooks/useTerminalLaunchProfiles', () => ({
   useTerminalLaunchProfiles: () => holder.launch
@@ -130,6 +134,12 @@ beforeEach(() => {
   holder.preview = vi.fn(async () => ({ status: 'planned', plan: plan() }))
   holder.restore = vi.fn(async () => ({ status: 'restored', rows: 5 }))
   holder.launch = { readiness: 'resolved', profiles: PROFILES }
+  holder.save = vi.fn(async () => ({
+    status: 'saved',
+    workingSetId: SECOND.workingSetId,
+    bytes: 1,
+    scrollback: { sealed: 0, absent: 0, failed: [] }
+  }))
 })
 
 afterEach(async () => {
@@ -212,6 +222,40 @@ describe('WorkingSetsDialog', () => {
     await click(restoreButton())
     expect(store.getState().activeModal).toBe('working-sets')
     expect(q('working-set-restore-result')[0].textContent).toContain('open tabs')
+  })
+
+  it('saves this workspace and lists what the store now holds', async () => {
+    holder.list = vi
+      .fn()
+      .mockResolvedValueOnce({ ...listed(), valid: [FIRST] })
+      .mockResolvedValueOnce(listed())
+    await render()
+    expect(q('working-set-row')).toHaveLength(1)
+    await click(q('working-set-save')[0])
+    expect(holder.save).toHaveBeenCalledExactlyOnceWith({ ownerKey: OWNER })
+    expect(holder.list).toHaveBeenCalledTimes(2)
+    expect(q('working-set-row')).toHaveLength(2)
+    expect(q('working-set-save-result')[0].dataset.workingSetSaveOk).toBe('true')
+  })
+
+  it('names a save that captured nothing and keeps the list as it was', async () => {
+    holder.save = vi.fn(async () => ({
+      status: 'not-capturable',
+      reason: 'no-terminals',
+      detail: OWNER
+    }))
+    await render()
+    await click(q('working-set-save')[0])
+    expect(holder.list).toHaveBeenCalledTimes(1)
+    const result = q('working-set-save-result')[0]
+    expect(result.dataset.workingSetSaveOk).toBe('false')
+    expect(result.textContent).toContain('no terminals')
+  })
+
+  it('offers no save where the client has no store', async () => {
+    holder.list = vi.fn(async () => ({ status: 'unavailable' }))
+    await render()
+    expect((q('working-set-save')[0] as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('never reports a rolled-back restore as a success', async () => {
