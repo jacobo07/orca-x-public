@@ -4,8 +4,9 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs'
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
+import { forkIpcChild } from '../../shared/ipc-message-listener-floor'
 import {
   DaemonSpawner,
   getDaemonPidPath,
@@ -666,7 +667,7 @@ function createOutOfProcessLauncher(
       const relocatedHost = materializeRelocatedDaemonHost()
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
-      const child = fork(
+      const child = forkIpcChild(
         forkEntryPath,
         [
           '--socket',

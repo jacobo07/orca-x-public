@@ -1,5 +1,6 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
+import { forkIpcChild } from '../../shared/ipc-message-listener-floor'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -207,7 +208,7 @@ class ComputerSidecarProcess {
     this.cleanupActiveChildListeners()
     this.child = null
 
-    const child = fork(this.entryPath, [], {
+    const child = forkIpcChild(this.entryPath, [], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       env: {
         ...process.env,
