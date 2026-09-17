@@ -89,6 +89,22 @@ Measurements are recorded as they land. Every metric is defined in that document
 attached to it, and the eleven metric names inherited from the program plan were undefined anywhere
 in this repository until then; two of them remain undefined and unpublished on purpose.
 
+Measured so far: the **Fan-Out Factor** of the local batched inspection leg (one census fork per due
+cycle at 1, 10 and 50 panes), the **Hidden Pane Tax** (~1.4M retained cells per hidden un-parkable
+pane, 99.91% released), and the **Dormant Row State Footprint** (100 remembered rows: 450 store
+objects, ~109 KB of workspace state, ~43 KB on disk, and zero rows the mount authority would mount).
+
+The last of those settles the logical dimension at the store altitude and deliberately not at the
+process one. The **Dormant Session Tax**, **Marginal Idle Session Cost**, **Cold Revival Latency**,
+**Reclaim Completeness** and **Leak Slope** all need a running app, and the lab's own 4 GB floor
+gates them: a curve taken under pressure is `inconclusive`, not a result. They are the next wave, not
+an omission.
+
+The daemon, SSH and runtime inspection legs stay `unmeasured` and code-read: each is one request per
+subject per cycle by construction, and the daemon's own answer is an in-memory read of a cache whose
+refresh volume is already bounded per session (`pty-subprocess-foreground-scan-cadence.test.ts`).
+What no test composes is those legs across N subjects in one due cycle.
+
 ## R4 — recurring work is inventoried, and the debt list only shrinks
 
 A timer that costs nothing with three panes is structural debt at a hundred. R4 makes every
