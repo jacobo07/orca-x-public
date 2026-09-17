@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
 
 import {
   handleLiveAgentSessionPresenceRequest,
+  installMainResumeSpawnGate,
   registerAgentSessionLivePresenceHandlers
 } from './agent-session-live-presence-ipc'
 
@@ -291,6 +292,43 @@ describe('registerAgentSessionLivePresenceHandlers', () => {
       gate.release(granted.operationId, sender(10))
     }
     expect(reservations.size).toBe(1)
+    installResumeSpawnGate(null)
+  })
+
+  it('installs a window-less gate for headless serve, holding for no window', async () => {
+    installResumeSpawnGate(null)
+    const reservations = new LiveSessionMaterializationReservations({
+      now: () => 0,
+      hasBoundPty: () => false
+    })
+    const deps: LiveAgentSessionPresenceReaderDeps = {
+      listHookRows: () => [],
+      isObservedInCurrentRuntime: () => true,
+      resolveIdentityKey: async () => 'claim:s',
+      getBoundPtyIdForPaneKey: () => undefined,
+      getPersistedPtyIdForPaneKey: () => undefined,
+      probePtyLiveness: async () => false
+    }
+    const handlersBefore = handleMock.mock.calls.length
+    installMainResumeSpawnGate(
+      () => deps,
+      () => reservations
+    )
+    const { worktreeId, agent, providerSession } = request()
+
+    const decision = await getResumeSpawnGate()!.decide({
+      sender: null,
+      worktreeId,
+      tabId: 'tab-headless',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      agent,
+      providerSession,
+      expectedKey: 'claim:s'
+    })
+
+    expect(decision.outcome).toBe('proceed')
+    expect(handleMock.mock.calls.length).toBe(handlersBefore)
+    expect(reservations.holder('claim:s')).toMatchObject({ ownerId: -1, tabId: 'tab-headless' })
     installResumeSpawnGate(null)
   })
 })

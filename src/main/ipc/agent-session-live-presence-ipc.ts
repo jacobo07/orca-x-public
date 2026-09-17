@@ -172,6 +172,16 @@ export function registerAgentSessionLivePresenceHandlers(
       resolveReservations().release(operationId, ownerOf(event.sender))
     }
   })
+  installMainResumeSpawnGate(resolveDeps, resolveReservations, ownerOf)
+}
+
+/** Installs the spawn gate. Headless serve calls this without IPC: runtime ensure still resumes
+ *  there, and a host with no gate would let every such resume through unchecked. */
+export function installMainResumeSpawnGate(
+  resolveDeps: () => LiveAgentSessionPresenceReaderDeps,
+  resolveReservations: () => LiveSessionMaterializationReservations,
+  ownerOf: (sender: ResumeSpawnSender) => number = () => NO_SPAWN_OWNER
+): void {
   const spawnOwner = (sender: ResumeSpawnSender | null): number =>
     sender ? ownerOf(sender) : NO_SPAWN_OWNER
   installResumeSpawnGate({

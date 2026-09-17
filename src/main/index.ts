@@ -296,7 +296,11 @@ import {
   LIVE_SESSION_COLLISION_CHANNEL
 } from './agent-hooks/live-session-collision-detector'
 import { readLiveAgentSessionPresence } from './agent-hooks/live-agent-session-presence-reader'
-import { createLiveAgentSessionPresenceDeps } from './ipc/agent-session-live-presence-deps'
+import {
+  createLiveAgentSessionPresenceDeps,
+  getLiveSessionMaterializationReservations
+} from './ipc/agent-session-live-presence-deps'
+import { installMainResumeSpawnGate } from './ipc/agent-session-live-presence-ipc'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
@@ -2501,6 +2505,13 @@ void app.whenReady().then(async () => {
   // nothing else republishes `session.tabs` when one changes — so a paired client
   // would keep the pane's last projection until an unrelated PTY touch came along.
   const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
+  // Why: headless serve never opens a window, yet runtime ensure resumes sessions there too.
+  installMainResumeSpawnGate(() => {
+    if (!store || !runtime) {
+      throw new Error('runtime_unavailable')
+    }
+    return createLiveAgentSessionPresenceDeps(store, runtime)
+  }, getLiveSessionMaterializationReservations)
   // Why: a resume chosen inside the provider's own picker is only visible here, after the fact.
   const liveSessionCollisions = createLiveSessionCollisionDetector({
     readPresence: async (args) => {
