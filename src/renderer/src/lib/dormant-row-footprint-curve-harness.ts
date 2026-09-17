@@ -135,14 +135,17 @@ export function evidenceFor(manifest: ProjectWorkingSetManifest): WorkingSetRest
   }
 }
 
-const byteLength = (value: unknown): number => new TextEncoder().encode(JSON.stringify(value)).length
+const byteLength = (value: unknown): number =>
+  new TextEncoder().encode(JSON.stringify(value)).length
 
 function readFootprint(state: AppState, rows: number, manifest: ProjectWorkingSetManifest) {
   const railRows = state.tabsByWorktree[FOOTPRINT_OWNER] ?? []
   const unified = state.unifiedTabsByWorktree[FOOTPRINT_OWNER] ?? []
   const groups = state.groupsByWorktree[FOOTPRINT_OWNER] ?? []
   const tabIds = new Set(railRows.map((row) => row.id))
-  const layouts = Object.entries(state.terminalLayoutsByTabId ?? {}).filter(([id]) => tabIds.has(id))
+  const layouts = Object.entries(state.terminalLayoutsByTabId ?? {}).filter(([id]) =>
+    tabIds.has(id)
+  )
   const records = Object.entries(state.sleepingAgentSessionsByPaneKey ?? {}).filter(([key]) =>
     tabIds.has(key.slice(0, key.indexOf(':')))
   )

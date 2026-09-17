@@ -30,9 +30,8 @@ const mockApi = createStoreSessionMockApi()
 const spawn = vi.fn()
 ;(mockApi.pty as Record<string, unknown>).spawn = spawn
 
-const { FOOTPRINT_OWNER, measureDormantRowFootprint, captureRail } = await import(
-  './dormant-row-footprint-curve-harness'
-)
+const { FOOTPRINT_OWNER, measureDormantRowFootprint, captureRail } =
+  await import('./dormant-row-footprint-curve-harness')
 
 const SCALES = [1, 10, 50, 100] as const
 
