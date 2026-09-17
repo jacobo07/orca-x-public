@@ -83,6 +83,7 @@ import {
   inspectPtyProviderProcess,
   inspectPtyProviderProcessForRenderer
 } from '../providers/pty-process-inspection'
+import { inspectPtyProcessesForRenderer } from '../providers/pty-process-inspection-batch'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
@@ -2497,6 +2498,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:inspectProcess')
+  ipcMain.removeHandler('pty:inspectProcesses')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
@@ -7993,6 +7995,11 @@ export function registerPtyHandlers(
 
   ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) =>
     inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
+  )
+
+  // Why: the renderer's process-exit backstop sends every due pane in one call per tick.
+  ipcMain.handle('pty:inspectProcesses', async (_event, args: { ids: unknown }) =>
+    inspectPtyProcessesForRenderer(args?.ids, getProviderForPty)
   )
 
   ipcMain.handle(

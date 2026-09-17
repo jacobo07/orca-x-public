@@ -5,6 +5,7 @@ import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import type { PtyProcessInspection } from '../shared/pty-process-inspection'
+import type { PtyProcessInspectionBatchEntry } from '../shared/pty-process-inspection-batch'
 import type { TerminalMenuCommand } from '../shared/terminal-menu-command'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../shared/app-menu-strip'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
@@ -1197,6 +1198,8 @@ const api = {
       ipcRenderer.invoke('pty:getForegroundProcess', { id }),
     inspectProcess: (id: string): Promise<PtyProcessInspection> =>
       ipcRenderer.invoke('pty:inspectProcess', { id }),
+    inspectProcesses: (ids: string[]): Promise<PtyProcessInspectionBatchEntry[]> =>
+      ipcRenderer.invoke('pty:inspectProcesses', { ids }),
     confirmForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
 
