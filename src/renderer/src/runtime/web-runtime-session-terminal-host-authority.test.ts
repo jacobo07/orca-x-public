@@ -186,6 +186,49 @@ describe('createWebRuntimeSessionTerminal', () => {
     }
   )
 
+  it('reports a resume the host refused as the collision, and does not retry it unguarded', async () => {
+    const runtimeCall = vi.fn(async (request: { method: string }) => {
+      if (request.method === 'status.get') {
+        return {
+          id: 'status',
+          ok: true,
+          result: {
+            runtimeId: 'runtime-1',
+            graphStatus: 'ready',
+            runtimeProtocolVersion: 3,
+            minCompatibleRuntimeClientVersion: 2,
+            capabilities: ['agent-session.host-authority.v1']
+          }
+        }
+      }
+      if (request.method === 'terminal.ensureAgentSession') {
+        return {
+          id: 'agent-session',
+          ok: false,
+          error: { code: 'agent_session_materializing', message: 'agent_session_materializing' }
+        }
+      }
+      return { id: 'list', ok: true, result: makeSnapshot() }
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const outcome = await createWebRuntimeSessionTerminal({
+      worktreeId: WORKTREE_ID,
+      agentSessionKind: 'resume',
+      launchAgent: 'codex',
+      command: "codex resume 'session-1'",
+      providerSession: { key: 'session_id' as const, id: 'session-1' }
+    })
+
+    expect(outcome).toEqual({
+      status: 'failed',
+      message: 'This session is already starting in another pane.'
+    })
+    expect(runtimeCall.mock.calls.map(([request]) => request.method)).not.toContain(
+      'session.tabs.createTerminal'
+    )
+  })
+
   it('creates paired web agents through host authority so activation is mirrored', async () => {
     const snapshot = {
       ...makeSnapshot(),
