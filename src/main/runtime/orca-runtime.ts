@@ -14889,6 +14889,17 @@ export class OrcaRuntimeService {
     }
   }
 
+  /**
+   * Marks a caller-owned stop that keeps history (Sleep), so the exit it causes keeps the row
+   * instead of retiring it from the host-authoritative session. Call the result once it settles.
+   */
+  retainSurfaceThroughPtyStop(ptyId: string): () => void {
+    this.intentionalHandlelessPtyStops.set(ptyId, this.ptysById.get(ptyId)?.incarnationId ?? null)
+    return () => {
+      this.intentionalHandlelessPtyStops.delete(ptyId)
+    }
+  }
+
   onPtyExit(ptyId: string, exitCode: number, exitIncarnationId?: PtyIncarnationId): void {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {

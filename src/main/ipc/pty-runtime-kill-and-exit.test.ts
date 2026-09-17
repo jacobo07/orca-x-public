@@ -180,9 +180,15 @@ describe('registerPtyHandlers', () => {
   })
   it('synthesizes runtime exit after ordinary daemon-backed pty kill', async () => {
     const shutdown = vi.fn(async () => undefined)
+    const events: string[] = []
     const runtime = {
       setPtyController: vi.fn(),
-      onPtyExit: vi.fn()
+      onPtyExit: vi.fn(() => events.push('exit')),
+      // Why: a keep-history kill is Sleep; its exit must land inside the retention window.
+      retainSurfaceThroughPtyStop: vi.fn(() => {
+        events.push('retain')
+        return () => events.push('release')
+      })
     }
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -216,10 +222,16 @@ describe('registerPtyHandlers', () => {
       keepHistory: true
     })
     expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1, undefined)
+    expect(runtime.retainSurfaceThroughPtyStop).toHaveBeenCalledWith('local-pty')
+    expect(events).toEqual(['retain', 'exit', 'release'])
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: 'local-pty',
       code: -1
     })
+
+    events.length = 0
+    await handlers.get('pty:kill')!(null, { id: 'local-pty-2' })
+    expect(events).toEqual(['exit'])
   })
   it('does not synthesize a duplicate renderer exit when kill emits provider exit', async () => {
     const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
