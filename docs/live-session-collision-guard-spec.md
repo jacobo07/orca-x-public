@@ -100,6 +100,8 @@ preflight is a new IPC/RPC method name, so an older peer fails closed rather tha
 | Class A gate on Sleep launch and cold restore                  | landed at the spawn: RED `143013dbc`, `175c81eb4`, `6352d715c`                   |
 | Reservation for simultaneous Class A resumes                   | landed `123c07615` (RED), `38a5137ed`, `f539fa099`, `08d9b2933`, e2e `1737c642a` |
 | Class A gate on working-set (snapshot) restore                 | landed at the spawn (revival is a pane cold restore)                             |
+| Runtime ensure (web, runtime panes) on the same reservation    | landed: RED `374888067`, `9ab2316c6`, `e0d52c924`, `c23065435`, `ca93d6d78`      |
+| Mobile AI Vault resume                                         | not guarded: typed command; inventory debt                                       |
 | Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt                 |
 | Shared-live rail indicator, go-to-open-session                 | not started                                                                      |
 | Real-provider product reality                                  | not run                                                                          |
@@ -143,17 +145,48 @@ lives there (`decideResumeSpawn`, installed by `registerAgentSessionLivePresence
   replies `agentResumeRefused`; it never falls back to launching a fresh provider session;
 - expiry is cleanup, not proof: every decision re-reads presence first.
 
-| Materializer                                     | Initiated | Class | Status                                                          |
-| ------------------------------------------------ | --------- | ----- | --------------------------------------------------------------- |
-| AI Vault resume                                  | user      | A     | guarded (dialog + reservation + spawn gate)                     |
-| Per-pane "Resume this session"                   | user      | A     | guarded: dialog + reservation, then gated respawn (`4f7fb4b8f`) |
-| Sleep launch into a new tab (activation, mobile) | automatic | A     | guarded at spawn; limit: record cleared before spawn            |
-| Pane cold restore                                | automatic | A     | guarded at spawn; refusal keeps the record (`be116a07e`)        |
-| In-place hibernation wake                        | automatic | A     | guarded at spawn (same path as cold restore)                    |
-| Working-set row revival                          | automatic | A     | guarded at spawn (lazy sleep record → cold restore)             |
-| Runtime-routed ensure (web, mobile, CLI)         | remote    | A     | not integrated: own `ClaimedAgentPtyOwnerRegistry` authority    |
-| Provider `/resume` picker                        | provider  | B     | post-effect notice to the owning window                         |
-| SSH                                              | any       | —     | unsupported: no claim key, proceeds unreserved                  |
+| Materializer                                          | Initiated | Class | Status                                                           |
+| ----------------------------------------------------- | --------- | ----- | ---------------------------------------------------------------- |
+| AI Vault resume                                       | user      | A     | guarded (dialog + reservation + spawn gate)                      |
+| Per-pane "Resume this session"                        | user      | A     | guarded: dialog + reservation, then gated respawn (`4f7fb4b8f`)  |
+| Sleep launch into a new tab (activation, mobile)      | automatic | A     | guarded at spawn; limit: record cleared before spawn             |
+| Pane cold restore                                     | automatic | A     | guarded at spawn; refusal keeps the record (`be116a07e`)         |
+| In-place hibernation wake                             | automatic | A     | guarded at spawn (same path as cold restore)                     |
+| Working-set row revival                               | automatic | A     | guarded at spawn (lazy sleep record → cold restore)              |
+| Runtime ensure: web AI Vault, runtime-hosted pane     | user/auto | A     | guarded: registry adopts, a new spawn crosses the gate           |
+| Host-side `terminal.create` with a recorded session   | any       | A     | guarded at the controller spawn (`c23065435`)                    |
+| Mobile AI Vault resume                                | user      | A     | **not guarded**: creates a plain pane, then types the command    |
+| Legacy text-command fallback (old host, `afterTabId`) | user      | A     | **not guarded**: the session travels only as command text        |
+| CLI                                                   | —         | —     | no Orca-selected resume; a typed `claude --resume` is the user's |
+| Provider `/resume` picker                             | provider  | B     | post-effect notice to the owning window                          |
+| SSH                                                   | any       | —     | unsupported: no claim key, proceeds unreserved                   |
+
+## Runtime ensure (2026-09-17)
+
+`terminal.ensureAgentSession` is the only runtime path that resumes an exact session. Its callers
+are the web AI Vault (`web-runtime-session.ts`) and the pane transport for runtime-hosted panes
+(`remote-runtime-pty-transport.ts`); mobile and the CLI do not call it. The host always resumes
+(`automatic` is rejected) and routes through `ClaimedAgentPtyOwnerRegistry` in the `pty.ts`
+controller.
+
+The registry keeps what only it can do: joining a claim that is being spawned, adopting a live
+owner (so a lost response retried adopts rather than duplicates), reconciling daemon and relay
+owner listings, the cross-worktree conflict, generation fencing and capacity. It could not see a
+desktop reservation or a desktop pane, so a spawn it would start now crosses the same gate as
+`pty:spawn` (`9ab2316c6`): the host passes the raw session (`agentSessionResumeSubject`), the gate
+reads presence, refuses a claim key it cannot reproduce, and holds the reservation for the ensured
+tab with no window owner. Release: spawn throw, PTY teardown of that tab, live handoff, bounds.
+A client disconnect after the spawn does not release it; the runtime keeps running.
+
+The gate is installed in shared startup as well as by the window registration, because
+`orca serve` never opens a window (`e0d52c924`). Refusals are four RPC codes
+(`agent_session_live_elsewhere`, `_multiple_live_owners`, `_materializing`, `_presence_unknown`),
+disjoint from the two a shipped client falls back on, so an old client fails closed. A runtime pane
+gets a plain shell plus `agentResumeRefused`, like desktop; the web AI Vault shows the
+`paneResume.blocked` copy (`ca93d6d78`). No remote caller has a Continue override.
+
+Inventory: the ratchet sweeps `mobile/src` and counts `terminal.ensureAgentSession` requests
+(`559f424cb`); mobile's three planner calls are named, shrink-only debt.
 
 Pane handling (`be116a07e`): a refusal shows the `resume-refused` banner, clears the launch
 config it registered and keeps the sleep record. A refused dormant working-set row still becomes
