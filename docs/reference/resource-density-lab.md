@@ -110,6 +110,7 @@ Each is defined here before any number is attached to it.
 
 | Metric                      | Definition                                                                                                                              |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Dormant Row State Footprint | Control-plane state one remembered row adds when a working set is restored: store objects installed, manifest bytes reaching disk, and the runtimes and recurring producers it arms. Measured through the real capture, plan and apply functions over one store, so it is load- and host-independent. |
 | Dormant Session Tax         | Orca control-plane bytes (canonical metric) at N dormant logical rows minus the same at the base scenario, at steady state.              |
 | Marginal Idle Session Cost  | The slope of that curve: added control-plane bytes per additional dormant row over the measured range. Reported with its range.          |
 | Active Terminal Tax         | Added control-plane bytes and added recurring work when one dormant row becomes one live plain terminal. Shell bytes are workload, excluded. |
@@ -119,6 +120,12 @@ Each is defined here before any number is attached to it.
 | Fan-Out Factor              | Effective inspection cardinality over transport cardinality for one due cycle: provider calls, census scans executed and child processes spawned, per leg, divided by requests sent. |
 | Reclaim Completeness        | Fraction of created subjects whose PTY and session records are gone after release and quiescence.                                        |
 | Leak Slope                  | Change in control-plane bytes across equal create/release lifecycle cycles at steady state, with owned-object counts beside it.           |
+
+Dormant Row State Footprint is a **state** figure at the renderer-store altitude. It is the
+deterministic floor under the logical dimension and it is never a substitute for the Dormant
+Session Tax, which is process bytes in a running app: a store object's cost in resident memory is
+not derivable from its shape. Because it costs no host, it is taken at scales the byte curve
+cannot safely reach, and a point it covers is not thereby covered for the process metric.
 
 **Not defined, therefore not published:** Memory Amplification Ratio (its numerator is ambiguous
 between metadata and resident workload) and Control Plane Survival Margin (it cannot be measured
