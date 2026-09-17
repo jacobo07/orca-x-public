@@ -2214,8 +2214,9 @@
       "hidden": "runs",
       "dormant": "none",
       "spawns": "unknown",
-      "disposition": "debt",
-      "note": "no own timer since the shared window backstop; stays debt until the backstop-only exit is proven in the running app"
+      "disposition": "justified",
+      "bound": "no own timer; one due time per live connected pane on the window backstop, and every pane due in a tick shares one pty:inspectProcesses call, so timers and renderer IPC stay constant per window; main still asks each pane's provider (daemon socket request, SSH relay request) and runtime-owned panes still take one RPC each",
+      "note": "agent-completion-coordinator-cardinality.test.ts: 50 panes 50 timers -> 1, 464 per-pane calls -> 0, silent exit noticed 9.29 s -> 1.25 s; tests/e2e/agent-completion-backstop.spec.ts proves it in the built app"
     },
     "src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts#self-rescheduling-timeout#schedulePendingTitleExpiry": {
       "responsibility": "agent-completion-pending-title-expiry",
