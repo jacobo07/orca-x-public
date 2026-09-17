@@ -10,9 +10,13 @@ which holds the invariants this protocol serves — above all "unknown is never 
 memory is never reported as Orca overhead".
 
 This is a measurement protocol, not a subsystem. It composes owners that already exist: the census
-(`src/main/memory/collector.ts`), the cardinality rigs named below, and the scale perf lab
-(`config/scripts/run-terminal-scale-perf-e2e.mjs` and its report gate). New scenarios extend those;
-they do not fork them.
+(`src/main/memory/collector.ts`), the cardinality rigs named below, and the memory e2e specs
+(`tests/e2e/terminal-parked-memory.spec.ts`, `tests/e2e/resource-usage-warm-reattach.spec.ts`), which
+are the estate's byte and cell instruments. New scenarios extend those; they do not fork them.
+
+`config/scripts/run-terminal-scale-perf-e2e.mjs` is a **latency** lab — frame counts at 10/25/50/100
+panes. It instruments no memory at all, so it is an owner for time at scale and never for a byte
+curve. Two waves of this program cited it as one; it is not.
 
 ## The six dimensions, kept apart
 
@@ -31,12 +35,30 @@ one live process are different resources.
 Sweep one dimension; hold the rest fixed and state their values. A curve whose other dimensions
 moved is not a curve.
 
-## Canonical metric
+## Three instruments, and the one to gate on
 
-Memory figures use the census's own metric, `getProcessMemoryMetric()`
-(`src/main/memory/process-memory-metric.ts`): **working-set on Windows, rss elsewhere**. The metric
-name travels with every number. Series carrying different metric names are never compared,
-subtracted or plotted together — a mismatch is a refusal, not a conversion.
+Process-level memory uses the census's own metric, `getProcessMemoryMetric()`
+(`src/main/memory/process-memory-metric.ts`): **working-set on Windows, rss elsewhere**. The
+snapshot already carries `processMemoryMetric` beside the numbers, so the metric name travels with
+every figure. Series carrying different metric names are never compared, subtracted or plotted
+together — a mismatch is a refusal, not a conversion.
+
+That metric is not, however, the right gate for a terminal pane. The estate holds three figures:
+
+| Instrument | Reachable as | What it cannot see |
+| ---------- | ------------ | ------------------ |
+| Census working-set / rss | `window.api.memory.getSnapshot()` | memory freed to an allocator free list rather than to the OS |
+| V8 heap | `performance.memory.usedJSHeapSize` (needs `--enable-precise-memory-info`) | xterm buffers — typed arrays live outside the V8 heap |
+| Retained xterm cells | the live buffers, 3 uint32s per cell | nothing about processes |
+
+Measured on the retention run below: releasing **79.0 MB** of terminal buffer moved the renderer's
+working-set by **3.8 MB** and the heap by 4.7 MB. A byte curve over either would have reported about
+5% of a reclaim that demonstrably happened — not noise, a systematic floor, because freed typed
+arrays return to the allocator rather than the OS.
+
+So for presentation-layer retention: **gate on cells, record bytes.** A byte figure is reported
+beside the cell figure, never in place of it, and a working-set reading is gated only as
+non-growth. `tests/e2e/terminal-parked-memory.spec.ts` is the worked example.
 
 ## Outcome vocabulary
 
@@ -92,7 +114,7 @@ Each is defined here before any number is attached to it.
 | Marginal Idle Session Cost  | The slope of that curve: added control-plane bytes per additional dormant row over the measured range. Reported with its range.          |
 | Active Terminal Tax         | Added control-plane bytes and added recurring work when one dormant row becomes one live plain terminal. Shell bytes are workload, excluded. |
 | Agent Management Tax        | Added control-plane bytes and added recurring work per additional live managed agent. The agent's own bytes are workload, excluded.       |
-| Hidden Pane Tax             | Control-plane plus presentation cost of a live row that is not mounted, against the same row mounted and visible.                        |
+| Hidden Pane Tax             | Retained xterm cells (primary) plus recorded bytes held by a live row that is hidden, against the same row released. Never bytes alone.   |
 | Cold Revival Latency        | Explicit Open on a dormant row until its runtime is usable, measured at a small and a dense logical set.                                 |
 | Fan-Out Factor              | Effective inspection cardinality over transport cardinality for one due cycle: provider calls, census scans executed and child processes spawned, per leg, divided by requests sent. |
 | Reclaim Completeness        | Fraction of created subjects whose PTY and session records are gone after release and quiescence.                                        |
@@ -161,6 +183,25 @@ leg is an in-memory subtree walk over that one shared snapshot. So the local leg
 local case. Falsified by construction: bypassing the shared reader yields 1/10/50 forks and reds the
 census assertion. Confounder: the local provider's own walk is stood in for, so this bounds the
 census leg and the batch composition, not the walk's cost.
+
+**Hidden Pane Tax, un-parkable hidden worktree** — `9c724c9d4` + `0e30e7b37` source, dev Electron
+(e2e mode, `--enable-precise-memory-info`), win32 x64, scenario `terminal hidden worktree retention
+budget`, dimension *presentation* at 4 staged tabs (5 pane managers) × 25,000 scrollback rows, other
+dimensions held at one window and one repository. Outcome `measured`, evidence class
+`dev-electron-e2e`. One run.
+
+| | Retained cells | Buffer | Renderer working-set | V8 heap | Mounted panes |
+| ------ | -------------- | ------ | -------------------- | ------- | ------------- |
+| before | 6,910,211      | 79.1 MB | 376.0 MB            | 168.6 MB | 5            |
+| after  | 6,307          | 0.1 MB  | 372.2 MB            | 163.9 MB | 1            |
+
+Readings: a hidden un-parkable pane holds roughly **1.4M cells / ~16 MB of buffer per pane** at that
+scrollback depth, and the budget released 99.91% of it in **118 ms** (bound: 2,000 ms). The two byte
+instruments each saw under 5% of that release, which is why the gate is the cell count. Confounders,
+from the spec's own notes: the un-parkable class is staged by rewriting `ptyId` to a
+remote-runtime-shaped id, so park-restorability is faithful but the transports underneath are real
+local PTYs — not a live remote runtime. Host bracket: 13.2 GB free before, 15.2 GB after, never near
+the 4 GB floor.
 
 **The daemon, SSH and runtime legs are not covered by that number.** A daemon-backed pane is
 inspected by one RPC per session (`src/main/daemon/daemon-pty-adapter.ts:1562` sends
