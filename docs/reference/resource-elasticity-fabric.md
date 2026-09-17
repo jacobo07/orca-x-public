@@ -220,3 +220,103 @@ baseline (3 → 1).
   - Issue lookups are per window: two windows showing one issue start two `gh` processes.
   - A failed issue lookup is cached as "no issue" for 5 min, because main turns every failure
     into `null`.
+
+## Third shrink — every pane's process-exit backstop shares one clock and one call per window
+
+`agent-completion-process-backstop` was the last debt in the baseline.
+
+- **What the backstop is for.** Hooks and terminal titles report completion as soon as they
+  arrive. Only the backstop notices an agent process that exits without saying so: an agent with
+  no hooks, a hook lost to a crash, or a title that never flips. It needs two idle readings in a
+  row, and an unknown reading (terminal gone, call failed) resets that count.
+- **What actually multiplied.** Every live, connected pane owned a self-rescheduling timeout
+  (750 ms with an agent, 2 s idle, 3 s hidden with agent evidence, 15 s with no evidence on
+  Windows) and made its own `pty:inspectProcess` call. A per-window queue capped starts at 8 per
+  second, so beyond about six agent panes the cost moved from calls into detection time.
+- **Owner.** `src/renderer/src/components/terminal-pane/agent-process-backstop.ts`, one per
+  renderer.
+  - Panes register a due time instead of owning a timer. The one timer fires at the earliest
+    due pane and runs every pane due within 30% of its own interval, so cadences line up.
+  - A tick's requests leave in one `pty:inspectProcesses` call. Each pane keeps its own tier,
+    its two-sample exit proof and its generation fence, and applies only its own answer.
+  - One call per host at a time. Panes that come due meanwhile go in the next call, and a slow
+    runtime host does not hold local panes.
+  - A pane disposed before its call leaves is never sent. The timer disarms when no pane is
+    scheduled.
+- **Per-pane truth.** Main answers each id separately (`pty-process-inspection-batch.ts`): an
+  inspection, or `failed` for a thrown call, a hung call (10 s deadline) or a missing provider.
+  An unanswered id or a lost envelope is also `failed`, and `failed` never reads as an idle
+  shell. The web client answers every id as failed.
+- **Mixed versions.** The renderer and main ship together, so the new IPC name has no version
+  boundary; the preload method is optional, and a surface without it falls back to one call per
+  pane. The daemon protocol did not move: its version is part of the endpoint, so a bump would
+  leave every running v36 daemon adopted beside a new one after each update. Main therefore
+  still asks the daemon one request per session; each is a read of that session's short
+  foreground cache.
+- **Measured** by `agent-completion-coordinator-cardinality.test.ts` through
+  `agent-completion-backstop-curve-harness.ts`: real coordinators and backstop, every pane running
+  an agent, a silent exit halfway through a 60 s window.
+
+  | panes | timers before → after | per-pane calls before → after | shared calls after | exit noticed before → after |
+  | ----- | --------------------- | ----------------------------- | ------------------ | --------------------------- |
+  | 1     | 1 → 1                 | 54 → 0                        | 54                 | 1.25 s → 1.25 s             |
+  | 10    | 10 → 1                | 464 → 0                       | 78                 | 1.23 s → 1.25 s             |
+  | 50    | 50 → 1                | 464 → 0                       | 78                 | 9.29 s → 1.25 s             |
+
+  Every pane is now inspected at its declared cadence: 761 and 3,881 per-pane answers at 10 and
+  50, against 464 under the cap. Main and the daemon therefore do more per-pane reads than
+  before at high counts. That is the freshness the tiers always declared, and each read is
+  in-memory apart from the process-table scan behind it.
+- **What still scales with panes.**
+  - Main to daemon: one socket request per session per tick.
+  - SSH panes: one relay request each.
+  - Runtime-owned panes: one `terminal.inspectProcess` RPC each (the runtime has no batch
+    method).
+  - On Windows, the daemon's whole-process-table scan was already shared (one in flight,
+    500 ms reuse) and throttled per session, so it is capped per process rather than per pane.
+    Each pane still walks its own subtree of that scan in memory.
+- **Regression proof.** Sixteen drills each turn a test red:
+  - a timer per pane;
+  - one timer that still asks per pane;
+  - a failure read as idle;
+  - one failure failing the whole call;
+  - answers matched by position;
+  - the generation fence removed;
+  - a timer left armed with no panes;
+  - overlapping calls;
+  - a hook waiting for the backstop;
+  - an unanswered pane read as idle;
+  - a surface without the batch method read as success;
+  - a new timer per pane;
+  - a lost envelope read as idle;
+  - a disposed pane still sent;
+  - main without its per-pane deadline;
+  - main failing every pane for one failure.
+
+  The generation-fence drill survived at first. The test's stale answer was idle, which is
+  harmless either way. It now sends a stale *live* answer, which would lend a restarted pane agent
+  evidence and so report an exit that never happened.
+- **Product reality.** `tests/e2e/agent-completion-backstop.spec.ts` (Windows) splits one tab into
+  four panes. Each runs a compiled `gemini.exe` stand-in that emits no hooks and no titles, and a
+  main-process spy counts inspection IPC.
+  - Over 6 s: one armed timer, 8–9 shared calls carrying all four ids, and no per-pane calls.
+  - A stop file written from outside Electron is reported once, for its pane only, in 6–7 s. The
+    notification is titled `gemini`, a name only the process-exit path gives a completion.
+  - The Windows daemon keeps trusting a cached agent until console membership confirms the exit,
+    and that caching, not the clock, sets the 6 s.
+  - One run failed to recognise any agent while the host was under memory pressure. The same
+    build then passed on rerun.
+- **Broken builds.**
+  - Discarding every answer turns the spec red: panes back off and the steady window sees no call.
+  - Delivering live answers but dropping idle ones turns it red where intended. Steady state
+    passes, and the exit is never noticed.
+  - Restored builds pass.
+- **Ratchet at zero.** With the baseline empty, the gate still rejects:
+  - a new self-rescheduling per-pane poll, as unclassified;
+  - the same poll classified as debt, as new debt;
+  - a timer planted back into the coordinator, as unclassified.
+- **Still open.**
+  - Runtime-owned panes could share one `terminal.inspectProcesses` per environment. The runtime
+    already negotiates capabilities.
+  - The 6 s Windows real-app detection has not been investigated.
+  - No real-app run at 10 or 50 panes; those counts are covered by the unit curve only.
