@@ -100,12 +100,17 @@ create **no** runtime, activating all fifty creates none, one Open materializes 
 row out of fifty sharing a single title, and workspace Sleep releases that runtime while all fifty
 logical rows survive. **Reclaim Completeness** is therefore `measured` structurally.
 
-Bytes and times were not taken, and the reason is the instrument rather than the rule: the canonical
-metric on Windows is working set, Windows trims working sets under memory pressure, and it trims
-hardest at the largest scale point — which is exactly where the signal lives. Free memory moved
-between 5.03 and 0.58 GB during that session. **Dormant Session Tax**, **Marginal Idle Session Cost**,
-**Cold Revival Latency** and **Leak Slope** stay `unmeasured` pending a quiet host. They are the next
-wave, not an omission.
+The byte curve followed on a quiet host. **Dormant Session Tax at 50 rows is +41 to +54 MB** and
+**Marginal Idle Session Cost is ≈0.8–1.1 MB per remembered row**, below detection at one row. The
+terminal host, the workload and the unattributed bucket are all flat across 0 to 50 rows, so a
+dormant row costs the daemon and the workload nothing; **68–79% of the tax is renderer**. Against
+55,875 bytes of workspace state for the same fifty rows, the process cost is some 800–1,000× the data
+it represents.
+
+That result selects the next wave. The logical dimension is answered — Orca can remember fifty
+sessions for about 1 MB each and no process at all — and the cost that remains is **presentation
+residency**: what the renderer spends representing a row that renders no terminal. **Cold Revival
+Latency** and **Leak Slope** are still `unmeasured`.
 
 The daemon, SSH and runtime inspection legs stay `unmeasured` and code-read: each is one request per
 subject per cycle by construction, and the daemon's own answer is an in-memory read of a cache whose

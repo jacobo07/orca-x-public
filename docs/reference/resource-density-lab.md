@@ -302,6 +302,55 @@ stand-in is a seeded provider-session store entry, not a live agent. Host bracke
 figure was taken**, and the Dormant Session Tax, Marginal Idle Session Cost and Cold Revival Latency
 remain `unmeasured` pending a host above the 4 GB floor.
 
+**Dormant Session Tax and Marginal Idle Session Cost** — `dormant-rail-memory-curve.spec.ts`, dev
+Electron (e2e mode), 1.4.178-rc.2, win32 x64, scenario `dormant rail memory curve`, dimension
+*logical session* at 0, 1, 10 and 50, other dimensions held at one window, one repository, one
+execution host and zero runtimes (asserted at every point). Metric `working-set`, asserted constant
+across the run. Five samples per point, median with observed range, one fresh app per point so no
+point inherits another's allocator high-water mark. Outcome `measured`. Evidence class
+`dev-electron-e2e`.
+
+| Sweep | Rows | Orca | main | renderer | terminal host | workload | unattributed | sample range |
+| ----- | ---- | ------- | ----- | -------- | ------------- | -------- | ------------ | ------------ |
+| fwd   | 0    | 767.7 MB | 268.7 | 214.5 | 87.5 | 101.6 | 11.4 | 12.3 |
+| fwd   | 1    | 766.9 MB | 267.1 | 213.0 | 89.1 | 101.0 | 11.4 | 0.5 |
+| fwd   | 10   | 786.9 MB | 272.9 | 226.2 | 89.5 | 101.0 | 11.4 | 8.9 |
+| fwd   | 50   | 809.0 MB | 277.3 | 242.3 | 90.7 | 101.0 | 11.4 | 1.5 |
+| rev   | 50   | 829.8 MB | 281.1 | 260.4 | 90.9 | 101.0 | 11.4 | 0.8 |
+| rev   | 10   | 818.3 MB | 276.4 | 253.2 | 91.1 | 100.7 | 11.4 | 0.7 |
+| rev   | 1    | 790.9 MB | 279.1 | 223.8 | 92.4 | 100.7 | 11.4 | 70.6 |
+| rev   | 0    | 775.3 MB | 269.9 | 217.3 | 92.4 | 100.7 | 11.4 | 9.7 |
+
+**Dormant Session Tax at 50 rows: +41.3 MB forward, +54.4 MB reversed.** **Marginal Idle Session
+Cost: ≈0.8–1.1 MB per remembered row**, reported as a range because the two sweeps disagree by that
+much. At 1 row the cost is **below detection** — forward reads −0.9 MB, reversed +15.6 MB, and that
+reversed point's own five samples spanned 70.6 MB.
+
+**Why the row effect is separable from host drift, which is the only reason these numbers are
+reportable.** Free host memory fell monotonically through the run, 5,049 → 4,382 MB, as other
+processes on the machine grew. In the forward sweep that drift rises together with the row count, so
+the two are confounded and the forward curve alone proves nothing. In the reversed sweep the host
+kept draining while the row count fell — and Orca's bytes fell **with the rows**, 829.8 → 775.3 MB.
+Drift would have held them flat or pushed them up. The reversed sweep is the control, and running it
+is what turned an unusable curve into a defensible one.
+
+**What the cost is made of.** Of the tax at 50 rows, **68% (forward) to 79% (reversed) is renderer**;
+main accounts for 8.6–11.2 MB. **The terminal host is flat** — 87.5 → 90.7 forward and 92.4 → 90.9
+reversed, moving by ~3 MB in either direction across 0 to 50 rows, so a dormant row costs the daemon
+nothing. **Workload is flat** at 100.7–101.6 MB and **unattributed is exactly flat** at 11.4 MB in all
+eight points: the byte-level confirmation of the structural result that dormant rows create no
+workload.
+
+Set against the store altitude, where 50 rows cost 55,875 bytes of workspace state, the process cost
+is roughly **800–1,000× the data it represents**. The data is trivial; the renderer's representation
+of it is the whole tax, and that is the next dimension to measure.
+
+Confounders: host drift as described, bounded by the reversed sweep rather than eliminated; the base
+point is the same app with an emptied workspace, and the data shows no activation offset (base
+renderer 214.5/217.3 against 213.0/223.8 at one row); the rail is seeded from a cloned two-row
+capture, so all fifty rows share one launch shape. One sweep of each direction — not a repeated
+experiment.
+
 **The daemon, SSH and runtime legs are not covered by that number.** A daemon-backed pane is
 inspected by one RPC per session (`src/main/daemon/daemon-pty-adapter.ts:1562` sends
 `inspectProcess` with a single `sessionId`), so those legs are linear in panes by construction —
