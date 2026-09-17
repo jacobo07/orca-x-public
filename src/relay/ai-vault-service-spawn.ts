@@ -1,5 +1,6 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
+import { forkIpcChild } from '../shared/ipc-message-listener-floor'
 import { buildRelayAiVaultServiceEnv } from '../main/ai-vault/session-scanner-service-env'
 import { lowerAiVaultServicePriority } from '../main/ai-vault/session-scanner-service-priority'
 
@@ -8,7 +9,7 @@ export function relayAiVaultServiceEntryPath(baseDir = __dirname): string {
 }
 
 export function spawnRelayAiVaultService(): ChildProcess {
-  const child = fork(relayAiVaultServiceEntryPath(), [], {
+  const child = forkIpcChild(relayAiVaultServiceEntryPath(), [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     execArgv: ['--max-old-space-size=384'],
     env: buildRelayAiVaultServiceEnv(),

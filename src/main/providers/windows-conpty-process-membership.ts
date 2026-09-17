@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process'
+import { installIpcMessageListenerFloor } from '../../shared/ipc-message-listener-floor'
 
 const CONPTY_PROCESS_LIST_TIMEOUT_MS = 3_000
 
@@ -35,6 +36,9 @@ export function readWindowsConptyProcessIds(
   } catch {
     return Promise.resolve(null)
   }
+  // Why here rather than at the fork: an injected forkProcess must be floored too, since finish()
+  // below drops the last 'message' listener from the exit and timeout paths.
+  installIpcMessageListenerFloor(child)
 
   return new Promise((resolve) => {
     let settled = false

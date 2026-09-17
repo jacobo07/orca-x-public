@@ -1,0 +1,9 @@
+# Files that own an IPC child without installing the message-listener floor.
+#
+# The list only shrinks. It is empty because every fork site was converted when the floor landed
+# (2026-09-17); an entry here means a host process can still die on node's
+# `Symbol(kPendingMessages)` null dereference when that child's last 'message' listener goes away
+# while its channel is closing. Add a line only with a reason, and delete it once the site forks
+# through `forkIpcChild()` or calls `installIpcMessageListenerFloor(child)`.
+#
+# Enforced by config/scripts/check-ipc-message-floor.mjs (pnpm check:ipc-message-floor).

@@ -1,5 +1,6 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { forkIpcChild } from '../../shared/ipc-message-listener-floor'
 import type { AiVaultListResult, AiVaultSubagentListResult } from '../../shared/ai-vault-types'
 import type {
   AiVaultSessionTitleRequest,
@@ -23,7 +24,7 @@ export function spawnAiVaultServiceProcess(): ChildProcess {
   if (!existsSync(entryPath)) {
     throw new Error(`AI Vault service entry not found: ${entryPath}`)
   }
-  const child = fork(entryPath, [], {
+  const child = forkIpcChild(entryPath, [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     execArgv: ['--max-old-space-size=384'],
     env: buildAiVaultServiceEnv(),

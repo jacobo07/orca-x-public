@@ -68,6 +68,14 @@ A state file also owes a rule about its own backup: never spend the last known-g
 
 `pnpm check:durability-contracts` enforces this. Modules that stage a temp file and rename it into place but carry no contract are ratcheted in `config/durability-unclassified-baseline.txt`: the existing ones are grandfathered and the list may only shrink, so a **new** unclassified publisher fails the gate. Prune with `--prune` after classifying one.
 
+## Forked IPC Children
+
+Fork through `forkIpcChild()` ([`src/shared/ipc-message-listener-floor.ts`](./src/shared/ipc-message-listener-floor.ts)), or call `installIpcMessageListenerFloor(child)` when the fork itself is injectable. `pnpm check:ipc-message-floor` fails on any file under `src/` that owns an IPC child without one, and `config/ipc-message-floor-baseline.txt` only shrinks.
+
+Node delivers an IPC message a tick after reading it and checks the channel only when it *schedules*. On that later tick a child with no `'message'` listener sends node into `target.channel[kPendingMessages]` — and `channel` is null once `disconnect()` ran or the child exited. The host then dies on `TypeError: Cannot read properties of null (reading 'Symbol(kPendingMessages)')` thrown from a tick, which no call site can catch; in main that is the "A JavaScript error occurred in the main process" dialog. The floor keeps one no-op listener attached for the child's whole life, so node can only take the branch that never touches the channel, and it replays what it absorbs so the queue-until-someone-listens behaviour is not lost.
+
+`fork()` always creates an IPC channel, so a site is exposed even with no `'ipc'` in its `stdio`. The teardown that arms the crash — dropping the last `'message'` listener, then disconnecting or killing — usually lives in a different function from the fork, which is why this is a gate rather than a code-review note. `removeAllListeners()` on a child is the sharpest form: it takes node's own internal handlers with it.
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
