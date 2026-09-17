@@ -9,6 +9,7 @@ import {
   type PaneSessionResumeTarget
 } from '@/lib/pane-session-resume-capability'
 import type { RecordedAgentResumePlan } from '@/lib/recorded-agent-resume-plan'
+import type { PaneShellIdleVerdict } from '@/lib/pane-shell-idle-check'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
@@ -57,6 +58,8 @@ export async function resumePaneSession(args: {
   target: PaneSessionResumeTarget
   confirm: ConfirmationDialogContextValue | null
   respawn: (startup: PaneSessionResumeStartup) => Promise<PaneSessionRespawnResult>
+  /** Fresh read of the pane's current shell; only `idle` lets the respawn destroy it. */
+  checkShellIdle: () => Promise<PaneShellIdleVerdict>
   getState: () => AppState
   materialization?: MaterializationApi
 }): Promise<PaneSessionResumeResult> {
@@ -107,6 +110,26 @@ export async function resumePaneSession(args: {
     await materialization
       .attachMaterializationTab({ operationId, tabId: target.tabId })
       .catch(() => false)
+  }
+  // Why last before the respawn: it destroys the shell, and a command may have started
+  // since the button was enabled (or the enabling evidence may predate this shell).
+  const verdict = await args.checkShellIdle().catch((): PaneShellIdleVerdict => 'unconfirmed')
+  if (verdict !== 'idle') {
+    release()
+    return {
+      outcome: 'unavailable',
+      capability: {
+        kind: 'disabled',
+        reason:
+          verdict === 'busy'
+            ? 'shell-busy'
+            : verdict === 'unsupported'
+              ? 'shell-unsupported'
+              : verdict === 'host-outdated'
+                ? 'host-outdated'
+                : 'shell-unconfirmed'
+      }
+    }
   }
   const launchToken = createBrowserUuid()
   const { plan } = current

@@ -106,4 +106,24 @@ describe('resolvePaneSessionResumeCapability', () => {
       )
     ).toEqual({ kind: 'disabled', reason: 'shell-busy' })
   })
+
+  it('says why a markerless shell can never be offered, unless a prompt was proven', () => {
+    expect(
+      resolvePaneSessionResumeCapability(
+        input({ foreground: { agent: null, shellForeground: false, shellPromptUnsupported: true } })
+      )
+    ).toEqual({ kind: 'disabled', reason: 'shell-unsupported' })
+    expect(
+      resolvePaneSessionResumeCapability(
+        input({
+          foreground: { agent: 'codex', shellForeground: false, shellPromptUnsupported: true }
+        })
+      )
+    ).toEqual({ kind: 'disabled', reason: 'shell-busy' })
+    expect(
+      resolvePaneSessionResumeCapability(
+        input({ foreground: { agent: null, shellForeground: true, shellPromptUnsupported: true } })
+      )
+    ).toEqual({ kind: 'available' })
+  })
 })

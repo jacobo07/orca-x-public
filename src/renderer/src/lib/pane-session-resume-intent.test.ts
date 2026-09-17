@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import type { PaneShellIdleVerdict } from '@/lib/pane-shell-idle-check'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { LiveSessionMaterializationResponse } from '../../../shared/live-agent-session-presence-types'
 import type { PaneSessionResumeCapability } from './pane-session-resume-capability'
@@ -100,6 +101,11 @@ const spawned = {
   reattached: false
 }
 
+const shellIdle = vi.fn(async (): Promise<PaneShellIdleVerdict> => {
+  calls.push('idle-check')
+  return 'idle'
+})
+
 function run(
   respawn: Parameters<typeof resumePaneSession>[0]['respawn'],
   confirm: Parameters<typeof resumePaneSession>[0]['confirm'] = null
@@ -108,6 +114,7 @@ function run(
     target: TARGET,
     confirm,
     respawn,
+    checkShellIdle: shellIdle,
     getState: () => ({}) as AppState,
     materialization
   })
@@ -124,6 +131,11 @@ describe('resumePaneSession', () => {
     vi.stubGlobal('window', { api: { agentStatus: { reserveMaterialization } } })
     materialization.attachMaterializationTab.mockClear()
     materialization.releaseMaterialization.mockClear()
+    shellIdle.mockClear()
+    shellIdle.mockImplementation(async () => {
+      calls.push('idle-check')
+      return 'idle'
+    })
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -134,7 +146,7 @@ describe('resumePaneSession', () => {
 
     await expect(run(respawn)).resolves.toEqual({ outcome: 'started' })
 
-    expect(calls).toEqual(['reserve', 'attach', 'respawn'])
+    expect(calls).toEqual(['reserve', 'attach', 'idle-check', 'respawn'])
     expect(reserveMaterialization.mock.calls[0][0]).toMatchObject({
       paneKey: TARGET.paneKey,
       providerSession: SESSION_S
@@ -188,7 +200,7 @@ describe('resumePaneSession', () => {
     const respawn = respawnReturning({ ...spawned, agentResumeRefused: 'materializing' })
 
     await expect(run(respawn)).resolves.toEqual({ outcome: 'blocked', reason: 'materializing' })
-    expect(calls).toEqual(['reserve', 'attach', 'respawn', 'release'])
+    expect(calls).toEqual(['reserve', 'attach', 'idle-check', 'respawn', 'release'])
   })
 
   it('gives the reservation back when the spawn fails', async () => {
@@ -198,7 +210,7 @@ describe('resumePaneSession', () => {
     })
 
     await expect(run(respawn)).resolves.toEqual({ outcome: 'spawn-failed' })
-    expect(calls).toEqual(['reserve', 'attach', 'respawn', 'release'])
+    expect(calls).toEqual(['reserve', 'attach', 'idle-check', 'respawn', 'release'])
   })
 
   it('does not call adopting the old shell a resume', async () => {
@@ -209,6 +221,51 @@ describe('resumePaneSession', () => {
       run(respawnReturning({ ...spawned, ptyId: 'pty-old', previousPtyId: 'pty-old' }))
     ).resolves.toEqual({ outcome: 'spawn-failed' })
     expect(materialization.releaseMaterialization).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-checks the current shell last and keeps a busy shell alive', async () => {
+    shellIdle.mockImplementation(async () => {
+      calls.push('idle-check')
+      return 'busy'
+    })
+    const respawn = respawnReturning(spawned)
+
+    await expect(run(respawn)).resolves.toEqual({
+      outcome: 'unavailable',
+      capability: { kind: 'disabled', reason: 'shell-busy' }
+    })
+    expect(calls).toEqual(['reserve', 'attach', 'idle-check', 'release'])
+    expect(respawn).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['unconfirmed', 'shell-unconfirmed'],
+    ['unsupported', 'shell-unsupported'],
+    ['host-outdated', 'host-outdated']
+  ] as const)('keeps a shell it could not prove idle (%s)', async (verdict, reason) => {
+    shellIdle.mockImplementation(async () => verdict)
+    const respawn = respawnReturning(spawned)
+
+    await expect(run(respawn)).resolves.toEqual({
+      outcome: 'unavailable',
+      capability: { kind: 'disabled', reason }
+    })
+    expect(respawn).not.toHaveBeenCalled()
+  })
+
+  it('treats a failed shell check as unconfirmed', async () => {
+    shellIdle.mockImplementation(async () => {
+      calls.push('idle-check')
+      throw new Error('inspect failed')
+    })
+    const respawn = respawnReturning(spawned)
+
+    await expect(run(respawn)).resolves.toEqual({
+      outcome: 'unavailable',
+      capability: { kind: 'disabled', reason: 'shell-unconfirmed' }
+    })
+    expect(respawn).not.toHaveBeenCalled()
+    expect(materialization.releaseMaterialization).toHaveBeenCalledTimes(1)
   })
 
   it('abandons the attempt when the pane moved on to another session during the dialog', async () => {

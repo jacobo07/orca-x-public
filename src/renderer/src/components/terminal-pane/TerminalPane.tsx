@@ -110,6 +110,7 @@ import {
   type PaneSessionRespawnResult,
   type PaneSessionResumeResult
 } from '@/lib/pane-session-resume-intent'
+import { checkPaneShellIdle } from '@/lib/pane-shell-idle-check'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
@@ -1688,6 +1689,28 @@ function TerminalPane(
         target: { paneKey, tabId, worktreeId },
         confirm: confirmDialog,
         getState: useAppStore.getState,
+        checkShellIdle: async () => {
+          const verdict = await checkPaneShellIdle({
+            getPtyId: () => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null,
+            inspect: (ptyId) => window.api.pty.inspectProcess(ptyId)
+          })
+          const current = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]
+          // Why: fresh evidence outranks an idle reading taken while the pane was hidden or parked.
+          // An outdated host proves nothing about the shell, so its reading stays and the strip explains.
+          if (
+            verdict !== 'idle' &&
+            verdict !== 'host-outdated' &&
+            current?.agent === null &&
+            current.shellForeground
+          ) {
+            useAppStore.getState().setPaneForegroundAgent(paneKey, {
+              agent: null,
+              shellForeground: false,
+              ...(verdict === 'unsupported' ? { shellPromptUnsupported: true } : {})
+            })
+          }
+          return verdict
+        },
         respawn: (startup) =>
           new Promise<PaneSessionRespawnResult>((resolve) => {
             const store = useAppStore.getState()

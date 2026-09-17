@@ -14803,6 +14803,7 @@
       "waitForPrompt": "Shell 回到提示符后即可使用。",
       "shellUnsupported": "此 Shell 不会报告其提示符，因此 Orca 无法判断它是否空闲。",
       "shellBusy": "此 Shell 中仍有命令正在运行。",
+      "hostOutdated": "请重启终端后在此恢复：此终端服务的版本早于 Orca。",
       "failed": "无法恢复此会话。请重试。",
       "blocked": {
         "open": "此会话已在另一个窗格中打开。",

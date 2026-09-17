@@ -54,6 +54,20 @@ function failureText(result: PaneSessionResumeResult): string | null {
   if (result.outcome === 'spawn-failed') {
     return translate('agentSession.paneResume.failed', "Couldn't resume this session. Try again.")
   }
+  if (result.outcome === 'unavailable' && result.capability.kind === 'disabled') {
+    if (result.capability.reason === 'shell-busy') {
+      return translate(
+        'agentSession.paneResume.shellBusy',
+        'A command is still running in this shell.'
+      )
+    }
+    if (result.capability.reason === 'host-outdated') {
+      return translate(
+        'agentSession.paneResume.hostOutdated',
+        'Restart terminals to resume here: this terminal service is older than Orca.'
+      )
+    }
+  }
   if (result.outcome !== 'blocked') {
     return null
   }
@@ -127,7 +141,12 @@ export function PaneSessionResumeBanner({
                   'agentSession.paneResume.waitForPrompt',
                   'Available when the shell is back at its prompt.'
                 )
-              : undefined
+              : reason === 'shell-unsupported'
+                ? translate(
+                    'agentSession.paneResume.shellUnsupported',
+                    "This shell doesn't report its prompt, so Orca can't tell it's idle."
+                  )
+                : undefined
           }
           onClick={() => {
             void resume()

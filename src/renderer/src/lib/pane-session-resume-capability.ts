@@ -25,7 +25,11 @@ export type PaneSessionResumeUnavailableReason =
 export type PaneSessionResumeCapability =
   | { kind: 'hidden' }
   | { kind: 'available' }
-  | { kind: 'disabled'; reason: 'shell-busy' | 'shell-unconfirmed' }
+  | {
+      kind: 'disabled'
+      /** host-outdated only comes from the click-time check, never from the store. */
+      reason: 'shell-busy' | 'shell-unconfirmed' | 'shell-unsupported' | 'host-outdated'
+    }
   | { kind: 'unavailable'; reason: PaneSessionResumeUnavailableReason }
 
 export type PaneSessionResumeInput = {
@@ -69,6 +73,9 @@ export function resolvePaneSessionResumeCapability(
   }
   if (input.foreground?.shellForeground === true) {
     return { kind: 'available' }
+  }
+  if (input.foreground?.shellPromptUnsupported === true && !input.foreground.agent) {
+    return { kind: 'disabled', reason: 'shell-unsupported' }
   }
   // Why: only a recognized agent proves the pane is busy; a running command, a failed
   // inspection and no reading at all all mean the prompt is unproven, which is not idle.
