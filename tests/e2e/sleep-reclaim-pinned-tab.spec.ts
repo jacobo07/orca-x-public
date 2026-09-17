@@ -29,7 +29,14 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
-import { createTerminalTabFromMenu } from './helpers/terminal-tab-menu'
+
+// Why: the menu helper matches the English "New tab" label; creation is not under test here.
+async function createTerminalTab(page: Page, worktreeId: string): Promise<void> {
+  await page.evaluate((wt) => {
+    window.__store!.getState().createTab(wt)
+  }, worktreeId)
+  await waitForActiveTerminalManager(page, 30_000)
+}
 
 const MIN_IDLE_MS = 60_000
 const PROBE_CHANNEL = 'memory:probeProcessPresence'
@@ -38,10 +45,13 @@ type Pane = { paneKey: string; tabId: string; ptyId: string }
 
 async function bindActivePane(page: Page, worktreeId: string, notPtyIds: string[]): Promise<Pane> {
   await expect
-    .poll(async () => {
-      const id = await waitForActivePanePtyId(page)
-      return notPtyIds.includes(id) ? null : id
-    })
+    .poll(
+      async () => {
+        const id = await waitForActivePanePtyId(page)
+        return notPtyIds.includes(id) ? null : id
+      },
+      { timeout: 30_000 }
+    )
     .not.toBeNull()
   const ptyId = await waitForActivePanePtyId(page)
   return page.evaluate(
@@ -201,9 +211,9 @@ test.describe('Sleep keeps a pinned tab awake', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const a = await bindActivePane(orcaPage, wt, [])
-    await createTerminalTabFromMenu(orcaPage)
+    await createTerminalTab(orcaPage, wt)
     const b = await bindActivePane(orcaPage, wt, [a.ptyId])
-    await createTerminalTabFromMenu(orcaPage)
+    await createTerminalTab(orcaPage, wt)
     const c = await bindActivePane(orcaPage, wt, [a.ptyId, b.ptyId])
 
     // The user's pin, through the product's own menu.
