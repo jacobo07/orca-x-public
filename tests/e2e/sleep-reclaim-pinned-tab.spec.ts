@@ -99,11 +99,26 @@ async function seedCompletedAgent(page: Page, pane: Pane, worktreeId: string, id
   )
 }
 
-async function togglePinFromTabMenu(page: Page, tabId: string, expected: 'true' | 'false') {
-  const tab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
-  await tab.click({ button: 'right' })
+// Why: terminals render as rail rows when the terminal rail is on, as strip tabs otherwise;
+// both open the same tab menu.
+async function togglePinFromTabMenu(page: Page, tabId: string, expected: boolean) {
+  const row = page.locator(
+    `[data-terminal-rail-tab-id="${tabId}"], [data-testid="sortable-tab"][data-tab-id="${tabId}"]`
+  )
+  await row.first().click({ button: 'right' })
   await page.locator('[data-tab-menu-action="toggle-pin"]').click()
-  await expect(tab).toHaveAttribute('data-pinned', expected, { timeout: 10_000 })
+  await expect
+    .poll(
+      () =>
+        page.evaluate((id) => {
+          const state = window.__store!.getState()
+          return Object.values(state.unifiedTabsByWorktree ?? {})
+            .flat()
+            .some((tab) => tab?.entityId === id && tab.isPinned === true)
+        }, tabId),
+      { timeout: 10_000 }
+    )
+    .toBe(expected)
 }
 
 type Reading = {
@@ -217,7 +232,7 @@ test.describe('Sleep keeps a pinned tab awake', () => {
     const c = await bindActivePane(orcaPage, wt, [a.ptyId, b.ptyId])
 
     // The user's pin, through the product's own menu.
-    await togglePinFromTabMenu(orcaPage, a.tabId, 'true')
+    await togglePinFromTabMenu(orcaPage, a.tabId, true)
     await seedCompletedAgent(orcaPage, a, wt, 'e2e-pinned-a')
     await seedCompletedAgent(orcaPage, b, wt, 'e2e-pinned-b')
 
@@ -309,7 +324,7 @@ test.describe('Sleep keeps a pinned tab awake', () => {
 
     // Unpin through the same menu: the pin leaves the plan, the idle rule still holds A.
     await switchToWorktree(orcaPage, wt)
-    await togglePinFromTabMenu(orcaPage, a.tabId, 'false')
+    await togglePinFromTabMenu(orcaPage, a.tabId, false)
     await switchToWorktree(orcaPage, homeWorktreeId)
     await openSection(orcaPage)
     await expect
