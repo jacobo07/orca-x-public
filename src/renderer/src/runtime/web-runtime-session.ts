@@ -68,6 +68,7 @@ import {
 } from './remote-runtime-session-tabs-inflight'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
+import { runtimeResumeRefusalMessage } from './runtime-resume-refusal-message'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
@@ -442,7 +443,8 @@ async function createWebRuntimeSessionTerminalResult(
       ...(createdTabId ? { hostTabId: createdTabId } : {})
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message =
+      runtimeResumeRefusalMessage(error) ?? (error instanceof Error ? error.message : String(error))
     console.warn(
       hostCreated
         ? '[web-runtime-session] terminal created but reconciliation failed:'

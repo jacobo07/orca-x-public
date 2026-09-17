@@ -13,6 +13,12 @@ export function agentSessionResumeRefusalErrorCode(reason: LiveSessionResumeRefu
   return REFUSAL_ERROR_CODES[reason]
 }
 
+/** The guard's reason when a host refused to resume a session; null for any other error. */
+export function readAgentSessionResumeRefusal(error: unknown): LiveSessionResumeRefusal | null {
+  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
+  return parseAgentSessionResumeRefusalErrorCode(code)
+}
+
 export function parseAgentSessionResumeRefusalErrorCode(
   code: unknown
 ): LiveSessionResumeRefusal | null {
