@@ -52,6 +52,12 @@ class FakeChildProcess extends EventEmitter {
   }
 }
 
+// Why not zero: every forked IPC child keeps one no-op 'message' listener for life
+// (src/shared/ipc-message-listener-floor.ts), because node's deferred delivery dereferences a
+// nulled channel when nothing is listening. The client's own handler is still detached — the
+// stale-child emissions below are what prove that, not the count.
+const IPC_MESSAGE_FLOOR_LISTENERS = 1
+
 describe('computer sidecar client', () => {
   const children: FakeChildProcess[] = []
   let deferNextSendCallback = false
@@ -85,7 +91,7 @@ describe('computer sidecar client', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     await firstRejection
     expect(firstChild.killed).toBe(true)
-    expect(firstChild.listenerCount('message')).toBe(0)
+    expect(firstChild.listenerCount('message')).toBe(IPC_MESSAGE_FLOOR_LISTENERS)
     expect(firstChild.listenerCount('exit')).toBe(0)
     expect(firstChild.listenerCount('error')).toBe(1)
 
@@ -120,7 +126,7 @@ describe('computer sidecar client', () => {
     firstChild.emit('error', new Error('active sidecar failed'))
     await firstRejection
     expect(firstChild.killed).toBe(true)
-    expect(firstChild.listenerCount('message')).toBe(0)
+    expect(firstChild.listenerCount('message')).toBe(IPC_MESSAGE_FLOOR_LISTENERS)
     expect(firstChild.listenerCount('exit')).toBe(0)
     expect(firstChild.listenerCount('error')).toBe(1)
 
@@ -330,7 +336,7 @@ describe('computer sidecar client', () => {
     await firstRejection
     await secondRejection
     expect(firstChild.killed).toBe(true)
-    expect(firstChild.listenerCount('message')).toBe(0)
+    expect(firstChild.listenerCount('message')).toBe(IPC_MESSAGE_FLOOR_LISTENERS)
     expect(firstChild.listenerCount('exit')).toBe(0)
     expect(firstChild.listenerCount('error')).toBe(1)
 
@@ -358,7 +364,7 @@ describe('computer sidecar client', () => {
 
     await expect(call).rejects.toThrow('computer sidecar IPC is unavailable')
     expect(children[0]!.killed).toBe(true)
-    expect(children[0]!.listenerCount('message')).toBe(0)
+    expect(children[0]!.listenerCount('message')).toBe(IPC_MESSAGE_FLOOR_LISTENERS)
     expect(children[0]!.listenerCount('exit')).toBe(0)
     expect(children[0]!.listenerCount('error')).toBe(1)
   })

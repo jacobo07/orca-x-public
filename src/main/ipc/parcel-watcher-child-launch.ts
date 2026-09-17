@@ -1,5 +1,6 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
+import { forkIpcChild } from '../../shared/ipc-message-listener-floor'
 import {
   createWatcherCanaryDirectory,
   removeWatcherCanaryDirectory
@@ -29,7 +30,7 @@ export function launchWatcherChild(
   const canaryDir = currentCanaryDir ?? createWatcherCanaryDirectory()
   let child: ChildProcess
   try {
-    child = fork(entryPath, [], {
+    child = forkIpcChild(entryPath, [], {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
       env: {
         ...process.env,
