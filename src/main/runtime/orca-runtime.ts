@@ -78,6 +78,7 @@ import {
   createEphemeralAgentSessionClaimSigner,
   type AgentSessionClaimSigner
 } from './agent-session-claim-identity'
+import { resolveAgentSessionResumeStartupCwd } from './agent-session-resume-startup-cwd'
 import { agentSessionClaimKey } from '../../shared/claimed-agent-pty-owner-snapshot'
 import {
   hasCompatibleAgentTitleIdentity,
@@ -26849,12 +26850,19 @@ export class OrcaRuntimeService {
     } else {
       this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
     }
+    // Why: a resume re-enters one exact session, so its directory is decided before the
+    // effect and never silently widened to the workspace root (see the resolver).
+    const resumeCwd = resolveAgentSessionResumeStartupCwd(workspace.path, request.startupCwd)
+    if (resumeCwd.status === 'outside-workspace') {
+      throw new Error('agent_session_resume_context_unauthorized')
+    }
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
       env: startup.env,
+      ...(resumeCwd.status === 'resolved' ? { cwd: resumeCwd.cwd } : {}),
       launchConfig: startup.launchConfig,
       launchAgent: request.agent,
       presentation: request.presentation ?? 'background',

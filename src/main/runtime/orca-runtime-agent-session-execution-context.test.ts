@@ -57,7 +57,7 @@ function createRuntime(agentDefaultEnv: Partial<Record<TuiAgent, Record<string, 
   return runtime
 }
 
-function ensureCodexSession(runtime: OrcaRuntimeService) {
+function ensureCodexSession(runtime: OrcaRuntimeService, startupCwd?: string) {
   return runtime.ensureAgentSession({
     kind: 'explicit',
     worktree: 'id:worktree-1',
@@ -66,15 +66,25 @@ function ensureCodexSession(runtime: OrcaRuntimeService) {
       key: 'session_id',
       id: '019f81b9-19a9-7651-a8d1-352d9420bd11',
       transcriptPath: CODEX_TRANSCRIPT
-    }
+    },
+    ...(startupCwd ? { startupCwd } : {})
   })
 }
 
 describe('ensureAgentSession execution context', () => {
-  // CHARACTERIZATION: ensure names no directory, so the spawn falls back to the workspace
-  // root and a subdirectory session resumes in the wrong project context. Invert when the
-  // request learns the session's own directory.
-  it('materializes an existing session with no directory of its own', async () => {
+  it('re-enters a subdirectory session in its own directory', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await ensureCodexSession(runtime, SESSION_CWD)
+
+    const options = createTerminal.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(options.cwd).toBe(SESSION_CWD)
+  })
+
+  // Why: without a directory the workspace root is still the right answer — this is the
+  // unchanged path every already-shipped caller takes.
+  it('keeps the workspace root when no directory is named', async () => {
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
 
@@ -82,6 +92,28 @@ describe('ensureAgentSession execution context', () => {
 
     const options = createTerminal.mock.calls[0]?.[1] as Record<string, unknown>
     expect(Object.keys(options)).not.toContain('cwd')
+  })
+
+  it('refuses a directory outside the workspace instead of resuming there', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await expect(ensureCodexSession(runtime, '/tmp/somewhere-else')).rejects.toThrow(
+      'agent_session_resume_context_unauthorized'
+    )
+
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('refuses a traversal that climbs out of the workspace', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await expect(ensureCodexSession(runtime, '../worktree-2/packages/web')).rejects.toThrow(
+      'agent_session_resume_context_unauthorized'
+    )
+
+    expect(createTerminal).not.toHaveBeenCalled()
   })
 
   // Why: a positive control for the assertion above — the sibling create path passes this
