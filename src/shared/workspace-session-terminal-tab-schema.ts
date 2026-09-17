@@ -53,7 +53,7 @@ export const terminalTabSchema = z.object({
   // Why `.catch`: a bad marker degrades to pre-dormancy behaviour (the tab mounts), never to a lost
   // session. `dormantOpenRequested` is deliberately absent: an open request must not outlive a restart.
   dormancy: z
-    .object({ reason: z.enum(['working-set-restore']) })
+    .object({ reason: z.enum(['working-set-restore', 'workspace-sleep']) })
     .optional()
     .catch(undefined)
 })

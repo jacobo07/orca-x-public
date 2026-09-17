@@ -69,7 +69,7 @@ export type TerminalTab = {
   dormantOpenRequested?: true
 }
 
-export type TerminalTabDormancyReason = 'working-set-restore'
+export type TerminalTabDormancyReason = 'working-set-restore' | 'workspace-sleep'
 
 export type TerminalTabDormancy = {
   reason: TerminalTabDormancyReason

@@ -3224,9 +3224,24 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
     noteCommittedPtyShutdownSettlements(exitGuardPtyIds)
 
+    const sleptTabIds = new Set(tabs.map((tab) => tab.id))
+    // Why here: every stop has succeeded, so a manually slept tab stays unmounted until opened.
+    const markSleptTabsDormant = (current: TerminalTab[]): TerminalTab[] =>
+      current.map((tab) =>
+        sleptTabIds.has(tab.id) && !tab.dormancy
+          ? { ...tab, dormancy: { reason: 'workspace-sleep' } }
+          : tab
+      )
     set((s) => {
+      const keptTabsByWorktree =
+        shutdownReason === 'manual-sleep'
+          ? {
+              ...s.tabsByWorktree,
+              [worktreeId]: markSleptTabsDormant(s.tabsByWorktree[worktreeId] ?? [])
+            }
+          : s.tabsByWorktree
       const nextTabsByWorktree = keepIdentifiers
-        ? s.tabsByWorktree
+        ? keptTabsByWorktree
         : {
             ...s.tabsByWorktree,
             [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((tab, index) =>
