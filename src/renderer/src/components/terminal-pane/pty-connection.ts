@@ -7819,6 +7819,9 @@ export function connectPanePty(
       if (data.length > 0) {
         hasReceivedPtyOutput = true
         recordAgentHibernationPaneOutput(cacheKey)
+        // Why here: this callback is already fenced on transportStreamGeneration, so a superseded
+        // incarnation's late chunk cannot stamp the pane that replaced it.
+        useAppStore.getState().recordTerminalOutput(cacheKey)
         // Why: output is the agent-start signal that ends the relaxed no-evidence process-scan cadence (a starting agent always prints).
         agentCompletionCoordinator.observeOutputActivity()
       }

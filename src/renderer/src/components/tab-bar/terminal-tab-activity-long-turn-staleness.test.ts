@@ -1,25 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { TERMINAL_OUTPUT_LIVENESS_WINDOW_MS } from '@/lib/terminal-output-recency'
 import {
   resetTerminalTabActivityFlagsCacheForTest,
   resolveTerminalTabActivityStatus
 } from './terminal-tab-activity-status'
 
 /**
- * CHARACTERIZATION — a turn longer than the staleness window loses its live state.
+ * A turn longer than the staleness window keeps its live state while its PTY is still producing.
  *
- * Agent hooks report at turn boundaries, so a single long turn emits no status update for its whole
- * duration. The freshness gate is a wall-clock test on the last report, so at 30m it drops a
- * `working` row whose agent is still streaming. The title heuristic is the only fallback, and it
- * speaks only for titles that carry agent evidence — a renamed or task-named pane has none.
+ * Agent hooks report at turn boundaries, so a long turn emits no status update while it runs, and
+ * the wall-clock freshness gate cannot tell it from an abandoned pane. Observed output is the input
+ * that separates them. It holds an existing state open; it never invents one.
  *
- * These assertions pin TODAY's behaviour, including the wrong one. When the projection learns to
- * read liveness, LONG-TURN-GOES-QUIET inverts in place and the diff is the evidence.
+ * This file previously pinned the opposite — LONG-TURN-GOES-QUIET, and an INDISTINGUISHABLE case
+ * asserting a streaming and an abandoned pane got the same answer. Both are inverted here rather
+ * than deleted, so the diff carries the fix.
  */
 
 const TAB_ID = 'tab-1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
 const NOW = 10_000
 const PAST_STALE = 31 * 60 * 1000
 const WITHIN_STALE = 29 * 60 * 1000
@@ -32,9 +34,9 @@ const TASK_NAMED_TAB: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'> = {
 
 const LIVE_PTY = { [TAB_ID]: ['pty-1'] }
 
-function workingEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
+function entry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   return {
-    paneKey: `${TAB_ID}:${LEAF_ID}`,
+    paneKey: PANE_KEY,
     state: 'working',
     prompt: '',
     updatedAt: NOW,
@@ -47,17 +49,26 @@ function workingEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEnt
 
 function resolveAt(
   elapsedMs: number,
-  tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>,
-  runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
+  options: {
+    tab?: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
+    state?: AgentStatusEntry['state']
+    /** Age of the newest observed output at read time; omitted means nothing was ever observed. */
+    outputAgeMs?: number
+    withoutAgentEntry?: boolean
+    runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
+  } = {}
 ): string {
-  const entry = workingEntry()
-  vi.setSystemTime(NOW + elapsedMs)
+  const now = NOW + elapsedMs
+  vi.setSystemTime(now)
+  const row = entry({ state: options.state ?? 'working' })
   return resolveTerminalTabActivityStatus({
-    tab,
-    agentStatusByPaneKey: { [entry.paneKey]: entry },
+    tab: options.tab ?? TASK_NAMED_TAB,
+    agentStatusByPaneKey: options.withoutAgentEntry ? {} : { [row.paneKey]: row },
     agentStatusEpoch: elapsedMs,
     ptyIdsByTabId: LIVE_PTY,
-    runtimePaneTitlesByTabId
+    runtimePaneTitlesByTabId: options.runtimePaneTitlesByTabId,
+    lastTerminalOutputAtByPaneKey:
+      options.outputAgeMs === undefined ? undefined : { [PANE_KEY]: now - options.outputAgeMs }
   })
 }
 
@@ -73,41 +84,62 @@ afterEach(() => {
 })
 
 describe('a working turn that outlives the staleness window', () => {
-  // Positive control: without this the case below could pass on a broken fixture.
+  // Positive control: without this the cases below could pass on a broken fixture.
   it('CONTROL shows the same pane live while the report is still fresh', () => {
-    expect(resolveAt(WITHIN_STALE, TASK_NAMED_TAB)).toBe('working')
+    expect(resolveAt(WITHIN_STALE)).toBe('working')
   })
 
-  it('LONG-TURN-GOES-QUIET drops a still-running agent to no live state', () => {
-    expect(resolveAt(PAST_STALE, TASK_NAMED_TAB)).toBe('active')
+  it('LONG-TURN-STAYS-LIVE keeps a still-streaming agent live past the window', () => {
+    expect(resolveAt(PAST_STALE, { outputAgeMs: 1_000 })).toBe('working')
   })
 
-  // Why this matters: it is the fallback that rescues the common case, which is why the defect
-  // reads as rare — it only surfaces on a pane whose title stopped looking like an agent.
   it('CONTROL shows the title heuristic still rescuing a spinner-titled pane', () => {
-    const spinnerTitled = { ...TASK_NAMED_TAB, launchAgent: 'claude' as const }
-    expect(resolveAt(PAST_STALE, spinnerTitled, { [TAB_ID]: { 1: '⠋ Sublimating…' } })).toBe(
-      'working'
-    )
+    expect(
+      resolveAt(PAST_STALE, {
+        tab: { ...TASK_NAMED_TAB, launchAgent: 'claude' },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: '⠋ Sublimating…' } }
+      })
+    ).toBe('working')
   })
 })
 
-describe('the input the projection does not have', () => {
-  // The legitimate reason the staleness gate exists: an abandoned pane must de-spin.
-  it('CONTROL de-spins a genuinely abandoned pane', () => {
-    expect(resolveAt(PAST_STALE, TASK_NAMED_TAB)).toBe('active')
+describe('what output may and may not do', () => {
+  // The reason the staleness gate exists. Output is the only thing that may hold it open.
+  it('CONTROL de-spins an abandoned pane that is not producing output', () => {
+    expect(resolveAt(PAST_STALE)).toBe('active')
   })
 
-  /**
-   * The architectural finding, not a preference: a pane streaming bytes right now and a pane
-   * abandoned an hour ago reach this resolver as byte-identical arguments. No fix to the predicate
-   * can separate them — every input is a label (a hook report, a title string) and none is evidence
-   * that the PTY is producing output. Whatever teaches the dot to tell them apart must add an input.
-   */
-  it('INDISTINGUISHABLE gives a streaming pane and an abandoned pane the same answer', () => {
-    const streaming = resolveAt(PAST_STALE, TASK_NAMED_TAB)
+  it('DISTINGUISHABLE separates a streaming pane from an abandoned one', () => {
+    const streaming = resolveAt(PAST_STALE, { outputAgeMs: 1_000 })
     resetTerminalTabActivityFlagsCacheForTest()
-    const abandoned = resolveAt(PAST_STALE, TASK_NAMED_TAB)
-    expect(streaming).toBe(abandoned)
+    const abandoned = resolveAt(PAST_STALE)
+    expect(streaming).toBe('working')
+    expect(abandoned).toBe('active')
+    expect(streaming).not.toBe(abandoned)
+  })
+
+  // Why bounded: a `done` hook that never arrived must not let later shell output spin forever.
+  it('de-spins once output stops, after the liveness window', () => {
+    expect(resolveAt(PAST_STALE, { outputAgeMs: TERMINAL_OUTPUT_LIVENESS_WINDOW_MS + 1_000 })).toBe(
+      'active'
+    )
+  })
+
+  it('does not revive a completed turn from later output', () => {
+    expect(resolveAt(PAST_STALE, { state: 'done', outputAgeMs: 1_000 })).toBe('active')
+  })
+
+  // Output is evidence a state still holds, never evidence of what the state is.
+  it('does not invent a working state for a pane with no agent row', () => {
+    expect(resolveAt(PAST_STALE, { withoutAgentEntry: true, outputAgeMs: 1_000 })).toBe('active')
+  })
+
+  it('keeps a needs-input turn actionable while it streams', () => {
+    expect(resolveAt(PAST_STALE, { state: 'blocked', outputAgeMs: 1_000 })).toBe('permission')
+  })
+
+  // A clock that moved backwards must not read as fresher than now.
+  it('ignores an output stamp from the future', () => {
+    expect(resolveAt(PAST_STALE, { outputAgeMs: -60_000 })).toBe('active')
   })
 })

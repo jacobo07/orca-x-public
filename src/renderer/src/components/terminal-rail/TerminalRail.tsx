@@ -74,7 +74,8 @@ function TerminalRailTab({
       agentStatusEpoch: s.agentStatusEpoch,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
       ptyIdsByTabId: s.ptyIdsByTabId,
-      terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
+      terminalLayout: s.terminalLayoutsByTabId?.[tab.id],
+      lastTerminalOutputAtByPaneKey: s.lastTerminalOutputAtByPaneKey
     })
   )
   const hasUnreadActivity = useAppStore((s) =>

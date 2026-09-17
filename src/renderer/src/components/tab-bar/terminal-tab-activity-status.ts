@@ -1,4 +1,5 @@
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { paneOutputHoldsAgentStateOpen } from '@/lib/terminal-output-recency'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -26,6 +27,7 @@ type TerminalTabActivityFlags = {
 type FlagsCache = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
   agentStatusEpoch: number | undefined
+  lastTerminalOutputAtByPaneKey: Record<string, number> | undefined
   flagsByTabId: Map<string, TerminalTabActivityFlags>
 }
 
@@ -37,17 +39,21 @@ let flagsCache: FlagsCache | null = null
 
 function getTerminalTabActivityFlags(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  agentStatusEpoch: number | undefined
+  agentStatusEpoch: number | undefined,
+  lastTerminalOutputAtByPaneKey: Record<string, number> | undefined
 ): Map<string, TerminalTabActivityFlags> {
   // Why: freshness is time-based, so the store bumps agentStatusEpoch without
   // replacing the map at the 30m stale boundary (createFreshnessScheduler).
   // Keying on the map reference alone would keep serving flags computed at the
   // old `now`, spinning an abandoned tab forever while the sidebar — which keys
   // on agentStatusEpoch — correctly de-spins. Invalidate on either changing.
+  // The output map joins the key for the same reason: it is a third time-varying
+  // input, so caching past it would serve a verdict its evidence no longer supports.
   if (
     flagsCache &&
     flagsCache.agentStatusByPaneKey === agentStatusByPaneKey &&
-    flagsCache.agentStatusEpoch === agentStatusEpoch
+    flagsCache.agentStatusEpoch === agentStatusEpoch &&
+    flagsCache.lastTerminalOutputAtByPaneKey === lastTerminalOutputAtByPaneKey
   ) {
     return flagsCache.flagsByTabId
   }
@@ -66,8 +72,21 @@ function getTerminalTabActivityFlags(
     }
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
+    //
+    // Output is the exception, and only for a non-done state: hooks report at turn
+    // boundaries, so a turn longer than the window looks identical to abandonment
+    // unless something says the PTY is still producing. It holds an existing state
+    // open; it never invents one.
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-      continue
+      const heldOpenByOutput =
+        entry.state !== 'done' &&
+        paneOutputHoldsAgentStateOpen({
+          lastOutputAt: lastTerminalOutputAtByPaneKey?.[entry.paneKey || paneKey],
+          now
+        })
+      if (!heldOpenByOutput) {
+        continue
+      }
     }
 
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
@@ -84,7 +103,12 @@ function getTerminalTabActivityFlags(
     }
   }
 
-  flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
+  flagsCache = {
+    agentStatusByPaneKey,
+    agentStatusEpoch,
+    lastTerminalOutputAtByPaneKey,
+    flagsByTabId
+  }
   return flagsByTabId
 }
 
@@ -131,6 +155,9 @@ type TerminalTabActivityInput = {
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayout?: TerminalLayoutSnapshot
+  // Why: without it a turn longer than the staleness window is indistinguishable from an
+  // abandoned pane. Absent means unknown, which keeps the pre-existing behaviour.
+  lastTerminalOutputAtByPaneKey?: Record<string, number>
 }
 
 /**
@@ -145,9 +172,14 @@ export function resolveTerminalTabActivityStatus({
   agentStatusEpoch,
   runtimePaneTitlesByTabId,
   ptyIdsByTabId,
-  terminalLayout
+  terminalLayout,
+  lastTerminalOutputAtByPaneKey
 }: TerminalTabActivityInput): TerminalTabActivityStatus {
-  const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
+  const flags = getTerminalTabActivityFlags(
+    agentStatusByPaneKey,
+    agentStatusEpoch,
+    lastTerminalOutputAtByPaneKey
+  ).get(tab.id)
   return resolveWorktreeStatus({
     tabs: [tab],
     browserTabs: [],

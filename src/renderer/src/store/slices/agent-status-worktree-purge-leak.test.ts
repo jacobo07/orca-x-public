@@ -88,6 +88,7 @@ function seedPaneState(store: ReturnType<typeof createTestStore>): void {
     unreadTerminalPanes: { [PANE]: true },
     unreadAgentCompletionPanes: { [PANE]: true },
     lastTerminalInputAtByPaneKey: { [PANE]: 123 },
+    lastTerminalOutputAtByPaneKey: { [PANE]: 123 },
     terminalInputPendingByPaneKey: { [PANE]: true }
   })
 }
@@ -115,6 +116,9 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.unreadTerminalPanes[PANE]).toBeUndefined()
     expect(s.unreadAgentCompletionPanes[PANE]).toBeUndefined()
     expect(s.lastTerminalInputAtByPaneKey[PANE]).toBeUndefined()
+    // Why: pane keys are reused, so a surviving output stamp would hold a stale agent state
+    // open on a fresh pane — the live-dot mirror of the pending-flag leak below.
+    expect(s.lastTerminalOutputAtByPaneKey[PANE]).toBeUndefined()
     // Why: a surviving pending flag would refuse resume on a reused pane key forever.
     expect(s.terminalInputPendingByPaneKey[PANE]).toBeUndefined()
   })
@@ -138,6 +142,7 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
       agentStatusByPaneKey: { [PANE]: liveEntry(PANE), [OTHER_PANE]: liveEntry(OTHER_PANE) },
       unreadTerminalTabs: { [TAB]: true, [OTHER_TAB]: true },
       lastTerminalInputAtByPaneKey: { [PANE]: 1, [OTHER_PANE]: 2 },
+      lastTerminalOutputAtByPaneKey: { [PANE]: 1, [OTHER_PANE]: 2 },
       terminalInputPendingByPaneKey: { [PANE]: true, [OTHER_PANE]: true }
     })
 
@@ -148,6 +153,8 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.agentStatusByPaneKey[OTHER_PANE]).toBeDefined()
     expect(s.unreadTerminalTabs[OTHER_TAB]).toBe(true)
     expect(s.lastTerminalInputAtByPaneKey[OTHER_PANE]).toBe(2)
+    expect(s.lastTerminalOutputAtByPaneKey[OTHER_PANE]).toBe(2)
+    expect(s.lastTerminalOutputAtByPaneKey[PANE]).toBeUndefined()
     expect(s.terminalInputPendingByPaneKey[OTHER_PANE]).toBe(true)
     expect(s.terminalInputPendingByPaneKey[PANE]).toBeUndefined()
   })

@@ -1539,6 +1539,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             s.lastTerminalInputAtByPaneKey,
             retiredPaneKeySet
           ),
+          lastTerminalOutputAtByPaneKey: removePaneKeys(
+            s.lastTerminalOutputAtByPaneKey,
+            retiredPaneKeySet
+          ),
           terminalInputPendingByPaneKey: removePaneKeys(
             s.terminalInputPendingByPaneKey,
             retiredPaneKeySet
@@ -1616,6 +1620,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
         unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
         lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
+        lastTerminalOutputAtByPaneKey: movePaneKeyedRecord(
+          s.lastTerminalOutputAtByPaneKey,
+          from,
+          to
+        ),
         terminalInputPendingByPaneKey: movePaneKeyedRecord(
           s.terminalInputPendingByPaneKey,
           from,
