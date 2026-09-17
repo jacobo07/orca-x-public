@@ -12,14 +12,23 @@
 //                        starting owner, and any new spawn crosses the same gate; `carrier` names the
 //                        file that hands the gate the session (agentSessionResumeSubject)
 //   not-an-effect        builds text or a plan, or defines the method, and launches nothing itself
+//   legacy-fallback      UNGUARDED compatibility leg of a gated path in the same file: runs only when
+//                        the gated request is not used or the host answers with a legacy-fallback code
+//                        (agent-session-legacy-fallback.ts). Only shrinks.
 //   unguarded            known debt: reaches a provider resume without the gate. Only shrinks.
+//
+// typedResumeLaunchers: functions that type a resume command into a created terminal. No gate can
+// see those launches, so every call needs a disposition.
 {
   "planners": [
     "buildAgentResumeStartupPlan",
     "planRecordedAgentResume",
     "buildAiVaultResumeCommand",
-    "buildAiVaultResumeShellCommand"
+    "buildAiVaultResumeShellCommand",
+    "buildMobileAiVaultResumeLaunch",
+    "buildMobileAiVaultResumeCommand"
   ],
+  "typedResumeLaunchers": ["resumeAiVaultSessionInTerminal"],
   "rpcMethods": ["terminal.ensureAgentSession"],
   "callSites": [
     {
@@ -75,25 +84,54 @@
       "reason": "Cold restore, wake and per-pane resume of a pane hosted by a runtime environment."
     },
     {
+      "file": "mobile/src/session/ai-vault-resume-materialization.ts",
+      "planner": "terminal.ensureAgentSession",
+      "count": 1,
+      "guard": "runtime-ensure-gate",
+      "carrier": "src/main/runtime/orca-runtime.ts",
+      "reason": "Mobile AI Vault resume on a current host: the exact selected session goes to the host before anything is created; a refusal creates no terminal and types nothing."
+    },
+    {
+      "file": "mobile/src/session/ai-vault-resume-materialization.ts",
+      "planner": "resumeAiVaultSessionInTerminal",
+      "count": 1,
+      "guard": "legacy-fallback",
+      "reason": "Mobile AI Vault typed-command resume, reached only when: the host does not advertise ensure (old host, decided before sending); the host answers legacy_required / method_not_found; or the host launch cannot reproduce the command (Codex CODEX_HOME, a cwd other than the workspace root, no startup plan). No gate sees it; only the after-the-fact SessionStart notice does."
+    },
+    {
+      "file": "mobile/src/session/ai-vault-resume-materialization.ts",
+      "planner": "buildMobileAiVaultResumeLaunch",
+      "count": 1,
+      "guard": "not-an-effect",
+      "reason": "Builds the typed command and tells the structured path whether a startup plan exists; launches nothing."
+    },
+    {
+      "file": "mobile/src/session/ai-vault-resume-launch.ts",
+      "planner": "buildMobileAiVaultResumeCommand",
+      "count": 2,
+      "guard": "not-an-effect",
+      "reason": "Command text inside buildMobileAiVaultResumeLaunch."
+    },
+    {
       "file": "mobile/src/session/ai-vault-resume-launch.ts",
       "planner": "buildAgentResumeStartupPlan",
       "count": 1,
-      "guard": "unguarded",
-      "reason": "Mobile AI Vault resume: session.tabs.createTerminal carries no session, then terminal.send types the command. Neither gate sees it; only the after-the-fact SessionStart notice does."
+      "guard": "not-an-effect",
+      "reason": "Startup plan inside buildMobileAiVaultResumeLaunch; the launch it feeds is the legacy-fallback row above."
     },
     {
       "file": "mobile/src/session/ai-vault-resume-launch.ts",
       "planner": "buildAiVaultResumeCommand",
       "count": 1,
-      "guard": "unguarded",
-      "reason": "Same mobile typed-command resume; command text for agents without a startup plan."
+      "guard": "not-an-effect",
+      "reason": "Command text inside buildMobileAiVaultResumeCommand."
     },
     {
       "file": "mobile/src/session/ai-vault-resume-launch.ts",
       "planner": "buildAiVaultResumeShellCommand",
       "count": 1,
-      "guard": "unguarded",
-      "reason": "Same mobile typed-command resume; shell form."
+      "guard": "not-an-effect",
+      "reason": "Shell form inside buildMobileAiVaultResumeLaunch."
     },
     {
       "file": "src/renderer/src/lib/ai-vault-resume-command.ts",
