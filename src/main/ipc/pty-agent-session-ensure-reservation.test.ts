@@ -211,6 +211,55 @@ describe('runtime ensure and the desktop materialization reservation', () => {
     expect(physicalSpawn).not.toHaveBeenCalled()
   })
 
+  describe('a host-side create that resumes a recorded session', () => {
+    const legacyResume = {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/recovered-worktree',
+      worktreeId: surface.worktreeId,
+      tabId: surface.tabId,
+      leafId: surface.leafId,
+      launchAgent: 'claude',
+      resumeProviderSession: SESSION
+    }
+
+    it('is refused while a desktop resume holds the session', async () => {
+      expect(reservations.tryAcquire(KEY, 'op-vault', DESKTOP_WINDOW)).toBe('granted')
+      const physicalSpawn = claimProvider(async () => ({ id: PTY_ID, incarnationId: 'inc-f' }))
+      const controller = registerAgentClaimController()
+
+      await expect(controller.spawn(legacyResume)).rejects.toThrow('agent_session_materializing')
+      expect(physicalSpawn).not.toHaveBeenCalled()
+    })
+
+    it('holds a free session for its tab, and gives it back when the spawn fails', async () => {
+      const physicalSpawn = claimProvider(async () => ({ id: PTY_ID, incarnationId: 'inc-g' }))
+      const controller = registerAgentClaimController()
+
+      await controller.spawn(legacyResume)
+      expect(physicalSpawn).toHaveBeenCalledOnce()
+      expect(reservations.holder(KEY)).toMatchObject({ ownerId: -1, tabId: surface.tabId })
+
+      reservations.releaseForTab(surface.tabId)
+      claimProvider(async () => {
+        throw new Error('spawn failed')
+      })
+      await expect(
+        registerAgentClaimController().spawn({ ...legacyResume, tabId: 'tab-other' })
+      ).rejects.toThrow('spawn failed')
+      expect(reservations.holder(KEY)).toBeNull()
+    })
+
+    it('does not consult the gate for a create that resumes nothing', async () => {
+      expect(reservations.tryAcquire(KEY, 'op-vault', DESKTOP_WINDOW)).toBe('granted')
+      const physicalSpawn = claimProvider(async () => ({ id: PTY_ID, incarnationId: 'inc-h' }))
+      const controller = registerAgentClaimController()
+
+      await controller.spawn({ ...legacyResume, resumeProviderSession: undefined })
+      expect(physicalSpawn).toHaveBeenCalledOnce()
+    })
+  })
+
   it('refuses a desktop resume while a runtime ensure of the session is starting', async () => {
     let finishSpawn!: () => void
     const spawnStarted = new Promise<void>((started) => {

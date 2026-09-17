@@ -42,3 +42,40 @@ export async function admitAgentSessionEnsureSpawn(args: {
   const operationId = decision.operationId
   return operationId ? () => gate.release(operationId, null) : null
 }
+
+/** A host-side terminal.create that resumes a recorded session (a client that fell back to the
+ *  legacy create, a host wake) crosses the same gate the renderer's pty:spawn does. */
+export async function admitRecordedResumeSpawn(args: {
+  connectionId?: string | null
+  worktreeId?: string
+  tabId?: string
+  leafId?: string
+  agent: unknown
+  providerSession: unknown
+}): Promise<(() => void) | null> {
+  const gate = getResumeSpawnGate()
+  if (
+    !gate ||
+    args.connectionId ||
+    args.providerSession === undefined ||
+    !args.worktreeId ||
+    !args.tabId ||
+    !args.leafId
+  ) {
+    // Why: the same preconditions the renderer spawn gate applies.
+    return null
+  }
+  const decision = await gate.decide({
+    sender: null,
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    leafId: args.leafId,
+    agent: args.agent,
+    providerSession: args.providerSession
+  })
+  if (decision.outcome === 'refused') {
+    throw new Error(agentSessionResumeRefusalErrorCode(decision.reason))
+  }
+  const operationId = decision.operationId
+  return operationId ? () => gate.release(operationId, null) : null
+}

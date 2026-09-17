@@ -236,7 +236,10 @@ import {
 import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
 import type { LiveSessionResumeRefusal } from '../../shared/live-agent-session-presence-types'
 import { getResumeSpawnGate, type ResumeSpawnSender } from '../agent-hooks/resume-spawn-gate-slot'
-import { admitAgentSessionEnsureSpawn } from './pty-agent-session-ensure-admission'
+import {
+  admitAgentSessionEnsureSpawn,
+  admitRecordedResumeSpawn
+} from './pty-agent-session-ensure-admission'
 import { withoutAgentResume } from './pty-resume-spawn-refusal'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
@@ -5176,6 +5179,18 @@ export function registerPtyHandlers(
             result.agentSessionEnsure = ensured
           } else {
             assertClientStillConnected()
+            // Why: a fresh host-side resume is a new runtime; reattaching an existing PTY is not.
+            const releaseRecordedResume =
+              preAdoptedStablePane || stablePaneOwnerCandidate || !args.resumeProviderSession
+                ? null
+                : await admitRecordedResumeSpawn({
+                    connectionId: args.connectionId,
+                    worktreeId: args.worktreeId,
+                    tabId: args.tabId,
+                    leafId: args.leafId,
+                    agent: args.launchAgent,
+                    providerSession: args.resumeProviderSession
+                  })
             const stablePaneSpawn = preAdoptedStablePane
               ? preAdoptedStablePane
               : await spawnForStablePane({
@@ -5195,6 +5210,9 @@ export function registerPtyHandlers(
                       args.connectionId
                     ),
                   onFreshSpawn: reportPtySpawnCommitted
+                }).catch((error: unknown) => {
+                  releaseRecordedResume?.()
+                  throw error
                 })
             result = stablePaneSpawn.result
             stablePaneOwner = stablePaneSpawn.owner
