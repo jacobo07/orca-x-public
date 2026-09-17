@@ -4,20 +4,13 @@ import {
   confirmAgentHibernationCandidates,
   type AgentHibernationConfirmationState
 } from './agent-hibernation-confirmation'
-import type { AppState } from '@/store/types'
 import {
   buildAgentHibernationPlannerSnapshot,
-  getRuntimeLivenessTargetWorktrees,
-  type RuntimePtyLivenessSample
+  fenceRuntimePtyLivenessSample
 } from './agent-hibernation-planner-snapshot'
 import { withAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import type {
-  RuntimeTerminalListResult,
-  RuntimeTerminalSummary
-} from '../../../shared/runtime-types'
+import { sampleRuntimePtyLiveness } from './runtime-pty-liveness-sample'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -44,62 +37,16 @@ const coordinator: AgentHibernationCoordinatorState = {
   now: () => Date.now()
 }
 
-function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
-  if (terminal.ptyId) {
-    return terminal.ptyId
-  }
-  if (terminal.tabId.startsWith('pty:') && terminal.tabId === terminal.leafId) {
-    return terminal.tabId.slice('pty:'.length) || null
-  }
-  return null
-}
-
-async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLivenessSample> {
-  const targets = getRuntimeLivenessTargetWorktrees(state)
-  const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
-  const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
-  await Promise.all(
-    [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
-      try {
-        const result = await callRuntimeRpc<RuntimeTerminalListResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
-          'terminal.list',
-          {
-            worktree: toRuntimeWorktreeSelector(worktreeId),
-            limit: 10_000,
-            requireFreshPtyLiveness: true,
-            includeVisualLayouts: false
-          },
-          { timeoutMs: 10_000 }
-        )
-        if (result.truncated) {
-          return
-        }
-        const ptyIds = new Set<string>()
-        for (const terminal of result.terminals) {
-          if (!terminal.connected || terminal.worktreeId !== worktreeId) {
-            continue
-          }
-          const ptyId = getTypedRuntimePtyId(terminal)
-          if (ptyId) {
-            ptyIds.add(ptyId)
-          }
-        }
-        runtimeLivePtyIdsByWorktreeId[worktreeId] = [...ptyIds].sort()
-      } catch {
-        // Why: stale runtime liveness is unsafe for all-or-nothing hibernation;
-        // omitting the worktree makes the planner fail closed for this pass.
-      }
-    })
-  )
-  return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
-}
-
 async function currentCandidates(now: number) {
-  const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState())
+  const sample = await sampleRuntimePtyLiveness(useAppStore.getState())
   const freshState = useAppStore.getState()
   return planAgentHibernationCandidates(
-    buildAgentHibernationPlannerSnapshot(freshState, now, runtimeLiveness)
+    buildAgentHibernationPlannerSnapshot(
+      freshState,
+      now,
+      // Why: judged against post-await state, so a worktree re-homed mid-sample is unknown.
+      fenceRuntimePtyLivenessSample(freshState, sample)
+    )
   )
     .filter((candidate) => {
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(

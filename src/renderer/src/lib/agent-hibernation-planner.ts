@@ -27,6 +27,8 @@ export type AgentHibernationPlannerSnapshot = {
   ptyIdsByTabId: Record<string, string[] | undefined>
   runtimeLivePtyIdsByWorktreeId?: Record<string, string[] | undefined>
   runtimeLivenessRequiredWorktreeIds?: string[]
+  /** The host each runtime worktree lives on; part of what a user authorized. */
+  runtimeEnvironmentIdByWorktreeId?: Record<string, string | undefined>
   mobileLockedPtyIds: string[]
   /** Terminal tabs the user pinned: kept awake, never slept, never woken by the pin. */
   pinnedTerminalTabIds: string[]
@@ -89,7 +91,11 @@ export type AgentHibernationPaneClassification = {
   reason: AgentHibernationExclusionReason | null
 }
 
-function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
+function signatureFor(
+  worktreeId: string,
+  environmentId: string | undefined,
+  panes: EligiblePane[]
+): string {
   const parts = panes
     .slice()
     .sort((a, b) => a.paneKey.localeCompare(b.paneKey))
@@ -97,7 +103,8 @@ function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
       (pane) =>
         `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.effectiveIdleStart}:${pane.inputAt}`
     )
-  return `${worktreeId}|${parts.join('|')}`
+  // Why: a worktree re-homed to another host is a different subject, even with equal pty ids.
+  return `${worktreeId}@${environmentId ?? ''}|${parts.join('|')}`
 }
 
 function candidateIdFor(worktreeId: string, paneKey: string): string {
@@ -255,7 +262,11 @@ export function planAgentHibernationCandidates(
       paneKeys: [eligible.paneKey],
       targetPtyIds: [eligible.ptyId],
       expectedRuntimePtyIds: [eligible.runtimePtyId],
-      signature: signatureFor(walked.worktreeId, [eligible])
+      signature: signatureFor(
+        walked.worktreeId,
+        snapshot.runtimeEnvironmentIdByWorktreeId?.[walked.worktreeId],
+        [eligible]
+      )
     })
   }
   return candidates

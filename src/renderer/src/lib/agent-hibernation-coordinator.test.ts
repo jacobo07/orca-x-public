@@ -22,6 +22,7 @@ import {
 } from './agent-hibernation-output-activity'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../runtime/runtime-rpc-client'
+import { resetRuntimePtyLivenessQueueForTests } from './runtime-pty-liveness-sample'
 import type { AppState } from '@/store/types'
 
 const NOW = 10_000_000
@@ -174,6 +175,7 @@ function deferred<T>(): {
 
 afterEach(() => {
   resetAgentHibernationCoordinatorForTests()
+  resetRuntimePtyLivenessQueueForTests()
   clearRuntimeCompatibilityCacheForTests()
   resetForegroundTerminalTabIdsForTests()
   resetAgentHibernationOutputActivityForTests()
@@ -628,6 +630,90 @@ describe('agent sleep coordinator', () => {
       ptyId: 'pty-2',
       expectedRuntimePtyId: 'pty-2'
     })
+  })
+
+  it('samples every runtime worktree on one host, which rejects overlapping listings', async () => {
+    vi.useFakeTimers()
+    let inFlight = 0
+    mockRuntimeEnvironmentCall.mockImplementation(
+      (args: { method: string; params: { worktree: string } }) => {
+        const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (compatible) {
+          return Promise.resolve(compatible)
+        }
+        if (args.method !== 'terminal.list') {
+          return Promise.resolve({ id: 'x', ok: true, result: {}, _meta: { runtimeId: 'r' } })
+        }
+        // Like the host: a listing overtaken by another fails closed.
+        inFlight += 1
+        const overlapped = inFlight > 1
+        const worktreeId = args.params.worktree.replace(/^id:/, '')
+        return new Promise((resolve) => setTimeout(resolve, 5)).then(() => {
+          inFlight -= 1
+          if (overlapped) {
+            throw new Error('terminal_liveness_unavailable')
+          }
+          const result = runtimeListResult([worktreeId === 'wt-bg' ? 'pty-1' : 'pty-2'])
+          return {
+            id: 'terminal-list',
+            ok: true,
+            result: {
+              ...result,
+              terminals: result.terminals.map((t) => ({ ...t, worktreeId }))
+            },
+            _meta: { runtimeId: 'r' }
+          }
+        })
+      }
+    )
+    const leaf2 = '22222222-2222-4222-8222-222222222222'
+    const second = {
+      ...entry(),
+      paneKey: `tab-2:${leaf2}`,
+      tabId: 'tab-2',
+      worktreeId: 'wt-bg2',
+      providerSession: { key: 'session_id' as const, id: 'session-2' }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      worktreesByRepo: {
+        'fixture-repo': ['wt-bg', 'wt-bg2'].map((id) => ({
+          id,
+          repoId: 'fixture-repo',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'runtime-1'
+        }))
+      } as never,
+      tabsByWorktree: {
+        'wt-bg': [tab()],
+        'wt-bg2': [{ ...tab(), id: 'tab-2', worktreeId: 'wt-bg2' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': layout(),
+        'tab-2': {
+          root: { type: 'leaf', leafId: leaf2 },
+          activeLeafId: leaf2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leaf2]: 'pty-2' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': [], 'tab-2': [] },
+      agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [second.paneKey]: second }
+    })
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(shutdown.mock.calls.map(([worktreeId]) => worktreeId).sort()).toEqual([
+      'wt-bg',
+      'wt-bg2'
+    ])
   })
 
   it('fails closed on truncated runtime liveness samples', async () => {

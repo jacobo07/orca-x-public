@@ -19,6 +19,7 @@ import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 export type RuntimePtyLivenessSample = {
   runtimeLivePtyIdsByWorktreeId: Record<string, string[]>
   runtimeLivenessRequiredWorktreeIds: string[]
+  runtimeEnvironmentIdByWorktreeId: Record<string, string>
 }
 
 export function getRuntimeLivenessTargetWorktrees(state: AppState): Map<string, string> {
@@ -32,16 +33,42 @@ export function getRuntimeLivenessTargetWorktrees(state: AppState): Map<string, 
   return targets
 }
 
+/** What a runtime answered, stamped with the host each worktree was asked on. */
+export type SampledRuntimePtyLiveness = {
+  runtimeLivePtyIdsByWorktreeId: Record<string, string[]>
+  environmentIdByWorktreeId: Record<string, string>
+}
+
 /**
- * For observational callers that must not fire an RPC sweep: name every worktree
- * that requires liveness while supplying none, so the planner fails closed into
- * `runtime-liveness-unknown` instead of falling back to possibly-stale pty ids.
+ * Applies a sample to current state. Every current runtime worktree requires
+ * liveness; only those answered by the host they still belong to supply it, so
+ * a missing, late or re-homed answer reads as `runtime-liveness-unknown`.
  */
-export function unsampledRuntimePtyLiveness(state: AppState): RuntimePtyLivenessSample {
-  return {
-    runtimeLivePtyIdsByWorktreeId: {},
-    runtimeLivenessRequiredWorktreeIds: [...getRuntimeLivenessTargetWorktrees(state).keys()]
+export function fenceRuntimePtyLivenessSample(
+  state: AppState,
+  sample: SampledRuntimePtyLiveness | null
+): RuntimePtyLivenessSample {
+  const targets = getRuntimeLivenessTargetWorktrees(state)
+  const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
+  for (const [worktreeId, environmentId] of targets) {
+    if (
+      sample &&
+      Object.hasOwn(sample.runtimeLivePtyIdsByWorktreeId, worktreeId) &&
+      sample.environmentIdByWorktreeId[worktreeId] === environmentId
+    ) {
+      runtimeLivePtyIdsByWorktreeId[worktreeId] = sample.runtimeLivePtyIdsByWorktreeId[worktreeId]
+    }
   }
+  return {
+    runtimeLivePtyIdsByWorktreeId,
+    runtimeLivenessRequiredWorktreeIds: [...targets.keys()],
+    runtimeEnvironmentIdByWorktreeId: Object.fromEntries(targets)
+  }
+}
+
+/** For callers holding no sample: every runtime worktree fails closed. */
+export function unsampledRuntimePtyLiveness(state: AppState): RuntimePtyLivenessSample {
+  return fenceRuntimePtyLivenessSample(state, null)
 }
 
 /**
@@ -81,6 +108,7 @@ export function buildAgentHibernationPlannerSnapshot(
     ptyIdsByTabId: state.ptyIdsByTabId,
     runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
     runtimeLivenessRequiredWorktreeIds: runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
+    runtimeEnvironmentIdByWorktreeId: runtimeLiveness.runtimeEnvironmentIdByWorktreeId,
     mobileLockedPtyIds: [...getAllDrivers()]
       .filter(([, driver]) => driver.kind === 'mobile')
       .map(([ptyId]) => ptyId),
