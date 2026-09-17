@@ -143,6 +143,26 @@ export class LiveSessionMaterializationReservations {
     }
   }
 
+  /** Cheap pre-check so a hook event pays for key resolution only when a handoff is possible. */
+  hasEntryForTab(tabId: string): boolean {
+    for (const entry of this.entries.values()) {
+      if (entry.tabId === tabId) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /** The session went live in the tab it was reserved for: the attempt is done. */
+  releaseKeyForTab(key: string, tabId: string): boolean {
+    const entry = this.entries.get(key)
+    if (entry?.tabId !== tabId) {
+      return false
+    }
+    this.entries.delete(key)
+    return true
+  }
+
   releaseForOwner(ownerId: number): void {
     for (const [operationId, permit] of this.permits) {
       if (permit.ownerId === ownerId) {

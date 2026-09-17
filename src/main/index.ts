@@ -296,6 +296,7 @@ import {
   LIVE_SESSION_COLLISION_CHANNEL
 } from './agent-hooks/live-session-collision-detector'
 import { readLiveAgentSessionPresence } from './agent-hooks/live-agent-session-presence-reader'
+import { installMaterializationHandoff } from './agent-hooks/live-session-materialization-handoff'
 import {
   createLiveAgentSessionPresenceDeps,
   getLiveSessionMaterializationReservations
@@ -2512,6 +2513,16 @@ void app.whenReady().then(async () => {
     }
     return createLiveAgentSessionPresenceDeps(store, runtime)
   }, getLiveSessionMaterializationReservations)
+  const unsubscribeMaterializationHandoff = installMaterializationHandoff({
+    subscribe: (listener) => agentHookServer.subscribeEnrichedStatus(listener),
+    resolveDeps: () => {
+      if (!store || !runtime) {
+        throw new Error('runtime_unavailable')
+      }
+      return createLiveAgentSessionPresenceDeps(store, runtime)
+    },
+    resolveReservations: getLiveSessionMaterializationReservations
+  })
   // Why: a resume chosen inside the provider's own picker is only visible here, after the fact.
   const liveSessionCollisions = createLiveSessionCollisionDetector({
     readPresence: async (args) => {
@@ -2551,6 +2562,7 @@ void app.whenReady().then(async () => {
   unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
     unsubscribeProviderSessionChanges()
+    unsubscribeMaterializationHandoff()
     unsubscribeHookStatusSessionTabs()
     unsubscribeHookStatusClear()
   }
