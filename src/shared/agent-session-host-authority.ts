@@ -24,6 +24,11 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_operation_expired',
   'agent_session_operation_capacity',
   'agent_session_legacy_required',
+  // Resume refused by the live-session collision guard (agent-session-resume-refusal.ts).
+  'agent_session_live_elsewhere',
+  'agent_session_multiple_live_owners',
+  'agent_session_materializing',
+  'agent_session_presence_unknown',
   'execution_owner_reconciling',
   'execution_owner_unavailable'
 ] as const

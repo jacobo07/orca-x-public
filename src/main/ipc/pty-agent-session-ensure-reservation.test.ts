@@ -6,6 +6,7 @@ import {
   type ResumeSpawnRequest
 } from '../agent-hooks/resume-spawn-gate-slot'
 import { agentSessionClaimKey } from '../../shared/claimed-agent-pty-owner-snapshot'
+import type { LiveAgentSessionPresenceReaderDeps } from '../agent-hooks/live-agent-session-presence-reader'
 import { decideResumeSpawn } from './agent-session-resume-spawn-gate'
 import { clearProviderPtyState, setLocalPtyProvider } from './pty'
 
@@ -68,14 +69,7 @@ describe('runtime ensure and the desktop materialization reservation', () => {
   const DESKTOP_WINDOW = 2
   let reservations: LiveSessionMaterializationReservations
 
-  const gateDeps = {
-    listHookRows: () => [],
-    isObservedInCurrentRuntime: () => true,
-    resolveIdentityKey: async () => KEY,
-    getBoundPtyIdForPaneKey: () => undefined,
-    getPersistedPtyIdForPaneKey: () => undefined,
-    probePtyLiveness: async () => false
-  }
+  let gateDeps: LiveAgentSessionPresenceReaderDeps
   const desktopResume = (tabId: string) =>
     decideResumeSpawn(
       gateDeps,
@@ -116,6 +110,15 @@ describe('runtime ensure and the desktop materialization reservation', () => {
   }
 
   beforeEach(() => {
+    gateDeps = {
+      listHookRows: () => [],
+      isObservedInCurrentRuntime: () => true,
+      resolveIdentityKey: async ({ providerSession }) =>
+        providerSession.id === SESSION.id ? KEY : `other:${providerSession.id}`,
+      getBoundPtyIdForPaneKey: () => undefined,
+      getPersistedPtyIdForPaneKey: () => undefined,
+      probePtyLiveness: async () => false
+    }
     reservations = new LiveSessionMaterializationReservations({
       now: () => 0,
       hasBoundPty: () => false
@@ -131,19 +134,84 @@ describe('runtime ensure and the desktop materialization reservation', () => {
     clearProviderPtyState(PTY_ID)
   })
 
-  it('today: a runtime ensure starts a second runtime while a desktop resume holds the session', async () => {
+  it('refuses a runtime ensure while a desktop resume holds the session', async () => {
     expect(reservations.tryAcquire(KEY, 'op-vault', DESKTOP_WINDOW)).toBe('granted')
     reservations.attachTab('op-vault', DESKTOP_WINDOW, 'tab-desktop')
     const physicalSpawn = claimProvider(async () => ({ id: PTY_ID, incarnationId: 'inc-a' }))
     const controller = registerAgentClaimController()
 
+    await expect(controller.spawn(ensureRequest)).rejects.toThrow('agent_session_materializing')
+    expect(physicalSpawn).not.toHaveBeenCalled()
+    expect(reservations.holder(KEY)?.operationId).toBe('op-vault')
+  })
+
+  it('holds a free session for the ensured tab, and a retry adopts instead of contending', async () => {
+    const physicalSpawn = claimProvider(async () => ({ id: PTY_ID, incarnationId: 'inc-c' }))
+    const controller = registerAgentClaimController()
+
     await expect(controller.spawn(ensureRequest)).resolves.toMatchObject({
       agentSessionEnsure: { disposition: 'created' }
     })
+    expect(reservations.holder(KEY)).toMatchObject({ ownerId: -1, tabId: surface.tabId })
+    await expect(controller.spawn(ensureRequest)).resolves.toMatchObject({
+      id: PTY_ID,
+      agentSessionEnsure: { disposition: 'adopted' }
+    })
     expect(physicalSpawn).toHaveBeenCalledOnce()
+    expect(await desktopResume('tab-desktop')).toEqual({
+      outcome: 'refused',
+      reason: 'materializing'
+    })
   })
 
-  it('today: a desktop resume is granted while a runtime ensure of the session is starting', async () => {
+  it('gives the session back when the admitted spawn fails', async () => {
+    claimProvider(async () => {
+      throw new Error('spawn failed')
+    })
+    const controller = registerAgentClaimController()
+
+    await expect(controller.spawn(ensureRequest)).rejects.toThrow('spawn failed')
+    expect(reservations.holder(KEY)).toBeNull()
+  })
+
+  it('refuses an ensure that cannot name its session, and one whose key presence cannot reproduce', async () => {
+    const physicalSpawn = claimProvider(async () => ({ id: PTY_ID, incarnationId: 'inc-d' }))
+    const controller = registerAgentClaimController()
+
+    await expect(
+      controller.spawn({ ...ensureRequest, agentSessionResumeSubject: undefined })
+    ).rejects.toThrow('agent_session_presence_unknown')
+    await expect(
+      controller.spawn({
+        ...ensureRequest,
+        agentSessionEnsure: { claim: { ...claim, identityDigest: 'c'.repeat(43) }, surface }
+      })
+    ).rejects.toThrow('agent_session_presence_unknown')
+    expect(physicalSpawn).not.toHaveBeenCalled()
+  })
+
+  it('refuses a runtime ensure of a session live in a desktop pane', async () => {
+    const livePane = 'tab-live:33333333-3333-4333-8333-333333333333'
+    gateDeps.listHookRows = () =>
+      [
+        {
+          paneKey: livePane,
+          worktreeId: surface.worktreeId,
+          agentType: claim.agent,
+          providerSession: SESSION
+        }
+      ] as never
+    gateDeps.getBoundPtyIdForPaneKey = (paneKey: string) =>
+      paneKey === livePane ? 'pty-desktop-live' : undefined
+    gateDeps.probePtyLiveness = async () => true
+    const physicalSpawn = claimProvider(async () => ({ id: PTY_ID, incarnationId: 'inc-e' }))
+    const controller = registerAgentClaimController()
+
+    await expect(controller.spawn(ensureRequest)).rejects.toThrow('agent_session_live_elsewhere')
+    expect(physicalSpawn).not.toHaveBeenCalled()
+  })
+
+  it('refuses a desktop resume while a runtime ensure of the session is starting', async () => {
     let finishSpawn!: () => void
     const spawnStarted = new Promise<void>((started) => {
       claimProvider(
@@ -162,6 +230,6 @@ describe('runtime ensure and the desktop materialization reservation', () => {
 
     finishSpawn()
     await ensured
-    expect(desktop).toEqual({ outcome: 'proceed', operationId: 'op-desktop-spawn' })
+    expect(desktop).toEqual({ outcome: 'refused', reason: 'materializing' })
   })
 })

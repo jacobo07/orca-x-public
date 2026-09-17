@@ -56,6 +56,7 @@ import {
 } from '../../shared/agent-status-types'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import type { AgentSessionResumeSubject } from '../agent-hooks/resume-spawn-gate-slot'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -1534,6 +1535,7 @@ type TerminalCreateOptions = {
   // Why: only the host-derived structured resume path may attach provider
   // identity; opaque terminal.create commands remain ordinary shells.
   agentSessionClaim?: AgentSessionExecutionClaim
+  agentSessionResumeSubject?: AgentSessionResumeSubject
   agentSessionCreateOperationId?: string
   signal?: AbortSignal
   // Why: idempotent create operations must retain their fence after the PTY
@@ -1837,6 +1839,8 @@ type RuntimePtyController = {
       claim: AgentSessionExecutionClaim
       surface: AgentSessionSurfaceBinding
     }
+    /** The exact session an ensure resumes; the spawn gate reads presence for it. */
+    agentSessionResumeSubject?: AgentSessionResumeSubject
     agentSessionCreateOperationId?: string
     signal?: AbortSignal
     onPtySpawnCommitted?: () => void
@@ -26840,6 +26844,10 @@ export class OrcaRuntimeService {
       leafId: request.placement?.leafId,
       persistHostSessionBinding: true,
       agentSessionClaim: claim,
+      agentSessionResumeSubject: {
+        agent: request.agent,
+        providerSession: request.providerSession
+      },
       signal: _caller.signal
     })
     return {
@@ -27287,7 +27295,10 @@ export class OrcaRuntimeService {
                       leafId,
                       terminalHandle: preAllocatedHandle
                     }
-                  }
+                  },
+                  ...(launchOpts.agentSessionResumeSubject
+                    ? { agentSessionResumeSubject: launchOpts.agentSessionResumeSubject }
+                    : {})
                 }
               : {}),
             ...(launchOpts.agentSessionCreateOperationId

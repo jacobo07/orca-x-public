@@ -236,6 +236,7 @@ import {
 import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
 import type { LiveSessionResumeRefusal } from '../../shared/live-agent-session-presence-types'
 import { getResumeSpawnGate, type ResumeSpawnSender } from '../agent-hooks/resume-spawn-gate-slot'
+import { admitAgentSessionEnsureSpawn } from './pty-agent-session-ensure-admission'
 import { withoutAgentResume } from './pty-resume-spawn-refusal'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
@@ -5112,12 +5113,25 @@ export function registerPtyHandlers(
               pendingRegistrationPtyId = recoveredOwner.ptyId
             }
             let providerResult: PtySpawnResult | null = null
+            const ensureRequest = args.agentSessionEnsure
             const ensured = await agentSessionOwners.ensure({
               claim: args.agentSessionEnsure.claim,
               surface: args.agentSessionEnsure.surface,
               spawn: async () => {
                 assertClientStillConnected()
-                providerResult = await provider.spawn(spawnOptions)
+                // Why: adoption above is not a new runtime; only a fresh spawn contends with desktop.
+                const releaseGrant = await admitAgentSessionEnsureSpawn({
+                  connectionId: args.connectionId,
+                  ensure: ensureRequest,
+                  subject: args.agentSessionResumeSubject
+                })
+                try {
+                  assertClientStillConnected()
+                  providerResult = await provider.spawn(spawnOptions)
+                } catch (error) {
+                  releaseGrant?.()
+                  throw error
+                }
                 rejectedRegistrationCandidate = providerResult
                 // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
                 reportPtySpawnCommitted()

@@ -35,15 +35,20 @@ export async function decideResumeSpawn(
     agent: request.agent,
     providerSession: request.providerSession
   })
+  const claimed = request.expectedKey !== undefined
   if (!subject) {
     // Why: without an exact resumable session there is no resume to collide with.
-    return { outcome: 'proceed', operationId: null }
+    return claimed ? refused('unknown') : { outcome: 'proceed', operationId: null }
   }
   const reading = await readPresence(deps, subject)
   if (!reading) {
     return refused('unknown')
   }
   const key = reading.subjectKey
+  if (claimed && key !== request.expectedKey) {
+    // Why: a signed claim this host cannot reproduce names a session presence cannot see.
+    return refused('unknown')
+  }
   if (!key) {
     // Why: a host that cannot place the identity (SSH) proceeds unreserved, as before.
     return { outcome: 'proceed', operationId: null }

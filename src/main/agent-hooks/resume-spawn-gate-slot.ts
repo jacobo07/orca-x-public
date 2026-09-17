@@ -1,4 +1,12 @@
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { LiveSessionResumeRefusal } from '../../shared/live-agent-session-presence-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+
+/** Raw session a runtime ensure resumes; its signed claim alone cannot be matched to hook rows. */
+export type AgentSessionResumeSubject = {
+  agent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+}
 
 /** The window that asked for the spawn; main-initiated spawns have none. */
 export type ResumeSpawnSender = {
@@ -13,6 +21,8 @@ export type ResumeSpawnRequest = {
   leafId: string
   agent: unknown
   providerSession: unknown
+  /** Claim key the caller already holds (runtime ensure); a different reading is refused. */
+  expectedKey?: string
 }
 
 export type ResumeSpawnDecision =
