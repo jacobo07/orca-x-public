@@ -52,7 +52,7 @@ const paneKey = (tabId: string, n: number): string => `${tabId}:${leafId(n)}`
 /** Every second row carries a resumable agent, so both resume-evidence branches are in the curve. */
 const isAgentRow = (index: number): boolean => index % 2 === 0
 
-function railState(rows: number): Record<string, unknown> {
+function railState(rows: number, groupSize: number): Record<string, unknown> {
   const tabs: unknown[] = []
   const unified: unknown[] = []
   const groups: { id: string; tabOrder: string[] }[] = []
@@ -73,7 +73,7 @@ function railState(rows: number): Record<string, unknown> {
       launchAgent: isAgentRow(index) ? 'claude' : null
     })
     unified.push({ id: `u${index}`, entityId: tabId, contentType: 'terminal' })
-    const groupIndex = Math.floor(index / GROUP_SIZE)
+    const groupIndex = Math.floor(index / groupSize)
     ;(groups[groupIndex] ??= { id: `g${groupIndex}`, tabOrder: [] }).tabOrder.push(`u${index}`)
     layouts[tabId] = {
       root: { type: 'leaf', leafId: leafId(leaf) },
@@ -102,9 +102,18 @@ function railState(rows: number): Record<string, unknown> {
   }
 }
 
-/** Capture N rows through the real producer. Throws rather than returning a guessed manifest. */
-export function captureRail(rows: number, workingSetId: string): ProjectWorkingSetManifest {
-  const result = projectWorkingSetFromState(railState(rows) as unknown as AppState, {
+/**
+ * Capture N rows through the real producer. Throws rather than returning a guessed manifest.
+ *
+ * `groupSize` exists because a source rail with ONE group cannot express a claim about group shape:
+ * a mutation flattening the rail is indistinguishable from correct behaviour against it.
+ */
+export function captureRail(
+  rows: number,
+  workingSetId: string,
+  groupSize: number = GROUP_SIZE
+): ProjectWorkingSetManifest {
+  const result = projectWorkingSetFromState(railState(rows, groupSize) as unknown as AppState, {
     ownerKey: FOOTPRINT_OWNER,
     label: null,
     workingSetId,
@@ -173,15 +182,15 @@ function readFootprint(state: AppState, rows: number, manifest: ProjectWorkingSe
 }
 
 /**
- * One point of the curve: capture N rows, plan the restore against an empty workspace, apply it,
- * and read what the restored rail holds. The caller owns the (empty) target store.
+ * One point of the curve for an already-built manifest: plan the restore against an empty
+ * workspace, apply it, and read what the restored rail holds. Used by the scale-clone seed, whose
+ * manifest comes from the real producer rather than from `captureRail`.
  */
-export function measureDormantRowFootprint(
-  rows: number,
+export function measureClonedFootprint(
+  manifest: ProjectWorkingSetManifest,
   store: StoreLike,
   newId: () => string
 ): DormantRowFootprintPoint {
-  const manifest = captureRail(rows, `00000000-0000-4000-8000-${String(rows).padStart(12, '0')}`)
   const plan = planWorkingSetRestore(manifest, {
     evidence: evidenceFor(manifest),
     launchProfiles: FOOTPRINT_PROFILES,
@@ -200,7 +209,20 @@ export function measureDormantRowFootprint(
   })
   const result = applyWorkingSetRestorePlan(plan, { store, now: () => 1_000, newId })
   if (result.status !== 'applied') {
-    throw new Error(`apply refused at ${rows} rows: ${JSON.stringify(result)}`)
+    throw new Error(`apply refused at ${manifest.entries.length} rows: ${JSON.stringify(result)}`)
   }
-  return readFootprint(store.getState(), rows, manifest)
+  return readFootprint(store.getState(), manifest.entries.length, manifest)
+}
+
+/**
+ * One point of the curve: capture N rows, plan the restore against an empty workspace, apply it,
+ * and read what the restored rail holds. The caller owns the (empty) target store.
+ */
+export function measureDormantRowFootprint(
+  rows: number,
+  store: StoreLike,
+  newId: () => string
+): DormantRowFootprintPoint {
+  const manifest = captureRail(rows, `00000000-0000-4000-8000-${String(rows).padStart(12, '0')}`)
+  return measureClonedFootprint(manifest, store, newId)
 }
