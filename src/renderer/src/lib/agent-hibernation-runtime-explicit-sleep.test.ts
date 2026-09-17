@@ -127,11 +127,12 @@ function owners(wtBg: string, wtOther: string) {
 /** A and B on runtime-1's wt-bg; C on runtime-2's wt-other. No local memory rows. */
 function installRuntimePanes(shutdown = vi.fn().mockResolvedValue(undefined)) {
   const noRows: MemorySnapshot = {
+    // A usable sweep (app memory measured) that simply has no row for a runtime pane.
     app: {
       cpu: 0,
-      memory: 0,
-      main: { cpu: 0, memory: 0 },
-      renderer: { cpu: 0, memory: 0 },
+      memory: 200,
+      main: { cpu: 0, memory: 100 },
+      renderer: { cpu: 0, memory: 100 },
       other: { cpu: 0, memory: 0 },
       history: []
     },
@@ -225,7 +226,12 @@ describe('sleeping runtime-backed panes the user was shown', () => {
     const shutdown = installRuntimePanes()
     const plan = await display()
     expect(plan.reclaimable.map((s) => s.paneKey)).toEqual([PANE_A, PANE_B, PANE_C])
-    expect(plan.estimate).toMatchObject({ knownBytes: 0, knownCount: 0, unknownCount: 3 })
+    expect(plan.estimate).toMatchObject({
+      knownBytes: 0,
+      knownCount: 0,
+      unknownCount: 3,
+      unknownReasons: ['not-locally-measured']
+    })
 
     const results = await sleepAuthorizedAgentPanes(
       plan.reclaimable.map((subject) => subject.authorization!)
