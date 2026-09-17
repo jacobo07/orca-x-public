@@ -13,6 +13,7 @@ const COMMAND_SETTLE_MS = 350
 const VISIBLE_PTY_SETTLE_MS = 350
 const WRAPPER_RESOLVE_RETRY_DELAYS_MS = [1200, 6000] as const
 type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'
+type HostPrompt = ShellPromptState | undefined
 
 type PaneForegroundAgentTrackerDeps = {
   getPtyId: () => string | null
@@ -107,16 +108,39 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     }, delayMs)
   }
 
+  // Why: a pane key can be rebound while an inspection is pending; the old PTY's
+  // answer must never publish into its replacement session.
+  const isStale = (generation: number, ptyId: string): boolean =>
+    disposed || generation !== readGeneration || trackablePtyId() !== ptyId
+
+  const clearAgentEvidence = (): void => {
+    hasForegroundAgentEvidence = false
+    hasKnownAgentEvidence = false
+    hasAgentExpectation = false
+  }
+
+  const settleConfirmedVisibleShell = (): void => {
+    clearAgentEvidence()
+    deps.publish({ agent: null, shellForeground: true })
+    deps.onConfirmedShellForeground?.('visible-pty')
+    deps.onVisibleForegroundSettled?.('shell')
+  }
+
   // Why both halves: a shell in front proves no child runs, but not that no in-process
   // command runs; the host's record of the shell's last marker proves the prompt.
-  async function settlePlainShellFromPromptState(generation: number, ptyId: string): Promise<void> {
-    let promptState: ShellPromptState | undefined
+  // Undefined when the read failed or the pane moved on while it was pending.
+  async function readHostPromptState(generation: number, ptyId: string): Promise<HostPrompt> {
     try {
-      promptState = await deps.readShellPromptState?.(ptyId)
+      const promptState = await deps.readShellPromptState?.(ptyId)
+      return isStale(generation, ptyId) ? undefined : promptState
     } catch {
-      promptState = undefined
+      return undefined
     }
-    if (disposed || generation !== readGeneration || trackablePtyId() !== ptyId) {
+  }
+
+  async function settlePlainShellFromPromptState(generation: number, ptyId: string): Promise<void> {
+    const promptState = await readHostPromptState(generation, ptyId)
+    if (isStale(generation, ptyId)) {
       return
     }
     if (promptState === 'prompt') {
@@ -152,9 +176,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     } catch {
       processName = null
     }
-    // Why: a pane key can be rebound while process inspection is pending; the
-    // old PTY's identity must never publish into its replacement session.
-    if (disposed || generation !== readGeneration || trackablePtyId() !== ptyId) {
+    if (isStale(generation, ptyId)) {
       return
     }
     const recognized = recognizeAgentProcess(processName)
@@ -178,6 +200,21 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     const retryDelay = WRAPPER_RESOLVE_RETRY_DELAYS_MS[retryIndex]
     const hasConfirmationExpectation =
       hasForegroundAgentEvidence || hasKnownAgentEvidence || hasAgentExpectation
+    if (
+      reason === 'visible-pty' &&
+      hasConfirmationExpectation &&
+      typeof processName === 'string' &&
+      isShellProcess(processName) &&
+      (await readHostPromptState(generation, ptyId)) === 'prompt'
+    ) {
+      // Why: the ladder waits for a wrapper to resolve into an agent; a trusted prompt with
+      // no command started since proves nothing was launched (an exited agent's tab).
+      settleConfirmedVisibleShell()
+      return
+    }
+    if (isStale(generation, ptyId)) {
+      return
+    }
     const shouldRetryExpectedIdentity =
       hasConfirmationExpectation && (reason !== 'command-finished' || processName === null)
     const shouldRetry =
@@ -202,12 +239,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         processName !== null &&
         isShellProcess(processName)
       ) {
-        hasForegroundAgentEvidence = false
-        hasKnownAgentEvidence = false
-        hasAgentExpectation = false
-        deps.publish({ agent: null, shellForeground: true })
-        deps.onConfirmedShellForeground?.(reason)
-        deps.onVisibleForegroundSettled?.('shell')
+        settleConfirmedVisibleShell()
       } else if (
         !hasForegroundAgentEvidence &&
         !hasKnownAgentEvidence &&
@@ -225,9 +257,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       if (processName === null) {
         // Why: unavailable inspection is not confirmed shell evidence; retire
         // stale routing after the bounded D ladder without asserting shell truth.
-        hasForegroundAgentEvidence = false
-        hasKnownAgentEvidence = false
-        hasAgentExpectation = false
+        clearAgentEvidence()
         deps.publish({ agent: null, shellForeground: false })
         deps.onCommandFinishedUnavailable?.()
         return
@@ -238,9 +268,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       // Why: the 133;D fired AND the foreground shows no agent — together that is
       // real prompt proof, so the agent truly exited. Reset the evidence so the
       // pane's ordinary shell commands go back to the no-RPC finished path.
-      hasForegroundAgentEvidence = false
-      hasKnownAgentEvidence = false
-      hasAgentExpectation = false
+      clearAgentEvidence()
       deps.publish({ agent: null, shellForeground: true })
       // Why: confirmed exit — let callers clear a stale agent title the shell
       // won't repaint (a plain `codex`/`grok` leaves its OSC title behind).

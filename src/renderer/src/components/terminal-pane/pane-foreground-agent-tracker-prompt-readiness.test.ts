@@ -200,4 +200,45 @@ describe('pane foreground tracker: prompt readiness', () => {
       expect(publish).not.toHaveBeenCalled()
     })
   })
+
+  // Measured with a real Claude: a relaunched agent tab took 11-16 s to become resumable
+  // because the wrapper-resolve ladder ran on a shell whose markers already proved the prompt.
+  describe('a reattached agent tab whose agent already exited', () => {
+    beforeEach(() => {
+      readForegroundProcess.mockResolvedValue('powershell.exe')
+    })
+
+    it('is ready after one read when its own markers say prompt', async () => {
+      readShellPromptState.mockResolvedValue('prompt')
+      makeTracker().onVisiblePtyBound(true)
+      await vi.advanceTimersByTimeAsync(SETTLE_MS)
+      expect(readForegroundProcess).toHaveBeenCalledOnce()
+      expect(publish).toHaveBeenLastCalledWith(SHELL_AT_PROMPT)
+      expect(onConfirmedShellForeground).toHaveBeenCalledExactlyOnceWith('visible-pty')
+    })
+
+    it.each<ShellPromptState | undefined>(['running', 'unknown', 'unsupported', undefined])(
+      'keeps waiting for a wrapped agent when the markers say %s',
+      async (state) => {
+        readShellPromptState.mockResolvedValue(state)
+        makeTracker().onVisiblePtyBound(true)
+        await vi.advanceTimersByTimeAsync(SETTLE_MS)
+        expect(publish).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1_200)
+        expect(readForegroundProcess).toHaveBeenCalledTimes(2)
+      }
+    )
+
+    it('still reports the agent when one is in front despite a stale prompt record', async () => {
+      readForegroundProcess.mockResolvedValue('claude.exe')
+      readShellPromptState.mockResolvedValue('prompt')
+      makeTracker().onVisiblePtyBound(true)
+      await vi.advanceTimersByTimeAsync(SETTLE_MS)
+      expect(publish).toHaveBeenLastCalledWith({
+        agent: 'claude',
+        shellForeground: false,
+        routingTrusted: true
+      })
+    })
+  })
 })
