@@ -154,3 +154,69 @@ Findings from the first inventory:
   - A base-root listing error other than ENOENT still reads as "every worktree deleted". The
     cost is one wasted structure refresh, because the renderer re-lists from git, not lost data.
   - The quiet tier also stretches the 15-run index backstop to 150 s for idle repos.
+
+## Second shrink — worktree card decorations share one clock per window
+
+`worktree-card-hosted-review-poll` and `worktree-card-linked-issue-poll` were removed from the
+baseline (3 → 1).
+
+- **What actually multiplied.** Every mounted worktree card owned two intervals: hosted review
+  every 60 s and linked issue every 5 min. The list is virtualized, so this scaled with mounted
+  cards rather than remembered worktrees, but four surfaces mount cards and one worktree can have
+  more than one. The expensive work did not multiply in the same way:
+  - The renderer caches already collapsed duplicate subjects into one IPC call.
+  - Main serves `hostedReview:forBranch` from one process-wide cache for every window and paces
+    the provider calls (found reviews 60 s, no review 15 min).
+  - `gh:issue` has no main-side cache and starts one `gh` per call.
+- **Owner.** `src/renderer/src/components/sidebar/worktree-card-decoration-refresh.ts`, one per
+  renderer.
+  - Cards register a subject keyed by every argument they send. One visibility-gated interval
+    runs both families, each on its own cadence.
+  - The clock arms on the first registration and disarms on the last, and one subject's failure
+    does not skip the others.
+  - Freshness and in-flight dedup stay in the store fetchers. The clock does not await, so a slow
+    lookup is single-flighted there rather than queued.
+- **Measured** by `worktree-card-refresh-cardinality.test.ts`, which drives the real hook and the
+  real store fetchers over a 10 min window.
+
+  | mounted cards (worktrees) | intervals before → after | store lookups before → after | IPC before → after |
+  | ------------------------- | ------------------------ | ---------------------------- | ------------------ |
+  | 1 (1)                     | 2 → 1                    | 14 → 14                      | 14 → 14            |
+  | 10 (10)                   | 20 → 1                   | 140 → 140                    | 140 → 140          |
+  | 50 (50)                   | 100 → 1                  | 700 → 700                    | 700 → 700          |
+  | 50 (25)                   | 100 → 1                  | 700 → 350                    | 350 → 350          |
+
+  IPC per distinct visible worktree is unchanged by design: each one still needs its own lookup.
+  Hidden windows make no calls before or after, and unmounting every card leaves no interval.
+
+- **Freshness was half what was declared, before and after the clock.**
+  - Each poll ran at exactly its cache TTL, and entries are stamped when the answer arrives. The
+    next tick found the entry younger than the TTL by the lookup latency and skipped it.
+  - The running app refreshed linked issues at 0 and 10 min.
+  - Scheduled refreshes now ask for a max age of 90% of the interval. The store accepts it only to
+    shorten its TTL.
+  - Real lookups per subject therefore return to the declared 60 s and 5 min. For linked issues
+    that doubles the `gh` spawns observed before the fix.
+- **Product reality.** `tests/e2e/worktree-card-decoration-refresh.spec.ts` puts a fake `gh` first
+  on PATH and changes PR and issue titles in its state file. It asserts that the entries the cards
+  read follow the change, and it reads the clock through an e2e-only renderer hook.
+  - On Windows the fake is a compiled `gh.exe`: Node's `execFile` never runs a `gh.cmd`.
+  - Disconnecting the linked-issue refresh in a built app turns it red.
+- **Not in the display path.** Workspace cleanup reads the hosted-review cache for labels and
+  filters only; eligibility comes from the main-side candidate.
+- **Regression proof.** Fifteen mutations each turn a test or the gate red:
+  - a clock per card, for both families and for each alone;
+  - one clock that still asks per card;
+  - a timer left running at zero subscribers;
+  - polling while hidden;
+  - one failure aborting the tick;
+  - the store's in-flight dedup removed;
+  - stale arguments kept, and a released subject still run;
+  - the issue family at the review cadence;
+  - the issue refresh disconnected;
+  - the max age ignored, and the max age allowed to extend the TTL;
+  - a planted per-card interval (gate).
+- **Still open.**
+  - Issue lookups are per window: two windows showing one issue start two `gh` processes.
+  - A failed issue lookup is cached as "no issue" for 5 min, because main turns every failure
+    into `null`.
