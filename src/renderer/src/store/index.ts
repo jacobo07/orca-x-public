@@ -140,7 +140,8 @@ if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefin
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>
         (await import('@/runtime/web-runtime-session')).createWebRuntimeSessionTerminal(args)
     }
-    // Why: no product surface saves or restores a working set yet; the e2e drives the real path.
+    // Why: the W4/W6 spec drives save/restore directly; the product route (worktree menu →
+    // Snapshots…) is covered by project-working-set-restore-surface.spec.ts, which only observes here.
     testWindow.__workingSetE2E = {
       save: async (request: { ownerKey: string; label?: string | null }) =>
         (await import('@/lib/project-working-set-save')).saveProjectWorkingSet(request),
