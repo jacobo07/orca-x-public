@@ -227,6 +227,14 @@ describe('worktree card decoration refresh cardinality', () => {
     }
   )
 
+  it('never stacks a second lookup behind one that is still in flight', async () => {
+    api.gh.issue.mockReset().mockImplementation(() => new Promise(() => {}))
+    const m = await measure(10, 1)
+    // Why: a hung `gh` must not become one extra spawn per tick for the same issue.
+    expect(m.issueIpc).toBe(m.subjects)
+    expect(m.hostedIpc).toBeGreaterThanOrEqual(m.subjects * 10)
+  })
+
   afterEach(() => {
     const out = process.env.ORCA_SIDEBAR_CURVE_OUT
     if (out) {
