@@ -1,5 +1,9 @@
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  resetRuntimeHostQueueForTests,
+  runOnRuntimeHost
+} from '@/runtime/runtime-host-query-queue'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   RuntimeTerminalListResult,
@@ -20,43 +24,8 @@ import {
 
 export const RUNTIME_PTY_LIVENESS_BUDGET_MS = 10_000
 
-const tailByEnvironmentId = new Map<string, Promise<void>>()
-
-function settlesBefore(previous: Promise<void>, deadline: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(false), Math.max(0, deadline - Date.now()))
-    void previous.then(() => {
-      clearTimeout(timer)
-      resolve(true)
-    })
-  })
-}
-
-// Why: each fresh listing supersedes the host's previous inventory refresh, so
-// overlapping requests to one host fail all but the last. Serialize per host,
-// but never wait past this sample's budget for a listing that has not returned.
-function inEnvironmentQueue<T>(
-  environmentId: string,
-  deadline: number,
-  run: () => Promise<T>
-): Promise<T | null> {
-  const previous = tailByEnvironmentId.get(environmentId) ?? Promise.resolve()
-  const result = settlesBefore(previous, deadline).then((ready) => (ready ? run() : null))
-  const tail = result.then(
-    () => undefined,
-    () => undefined
-  )
-  tailByEnvironmentId.set(environmentId, tail)
-  void tail.then(() => {
-    if (tailByEnvironmentId.get(environmentId) === tail) {
-      tailByEnvironmentId.delete(environmentId)
-    }
-  })
-  return result
-}
-
 export function resetRuntimePtyLivenessQueueForTests(): void {
-  tailByEnvironmentId.clear()
+  resetRuntimeHostQueueForTests()
 }
 
 function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
@@ -136,7 +105,7 @@ export async function sampleRuntimePtyLiveness(
   await Promise.all(
     [...worktreeIdsByEnvironmentId].map(async ([environmentId, worktreeIds]) => {
       for (const worktreeId of worktreeIds) {
-        const live = await inEnvironmentQueue(environmentId, deadline, () =>
+        const live = await runOnRuntimeHost(environmentId, deadline, () =>
           listLivePtyIds(environmentId, worktreeId, deadline)
         )
         if (live) {
