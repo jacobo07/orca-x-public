@@ -6,6 +6,7 @@ import { vi } from 'vitest'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 import { processResult } from './agent-completion-coordinator-test-harness'
 import type { AgentCompletionCoordinator } from './agent-completion-coordinator-types'
+import type { RuntimeTerminalProcessInspectionOutcome } from '@/runtime/runtime-terminal-inspection-batch'
 
 export const BACKSTOP_CURVE_WINDOW_MS = 60_000
 const EXIT_AT_MS = 30_000
@@ -14,6 +15,9 @@ export type BackstopCurvePoint = {
   panes: number
   timers: number
   singleCalls: number
+  batchCalls: number
+  // Pane answers carried, across both kinds of call.
+  inspections: number
   worstGapMs: number
   // Why null: the backstop never noticed the exit inside the window.
   detectionLatencyMs: number | null
@@ -24,6 +28,7 @@ export type BackstopCurveRig = {
   coordinators: AgentCompletionCoordinator[]
   exit: (index: number) => void
   inspectProcess: ReturnType<typeof vi.fn>
+  inspectProcesses: ReturnType<typeof vi.fn>
   inspectedAt: Map<string, number[]>
   completedAt: Map<number, number>
   startedAt: number
@@ -34,18 +39,26 @@ export function createBackstopCurveRig(count: number): BackstopCurveRig {
   const inspectedAt = new Map<string, number[]>()
   const completedAt = new Map<number, number>()
   const startedAt = Date.now()
-  const inspectProcess = vi.fn(async (_settings: unknown, ptyId: string) => {
+  const answer = (ptyId: string) => {
     const times = inspectedAt.get(ptyId) ?? []
     times.push(Date.now() - startedAt)
     inspectedAt.set(ptyId, times)
     return processResult(exited.has(ptyId) ? null : 'codex')
-  })
+  }
+  const inspectProcess = vi.fn(async (_settings: unknown, ptyId: string) => answer(ptyId))
+  const inspectProcesses = vi.fn(
+    async (_settings: unknown, ptyIds: string[]) =>
+      new Map<string, RuntimeTerminalProcessInspectionOutcome>(
+        ptyIds.map((ptyId) => [ptyId, { status: 'inspected', inspection: answer(ptyId) }])
+      )
+  )
   const coordinators = Array.from({ length: count }, (_, index) => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: `tab-${index}:leaf-1`,
       getPtyId: () => `pty-${index}`,
       getSettings: () => null,
       inspectProcess,
+      inspectProcesses,
       // Why: hooks and titles never report completion here, so only the backstop can.
       dispatchCompletion: () => {
         if (!completedAt.has(index)) {
@@ -63,6 +76,7 @@ export function createBackstopCurveRig(count: number): BackstopCurveRig {
     coordinators,
     exit: (index) => exited.add(`pty-${index}`),
     inspectProcess,
+    inspectProcesses,
     inspectedAt,
     completedAt,
     startedAt
@@ -109,6 +123,8 @@ export async function measureBackstopCurve(count: number): Promise<BackstopCurve
     panes: count,
     timers,
     singleCalls: rig.inspectProcess.mock.calls.length,
+    batchCalls: rig.inspectProcesses.mock.calls.length,
+    inspections: [...rig.inspectedAt.values()].reduce((sum, times) => sum + times.length, 0),
     worstGapMs,
     detectionLatencyMs: completed === undefined ? null : completed - EXIT_AT_MS,
     completions: rig.completedAt.size

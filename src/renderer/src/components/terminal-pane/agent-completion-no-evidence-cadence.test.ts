@@ -11,7 +11,7 @@ import {
   createAgentCompletionCoordinator,
   resetAgentCompletionCoordinatorIdentitiesForTest
 } from './agent-completion-coordinator'
-import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
+import { resetAgentProcessBackstopForTests } from './agent-process-backstop'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 
@@ -50,7 +50,7 @@ describe('agent completion no-evidence inspection cadence', () => {
   })
 
   afterEach(() => {
-    resetAgentProcessInspectionQueueForTests()
+    resetAgentProcessBackstopForTests()
     resetAgentCompletionCoordinatorIdentitiesForTest()
     vi.useRealTimers()
     vi.restoreAllMocks()

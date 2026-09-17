@@ -11,7 +11,7 @@ import {
   type BackstopCurvePoint
 } from './agent-completion-backstop-curve-harness'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
-import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
+import { resetAgentProcessBackstopForTests } from './agent-process-backstop'
 import {
   processResult,
   useAgentCompletionCoordinatorLifecycle
@@ -19,8 +19,6 @@ import {
 import type { AgentCompletionCoordinator } from './agent-completion-coordinator-types'
 
 const WINDOW_MS = 60_000
-// Mirrors MAX_INSPECTION_STARTS_PER_SECOND in agent-process-inspection-queue.ts.
-const WINDOW_START_BUDGET = 8 * (WINDOW_MS / 1_000)
 
 // Why a file: the vitest config swallows console output.
 function writeCurve(curve: BackstopCurvePoint[]): void {
@@ -60,31 +58,36 @@ function inspectedPtyIds(inspectProcess: ReturnType<typeof vi.fn>): Set<string> 
 describe('agent completion backstop cardinality', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  it('pays one timer per pane and trades volume for detection latency past the queue cap', async () => {
+  // Before the shared backstop (499c054df): timers 1/10/50, per-pane calls 54/464/464 (capped
+  // at 8 starts/s), detection of a silent exit 1.25 s / 1.23 s / 9.29 s.
+  it('adds no timer, no call and no detection delay per extra agent pane', async () => {
     const curve: BackstopCurvePoint[] = []
     for (const panes of [1, 10, 50]) {
       curve.push(await measureBackstopCurve(panes))
-      resetAgentProcessInspectionQueueForTests()
+      resetAgentProcessBackstopForTests()
     }
     writeCurve(curve)
     const [one, ten, fifty] = curve as [BackstopCurvePoint, BackstopCurvePoint, BackstopCurvePoint]
 
-    for (const point of curve) {
-      expect(point.timers).toBeGreaterThanOrEqual(point.panes)
-    }
-    // Why: the queue, not the pane count, bounds volume; the cost moves into latency.
-    expect(fifty.singleCalls).toBeLessThanOrEqual(WINDOW_START_BUDGET + 50)
-    expect(ten.singleCalls).toBeGreaterThan(8 * one.singleCalls)
-    expect(fifty.detectionLatencyMs!).toBeGreaterThan(5 * one.detectionLatencyMs!)
+    expect(curve.map((point) => point.timers)).toEqual([1, 1, 1])
+    expect(curve.map((point) => point.singleCalls)).toEqual([0, 0, 0])
+    // One call per tick, whatever the pane count: ticks are at most one per 70% of the 750 ms tier.
+    expect(fifty.batchCalls).toBeLessThanOrEqual(ten.batchCalls)
+    expect(fifty.batchCalls).toBeLessThanOrEqual(Math.ceil(WINDOW_MS / (0.7 * 750)))
+    // Every pane keeps its own full cadence inside those calls.
+    expect(fifty.inspections).toBeGreaterThanOrEqual(0.9 * 50 * one.inspections)
+    expect(fifty.detectionLatencyMs!).toBeLessThanOrEqual(one.detectionLatencyMs! + 750)
+    expect(fifty.worstGapMs).toBeLessThanOrEqual(one.worstGapMs)
     // Only the pane whose agent exited completes.
     expect(curve.map((point) => point.completions)).toEqual([1, 1, 1])
   })
 
-  it('still reaches every pane under the queue cap', async () => {
+  it('asks each pane on its own call when the caller has no batch inspector', async () => {
     const fifty = createPanes(50, { visible: true, live: true, agent: true })
     await vi.advanceTimersByTimeAsync(WINDOW_MS)
 
     expect(inspectedPtyIds(fifty.inspectProcess).size).toBe(50)
+    expect(fifty.inspectProcess.mock.calls.length).toBeGreaterThanOrEqual(50 * 50)
   })
 
   it('charges nothing for hidden panes without agent evidence, at any count', async () => {
@@ -109,7 +112,6 @@ describe('agent completion backstop cardinality', () => {
       live: true,
       agent: true
     })
-    // Why: 50 panes at 750ms outrun the 8/s budget, so a backlog is queued at dispose time.
     await vi.advanceTimersByTimeAsync(5_000)
     coordinators.forEach((c) => c.dispose())
     const callsAtDispose = inspectProcess.mock.calls.length

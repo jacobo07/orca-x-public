@@ -31,7 +31,8 @@
     "createTaskbarPreviewRefreshTicker",
     "startRemoteRuntimeSocketLiveness",
     "getWorktreeObservationClock",
-    "getWorktreeCardDecorationRefresh"
+    "getWorktreeCardDecorationRefresh",
+    "getAgentProcessBackstop"
   ],
   "sites": {
     "src/cli/handlers/orchestration.ts#interval#startCheckKeepalive": {
@@ -2181,16 +2182,40 @@
       "disposition": "justified",
       "note": "use-tab-bar-create-menu-controller.ts:96-116 retries until Date.now()>=expiresAt"
     },
-    "src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts#self-rescheduling-timeout#scheduleNextPoll": {
+    "src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts#helper:getAgentProcessBackstop#clearPollTimer": {
+      "responsibility": "agent-completion-backstop-release",
+      "cadence": "once per cancel",
+      "lifetime": "bounded",
+      "scaling": "per-live-pty",
+      "hidden": "n/a",
+      "dormant": "n/a",
+      "spawns": "none",
+      "disposition": "justified",
+      "bound": "only removes this pane's due time from the window backstop; never schedules",
+      "note": "releasing the last pane disarms the window timer (agent-process-backstop.test.ts)"
+    },
+    "src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts#helper:getAgentProcessBackstop#requestInspection": {
+      "responsibility": "agent-completion-backstop-inspection-request",
+      "cadence": "once per due tick or pending-title probe",
+      "lifetime": "bounded",
+      "scaling": "per-live-pty",
+      "hidden": "n/a",
+      "dormant": "n/a",
+      "spawns": "none",
+      "disposition": "justified",
+      "bound": "one request per pane per tick, single-flight per pane; the window backstop sends every request of a tick in one pty:inspectProcesses call and skips panes disposed before it leaves",
+      "note": "agent-process-backstop.test.ts: one call per tick, no overlap per host, disposed panes never sent"
+    },
+    "src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts#helper:getAgentProcessBackstop#scheduleNextPoll": {
       "responsibility": "agent-completion-process-backstop",
-      "cadence": "750ms-15s tiered (750ms agent / 2s idle / 3s hidden-with-agent / 15s no-evidence, local Windows)",
+      "cadence": "750ms-15s tiered (750ms agent / 2s idle / 3s hidden-with-agent / 15s no-evidence, local Windows), aligned up to 30% early onto the window tick",
       "lifetime": "while-active",
       "scaling": "per-live-pty",
       "hidden": "runs",
       "dormant": "none",
       "spawns": "unknown",
       "disposition": "debt",
-      "note": "agent-completion-coordinator.ts:673 (verified by lead): one self-rescheduling poll per connected live terminal pane, hidden panes without agent evidence and non-live panes do not poll, hidden panes with agent evidence poll slower (3s) rather than pausing; serialized by agent-process-inspection-queue.ts (max 4 concurrent, 8 starts/s per window)"
+      "note": "no own timer since the shared window backstop; stays debt until the backstop-only exit is proven in the running app"
     },
     "src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts#self-rescheduling-timeout#schedulePendingTitleExpiry": {
       "responsibility": "agent-completion-pending-title-expiry",
@@ -2203,16 +2228,16 @@
       "disposition": "justified",
       "note": "agent-completion-coordinator.ts:408-433 holds a generic spinner title as pending-completion only until maxExpiresAt or a probe confirms/denies agent ownership"
     },
-    "src/renderer/src/components/terminal-pane/agent-process-inspection-queue.ts#self-rescheduling-timeout#scheduleInspectionPump": {
-      "responsibility": "agent-completion-process-backstop",
-      "cadence": "0-100ms pump retry, serializes at MAX_CONCURRENT_INSPECTIONS=4 / MAX_INSPECTION_STARTS_PER_SECOND=8",
+    "src/renderer/src/components/terminal-pane/agent-process-backstop.ts#self-rescheduling-timeout#arm": {
+      "responsibility": "agent-completion-backstop-clock",
+      "cadence": "the earliest due pane's time; one tick runs every pane due within 30% of its interval",
       "lifetime": "while-active",
       "scaling": "per-window",
-      "hidden": "n/a",
+      "hidden": "runs",
       "dormant": "n/a",
       "spawns": "none",
       "disposition": "justified",
-      "note": "agent-process-inspection-queue.ts:1-60 the module-singleton serializer explicitly named in the known facts as the per-window concurrency/rate limiter for agent-completion-coordinator's per-pty polls"
+      "note": "the one timer behind every pane's process-exit backstop in this renderer; armed on the first due pane, disarmed when none is scheduled (agent-process-backstop.test.ts)"
     },
     "src/renderer/src/components/terminal-pane/hidden-output-restore-scheduler.ts#self-rescheduling-timeout#scheduleInactiveRestoreDrain": {
       "responsibility": "hidden-pane-scrollback-restore-drain",

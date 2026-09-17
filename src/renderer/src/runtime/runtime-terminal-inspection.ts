@@ -67,10 +67,24 @@ export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Da
   }
 }
 
+/** Whether this pane's process inspection is answered by this app's main process. */
+export function isLocallyInspectedRuntimePty(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string
+): boolean {
+  const target = getRemoteRuntimePtyEnvironmentId(ptyId)
+    ? 'environment'
+    : getActiveRuntimeTarget(settings).kind
+  return target !== 'environment' || !getRemoteRuntimeTerminalHandle(ptyId)
+}
+
 export async function inspectRuntimeTerminalProcess(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string
 ): Promise<RuntimeTerminalProcessInspection> {
+  if (isLocallyInspectedRuntimePty(settings, ptyId)) {
+    return window.api.pty.inspectProcess(ptyId)
+  }
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)

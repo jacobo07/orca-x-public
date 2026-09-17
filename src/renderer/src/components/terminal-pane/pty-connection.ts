@@ -143,6 +143,7 @@ import {
   registerPtyTitleSource
 } from './pty-buffer-serializer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcesses } from '@/runtime/runtime-terminal-inspection-batch'
 // Why: a restored pane's stale-account prompt can only be raised once a PTY is
 // actually attached — nothing is inspectable while the session hydrates.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
@@ -2445,6 +2446,7 @@ export function connectPanePty(
     getPtyId: () => transport.getPtyId(),
     getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
+    inspectProcesses: inspectRuntimeTerminalProcesses,
     dispatchHookLifecycle: (payload) => dispatchAgentHookTerminalLifecycle(cacheKey, payload),
     shouldSuppressProcessReplacementCompletion: (_exited, replacement) => {
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]

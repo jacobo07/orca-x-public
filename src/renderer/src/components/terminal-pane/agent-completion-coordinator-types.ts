@@ -2,6 +2,7 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-t
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type { BackstopInspectProcesses } from './agent-process-backstop'
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   stateStartedAt?: number
@@ -27,6 +28,8 @@ export type AgentCompletionCoordinatorOptions = {
     settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
     ptyId: string
   ) => Promise<RuntimeTerminalProcessInspection>
+  /** Lets the window's backstop answer every due pane in one call; without it each pane is asked alone. */
+  inspectProcesses?: BackstopInspectProcesses
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   dispatchHookLifecycle?: (payload: AgentCompletionStatusSnapshot) => void
