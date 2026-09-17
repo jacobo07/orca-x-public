@@ -123,9 +123,14 @@ describe('sampleRuntimePtyLiveness', () => {
     const sample = await sampleRuntimePtyLiveness(useAppStore.getState())
 
     expect(sample.runtimeLivePtyIdsByWorktreeId).toEqual({
-      'wt-a': ['pty-wt-a'],
-      'wt-b': ['pty-wt-b'],
-      'wt-c': ['pty-wt-c']
+      'wt-a': ['h-pty-wt-a', 'pty-wt-a'],
+      'wt-b': ['h-pty-wt-b', 'pty-wt-b'],
+      'wt-c': ['h-pty-wt-c', 'pty-wt-c']
+    })
+    // A pane may be named by handle (paired client) or PTY; both resolve to the host PTY.
+    expect(sample.hostPtyIdByRuntimeIdByWorktreeId['wt-a']).toEqual({
+      'h-pty-wt-a': 'pty-wt-a',
+      'pty-wt-a': 'pty-wt-a'
     })
     expect(sample.environmentIdByWorktreeId).toEqual({
       'wt-a': 'runtime-1',
@@ -176,7 +181,7 @@ describe('sampleRuntimePtyLiveness', () => {
 
     const sample = await sampleRuntimePtyLiveness(useAppStore.getState())
 
-    expect(sample.runtimeLivePtyIdsByWorktreeId).toEqual({ 'wt-b': ['pty-b'] })
+    expect(sample.runtimeLivePtyIdsByWorktreeId).toEqual({ 'wt-b': ['h-pty-b', 'pty-b'] })
   })
 
   it('records a successful empty listing as no live PTYs, not as unknown', async () => {
@@ -218,6 +223,7 @@ describe('sampleRuntimePtyLiveness', () => {
 
     await expect(second).resolves.toEqual({
       runtimeLivePtyIdsByWorktreeId: {},
+      hostPtyIdByRuntimeIdByWorktreeId: {},
       environmentIdByWorktreeId: {}
     })
     // The stuck listing is never overlapped by the one queued behind it.
@@ -244,14 +250,16 @@ describe('sampleRuntimePtyLiveness', () => {
 
 describe('fenceRuntimePtyLivenessSample', () => {
   const sample = {
-    runtimeLivePtyIdsByWorktreeId: { 'wt-a': ['pty-a'] },
+    runtimeLivePtyIdsByWorktreeId: { 'wt-a': ['pty-a', 'term_a'] },
+    hostPtyIdByRuntimeIdByWorktreeId: { 'wt-a': { 'pty-a': 'pty-a', term_a: 'pty-a' } },
     environmentIdByWorktreeId: { 'wt-a': 'runtime-1' }
   }
 
   it('applies an answer from the host the worktree still belongs to', () => {
     installWorktrees({ 'wt-a': 'runtime-1' })
     expect(fenceRuntimePtyLivenessSample(useAppStore.getState(), sample)).toEqual({
-      runtimeLivePtyIdsByWorktreeId: { 'wt-a': ['pty-a'] },
+      runtimeLivePtyIdsByWorktreeId: { 'wt-a': ['pty-a', 'term_a'] },
+      runtimeHostPtyIdByRuntimeIdByWorktreeId: { 'wt-a': { 'pty-a': 'pty-a', term_a: 'pty-a' } },
       runtimeLivenessRequiredWorktreeIds: ['wt-a'],
       runtimeEnvironmentIdByWorktreeId: { 'wt-a': 'runtime-1' }
     })
@@ -261,6 +269,7 @@ describe('fenceRuntimePtyLivenessSample', () => {
     installWorktrees({ 'wt-a': 'runtime-2' })
     expect(fenceRuntimePtyLivenessSample(useAppStore.getState(), sample)).toEqual({
       runtimeLivePtyIdsByWorktreeId: {},
+      runtimeHostPtyIdByRuntimeIdByWorktreeId: {},
       runtimeLivenessRequiredWorktreeIds: ['wt-a'],
       runtimeEnvironmentIdByWorktreeId: { 'wt-a': 'runtime-2' }
     })
@@ -268,8 +277,8 @@ describe('fenceRuntimePtyLivenessSample', () => {
 
   it('requires liveness for a runtime worktree the sample never covered', () => {
     installWorktrees({ 'wt-a': 'runtime-1', 'wt-new': 'runtime-1' })
-    expect(fenceRuntimePtyLivenessSample(useAppStore.getState(), sample)).toEqual({
-      runtimeLivePtyIdsByWorktreeId: { 'wt-a': ['pty-a'] },
+    expect(fenceRuntimePtyLivenessSample(useAppStore.getState(), sample)).toMatchObject({
+      runtimeLivePtyIdsByWorktreeId: { 'wt-a': ['pty-a', 'term_a'] },
       runtimeLivenessRequiredWorktreeIds: ['wt-a', 'wt-new'],
       runtimeEnvironmentIdByWorktreeId: { 'wt-a': 'runtime-1', 'wt-new': 'runtime-1' }
     })

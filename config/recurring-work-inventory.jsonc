@@ -2408,7 +2408,7 @@
       "dormant": "n/a",
       "spawns": "none",
       "disposition": "justified",
-      "note": "agent-hibernation-coordinator.ts:176-192 module-singleton interval scans all hibernation candidates in one batched tick (not one timer per pane), serialized via tickInFlight"
+      "note": "agent-hibernation-coordinator.ts runAgentHibernationTick: module-singleton interval scans all hibernation candidates in one batched tick (not one timer per pane), serialized via tickInFlight. Each tick samples runtime PTY liveness once per runtime-backed worktree via runtime-pty-liveness-sample.ts: one terminal.list per worktree, serialized per host, hosts in parallel, 10 s budget per host per sample; the Resource Manager panel adds one sample per showing, not per poll"
     },
     "src/renderer/src/lib/agent-startup-delayed-delivery.ts#self-rescheduling-timeout#scheduleStaleStartupRecheck": {
       "responsibility": "agent-startup-delayed-delivery-recheck",

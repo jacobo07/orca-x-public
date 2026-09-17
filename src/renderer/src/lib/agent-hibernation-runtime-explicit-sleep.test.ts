@@ -27,7 +27,10 @@ const PANE_A = `tab-a:${LEAF_A}`
 const PANE_B = `tab-b:${LEAF_B}`
 const PANE_C = `tab-c:${LEAF_C}`
 
-/** What each host answers per worktree: live PTY ids, or a failure. */
+/**
+ * What each host answers per worktree: live PTY ids, or a failure. A `handle>pty`
+ * entry is a terminal whose handle differs from its host PTY, as a paired client sees it.
+ */
 let hosts: Record<string, Record<string, string[] | Error>> = {}
 
 function installHosts(): void {
@@ -49,20 +52,27 @@ function installHosts(): void {
         id: 'terminal-list',
         ok: true,
         result: {
-          terminals: answer.map((ptyId) => ({
-            handle: `h-${ptyId}`,
-            ptyId,
-            worktreeId,
-            worktreePath: `/tmp/${worktreeId}`,
-            branch: 'b',
-            tabId: `pty:${ptyId}`,
-            leafId: `pty:${ptyId}`,
-            title: '',
-            connected: true,
-            writable: true,
-            lastOutputAt: null,
-            preview: ''
-          })),
+          terminals: answer
+            .map((listed) => {
+              const [handle, ptyId] = listed.includes('>')
+                ? listed.split('>')
+                : [`h-${listed}`, listed]
+              return { handle, ptyId }
+            })
+            .map(({ handle, ptyId }) => ({
+              handle,
+              ptyId,
+              worktreeId,
+              worktreePath: `/tmp/${worktreeId}`,
+              branch: 'b',
+              tabId: `pty:${ptyId}`,
+              leafId: `pty:${ptyId}`,
+              title: '',
+              connected: true,
+              writable: true,
+              lastOutputAt: null,
+              preview: ''
+            })),
           totalCount: answer.length,
           truncated: false
         },
@@ -309,6 +319,47 @@ describe('sleeping runtime-backed panes the user was shown', () => {
 
     expect(results.map((r) => r.candidateId)).toEqual([`wt-bg|${PANE_A}`, `wt-bg|${PANE_B}`])
     expect(slept(shutdown).map((s) => s.paneKey)).toEqual([PANE_A, PANE_B])
+  })
+
+  it("sleeps a paired client's pane by the host PTY behind its terminal handle", async () => {
+    const shutdown = installRuntimePanes()
+    // A paired client knows its pane only as remote:<env>@@<terminal handle>.
+    useAppStore.setState((s) => ({
+      terminalLayoutsByTabId: {
+        ...s.terminalLayoutsByTabId,
+        'tab-a': leafLayout(LEAF_A, 'remote:runtime-1@@term_a')
+      }
+    }))
+    hosts['runtime-1']['wt-bg'] = ['term_a>host-pty-a', 'pty-b']
+    const shown = await authorizationsOnScreen()
+    expect(shown.map((a) => a.candidateId)).toContain(`wt-bg|${PANE_A}`)
+
+    const results = await sleepAuthorizedAgentPanes(shown)
+
+    expect(results.map((r) => r.outcome)).toEqual(['slept', 'slept', 'slept'])
+    expect(slept(shutdown)[0]).toEqual({
+      worktreeId: 'wt-bg',
+      paneKey: PANE_A,
+      expectedRuntimePtyId: 'host-pty-a'
+    })
+  })
+
+  it('refuses a paired pane whose handle now names a different host PTY', async () => {
+    const shutdown = installRuntimePanes()
+    useAppStore.setState((s) => ({
+      terminalLayoutsByTabId: {
+        ...s.terminalLayoutsByTabId,
+        'tab-a': leafLayout(LEAF_A, 'remote:runtime-1@@term_a')
+      }
+    }))
+    hosts['runtime-1']['wt-bg'] = ['term_a>host-pty-a', 'pty-b']
+    const shown = await authorizationsOnScreen()
+    hosts['runtime-1']['wt-bg'] = ['term_a>host-pty-a2', 'pty-b']
+
+    const results = await sleepAuthorizedAgentPanes(shown)
+
+    expect(results.map((r) => r.outcome)).toEqual(['changed', 'slept', 'slept'])
+    expect(slept(shutdown).map((s) => s.expectedRuntimePtyId)).toEqual(['pty-b', 'pty-c'])
   })
 
   it('keeps a pane pinned after display awake although its host proves it live', async () => {

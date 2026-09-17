@@ -29,6 +29,8 @@ export type AgentHibernationPlannerSnapshot = {
   runtimeLivenessRequiredWorktreeIds?: string[]
   /** The host each runtime worktree lives on; part of what a user authorized. */
   runtimeEnvironmentIdByWorktreeId?: Record<string, string | undefined>
+  /** Host PTY behind each live runtime identity (a terminal handle, for paired clients). */
+  runtimeHostPtyIdByRuntimeIdByWorktreeId?: Record<string, Record<string, string> | undefined>
   mobileLockedPtyIds: string[]
   /** Terminal tabs the user pinned: kept awake, never slept, never woken by the pin. */
   pinnedTerminalTabIds: string[]
@@ -253,6 +255,10 @@ export function planAgentHibernationCandidates(
       continue
     }
     const eligible = walked.verdict.pane
+    const hostPtyId =
+      snapshot.runtimeHostPtyIdByRuntimeIdByWorktreeId?.[walked.worktreeId]?.[
+        eligible.runtimePtyId
+      ] ?? eligible.runtimePtyId
     candidates.push({
       id: candidateIdFor(walked.worktreeId, eligible.paneKey),
       worktreeId: walked.worktreeId,
@@ -261,12 +267,13 @@ export function planAgentHibernationCandidates(
       leafId: eligible.leafId,
       paneKeys: [eligible.paneKey],
       targetPtyIds: [eligible.ptyId],
-      expectedRuntimePtyIds: [eligible.runtimePtyId],
-      signature: signatureFor(
+      expectedRuntimePtyIds: [hostPtyId],
+      // Why: a handle re-bound to another host PTY is a new incarnation the user never saw.
+      signature: `${signatureFor(
         walked.worktreeId,
         snapshot.runtimeEnvironmentIdByWorktreeId?.[walked.worktreeId],
         [eligible]
-      )
+      )}>${hostPtyId}`
     })
   }
   return candidates

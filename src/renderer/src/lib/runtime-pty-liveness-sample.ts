@@ -69,11 +69,13 @@ function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
   return null
 }
 
+type WorktreeLiveness = { ptyIds: string[]; hostPtyIdByRuntimeId: Record<string, string> }
+
 async function listLivePtyIds(
   environmentId: string,
   worktreeId: string,
   deadline: number
-): Promise<string[] | null> {
+): Promise<WorktreeLiveness | null> {
   const timeoutMs = deadline - Date.now()
   if (timeoutMs <= 0) {
     return null
@@ -93,17 +95,22 @@ async function listLivePtyIds(
     if (result.truncated) {
       return null
     }
-    const ptyIds = new Set<string>()
+    const hostPtyIdByRuntimeId: Record<string, string> = {}
     for (const terminal of result.terminals) {
       if (!terminal.connected || terminal.worktreeId !== worktreeId) {
         continue
       }
       const ptyId = getTypedRuntimePtyId(terminal)
-      if (ptyId) {
-        ptyIds.add(ptyId)
+      if (!ptyId) {
+        continue
+      }
+      hostPtyIdByRuntimeId[ptyId] = ptyId
+      // Why: a paired client names its pane by terminal handle; exact stop needs the host PTY.
+      if (terminal.handle) {
+        hostPtyIdByRuntimeId[terminal.handle] = ptyId
       }
     }
-    return [...ptyIds].sort()
+    return { ptyIds: Object.keys(hostPtyIdByRuntimeId).sort(), hostPtyIdByRuntimeId }
   } catch {
     // Why: a failed listing proves nothing; omitting the worktree fails closed.
     return null
@@ -121,6 +128,7 @@ export async function sampleRuntimePtyLiveness(
   }
   const sample: SampledRuntimePtyLiveness = {
     runtimeLivePtyIdsByWorktreeId: {},
+    hostPtyIdByRuntimeIdByWorktreeId: {},
     environmentIdByWorktreeId: {}
   }
   // Why: one budget per host bounds a sample however many worktrees an unreachable host has.
@@ -128,11 +136,12 @@ export async function sampleRuntimePtyLiveness(
   await Promise.all(
     [...worktreeIdsByEnvironmentId].map(async ([environmentId, worktreeIds]) => {
       for (const worktreeId of worktreeIds) {
-        const ptyIds = await inEnvironmentQueue(environmentId, deadline, () =>
+        const live = await inEnvironmentQueue(environmentId, deadline, () =>
           listLivePtyIds(environmentId, worktreeId, deadline)
         )
-        if (ptyIds) {
-          sample.runtimeLivePtyIdsByWorktreeId[worktreeId] = ptyIds
+        if (live) {
+          sample.runtimeLivePtyIdsByWorktreeId[worktreeId] = live.ptyIds
+          sample.hostPtyIdByRuntimeIdByWorktreeId[worktreeId] = live.hostPtyIdByRuntimeId
           sample.environmentIdByWorktreeId[worktreeId] = environmentId
         }
       }

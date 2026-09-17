@@ -18,6 +18,7 @@ import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 
 export type RuntimePtyLivenessSample = {
   runtimeLivePtyIdsByWorktreeId: Record<string, string[]>
+  runtimeHostPtyIdByRuntimeIdByWorktreeId: Record<string, Record<string, string>>
   runtimeLivenessRequiredWorktreeIds: string[]
   runtimeEnvironmentIdByWorktreeId: Record<string, string>
 }
@@ -35,7 +36,10 @@ export function getRuntimeLivenessTargetWorktrees(state: AppState): Map<string, 
 
 /** What a runtime answered, stamped with the host each worktree was asked on. */
 export type SampledRuntimePtyLiveness = {
+  /** Live identities as panes name them: host PTY ids and terminal handles. */
   runtimeLivePtyIdsByWorktreeId: Record<string, string[]>
+  /** The host PTY each live identity resolves to — what exact stop targets. */
+  hostPtyIdByRuntimeIdByWorktreeId: Record<string, Record<string, string>>
   environmentIdByWorktreeId: Record<string, string>
 }
 
@@ -50,6 +54,7 @@ export function fenceRuntimePtyLivenessSample(
 ): RuntimePtyLivenessSample {
   const targets = getRuntimeLivenessTargetWorktrees(state)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
+  const runtimeHostPtyIdByRuntimeIdByWorktreeId: Record<string, Record<string, string>> = {}
   for (const [worktreeId, environmentId] of targets) {
     if (
       sample &&
@@ -57,10 +62,13 @@ export function fenceRuntimePtyLivenessSample(
       sample.environmentIdByWorktreeId[worktreeId] === environmentId
     ) {
       runtimeLivePtyIdsByWorktreeId[worktreeId] = sample.runtimeLivePtyIdsByWorktreeId[worktreeId]
+      runtimeHostPtyIdByRuntimeIdByWorktreeId[worktreeId] =
+        sample.hostPtyIdByRuntimeIdByWorktreeId[worktreeId] ?? {}
     }
   }
   return {
     runtimeLivePtyIdsByWorktreeId,
+    runtimeHostPtyIdByRuntimeIdByWorktreeId,
     runtimeLivenessRequiredWorktreeIds: [...targets.keys()],
     runtimeEnvironmentIdByWorktreeId: Object.fromEntries(targets)
   }
@@ -109,6 +117,8 @@ export function buildAgentHibernationPlannerSnapshot(
     runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
     runtimeLivenessRequiredWorktreeIds: runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
     runtimeEnvironmentIdByWorktreeId: runtimeLiveness.runtimeEnvironmentIdByWorktreeId,
+    runtimeHostPtyIdByRuntimeIdByWorktreeId:
+      runtimeLiveness.runtimeHostPtyIdByRuntimeIdByWorktreeId,
     mobileLockedPtyIds: [...getAllDrivers()]
       .filter(([, driver]) => driver.kind === 'mobile')
       .map(([ptyId]) => ptyId),

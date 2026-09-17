@@ -6,6 +6,7 @@ import { createRuntimePtyLivenessObserver } from './runtime-pty-liveness-observe
 function sampleOf(ptyId: string): SampledRuntimePtyLiveness {
   return {
     runtimeLivePtyIdsByWorktreeId: { 'wt-a': [ptyId] },
+    hostPtyIdByRuntimeIdByWorktreeId: { 'wt-a': { [ptyId]: ptyId } },
     environmentIdByWorktreeId: { 'wt-a': 'runtime-1' }
   }
 }
