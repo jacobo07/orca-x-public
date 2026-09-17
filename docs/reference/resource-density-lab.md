@@ -252,6 +252,56 @@ constant rather than swept. This is a **state** figure at the store altitude —
 resident bytes, and the 100-row point it reaches for free is **not** thereby covered for the process
 metric. Tree bracket: the dirty-path set was identical before and after (22 paths, none moved).
 
+**Logical dimension, real Electron — structural Product Reality** — `dormant-rail-density.spec.ts`,
+dev Electron (e2e mode), 1.4.178-rc.2, win32 x64, scenario `restored dormant rail at fifty rows`,
+dimension *logical session* at 50, other dimensions held at one window, one repository, one execution
+host. Outcome `measured`, evidence class `dev-electron-e2e`. One run per assertion; every figure is a
+count, which is load-independent, so no median is owed and host pressure does not invalidate it.
+
+The seed is not authored. Two rows are captured live through the real producer, then
+`cloneWorkingSetToScale` multiplies that captured shape to fifty, regenerating only tab ids, leaf ids
+and provider session ids. Labels are deliberately *not* regenerated: all fifty rows show one title,
+so identity can only be resolved by tab id. The scaled manifest is written into the store beside the
+one the product wrote, and the app reads it back through its own sealed reader.
+
+| | Rail rows | Rows with a process | New host sessions vs baseline |
+| ---- | --------- | ------------------- | ----------------------------- |
+| after restore | 50 | 0 | 0 |
+| after activating all fifty | 50 | 0 | 0 |
+| after one Open, mid-rail | 50 | 1 (exactly the opened row) | 1 |
+| after workspace Sleep | 50 | 0 | 0 |
+
+Readings: fifty remembered rows restore with **no** runtime, activating every one of them is
+composition rather than an open, a single Open materializes **exactly** its own row out of fifty
+sharing one title, and the canonical reclaim releases that runtime while all fifty logical rows
+survive. `project-working-set-restore.spec.ts` already proved this shape at three rows; three cannot
+fail it in an interesting way, because a title-keyed, index-keyed or wake-everything defect is
+invisible on a rail small enough to get right by accident.
+
+Two instrument notes, both of which produced a wrong answer first. A baseline taken the instant the
+store empties is not a baseline: the host registers and unregisters PTYs on its own schedule, so a
+session from the seeding phase surfaced *after* the read and was indistinguishable from one the
+restore had started. The baseline now waits for the host's own list to stop moving and fails loudly
+if it never does. And an evidence line printed only after the reclaim reads `newMainSessions=0`
+whether one row woke or nothing ever happened, so the peak is now asserted and recorded separately.
+
+Broken build: removing the dormancy marker from the apply payload, rebuilding the real artifact and
+re-running turns it red — main lists a rolling set of PTYs bound to no opened row across all twelve
+samples, which is fifty remembered rows materializing. Restored by SHA-256, rebuilt, green.
+
+That ordering took two attempts and the first two are worth recording. The mutation initially failed
+at the dormancy-marker assertion, and then at the dormant placeholder's absence — both upstream of
+the process window, so the drill was proving the spec noticed a missing marker rather than that
+nothing had spawned. The spec now judges **processes before chrome**: a missing placeholder is a
+symptom, a running shell is the defect.
+
+Confounders: row 25 of the cycle is the **non-agent** source row, so the Open exercises a plain
+restart rather than an exact provider resume — the resume leg at scale is `unmeasured`. The agent
+stand-in is a seeded provider-session store entry, not a live agent. Host bracket: this run is
+`measured` for counts only; free memory fell to 0.58 GB during the session, so **no byte or latency
+figure was taken**, and the Dormant Session Tax, Marginal Idle Session Cost and Cold Revival Latency
+remain `unmeasured` pending a host above the 4 GB floor.
+
 **The daemon, SSH and runtime legs are not covered by that number.** A daemon-backed pane is
 inspected by one RPC per session (`src/main/daemon/daemon-pty-adapter.ts:1562` sends
 `inspectProcess` with a single `sessionId`), so those legs are linear in panes by construction —

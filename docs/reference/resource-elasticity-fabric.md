@@ -94,11 +94,18 @@ cycle at 1, 10 and 50 panes), the **Hidden Pane Tax** (~1.4M retained cells per 
 pane, 99.91% released), and the **Dormant Row State Footprint** (100 remembered rows: 450 store
 objects, ~109 KB of workspace state, ~43 KB on disk, and zero rows the mount authority would mount).
 
-The last of those settles the logical dimension at the store altitude and deliberately not at the
-process one. The **Dormant Session Tax**, **Marginal Idle Session Cost**, **Cold Revival Latency**,
-**Reclaim Completeness** and **Leak Slope** all need a running app, and the lab's own 4 GB floor
-gates them: a curve taken under pressure is `inconclusive`, not a result. They are the next wave, not
-an omission.
+The logical dimension then crossed into the running app, but only as far as the host allowed. Counts
+are load-independent and were taken: fifty rows restored from a really-captured, cloned manifest
+create **no** runtime, activating all fifty creates none, one Open materializes **exactly** its own
+row out of fifty sharing a single title, and workspace Sleep releases that runtime while all fifty
+logical rows survive. **Reclaim Completeness** is therefore `measured` structurally.
+
+Bytes and times were not taken, and the reason is the instrument rather than the rule: the canonical
+metric on Windows is working set, Windows trims working sets under memory pressure, and it trims
+hardest at the largest scale point — which is exactly where the signal lives. Free memory moved
+between 5.03 and 0.58 GB during that session. **Dormant Session Tax**, **Marginal Idle Session Cost**,
+**Cold Revival Latency** and **Leak Slope** stay `unmeasured` pending a quiet host. They are the next
+wave, not an omission.
 
 The daemon, SSH and runtime inspection legs stay `unmeasured` and code-read: each is one request per
 subject per cycle by construction, and the daemon's own answer is an in-memory read of a cache whose
