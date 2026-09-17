@@ -72,6 +72,7 @@ function plannerSnapshot(
     terminalLayoutsByTabId: Object.fromEntries(indexes.map((i) => [`tab-${i + 1}`, layout(i)])),
     ptyIdsByTabId: Object.fromEntries(indexes.map((i) => [`tab-${i + 1}`, [`pty-${i + 1}`]])),
     mobileLockedPtyIds: [],
+    pinnedTerminalTabIds: [],
     agentStatusByPaneKey: Object.fromEntries(indexes.map((i) => [paneKeyOf(i), entry(i)])),
     sleepingAgentSessionsByPaneKey: {},
     lastTerminalInputAtByPaneKey: {},
@@ -190,6 +191,26 @@ describe('sleep authorization plan', () => {
     expect(plan.estimate.unknownReasons).toEqual([])
     expect(plan.estimate.knownCount).toBe(3)
     expect(plan.estimate.knownBytes).toBe(750 * MB)
+  })
+
+  // Why: a pinned pane is measurable and resumable, and still not ours to reclaim.
+  it('leaves a pinned pane and its measured bytes out of the estimate', () => {
+    const allMeasured = memorySnapshot([
+      session(paneKeyOf(0), 11, 400 * MB),
+      session(paneKeyOf(1), 12, 100 * MB),
+      session(paneKeyOf(2), 13, 250 * MB)
+    ])
+    const plan = buildSleepAuthorizationPlan(
+      plannerSnapshot({ pinnedTerminalTabIds: ['tab-1'] }),
+      allMeasured
+    )
+
+    expect(plan.reclaimable.map((s) => s.paneKey).sort()).toEqual([paneKeyOf(1), paneKeyOf(2)])
+    expect(plan.excluded.map((s) => [s.paneKey, s.exclusionReason])).toEqual([
+      [paneKeyOf(0), 'tab-pinned']
+    ])
+    expect(plan.estimate.knownCount).toBe(2)
+    expect(plan.estimate.knownBytes).toBe(350 * MB)
   })
 
   it('reports an already-sleeping subject as excluded, not as reclaimable', () => {

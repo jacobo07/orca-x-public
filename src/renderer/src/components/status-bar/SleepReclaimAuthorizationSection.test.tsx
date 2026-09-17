@@ -182,6 +182,16 @@ describe('SleepReclaimAuthorizationSection', () => {
     expect(container.textContent).toContain('Held by a mobile client')
   })
 
+  it('names a pinned tab as the reason a pane stays awake', () => {
+    render(plan({ excluded: [excluded('tab-3:p', 'tab-pinned', 700 * MB)] }))
+    act(() => {
+      container.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.textContent).toContain('Pinned tab')
+    expect(container.textContent).toContain('1 pane is kept awake')
+    expect(container.textContent).not.toContain('700')
+  })
+
   it('renders nothing when the planner saw no panes at all', () => {
     render(
       plan({
