@@ -2964,6 +2964,9 @@
             "stop_command_title": "Stop running command?",
             "stop_agent_description": "Closing this terminal will stop the agent's current work.",
             "stop_command_description": "Closing this terminal will stop the command running inside it.",
+            "discard_unsent_input_title": "Discard what you typed?",
+            "discard_unsent_input_confirm": "Discard and Close",
+            "discard_unsent_input_description": "This terminal has something typed at its prompt that was never submitted. Closing it discards that line.",
             "dont_ask_again": "Don't ask again for running terminals",
             "stop_agent_confirm": "Stop Agent",
             "stop_command_confirm": "Stop and Close"

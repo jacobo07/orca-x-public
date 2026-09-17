@@ -8,12 +8,16 @@ import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from './runtime-terminal-stream'
+import type { ShellInputSincePrompt } from '../../../shared/terminal-osc133-prompt-state'
 
 export type RuntimeTerminalProcessInspection = {
   foregroundProcess: string | null
   hasChildProcesses: boolean
   // Why: callers must not treat a stale remote handle as authoritative idle evidence.
   unavailable?: true
+  /** Present only from authorities that track it; a runtime host that does not answers
+   *  undefined, which readers must treat as unknown rather than as an empty line. */
+  inputSincePrompt?: ShellInputSincePrompt
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'

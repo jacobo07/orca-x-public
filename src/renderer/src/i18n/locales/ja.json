@@ -2770,6 +2770,9 @@
             "stop_command_title": "実行中のコマンドを停止しますか?",
             "stop_agent_description": "このターミナルを閉じると、Agent の現在の作業が停止します。",
             "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
+            "discard_unsent_input_title": "入力内容を破棄しますか?",
+            "discard_unsent_input_confirm": "破棄して閉じる",
+            "discard_unsent_input_description": "このターミナルのプロンプトには、まだ送信されていない入力があります。閉じるとその行は破棄されます。",
             "dont_ask_again": "実行中のターミナルでは今後確認しない",
             "stop_agent_confirm": "Agent を停止",
             "stop_command_confirm": "停止して閉じる"

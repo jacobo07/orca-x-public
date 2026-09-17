@@ -2782,6 +2782,9 @@
             "stop_command_title": "停止运行中的命令？",
             "stop_agent_description": "关闭此终端将停止智能体当前任务。",
             "stop_command_description": "关闭此终端将停止其中正在运行的命令。",
+            "discard_unsent_input_title": "要放弃已输入的内容吗？",
+            "discard_unsent_input_confirm": "放弃并关闭",
+            "discard_unsent_input_description": "此终端的提示符中有尚未提交的输入。关闭后该行内容将被丢弃。",
             "dont_ask_again": "对有运行中进程的终端不再询问",
             "stop_agent_confirm": "停止智能体",
             "stop_command_confirm": "停止并关闭"

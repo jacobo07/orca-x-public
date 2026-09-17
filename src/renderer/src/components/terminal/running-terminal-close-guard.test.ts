@@ -406,4 +406,88 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(visibleRequest()).toBeNull()
   })
+
+  // Closing kills the pty, so a line waiting at the prompt goes with it — and the user never
+  // submitted that line. Same authority as the running-process prompt, not a second guard.
+  describe('a line typed but never submitted', () => {
+    it('stops the close and says what is actually at stake', async () => {
+      inspectRuntimeTerminalProcessMock.mockResolvedValue({
+        foregroundProcess: 'pwsh',
+        hasChildProcesses: false,
+        inputSincePrompt: 'typed'
+      })
+      const onClose = vi.fn()
+
+      guard(onClose)
+      await settleProbe()
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(visibleRequest()?.copyKind).toBe('unsent-input')
+    })
+
+    it('still leads with the running command when both are true', async () => {
+      // A command mid-flight is the costlier surprise; the draft is only the headline
+      // when nothing is running behind it.
+      inspectRuntimeTerminalProcessMock.mockResolvedValue({
+        foregroundProcess: 'sleep',
+        hasChildProcesses: true,
+        inputSincePrompt: 'typed'
+      })
+      const onClose = vi.fn()
+
+      guard(onClose)
+      await settleProbe()
+
+      expect(onClose).not.toHaveBeenCalled()
+      expect(visibleRequest()?.copyKind).not.toBe('unsent-input')
+    })
+
+    it('closes a prompt the host vouches is empty', async () => {
+      inspectRuntimeTerminalProcessMock.mockResolvedValue({
+        foregroundProcess: 'pwsh',
+        hasChildProcesses: false,
+        inputSincePrompt: 'clean'
+      })
+      const onClose = vi.fn()
+
+      guard(onClose)
+      await settleProbe()
+
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(visibleRequest()).toBeNull()
+    })
+
+    it('closes when no authority can see the line, matching this path on running commands', async () => {
+      // Deliberately unlike the resume check, which refuses on unknown. This close already
+      // fails open on an answered probe for a *running command*; being stricter about a
+      // draft than about live work would be incoherent, and would make every older daemon
+      // prompt on every close.
+      inspectRuntimeTerminalProcessMock.mockResolvedValue({
+        foregroundProcess: 'pwsh',
+        hasChildProcesses: false
+      })
+      const onClose = vi.fn()
+
+      guard(onClose)
+      await settleProbe()
+
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(visibleRequest()).toBeNull()
+    })
+
+    it('does not treat a stale remote handle as a typed line', async () => {
+      inspectRuntimeTerminalProcessMock.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'typed',
+        unavailable: true
+      })
+      const onClose = vi.fn()
+
+      guard(onClose)
+      await settleProbe()
+
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
 })

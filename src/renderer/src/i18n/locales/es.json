@@ -2776,6 +2776,9 @@
             "stop_command_title": "¿Detener comando en ejecución?",
             "stop_agent_description": "Al cerrar esta terminal, se detendrá el trabajo actual del agente.",
             "stop_command_description": "Al cerrar esta terminal, se detendrá el comando que se está ejecutando en ella.",
+            "discard_unsent_input_title": "¿Descartar lo que escribiste?",
+            "discard_unsent_input_confirm": "Descartar y cerrar",
+            "discard_unsent_input_description": "Esta terminal tiene algo escrito en el prompt que nunca se envió. Al cerrarla, se descartará esa línea.",
             "dont_ask_again": "No volver a preguntar para terminales en ejecución",
             "stop_agent_confirm": "Detener agente",
             "stop_command_confirm": "Detener y cerrar"

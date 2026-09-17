@@ -2770,6 +2770,9 @@
             "stop_command_title": "실행 중인 명령을 중지할까요?",
             "stop_agent_description": "이 terminal을 닫으면 agent의 현재 작업이 중지됩니다.",
             "stop_command_description": "이 terminal을 닫으면 내부에서 실행 중인 명령이 중지됩니다.",
+            "discard_unsent_input_title": "입력한 내용을 버릴까요?",
+            "discard_unsent_input_confirm": "버리고 닫기",
+            "discard_unsent_input_description": "이 terminal의 프롬프트에 아직 전송하지 않은 입력이 있습니다. 닫으면 그 줄은 사라집니다.",
             "dont_ask_again": "실행 중인 terminals에 대해 다시 묻지 않기",
             "stop_agent_confirm": "Agent 중지",
             "stop_command_confirm": "중지하고 닫기"
