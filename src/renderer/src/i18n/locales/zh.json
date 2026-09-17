@@ -2,6 +2,8 @@
   "workingSet": {
     "dormantTerminal": {
       "title": "已恢复，未运行",
+      "sleptTitle": "已休眠，未运行",
+      "sleptFreshBody": "打开后将在其文件夹中重新启动此终端。",
       "resumeBody": "打开后将恢复 {{agent}} 会话。",
       "freshBody": "打开后将在其文件夹中启动新终端。",
       "open": "打开"

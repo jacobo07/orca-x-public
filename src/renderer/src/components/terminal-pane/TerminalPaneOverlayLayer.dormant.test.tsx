@@ -149,6 +149,29 @@ describe('dormant terminals in the split overlay', () => {
     expect(holder.paneRenders).not.toContain('dormant-b')
   })
 
+  it('says a slept tab is asleep and a restored tab is restored', () => {
+    render(true)
+    const reasonShown = () =>
+      container.querySelector<HTMLElement>('[data-testid="dormant-terminal-placeholder"]')?.dataset
+        .dormancyReason
+    const title = () =>
+      container.querySelector('[data-testid="dormant-terminal-placeholder"] p')?.textContent
+    expect(reasonShown()).toBe('working-set-restore')
+    const restoredTitle = title()
+
+    act(() => {
+      store.setState((s) => ({
+        tabsByWorktree: {
+          [WT]: s.tabsByWorktree[WT]!.map((t) =>
+            t.id === 'dormant-a' ? { ...t, dormancy: { reason: 'workspace-sleep' as const } } : t
+          )
+        }
+      }))
+    })
+    expect(reasonShown()).toBe('workspace-sleep')
+    expect(title()).not.toBe(restoredTitle)
+  })
+
   it('opening the placeholder mounts that tab and no dormant sibling', () => {
     render(true)
     const button = container.querySelector<HTMLButtonElement>(

@@ -17,6 +17,16 @@ export default function DormantTerminalPlaceholder({
       Object.values(state.sleepingAgentSessionsByPaneKey).find((record) => record.tabId === tabId)
         ?.agent
   )
+  const reason = useAppStore((state) => {
+    for (const tabs of Object.values(state.tabsByWorktree)) {
+      const tab = tabs.find((candidate) => candidate.id === tabId)
+      if (tab) {
+        return tab.dormancy?.reason
+      }
+    }
+    return undefined
+  })
+  const slept = reason === 'workspace-sleep'
   const requestOpen = useAppStore((state) => state.requestDormantTerminalTabOpen)
   const agentLabel = agent ? getAgentLabel(agent) : null
 
@@ -25,9 +35,12 @@ export default function DormantTerminalPlaceholder({
       className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background p-6 text-center"
       data-testid="dormant-terminal-placeholder"
       data-dormant-terminal-tab-id={tabId}
+      data-dormancy-reason={reason}
     >
       <p className="text-sm font-medium text-foreground">
-        {translate('workingSet.dormantTerminal.title', 'Restored, not running')}
+        {slept
+          ? translate('workingSet.dormantTerminal.sleptTitle', 'Asleep, not running')
+          : translate('workingSet.dormantTerminal.title', 'Restored, not running')}
       </p>
       <p className="max-w-sm text-xs text-muted-foreground">
         {agentLabel
@@ -36,10 +49,15 @@ export default function DormantTerminalPlaceholder({
               'Opening it resumes the {{agent}} session.',
               { agent: agentLabel }
             )
-          : translate(
-              'workingSet.dormantTerminal.freshBody',
-              'Opening it starts a new terminal in its folder.'
-            )}
+          : slept
+            ? translate(
+                'workingSet.dormantTerminal.sleptFreshBody',
+                'Opening it starts this terminal again in its folder.'
+              )
+            : translate(
+                'workingSet.dormantTerminal.freshBody',
+                'Opening it starts a new terminal in its folder.'
+              )}
       </p>
       <Button
         size="sm"

@@ -2,6 +2,8 @@
   "workingSet": {
     "dormantTerminal": {
       "title": "復元済み・未実行",
+      "sleptTitle": "スリープ中・未実行",
+      "sleptFreshBody": "開くとこのターミナルをそのフォルダーで再び起動します。",
       "resumeBody": "開くと {{agent}} のセッションを再開します。",
       "freshBody": "開くとそのフォルダーで新しいターミナルを起動します。",
       "open": "開く"
