@@ -87,16 +87,18 @@ describe('agent completion over the shared backstop call', () => {
     holdNext = true
     await vi.advanceTimersByTimeAsync(1_000)
     expect(getAgentProcessBackstop().snapshot().inFlightGroups).toBe(1)
-    // The pane's runtime is replaced while its question is in flight.
+    // The pane's runtime is replaced while its question is in flight; the new one runs no agent.
     coordinator.resetCompletionState()
-    coordinator.observeTitle('Codex working')
-    held.resolve(new Map([['pty-0', shell]]))
-    await flushAsyncTicks(10)
     answer = shell
-    await vi.advanceTimersByTimeAsync(1_000)
+    // The old runtime's answer still says the agent is alive.
+    held.resolve(new Map([['pty-0', agent]]))
+    await flushAsyncTicks(10)
+    await vi.advanceTimersByTimeAsync(10_000)
 
-    // Only fresh answers count: the stale idle sample must not be the first of the two.
+    // Applied to the new runtime, it would lend it agent evidence and two idle samples would
+    // then announce an exit for an agent that never ran there.
     expect(dispatchCompletion).not.toHaveBeenCalled()
+    expect(inspectProcesses.mock.calls.length).toBeGreaterThan(3)
   })
 
   it('ignores an answer that arrives after its pane closed, and leaves nothing behind', async () => {
