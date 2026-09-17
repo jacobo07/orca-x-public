@@ -58,12 +58,21 @@ export type Osc133CommandFinishedScanner = {
 export function createOsc133CommandFinishedScanner(
   onCommandFinished: (bestEffortExitCode: number | null) => void,
   /** OSC 133;C — the shell exec'd a command; the pane's foreground changed. */
-  onCommandStarted?: () => void
+  onCommandStarted?: () => void,
+  /** OSC 133;A — the shell drew a prompt (the only marker a never-used shell emits). */
+  onPromptStarted?: () => void,
+  /** Every complete OSC 133 sequence with its raw payload (e.g. `D;0;orca`). */
+  onMarker?: (payload: string) => void
 ): Osc133CommandFinishedScanner {
   let carry = ''
 
   const handleOsc133 = (payload: string): void => {
+    onMarker?.(payload)
     const [sequence, exitCode] = payload.split(';')
+    if (sequence === 'A') {
+      onPromptStarted?.()
+      return
+    }
     if (sequence === 'C') {
       onCommandStarted?.()
       return

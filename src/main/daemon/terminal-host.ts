@@ -20,6 +20,7 @@ import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { isShellProcess } from '../../shared/agent-detection'
+import type { PtyProcessInspection } from '../../shared/pty-process-inspection'
 import { TerminalAttachCanceledError } from './daemon-errors'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
@@ -189,14 +190,13 @@ export class TerminalHost {
     return session.getForegroundProcess()
   }
 
-  inspectProcess(sessionId: string): {
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-  } {
-    const foregroundProcess = this.getAliveSession(sessionId).getForegroundProcess()
+  inspectProcess(sessionId: string): PtyProcessInspection {
+    const session = this.getAliveSession(sessionId)
+    const foregroundProcess = session.getForegroundProcess()
     return {
       foregroundProcess,
-      hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess)
+      hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess),
+      promptState: session.shellPromptState.read()
     }
   }
 

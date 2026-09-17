@@ -20,6 +20,7 @@ import type {
   TerminalSnapshot
 } from './types'
 import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
+import { SessionShellPromptState } from './session-shell-prompt-state'
 
 export class Session {
   readonly sessionId: string
@@ -37,6 +38,7 @@ export class Session {
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
   private readonly startupIngress: PtyStartupIngress
+  readonly shellPromptState = new SessionShellPromptState(() => this.subprocess.shellPath)
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -339,6 +341,7 @@ export class Session {
     if (this._disposed) {
       return
     }
+    this.shellPromptState.observe(data)
     this.shellReady.ingestSubprocessData(data)
   }
 

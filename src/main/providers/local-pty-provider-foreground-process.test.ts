@@ -171,6 +171,21 @@ describe('LocalPtyProvider', () => {
     })
   })
 
+  describe('inspectProcess', () => {
+    it("carries the shell's own prompt state beside the process reading", async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const emit = mockProc.onData.mock.calls[0][0] as (data: string) => void
+      emit('\x1b]133;A\x07% ')
+      expect(await provider.inspectProcess(id)).toEqual({
+        foregroundProcess: 'zsh',
+        hasChildProcesses: false,
+        promptState: 'prompt'
+      })
+      emit('make\r\n\x1b]133;C\x07')
+      expect((await provider.inspectProcess(id)).promptState).toBe('running')
+    })
+  })
+
   describe('getForegroundProcess', () => {
     it('returns the process name', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })

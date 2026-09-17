@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { PtyProcessInspection } from '../shared/pty-process-inspection'
 import type { TerminalMenuCommand } from '../shared/terminal-menu-command'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../shared/app-menu-strip'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
@@ -1194,13 +1195,8 @@ const api = {
     /** Return the PTY foreground process basename when available (e.g. "codex"). */
     getForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:getForegroundProcess', { id }),
-    inspectProcess: (
-      id: string
-    ): Promise<{
-      foregroundProcess: string | null
-      hasChildProcesses: boolean
-      unavailable?: true
-    }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
+    inspectProcess: (id: string): Promise<PtyProcessInspection> =>
+      ipcRenderer.invoke('pty:inspectProcess', { id }),
     confirmForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
 

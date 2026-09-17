@@ -5,6 +5,16 @@ import {
 } from './powershell-osc133-bootstrap'
 
 describe('PowerShell OSC 133 bootstrap', () => {
+  it('tags its prompt markers only once commands are known to emit 133;C', () => {
+    const script = getPowerShellOsc133Bootstrap()
+    const hookInstalled = script.indexOf('function Global:PSConsoleHostReadLine')
+    const tagSet = script.indexOf(`PromptTag = ";orca"`)
+    expect(script).toContain('PromptTag = ""')
+    expect(tagSet).toBeGreaterThan(hookInstalled)
+    expect(script).toContain(']133;A$($Global:__OrcaOsc133State.PromptTag)')
+    expect(script).toContain(']133;D;$fakeExitCode$($Global:__OrcaOsc133State.PromptTag)')
+  })
+
   it('wraps prompt/readline without bypassing profiles or execution policy', () => {
     const script = getPowerShellOsc133Bootstrap()
 

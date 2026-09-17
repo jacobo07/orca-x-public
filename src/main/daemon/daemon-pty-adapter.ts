@@ -1558,10 +1558,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
         hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
       }
     }
-    return this.client.request<{
-      foregroundProcess: string | null
-      hasChildProcesses: boolean
-    }>('inspectProcess', { sessionId: id })
+    // Why the pass-through: a daemon that predates prompt tracking simply omits promptState.
+    return this.client.request<PtyProcessInspection>('inspectProcess', { sessionId: id })
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {
