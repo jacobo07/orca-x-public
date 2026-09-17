@@ -67,6 +67,28 @@ reports its own truth).
 R2 needed no code: R1's layout already separates Orca overhead (the Orca group, including the
 terminal host), workload (project groups) and unattributed memory.
 
+Still open for R1: the packaged application's own Resource Manager has never been looked at. The
+unit and dev-Electron evidence is not a substitute, so R1 is not product-real until the packaged
+surface shows the terminal-host row, keeps workload out of Orca overhead, and reads Unmeasured —
+not zero — when the sweep fails. It is folded into R3's packaged run.
+
+## R3 — density is measured per resource dimension, not per pane
+
+[The Resource Density Lab](./resource-density-lab.md) is the protocol: the six dimensions kept apart
+(logical, presentation, terminal runtime, agent runtime, repository, window), the canonical metric,
+the outcome vocabulary that keeps unmeasured away from zero, host preconditions and stabilization,
+scale points, the metric definitions, and the split between structural ratchets in CI and noisy lab
+baselines outside it.
+
+It exists because the earlier waves measured producers, not the system: fewer timers is not less
+work, and one batched request is not one unit of work. Effective inspection cardinality — how many
+provider calls, census scans and process spawns one due cycle really performs, per leg — is the first
+question it asks.
+
+Measurements are recorded as they land. Every metric is defined in that document before a number is
+attached to it, and the eleven metric names inherited from the program plan were undefined anywhere
+in this repository until then; two of them remain undefined and unpublished on purpose.
+
 ## R4 — recurring work is inventoried, and the debt list only shrinks
 
 A timer that costs nothing with three panes is structural debt at a hundred. R4 makes every
