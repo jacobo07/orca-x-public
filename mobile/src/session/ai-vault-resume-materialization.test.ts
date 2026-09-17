@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../../src/shared/agent-session-host-authority'
+import { AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -27,7 +28,13 @@ function fail(code: string): RpcResponse {
 // A host that holds a desktop reservation for every session unless a handler says otherwise.
 function fakeHost(overrides: Record<string, Handler> = {}) {
   const handlers: Record<string, Handler> = {
-    'status.get': () => ok({ capabilities: [AGENT_SESSION_HOST_AUTHORITY_CAPABILITY] }),
+    'status.get': () =>
+      ok({
+        capabilities: [
+          AGENT_SESSION_HOST_AUTHORITY_CAPABILITY,
+          AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY
+        ]
+      }),
     'terminal.ensureAgentSession': () => fail('agent_session_materializing'),
     'session.tabs.createTerminal': () =>
       ok({ tab: { type: 'terminal', id: 'tab-legacy', terminal: 'term_legacy', title: 'T' } }),
@@ -156,7 +163,11 @@ describe('materializeMobileAiVaultResume on a current host', () => {
       kind: 'explicit',
       worktree: 'id:wt-1',
       agent: 'claude',
-      providerSession: { key: 'session_id', id: 'session-S' },
+      providerSession: {
+        key: 'session_id',
+        id: 'session-S',
+        transcriptPath: '/Users/ada/.claude/projects/repo/session-S.jsonl'
+      },
       presentation: 'background'
     })
     expect(host.calls('session.tabs.activate')[0]?.[1]).toEqual({
@@ -348,10 +359,8 @@ describe('materializeMobileAiVaultResume legacy compatibility (unguarded)', () =
   })
 
   it.each([
-    ['a Codex session (per-session CODEX_HOME)', { agent: 'codex', codexHome: '/h/.codex' }],
-    ['a real-home Codex session', { agent: 'codex', codexHome: null }],
-    ['a session started in a subdirectory', { cwd: '/Users/ada/repo/packages/app' }],
-    ['a non-resumable agent', { agent: 'hermes' }]
+    ['a non-resumable agent', { agent: 'hermes' }],
+    ['a session recorded outside the workspace', { cwd: '/Users/ada/elsewhere' }]
   ] as const)('keeps %s on the typed command', async (_label, overrides) => {
     const host = fakeHost({ 'terminal.ensureAgentSession': ensured('created') })
 
@@ -365,4 +374,78 @@ describe('materializeMobileAiVaultResume legacy compatibility (unguarded)', () =
     expect(host.calls('terminal.ensureAgentSession')).toHaveLength(0)
     expect(host.calls('session.tabs.createTerminal')).toHaveLength(1)
   })
+
+  // These three used to be typed past the guard because the host could not reproduce their
+  // context. A host that says it can now gets them structured instead.
+  it.each([
+    ['a Codex session (per-session CODEX_HOME)', { agent: 'codex', codexHome: '/h/.codex' }],
+    ['a real-home Codex session', { agent: 'codex', codexHome: null }],
+    ['a session started in a subdirectory', { cwd: '/Users/ada/repo/packages/app' }]
+  ] as const)('resumes %s through the guard when the host honours its context', async (
+    _label,
+    overrides
+  ) => {
+    const host = fakeHost({ 'terminal.ensureAgentSession': ensured('created') })
+
+    await expect(
+      materializeMobileAiVaultResume(
+        host.client,
+        request({ session: session(overrides as Partial<AiVaultSession>) })
+      )
+    ).resolves.toMatchObject({ path: 'structured', disposition: 'created' })
+    expect(host.calls('terminal.ensureAgentSession')).toHaveLength(1)
+    expectNothingTyped(host)
+  })
+
+  it('names the session file so the host can resolve its Codex account home', async () => {
+    const host = fakeHost({ 'terminal.ensureAgentSession': ensured('created') })
+
+    await materializeMobileAiVaultResume(
+      host.client,
+      request({
+        session: session({ agent: 'codex', codexHome: '/h/.codex', filePath: '/h/.codex/r.jsonl' })
+      })
+    )
+
+    expect(host.calls('terminal.ensureAgentSession')[0]?.[1]).toMatchObject({
+      providerSession: { transcriptPath: '/h/.codex/r.jsonl' }
+    })
+  })
+
+  it('sends the recorded subdirectory so the host re-enters it', async () => {
+    const host = fakeHost({ 'terminal.ensureAgentSession': ensured('created') })
+
+    await materializeMobileAiVaultResume(
+      host.client,
+      request({ session: session({ cwd: '/Users/ada/repo/packages/app' }) })
+    )
+
+    expect(host.calls('terminal.ensureAgentSession')[0]?.[1]).toMatchObject({
+      startupCwd: '/Users/ada/repo/packages/app'
+    })
+  })
+
+  // Why: the method is there and would answer — it would just resume the session at the
+  // workspace root under its own provider home. That is not the structured path's promise.
+  it.each([
+    ['a Codex session', { agent: 'codex', codexHome: '/h/.codex' }],
+    ['a subdirectory session', { cwd: '/Users/ada/repo/packages/app' }]
+  ] as const)(
+    'keeps %s typed when the host has the method but not the context guarantee',
+    async (_label, overrides) => {
+      const host = fakeHost({
+        'status.get': () => ok({ capabilities: [AGENT_SESSION_HOST_AUTHORITY_CAPABILITY] }),
+        'terminal.ensureAgentSession': ensured('created')
+      })
+
+      await expect(
+        materializeMobileAiVaultResume(
+          host.client,
+          request({ session: session(overrides as Partial<AiVaultSession>) })
+        )
+      ).resolves.toMatchObject({ path: 'legacy', legacyReason: 'host-lacks-context-fidelity' })
+      expect(host.calls('terminal.ensureAgentSession')).toHaveLength(0)
+      expectOneLegacyLaunch(host)
+    }
+  )
 })

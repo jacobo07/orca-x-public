@@ -4,12 +4,19 @@ import {
   type RuntimeEnsureAgentSessionRequest
 } from '../../../src/shared/agent-session-host-authority'
 import { isAgentSessionLegacyFallbackErrorCode } from '../../../src/shared/agent-session-legacy-fallback'
+import { agentSessionResumeNeedsRecordedContext } from '../../../src/shared/agent-session-resume-context'
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
 import { parseAgentSessionResumeRefusalErrorCode } from '../../../src/shared/agent-session-resume-refusal'
 import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
-import { normalizeRuntimePathForComparison } from '../../../src/shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../src/shared/cross-platform-path'
 import type { LiveSessionResumeRefusal } from '../../../src/shared/live-agent-session-presence-types'
-import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -38,6 +45,9 @@ export type MobileAiVaultLegacyResumeReason =
   | 'launch-not-reproducible'
   // Decided before sending: the host does not advertise the structured method, or could not say.
   | 'host-lacks-structured-resume'
+  // Decided before sending: the host has the method but not the guarantee this session needs —
+  // it would start at the workspace root under its own provider home.
+  | 'host-lacks-context-fidelity'
   // The host answered with a reply that proves nothing started.
   | 'host-requires-legacy'
 
@@ -92,12 +102,13 @@ export function planMobileAiVaultStructuredResume(
   if (!hasStartupPlan || !isResumableTuiAgent(session.agent) || !session.sessionId) {
     return null
   }
-  // Why: the typed command exports or strips CODEX_HOME per session; the host launch does neither.
-  if (session.agent === 'codex') {
-    return null
-  }
-  // Why: the typed command changes into the session's cwd; the host launch starts at the workspace.
-  if (session.cwd && !isSameWorkspacePath(session.cwd, request.workspacePath)) {
+  // Why: the host re-enters the recorded directory, but only inside the workspace it is
+  // resuming into; anything else it refuses, so the typed command still owns that case.
+  const startupCwd =
+    session.cwd && !isSameWorkspacePath(session.cwd, request.workspacePath)
+      ? session.cwd.trim()
+      : null
+  if (startupCwd && !isInsideWorkspace(startupCwd, request.workspacePath)) {
     return null
   }
   const ompResumeFilePath =
@@ -108,10 +119,21 @@ export function planMobileAiVaultStructuredResume(
     kind: 'explicit',
     worktree: `id:${request.worktreeId}`,
     agent: session.agent,
-    providerSession: { key: 'session_id', id: session.sessionId },
+    providerSession: {
+      key: 'session_id',
+      id: session.sessionId,
+      // Why: the host resolves which provider account home this session belongs to from
+      // its transcript. Mobile names the file; it never names the home.
+      ...(session.filePath?.trim() ? { transcriptPath: session.filePath.trim() } : {})
+    },
     ...(ompResumeFilePath ? { ompResumeFilePath } : {}),
+    ...(startupCwd ? { startupCwd } : {}),
     presentation: 'background'
   }
+}
+
+function isInsideWorkspace(cwd: string, workspacePath: string | null): boolean {
+  return workspacePath !== null && isPathInsideOrEqual(workspacePath, cwd)
 }
 
 /** Turns an explicit AI Vault selection into a running session on the host. */
@@ -145,9 +167,22 @@ export async function materializeMobileAiVaultResume(
   if (!structured) {
     return await legacy('launch-not-reproducible')
   }
+  const needsRecordedContext = agentSessionResumeNeedsRecordedContext({
+    agent: request.session.agent,
+    sessionCwd: request.session.cwd,
+    workspacePath: request.workspacePath
+  })
   // Why: decided before sending, so an ambiguous structured reply can never turn into a second launch.
-  if (!(await hostSupportsStructuredResume(client, structured.agent === 'omp'))) {
-    return await legacy('host-lacks-structured-resume')
+  const support = await hostSupportsStructuredResume(client, {
+    omp: structured.agent === 'omp',
+    needsRecordedContext
+  })
+  if (support !== 'supported') {
+    return await legacy(
+      support === 'lacks-context-fidelity'
+        ? 'host-lacks-context-fidelity'
+        : 'host-lacks-structured-resume'
+    )
   }
   const response = await client.sendRequest('terminal.ensureAgentSession', structured, {
     timeoutMs: RESUME_RPC_TIMEOUT_MS
@@ -185,27 +220,41 @@ export async function materializeMobileAiVaultResume(
   }
 }
 
-async function hostSupportsStructuredResume(client: ResumeClient, omp: boolean): Promise<boolean> {
+async function hostSupportsStructuredResume(
+  client: ResumeClient,
+  required: { omp: boolean; needsRecordedContext: boolean }
+): Promise<'supported' | 'unsupported' | 'lacks-context-fidelity'> {
   let capabilities: unknown
   try {
     const status = await client.sendRequest('status.get', undefined, {
       timeoutMs: RESUME_RPC_TIMEOUT_MS
     })
     if (!status.ok) {
-      return false
+      return 'unsupported'
     }
     capabilities = (status.result as { capabilities?: unknown } | null)?.capabilities
   } catch {
     // Why: a failed read-only probe started nothing, so the compatible launch cannot duplicate.
-    return false
+    return 'unsupported'
   }
   if (!Array.isArray(capabilities)) {
-    return false
+    return 'unsupported'
   }
-  return (
-    capabilities.includes(AGENT_SESSION_HOST_AUTHORITY_CAPABILITY) &&
-    (!omp || capabilities.includes(AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY))
-  )
+  if (
+    !capabilities.includes(AGENT_SESSION_HOST_AUTHORITY_CAPABILITY) ||
+    (required.omp && !capabilities.includes(AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY))
+  ) {
+    return 'unsupported'
+  }
+  // Why: kept apart from the method being absent — this host answers, and would resume the
+  // right session in the wrong directory or under the wrong account.
+  if (
+    required.needsRecordedContext &&
+    !capabilities.includes(AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY)
+  ) {
+    return 'lacks-context-fidelity'
+  }
+  return 'supported'
 }
 
 function readEnsureResult(value: unknown): {
