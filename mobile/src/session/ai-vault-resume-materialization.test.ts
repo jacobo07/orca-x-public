@@ -98,7 +98,8 @@ function expectNothingTyped(host: ReturnType<typeof fakeHost>): void {
 function expectOneLegacyLaunch(host: ReturnType<typeof fakeHost>): void {
   expect(host.calls('session.tabs.createTerminal')).toHaveLength(1)
   expect(host.calls('terminal.send')).toHaveLength(1)
-  expect((host.calls('terminal.send')[0]?.[1] as { text?: string }).text).toContain('session-S')
+  const typed = host.calls('terminal.send')[0]?.[1] as { text?: string } | undefined
+  expect(typed?.text).toContain('session-S')
 }
 
 describe('materializeMobileAiVaultResume against a host that is already starting S', () => {
