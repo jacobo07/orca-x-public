@@ -134,19 +134,22 @@ describe('ensureAgentSession execution context', () => {
     expect(options.cwd).toBe(SESSION_CWD)
   })
 
-  // CHARACTERIZATION: the host holds the rollout path that names the session's account
-  // home and still applies none of it — so an inherited CODEX_HOME survives and a
-  // real-home session is never stripped. Invert when provenance reaches the spawn.
-  it('applies no account-home provenance to a Codex session it can locate', async () => {
+  // Why: the spawn layer decides the Codex account home from this subject and nothing else
+  // (prepareCodexResumeHome), so handing it over IS the provenance. That the home then
+  // reaches the process env is pinned one layer down, in the pty resume-provenance suite.
+  it('hands the spawn layer the subject its account-home provenance is resolved from', async () => {
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
 
     await ensureCodexSession(runtime)
 
-    const options = createTerminal.mock.calls[0]?.[1] as { env?: Record<string, string> }
-    expect(Object.keys(options)).not.toContain('envToDelete')
-    expect(Object.keys(options.env ?? {})).not.toContain('CODEX_HOME')
-    expect(Object.keys(options.env ?? {})).not.toContain('ORCA_CODEX_HOME')
+    const options = createTerminal.mock.calls[0]?.[1] as {
+      resumeProviderSession?: { id: string; transcriptPath?: string }
+    }
+    expect(options.resumeProviderSession).toMatchObject({
+      id: '019f81b9-19a9-7651-a8d1-352d9420bd11',
+      transcriptPath: CODEX_TRANSCRIPT
+    })
   })
 
   // Why: proves the env assertion can see a variable at all — otherwise "no CODEX_HOME"

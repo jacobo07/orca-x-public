@@ -26869,6 +26869,10 @@ export class OrcaRuntimeService {
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
       persistHostSessionBinding: true,
+      // Why: the spawn layer resolves which account home this session belongs to from the
+      // subject itself (prepareCodexResumeHome). Without it a Codex resume inherits
+      // whichever home the host happens to carry — the right session, the wrong account.
+      resumeProviderSession: request.providerSession,
       agentSessionClaim: claim,
       agentSessionResumeSubject: {
         agent: request.agent,
