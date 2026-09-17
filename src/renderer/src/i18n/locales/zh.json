@@ -5,6 +5,64 @@
       "resumeBody": "打开后将恢复 {{agent}} 会话。",
       "freshBody": "打开后将在其文件夹中启动新终端。",
       "open": "打开"
+    },
+    "history": {
+      "menu": "快照…",
+      "title": "快照 · {{name}}",
+      "description": "此工作区保存的终端布局。恢复后标签页会回来但不会运行，只有打开时才会启动。文件不会被更改。",
+      "loading": "正在加载快照…",
+      "unavailable": "此客户端不支持快照。",
+      "invalidRequest": "无法将此工作区与快照存储对应。",
+      "unreadable": "无法读取快照存储（{{code}}）。",
+      "empty": "此工作区尚未保存任何快照。",
+      "listLabel": "已保存的快照",
+      "untitled": "未命名快照",
+      "tabCount": "标签页：{{count}}",
+      "latest": "最新",
+      "problemsTitle": "无法恢复",
+      "problem": {
+        "unsupportedVersion": "由更新版本的 Orca X 保存",
+        "corrupt": "文件已损坏",
+        "unreadable": "无法读取",
+        "missing": "已不在磁盘上",
+        "unverified": "保存未得到确认",
+        "unrecognized": "快照文件夹中有无法识别的文件"
+      },
+      "checkingProfiles": "正在检查启动选项…",
+      "previewLoading": "正在检查此快照可以恢复的内容…",
+      "profilesUnresolved": "无法检查启动选项，因此部分标签页可能显示为未知。",
+      "capability": {
+        "exactResume": "恢复会话：{{count}}",
+        "restartable": "重新启动：{{count}}",
+        "recreateContext": "在其文件夹中新建终端：{{count}}",
+        "historyOnly": "仅历史记录：{{count}}",
+        "notRestorable": "无法恢复：{{count}}",
+        "unknown": "未知：{{count}}"
+      },
+      "liveElsewhere": "已在别处打开，不会在此恢复：{{count}}",
+      "blocker": {
+        "currentWork": "此工作区有打开的标签页。请先关闭再恢复；不会替换任何内容。",
+        "scopeMismatch": "此快照属于其他工作区。",
+        "hostUnavailable": "此工作区的主机不可用。"
+      },
+      "read": {
+        "missing": "此快照已不在磁盘上。列表已刷新。",
+        "unsupportedVersion": "此快照由更新版本的 Orca X 保存。",
+        "corrupt": "此快照文件已损坏。",
+        "unreadable": "无法读取此快照（{{code}}）。",
+        "invalidRequest": "此快照的请求格式不正确。"
+      },
+      "selectPrompt": "请选择要恢复的快照。",
+      "restore": "恢复",
+      "restoring": "正在恢复…",
+      "close": "关闭",
+      "restored": "快照已恢复。标签页只有在打开时才会启动。",
+      "result": {
+        "inFlight": "此工作区已有恢复正在进行。",
+        "targetChanged": "恢复期间工作区发生了变化；未替换任何内容。",
+        "failedRolledBack": "恢复失败并已撤销；工作区未更改。",
+        "failedNotRolledBack": "恢复失败且未能完全撤销。请检查此工作区的标签页。"
+      }
     }
   },
   "app": {
@@ -14731,6 +14789,8 @@
       "resume": "恢复此会话",
       "resuming": "正在恢复…",
       "waitForPrompt": "Shell 回到提示符后即可使用。",
+      "shellUnsupported": "此 Shell 不会报告其提示符，因此 Orca 无法判断它是否空闲。",
+      "shellBusy": "此 Shell 中仍有命令正在运行。",
       "failed": "无法恢复此会话。请重试。",
       "blocked": {
         "open": "此会话已在另一个窗格中打开。",

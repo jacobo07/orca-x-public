@@ -5,6 +5,64 @@
       "resumeBody": "開くと {{agent}} のセッションを再開します。",
       "freshBody": "開くとそのフォルダーで新しいターミナルを起動します。",
       "open": "開く"
+    },
+    "history": {
+      "menu": "スナップショット…",
+      "title": "スナップショット · {{name}}",
+      "description": "このワークスペースに保存されたターミナル構成です。復元するとタブは起動せずに戻り、開いたときにだけ起動します。ファイルは変更されません。",
+      "loading": "スナップショットを読み込み中…",
+      "unavailable": "このクライアントではスナップショットを利用できません。",
+      "invalidRequest": "このワークスペースをスナップショットの保存先に対応付けられません。",
+      "unreadable": "スナップショットの保存先を読み取れませんでした（{{code}}）。",
+      "empty": "このワークスペースにはまだスナップショットがありません。",
+      "listLabel": "保存済みスナップショット",
+      "untitled": "無題のスナップショット",
+      "tabCount": "タブ: {{count}}",
+      "latest": "最新",
+      "problemsTitle": "復元できません",
+      "problem": {
+        "unsupportedVersion": "新しいバージョンの Orca X で保存されています",
+        "corrupt": "ファイルが破損しています",
+        "unreadable": "読み取れませんでした",
+        "missing": "ディスク上にありません",
+        "unverified": "保存を確認できませんでした",
+        "unrecognized": "スナップショットフォルダー内の不明なファイル"
+      },
+      "checkingProfiles": "起動オプションを確認中…",
+      "previewLoading": "このスナップショットで復元できる内容を確認中…",
+      "profilesUnresolved": "起動オプションを確認できなかったため、一部のタブは不明と表示される場合があります。",
+      "capability": {
+        "exactResume": "セッションを再開: {{count}}",
+        "restartable": "再起動: {{count}}",
+        "recreateContext": "そのフォルダーで新しいターミナル: {{count}}",
+        "historyOnly": "履歴のみ: {{count}}",
+        "notRestorable": "復元不可: {{count}}",
+        "unknown": "不明: {{count}}"
+      },
+      "liveElsewhere": "別の場所で開いているためここでは再開しません: {{count}}",
+      "blocker": {
+        "currentWork": "このワークスペースには開いているタブがあります。復元する前に閉じてください。何も置き換えられません。",
+        "scopeMismatch": "このスナップショットは別のワークスペースのものです。",
+        "hostUnavailable": "このワークスペースのホストを利用できません。"
+      },
+      "read": {
+        "missing": "このスナップショットはディスク上にありません。一覧を更新しました。",
+        "unsupportedVersion": "このスナップショットは新しいバージョンの Orca X で保存されました。",
+        "corrupt": "このスナップショットのファイルは破損しています。",
+        "unreadable": "このスナップショットを読み取れませんでした（{{code}}）。",
+        "invalidRequest": "このスナップショットの要求が不正でした。"
+      },
+      "selectPrompt": "復元するスナップショットを選択してください。",
+      "restore": "復元",
+      "restoring": "復元中…",
+      "close": "閉じる",
+      "restored": "スナップショットを復元しました。タブは開いたときにだけ起動します。",
+      "result": {
+        "inFlight": "このワークスペースへの復元はすでに実行中です。",
+        "targetChanged": "復元中にワークスペースが変更されたため、何も置き換えていません。",
+        "failedRolledBack": "復元に失敗したため元に戻しました。ワークスペースは変更されていません。",
+        "failedNotRolledBack": "復元に失敗し、完全には元に戻せませんでした。このワークスペースのタブを確認してください。"
+      }
     }
   },
   "app": {
@@ -14711,6 +14769,8 @@
       "resume": "このセッションを再開",
       "resuming": "再開中…",
       "waitForPrompt": "シェルがプロンプトに戻ると利用できます。",
+      "shellUnsupported": "このシェルはプロンプトを通知しないため、Orca はアイドル状態か判断できません。",
+      "shellBusy": "このシェルではまだコマンドが実行中です。",
       "failed": "このセッションを再開できませんでした。もう一度お試しください。",
       "blocked": {
         "open": "このセッションは別のペインで開いています。",

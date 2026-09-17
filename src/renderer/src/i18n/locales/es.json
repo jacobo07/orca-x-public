@@ -5,6 +5,64 @@
       "resumeBody": "Al abrirla se reanuda la sesión de {{agent}}.",
       "freshBody": "Al abrirla se inicia una terminal nueva en su carpeta.",
       "open": "Abrir"
+    },
+    "history": {
+      "menu": "Snapshots…",
+      "title": "Snapshots · {{name}}",
+      "description": "Distribuciones de terminales guardadas de este espacio de trabajo. Al restaurar, las pestañas vuelven sin ejecutarse; cada una se inicia solo cuando la abres. Los archivos no cambian.",
+      "loading": "Cargando snapshots…",
+      "unavailable": "Las snapshots no están disponibles en este cliente.",
+      "invalidRequest": "Este espacio de trabajo no se puede asociar a un almacén de snapshots.",
+      "unreadable": "No se pudo leer el almacén de snapshots ({{code}}).",
+      "empty": "Aún no hay snapshots guardadas para este espacio de trabajo.",
+      "listLabel": "Snapshots guardadas",
+      "untitled": "Snapshot sin título",
+      "tabCount": "Pestañas: {{count}}",
+      "latest": "Más reciente",
+      "problemsTitle": "No restaurables",
+      "problem": {
+        "unsupportedVersion": "Guardada con una versión más reciente de Orca X",
+        "corrupt": "Archivo dañado",
+        "unreadable": "No se pudo leer",
+        "missing": "Ya no está en el disco",
+        "unverified": "No se confirmó el guardado",
+        "unrecognized": "Archivo no reconocido en la carpeta de snapshots"
+      },
+      "checkingProfiles": "Comprobando opciones de inicio…",
+      "previewLoading": "Comprobando qué puede recuperar esta snapshot…",
+      "profilesUnresolved": "No se pudieron comprobar las opciones de inicio, así que algunas pestañas pueden aparecer como desconocidas.",
+      "capability": {
+        "exactResume": "Reanudar sesión: {{count}}",
+        "restartable": "Volver a iniciar: {{count}}",
+        "recreateContext": "Terminal nueva en su carpeta: {{count}}",
+        "historyOnly": "Solo historial: {{count}}",
+        "notRestorable": "No se pueden restaurar: {{count}}",
+        "unknown": "Desconocido: {{count}}"
+      },
+      "liveElsewhere": "Abiertas en otro sitio, no se reanudarán aquí: {{count}}",
+      "blocker": {
+        "currentWork": "Este espacio de trabajo tiene pestañas abiertas. Ciérralas antes de restaurar; no se reemplaza nada.",
+        "scopeMismatch": "Esta snapshot pertenece a otro espacio de trabajo.",
+        "hostUnavailable": "El host de este espacio de trabajo no está disponible."
+      },
+      "read": {
+        "missing": "Esta snapshot ya no está en el disco. Se ha actualizado la lista.",
+        "unsupportedVersion": "Esta snapshot se guardó con una versión más reciente de Orca X.",
+        "corrupt": "El archivo de esta snapshot está dañado.",
+        "unreadable": "No se pudo leer esta snapshot ({{code}}).",
+        "invalidRequest": "La solicitud de esta snapshot no era válida."
+      },
+      "selectPrompt": "Selecciona una snapshot para restaurarla.",
+      "restore": "Restaurar",
+      "restoring": "Restaurando…",
+      "close": "Cerrar",
+      "restored": "Snapshot restaurada. Sus pestañas solo se inician cuando las abres.",
+      "result": {
+        "inFlight": "Ya hay una restauración en curso en este espacio de trabajo.",
+        "targetChanged": "El espacio de trabajo cambió durante la restauración; no se reemplazó nada.",
+        "failedRolledBack": "La restauración falló y se deshizo; el espacio de trabajo no ha cambiado.",
+        "failedNotRolledBack": "La restauración falló y no se pudo deshacer por completo. Revisa las pestañas de este espacio de trabajo."
+      }
     }
   },
   "app": {
@@ -14731,6 +14789,8 @@
       "resume": "Reanudar esta sesión",
       "resuming": "Reanudando…",
       "waitForPrompt": "Disponible cuando el shell vuelva a su prompt.",
+      "shellUnsupported": "Este shell no informa de su prompt, así que Orca no puede saber si está inactivo.",
+      "shellBusy": "Todavía hay un comando en ejecución en este shell.",
       "failed": "No se pudo reanudar esta sesión. Inténtalo de nuevo.",
       "blocked": {
         "open": "Esta sesión está abierta en otro pane.",

@@ -5,6 +5,64 @@
       "resumeBody": "Opening it resumes the {{agent}} session.",
       "freshBody": "Opening it starts a new terminal in its folder.",
       "open": "Open"
+    },
+    "history": {
+      "menu": "Snapshots…",
+      "title": "Snapshots · {{name}}",
+      "description": "Saved terminal layouts for this workspace. Restoring brings the tabs back without starting them; each one starts only when you open it. Files are not changed.",
+      "loading": "Loading snapshots…",
+      "unavailable": "Snapshots aren't available in this client.",
+      "invalidRequest": "This workspace can't be matched to a snapshot store.",
+      "unreadable": "The snapshot store couldn't be read ({{code}}).",
+      "empty": "No snapshots saved for this workspace yet.",
+      "listLabel": "Saved snapshots",
+      "untitled": "Untitled snapshot",
+      "tabCount": "Tabs: {{count}}",
+      "latest": "Latest",
+      "problemsTitle": "Not restorable",
+      "problem": {
+        "unsupportedVersion": "Saved by a newer version of Orca X",
+        "corrupt": "Damaged file",
+        "unreadable": "Couldn't be read",
+        "missing": "No longer on disk",
+        "unverified": "Save wasn't confirmed",
+        "unrecognized": "Unrecognized file in the snapshot folder"
+      },
+      "checkingProfiles": "Checking launch options…",
+      "previewLoading": "Checking what this snapshot can bring back…",
+      "profilesUnresolved": "Launch options couldn't be checked, so some tabs may show as unknown.",
+      "capability": {
+        "exactResume": "Resume session: {{count}}",
+        "restartable": "Relaunch: {{count}}",
+        "recreateContext": "New terminal in its folder: {{count}}",
+        "historyOnly": "History only: {{count}}",
+        "notRestorable": "Can't be restored: {{count}}",
+        "unknown": "Unknown: {{count}}"
+      },
+      "liveElsewhere": "Open elsewhere, won't resume here: {{count}}",
+      "blocker": {
+        "currentWork": "This workspace has open tabs. Close them before restoring; nothing is replaced.",
+        "scopeMismatch": "This snapshot belongs to a different workspace.",
+        "hostUnavailable": "This workspace's host isn't available."
+      },
+      "read": {
+        "missing": "This snapshot is no longer on disk. The list has been refreshed.",
+        "unsupportedVersion": "This snapshot was saved by a newer version of Orca X.",
+        "corrupt": "This snapshot file is damaged.",
+        "unreadable": "This snapshot couldn't be read ({{code}}).",
+        "invalidRequest": "The request for this snapshot was malformed."
+      },
+      "selectPrompt": "Select a snapshot to restore.",
+      "restore": "Restore",
+      "restoring": "Restoring…",
+      "close": "Close",
+      "restored": "Snapshot restored. Its tabs start only when you open them.",
+      "result": {
+        "inFlight": "A restore into this workspace is already running.",
+        "targetChanged": "The workspace changed while restoring; nothing was replaced.",
+        "failedRolledBack": "Restore failed and was undone; the workspace is unchanged.",
+        "failedNotRolledBack": "Restore failed and couldn't be fully undone. Check this workspace's tabs."
+      }
     }
   },
   "app": {
@@ -16538,6 +16596,8 @@
       "resume": "Resume this session",
       "resuming": "Resuming…",
       "waitForPrompt": "Available when the shell is back at its prompt.",
+      "shellUnsupported": "This shell doesn't report its prompt, so Orca can't tell it's idle.",
+      "shellBusy": "A command is still running in this shell.",
       "failed": "Couldn't resume this session. Try again.",
       "blocked": {
         "open": "This session is open in another pane.",
