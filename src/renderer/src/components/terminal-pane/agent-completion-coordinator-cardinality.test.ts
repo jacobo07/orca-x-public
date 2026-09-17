@@ -4,8 +4,14 @@
  * this file pins how the total scales with pane count and what a pane costs once it
  * stops being a live, visible subject.
  */
+import { writeFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
+import {
+  measureBackstopCurve,
+  type BackstopCurvePoint
+} from './agent-completion-backstop-curve-harness'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
 import {
   processResult,
   useAgentCompletionCoordinatorLifecycle
@@ -15,6 +21,13 @@ import type { AgentCompletionCoordinator } from './agent-completion-coordinator-
 const WINDOW_MS = 60_000
 // Mirrors MAX_INSPECTION_STARTS_PER_SECOND in agent-process-inspection-queue.ts.
 const WINDOW_START_BUDGET = 8 * (WINDOW_MS / 1_000)
+
+// Why a file: the vitest config swallows console output.
+function writeCurve(curve: BackstopCurvePoint[]): void {
+  if (process.env.ORCA_BACKSTOP_CURVE_OUT) {
+    writeFileSync(process.env.ORCA_BACKSTOP_CURVE_OUT, JSON.stringify(curve, null, 1))
+  }
+}
 
 type PaneState = { visible: boolean; live: boolean; agent: boolean }
 
@@ -47,21 +60,30 @@ function inspectedPtyIds(inspectProcess: ReturnType<typeof vi.fn>): Set<string> 
 describe('agent completion backstop cardinality', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  it('scales with visible agent panes until the per-window start budget caps it', async () => {
-    const one = createPanes(1, { visible: true, live: true, agent: true })
-    await vi.advanceTimersByTimeAsync(WINDOW_MS)
-    const perPaneAtOne = one.inspectProcess.mock.calls.length
-    one.coordinators.forEach((c) => c.dispose())
+  it('pays one timer per pane and trades volume for detection latency past the queue cap', async () => {
+    const curve: BackstopCurvePoint[] = []
+    for (const panes of [1, 10, 50]) {
+      curve.push(await measureBackstopCurve(panes))
+      resetAgentProcessInspectionQueueForTests()
+    }
+    writeCurve(curve)
+    const [one, ten, fifty] = curve as [BackstopCurvePoint, BackstopCurvePoint, BackstopCurvePoint]
 
+    for (const point of curve) {
+      expect(point.timers).toBeGreaterThanOrEqual(point.panes)
+    }
+    // Why: the queue, not the pane count, bounds volume; the cost moves into latency.
+    expect(fifty.singleCalls).toBeLessThanOrEqual(WINDOW_START_BUDGET + 50)
+    expect(ten.singleCalls).toBeGreaterThan(8 * one.singleCalls)
+    expect(fifty.detectionLatencyMs!).toBeGreaterThan(5 * one.detectionLatencyMs!)
+    // Only the pane whose agent exited completes.
+    expect(curve.map((point) => point.completions)).toEqual([1, 1, 1])
+  })
+
+  it('still reaches every pane under the queue cap', async () => {
     const fifty = createPanes(50, { visible: true, live: true, agent: true })
     await vi.advanceTimersByTimeAsync(WINDOW_MS)
-    const totalAtFifty = fifty.inspectProcess.mock.calls.length
 
-    expect(perPaneAtOne).toBeGreaterThanOrEqual(70)
-    // Why: the queue, not the pane count, bounds volume; the cost moves into latency.
-    expect(totalAtFifty).toBeLessThanOrEqual(WINDOW_START_BUDGET + 50)
-    expect(totalAtFifty / 50).toBeLessThan(perPaneAtOne / 5)
-    // Starvation guard: a capped queue must still reach every pane.
     expect(inspectedPtyIds(fifty.inspectProcess).size).toBe(50)
   })
 
