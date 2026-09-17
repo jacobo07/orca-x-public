@@ -10,8 +10,8 @@
  * Then the automatic path. C, unpinned, is given a completed status after the
  * click: the 60 s coordinator must sleep C (the control that its ticks run in
  * this app) while A, pinned and otherwise eligible, stays live through the same
- * ticks. Finally A is unpinned through the same menu, and the plan stops naming
- * the pin while the idle rule still keeps A awake — unpinning is not permission.
+ * ticks. Finally A is unpinned through the same menu: the plan reprojects through the
+ * existing refresh and offers A, which is still running — unpinning sleeps nothing.
  *
  * Supplied by this spec, so NOT proven here: the agent status entries (a plain
  * shell has no agent hooks) and the sleep settings, set in the renderer store.
@@ -161,8 +161,9 @@ async function openSection(page: Page) {
     await page.getByTestId('resource-manager-trigger').click()
   }
   await expect(section).toBeVisible({ timeout: 20_000 })
-  const disclosure = section.locator('button[aria-expanded]')
-  if ((await disclosure.getAttribute('aria-expanded')) === 'false') {
+  // Why: the kept-awake disclosure exists only while some pane is kept awake.
+  const disclosure = section.locator('button[aria-expanded="false"]')
+  if ((await disclosure.count()) > 0) {
     await disclosure.click()
   }
 }
@@ -322,15 +323,21 @@ test.describe('Sleep keeps a pinned tab awake', () => {
     ])
     expect((await readProbeSpy(electronApp)).calls).toHaveLength(1)
 
-    // Unpin through the same menu: the pin leaves the plan, the idle rule still holds A.
+    // Unpin through the same menu. A was already idle (its tab never came to the
+    // foreground), so a fresh plan offers it — and unpinning alone sleeps nothing.
     await switchToWorktree(orcaPage, wt)
     await togglePinFromTabMenu(orcaPage, a.tabId, false)
     await switchToWorktree(orcaPage, homeWorktreeId)
     await openSection(orcaPage)
     await expect
-      .poll(async () => (await readPlan(orcaPage, a, b)).reasons, { timeout: 15_000 })
-      .not.toContain('tab-pinned')
-    expect((await readPlan(orcaPage, a, b)).reasons).toContain('not-idle-long-enough')
+      .poll(
+        async () => {
+          const r = await readPlan(orcaPage, a, b)
+          return { reclaimable: r.reclaimable, pinned: r.reasons.includes('tab-pinned') }
+        },
+        { timeout: 15_000 }
+      )
+      .toEqual({ reclaimable: 1, pinned: false })
     expect(await readLiveness(orcaPage, wt, [a])).toEqual([
       { live: true, hostListed: true, resumeRecorded: false }
     ])
