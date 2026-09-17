@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { ParkPhaseRequest } from '../shared/durable-exit-types'
 import type { PtyProcessInspection } from '../shared/pty-process-inspection'
 import type { PtyProcessInspectionBatchEntry } from '../shared/pty-process-inspection-batch'
 import type { TerminalMenuCommand } from '../shared/terminal-menu-command'
@@ -3189,6 +3190,23 @@ const api = {
     read: (args) => ipcRenderer.invoke('workingSet:read', args),
     probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args)
   } satisfies PreloadApi['workingSet'],
+  durableExit: {
+    park: (request) => ipcRenderer.invoke('durableExit:park', request),
+    onParkPhaseRequest: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, request: ParkPhaseRequest): void =>
+        callback(request)
+      ipcRenderer.on('durableExit:parkPhaseRequest', listener)
+      return () => ipcRenderer.removeListener('durableExit:parkPhaseRequest', listener)
+    },
+    respondParkPhase: (response) => {
+      ipcRenderer.send('durableExit:parkPhaseResponse', response)
+    },
+    onParkFromMenu: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('durableExit:parkFromMenu', listener)
+      return () => ipcRenderer.removeListener('durableExit:parkFromMenu', listener)
+    }
+  } satisfies PreloadApi['durableExit'],
 
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),

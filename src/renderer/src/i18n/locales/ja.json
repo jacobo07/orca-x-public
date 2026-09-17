@@ -1,4 +1,14 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "すべてスリープして保存しました。Orca を終了します。",
+      "stayedOpen": "Orca は開いたままです",
+      "refused": "{{count}} 個のワークスペースで作業が実行中のため、何もスリープしませんでした。",
+      "incomplete": "一部のワークスペースはスリープしました。{{count}} 個はスリープできず、実行中のままです。",
+      "sealFailed": "セッションを保存できなかったため、Orca は開いたままです。",
+      "unavailable": "このウィンドウでは現在「スリープして終了」を使用できません。"
+    }
+  },
   "workingSet": {
     "dormantTerminal": {
       "title": "復元済み・未実行",
@@ -129,6 +139,7 @@
     "reportCrash": "クラッシュを報告…",
     "file": "ファイル",
     "newWindow": "新しいウィンドウ",
+    "parkAndExit": "すべてスリープして終了",
     "exit": "終了",
     "edit": "編集",
     "appearance": "外観",

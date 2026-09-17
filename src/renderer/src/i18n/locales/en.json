@@ -1,4 +1,14 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "Everything is asleep and saved. Orca is closing.",
+      "stayedOpen": "Orca stayed open",
+      "refused": "{{count}} workspace(s) have running work, so nothing was put to sleep.",
+      "incomplete": "Some workspaces are asleep; {{count}} could not be put to sleep and are still running.",
+      "sealFailed": "The session could not be saved, so Orca stays open.",
+      "unavailable": "Park and exit is not available in this window right now."
+    }
+  },
   "workingSet": {
     "dormantTerminal": {
       "title": "Restored, not running",
@@ -156,6 +166,7 @@
     "reportCrash": "Report Crash...",
     "file": "File",
     "newWindow": "New Window",
+    "parkAndExit": "Sleep Everything and Exit",
     "exit": "Exit",
     "edit": "Edit",
     "appearance": "Appearance",

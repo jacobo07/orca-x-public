@@ -1,4 +1,14 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "Todo está dormido y guardado. Orca se está cerrando.",
+      "stayedOpen": "Orca sigue abierto",
+      "refused": "{{count}} espacio(s) de trabajo tienen trabajo en curso, así que no se durmió nada.",
+      "incomplete": "Algunos espacios de trabajo están dormidos; {{count}} no se pudieron dormir y siguen en ejecución.",
+      "sealFailed": "No se pudo guardar la sesión, así que Orca sigue abierto.",
+      "unavailable": "Aparcar y salir no está disponible ahora en esta ventana."
+    }
+  },
   "workingSet": {
     "dormantTerminal": {
       "title": "Restaurada, sin ejecutar",
@@ -129,6 +139,7 @@
     "reportCrash": "Informar fallo...",
     "file": "Archivo",
     "newWindow": "Nueva ventana",
+    "parkAndExit": "Dormir todo y salir",
     "exit": "Salir",
     "edit": "Editar",
     "appearance": "Apariencia",

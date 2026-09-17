@@ -1,4 +1,14 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "所有内容已休眠并保存。Orca 正在关闭。",
+      "stayedOpen": "Orca 保持打开",
+      "refused": "{{count}} 个工作区有正在运行的工作，因此没有休眠任何内容。",
+      "incomplete": "部分工作区已休眠；{{count}} 个无法休眠，仍在运行。",
+      "sealFailed": "无法保存会话，因此 Orca 保持打开。",
+      "unavailable": "此窗口当前无法使用“休眠并退出”。"
+    }
+  },
   "workingSet": {
     "dormantTerminal": {
       "title": "已恢复，未运行",
@@ -129,6 +139,7 @@
     "reportCrash": "发送崩溃报告...",
     "file": "文件",
     "newWindow": "新建窗口",
+    "parkAndExit": "全部休眠并退出",
     "exit": "退出",
     "edit": "编辑",
     "appearance": "外观",

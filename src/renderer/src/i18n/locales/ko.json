@@ -1,4 +1,14 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "모든 항목이 절전 상태로 저장되었습니다. Orca를 종료합니다.",
+      "stayedOpen": "Orca가 열린 상태로 유지됩니다",
+      "refused": "작업이 실행 중인 워크스페이스가 {{count}}개 있어 아무것도 절전하지 않았습니다.",
+      "incomplete": "일부 워크스페이스는 절전되었지만 {{count}}개는 절전하지 못해 계속 실행 중입니다.",
+      "sealFailed": "세션을 저장하지 못해 Orca가 열린 상태로 유지됩니다.",
+      "unavailable": "지금 이 창에서는 절전 후 종료를 사용할 수 없습니다."
+    }
+  },
   "workingSet": {
     "dormantTerminal": {
       "title": "복원됨, 실행 안 함",
@@ -129,6 +139,7 @@
     "reportCrash": "크래시 신고...",
     "file": "파일",
     "newWindow": "새 창",
+    "parkAndExit": "모두 절전 후 종료",
     "exit": "종료",
     "edit": "편집",
     "appearance": "외관",

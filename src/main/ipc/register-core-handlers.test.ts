@@ -24,6 +24,7 @@ const {
   registerPetHandlersMock,
   registerSessionHandlersMock,
   registerProjectWorkingSetHandlersMock,
+  registerDurableExitHandlersMock,
   registerWorkspaceWindowClaimHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
@@ -91,6 +92,7 @@ const {
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerProjectWorkingSetHandlersMock: vi.fn(),
+  registerDurableExitHandlersMock: vi.fn(),
   registerWorkspaceWindowClaimHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
@@ -264,6 +266,10 @@ vi.mock('./pet', () => ({
 
 vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
+}))
+
+vi.mock('./durable-exit', () => ({
+  registerDurableExitHandlers: registerDurableExitHandlersMock
 }))
 
 vi.mock('./project-working-set', () => ({
@@ -558,6 +564,7 @@ describe('registerCoreHandlers', () => {
     expect(registerOrcaProfileHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerProjectWorkingSetHandlersMock).toHaveBeenCalledOnce()
+    expect(registerDurableExitHandlersMock).toHaveBeenCalledOnce()
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store, {
       isDashboardPopoutRenderer: isDashboardPopoutRendererMock
     })

@@ -93,6 +93,7 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
+import { attachParkPhaseBridge } from '@/lib/durable-exit/park-phase-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
@@ -800,6 +801,7 @@ export function useIpcEvents(): void {
     let lastLiveAgentStatusApplyAt = 0
 
     unsubs.push(attachMobileMarkdownBridge())
+    unsubs.push(attachParkPhaseBridge())
 
     const handleWorktreesChanged = async (
       repoId: string,

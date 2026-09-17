@@ -2004,6 +2004,11 @@ export class Store {
     })
   }
 
+  /** The profile file this store publishes, for callers that must read what reached the disk. */
+  getDataFilePath(): string {
+    return this.dataFile
+  }
+
   flushActiveViewPreferenceOrThrow(): void {
     this.activeViewPreference.flushOrThrow()
   }

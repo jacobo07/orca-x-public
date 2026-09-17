@@ -863,6 +863,21 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       read: () => Promise.resolve({ status: 'unavailable' as const }),
       probeRestoreEvidence: () => Promise.resolve({ status: 'unavailable' as const })
     },
+    // Why explicit: a web client cannot quit the desktop app or its daemon.
+    durableExit: {
+      park: () =>
+        Promise.resolve({
+          operationId: 'web',
+          status: 'unavailable' as const,
+          workspaces: [],
+          alreadyAsleepCount: 0,
+          exiting: false,
+          detail: 'web-client'
+        }),
+      onParkPhaseRequest: () => () => {},
+      respondParkPhase: () => {},
+      onParkFromMenu: () => () => {}
+    },
     cache: {
       getGitHub: () =>
         Promise.resolve(

@@ -37,6 +37,7 @@ import { setAgentBrowserBridgeRef, registerBrowserHandlers } from './browser'
 import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { registerSessionHandlers } from './session'
 import { registerProjectWorkingSetHandlers } from './project-working-set'
+import { registerDurableExitHandlers } from './durable-exit'
 import { registerWorkspaceWindowClaimHandlers } from './workspace-window-claim'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -213,6 +214,7 @@ export function registerCoreHandlers(
   registerPetHandlers()
   registerSessionHandlers(store)
   registerProjectWorkingSetHandlers()
+  registerDurableExitHandlers(() => store.getDataFilePath())
   registerWorkspaceWindowClaimHandlers({
     openNewWindow: lifecycleOptions.onOpenNewWindow,
     onTopologyChanged: lifecycleOptions.onWindowTopologyChanged
