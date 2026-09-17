@@ -1,4 +1,5 @@
 import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
+import { runOnRuntimeHost } from './runtime-host-query-queue'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../shared/runtime-types'
 
@@ -101,18 +102,29 @@ async function waitForLegacySleepConvergence(
       await new Promise<void>((resolve) => globalThis.setTimeout(resolve, delayMs))
     }
     try {
-      const listTimeoutMs = legacySleepRpcTimeout(deadline)
-      const result = await callRuntimeRpc(
-        { kind: 'environment', environmentId },
-        'terminal.list',
-        {
-          worktree: worktreeSelector,
-          limit: 10_000,
-          requireFreshPtyLiveness: true,
-          includeVisualLayouts: false
-        },
-        { timeoutMs: listTimeoutMs }
+      // Why: the host answers one fresh listing at a time, so this verification waits its
+      // turn behind any other consumer rather than superseding it — and still issues its
+      // own listing when the turn comes, because a sleep may not be verified from an
+      // answer taken before the stop.
+      const listDeadline = Date.now() + legacySleepRpcTimeout(deadline)
+      const result = await runOnRuntimeHost(environmentId, listDeadline, () =>
+        callRuntimeRpc(
+          { kind: 'environment', environmentId },
+          'terminal.list',
+          {
+            worktree: worktreeSelector,
+            limit: 10_000,
+            requireFreshPtyLiveness: true,
+            includeVisualLayouts: false
+          },
+          { timeoutMs: Math.max(1, listDeadline - Date.now()) }
+        )
       )
+      if (result === null) {
+        // Why: never got to ask — distinct from a host that answered something unusable.
+        lastFailure = new Error('terminal_liveness_host_busy')
+        continue
+      }
       const hasLiveTerminal = hasLiveListedTerminal(result)
       if (hasLiveTerminal === false) {
         return
