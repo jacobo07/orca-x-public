@@ -218,6 +218,40 @@ worktree store lookups this scenario exercises. The measured mechanism does not 
 and the run's own mount-count assertions (5 before, 1 after, decoy exemption held) behaved as
 specified — so this is recorded as **attributable with a named confounder**, not as a clean-tree run.
 
+**Dormant Row State Footprint, restored rail** — `f4e2b4f05`, dev unit subject, 1.4.178-rc.2,
+win32 x64, scenario `restored dormant rail`, dimension *logical session* swept at 1, 10, 50 and 100
+rows. Every other dimension is absent by construction: no app, no window, no repository observation,
+no runtime and no agent — the subject is the capture, plan and apply functions over one store.
+Outcome `measured`, evidence class `deterministic-unit`. One sample per point: every figure is a
+count or a serialized length, so no median is owed.
+
+| Rows | Store objects | Resume handles | Workspace state | Manifest | Rows the mount authority would mount |
+| ---- | ------------- | -------------- | --------------- | -------- | ------------------------------------ |
+| 1    | 5             | 1              | 1,590 B         | 820 B    | 0                                    |
+| 10   | 45            | 5              | 11,295 B        | 4,721 B  | 0                                    |
+| 50   | 225           | 25             | 55,875 B        | 22,411 B | 0                                    |
+| 100  | 450           | 50             | 111,549 B       | 44,523 B | 0                                    |
+
+Readings: store objects are **exactly** `4n + ceil(n/2)` at every point — one row, one unified tab,
+one group member and one layout each, plus a resume handle for every second row, which is the half
+of this rail carrying a sealed agent session. State costs **~1,114 B per row** and the manifest
+**~442 B per row**; the 1→10 slope is 3% lower only because the single-row point carries the odd
+half of the agent parity. So a hundred remembered rows is about **109 KB of workspace state and
+43 KB on disk**, and no timer is armed at any scale.
+
+The mount column is the load-bearing one. It is `decideTerminalTabMount`'s own answer with **no
+render restriction in force**, so nothing but dormancy can hold a row back — the restriction
+dissolves at its threshold, after a full reveal and under its kill switch, and dormancy must not.
+Asking the authority rather than reading `ptyId` is not a stylistic choice: hydration normalizes
+that field to null whatever the payload carried, so a restore that installs a runtime **survives**
+an assertion on it. That mutation did survive, and the instrument was changed rather than the score.
+
+Confounders: the rail is synthetic (one pane per row, every second row a resumable Claude session,
+eight rows per group) and restore-time evidence confirms every sealed fact, so capability is held
+constant rather than swept. This is a **state** figure at the store altitude — it says nothing about
+resident bytes, and the 100-row point it reaches for free is **not** thereby covered for the process
+metric. Tree bracket: the dirty-path set was identical before and after (22 paths, none moved).
+
 **The daemon, SSH and runtime legs are not covered by that number.** A daemon-backed pane is
 inspected by one RPC per session (`src/main/daemon/daemon-pty-adapter.ts:1562` sends
 `inspectProcess` with a single `sessionId`), so those legs are linear in panes by construction —
