@@ -308,17 +308,18 @@ test('offers a live runtime-backed pane for sleep only once its host proves it l
     }, MIN_IDLE_MS)
 
     const note = async (stage: string) => {
+      const plan = await readPlan(page)
       timeline.push({
         stage,
         at: Date.now(),
         workerPid: process.pid,
-        plan: await readPlan(page),
+        plan,
         pane: await readPaneFacts(page, paneKey, tabId),
         calls: await updateSpy(app, {})
       })
       // Why: written as it goes, so a run that dies mid-way still says where.
       writeFileSync(testInfo.outputPath('pane-timeline.json'), JSON.stringify(timeline, null, 2))
-      return (timeline[timeline.length - 1] as { plan: Awaited<ReturnType<typeof readPlan>> }).plan
+      return plan
     }
     await note('seeded')
 
