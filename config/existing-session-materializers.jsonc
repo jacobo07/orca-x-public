@@ -1,13 +1,18 @@
 // Every production call of a function that turns an existing provider session into a resume
-// launch, and how that launch is kept from duplicating a live or starting session.
+// launch, and every client call of an RPC method that asks a host to do it, with how that launch
+// is kept from duplicating a live or starting session.
 // Enforced by src/main/agent-hooks/existing-session-materializer-inventory.test.ts: a new call,
-// a changed count, or a stale entry fails. See docs/live-session-collision-guard-spec.md.
+// a changed count, or a stale entry fails. Swept: src/ and mobile/src/.
+// See docs/live-session-collision-guard-spec.md.
 //
 // guard:
-//   resume-spawn-gate  the launch reaches pty:spawn with resumeProviderSession and is decided there;
-//                      `carrier` names the file that puts the session on the spawn request
-//   runtime-registry   runtime-routed ensure; own ClaimedAgentPtyOwnerRegistry, not the spawn gate
-//   not-an-effect      builds text or a plan that something else launches
+//   resume-spawn-gate    the launch reaches pty:spawn with resumeProviderSession and is decided there;
+//                        `carrier` names the file that puts the session on the spawn request
+//   runtime-ensure-gate  terminal.ensureAgentSession: the host's owner registry adopts a live or
+//                        starting owner, and any new spawn crosses the same gate; `carrier` names the
+//                        file that hands the gate the session (agentSessionResumeSubject)
+//   not-an-effect        builds text or a plan, or defines the method, and launches nothing itself
+//   unguarded            known debt: reaches a provider resume without the gate. Only shrinks.
 {
   "planners": [
     "buildAgentResumeStartupPlan",
@@ -15,6 +20,7 @@
     "buildAiVaultResumeCommand",
     "buildAiVaultResumeShellCommand"
   ],
+  "rpcMethods": ["terminal.ensureAgentSession"],
   "callSites": [
     {
       "file": "src/main/ai-vault/session-scanner-accumulator.ts",
@@ -34,8 +40,60 @@
       "file": "src/main/runtime/orca-runtime.ts",
       "planner": "buildAgentResumeStartupPlan",
       "count": 1,
-      "guard": "runtime-registry",
-      "reason": "Runtime ensure for web, mobile and CLI. Not yet on the spawn gate: open collision-guard debt."
+      "guard": "runtime-ensure-gate",
+      "carrier": "src/main/runtime/orca-runtime.ts",
+      "reason": "ensureAgentSession itself: the claimed spawn goes through the owner registry, then the spawn gate for anything it would start."
+    },
+    {
+      "file": "src/main/runtime/runtime-rpc.ts",
+      "planner": "terminal.ensureAgentSession",
+      "count": 1,
+      "guard": "not-an-effect",
+      "reason": "Method allowlist entry; the handler is the method definition."
+    },
+    {
+      "file": "src/main/runtime/rpc/methods/agent-session.ts",
+      "planner": "terminal.ensureAgentSession",
+      "count": 1,
+      "guard": "not-an-effect",
+      "reason": "Method definition; it calls ensureAgentSession, classified above."
+    },
+    {
+      "file": "src/renderer/src/runtime/web-runtime-session.ts",
+      "planner": "terminal.ensureAgentSession",
+      "count": 1,
+      "guard": "runtime-ensure-gate",
+      "carrier": "src/main/runtime/orca-runtime.ts",
+      "reason": "AI Vault resume in a runtime-hosted (web) workspace; a refusal is an RPC error, and only legacy_required / method_not_found fall back."
+    },
+    {
+      "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts",
+      "planner": "terminal.ensureAgentSession",
+      "count": 1,
+      "guard": "runtime-ensure-gate",
+      "carrier": "src/main/runtime/orca-runtime.ts",
+      "reason": "Cold restore, wake and per-pane resume of a pane hosted by a runtime environment."
+    },
+    {
+      "file": "mobile/src/session/ai-vault-resume-launch.ts",
+      "planner": "buildAgentResumeStartupPlan",
+      "count": 1,
+      "guard": "unguarded",
+      "reason": "Mobile AI Vault resume: session.tabs.createTerminal carries no session, then terminal.send types the command. Neither gate sees it; only the after-the-fact SessionStart notice does."
+    },
+    {
+      "file": "mobile/src/session/ai-vault-resume-launch.ts",
+      "planner": "buildAiVaultResumeCommand",
+      "count": 1,
+      "guard": "unguarded",
+      "reason": "Same mobile typed-command resume; command text for agents without a startup plan."
+    },
+    {
+      "file": "mobile/src/session/ai-vault-resume-launch.ts",
+      "planner": "buildAiVaultResumeShellCommand",
+      "count": 1,
+      "guard": "unguarded",
+      "reason": "Same mobile typed-command resume; shell form."
     },
     {
       "file": "src/renderer/src/lib/ai-vault-resume-command.ts",

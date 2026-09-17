@@ -1,13 +1,26 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { parse } from 'jsonc-parser'
 import { describe, expect, it } from 'vitest'
 
 const REPO_ROOT = join(__dirname, '..', '..', '..')
 const INVENTORY_PATH = join(REPO_ROOT, 'config', 'existing-session-materializers.jsonc')
-const GUARDS = new Set(['resume-spawn-gate', 'runtime-registry', 'not-an-effect'])
+// Why: mobile imports the shared planners and resumes sessions on a paired host.
+const SWEPT_ROOTS = ['src', 'mobile/src']
+const GUARDS = new Set(['resume-spawn-gate', 'runtime-ensure-gate', 'not-an-effect', 'unguarded'])
+// Carrier evidence per gated class: the field that hands the session to the gate.
+const CARRIER_FIELD: Record<string, RegExp> = {
+  'resume-spawn-gate': /\bresumeProviderSession\s*:/,
+  'runtime-ensure-gate': /\bagentSessionResumeSubject\s*:/
+}
+// Known debt, spelled out here so a new unguarded entry is a reviewed change to this test too.
+const KNOWN_UNGUARDED = [
+  'mobile/src/session/ai-vault-resume-launch.ts#buildAgentResumeStartupPlan',
+  'mobile/src/session/ai-vault-resume-launch.ts#buildAiVaultResumeCommand',
+  'mobile/src/session/ai-vault-resume-launch.ts#buildAiVaultResumeShellCommand'
+]
 // Why: a sweep that silently stopped matching must not read as a clean estate.
-const MIN_CALL_SITES = 6
+const MIN_CALL_SITES = 10
 
 type CallSite = {
   file: string
@@ -17,7 +30,7 @@ type CallSite = {
   carrier?: string
   reason: string
 }
-type Inventory = { planners: string[]; callSites: CallSite[] }
+type Inventory = { planners: string[]; rpcMethods: string[]; callSites: CallSite[] }
 
 function readInventory(): Inventory {
   return parse(readFileSync(INVENTORY_PATH, 'utf8')) as Inventory
@@ -31,6 +44,12 @@ function stripComments(source: string): string {
 export function countPlannerCalls(source: string, planner: string): number {
   const pattern = new RegExp(`(?<!function\\s+)(?<![\\w$.])${planner}\\s*\\(`, 'g')
   return stripComments(source).match(pattern)?.length ?? 0
+}
+
+/** A method name is only ever used as a string literal. */
+export function countRpcMethodUses(source: string, method: string): number {
+  const escaped = method.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return stripComments(source).match(new RegExp(`['"\`]${escaped}['"\`]`, 'g'))?.length ?? 0
 }
 
 function productionSources(dir: string, out: string[] = []): string[] {
@@ -47,15 +66,22 @@ function productionSources(dir: string, out: string[] = []): string[] {
   return out
 }
 
-function sweep(planners: readonly string[]): Map<string, number> {
+function sweep(inventory: Inventory): Map<string, number> {
   const found = new Map<string, number>()
-  for (const path of productionSources(join(REPO_ROOT, 'src'))) {
-    const source = readFileSync(path, 'utf8')
-    const file = relative(REPO_ROOT, path).split('\\').join('/')
-    for (const planner of planners) {
-      const count = countPlannerCalls(source, planner)
-      if (count > 0) {
-        found.set(`${file}#${planner}`, count)
+  for (const root of SWEPT_ROOTS) {
+    for (const path of productionSources(join(REPO_ROOT, root))) {
+      const source = readFileSync(path, 'utf8')
+      const file = relative(REPO_ROOT, path).split('\\').join('/')
+      const record = (name: string, count: number) => {
+        if (count > 0) {
+          found.set(`${file}#${name}`, count)
+        }
+      }
+      for (const planner of inventory.planners) {
+        record(planner, countPlannerCalls(source, planner))
+      }
+      for (const method of inventory.rpcMethods) {
+        record(method, countRpcMethodUses(source, method))
       }
     }
   }
@@ -64,18 +90,25 @@ function sweep(planners: readonly string[]): Map<string, number> {
 
 describe('existing-session materializer inventory', () => {
   const inventory = readInventory()
-  const found = sweep(inventory.planners)
+  const found = sweep(inventory)
   const declared = new Map(
     inventory.callSites.map((site) => [`${site.file}#${site.planner}`, site])
   )
 
   it('finds enough call sites to mean something', () => {
+    for (const root of SWEPT_ROOTS) {
+      expect(existsSync(join(REPO_ROOT, root)), root).toBe(true)
+    }
     expect(found.size).toBeGreaterThanOrEqual(MIN_CALL_SITES)
-    // Anchor by name so a renamed planner fails here instead of matching nothing.
+    // Anchor by name so a renamed planner or method fails here instead of matching nothing.
     expect(found.get('src/main/runtime/orca-runtime.ts#buildAgentResumeStartupPlan')).toBe(1)
+    expect(
+      found.get('src/main/runtime/rpc/methods/agent-session.ts#terminal.ensureAgentSession')
+    ).toBe(1)
+    expect([...found.keys()].some((key) => key.startsWith('mobile/src/'))).toBe(true)
   })
 
-  it('classifies every production resume planner call', () => {
+  it('classifies every production resume planner call and ensure request', () => {
     const unclassified = [...found]
       .filter(([key, count]) => declared.get(key)?.count !== count)
       .map(([key, count]) => `${key} x${count} (declared ${declared.get(key)?.count ?? 'none'})`)
@@ -94,13 +127,22 @@ describe('existing-session materializer inventory', () => {
     }
   })
 
-  it('only claims the spawn gate where the launch carries the session to the spawn', () => {
-    const gated = inventory.callSites.filter((s) => s.guard === 'resume-spawn-gate')
-    expect(gated.length).toBeGreaterThan(0)
-    for (const site of gated) {
-      expect(site.carrier, `${site.file} names no carrier`).toBeTruthy()
-      const source = stripComments(readFileSync(join(REPO_ROOT, site.carrier ?? ''), 'utf8'))
-      expect(/\bresumeProviderSession\s*:/.test(source), site.carrier).toBe(true)
+  it('only lists the unguarded debt this test names, and nothing else', () => {
+    const unguarded = inventory.callSites
+      .filter((site) => site.guard === 'unguarded')
+      .map((site) => `${site.file}#${site.planner}`)
+    expect(unguarded.sort()).toEqual([...KNOWN_UNGUARDED].sort())
+  })
+
+  it('only claims a gate where the launch hands the session to it', () => {
+    for (const [guard, field] of Object.entries(CARRIER_FIELD)) {
+      const gated = inventory.callSites.filter((s) => s.guard === guard)
+      expect(gated.length, guard).toBeGreaterThan(0)
+      for (const site of gated) {
+        expect(site.carrier, `${site.file} names no carrier`).toBeTruthy()
+        const source = stripComments(readFileSync(join(REPO_ROOT, site.carrier ?? ''), 'utf8'))
+        expect(field.test(source), `${site.carrier} for ${guard}`).toBe(true)
+      }
     }
   })
 
@@ -112,9 +154,13 @@ describe('existing-session materializer inventory', () => {
       '/* planRecordedAgentResume( */',
       'const a = buildAgentResumeStartupPlan({})',
       'const b = obj.buildAgentResumeStartupPlan({})',
-      'return planRecordedAgentResume ({})'
+      'return planRecordedAgentResume ({})',
+      "call('terminal.ensureAgentSession', {})",
+      "// call('terminal.ensureAgentSession')",
+      "call('terminal.ensureAgentSessionX')"
     ].join('\n')
     expect(countPlannerCalls(synthetic, 'buildAgentResumeStartupPlan')).toBe(1)
     expect(countPlannerCalls(synthetic, 'planRecordedAgentResume')).toBe(1)
+    expect(countRpcMethodUses(synthetic, 'terminal.ensureAgentSession')).toBe(1)
   })
 })
