@@ -181,6 +181,18 @@ test.describe('agent completion backstop', () => {
       await execInTerminal(orcaPage, pane.ptyId, `${agentPath} ${stopFile(index)}`)
     }
 
+    // Why: a recognition timeout otherwise says nothing about what the backstop did see.
+    test.info().annotations.push({ type: 'panes', description: JSON.stringify(panes) })
+    const describeSeen = async () => {
+      const { inspections } = await readSpy(electronApp)
+      const names = new Set<string>()
+      for (const entry of inspections.slice(-20)) {
+        for (const name of Object.values(entry.foreground)) {
+          names.add(String(name))
+        }
+      }
+      return JSON.stringify({ calls: inspections.length, recentForeground: [...names] })
+    }
     // Every stand-in is seen as an agent by the backstop itself.
     await expect
       .poll(
@@ -199,6 +211,10 @@ test.describe('agent completion backstop', () => {
         { timeout: 60_000, message: 'the backstop never recognized every stand-in agent' }
       )
       .toBe(PANES)
+      .catch(async (error: unknown) => {
+        test.info().annotations.push({ type: 'seen', description: await describeSeen() })
+        throw error
+      })
 
     // Steady state: one timer, one call per tick carrying every pane, no per-pane calls.
     const windowStart = (await readSpy(electronApp)).now
