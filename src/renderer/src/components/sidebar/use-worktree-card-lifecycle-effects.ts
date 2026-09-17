@@ -1,12 +1,9 @@
 import { useEffect } from 'react'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
-import {
-  HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS,
-  isWebClient,
-  type WorktreeCardProps
-} from './worktree-card-model'
+import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { getWorktreeCardDecorationRefresh } from './worktree-card-decoration-refresh'
+import { isWebClient, type WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 
@@ -88,10 +85,23 @@ export function useWorktreeCardLifecycleEffects({
       })
     }
     // Why: PRs created outside Orca (e.g. `gh pr create`) emit no renderer event; poll visible cards to discover them.
-    return installWindowVisibilityInterval({
-      run: refreshHostedReview,
-      intervalMs: HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS
-    })
+    const subjectKey = [
+      repo.id,
+      repo.path,
+      branch,
+      worktree.linkedPR ?? '',
+      cachedBranchFallbackGitHubPRNumber ?? '',
+      worktree.head ?? '',
+      linkedGitLabMR ?? '',
+      linkedBitbucketPR ?? '',
+      linkedAzureDevOpsPR ?? '',
+      linkedGiteaPR ?? ''
+    ].join('\0')
+    return getWorktreeCardDecorationRefresh().register(
+      'hosted-review',
+      subjectKey,
+      refreshHostedReview
+    )
   }, [
     repo,
     isFolder,
@@ -173,10 +183,11 @@ export function useWorktreeCardLifecycleEffects({
     const issueNumber = worktree.linkedIssue
 
     // Why: fallback poll behind activity triggers; stopped while hidden to avoid waking idle workspaces.
-    return installWindowVisibilityInterval({
-      run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
-      intervalMs: 5 * 60_000
-    })
+    return getWorktreeCardDecorationRefresh().register(
+      'linked-issue',
+      [repo.id, repo.path, issueNumber].join('\0'),
+      () => fetchIssue(repo.path, issueNumber, { repoId: repo.id })
+    )
   }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 
   useEffect(() => {
