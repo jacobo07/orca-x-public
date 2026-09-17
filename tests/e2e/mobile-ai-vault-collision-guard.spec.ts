@@ -31,7 +31,7 @@ const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-mobile-vault-'))
 /** Where the stand-in agent reports the directory it was actually started in. */
 const agentCwdReport = path.join(fakeCliDir, 'agent-cwd.log')
 const fakeClaudeSource =
-  "const report = process.env.ORCA_E2E_AGENT_CWD_REPORT\n" +
+  'const report = process.env.ORCA_E2E_AGENT_CWD_REPORT\n' +
   "if (report) { require('node:fs').appendFileSync(report, process.cwd() + '\\n') }\n" +
   "process.stdout.write('fake claude ready\\n'); setInterval(() => {}, 60_000)\n"
 if (process.platform === 'win32') {
@@ -307,7 +307,8 @@ test('a mobile AI Vault resume contends with the desktop reservation before anyt
     expect(contextClient.sent).not.toContain('terminal.send')
     await expect
       .poll(
-        () => (existsSync(agentCwdReport) ? readFileSync(agentCwdReport, 'utf8').toLowerCase() : ''),
+        () =>
+          existsSync(agentCwdReport) ? readFileSync(agentCwdReport, 'utf8').toLowerCase() : '',
         { timeout: 60_000, message: 'the resumed agent never reported a working directory' }
       )
       .toContain(subdirectory.toLowerCase())

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../../src/shared/agent-session-host-authority'
-import { AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import type { RpcResponse } from '../transport/types'
 import {
   materializeMobileAiVaultResume,
@@ -381,21 +383,21 @@ describe('materializeMobileAiVaultResume legacy compatibility (unguarded)', () =
     ['a Codex session (per-session CODEX_HOME)', { agent: 'codex', codexHome: '/h/.codex' }],
     ['a real-home Codex session', { agent: 'codex', codexHome: null }],
     ['a session started in a subdirectory', { cwd: '/Users/ada/repo/packages/app' }]
-  ] as const)('resumes %s through the guard when the host honours its context', async (
-    _label,
-    overrides
-  ) => {
-    const host = fakeHost({ 'terminal.ensureAgentSession': ensured('created') })
+  ] as const)(
+    'resumes %s through the guard when the host honours its context',
+    async (_label, overrides) => {
+      const host = fakeHost({ 'terminal.ensureAgentSession': ensured('created') })
 
-    await expect(
-      materializeMobileAiVaultResume(
-        host.client,
-        request({ session: session(overrides as Partial<AiVaultSession>) })
-      )
-    ).resolves.toMatchObject({ path: 'structured', disposition: 'created' })
-    expect(host.calls('terminal.ensureAgentSession')).toHaveLength(1)
-    expectNothingTyped(host)
-  })
+      await expect(
+        materializeMobileAiVaultResume(
+          host.client,
+          request({ session: session(overrides as Partial<AiVaultSession>) })
+        )
+      ).resolves.toMatchObject({ path: 'structured', disposition: 'created' })
+      expect(host.calls('terminal.ensureAgentSession')).toHaveLength(1)
+      expectNothingTyped(host)
+    }
+  )
 
   it('names the session file so the host can resolve its Codex account home', async () => {
     const host = fakeHost({ 'terminal.ensureAgentSession': ensured('created') })
