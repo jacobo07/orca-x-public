@@ -2143,6 +2143,8 @@ export function connectPanePty(
     isTrackablePtyId: isForegroundTrackingAllowed,
     readForegroundProcess: (id) => window.api.pty.getForegroundProcess(id),
     confirmForegroundProcess: (id) => window.api.pty.confirmForegroundProcess(id),
+    readShellPromptState: async (id) => (await window.api.pty.inspectProcess(id)).promptState,
+    readPublished: () => useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey],
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(cacheKey, entry),
     hasKnownAgentIdentity: paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
@@ -2275,8 +2277,15 @@ export function connectPanePty(
       // process-confirmation window; they never become routing evidence.
       paneForegroundAgentTracker.onCommandStarted(commandInferredPaneAgent)
     },
-    onCommandFinished: handleCommandFinished
+    onCommandFinished: handleCommandFinished,
+    onPromptShown: () => paneForegroundAgentTracker.onPromptShown()
   })
+  // Why: main's facts carry no foreground read, so a start only withdraws idle proof
+  // and re-opens reveal sampling that a settled shell reading had closed.
+  const handleCommandStartedFact = (): void => {
+    visibleForegroundSampleSettled = false
+    paneForegroundAgentTracker.onCommandStartedFact()
+  }
   // Why: the xterm OSC 133 swallow is rendering hygiene, not a side effect —
   // it stays attached in every authority mode.
   commandLifecycle.attachXtermConsumer(pane.terminal)
@@ -2390,6 +2399,8 @@ export function connectPanePty(
         onAgentBecameWorking,
         onAgentExited,
         onCommandFinished: handleCommandFinished,
+        onCommandStarted: handleCommandStartedFact,
+        onPromptShown: () => paneForegroundAgentTracker.onPromptShown(),
         onPrLink: (link) =>
           useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link),
         // Why: the Command Code settle policy stays here — the done settle

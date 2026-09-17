@@ -40,6 +40,19 @@ describe('pane foreground agent slice', () => {
     expect(store.getState().paneForegroundAgentByPaneKey).toEqual({})
   })
 
+  it('treats a markerless-shell reading as a change, so the resume reason can update', () => {
+    const store = createTestStore()
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', { agent: null, shellForeground: false })
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: null,
+      shellForeground: false,
+      shellPromptUnsupported: true
+    })
+    expect(
+      store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.shellPromptUnsupported
+    ).toBe(true)
+  })
+
   it('sweeps only the closed tab prefix, not sibling tabs or prefix-share ids', () => {
     const store = createTestStore()
     store

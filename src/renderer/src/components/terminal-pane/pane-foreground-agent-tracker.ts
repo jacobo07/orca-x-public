@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { ShellPromptState } from '../../../../shared/terminal-osc133-prompt-state'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 // Why: settle after exec, then place the final generic retry beyond sequential
@@ -21,6 +22,11 @@ type PaneForegroundAgentTrackerDeps = {
   readForegroundProcess: (ptyId: string) => Promise<string | null>
   /** Fresh, provider-owned evidence used only when input routing may change. */
   confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
+  /** The shell's own OSC 133 state as recorded by whoever saw all its output (the PTY
+   *  host). Lets a reattached shell that drew its prompt before this pane existed prove it. */
+  readShellPromptState?: (ptyId: string) => Promise<ShellPromptState | undefined>
+  /** The pane's current published entry, so a fact-only update never clobbers an identity. */
+  readPublished?: () => PaneForegroundAgentEntry | undefined
   publish: (entry: PaneForegroundAgentEntry) => void
   /** True when the pane is otherwise known to run an agent (launchAgent, live
    *  hook status). Lets a restored agent pane confirm — rather than trust — a
@@ -47,6 +53,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   onCommandStarted: (expectedAgent?: TuiAgent | null) => void
   /** True when pane identity must remain visible until an async shell confirmation. */
   onCommandFinished: () => boolean
+  /** OSC 133;A — the shell drew a prompt; a never-used shell emits nothing else. */
+  onPromptShown: () => void
+  /** OSC 133;C reported by main, which reads no foreground; only withdraws idle-shell proof. */
+  onCommandStartedFact: () => void
   dispose: () => void
 } {
   let disposed = false
@@ -95,6 +105,29 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         }
       })
     }, delayMs)
+  }
+
+  // Why both halves: a shell in front proves no child runs, but not that no in-process
+  // command runs; the host's record of the shell's last marker proves the prompt.
+  async function settlePlainShellFromPromptState(generation: number, ptyId: string): Promise<void> {
+    let promptState: ShellPromptState | undefined
+    try {
+      promptState = await deps.readShellPromptState?.(ptyId)
+    } catch {
+      promptState = undefined
+    }
+    if (disposed || generation !== readGeneration || trackablePtyId() !== ptyId) {
+      return
+    }
+    if (promptState === 'prompt') {
+      deps.publish({ agent: null, shellForeground: true })
+      deps.onVisibleForegroundSettled?.('shell')
+      return
+    }
+    if (promptState === 'unsupported') {
+      deps.publish({ agent: null, shellForeground: false, shellPromptUnsupported: true })
+    }
+    deps.onVisibleForegroundSettled?.('inconclusive')
   }
 
   async function readForeground(
@@ -175,6 +208,14 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         deps.publish({ agent: null, shellForeground: true })
         deps.onConfirmedShellForeground?.(reason)
         deps.onVisibleForegroundSettled?.('shell')
+      } else if (
+        !hasForegroundAgentEvidence &&
+        !hasKnownAgentEvidence &&
+        !hasAgentExpectation &&
+        typeof processName === 'string' &&
+        isShellProcess(processName)
+      ) {
+        await settlePlainShellFromPromptState(generation, ptyId)
       } else {
         deps.onVisibleForegroundSettled?.('inconclusive')
       }
@@ -275,6 +316,41 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       // the read republishes its identity; only a genuine shell result clears it.
       scheduleRead(COMMAND_SETTLE_MS, 0, 'command-finished')
       return true
+    },
+    onPromptShown() {
+      // Why: a D earlier in the same prompt already started its own confirmation, and
+      // a launch's command read owns the prompt its shell draws before the agent starts.
+      if (
+        scheduledReadReason === 'command' ||
+        activeReadReason === 'command' ||
+        scheduledReadReason === 'command-finished' ||
+        activeReadReason === 'command-finished' ||
+        hasAgentExpectation ||
+        !trackablePtyId()
+      ) {
+        return
+      }
+      if (!hasForegroundAgentEvidence) {
+        // Why: launch or hook identity without a seen agent process means a launch may
+        // still be starting (a slow profile draws its first prompt late); leave it to 133;D.
+        if (hasKnownAgentEvidence || deps.hasKnownAgentIdentity?.() === true) {
+          return
+        }
+        cancelPendingRead()
+        deps.publish({ agent: null, shellForeground: true })
+        return
+      }
+      // Why: a full-screen agent's nested shells draw prompts too.
+      cancelPendingRead()
+      scheduleRead(COMMAND_SETTLE_MS, 0, 'command-finished')
+    },
+    onCommandStartedFact() {
+      const current = deps.readPublished?.()
+      if (!current || current.agent !== null || current.shellForeground !== true) {
+        return
+      }
+      cancelPendingRead()
+      deps.publish({ agent: null, shellForeground: false })
     },
     dispose() {
       disposed = true
