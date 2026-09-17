@@ -292,7 +292,7 @@ function calleesOf(text) {
 }
 
 const SPAWN_CALL =
-  /(?:^|[^\w$])(?:execFile|execFileAsync|execFileSync|execSync|spawn|spawnSync|fork|runCommand)\s*\(|\bexec\s*\(/
+  /(?:^|[^\w$])(?:execFile|execFileAsync|execFileSync|execSync|spawn|spawnSync|fork|forkIpcChild|runCommand)\s*\(|\bexec\s*\(/
 
 function bodiesByName(scopes, code) {
   const bodies = new Map()
@@ -386,7 +386,17 @@ export function scanSource(relPath, source, helperNames = []) {
       when: importsWatcher
     },
     { kind: 'worker', pattern: /\bnew\s+Worker\s*\(|utilityProcess\.fork\s*\(/g, when: true },
-    { kind: 'worker', pattern: /(?:^|[^\w$.])fork\s*\(/g, when: importsFork }
+    { kind: 'worker', pattern: /(?:^|[^\w$.])fork\s*\(/g, when: importsFork },
+    // The estate forks IPC children through this wrapper (AGENTS.md, "Forked IPC Children"). It
+    // imports no `fork` from child_process and its name does not match a bare `fork(`, so both
+    // rules above miss it — and the six sites it owns include the terminal daemon.
+    {
+      kind: 'worker',
+      pattern: /(?:^|[^\w$.])forkIpcChild\s*\(/g,
+      // Not in the module that DEFINES it: `export function forkIpcChild(` matches this pattern as
+      // a call. Its own inner fork is that file's business and was never counted here.
+      when: !relPath.endsWith('ipc-message-listener-floor.ts')
+    }
   ]
   for (const { kind, pattern, when } of structural) {
     if (!when) {

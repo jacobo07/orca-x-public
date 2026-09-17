@@ -613,6 +613,18 @@
       "bound": "one resolve-poll loop per native-chat transcript subscription, closed via unsubscribe() when the subscriber goes away",
       "note": "transcript-watch.ts:93 - unref'd, exponential backoff in production, fixed interval under test"
     },
+    "src/shared/ipc-message-listener-floor.ts#worker#forkIpcChild": {
+      "responsibility": "ipc-child-fork-wrapper",
+      "cadence": "n/a (one per call)",
+      "lifetime": "persistent",
+      "scaling": "per-request",
+      "hidden": "n/a",
+      "dormant": "n/a",
+      "spawns": "node",
+      "disposition": "justified",
+      "bound": "creates no child of its own: this is the single fork() every IPC child in src/ now goes through, so its cardinality is exactly the sum of its call sites, each classified separately in this file",
+      "note": "ipc-message-listener-floor.ts:133 - the wrapper that keeps one no-op 'message' listener attached for the child's life; see AGENTS.md \"Forked IPC Children\""
+    },
     "src/main/plugins/plugin-host-process.ts#worker#startPluginWorker": {
       "responsibility": "plugin-host-process-spawn",
       "cadence": "n/a (one per enabled plugin)",
