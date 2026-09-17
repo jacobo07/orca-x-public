@@ -2,7 +2,10 @@ import { useEffect } from 'react'
 
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
-import { getWorktreeCardDecorationRefresh } from './worktree-card-decoration-refresh'
+import {
+  getWorktreeCardDecorationMaxAgeMs,
+  getWorktreeCardDecorationRefresh
+} from './worktree-card-decoration-refresh'
 import { isWebClient, type WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
@@ -81,7 +84,8 @@ export function useWorktreeCardLifecycleEffects({
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
         linkedGiteaPR,
-        staleWhileRevalidate: true
+        staleWhileRevalidate: true,
+        maxAgeMs: getWorktreeCardDecorationMaxAgeMs('hosted-review')
       })
     }
     // Why: PRs created outside Orca (e.g. `gh pr create`) emit no renderer event; poll visible cards to discover them.
@@ -186,7 +190,11 @@ export function useWorktreeCardLifecycleEffects({
     return getWorktreeCardDecorationRefresh().register(
       'linked-issue',
       [repo.id, repo.path, issueNumber].join('\0'),
-      () => fetchIssue(repo.path, issueNumber, { repoId: repo.id })
+      () =>
+        fetchIssue(repo.path, issueNumber, {
+          repoId: repo.id,
+          maxAgeMs: getWorktreeCardDecorationMaxAgeMs('linked-issue')
+        })
     )
   }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 

@@ -629,6 +629,8 @@ export type CacheEntry<T> = {
 
 type FetchOptions = {
   force?: boolean
+  /** Entries older than this are stale; can only shorten the TTL (polls at the TTL cadence). */
+  maxAgeMs?: number
   noCache?: boolean
   requireComplete?: boolean
   allowStaleFallback?: boolean
@@ -3405,7 +3407,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repo !== undefined
     )
     const cached = get().issueCache[cacheKey]
-    if (isFresh(cached)) {
+    if (isFresh(cached, Math.min(CACHE_TTL, options?.maxAgeMs ?? CACHE_TTL))) {
       return cached.data
     }
 

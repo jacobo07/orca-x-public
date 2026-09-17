@@ -13,6 +13,14 @@ export const WORKTREE_CARD_DECORATION_INTERVALS_MS: Record<WorktreeCardDecoratio
   'linked-issue': 5 * 60_000
 }
 
+/**
+ * Why: the store stamps an entry when the answer arrives, so at the next tick it is younger than one
+ * interval by the lookup's latency and would be skipped; scheduled refreshes accept 90% of it.
+ */
+export function getWorktreeCardDecorationMaxAgeMs(family: WorktreeCardDecorationFamily): number {
+  return Math.floor(WORKTREE_CARD_DECORATION_INTERVALS_MS[family] * 0.9)
+}
+
 type Subject = { run: () => unknown; holders: number }
 
 export type WorktreeCardDecorationRefresh = {

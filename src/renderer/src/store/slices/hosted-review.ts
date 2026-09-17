@@ -31,6 +31,8 @@ type CacheEntry<T> = {
 }
 type FetchOptions = {
   force?: boolean
+  /** Entries older than this are stale; can only shorten the TTL (polls at the TTL cadence). */
+  maxAgeMs?: number
   repoId?: string
   staleWhileRevalidate?: boolean
   currentHeadOid?: string | null
@@ -103,8 +105,11 @@ export function _clearHostedReviewRequestGenerationsForTest(): void {
   requestGenerations.clear()
 }
 
-function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
-  return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL_MS
+function isFresh<T>(
+  entry: CacheEntry<T> | undefined,
+  maxAgeMs: number = CACHE_TTL_MS
+): entry is CacheEntry<T> {
+  return entry !== undefined && Date.now() - entry.fetchedAt < Math.min(CACHE_TTL_MS, maxAgeMs)
 }
 
 function findHostedReviewRepoByPath(
@@ -406,7 +411,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       !linkedRefetch &&
       !scopedResultRefetch &&
       !staleMergedHeadRefetch &&
-      isFresh(cached)
+      isFresh(cached, options?.maxAgeMs)
     ) {
       return cached.data
     }

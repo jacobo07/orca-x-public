@@ -144,12 +144,14 @@ async function measure(cards: number, cardsPerSubject: number): Promise<Measurem
     await vi.advanceTimersByTimeAsync(WINDOW_MS)
   })
   const hiddenCalls = counters.hostedFetch + counters.issueFetch - beforeHidden
-  setVisibility('visible')
 
   for (const hook of hooks) {
     hook.unmount()
   }
   const intervalsAfterUnmount = live.size
+  // Why: becoming visible with cards still mounted starts lookups that outlive the fake clock and
+  // stay in the store's module-level in-flight map for the next case.
+  setVisibility('visible')
   unsubscribeStore()
   vi.restoreAllMocks()
   return {
@@ -226,6 +228,35 @@ describe('worktree card decoration refresh cardinality', () => {
       expect(m.issueFetch).toBeLessThanOrEqual(m.subjects * 3)
     }
   )
+
+  it('keeps each cadence when lookups take time to answer', async () => {
+    // Why: fetchedAt is stamped on the answer, so with cadence == TTL a slow lookup makes the
+    // next tick see a fresh entry and skip it; the real app showed issues refresh every 10 min.
+    const slow =
+      <T>(answer: (args: never) => T) =>
+      (args: never) =>
+        new Promise<T>((resolve) => setTimeout(() => resolve(answer(args)), 500))
+    const hosted = api.hostedReview.forBranch.getMockImplementation()!
+    const issue = api.gh.issue.getMockImplementation()!
+    api.hostedReview.forBranch.mockImplementation(slow(hosted))
+    api.gh.issue.mockImplementation(slow(issue))
+    const m = await measure(10, 1)
+    expect(m.hostedIpc).toBe(m.subjects * 11)
+    expect(m.issueIpc).toBe(m.subjects * 3)
+  })
+
+  it('lets a scheduled max age shorten the store TTL but never extend it', async () => {
+    const store = makeStore(1)
+    const repo = store.getState().repos[0]
+    const long = { repoId: repo.id, maxAgeMs: 60 * 60_000 }
+    await store.getState().fetchIssue(repo.path, 1, long)
+    await store.getState().fetchHostedReviewForBranch(repo.path, 'b', long)
+    vi.advanceTimersByTime(5 * 60_000 + 1)
+    await store.getState().fetchIssue(repo.path, 1, long)
+    await store.getState().fetchHostedReviewForBranch(repo.path, 'b', long)
+    expect(api.gh.issue).toHaveBeenCalledTimes(2)
+    expect(api.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+  })
 
   it('never stacks a second lookup behind one that is still in flight', async () => {
     api.gh.issue.mockReset().mockImplementation(() => new Promise(() => {}))
