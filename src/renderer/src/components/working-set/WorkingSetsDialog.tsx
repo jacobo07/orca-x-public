@@ -68,6 +68,8 @@ function WorkingSetsDialogBody({
 
   const select = (workingSetId: string): void => {
     setSelectedId(workingSetId)
+    // Why also on the same row: choosing it again is how the user re-checks a changed workspace.
+    setPreviewRevision((value) => value + 1)
     setResultText(null)
   }
 
@@ -87,7 +89,8 @@ function WorkingSetsDialogBody({
       onClose()
       return
     }
-    if (!mountedRef.current) {
+    // Why silent: the click that owns the flight reports its own result.
+    if (!mountedRef.current || result.status === 'in-flight') {
       return
     }
     setRestoring(false)

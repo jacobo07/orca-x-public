@@ -58,7 +58,6 @@
       "close": "关闭",
       "restored": "快照已恢复。标签页只有在打开时才会启动。",
       "result": {
-        "inFlight": "此工作区已有恢复正在进行。",
         "targetChanged": "恢复期间工作区发生了变化；未替换任何内容。",
         "failedRolledBack": "恢复失败并已撤销；工作区未更改。",
         "failedNotRolledBack": "恢复失败且未能完全撤销。请检查此工作区的标签页。"

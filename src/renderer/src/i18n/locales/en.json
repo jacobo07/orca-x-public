@@ -58,7 +58,6 @@
       "close": "Close",
       "restored": "Snapshot restored. Its tabs start only when you open them.",
       "result": {
-        "inFlight": "A restore into this workspace is already running.",
         "targetChanged": "The workspace changed while restoring; nothing was replaced.",
         "failedRolledBack": "Restore failed and was undone; the workspace is unchanged.",
         "failedNotRolledBack": "Restore failed and couldn't be fully undone. Check this workspace's tabs."

@@ -143,16 +143,15 @@ export function readProblemText(read: Exclude<WorkingSetReadResult, { status: 'v
   }
 }
 
-/** Null for a restore that succeeded; the surface closes and announces that separately. */
+/**
+ * Null for a restore that succeeded (the surface closes and announces it) and for a click ignored
+ * while another restore runs (that one reports).
+ */
 export function restoreResultText(result: ProductRestoreResult): string | null {
   switch (result.status) {
     case 'restored':
-      return null
     case 'in-flight':
-      return translate(
-        'workingSet.history.result.inFlight',
-        'A restore into this workspace is already running.'
-      )
+      return null
     case 'unreadable':
       return readProblemText(result.read)
     case 'refused':

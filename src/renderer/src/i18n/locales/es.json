@@ -58,7 +58,6 @@
       "close": "Cerrar",
       "restored": "Snapshot restaurada. Sus pestañas solo se inician cuando las abres.",
       "result": {
-        "inFlight": "Ya hay una restauración en curso en este espacio de trabajo.",
         "targetChanged": "El espacio de trabajo cambió durante la restauración; no se reemplazó nada.",
         "failedRolledBack": "La restauración falló y se deshizo; el espacio de trabajo no ha cambiado.",
         "failedNotRolledBack": "La restauración falló y no se pudo deshacer por completo. Revisa las pestañas de este espacio de trabajo."

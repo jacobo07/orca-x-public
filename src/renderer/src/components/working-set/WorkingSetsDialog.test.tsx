@@ -258,6 +258,33 @@ describe('WorkingSetsDialog', () => {
     expect((q('working-set-save')[0] as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('lets the click that owns a restore report it when a second click lands in the same turn', async () => {
+    let release!: (value: unknown) => void
+    holder.restore = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => (release = resolve)))
+      .mockResolvedValueOnce({ status: 'in-flight' })
+    await render()
+    await click(q('working-set-row')[0])
+    await act(async () => {
+      restoreButton().click()
+      restoreButton().click()
+    })
+    await flush()
+    expect(q('working-set-restore-result')).toHaveLength(0)
+    expect(restoreButton().disabled).toBe(true)
+    await act(async () => release({ status: 'restored', rows: 5 }))
+    await flush()
+    expect(store.getState().activeModal).toBe('none')
+  })
+
+  it('re-checks the workspace when the selected row is chosen again', async () => {
+    await render()
+    await click(q('working-set-row')[0])
+    await click(q('working-set-row')[0])
+    expect(holder.preview).toHaveBeenCalledTimes(2)
+  })
+
   it('never reports a rolled-back restore as a success', async () => {
     holder.restore = vi.fn(async () => ({ status: 'failed', stage: 'verify', rolledBack: true }))
     await render()
