@@ -91,21 +91,22 @@ preflight is a new IPC/RPC method name, so an older peer fails closed rather tha
 
 ## Status (2026-09-16)
 
-| Slice                                                          | State                                                                            |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Presence projection, reader, claim-key identity                | landed `326a31df5`, `20db169ad`                                                  |
-| `agentSession:readLivePresence` (renderer read)                | landed `26d0fb75c`                                                               |
-| Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; owning-window warning toast `fc7307fe2`                      |
-| Class A gate on AI Vault resume (Back / Continue / revalidate) | landed `9ae0aecf8`, copy `b8030f2b4`                                             |
-| Class A gate on Sleep launch and cold restore                  | landed at the spawn: RED `143013dbc`, `175c81eb4`, `6352d715c`                   |
-| Reservation for simultaneous Class A resumes                   | landed `123c07615` (RED), `38a5137ed`, `f539fa099`, `08d9b2933`, e2e `1737c642a` |
-| Class A gate on working-set (snapshot) restore                 | landed at the spawn (revival is a pane cold restore)                             |
-| Runtime ensure (web, runtime panes) on the same reservation    | landed: RED `374888067`, `9ab2316c6`, `e0d52c924`, `c23065435`, `ca93d6d78`      |
-| Mobile AI Vault resume (current mobile + current host)         | landed: RED `657cb02f3`, `862da67bf`, `3a5e03911`, `f9f925335`, e2e `90a775c0e`  |
-| Mobile typed-command fallback                                  | unguarded compatibility leg, inventoried (`b1629058f`)                           |
-| Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt                 |
-| Shared-live rail indicator, go-to-open-session                 | not started                                                                      |
-| Real-provider product reality                                  | not run                                                                          |
+| Slice                                                          | State                                                                                        |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Presence projection, reader, claim-key identity                | landed `326a31df5`, `20db169ad`                                                              |
+| `agentSession:readLivePresence` (renderer read)                | landed `26d0fb75c`                                                                           |
+| Class B detection + `agentSession:liveCollision` push          | landed `c8626a2a7`; owning-window warning toast `fc7307fe2`                                  |
+| Class A gate on AI Vault resume (Back / Continue / revalidate) | landed `9ae0aecf8`, copy `b8030f2b4`                                                         |
+| Class A gate on Sleep launch and cold restore                  | landed at the spawn: RED `143013dbc`, `175c81eb4`, `6352d715c`                               |
+| Reservation for simultaneous Class A resumes                   | landed `123c07615` (RED), `38a5137ed`, `f539fa099`, `08d9b2933`, e2e `1737c642a`             |
+| Class A gate on working-set (snapshot) restore                 | landed at the spawn (revival is a pane cold restore)                                         |
+| Runtime ensure (web, runtime panes) on the same reservation    | landed: RED `374888067`, `9ab2316c6`, `e0d52c924`, `c23065435`, `ca93d6d78`                  |
+| Mobile AI Vault resume (current mobile + current host)         | landed: RED `657cb02f3`, `862da67bf`, `3a5e03911`, `f9f925335`, e2e `90a775c0e`              |
+| Mobile typed-command fallback                                  | unguarded compatibility leg, inventoried (`b1629058f`)                                       |
+| Execution-context fidelity (recorded directory, account home)  | landed: RED `cac3d209f`, `0a5b2a0f6`, fix `80a9b2af6`, `ab52977ff`, `882e35b58`, `0763c9c40` |
+| Class B Back semantics                                         | unmeasured; interactive probe blocked by the folder-trust prompt                             |
+| Shared-live rail indicator, go-to-open-session                 | not started                                                                                  |
+| Real-provider product reality                                  | not run                                                                                      |
 
 Measured: Claude Code 2.1.273 `-p --resume <id>` returns the same session id.
 
@@ -206,9 +207,10 @@ The typed command remains, as an unguarded leg, only when:
   OMP), read from `status.get` before sending; an unreadable status counts as not advertised;
 - the host answers `agent_session_legacy_required` or `method_not_found`
   (`src/shared/agent-session-legacy-fallback.ts`, shared with web);
-- the host launch cannot reproduce the command: Codex (the typed command sets or strips
-  `CODEX_HOME` per session, ensure does neither), a session cwd other than the workspace root
-  (ensure starts at the workspace), or no startup plan.
+- the session needs its recorded context and the host does not advertise
+  `agent-session.resume-context.v1` (see the next section) — a distinct reason,
+  `host-lacks-context-fidelity`, because that host answers and would resume elsewhere;
+- the session is recorded outside the workspace being resumed into, or there is no startup plan.
 
 Refusals, unknown replies, timeouts and other errors never fall back.
 
@@ -220,9 +222,58 @@ Refusals, unknown replies, timeouts and other errors never fall back.
 | current | answers legacy_required                     | typed command, unguarded                               |
 | older   | any                                         | typed command, Class B only                            |
 
-Mobile only resumes into local targets, so SSH never reaches this path. The web AI Vault sends
-Codex and subdirectory sessions to ensure regardless; whether that resumes under the wrong home or
-directory is unmeasured (recorded, not changed).
+Mobile only resumes into local targets, so SSH never reaches this path.
+
+## Execution-context fidelity (2026-09-17)
+
+A resume can be collision-safe and still be the wrong resume. `terminal.ensureAgentSession` took
+the worktree selector as its only location input, so every resume started at the workspace root
+(`orca-runtime.ts`, the `?? workspace.path` fallback) with the host's settings environment — while
+its own sibling `terminal.createAgentSession` had accepted a validated `startupCwd` since both were
+born in `b232df732`. Two things followed, and both were measured before anything changed:
+
+- a session recorded in a subdirectory resumed at the workspace root;
+- a Codex session resumed under whichever `CODEX_HOME` the host carried, because the spawn layer
+  resolves the account home from `resumeProviderSession` and ensure never passed it.
+
+The web client made this a drop rather than an absence: `web-runtime-session.ts` holds `cwd`, `env`
+and `envToDelete` (its legacy leg sends all three) and omitted them from the guarded request.
+
+**What each side owns now.** The directory crosses the wire as `startupCwd`, because no host-side
+record maps a vault session to a directory at ensure time. The account home does not: the host
+resolves it from the transcript path the request already carries, through the authority that
+already exists (`prepareCodexSessionResume`, `aiVault:prepareSessionResume`), which also owns the
+real-home strip and the cross-account repin. Clients name a file; they never name a home.
+
+**The directory is constrained, unlike a new terminal's.** `resolveTerminalStartupCwd` is
+deliberately unconstrained (#7685) so a new terminal can open outside the worktree. A resume may
+not: `agent-session-resume-startup-cwd.ts` refuses anything outside the workspace being resumed
+into with `agent_session_resume_context_unauthorized`, so a paired client cannot start an agent
+anywhere on the host. That code is not in the legacy fallback list, so a refusal can never become a
+typed command. A missing directory is not silently rooted either — the spawn fails loudly.
+
+**Capability.** `agent-session.resume-context.v1` states the guarantee, not the method: an older
+host advertising `agent-session.host-authority.v1` answers and resumes elsewhere, and because the
+ensure params are `.strict()`, the added field would be rejected outright rather than ignored.
+Clients read it from `status.get` before sending; when it is absent and the session needs its
+context, both fall back to the typed command that reproduces it. Mobile reports that as
+`host-lacks-context-fidelity`, kept apart from the method being missing. One shared predicate
+(`agent-session-resume-context.ts`) decides "needs recorded context" for both clients: Codex
+always, plus any session recorded away from the workspace root.
+
+| Client → host                             | Result                                                     |
+| ----------------------------------------- | ---------------------------------------------------------- |
+| current → current                         | guarded and context-faithful                               |
+| current → ensure without `resume-context` | typed command, unguarded, reason states the capability gap |
+| current → no ensure                       | typed command, unguarded                                   |
+| older client → any                        | typed command; only the after-the-fact notice sees it      |
+
+Runtime-hosted panes carry no directory at that layer at all (`remote-runtime-pty-transport.ts`
+has no cwd in scope), so they gain the account-home fix and still resume at the workspace root; the
+tab's own `startupCwd`, which the host already persists, is the open follow-up.
+
+Evidence: 7 host cases, 4 web cases, 33 mobile cases; the containment mutation reds exactly the two
+escape cases, and inverting the shared predicate reds one mixed-version case in each client.
 
 Evidence: 28 unit cases; 12 client mutations and 7 inventory mutations or plants caught; e2e
 `90a775c0e` drives the mobile module over the real E2EE socket as a `mobile`-scope device and is
