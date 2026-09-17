@@ -3,11 +3,15 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
+import type { MemorySnapshot } from '../../../shared/process-stats-types'
 import {
   resetAgentHibernationCoordinatorForTests,
+  runAgentHibernationTick,
   sleepAuthorizedAgentPanes,
   type AgentSleepAuthorization
 } from './agent-hibernation-coordinator'
+import { createReclaimObserver } from './agent-sleep-observed-reclaim'
+import { observeSleepAuthorizationPlan } from './observe-sleep-authorization-plan'
 import { buildSleepAuthorizationPlan } from './agent-sleep-authorization-plan'
 import {
   buildAgentHibernationPlannerSnapshot,
@@ -255,5 +259,258 @@ describe('explicit agent sleep', () => {
     const results = await sleepAuthorizedAgentPanes(shown)
 
     expect(results.map((r) => r.candidateId)).toEqual(shown.map((a) => a.candidateId))
+  })
+})
+
+/** The tab strip's unified tabs, so the real pin actions have something to pin. */
+function withUnifiedTerminalTabs(): void {
+  const unified = (id: string) => ({
+    id,
+    entityId: id,
+    groupId: 'group-bg',
+    worktreeId: 'wt-bg',
+    contentType: 'terminal',
+    label: 'Agent',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  })
+  useAppStore.setState({
+    unifiedTabsByWorktree: { 'wt-bg': [unified('tab-a'), unified('tab-b')] } as never,
+    groupsByWorktree: {}
+  })
+}
+
+async function settle(): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    await Promise.resolve()
+  }
+}
+
+describe('a pinned tab keeps its agent awake', () => {
+  it('keeps a pane pinned after it was shown, and sleeps the rest', async () => {
+    const shutdown = installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+    const shown = authorizationsOnScreen()
+    expect(shown).toHaveLength(2)
+    useAppStore.getState().pinTab('tab-a')
+
+    const results = await sleepAuthorizedAgentPanes(shown)
+
+    expect(results.map((r) => r.outcome)).toEqual(['not-eligible', 'slept'])
+    expect(sleptPaneKeys(shutdown)).toEqual([PANE_B])
+  })
+
+  it('keeps a later pane pinned while an earlier one is being put to sleep', async () => {
+    const shutdown = installTwoEligiblePanes(
+      vi.fn().mockImplementation(async (_worktreeId: string, opts: { paneKey: string }) => {
+        if (opts.paneKey === PANE_A) {
+          useAppStore.getState().pinTab('tab-b')
+        }
+      })
+    )
+    withUnifiedTerminalTabs()
+    const shown = authorizationsOnScreen()
+
+    const results = await sleepAuthorizedAgentPanes(shown)
+
+    expect(results.map((r) => r.outcome)).toEqual(['slept', 'not-eligible'])
+    expect(sleptPaneKeys(shutdown)).toEqual([PANE_A])
+  })
+
+  // Why: re-planning may narrow what the user approved, never widen it.
+  it('does not add a pane unpinned during the batch the user approved without it', async () => {
+    const shutdown = installTwoEligiblePanes(
+      vi.fn().mockImplementation(async (_worktreeId: string, opts: { paneKey: string }) => {
+        if (opts.paneKey === PANE_A) {
+          useAppStore.getState().unpinTab('tab-b')
+        }
+      })
+    )
+    withUnifiedTerminalTabs()
+    useAppStore.getState().pinTab('tab-b')
+    const shown = authorizationsOnScreen()
+    expect(shown.map((a) => a.candidateId)).toEqual([`wt-bg|${PANE_A}`])
+
+    const results = await sleepAuthorizedAgentPanes(shown)
+
+    expect(results.map((r) => r.outcome)).toEqual(['slept'])
+    expect(sleptPaneKeys(shutdown)).toEqual([PANE_A])
+    // Control: the unpin really made it eligible, so only the approved set kept it out.
+    expect(authorizationsOnScreen().map((a) => a.candidateId)).toContain(`wt-bg|${PANE_B}`)
+  })
+
+  it('does not wake or disturb a slept pane when its tab is pinned', async () => {
+    installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+    const record = { agentType: 'claude', worktreeId: 'wt-bg', sleptAt: 1 } as never
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: { [PANE_A]: record },
+      ptyIdsByTabId: { 'tab-a': [], 'tab-b': ['pty-b'] }
+    })
+    const before = useAppStore.getState()
+
+    useAppStore.getState().pinTab('tab-a')
+
+    const after = useAppStore.getState()
+    expect(after.sleepingAgentSessionsByPaneKey).toBe(before.sleepingAgentSessionsByPaneKey)
+    expect(after.ptyIdsByTabId).toBe(before.ptyIdsByTabId)
+    expect(after.terminalLayoutsByTabId).toBe(before.terminalLayoutsByTabId)
+  })
+
+  it('measures after the effect only the processes of the pane that actually slept', async () => {
+    installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+    useAppStore.getState().pinTab('tab-a')
+    const state = useAppStore.getState()
+    const plan = buildSleepAuthorizationPlan(
+      buildAgentHibernationPlannerSnapshot(state, Date.now(), unsampledRuntimePtyLiveness(state)),
+      measuredSnapshot()
+    )
+    expect(plan.reclaimable.map((s) => s.paneKey)).toEqual([PANE_B])
+    // The pinned pane's pid is still running; it must not read as a slept pane lingering.
+    const probe = vi.fn().mockResolvedValue({
+      sweep: 'measured',
+      requestedAt: 10,
+      sweepStartedAt: 11,
+      metric: 'working-set',
+      presentPids: [101]
+    })
+
+    const results = await sleepAuthorizedAgentPanes(
+      plan.reclaimable.map((subject) => subject.authorization!)
+    )
+    const observed = await createReclaimObserver(probe)({ subjects: plan.reclaimable, results })
+
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(probe).toHaveBeenCalledWith([202])
+    expect(observed).toMatchObject({ status: 'measured', bytes: 700, stillRunningProcessCount: 0 })
+  })
+
+  it('keeps a pane pinned after display out of the post-effect measurement', async () => {
+    installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+    useAppStore.setState({ memorySnapshot: measuredSnapshot() })
+    const plan = observeSleepAuthorizationPlan()
+    expect(plan.reclaimable.map((s) => s.paneKey)).toEqual([PANE_A, PANE_B])
+    useAppStore.getState().pinTab('tab-a')
+    const probe = vi.fn().mockResolvedValue({
+      sweep: 'measured',
+      requestedAt: 10,
+      sweepStartedAt: 11,
+      metric: 'working-set',
+      presentPids: []
+    })
+
+    const results = await sleepAuthorizedAgentPanes(
+      plan.reclaimable.map((subject) => subject.authorization!)
+    )
+    const observed = await createReclaimObserver(probe)({ subjects: plan.reclaimable, results })
+
+    expect(results.map((r) => r.outcome)).toEqual(['not-eligible', 'slept'])
+    expect(probe).toHaveBeenCalledWith([202])
+    expect(observed).toMatchObject({ status: 'measured', bytes: 700, measuredPaneCount: 1 })
+  })
+
+  it('shows the pinned pane as kept awake in the displayed plan', () => {
+    installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+    useAppStore.setState({ memorySnapshot: measuredSnapshot() })
+    useAppStore.getState().pinTab('tab-a')
+
+    const plan = observeSleepAuthorizationPlan()
+
+    expect(plan.reclaimable.map((s) => s.paneKey)).toEqual([PANE_B])
+    expect(plan.excluded.map((s) => [s.paneKey, s.exclusionReason])).toEqual([
+      [PANE_A, 'tab-pinned']
+    ])
+    expect(plan.estimate.knownBytes).toBe(700)
+  })
+})
+
+/** Pane A (pinned in the test) owns pid 101, pane B owns pid 202. */
+function measuredSnapshot(): MemorySnapshot {
+  const sessionFor = (paneKey: string, pid: number, memory: number) => ({
+    sessionId: `s-${paneKey}`,
+    paneKey,
+    pid,
+    cpu: 0,
+    memory,
+    processes: [{ pid, memory }]
+  })
+  return {
+    app: {
+      cpu: 0,
+      memory: 1,
+      main: { cpu: 0, memory: 1 },
+      renderer: { cpu: 0, memory: 0 },
+      other: { cpu: 0, memory: 0 },
+      history: []
+    },
+    worktrees: [
+      {
+        worktreeId: 'wt-bg',
+        worktreeName: 'bg',
+        repoId: 'fixture-repo',
+        repoName: 'Repo',
+        cpu: 0,
+        memory: 1600,
+        sessions: [sessionFor(PANE_A, 101, 900), sessionFor(PANE_B, 202, 700)],
+        history: []
+      }
+    ],
+    host: {
+      totalMemory: 1,
+      freeMemory: 1,
+      availableMemory: 1,
+      availableMemorySource: 'free-memory',
+      usedMemory: 0,
+      memoryUsagePercent: 0,
+      cpuCoreCount: 1,
+      loadAverage1m: 0
+    },
+    processMemoryMetric: 'working-set',
+    totalCpu: 0,
+    totalMemory: 1,
+    collectedAt: 1,
+    sweepStartedAt: 1
+  } as MemorySnapshot
+}
+
+describe('automatic sleep leaves a pinned tab awake', () => {
+  it('control: two ticks sleep both unpinned panes', async () => {
+    const shutdown = installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+
+    await runAgentHibernationTick()
+    await runAgentHibernationTick()
+    await settle()
+
+    expect(sleptPaneKeys(shutdown).sort()).toEqual([PANE_A, PANE_B].sort())
+  })
+
+  it('never sleeps a pinned pane on the tick path', async () => {
+    const shutdown = installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+    useAppStore.getState().pinTab('tab-a')
+
+    await runAgentHibernationTick()
+    await runAgentHibernationTick()
+    await settle()
+
+    expect(sleptPaneKeys(shutdown)).toEqual([PANE_B])
+  })
+
+  it('drops a pane pinned between the two confirming ticks', async () => {
+    const shutdown = installTwoEligiblePanes()
+    withUnifiedTerminalTabs()
+
+    await runAgentHibernationTick()
+    useAppStore.getState().pinTab('tab-a')
+    await runAgentHibernationTick()
+    await settle()
+
+    expect(sleptPaneKeys(shutdown)).toEqual([PANE_B])
   })
 })
