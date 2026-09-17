@@ -126,7 +126,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-context.v1']
             }
           }
         }
@@ -197,7 +197,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
+            capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-context.v1']
           }
         }
       }
@@ -376,7 +376,7 @@ describe('createWebRuntimeSessionTerminal', () => {
               graphStatus: 'ready',
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-context.v1']
             }
           }
         }
@@ -437,7 +437,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
+            capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-context.v1']
           }
         }
       }
@@ -490,7 +490,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
+            capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-context.v1']
           }
         }
       }
@@ -552,7 +552,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             graphStatus: 'ready',
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
+            capabilities: ['agent-session.host-authority.v1', 'agent-session.resume-context.v1']
           }
         }
       }

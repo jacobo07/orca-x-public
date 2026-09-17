@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebRuntimeSessionTerminal } from './web-runtime-session'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import {
-  ENVIRONMENT_ID,
   FOCUS_LEAF_ID,
   WORKTREE_ID,
   makeSnapshot,
@@ -146,19 +145,33 @@ describe('web AI Vault resume execution context', () => {
     resetWebSessionCloseIntentForTests()
   })
 
-  // CHARACTERIZATION of today's defect: a subdirectory session resumes at the workspace
-  // root because the guarded request carries no directory at all. Invert this the moment
-  // ensure learns the session's own context — the diff is the evidence the fix landed.
-  it('sends a guarded resume with no startup directory, so the host falls back to the workspace root', async () => {
-    const runtimeCall = makeRuntimeCall(['agent-session.host-authority.v1'])
+  it('resumes a subdirectory session in its own directory', async () => {
+    const runtimeCall = makeRuntimeCall([
+      'agent-session.host-authority.v1',
+      'agent-session.resume-context.v1'
+    ])
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(resumeSubdirectoryCodexSession()).resolves.toEqual({ status: 'created' })
 
     const ensure = requestFor(runtimeCall, 'terminal.ensureAgentSession')
     expect(ensure).toBeDefined()
-    expect(Object.keys(ensure!.params)).not.toContain('startupCwd')
-    expect(Object.keys(ensure!.params)).not.toContain('envToDelete')
+    expect(ensure!.params).toMatchObject({ startupCwd: SESSION_CWD })
+  })
+
+  // Why: the method existing is not the guarantee the caller depends on. A host that has
+  // ensure but cannot reproduce this context must never receive the request.
+  it('takes the legacy launch when the host has the method but not the context guarantee', async () => {
+    const runtimeCall = makeRuntimeCall(['agent-session.host-authority.v1'])
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(resumeSubdirectoryCodexSession()).resolves.toEqual({ status: 'created' })
+
+    expect(requestFor(runtimeCall, 'terminal.ensureAgentSession')).toBeUndefined()
+    expect(requestFor(runtimeCall, 'session.tabs.createTerminal')!.params).toMatchObject({
+      cwd: SESSION_CWD,
+      envToDelete: CODEX_ENV_TO_DELETE
+    })
   })
 
   // Why: proves the case above is a DROP at the guarded boundary, not context the client
@@ -185,7 +198,7 @@ describe('web AI Vault resume execution context', () => {
     await expect(
       createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
-        agentSessionKind: 'create',
+        agentSessionKind: 'fresh',
         launchAgent: 'codex',
         cwd: SESSION_CWD,
         activate: false
