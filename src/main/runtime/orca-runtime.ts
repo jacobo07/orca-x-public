@@ -11589,6 +11589,13 @@ export class OrcaRuntimeService {
           this.retirePtyAgentLaunchAuthority(ptyId)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
         },
+        // Why: without these the renderer cannot tell an idle prompt from a running command.
+        onCommandStarted: () => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-started' })
+        },
+        onPromptShown: () => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'prompt-shown' })
+        },
         onBell: () => {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         },
