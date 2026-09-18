@@ -23,6 +23,30 @@ export type E2EEKeypair = {
   publicKeyB64: string
 }
 
+/**
+ * This host's public key without side effects: `undefined` when no key file exists, `null`
+ * when one exists but is not a valid keypair. Observers must use this, never the loader,
+ * because the loader replaces a malformed file and so changes the host's identity.
+ */
+export function readE2EEPublicKey(userDataPath: string): string | null | undefined {
+  const filePath = join(userDataPath, KEYPAIR_FILENAME)
+  if (!existsSync(filePath)) {
+    return undefined
+  }
+  try {
+    if (statSync(filePath).size > MAX_KEYPAIR_FILE_BYTES) {
+      return null
+    }
+    const raw: Partial<KeypairFile> = JSON.parse(readFileSync(filePath, 'utf-8'))
+    if (raw.v !== KEYPAIR_VERSION || typeof raw.publicKeyB64 !== 'string' || !raw.secretKeyB64) {
+      return null
+    }
+    return Buffer.from(raw.publicKeyB64, 'base64').length === 32 ? raw.publicKeyB64 : null
+  } catch {
+    return null
+  }
+}
+
 export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
   const filePath = join(userDataPath, KEYPAIR_FILENAME)
 
