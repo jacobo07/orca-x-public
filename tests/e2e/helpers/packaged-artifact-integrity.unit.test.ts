@@ -18,7 +18,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { assertPackagedMainMatchesBuild } from './packaged-orca-app'
+import { assertPackagedMainMatchesBuild } from './packaged-artifact-integrity'
 
 const BUILT_MAIN = `\n;(() => {\n  const guardKey = "__ORCA_BOOTSTRAP_FATAL_EXIT_GUARD__"\n${'x'.repeat(6000)}\n})()\n`
 

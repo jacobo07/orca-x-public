@@ -320,7 +320,7 @@ describe('the four identity verdicts, against a real daemon on a real Windows ho
 
     const ordered = [...conclusive].sort((a, b) => a - b)
     const median = ordered.length > 0 ? Math.round(ordered[Math.floor(ordered.length / 2)]) : -1
-    const max = ordered.length > 0 ? Math.round(ordered[ordered.length - 1]) : -1
+    const max = ordered.length > 0 ? Math.round(ordered.at(-1)!) : -1
     const provenance =
       `conclusive=${conclusive.length}/${LATENCY_SAMPLES} degraded=${degraded} ` +
       `median=${median}ms max=${max}ms freeMB ${freeBefore}->${freeAfter}`

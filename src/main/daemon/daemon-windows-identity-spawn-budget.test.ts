@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import type * as ChildProcessModule from 'node:child_process'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
@@ -20,7 +21,7 @@ const stub = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:child_process')>()
+  const actual = await importOriginal<typeof ChildProcessModule>()
   const respond = (file: string, args: readonly string[]): string => {
     if (file !== 'powershell.exe') {
       return ''

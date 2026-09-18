@@ -5,6 +5,7 @@ import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import type { ParkPhaseRequest } from '../shared/durable-exit-types'
+import type { ProcessPresenceProbe } from '../shared/process-stats-types'
 import type { PtyProcessInspection } from '../shared/pty-process-inspection'
 import type { PtyProcessInspectionBatchEntry } from '../shared/pty-process-inspection-batch'
 import type { TerminalMenuCommand } from '../shared/terminal-menu-command'
@@ -3715,9 +3716,7 @@ const api = {
       ipcRenderer.on('ui:openCrashReport', listener)
       return () => ipcRenderer.removeListener('ui:openCrashReport', listener)
     },
-    onTerminalCommand: (
-      callback: (command: TerminalMenuCommand) => void
-    ): (() => void) => {
+    onTerminalCommand: (callback: (command: TerminalMenuCommand) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, command: TerminalMenuCommand) =>
         callback(command)
       ipcRenderer.on('ui:terminalCommand', listener)
@@ -4433,9 +4432,7 @@ const api = {
 
   memory: {
     getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot'),
-    probeProcessPresence: (
-      pids: number[]
-    ): Promise<import('../shared/process-stats-types').ProcessPresenceProbe> =>
+    probeProcessPresence: (pids: number[]): Promise<ProcessPresenceProbe> =>
       ipcRenderer.invoke('memory:probeProcessPresence', pids)
   },
 
