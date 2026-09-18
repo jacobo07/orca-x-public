@@ -229,7 +229,8 @@ describe('terminal multiplex RPC', () => {
           expect.objectContaining({
             type: 'driver-changed',
             streamId: 7,
-            driver: { kind: 'mobile', clientId: 'phone-1' }
+            // Observers get a per-device id, never the phone's pairing token.
+            driver: { kind: 'mobile', clientId: expect.stringMatching(/^observed:[0-9a-f]{32}$/) }
           })
         ])
       )

@@ -9,6 +9,7 @@ import {
 } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import type { DriverState, OrcaRuntimeService } from '../../orca-runtime'
+import { observedTerminalDriverState } from '../../terminal-driver-observer-identity'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
@@ -2754,7 +2755,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               emit({
                 type: 'driver-changed',
                 streamId: request.streamId,
-                driver
+                driver: observedTerminalDriverState(driver)
               })
             })
             const fitOverride = runtime.getTerminalFitOverride(ptyId)
@@ -2772,7 +2773,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             emit({
               type: 'driver-changed',
               streamId: request.streamId,
-              driver: runtime.getDriver(ptyId)
+              driver: observedTerminalDriverState(runtime.getDriver(ptyId))
             })
           }
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {

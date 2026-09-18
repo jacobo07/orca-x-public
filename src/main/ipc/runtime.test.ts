@@ -216,4 +216,31 @@ describe('registerRuntimeHandlers', () => {
       vi.useRealTimers()
     }
   })
+
+  it('hydrates terminal drivers without the driving phone pairing token', () => {
+    const phoneToken = 'c3'.repeat(24)
+    const runtime = {
+      getAllTerminalDrivers: vi.fn().mockReturnValue(
+        new Map([
+          ['pty-mobile', { kind: 'mobile', clientId: phoneToken }],
+          ['pty-desktop', { kind: 'desktop' }]
+        ])
+      )
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:getTerminalDrivers'
+    )![1]
+
+    const drivers = handler() as { ptyId: string; driver: { kind: string; clientId?: string } }[]
+
+    expect(JSON.stringify(drivers)).not.toContain(phoneToken)
+    expect(drivers).toEqual([
+      {
+        ptyId: 'pty-mobile',
+        driver: { kind: 'mobile', clientId: expect.stringMatching(/^observed:[0-9a-f]{32}$/) }
+      },
+      { ptyId: 'pty-desktop', driver: { kind: 'desktop' } }
+    ])
+  })
 })

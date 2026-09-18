@@ -54,6 +54,7 @@ import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { observedTerminalDriverState } from '../runtime/terminal-driver-observer-identity'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import {
@@ -436,7 +437,7 @@ function registerRuntimeWindowLifecycle(
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
-      send('runtime:terminalDriverChanged', { ptyId, driver }),
+      send('runtime:terminalDriverChanged', { ptyId, driver: observedTerminalDriverState(driver) }),
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>

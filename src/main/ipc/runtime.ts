@@ -10,6 +10,7 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { observedTerminalDriverState } from '../runtime/terminal-driver-observer-identity'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -86,7 +87,10 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     'runtime:getTerminalDrivers',
     (): { ptyId: string; driver: RuntimeTerminalDriverState }[] => {
       const drivers = runtime.getAllTerminalDrivers()
-      return Array.from(drivers.entries()).map(([ptyId, driver]) => ({ ptyId, driver }))
+      return Array.from(drivers.entries()).map(([ptyId, driver]) => ({
+        ptyId,
+        driver: observedTerminalDriverState(driver)
+      }))
     }
   )
 
