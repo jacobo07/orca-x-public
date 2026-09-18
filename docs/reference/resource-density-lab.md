@@ -111,6 +111,7 @@ Each is defined here before any number is attached to it.
 | Metric                      | Definition                                                                                                                              |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Dormant Row State Footprint | Control-plane state one remembered row adds when a working set is restored: store objects installed, manifest bytes reaching disk, and the runtimes and recurring producers it arms. Measured through the real capture, plan and apply functions over one store, so it is load- and host-independent. |
+| Dormant Row Presentation Footprint | What one presentation surface holds per dormant row it renders: DOM elements, and live store subscribers read from the store's own listener census. Counts from the real component over the real store, so load-independent. Stated per surface. |
 | Dormant Session Tax         | Orca control-plane bytes (canonical metric) at N dormant logical rows minus the same at the base scenario, at steady state.              |
 | Marginal Idle Session Cost  | The slope of that curve: added control-plane bytes per additional dormant row over the measured range. Reported with its range.          |
 | Active Terminal Tax         | Added control-plane bytes and added recurring work when one dormant row becomes one live plain terminal. Shell bytes are workload, excluded. |
@@ -388,6 +389,48 @@ inspected by one RPC per session (`src/main/daemon/daemon-pty-adapter.ts:1562` s
 `inspectProcess` with a single `sessionId`), so those legs are linear in panes by construction —
 code-read evidence, `unmeasured`, and deliberately left per-session because the daemon's protocol
 version is part of its endpoint.
+
+### Dormant Row Presentation Footprint — terminal rail (2026-09-18)
+
+`src/renderer/src/components/terminal-rail/terminal-rail-presentation-residency.test.tsx` renders the
+real `TerminalRail`, with the `tabActions` production always passes, over the real store at 1, 10
+and 50 dormant rows. Each row has a layout naming its pane and no PTY. Subscribers come from
+`readStoreListenerCount()`, the census installed on the store's inner api. Outcome `measured`.
+Evidence class `renderer-unit`.
+
+| Rows | DOM elements | live store subscribers | rows in DOM | previews connected |
+| ---- | ------------ | ---------------------- | ----------- | ------------------ |
+| 1    | 12           | 28                     | 1           | 0                  |
+| 10   | 93           | 244                    | 10          | 0                  |
+| 50   | 453          | 1,204                  | 50          | 0                  |
+
+**Per dormant row: 9 DOM elements and 24 store subscribers, exactly linear.** The slope is taken
+from the 1- and 50-row points and predicts the 10-row point exactly. **The rail is not virtualized.**
+It maps every row into an `overflow-y-auto` div, so a row scrolled out of view is still a mounted
+subtree. The estate ships `@tanstack/react-virtual` and uses it in three other lists, so this is a
+choice, not a missing tool. Subscribers are released on unmount, back to baseline at every point.
+
+**Where the 24 come from (read from source; the total is measured).** `useTabAgent` holds 13
+subscribers. Several of them allocate on every evaluation: one builds a `Set` of PTY ids and spreads
+it into an array. `TerminalRailTab` holds 6, `TerminalPreviewHoverTrigger` 2, and the per-row context
+menu and icon hold the rest. Each subscriber re-runs its selector on **every** store write anywhere
+in the app, so 50 dormant rows add 1,204 selector evaluations to every write, and none of those rows
+has anything to report.
+
+**What this does not explain.** 453 DOM elements and a few kilobytes of hook state per row cannot
+be the ~1 MB per row the byte curve found in the renderer. The rail's cost is **CPU per store
+write, not resident bytes**. The megabyte is still unattributed at this altitude.
+
+**The tab strip holds a second set per tab (read from source, runtime `unmeasured`).**
+`SortableTab` also calls `useTabAgent`, and `tab-bar/` uses no virtualizer. So the ~13-subscriber
+agent resolution runs twice for every dormant tab, once per surface, from identical inputs. A
+dormant tab rendered nowhere costs the overlay layer nothing: `TerminalPaneOverlayLayer` returns
+null for a hidden dormant tab.
+
+Mutation drills, each restored and verified by SHA-256. Rendering only the first 10 rows (a
+windowing stand-in) reds both cases: rows read `[1, 10, 10]` and the slope stops being a whole
+number. Adding one subscriber per row reds the ratchet at exactly `24 → 25` while the
+virtualization case stays green.
 
 ## What this protocol cannot judge
 

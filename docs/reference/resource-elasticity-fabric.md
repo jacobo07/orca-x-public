@@ -112,6 +112,14 @@ sessions for about 1 MB each and no process at all — and the cost that remains
 residency**: what the renderer spends representing a row that renders no terminal. **Cold Revival
 Latency** and **Leak Slope** are still `unmeasured`.
 
+Presentation residency has now been measured for the terminal rail, counts only. The rail is **not
+virtualized**. Each dormant row holds **9 DOM elements and 24 live store subscribers**, exactly
+linear, so 50 rows hold 1,204 subscribers and every store write re-runs all of them. The tab strip
+runs the same agent resolution a second time per tab (read from source). This is a **CPU-per-write**
+cost, and it does **not** account for the ~1 MB per row in renderer bytes. That megabyte is still
+unattributed. Two things are next: a rail-collapsed vs rail-expanded byte comparison at 50 rows,
+and a heap breakdown. Neither can run below the 4 GB headroom floor.
+
 The daemon, SSH and runtime inspection legs stay `unmeasured` and code-read: each is one request per
 subject per cycle by construction, and the daemon's own answer is an in-memory read of a cache whose
 refresh volume is already bounded per session (`pty-subprocess-foreground-scan-cadence.test.ts`).
