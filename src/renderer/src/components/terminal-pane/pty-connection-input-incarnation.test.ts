@@ -52,7 +52,9 @@ function transportOption<T>(name: string): T {
   return createdTransportOptions[0]?.[name] as T
 }
 
-describe('unsent-input evidence belongs to one shell incarnation', () => {
+// Why above the waits' 150s bound: the config's 30s test timeout would otherwise fire first, so a
+// starved host reads as a failure instead of reaching the condition.
+describe('unsent-input evidence belongs to one shell incarnation', { timeout: 180_000 }, () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -80,10 +82,22 @@ describe('unsent-input evidence belongs to one shell incarnation', () => {
       ptyIdsByTabId: { 'tab-1': [] }
     } as StoreState
 
-    connectPanePty(createPane(1) as never, createManager(1) as never, buildPaneConnectionDeps(() => mockStoreState) as never)
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      buildPaneConnectionDeps(() => mockStoreState) as never
+    )
     await flushAsyncTicks()
 
-    expect(mockStoreState.clearTerminalInputPending).toHaveBeenCalledWith(PANE_KEY)
+    // Why both halves: the draft flag AND Sleep's typing stamp described the dead shell. A stale
+    // stamp alone makes Sleep skip the host's draft check for the new shell.
+    // Why waitFor: on a loaded host the spawn lands after a fixed flush, then leaks into the next case.
+    await vi.waitFor(
+      () => expect(mockStoreState.resetTerminalInputForFreshShell).toHaveBeenCalledWith(PANE_KEY),
+      { timeout: 150_000, interval: 50 }
+    )
+    // A new shell is not a provider event: nothing here may write the explicit-exit record.
+    expect(mockStoreState.markSleepingAgentExited).not.toHaveBeenCalled()
   })
 
   it('keeps the draft when the pane reattaches to its still-live shell', async () => {
@@ -101,8 +115,16 @@ describe('unsent-input evidence belongs to one shell incarnation', () => {
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
 
-    expect(transport.connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'live-pty' }))
-    expect(mockStoreState.clearTerminalInputPending).not.toHaveBeenCalled()
+    // Precondition: the attach was attempted, so the absence below is a measurement.
+    await vi.waitFor(
+      () =>
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'live-pty' })
+        ),
+      { timeout: 150_000, interval: 50 }
+    )
+    await flushAsyncTicks()
+    expect(mockStoreState.resetTerminalInputForFreshShell).not.toHaveBeenCalled()
   })
 
   it('keeps the draft across a provider handle rotation, which is the same shell', async () => {
@@ -127,7 +149,13 @@ describe('unsent-input evidence belongs to one shell incarnation', () => {
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
 
+    // Precondition: connect ran, and it invokes the rotation synchronously before returning.
+    await vi.waitFor(() => expect(transport.connect).toHaveBeenCalled(), {
+      timeout: 150_000,
+      interval: 50
+    })
+    await flushAsyncTicks()
     expect(transportOption<unknown>('onPtyRebind')).toBeTypeOf('function')
-    expect(mockStoreState.clearTerminalInputPending).not.toHaveBeenCalled()
+    expect(mockStoreState.resetTerminalInputForFreshShell).not.toHaveBeenCalled()
   })
 })

@@ -256,6 +256,51 @@ describe('agent sleep coordinator', () => {
       expect(shutdown).toHaveBeenCalled()
     })
 
+    // Phase 7: the stamp above belonged to a shell that is gone. A fresh shell in the same pane
+    // has no renderer evidence, so the host must be asked again rather than skipped.
+    it('asks the host again once a fresh shell has replaced the stamped one', async () => {
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'typed'
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+        lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: 1 }
+      })
+      useAppStore.getState().resetTerminalInputForFreshShell(`tab-1:${LEAF}`)
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).not.toHaveBeenCalled()
+    })
+
+    it('keeps the explicit exit when a fresh shell resets the input evidence', () => {
+      const exited = {
+        paneKey: `tab-1:${LEAF}`,
+        worktreeId: 'wt-bg',
+        tabId: 'tab-1',
+        leafId: LEAF,
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'exited-session' },
+        updatedAt: 1,
+        automaticResumeBlockedBy: 'agent-exited'
+      } as never
+      useAppStore.setState({
+        sleepingAgentSessionsByPaneKey: { [`tab-1:${LEAF}`]: exited },
+        lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: 1 },
+        terminalInputPendingByPaneKey: { [`tab-1:${LEAF}`]: true }
+      })
+
+      useAppStore.getState().resetTerminalInputForFreshShell(`tab-1:${LEAF}`)
+
+      const state = useAppStore.getState()
+      expect(state.lastTerminalInputAtByPaneKey[`tab-1:${LEAF}`]).toBeUndefined()
+      expect(state.terminalInputPendingByPaneKey[`tab-1:${LEAF}`]).toBeUndefined()
+      expect(state.sleepingAgentSessionsByPaneKey[`tab-1:${LEAF}`]).toBe(exited)
+    })
+
     it('sleeps when no authority can see the line, so an older host is not frozen awake', async () => {
       vi.useFakeTimers()
       mockInspectProcess.mockResolvedValue({

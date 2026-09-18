@@ -3110,7 +3110,7 @@ export function connectPanePty(
     spawnedFreshPtyId = ptyId
     // Why: an unsent line lives in one shell; a fresh one cannot hold the dead one's draft, and
     // a no-marker shell (cmd.exe, Git Bash, embedded startup command) would never clear it.
-    useAppStore.getState().clearTerminalInputPending(cacheKey)
+    useAppStore.getState().resetTerminalInputForFreshShell(cacheKey)
     // Why: Command Code has no prompt-start hook. Seed the visible working row
     // once the PTY exists, then let real hook events refine or complete it.
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })

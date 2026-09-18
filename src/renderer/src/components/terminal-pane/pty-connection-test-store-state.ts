@@ -116,6 +116,7 @@ export type StoreState = {
   recordTerminalInput: ReturnType<typeof vi.fn>
   recordTerminalOutput: ReturnType<typeof vi.fn>
   clearTerminalInputPending: ReturnType<typeof vi.fn>
+  resetTerminalInputForFreshShell: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>

@@ -71,6 +71,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     recordTerminalInput: vi.fn(),
     recordTerminalOutput: vi.fn(),
     clearTerminalInputPending: vi.fn(),
+    resetTerminalInputForFreshShell: vi.fn(),
     setAgentStatus: vi.fn(
       (
         paneKey: string,

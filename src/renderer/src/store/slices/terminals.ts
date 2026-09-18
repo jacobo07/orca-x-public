@@ -815,6 +815,8 @@ export type TerminalSlice = {
   terminalInputPendingByPaneKey: Record<string, true>
   /** Called on OSC 133 command-start (submitted) and prompt-shown (line reset, e.g. Ctrl+C). */
   clearTerminalInputPending: (paneKey: string) => void
+  /** A fresh shell took the pane: drop input evidence that described the dead one. */
+  resetTerminalInputForFreshShell: (paneKey: string) => void
   /** Seed cache timers for idle Claude sessions missing one; called when the feature is enabled mid-session. */
   seedCacheTimersForIdleTabs: () => void
   /** SSH target IDs needing a passphrase; reconnect is deferred until the user focuses an affected terminal tab. */
@@ -1234,6 +1236,24 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const next = { ...s.terminalInputPendingByPaneKey }
       delete next[paneKey]
       return { terminalInputPendingByPaneKey: next }
+    })
+  },
+
+  resetTerminalInputForFreshShell: (paneKey) => {
+    set((s) => {
+      const hasPending = s.terminalInputPendingByPaneKey[paneKey] !== undefined
+      const hasStamp = s.lastTerminalInputAtByPaneKey[paneKey] !== undefined
+      if (!paneKey || (!hasPending && !hasStamp)) {
+        return {}
+      }
+      const pending = { ...s.terminalInputPendingByPaneKey }
+      const stamps = { ...s.lastTerminalInputAtByPaneKey }
+      delete pending[paneKey]
+      // Why the stamp too: Sleep asks the host about a draft only for panes with no stamp, so a
+      // dead shell's stamp would hide a line the new shell holds. A late coalesced flush cannot
+      // revive a deleted key.
+      delete stamps[paneKey]
+      return { terminalInputPendingByPaneKey: pending, lastTerminalInputAtByPaneKey: stamps }
     })
   },
 
