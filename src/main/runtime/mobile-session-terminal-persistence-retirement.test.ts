@@ -295,6 +295,49 @@ describe('mobile session terminal persistence retirement', () => {
     expect(untrustedReplacement.terminalPtyIncarnationsByPaneKey).toBeUndefined()
   })
 
+  // Characterization, not intent: membership is proved only by PTY admission and PTY exit, so a
+  // tab that never had a PTY (slept, dormant, restored from a working set) cannot be added or
+  // removed by a renderer write once the repo has a topology revision. Invert when that changes.
+  describe('PTY-less membership under a topology revision (today)', () => {
+    const ptyLessTab = (id: string, sortOrder: number) => ({
+      id,
+      ptyId: null,
+      worktreeId: WORKTREE_ID,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder,
+      createdAt: sortOrder + 1
+    })
+    const hostSession = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [WORKTREE_ID]: [ptyLessTab('kept', 0), ptyLessTab('closed', 1)] },
+      terminalLayoutsByTabId: {},
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 3 }
+    }
+
+    it('brings back a PTY-less tab the renderer closed', () => {
+      const closed = sanitizeWorkspaceSessionTerminalRetirements(
+        { ...hostSession, tabsByWorktree: { [WORKTREE_ID]: [ptyLessTab('kept', 0)] } },
+        hostSession
+      )
+      expect(closed.tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual(['kept', 'closed'])
+    })
+
+    it('drops a PTY-less tab the renderer added', () => {
+      const added = sanitizeWorkspaceSessionTerminalRetirements(
+        {
+          ...hostSession,
+          tabsByWorktree: {
+            [WORKTREE_ID]: [ptyLessTab('kept', 0), ptyLessTab('closed', 1), ptyLessTab('restored', 2)]
+          }
+        },
+        hostSession
+      )
+      expect(added.tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual(['kept', 'closed'])
+    })
+  })
+
   it('migrates legacy tombstones into one repo watermark', () => {
     const stale = {
       ...getDefaultWorkspaceSession(),
