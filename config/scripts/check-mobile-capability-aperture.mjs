@@ -13,6 +13,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import {
+  collectMobileProductionSources,
+  evaluateSurface,
+  referencedMethodNames
+} from './mobile-rpc-surface.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 
@@ -23,6 +28,15 @@ export const DEFAULT_BASELINE = path.join(
   'config',
   'mobile-capability-aperture-baseline.txt'
 )
+export const DEFAULT_SURFACE_BASELINE = path.join(
+  REPO_ROOT,
+  'config',
+  'mobile-rpc-unsurfaced-baseline.txt'
+)
+export const DEFAULT_MOBILE_ROOTS = [
+  path.join(REPO_ROOT, 'mobile', 'src'),
+  path.join(REPO_ROOT, 'mobile', 'app')
+]
 
 // A sweep that silently matched nothing must not report a clean bill.
 export const POPULATION_FLOOR = 400
@@ -197,6 +211,44 @@ function main() {
 
   const result = evaluateAperture({ population, allowlist, baseline })
 
+  const surfaceBaselinePath = path.resolve(
+    flagValue('--surface-baseline', DEFAULT_SURFACE_BASELINE)
+  )
+  const mobileTexts = collectMobileProductionSources(DEFAULT_MOBILE_ROOTS).map((file) =>
+    fs.readFileSync(file, 'utf8')
+  )
+  const surface = evaluateSurface({
+    allowlist,
+    referenced: referencedMethodNames(mobileTexts, allowlist),
+    baseline: fs.existsSync(surfaceBaselinePath)
+      ? parseBaseline(fs.readFileSync(surfaceBaselinePath, 'utf8'))
+      : new Set()
+  })
+
+  if (process.argv.includes('--write-surface-baseline')) {
+    const floorFailed = surface.failures.some((f) => f.kind === 'surface-floor')
+    if (floorFailed || surface.unreferenced.length === 0) {
+      console.error('refusing to write a surface baseline from a sweep that failed its floor')
+      process.exit(1)
+    }
+    const header = [
+      '# Allowlisted mobile RPC methods that no mobile production source names.',
+      '#',
+      '# Reach is not surface: MOBILE_RPC_METHOD_ALLOWLIST says mobile MAY call a method, and a method',
+      '# no mobile code names has no screen by construction. Frozen so a NEW one is a decision in a',
+      '# diff. Shrink-only in both directions: a method that gains a mobile reference, or leaves the',
+      '# allowlist, fails as a stale entry. See config/scripts/mobile-rpc-surface.mjs.',
+      '#',
+      `# Frozen ${new Date().toISOString().slice(0, 10)}: ${surface.unreferenced.length} of ` +
+        `${allowlist.size} allowlisted methods unreferenced.`,
+      ''
+    ]
+    fs.writeFileSync(surfaceBaselinePath, `${header.concat(surface.unreferenced).join('\n')}\n`, 'utf8')
+    console.log(`wrote ${surface.unreferenced.length} entries to ${path.relative(REPO_ROOT, surfaceBaselinePath)}`)
+    return
+  }
+  result.failures.push(...surface.failures)
+
   if (process.argv.includes('--write-baseline')) {
     // Refuse a degenerate baseline: an empty one refuses the whole surface while reporting that
     // the METHODS are unrecognised, which points the next reader at entirely the wrong thing.
@@ -234,6 +286,10 @@ function main() {
   console.log(
     `mobile capability aperture: ${result.reachable.length}/${result.populationSize} host RPC ` +
       `methods reachable (${pct}%), ${result.hostOnly.length} host-only, ${baseline.size} baselined`
+  )
+  console.log(
+    `mobile capability surface: ${surface.referenced.length}/${allowlist.size} allowlisted methods ` +
+      `named by mobile source, ${surface.unreferenced.length} reach-without-surface`
   )
 
   if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2))
