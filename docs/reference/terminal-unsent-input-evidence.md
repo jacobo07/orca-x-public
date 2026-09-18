@@ -33,9 +33,10 @@ Measured in the real app by `tests/e2e/shell-unsent-input-support-matrix.spec.ts
 | --- | --- | --- | --- |
 | the preferred shell (pwsh on this host) | `prompt` | `typed` | **yes** |
 | `cmd.exe` | `unsupported` | `undefined` | **no** — renderer witness only |
+| Git Bash (`Git\bin\bash.exe`) | `unsupported` | `undefined` | **no** — renderer witness only |
 
-Git Bash and an embedded startup command are in the same class as `cmd.exe`: no markers, so no host
-answer. They are not measured yet.
+An embedded startup command is in the same class and is not measured here: the command rides in the
+shell's launch arguments and runs before the first prompt, so it emits no markers at all.
 
 ## The open decision
 

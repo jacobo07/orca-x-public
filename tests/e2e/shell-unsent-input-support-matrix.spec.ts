@@ -7,10 +7,13 @@
  * docs/reference/terminal-unsent-input-evidence.md cannot drift from the product silently. A shell
  * that starts answering should turn this red and gain protection, not be quietly assumed.
  */
+import { existsSync } from 'node:fs'
 import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActiveTerminalManager } from './helpers/terminal'
+
+const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe'
 
 type Reading = { promptState: unknown; beforeInput: unknown; afterInput: unknown }
 
@@ -98,8 +101,19 @@ test('records which shells can report an unsent line', async ({ orcaPage }) => {
     'cmd.exe has no markers, so a draft there is renderer-only'
   ).toBeUndefined()
 
+  // Git Bash, where present: measured rather than assumed to match cmd.exe — Orca injects shell
+  // integration per shell family, so bash could legitimately answer where cmd.exe cannot.
+  const gitBash = existsSync(GIT_BASH) ? await readShell(page, worktreeId, GIT_BASH) : null
+  if (gitBash) {
+    expect(
+      [undefined, 'clean', 'typed'],
+      'an unexpected answer means the matrix doc is now wrong'
+    ).toContain(gitBash.afterInput)
+  }
+
   console.log(
     `[shell-matrix] preferred=${String(preferred.promptState)}/${String(preferred.afterInput)} ` +
-      `cmd=${String(cmd.promptState)}/${String(cmd.afterInput)}`
+      `cmd=${String(cmd.promptState)}/${String(cmd.afterInput)} ` +
+      `gitbash=${gitBash ? `${String(gitBash.promptState)}/${String(gitBash.afterInput)}` : 'absent'}`
   )
 })
