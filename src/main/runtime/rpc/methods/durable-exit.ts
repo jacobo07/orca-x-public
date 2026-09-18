@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { ParkResult } from '../../../../shared/durable-exit-types'
 import { getParkCoordinator } from '../../../durable-exit/park-coordinator'
 import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { isLocalRpcCaller } from '../local-rpc-caller'
 
 const ParkParams = z.object({
   mode: z.enum(['plan', 'park']),
@@ -22,13 +23,7 @@ function unavailable(detail: string): ParkResult {
 
 /** Only the local CLI may quit this desktop; paired devices and saved environments may not. */
 export function isRemoteParkCaller(ctx: RpcContext): boolean {
-  return Boolean(
-    ctx.pairedDeviceId ||
-    ctx.clientKind ||
-    ctx.clientId ||
-    ctx.connectionId ||
-    ctx.authenticatedCallerFingerprint
-  )
+  return !isLocalRpcCaller(ctx)
 }
 
 export const DURABLE_EXIT_METHODS: RpcMethod[] = [
