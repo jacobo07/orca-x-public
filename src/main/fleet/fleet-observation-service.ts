@@ -5,6 +5,7 @@ import {
 } from '../../shared/execution-host'
 import { compareFleetAddresses, identityFromKeyFingerprint } from '../../shared/fleet-host-identity'
 import type { FleetPlacementMember } from '../../shared/fleet-placement'
+import type { FleetObservation } from '../../shared/fleet-placement-view'
 import {
   classifyRemoteFleetObservation,
   fleetHostFactsFromStatus,
@@ -41,14 +42,7 @@ export type FleetObservationDeps = {
   stepDeadlineMs?: number
 }
 
-export type FleetObservation = {
-  observedAt: number
-  /** Same clock as every sample's `startedAt`; plans judge age against this, not their own. */
-  completedAt: number
-  members: FleetPlacementMember[]
-  /** What this view covers; SSH targets carry no Orca key and are not enumerated yet. */
-  coverage: { runtimeEnvironments: number; sshTargets: 'not-enumerated' }
-}
+export type { FleetObservation }
 
 function fingerprintOf(key: string | null | undefined): string | null | undefined {
   return typeof key === 'string' ? fingerprintHostPublicKey(key) : key

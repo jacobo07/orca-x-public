@@ -1,10 +1,6 @@
 import { z } from 'zod'
-import {
-  planFleetPlacement,
-  type FleetPlacementProposal,
-  type FleetPlacementRequest
-} from '../../../../shared/fleet-placement'
-import type { FleetObservation } from '../../../fleet/fleet-observation-service'
+import { planFleetPlacement, type FleetPlacementRequest } from '../../../../shared/fleet-placement'
+import type { FleetPlacementViewResult } from '../../../../shared/fleet-placement-view'
 import { readFleetObservation } from '../../../fleet/fleet-observation-slot'
 import { defineMethod, type RpcMethod } from '../core'
 import { isLocalRpcCaller } from '../local-rpc-caller'
@@ -21,15 +17,7 @@ const PlacementViewParams = z
   })
   .strict()
 
-export type FleetPlacementViewResult =
-  | { status: 'refused'; reason: 'remote-caller' }
-  | { status: 'unavailable'; reason: 'no-fleet-reader' }
-  | {
-      status: 'ok'
-      request: FleetPlacementRequest
-      observation: FleetObservation
-      proposal: FleetPlacementProposal
-    }
+export type { FleetPlacementViewResult }
 
 export const FLEET_METHODS: RpcMethod[] = [
   defineMethod({

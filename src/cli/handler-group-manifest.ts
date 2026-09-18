@@ -188,6 +188,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
   },
   {
+    name: 'fleet',
+    keys: ['fleet placement'],
+    load: async () => (await import('./handlers/fleet.js')).FLEET_HANDLERS
+  },
+  {
     name: 'introspection',
     keys: ['agent-context'],
     load: async () => (await import('./handlers/introspection.js')).INTROSPECTION_HANDLERS
