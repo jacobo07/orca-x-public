@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import {
   cpSync,
   existsSync,
@@ -7,6 +7,7 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
@@ -64,6 +65,39 @@ type MaterializeMarker = {
   version: string
   completedAt: string
   entryRelPath: string
+  /** Content identity of the copied daemon bundle; absent on pre-fingerprint markers. */
+  bundleFingerprint?: string
+}
+
+function listFilesSorted(dir: string): string[] {
+  try {
+    return readdirSync(dir, { recursive: true, encoding: 'utf8' })
+      .map((rel) => join(dir, rel))
+      .filter((file) => statSync(file).isFile())
+      .sort()
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Why: fork builds ship new daemon code under an unchanged app version, so the version alone let a
+ * weeks-old daemon keep being forked — one that rejected every hello once the protocol moved on.
+ */
+function computeBundleFingerprint(sources: DaemonHostSources): string {
+  const hash = createHash('sha256')
+  hash.update(String(statSync(sources.execPath).size))
+  const mainDir = winPath.dirname(sources.entrySourcePath)
+  const pkgJson = join(sources.resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
+  for (const file of [sources.entrySourcePath, pkgJson, ...listFilesSorted(join(mainDir, 'chunks'))]) {
+    hash.update(`\0${toPosixRelative(sources.appDir, file)}\0`)
+    try {
+      hash.update(readFileSync(file))
+    } catch {
+      hash.update('<missing>')
+    }
+  }
+  return hash.digest('hex')
 }
 
 // win32 path semantics so Windows paths decompose correctly off-win32 in cross-platform unit tests; production runs on win32 only.
@@ -191,7 +225,10 @@ function readMarker(dir: string): MaterializeMarker | null {
       return {
         version: parsed.version,
         completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : '',
-        entryRelPath: parsed.entryRelPath
+        entryRelPath: parsed.entryRelPath,
+        ...(typeof parsed.bundleFingerprint === 'string'
+          ? { bundleFingerprint: parsed.bundleFingerprint }
+          : {})
       }
     }
   } catch {
@@ -211,18 +248,19 @@ function hostRootDir(): string {
 }
 
 /**
- * The relocated host for the current version, or null. Valid only when the marker matches this version
- * AND the exe + entry exist, so a partial or stale copy never reports ready.
+ * The relocated host for the current build, or null. Valid only when the marker matches this version
+ * AND this bundle's content AND the exe + entry exist, so a partial or stale copy never reports ready.
  */
 export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   const sources = collectDaemonHostSources()
-  if (!sources) {
-    return null
-  }
+  return sources ? readValidRelocatedHost(computeBundleFingerprint(sources)) : null
+}
+
+function readValidRelocatedHost(bundleFingerprint: string): RelocatedDaemonHost | null {
   const version = app.getVersion()
   const dest = join(hostRootDir(), version)
   const marker = readMarker(dest)
-  if (!marker || marker.version !== version) {
+  if (!marker || marker.version !== version || marker.bundleFingerprint !== bundleFingerprint) {
     return null
   }
   const execPath = join(dest, DAEMON_HOST_EXE_NAME)
@@ -238,13 +276,14 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
  * via marker; stages into a temp sibling and publishes by atomic rename, so a crash mid-copy never leaves a half-populated dest.
  */
 export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
-  const existing = getRelocatedDaemonHost()
-  if (existing) {
-    return existing
-  }
   const sources = collectDaemonHostSources()
   if (!sources) {
     return null
+  }
+  const bundleFingerprint = computeBundleFingerprint(sources)
+  const existing = readValidRelocatedHost(bundleFingerprint)
+  if (existing) {
+    return existing
   }
   const version = app.getVersion()
   const root = hostRootDir()
@@ -258,7 +297,8 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     const marker: MaterializeMarker = {
       version,
       completedAt: new Date().toISOString(),
-      entryRelPath: sources.entryRelPath
+      entryRelPath: sources.entryRelPath,
+      bundleFingerprint
     }
     writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
     // Replace any stale/partial dest, then publish the staging dir atomically.
@@ -272,7 +312,7 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     }
     return null
   }
-  return getRelocatedDaemonHost()
+  return readValidRelocatedHost(bundleFingerprint)
 }
 
 function isDaemonPidAlive(pid: number, startedAtMs: number | null): boolean {

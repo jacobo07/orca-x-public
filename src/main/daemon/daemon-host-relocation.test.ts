@@ -196,6 +196,39 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(existsSync(sentinel)).toBe(true)
   })
 
+  // Why: fork builds ship new daemon code under an unchanged app version; a version-only marker
+  // kept forking the first daemon ever cached for that version, which then rejected every hello.
+  it('recopies when the daemon bundle changed under the same app version', () => {
+    materializeRelocatedDaemonHost()
+    const mainDir = join(installDir, 'resources', 'app.asar.unpacked', 'out', 'main')
+    writeFileSync(join(mainDir, 'daemon-entry.js'), 'entry-v2')
+    const result = materializeRelocatedDaemonHost()
+    expect(readFileSync(result!.entryPath, 'utf8')).toBe('entry-v2')
+  })
+
+  it('recopies when only a daemon chunk changed under the same app version', () => {
+    materializeRelocatedDaemonHost()
+    const chunk = join(installDir, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js')
+    writeFileSync(chunk, 'chunk-v2')
+    materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    expect(
+      readFileSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'), 'utf8')
+    ).toBe('chunk-v2')
+  })
+
+  it('does not trust a pre-fingerprint marker for the current version', () => {
+    const result = materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    writeFileSync(
+      join(dest, '.materialized.json'),
+      JSON.stringify({ version: '9.9.9', completedAt: '', entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js' })
+    )
+    writeFileSync(result!.entryPath, 'stale-entry')
+    expect(getRelocatedDaemonHost()).toBeNull()
+    expect(readFileSync(materializeRelocatedDaemonHost()!.entryPath, 'utf8')).toBe('entry')
+  })
+
   it('fails open on a missing required input, leaving no dest or staging dir', () => {
     rmSync(join(installDir, 'resources', 'node_modules', 'node-pty'), {
       recursive: true,
