@@ -32809,6 +32809,10 @@ export class OrcaRuntimeService {
         ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
         ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
         ...(launchAgent ? { launchAgent } : {}),
+        // Why: recorded launch provenance, carried rather than re-derived. The renderer
+        // already decided whether this leaf owns it; re-deciding here from live PTY
+        // state would reintroduce exactly the inference this field exists to replace.
+        ...(tab.launchProfileId ? { launchProfileId: tab.launchProfileId } : {}),
         ...(agentStatus ??
           this.buildPtyMobileAgentStatus(
             mobileStatusPty,

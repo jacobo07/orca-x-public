@@ -28,7 +28,16 @@
 # destroying them, and one that states nothing is refused instead of falling back. That is the
 # unresolved total genuinely falling to four, and it takes release-critical debt to zero -- the
 # remaining four are P1 and below, each carrying a severityReason that had to argue itself.
+#
+# 2026-09-16: voice.transcript-target-ownership left this list PORTED, and
+# voice.unclaimed-transcript-recovery arrived in the same commit. Read that as one row
+# splitting, not as a capability regressing and not as progress: the unresolved total is
+# unchanged at four. Target ownership genuinely closed -- a transcript now reaches the
+# exact composer or PTY that was speaking, or is refused. What arrived is the half that
+# had been living inside that row's reason prose as "the second half", where it could not
+# be counted: desktop RETAINS a transcript whose origin has gone and tells the user, and
+# mobile refuses and stops. Splitting it is what makes it debt someone can be assigned.
 drafts.user-invested-input-survives-process-death
 runtime.command-acts-on-the-window-that-owns-the-target
 terminal.launch-profile-identity
-voice.transcript-target-ownership
+voice.unclaimed-transcript-recovery

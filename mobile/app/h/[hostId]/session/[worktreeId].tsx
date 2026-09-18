@@ -138,10 +138,13 @@ import {
   getTerminalLiveInputKeyboardType
 } from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
+import { appendBufferedDictation } from '../../../../src/dictation/mobile-dictation-buffered-append'
 import {
-  appendBufferedDictation,
-  routeDictationTranscript
-} from '../../../../src/terminal/terminal-live-dictation-routing'
+  captureDictationTarget,
+  resolveDictationDelivery,
+  type DictationTarget
+} from '../../../../src/dictation/mobile-dictation-delivery'
+import { dispatchDictationDelivery } from '../../../../src/dictation/mobile-dictation-transcript-dispatch'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
@@ -915,10 +918,8 @@ export default function SessionScreen() {
     typeof Keyboard.addListener
   > | null>(null)
   const sessionTabActionSheetRequestSeqRef = useRef(0)
-  const dictationRouteContextRef = useRef<{
-    readonly handle: string | null
-    readonly liveInputEnabled: boolean
-  } | null>(null)
+  // Why: the surface a dictation belongs to is decided when recording starts; nothing read at delivery may change it.
+  const dictationRouteContextRef = useRef<DictationTarget | null>(null)
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   // Why: a lease-only subscribe never renders, so the reconciler needs to tell it apart
@@ -1113,40 +1114,27 @@ export default function SessionScreen() {
     client,
     enabled: canSend,
     onTranscript: (text) => {
-      // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
-      if (showNativeChatRef.current) {
-        nativeChatController.setChatComposerText((current) =>
-          appendBufferedDictation(current, text)
-        )
-        showToast('Dictation inserted')
-        return
-      }
-      // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
-      const routeContext = dictationRouteContextRef.current
+      // Clear first and in every path: a transcript the chat consumed used to leave
+      // the captured terminal behind for the next recording to pick up.
+      const target = dictationRouteContextRef.current
       dictationRouteContextRef.current = null
-      const route = routeDictationTranscript(
-        text,
-        routeContext?.liveInputEnabled ?? liveInputEnabled
-      )
-      if (route.kind === 'live-insert') {
-        const insertHandle = routeContext?.handle ?? activeHandleRef.current
-        if (!insertHandle) {
-          return
-        }
-        void (async () => {
+      // Why: dictation belongs to the composer that started it — native chat consumes it
+      // locally, terminal mode keeps live-input routing, and the dispatch itself is
+      // behaviourally pinned rather than only readable as source.
+      dispatchDictationDelivery(resolveDictationDelivery(text, target), appendBufferedDictation, {
+        // Why: the captured draft key, never the current one — the user can switch
+        // tabs while ASR runs and both tabs can be in chat view.
+        appendToCapturedChatDraft: nativeChatController.appendDictationToDraft,
+        // Live mode inserts the transcript into its PTY as text (no Return).
+        insertIntoLiveTerminal: async (insertHandle, insertText) => {
           const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
-          if (!flushedPendingInput) {
-            return
-          }
-          const sent = await sendLiveTerminalInput(insertHandle, route.text)
-          if (sent) {
-            showToast('Dictation inserted')
-          }
-        })()
-        return
-      }
-      setInput((current) => appendBufferedDictation(current, route.text))
-      showToast('Dictation inserted')
+          return flushedPendingInput ? await sendLiveTerminalInput(insertHandle, insertText) : false
+        },
+        appendToCommandField: setInput,
+        notifyInserted: () => showToast('Dictation inserted'),
+        // Why: a transcript that never had a destination is not a transcript that went somewhere quietly.
+        notifyNoTarget: () => showToast('Dictation had no target — nothing was inserted')
+      })
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
@@ -1161,9 +1149,14 @@ export default function SessionScreen() {
   })
 
   const startDictation = useCallback(() => {
-    const routeContext = activeHandle
-      ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
-      : null
+    // Why: the owning surface INSTANCE is captured before any async work — the chat
+    // overlay can open or close, and the active tab can change, while ASR still runs.
+    const routeContext = captureDictationTarget({
+      nativeChatVisible: showNativeChatRef.current,
+      nativeChatDraftKey: nativeChatScopeKey,
+      activeHandle,
+      liveInputEnabled: activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+    })
     dictationRouteContextRef.current = routeContext
     void dictation.start().catch((err) => {
       if (dictationRouteContextRef.current === routeContext) {
@@ -1172,7 +1165,14 @@ export default function SessionScreen() {
       triggerError()
       showToast(err instanceof Error ? err.message : String(err))
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+  }, [
+    activeHandle,
+    dictation,
+    liveInputTerminalHandles,
+    nativeChatScopeKey,
+    triggerError,
+    showToast
+  ])
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null

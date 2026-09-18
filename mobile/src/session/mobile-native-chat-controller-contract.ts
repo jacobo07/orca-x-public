@@ -21,6 +21,10 @@ export type MobileNativeChatController = {
   nativeChatAgent: string | null
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
+  /** Writes into a composer captured earlier, not the one that is current now.
+   *  Dictation records its draft key when recording starts; delivering through
+   *  setChatComposerText after a tab switch lands the words on another agent. */
+  appendDictationToDraft: (capturedDraftKey: string, append: (current: string) => string) => void
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>

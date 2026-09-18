@@ -182,6 +182,13 @@ export type RuntimeMobileSessionTerminalTab = {
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
   launchAgent?: TuiAgent
+  /** The launch profile this terminal was started from, as RECORDED at launch rather
+   *  than derived. The only field that lets a client answer source:'recorded'; absent
+   *  means the client falls back to inference or to unknown, never to the host default.
+   *  Published only for the pane the tab was launched into -- see
+   *  leafOwnsTabLaunchProvenance. Optional on the wire: an older host omits it and an
+   *  older client ignores it, and both degrade to the inference that already existed. */
+  launchProfileId?: string
   startupCwd?: string
   parentLayout?: TerminalLayoutSnapshot
   /** Tab-level color/pin (per parentTabId), host-persisted for remote servers. */
