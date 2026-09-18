@@ -345,56 +345,45 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  it('resumes active worktree-sleep stable-pane records when the preserved leaf has no PTY to cold-restore', () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
-    useAppStore.setState({
-      ...makeActiveTerminalState('tab-1'),
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null
-        }
-      },
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
+  // Why: the preserved pane resumes its own record in place on mount even with no PTY; forking a
+  // new tab here cleared that record first, so the original pane came back as a plain shell and the
+  // session reopened at the end of the tab strip.
+  it.each(['worktree-sleep', 'live', 'quit'] as const)(
+    'leaves a %s record to its preserved leaf in the active worktree even with no PTY binding',
+    (origin) => {
+      const paneKey = makePaneKey('tab-1', LEAF_ID)
+      const record = makeRecord({ paneKey, origin })
+      useAppStore.setState({
+        ...makeActiveTerminalState('tab-1'),
+        tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
+        terminalLayoutsByTabId: {
+          'tab-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID, expandedLeafId: null }
+        },
+        sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+      } as never)
 
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+      const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
 
-    const state = useAppStore.getState()
-    const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
-    expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
-    expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
-  })
+      const state = useAppStore.getState()
+      expect(launched).toBe(0)
+      expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
+      expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+    }
+  )
 
-  it('resumes live stable-pane records when the preserved leaf has no PTY to cold-restore', () => {
+  it('still forks a PTY-less preserved leaf whose worktree is not active', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'live' })
     useAppStore.setState({
-      ...makeActiveTerminalState('tab-1'),
+      ...makeActiveTerminalState('other-tab', 'wt-other'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null
-        }
+        'tab-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID, expandedLeafId: null }
       },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
 
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    const state = useAppStore.getState()
-    const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
-    expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
-    expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
   })
 
   it('does not let a sibling split-pane PTY claim a live stable-pane record', () => {
@@ -701,7 +690,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       launchConfig: { agentArgs: '--active', agentEnv: {} }
     })
     useAppStore.setState({
-      ...makeActiveTerminalState('tab-active'),
+      // Why: an inactive worktree, so the preserved leaf cannot own recovery and a fresh tab launches.
+      ...makeActiveTerminalState('other-tab', 'wt-other'),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-active', 'wt-1')] },
       terminalLayoutsByTabId: {
         'tab-active': {
