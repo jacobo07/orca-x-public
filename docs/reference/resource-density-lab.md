@@ -132,6 +132,38 @@ between metadata and resident workload) and Control Plane Survival Margin (it ca
 without pushing the host toward exhaustion). A number must not be attached to either name until a
 definition lands here.
 
+## Cold Revival Latency: where the stopwatch stops, and which row it may time
+
+"Until its runtime is usable" names three different moments. They are recorded separately, because
+the gap between them is what says which layer owns the time:
+
+| Rung | What is true | Read through |
+| ---- | ------------ | ------------ |
+| T1 runtime bound | the row holds a PTY id | `ptyIdsByTabId[tabId]` non-empty |
+| T2 surface mounted | that tab has an xterm/PTY pair | `__paneManagers.get(tabId)`, active pane's `container.dataset.ptyId` |
+| T3 usable | the shell has painted its first byte | `getTerminalContent` — the SerializeAddon the PaneManager already loads |
+
+**T3 is the published figure.** T1 is "a PTY object exists", which a revival reaches while the user
+is still looking at an empty pane; publishing the fastest rung as the metric would report a number
+nobody experiences. The stopwatch starts at the `dormant-terminal-open` click — the user's own
+action — not at the activation that merely reveals the placeholder.
+
+It stops at first paint rather than at an echoed probe command. A probe measures the shell's round
+trip, and the shell is workload: the same invariant that keeps a user shell's bytes out of Orca
+overhead keeps its startup out of Orca's revival latency. First paint is therefore an upper bound on
+Orca's work and a lower bound on the user's wait, and that difference is named rather than folded in.
+
+**One row kind per series.** The cloned rail alternates — every second row carries a sealed provider
+session, the rest restart plain — and the two revive through different paths, so a series that
+changes kind between its points is not a curve. The clone truncates to the first source row at N=1,
+where only the sealed kind exists, so the sealed series is the one that spans every scale and the
+plain-restart series begins at N=2. Neither may be reported as the other, and the kind is recorded
+with the figure.
+
+Latency is a time, so unlike the counts in the structural rig it is **invalid on a busy host**: it
+takes the same ≥4 GB floor, the same before-and-after bracket, and the same median-with-range as the
+byte curve.
+
 ## Complexity classification
 
 Every recurring or resident cost names the dimension it scales with: per app · per window · per
