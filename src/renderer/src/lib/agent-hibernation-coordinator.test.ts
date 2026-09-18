@@ -30,11 +30,20 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 const mockRuntimeEnvironmentCall = vi.fn()
+// Default answers exactly what a host with nothing to report answers, so the effect-time draft
+// probe is a no-op for every test that is not about it.
+const mockInspectProcess = vi.fn(async () => ({
+  foregroundProcess: null,
+  hasChildProcesses: false
+}))
 
 vi.stubGlobal('window', {
   api: {
     runtimeEnvironments: {
       call: mockRuntimeEnvironmentCall
+    },
+    pty: {
+      inspectProcess: mockInspectProcess
     }
   }
 })
@@ -185,6 +194,83 @@ afterEach(() => {
 })
 
 describe('agent sleep coordinator', () => {
+  // The planner's input guard is the better instrument and owns every pane it has evidence for.
+  // But its evidence is renderer-only and the shell outlives the renderer, so after a reload a
+  // pane with a line waiting at it reads as untouched. These cover only that hole.
+  describe('a line the host holds and this renderer never saw', () => {
+    // mockResolvedValue replaces the implementation for good, so without this a 'typed' answer
+    // leaks into every later test in the file and keeps their panes awake.
+    afterEach(() => {
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false
+      })
+    })
+
+    it('keeps a pane awake when the host still holds a line', async () => {
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'typed'
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).not.toHaveBeenCalled()
+    })
+
+    it('sleeps when the host vouches the prompt is clean', async () => {
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'clean'
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).toHaveBeenCalled()
+    })
+
+    it('leaves a pane the renderer does have input for to the planner', async () => {
+      // Not second-guessed: the segment logic already decided this pane, and it is the
+      // instrument that can tell a draft from a submission.
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'typed'
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+        lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: 1 }
+      })
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).toHaveBeenCalled()
+    })
+
+    it('sleeps when no authority can see the line, so an older host is not frozen awake', async () => {
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).toHaveBeenCalled()
+    })
+  })
+
   it('hibernates an eligible background worktree after two stable ticks', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
@@ -319,8 +405,9 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
 
     await runAgentHibernationTick()
-    await Promise.resolve()
-    await Promise.resolve()
+    // Why not a fixed number of microtask flushes: the tick dispatches its shutdown
+    // fire-and-forget, so hand-counting hops pins the assertion to the call depth of the day.
+    await vi.advanceTimersByTimeAsync(0)
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       paneKey: `tab-1:${LEAF}`,
       tabId: 'tab-1',
@@ -408,8 +495,9 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
 
     await runAgentHibernationTick()
-    await Promise.resolve()
-    await Promise.resolve()
+    // Why not a fixed number of microtask flushes: the tick dispatches its shutdown
+    // fire-and-forget, so hand-counting hops pins the assertion to the call depth of the day.
+    await vi.advanceTimersByTimeAsync(0)
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       paneKey: `tab-1:${LEAF}`,
       tabId: 'tab-1',

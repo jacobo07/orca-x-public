@@ -109,7 +109,8 @@ function signatureFor(
   return `${worktreeId}@${environmentId ?? ''}|${parts.join('|')}`
 }
 
-function candidateIdFor(worktreeId: string, paneKey: string): string {
+/** Exported so a caller holding a classification can name the same subject the plan does. */
+export function candidateIdFor(worktreeId: string, paneKey: string): string {
   return `${worktreeId}|${paneKey}`
 }
 

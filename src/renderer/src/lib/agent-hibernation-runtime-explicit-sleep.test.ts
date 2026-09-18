@@ -378,3 +378,80 @@ describe('sleeping runtime-backed panes the user was shown', () => {
     expect(slept(shutdown).map((s) => s.paneKey)).toEqual([PANE_B, PANE_C])
   })
 })
+
+/**
+ * Two refusals can be identical to a user and need opposite fixes: a pin is a decision, an
+ * unanswered host is a question we could not ask. The outcome word is the same for both, so
+ * the cause is the only thing that can tell them apart afterwards.
+ */
+describe('why a runtime pane did not sleep', () => {
+  it('separates a host that could not be asked from a pane the user pinned', async () => {
+    installRuntimePanes()
+    const shown = await authorizationsOnScreen()
+    hosts['runtime-1']['wt-bg'] = new Error('terminal_liveness_unavailable')
+    useAppStore.setState((s) => ({
+      tabsByWorktree: {
+        ...s.tabsByWorktree,
+        'wt-other': [{ ...tab('tab-c', 'wt-other'), isPinned: true }]
+      }
+    }))
+
+    const results = await sleepAuthorizedAgentPanes(shown)
+
+    expect(results.map((r) => ({ outcome: r.outcome, cause: r.cause }))).toEqual([
+      { outcome: 'not-eligible', cause: 'runtime-liveness-unknown' },
+      { outcome: 'not-eligible', cause: 'runtime-liveness-unknown' },
+      { outcome: 'not-eligible', cause: 'tab-pinned' }
+    ])
+  })
+
+  it('says nothing about a pane that slept', async () => {
+    installRuntimePanes()
+    const shown = await authorizationsOnScreen()
+
+    const results = await sleepAuthorizedAgentPanes(shown)
+
+    expect(results.every((r) => r.outcome === 'slept' && r.cause === undefined)).toBe(true)
+  })
+
+  it.each([
+    ['agent_hibernation_pane_binding_mismatch', 'pane-binding-mismatch'],
+    ['agent_hibernation_capture_missing', 'capture-missing'],
+    ['missing_runtime_for_exact_terminal_stop', 'runtime-missing'],
+    ['exact_terminal_stop_mismatch', 'stop-targeted-wrong-pty'],
+    ['terminal_worktree_sleep_still_live', 'stop-still-live']
+  ])('names the effect that threw %s', async (thrown, cause) => {
+    installRuntimePanes(vi.fn().mockRejectedValue(new Error(thrown)))
+    const shown = await authorizationsOnScreen()
+
+    const results = await sleepAuthorizedAgentPanes([shown[0]!])
+
+    expect(results).toEqual([{ candidateId: shown[0]!.candidateId, outcome: 'failed', cause }])
+  })
+
+  it('reads the token through a transport that re-wrapped it', async () => {
+    installRuntimePanes(
+      vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "Error invoking remote method 'runtimeEnvironments:call': Error: exact_terminal_stop_mismatch"
+          )
+        )
+    )
+    const shown = await authorizationsOnScreen()
+
+    const results = await sleepAuthorizedAgentPanes([shown[0]!])
+
+    expect(results[0]).toMatchObject({ outcome: 'failed', cause: 'stop-targeted-wrong-pty' })
+  })
+
+  it('does not dress an unrecognised failure as a known one', async () => {
+    installRuntimePanes(vi.fn().mockRejectedValue(new Error('something nobody named')))
+    const shown = await authorizationsOnScreen()
+
+    const results = await sleepAuthorizedAgentPanes([shown[0]!])
+
+    expect(results[0]).toMatchObject({ outcome: 'failed', cause: 'effect-threw' })
+  })
+})
