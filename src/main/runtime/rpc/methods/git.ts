@@ -47,9 +47,7 @@ export const GIT_METHODS: RpcMethod[] = [
               ...(params.branchLineTotalMergeBase === undefined
                 ? {}
                 : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),
-              ...(params.worktreeContentIdentity === true
-                ? { worktreeContentIdentity: true }
-                : {}),
+              ...(params.worktreeContentIdentity === true ? { worktreeContentIdentity: true } : {}),
               ...(signal ? { signal } : {})
             }
       return options === undefined

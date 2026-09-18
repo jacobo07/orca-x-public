@@ -1394,9 +1394,7 @@ export class LocalPtyProvider implements IPtyProvider {
             promptState: resolveShellPromptState(promptState.tracker, promptState.trust),
             // Why gated on trust: a shell Orca never instrumented emits no marker that could
             // retire this, so it must answer unknown rather than claim an empty line.
-            ...(promptState.trust === 'none'
-              ? {}
-              : { inputSincePrompt: promptState.input.read() })
+            ...(promptState.trust === 'none' ? {} : { inputSincePrompt: promptState.input.read() })
           }
         : {})
     }

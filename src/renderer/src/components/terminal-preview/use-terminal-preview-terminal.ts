@@ -79,7 +79,12 @@ export function useTerminalPreviewTerminal(args: {
       for (let row = buffer.viewportY; row < buffer.viewportY + terminal.rows; row += 1) {
         lines.push(buffer.getLine(row)?.translateToString(true).trimEnd() ?? '')
       }
-      setTranscript(lines.join('\n').replace(/\n{3,}/g, '\n\n').trim())
+      setTranscript(
+        lines
+          .join('\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim()
+      )
     }
 
     const write = (chunk: string, live: boolean): void => {

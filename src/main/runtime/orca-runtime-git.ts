@@ -979,9 +979,7 @@ export class RuntimeGitCommands {
             .map(({ requested, relative }) => [relative, stated.get(requested) as string])
         )
       : undefined
-    const requestedFor = new Map(
-      normalized.map(({ requested, relative }) => [relative, requested])
-    )
+    const requestedFor = new Map(normalized.map(({ requested, relative }) => [relative, requested]))
     const inCallerTerms = (paths: string[]): string[] =>
       paths.map((each) => requestedFor.get(each) ?? each)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null

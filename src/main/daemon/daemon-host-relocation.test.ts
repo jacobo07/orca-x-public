@@ -208,12 +208,23 @@ describe('materializeRelocatedDaemonHost', () => {
 
   it('recopies when only a daemon chunk changed under the same app version', () => {
     materializeRelocatedDaemonHost()
-    const chunk = join(installDir, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js')
+    const chunk = join(
+      installDir,
+      'resources',
+      'app.asar.unpacked',
+      'out',
+      'main',
+      'chunks',
+      'a.js'
+    )
     writeFileSync(chunk, 'chunk-v2')
     materializeRelocatedDaemonHost()
     const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
     expect(
-      readFileSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'), 'utf8')
+      readFileSync(
+        join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'),
+        'utf8'
+      )
     ).toBe('chunk-v2')
   })
 
@@ -222,7 +233,11 @@ describe('materializeRelocatedDaemonHost', () => {
     const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
     writeFileSync(
       join(dest, '.materialized.json'),
-      JSON.stringify({ version: '9.9.9', completedAt: '', entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js' })
+      JSON.stringify({
+        version: '9.9.9',
+        completedAt: '',
+        entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js'
+      })
     )
     writeFileSync(result!.entryPath, 'stale-entry')
     expect(getRelocatedDaemonHost()).toBeNull()

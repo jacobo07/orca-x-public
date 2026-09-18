@@ -109,7 +109,7 @@ describe('parsers', () => {
 
   it('stops at the end of the allowlist literal', () => {
     const src = [
-      "const MOBILE_RPC_METHOD_ALLOWLIST = new Set([",
+      'const MOBILE_RPC_METHOD_ALLOWLIST = new Set([',
       "  'alpha.read',",
       "  'beta.run'",
       '])',

@@ -106,10 +106,7 @@ describe('batched pty inspection fan-out', () => {
       powershellScanCount.value = 0
       execFileMock.mockImplementation(
         (cmd: string, _args: unknown, _opts: unknown, cb: unknown) => {
-          const callback = cb as (
-            err: unknown,
-            result: { stdout: string; stderr: string }
-          ) => void
+          const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
           if (cmd === 'powershell.exe') {
             powershellScanCount.value += 1
           }

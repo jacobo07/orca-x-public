@@ -41,11 +41,8 @@ const MARKER = 'ORCA-THUMB'
 const SAMPLE_FRAMES = 6
 const SAMPLE_INTERVAL_MS = 3_000
 
-test('a minimized packaged window keeps its taskbar thumbnail whole and current @headful', async (
-  // oxlint-disable-next-line no-empty-pattern -- this spec owns its own launch and opts out of the app fixture.
-  {},
-  testInfo
-) => {
+test('a minimized packaged window keeps its taskbar thumbnail whole and current @headful', async (// oxlint-disable-next-line no-empty-pattern -- this spec owns its own launch and opts out of the app fixture.
+{}, testInfo) => {
   test.skip(process.platform !== 'win32', 'the taskbar thumbnail is a Windows surface')
   const executablePath = resolvePackagedOrcaExecutable()
   test.skip(
@@ -86,7 +83,10 @@ test('a minimized packaged window keeps its taskbar thumbnail whole and current 
           })
         )
       )
-      expect(hwnd, 'the packaged window surrendered no native handle — setup failure').toBeGreaterThan(0)
+      expect(
+        hwnd,
+        'the packaged window surrendered no native handle — setup failure'
+      ).toBeGreaterThan(0)
 
       await app.evaluate(({ BrowserWindow }) => {
         const [window] = BrowserWindow.getAllWindows()

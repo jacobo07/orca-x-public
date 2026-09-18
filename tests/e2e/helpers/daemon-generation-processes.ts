@@ -130,7 +130,8 @@ async function readWindowsProcessRow(pid: number): Promise<ProcessRow | null> {
   }
   const rowPid = Number(parsed.pid)
   const parentPid = Number(parsed.parentPid)
-  const startedAtMs = typeof parsed.startedAt === 'string' ? Date.parse(parsed.startedAt) : Number.NaN
+  const startedAtMs =
+    typeof parsed.startedAt === 'string' ? Date.parse(parsed.startedAt) : Number.NaN
   return Number.isInteger(rowPid) && Number.isInteger(parentPid) && Number.isFinite(startedAtMs)
     ? { pid: rowPid, parentPid, startedAtMs }
     : null

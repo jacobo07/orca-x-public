@@ -45,7 +45,10 @@ export function shouldWriteTerminalOutputStamp(paneKey: string, at: number): boo
     return false
   }
   const lastWrittenAt = lastWrittenByPaneKey.get(paneKey)
-  if (lastWrittenAt !== undefined && at - lastWrittenAt < TERMINAL_OUTPUT_RECENCY_WRITE_INTERVAL_MS) {
+  if (
+    lastWrittenAt !== undefined &&
+    at - lastWrittenAt < TERMINAL_OUTPUT_RECENCY_WRITE_INTERVAL_MS
+  ) {
     return false
   }
   lastWrittenByPaneKey.set(paneKey, at)

@@ -80,7 +80,9 @@ export function TerminalPreviewCard({
 
       <div
         className="relative flex h-[200px] w-full items-start overflow-hidden rounded-[6px] border border-border bg-background p-1.5"
-        style={terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined}
+        style={
+          terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined
+        }
       >
         {notice ? (
           <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-[11px] text-muted-foreground">

@@ -267,57 +267,57 @@ export default function TerminalRail({
         )}
       />
       <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-1">
-          {rows.map((row) => {
-            if (row.kind === 'tab') {
-              const tab = tabsById.get(row.tabId)
-              if (!tab) {
-                return null
-              }
-              return (
-                <TerminalPreviewHoverTrigger
-                  key={`tab-${row.tabId}`}
-                  tabId={row.tabId}
-                  leafId={row.leafId}
-                  title={tab.customTitle ?? tab.title}
-                >
-                  <TerminalRailTab
-                    tab={tab}
-                    paneCount={row.paneCount}
-                    isActive={activeRow === row}
-                    onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
-                    actions={tabActions}
-                    tabIndex={tabIds.indexOf(row.tabId)}
-                    tabCount={tabIds.length}
-                  />
-                </TerminalPreviewHoverTrigger>
-              )
+        {rows.map((row) => {
+          if (row.kind === 'tab') {
+            const tab = tabsById.get(row.tabId)
+            if (!tab) {
+              return null
             }
-            // Why: makePaneKey rejects legacy numeric leaf ids, and a pane whose key cannot be
-            // built simply has no status to show — better than fabricating one for it.
-            const agentState = isTerminalLeafId(row.leafId)
-              ? (agentStatusByPaneKey?.[makePaneKey(row.tabId, row.leafId)]?.state ?? null)
-              : null
-            const customTitle = layoutsByTabId?.[row.tabId]?.titlesByLeafId?.[row.leafId]
-            const paneLabel =
-              customTitle ??
-              `${translate('auto.components.terminal.rail.TerminalRail.pane', 'Pane')} ${row.position}`
             return (
               <TerminalPreviewHoverTrigger
-                key={`pane-${row.leafId}`}
+                key={`tab-${row.tabId}`}
                 tabId={row.tabId}
                 leafId={row.leafId}
-                title={paneLabel}
+                title={tab.customTitle ?? tab.title}
               >
-                <TerminalRailPaneRow
-                  label={paneLabel}
-                  agentState={agentState}
+                <TerminalRailTab
+                  tab={tab}
+                  paneCount={row.paneCount}
                   isActive={activeRow === row}
                   onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
-                  onContextMenu={(event) => event.preventDefault()}
+                  actions={tabActions}
+                  tabIndex={tabIds.indexOf(row.tabId)}
+                  tabCount={tabIds.length}
                 />
               </TerminalPreviewHoverTrigger>
             )
-          })}
+          }
+          // Why: makePaneKey rejects legacy numeric leaf ids, and a pane whose key cannot be
+          // built simply has no status to show — better than fabricating one for it.
+          const agentState = isTerminalLeafId(row.leafId)
+            ? (agentStatusByPaneKey?.[makePaneKey(row.tabId, row.leafId)]?.state ?? null)
+            : null
+          const customTitle = layoutsByTabId?.[row.tabId]?.titlesByLeafId?.[row.leafId]
+          const paneLabel =
+            customTitle ??
+            `${translate('auto.components.terminal.rail.TerminalRail.pane', 'Pane')} ${row.position}`
+          return (
+            <TerminalPreviewHoverTrigger
+              key={`pane-${row.leafId}`}
+              tabId={row.tabId}
+              leafId={row.leafId}
+              title={paneLabel}
+            >
+              <TerminalRailPaneRow
+                label={paneLabel}
+                agentState={agentState}
+                isActive={activeRow === row}
+                onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
+                onContextMenu={(event) => event.preventDefault()}
+              />
+            </TerminalPreviewHoverTrigger>
+          )
+        })}
       </div>
     </div>
   )

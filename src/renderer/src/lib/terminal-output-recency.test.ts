@@ -29,8 +29,9 @@ describe('shouldWriteTerminalOutputStamp', () => {
       }
     }
     expect(writes).toBe(0)
-    expect(shouldWriteTerminalOutputStamp(PANE, 1_000 + TERMINAL_OUTPUT_RECENCY_WRITE_INTERVAL_MS))
-      .toBe(true)
+    expect(
+      shouldWriteTerminalOutputStamp(PANE, 1_000 + TERMINAL_OUTPUT_RECENCY_WRITE_INTERVAL_MS)
+    ).toBe(true)
   })
 
   it('gates each pane independently', () => {

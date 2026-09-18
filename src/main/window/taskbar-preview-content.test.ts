@@ -78,9 +78,9 @@ describe('selectThumbnailLines', () => {
 
 describe('describeUnavailableSubject', () => {
   it('gives every reason its own words rather than one blank frame', () => {
-    const rendered = (
-      ['no-workspace', 'no-tab', 'no-pane', 'no-pty', 'not-live'] as const
-    ).map((reason) => describeUnavailableSubject(reason).join('|'))
+    const rendered = (['no-workspace', 'no-tab', 'no-pane', 'no-pty', 'not-live'] as const).map(
+      (reason) => describeUnavailableSubject(reason).join('|')
+    )
     // A pane that has not started and a terminal that has exited must not read the same: one is
     // worth waiting for and the other never will be.
     expect(new Set(rendered).size).toBeGreaterThan(1)

@@ -46,10 +46,7 @@ type RegisterAppMenuOptions = {
   onZoomReset: (window?: Electron.BaseWindow | null) => void
   onToggleLeftSidebar: (window?: Electron.BaseWindow | null) => void
   onToggleRightSidebar: (window?: Electron.BaseWindow | null) => void
-  onTerminalCommand: (
-    command: TerminalMenuCommand,
-    window?: Electron.BaseWindow | null
-  ) => void
+  onTerminalCommand: (command: TerminalMenuCommand, window?: Electron.BaseWindow | null) => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined

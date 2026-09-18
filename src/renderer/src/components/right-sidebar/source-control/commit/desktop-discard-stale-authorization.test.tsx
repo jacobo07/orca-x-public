@@ -102,7 +102,9 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((each) => rm(each, { recursive: true, force: true })))
 })
 
-function resolveTransportWith(outcome: 'accepts' | 'refuses-as-stale' | 'refuses-as-old-host'): void {
+function resolveTransportWith(
+  outcome: 'accepts' | 'refuses-as-stale' | 'refuses-as-old-host'
+): void {
   hostMocks.discardRuntimeGitPath.mockImplementation((): Promise<void> => {
     const running =
       outcome === 'accepts'

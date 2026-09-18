@@ -89,7 +89,8 @@ function computeBundleFingerprint(sources: DaemonHostSources): string {
   hash.update(String(statSync(sources.execPath).size))
   const mainDir = winPath.dirname(sources.entrySourcePath)
   const pkgJson = join(sources.resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
-  for (const file of [sources.entrySourcePath, pkgJson, ...listFilesSorted(join(mainDir, 'chunks'))]) {
+  const inputs = [sources.entrySourcePath, pkgJson, ...listFilesSorted(join(mainDir, 'chunks'))]
+  for (const file of inputs) {
     hash.update(`\0${toPosixRelative(sources.appDir, file)}\0`)
     try {
       hash.update(readFileSync(file))

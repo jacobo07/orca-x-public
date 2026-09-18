@@ -2083,13 +2083,17 @@ export function createRemoteRuntimePtyTransport(
                     environmentId: createEnvironmentId,
                     hostAuthority: hostAuthorityCreate,
                     ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
-                      ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+                      ? {
+                          hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY
+                        }
                       : {}),
                     legacy: legacyCreate
                   })
               : await legacyCreate()
           } catch (error) {
-            refusal.reason = resumeProviderSessionToSend ? readAgentSessionResumeRefusal(error) : null
+            refusal.reason = resumeProviderSessionToSend
+              ? readAgentSessionResumeRefusal(error)
+              : null
             if (!refusal.reason) {
               throw error
             }

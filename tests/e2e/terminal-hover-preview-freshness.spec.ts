@@ -121,7 +121,10 @@ test.describe('@terminal-hover-preview-freshness', () => {
     // asymmetry into the result.
     const samples: FreshnessSample[] = await orcaPage.evaluate(
       async ({ ptyId, marker, sampleIntervalMs, windowMs }) => {
-        const byTick = new Map<number, { tick: number; emittedAt: number; modelAt?: number; viewAt?: number }>()
+        const byTick = new Map<
+          number,
+          { tick: number; emittedAt: number; modelAt?: number; viewAt?: number }
+        >()
         const pattern = new RegExp(`${marker}-(\\d+)-(\\d+)`, 'g')
 
         const harvest = (text: string, field: 'modelAt' | 'viewAt', now: number): void => {

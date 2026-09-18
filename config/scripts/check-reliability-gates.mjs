@@ -543,11 +543,7 @@ async function pruneAssertionBaseline(manifest, root) {
     }
     return 1
   }
-  await fs.writeFile(
-    baselinePath,
-    `${extractBaselineHeader(existing)}${kept.join('\n')}\n`,
-    'utf8'
-  )
+  await fs.writeFile(baselinePath, `${extractBaselineHeader(existing)}${kept.join('\n')}\n`, 'utf8')
   console.log(
     `${ASSERTION_BASELINE_PATH}: ${recorded.size} entr(ies) -> ${kept.length} after pruning.`
   )

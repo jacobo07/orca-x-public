@@ -112,7 +112,8 @@ async function observeDaemonProcessIdentity(
   try {
     const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
     return observed(
-      commandLineMatchesDaemon(cmdline, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs),
+      commandLineMatchesDaemon(cmdline, socketPath, tokenPath) &&
+        startTimeMatches(pid, startedAtMs),
       cmdline
     )
   } catch {

@@ -12,10 +12,7 @@ import {
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 import { inspectDaemonProcessIdentity, isNoSuchProcessError } from './daemon-pid-identity'
 import { getAliveDaemonSessionCount } from './daemon-live-session-count'
-import {
-  atomicRetirementWasAnswered,
-  requestAtomicRetirement
-} from './daemon-atomic-retirement'
+import { atomicRetirementWasAnswered, requestAtomicRetirement } from './daemon-atomic-retirement'
 import { supportsAtomicRetirement } from './daemon-protocol-version'
 import { PROTOCOL_VERSION } from './types'
 

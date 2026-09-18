@@ -46,7 +46,9 @@ export function parseAssertionBaseline(text) {
     }
     const match = /^(\S+)\s+(\d+)$/.exec(trimmed)
     if (!match) {
-      throw new Error(`${ASSERTION_BASELINE_PATH}:${index + 1}: expected "<gate-id> <count>", got "${trimmed}"`)
+      throw new Error(
+        `${ASSERTION_BASELINE_PATH}:${index + 1}: expected "<gate-id> <count>", got "${trimmed}"`
+      )
     }
     entries.set(match[1], Number(match[2]))
   }

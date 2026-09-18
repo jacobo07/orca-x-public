@@ -1,7 +1,4 @@
-import type {
-  ShellInputSincePrompt,
-  ShellPromptState
-} from './terminal-osc133-prompt-state'
+import type { ShellInputSincePrompt, ShellPromptState } from './terminal-osc133-prompt-state'
 
 export type PtyProcessInspection = {
   foregroundProcess: string | null

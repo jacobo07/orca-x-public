@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createShellInputSincePromptTracker, isTerminalAutoReply } from './terminal-shell-input-since-prompt'
+import {
+  createShellInputSincePromptTracker,
+  isTerminalAutoReply
+} from './terminal-shell-input-since-prompt'
 
 const ESC = ''
 

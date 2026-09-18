@@ -329,7 +329,11 @@ describe('mobile session terminal persistence retirement', () => {
         {
           ...hostSession,
           tabsByWorktree: {
-            [WORKTREE_ID]: [ptyLessTab('kept', 0), ptyLessTab('closed', 1), ptyLessTab('restored', 2)]
+            [WORKTREE_ID]: [
+              ptyLessTab('kept', 0),
+              ptyLessTab('closed', 1),
+              ptyLessTab('restored', 2)
+            ]
           }
         },
         hostSession

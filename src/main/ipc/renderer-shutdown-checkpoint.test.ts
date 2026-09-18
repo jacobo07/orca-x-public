@@ -10,7 +10,10 @@ function makeEvent(): ShutdownEvent {
 const { syncHandlers, invokeHandlers } = vi.hoisted(() => ({
   syncHandlers: new Map<
     string,
-    (event: { sender: { id: number }; returnValue?: unknown }, args: Record<string, unknown>) => void
+    (
+      event: { sender: { id: number }; returnValue?: unknown },
+      args: Record<string, unknown>
+    ) => void
   >(),
   invokeHandlers: new Map<string, () => Promise<{ ok: boolean }>>()
 }))

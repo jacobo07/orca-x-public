@@ -7429,8 +7429,7 @@ export function registerPtyHandlers(
       return ownerWebContentsId === sender.id
     }
     return (
-      isAppWindowRenderer(sender.id) ||
-      isPtyWriteEventFromMainWindow(event, mainWindow.webContents)
+      isAppWindowRenderer(sender.id) || isPtyWriteEventFromMainWindow(event, mainWindow.webContents)
     )
   }
 

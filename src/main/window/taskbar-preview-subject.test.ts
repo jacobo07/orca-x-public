@@ -16,7 +16,10 @@ import {
 const SESSION: TaskbarPreviewSessionView = {
   activeTabIdByWorktree: { 'worktree-a': 'tab-a', 'worktree-b': 'tab-b' },
   terminalLayoutsByTabId: {
-    'tab-a': { activeLeafId: 'leaf-a1', ptyIdsByLeafId: { 'leaf-a1': 'pty-a1', 'leaf-a2': 'pty-a2' } },
+    'tab-a': {
+      activeLeafId: 'leaf-a1',
+      ptyIdsByLeafId: { 'leaf-a1': 'pty-a1', 'leaf-a2': 'pty-a2' }
+    },
     'tab-b': { activeLeafId: 'leaf-b1', ptyIdsByLeafId: { 'leaf-b1': 'pty-b1' } }
   }
 }
