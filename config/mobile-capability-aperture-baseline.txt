@@ -19,6 +19,10 @@ accounts.addClaudeFromConfigDir
 accounts.addCodexFromHome
 accounts.removeClaude
 accounts.removeCodex
+# Added 2026-09-18, desktop-only by design: park-and-exit quits the desktop, and the durable-exit
+# contract refuses paired and remote callers by context. It landed while this gate sat outside
+# `pnpm lint`, so nothing flagged it.
+app.park
 artifacts.delete
 artifacts.getPublishedLink
 artifacts.list
