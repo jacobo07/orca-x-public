@@ -117,7 +117,13 @@ function activeOrQueuedResumeClaimsProviderSession(
     }
   }
 
+  const recordTabId = getAgentStatusTabId(record)
   for (const [tabId, claim] of Object.entries(state.automaticAgentResumeClaimsByTabId)) {
+    // Why: a claim outlives the spawn it guarded; a record from a pane of the claimed tab can only
+    // exist once that tab's agent ran, so the claim is that very session, not a competing resume.
+    if (tabId === recordTabId) {
+      continue
+    }
     if (
       worktreeTabIds.has(tabId) &&
       claim.worktreeId === record.worktreeId &&

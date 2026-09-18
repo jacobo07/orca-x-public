@@ -612,6 +612,44 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[stale.paneKey]).toBeUndefined()
   })
 
+  // Why: the claim is written when a wake creates the tab and outlives the spawn, so on the tab's
+  // second sleep→wake it named the tab's own session and deleted the record its pane resumes from.
+  it('keeps a pane-owned record whose own tab still carries the claim from an earlier wake', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const record = makeRecord({ paneKey, origin: 'worktree-sleep', capturedAt: 5, updatedAt: 5 })
+    useAppStore.setState({
+      ...makeActiveTerminalState('tab-1'),
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
+      terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
+      automaticAgentResumeClaimsByTabId: {
+        'tab-1': { worktreeId: 'wt-1', launchAgent: 'claude', providerSession: record.providerSession }
+      },
+      sleepingAgentSessionsByPaneKey: { [paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBe(record)
+  })
+
+  it('still clears a record whose session a different tab has claimed', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTerminalTab('tab-1', 'wt-1'), makeTerminalTab('tab-2', 'wt-1')]
+      },
+      automaticAgentResumeClaimsByTabId: {
+        'tab-2': { worktreeId: 'wt-1', launchAgent: 'claude', providerSession: record.providerSession }
+      },
+      sleepingAgentSessionsByPaneKey: { [paneKey]: record }
+    } as never)
+
+    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
+
   it('lets quit/live pane-owned records claim provider sessions before stale duplicates launch', () => {
     const ownedPaneKey = makePaneKey('tab-1', LEAF_ID)
     const stalePaneKey = makePaneKey('missing-tab', OTHER_LEAF_ID)
