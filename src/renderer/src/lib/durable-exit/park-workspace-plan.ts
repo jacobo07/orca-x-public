@@ -37,6 +37,16 @@ export function childProcessAnswerFor(inspection: PtyProcessInspection): ChildPr
   return inspection.promptState === 'prompt' ? false : 'unknown'
 }
 
+/** One host inspection per PTY, read for both questions a park asks of it. */
+export type ParkPtyAnswer = { children: ChildProcessAnswer; hostHoldsLine: boolean }
+
+export function parkPtyAnswerFor(inspection: PtyProcessInspection): ParkPtyAnswer {
+  return {
+    children: childProcessAnswerFor(inspection),
+    hostHoldsLine: inspection.inputSincePrompt === 'typed' && inspection.unavailable !== true
+  }
+}
+
 export type ParkWorkspacePlan = {
   worktreeId: string
   livePtyIds: string[]
@@ -57,7 +67,8 @@ const REASON_ORDER: ParkKeepReason[] = [
 
 function agentKeepReason(
   entry: AgentStatusEntry,
-  inputAt: number | undefined
+  inputAt: number | undefined,
+  hostHoldsLine: boolean
 ): ParkKeepReason | null {
   if (entry.state !== 'done' || entry.interrupted === true) {
     return 'agent-working'
@@ -82,6 +93,11 @@ function agentKeepReason(
     Number.isFinite(inputAt) &&
     lastInputBlocksHibernation(entry, inputAt)
   ) {
+    return 'unsent-input'
+  }
+  // Why only without a stamp: the renderer's segment attribution is finer, and the stamp is gone
+  // after a reload, which is exactly when a host-held draft would otherwise read as none.
+  if (inputAt === undefined && hostHoldsLine) {
     return 'unsent-input'
   }
   return null
@@ -118,7 +134,7 @@ export function collectParkSubjectPtyIds(snapshot: ParkPlanSnapshot): Map<string
 export function planParkWorkspaces(
   snapshot: ParkPlanSnapshot,
   childProcessesByPtyId: Readonly<Record<string, ChildProcessAnswer | undefined>>,
-  options: { includePinned: boolean }
+  options: { includePinned: boolean; hostHoldsLinePtyIds: ReadonlySet<string> }
 ): ParkWorkspacePlan[] {
   const mobileLocked = new Set(snapshot.mobileLockedPtyIds.map(toRuntimePtyId))
   const pinned = new Set(snapshot.pinnedTerminalTabIds)
@@ -155,7 +171,8 @@ export function planParkWorkspaces(
         if (entry && getEntryTabId(entry) === tab.id && parsePaneKey(entry.paneKey)) {
           const reason = agentKeepReason(
             entry,
-            snapshot.lastTerminalInputAtByPaneKey[entry.paneKey]
+            snapshot.lastTerminalInputAtByPaneKey[entry.paneKey],
+            options.hostHoldsLinePtyIds.has(ptyId)
           )
           if (reason) {
             reasons.add(reason)

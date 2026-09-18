@@ -25,6 +25,7 @@ type World = {
   state: AppState
   events: string[]
   children: Record<string, boolean | 'unknown'>
+  hostHoldsLine: string[]
   deps: ParkPhaseDeps
 }
 
@@ -66,11 +67,15 @@ function world(overrides: { agentState?: AgentStatusEntry['state'] } = {}): Worl
     state,
     events: [],
     children: { 'pty-a': true, 'pty-b': false },
+    hostHoldsLine: [],
     deps: undefined as unknown as ParkPhaseDeps
   }
   w.deps = {
     getState: () => w.state,
-    inspectChildren: async (ptyId) => w.children[ptyId] ?? 'unknown',
+    inspectPty: async (ptyId) => ({
+      children: w.children[ptyId] ?? 'unknown',
+      hostHoldsLine: w.hostHoldsLine.includes(ptyId)
+    }),
     saveSession: async () => {
       w.events.push('save')
     },
@@ -102,6 +107,20 @@ function world(overrides: { agentState?: AgentStatusEntry['state'] } = {}): Worl
 const park = { mode: 'park', includePinned: false } as const
 
 describe('runParkPhase', () => {
+  it('refuses when only the host knows the agent pane holds an unsent line', async () => {
+    const w = world()
+    w.hostHoldsLine = ['pty-a']
+    const result = await runParkPhase(park, w.deps)
+    expect(result.status).toBe('refused')
+    expect(result.workspaces).toContainEqual({
+      worktreeId: 'wt-a',
+      outcome: 'kept',
+      reasons: ['unsent-input'],
+      livePtyCount: 1
+    })
+    expect(w.events).toEqual([])
+  })
+
   it('plans without saving or sleeping anything', async () => {
     const w = world({ agentState: 'working' })
     const result = await runParkPhase({ mode: 'plan', includePinned: false }, w.deps)

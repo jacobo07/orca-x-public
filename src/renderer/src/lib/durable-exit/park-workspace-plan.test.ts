@@ -3,6 +3,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   childProcessAnswerFor,
+  parkPtyAnswerFor,
   planParkWorkspaces,
   type ParkPlanSnapshot
 } from './park-workspace-plan'
@@ -75,9 +76,10 @@ const idleShell = { 'pty-shell': false, 'pty-agent': true } as const
 function reasons(
   snap: ParkPlanSnapshot,
   children: Record<string, boolean | 'unknown'> = idleShell,
-  includePinned = false
+  includePinned = false,
+  hostHoldsLinePtyIds: ReadonlySet<string> = new Set()
 ) {
-  return planParkWorkspaces(snap, children, { includePinned }).map((plan) => ({
+  return planParkWorkspaces(snap, children, { includePinned, hostHoldsLinePtyIds }).map((plan) => ({
     worktreeId: plan.worktreeId,
     keepReasons: plan.keepReasons
   }))
@@ -99,9 +101,24 @@ describe('childProcessAnswerFor', () => {
   })
 })
 
+describe('parkPtyAnswerFor', () => {
+  const base = { foregroundProcess: 'pwsh.exe', hasChildProcesses: false } as const
+  it.each([
+    ['a typed line the host vouches for', { ...base, inputSincePrompt: 'typed' }, true],
+    ['a clean prompt', { ...base, inputSincePrompt: 'clean' }, false],
+    ['an older host that cannot say', { ...base }, false],
+    ['a terminal that is gone', { ...base, inputSincePrompt: 'typed', unavailable: true }, false]
+  ] as const)('%s', (_label, inspection, expected) => {
+    expect(parkPtyAnswerFor(inspection).hostHoldsLine).toBe(expected)
+  })
+})
+
 describe('planParkWorkspaces', () => {
   it('releases a finished resumable agent and an idle shell, and ignores a workspace with no process', () => {
-    const plans = planParkWorkspaces(snapshot(), idleShell, { includePinned: false })
+    const plans = planParkWorkspaces(snapshot(), idleShell, {
+      includePinned: false,
+      hostHoldsLinePtyIds: new Set()
+    })
     expect(plans).toEqual([
       { worktreeId: WT, livePtyIds: ['pty-agent', 'pty-shell'], keepReasons: [] }
     ])
@@ -133,6 +150,33 @@ describe('planParkWorkspaces', () => {
     expect(
       reasons(snapshot({ lastTerminalInputAtByPaneKey: { [entry.paneKey]: OLD + 5 } }))
     ).toEqual([{ worktreeId: WT, keepReasons: ['unsent-input'] }])
+  })
+
+  // After a renderer reload the typing stamp is gone; the host still knows the line is there.
+  it('keeps the workspace when only the host knows the agent pane holds a line', () => {
+    expect(reasons(snapshot(), idleShell, false, new Set(['pty-agent']))).toEqual([
+      { worktreeId: WT, keepReasons: ['unsent-input'] }
+    ])
+  })
+
+  it('releases an agent pane with no stamp when the host holds no line', () => {
+    expect(reasons(snapshot(), idleShell, false, new Set(['pty-shell']))).toEqual([
+      { worktreeId: WT, keepReasons: [] }
+    ])
+  })
+
+  // Why: a TUI agent runs past the shell's 133;C, so the host reads any pane ever typed into as
+  // holding a line. Where the renderer attributed the input to a submission, its answer stands.
+  it('lets a renderer stamp read as submitted outrank the host', () => {
+    const entry = agent()
+    expect(
+      reasons(
+        snapshot({ lastTerminalInputAtByPaneKey: { [entry.paneKey]: OLD - 5 } }),
+        idleShell,
+        false,
+        new Set(['pty-agent'])
+      )
+    ).toEqual([{ worktreeId: WT, keepReasons: [] }])
   })
 
   it('keeps a workspace a phone is driving', () => {
