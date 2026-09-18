@@ -136,6 +136,11 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
   if (!record.origin && record.state === 'done') {
     return true
   }
+  // Why: an agent parked on a permission prompt or question emits no hooks until the user answers,
+  // so hook age measures how long it waited, not whether the session is still resumable.
+  if (record.state === 'waiting' || record.state === 'blocked') {
+    return false
+  }
   return (
     record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
   )

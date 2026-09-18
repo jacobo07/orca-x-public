@@ -782,6 +782,24 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
+  // Why: an agent parked on a permission prompt or question emits no hooks, so its age says
+  // nothing about whether it is still resumable; discarding it stranded the pane as a plain shell.
+  it.each(['waiting', 'blocked'] as const)(
+    'keeps and resumes a quit record left %s longer than the stale window',
+    (state) => {
+      const record = makeRecord({ origin: 'quit', state, capturedAt: 3_000_000, updatedAt: 1 })
+      useAppStore.setState({
+        tabsByWorktree: { 'wt-1': [] },
+        sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+      } as never)
+
+      const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+      expect(launched).toBe(1)
+      expect(useAppStore.getState().tabsByWorktree['wt-1']?.[0]?.launchAgent).toBe('claude')
+    }
+  )
+
   it('resumes interrupted manual records that no preserved pane can own', () => {
     const record = makeRecord({ origin: 'worktree-sleep', interrupted: true })
     useAppStore.setState({
