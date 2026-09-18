@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import {
   cpSync,
   existsSync,
@@ -7,11 +7,11 @@ import {
   readdirSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
 import { app } from 'electron'
+import { computeDaemonBundleFingerprint as computeBundleFingerprint } from './daemon-host-bundle-fingerprint'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { startTimeMatches } from './daemon-process-start-time'
 
@@ -67,37 +67,6 @@ type MaterializeMarker = {
   entryRelPath: string
   /** Content identity of the copied daemon bundle; absent on pre-fingerprint markers. */
   bundleFingerprint?: string
-}
-
-function listFilesSorted(dir: string): string[] {
-  try {
-    return readdirSync(dir, { recursive: true, encoding: 'utf8' })
-      .map((rel) => join(dir, rel))
-      .filter((file) => statSync(file).isFile())
-      .sort()
-  } catch {
-    return []
-  }
-}
-
-/**
- * Why: fork builds ship new daemon code under an unchanged app version, so the version alone let a
- * weeks-old daemon keep being forked — one that rejected every hello once the protocol moved on.
- */
-function computeBundleFingerprint(sources: DaemonHostSources): string {
-  const hash = createHash('sha256')
-  hash.update(String(statSync(sources.execPath).size))
-  const mainDir = winPath.dirname(sources.entrySourcePath)
-  const pkgJson = join(sources.resourcesPath, 'app.asar.unpacked', 'out', 'package.json')
-  for (const file of [sources.entrySourcePath, pkgJson, ...listFilesSorted(join(mainDir, 'chunks'))]) {
-    hash.update(`\0${toPosixRelative(sources.appDir, file)}\0`)
-    try {
-      hash.update(readFileSync(file))
-    } catch {
-      hash.update('<missing>')
-    }
-  }
-  return hash.digest('hex')
 }
 
 // win32 path semantics so Windows paths decompose correctly off-win32 in cross-platform unit tests; production runs on win32 only.
@@ -301,9 +270,22 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
       bundleFingerprint
     }
     writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
-    // Replace any stale/partial dest, then publish the staging dir atomically.
-    rmSync(dest, { recursive: true, force: true })
+    // Why: a stale same-version dest may still be the image of a live daemon owning user terminals.
+    // Renaming it first fails whole while that daemon runs, where a recursive delete would strip its
+    // unlocked files before failing on the exe; only a dest nothing runs from is ever deleted.
+    let retired: string | null = null
+    if (existsSync(dest)) {
+      retired = join(root, `${version}.retired-${randomBytes(6).toString('hex')}`)
+      renameSync(dest, retired)
+    }
     renameSync(staging, dest)
+    if (retired) {
+      try {
+        rmSync(retired, { recursive: true, force: true })
+      } catch {
+        // Best-effort; pruneOldDaemonHosts retries on a later launch.
+      }
+    }
   } catch {
     try {
       rmSync(staging, { recursive: true, force: true })

@@ -7,6 +7,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
+import type * as NodeFs from 'node:fs'
 import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,6 +24,21 @@ const { electronApp } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: electronApp }))
+
+// Why: Windows refuses to rename a directory a running daemon's image lives in; simulate that lock.
+const { lockedDirs } = vi.hoisted(() => ({ lockedDirs: new Set<string>() }))
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  return {
+    ...actual,
+    renameSync: (from: string, to: string) => {
+      if (lockedDirs.has(from)) {
+        throw Object.assign(new Error(`EPERM: rename '${from}'`), { code: 'EPERM' })
+      }
+      return actual.renameSync(from, to)
+    }
+  }
+})
 
 import {
   buildDaemonHostManifest,
@@ -215,6 +231,23 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(
       readFileSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'), 'utf8')
     ).toBe('chunk-v2')
+  })
+
+  // Why: a same-version dir can host a live daemon owning user terminals; a recursive delete would
+  // strip its unlocked files and only then fail on the exe. It must be left byte-for-byte intact.
+  it('leaves a stale host a live daemon still runs from untouched and falls back', () => {
+    const first = materializeRelocatedDaemonHost()
+    const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
+    writeFileSync(join(installDir, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js'), 'entry-v2')
+    lockedDirs.add(dest)
+    try {
+      expect(materializeRelocatedDaemonHost()).toBeNull()
+    } finally {
+      lockedDirs.clear()
+    }
+    expect(readFileSync(first!.entryPath, 'utf8')).toBe('entry')
+    expect(existsSync(join(dest, 'orca-terminal-daemon.exe'))).toBe(true)
+    expect(readdirSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toEqual(['9.9.9'])
   })
 
   it('does not trust a pre-fingerprint marker for the current version', () => {
