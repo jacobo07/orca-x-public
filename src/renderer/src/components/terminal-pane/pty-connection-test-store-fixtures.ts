@@ -69,6 +69,8 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     markWorktreeUnread: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
     recordTerminalInput: vi.fn(),
+    recordTerminalOutput: vi.fn(),
+    clearTerminalInputPending: vi.fn(),
     setAgentStatus: vi.fn(
       (
         paneKey: string,
