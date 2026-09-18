@@ -3,6 +3,7 @@ import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-gene
 import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
+  GitBulkDiscardPaths,
   GitBulkPaths,
   GitCheckIgnored,
   GitCheckout,
@@ -46,9 +47,7 @@ export const GIT_METHODS: RpcMethod[] = [
               ...(params.branchLineTotalMergeBase === undefined
                 ? {}
                 : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),
-              ...(params.worktreeContentIdentity === true
-                ? { worktreeContentIdentity: true }
-                : {}),
+              ...(params.worktreeContentIdentity === true ? { worktreeContentIdentity: true } : {}),
               ...(signal ? { signal } : {})
             }
       return options === undefined
@@ -216,9 +215,14 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.bulkDiscard',
-    params: GitBulkPaths,
+    params: GitBulkDiscardPaths,
+    // Two shapes deliberately, so a caller that states nothing reaches the runtime with the original
+    // arity -- the same reason git.discard has two. It keeps the existing routing assertions pinning
+    // what they were written to pin instead of quietly widening them.
     handler: async (params, { runtime }) =>
-      runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths)
+      params.observed === undefined
+        ? runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths)
+        : runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths, params.observed)
   }),
   defineMethod({
     name: 'git.remoteFileUrl',

@@ -16,6 +16,16 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { LiveSessionResumeRefusal } from '../../../../shared/live-agent-session-presence-types'
+
+export type StartupSpawnSettled =
+  | {
+      kind: 'spawned'
+      ptyId: string
+      reattached: boolean
+      agentResumeRefused?: LiveSessionResumeRefusal
+    }
+  | { kind: 'failed' }
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -88,6 +98,8 @@ export type PtyConnectionDeps = {
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
+  /** Reports how this connection's own startup spawn ended, once; for in-place respawns. */
+  onStartupSpawnSettled?: (result: StartupSpawnSettled) => void
   // Why: the renderer dispatches two notification sources — BEL from the PTY
   // byte stream and agent-task-complete on the working→idle title transition.
   // shared/types.ts keeps a wider NotificationEventSource union because the

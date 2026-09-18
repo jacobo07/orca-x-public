@@ -69,6 +69,19 @@ import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-en
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import type { PtyProcessInspection } from '../../shared/pty-process-inspection'
+import {
+  createShellPromptStateTracker,
+  resolveShellPromptState,
+  shellPromptMarkerTrust,
+  type ShellPromptMarkerTrust,
+  type ShellPromptStateTracker
+} from '../../shared/terminal-osc133-prompt-state'
+import {
+  createShellInputSincePromptTracker,
+  type ShellInputSincePromptTracker
+} from '../../shared/terminal-shell-input-since-prompt'
+import { isShellProcess } from '../../shared/shell-process-detection'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import {
@@ -114,6 +127,14 @@ type PendingLocalPtySpawn = {
 }
 const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 const ptyShellName = new Map<string, string>()
+const ptyPromptStates = new Map<
+  string,
+  {
+    tracker: ShellPromptStateTracker
+    trust: ShellPromptMarkerTrust
+    input: ShellInputSincePromptTracker
+  }
+>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
 const ptyLastRecognizedForeground = new Map<string, string>()
@@ -266,6 +287,7 @@ function clearPtyState(id: string): void {
   ptyIncarnations.delete(id)
   ptyAgentSessionIds.delete(id)
   ptyShellName.delete(id)
+  ptyPromptStates.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyLastRecognizedForeground.delete(id)
   ptyTerminalHandle.delete(id)
@@ -933,6 +955,17 @@ export class LocalPtyProvider implements IPtyProvider {
       ptyAgentSessionIds.add(id)
     }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
+    const promptTrust = shellPromptMarkerTrust(shellPath, process.platform)
+    const promptInput = createShellInputSincePromptTracker()
+    const promptState = {
+      tracker: createShellPromptStateTracker(
+        () => promptTrust,
+        (sequence) => promptInput.notePromptMarker(sequence)
+      ),
+      trust: promptTrust,
+      input: promptInput
+    }
+    ptyPromptStates.set(id, promptState)
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
       ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
     }
@@ -1064,6 +1097,7 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const disposables: { dispose: () => void }[] = []
     const onDataDisposable = proc.onData((rawData) => {
+      promptState.tracker.observe(rawData)
       let data = rawData
       if (shellStartupOutputScanState && resolveShellReady) {
         const scanned = scanShellStartupOutput(shellStartupOutputScanState, data)
@@ -1161,6 +1195,9 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!proc) {
       return false
     }
+    // Why after the query-reply return above: those never reach the shell, so they cannot be
+    // the line a respawn would destroy.
+    ptyPromptStates.get(id)?.input.noteWrite(data)
     proc.write(data)
     return true
   }
@@ -1337,6 +1374,30 @@ export class LocalPtyProvider implements IPtyProvider {
   }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */
+  }
+
+  // Why its own method: the generic fallback cannot carry the shell's marker state.
+  async inspectProcess(id: string): Promise<PtyProcessInspection> {
+    const foregroundProcess = await this.getForegroundProcess(id)
+    // Why: Windows node-pty names the terminal, not the process, so the generic check
+    // always says "child"; the resolved foreground is what the daemon compares too.
+    const hasChildProcesses =
+      process.platform === 'win32'
+        ? foregroundProcess !== null && !isShellProcess(foregroundProcess)
+        : await this.hasChildProcesses(id)
+    const promptState = ptyPromptStates.get(id)
+    return {
+      foregroundProcess,
+      hasChildProcesses,
+      ...(promptState
+        ? {
+            promptState: resolveShellPromptState(promptState.tracker, promptState.trust),
+            // Why gated on trust: a shell Orca never instrumented emits no marker that could
+            // retire this, so it must answer unknown rather than claim an empty line.
+            ...(promptState.trust === 'none' ? {} : { inputSincePrompt: promptState.input.read() })
+          }
+        : {})
+    }
   }
 
   async hasChildProcesses(id: string): Promise<boolean> {

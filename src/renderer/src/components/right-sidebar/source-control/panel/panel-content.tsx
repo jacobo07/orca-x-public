@@ -57,7 +57,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     repositoryHuge,
     requestDiscardAllInArea,
     requestDiscardEntry,
-    requestDiscardPaths,
+    requestDiscardEntries,
     revealInExplorer,
     selectedKeySet,
     setBaseRefDialogOpen,
@@ -153,7 +153,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           fileListScrollElement={fileListScrollElement}
           collapsedTreeDirs={collapsedTreeDirs}
           toggleTreeDir={toggleTreeDir}
-          requestDiscardPaths={requestDiscardPaths}
+          requestDiscardEntries={requestDiscardEntries}
           expandedSubmoduleKeys={expandedSubmoduleKeys}
           toggleSubmodule={toggleSubmodule}
           currentWorktreeId={currentWorktreeId}

@@ -24,6 +24,13 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_operation_expired',
   'agent_session_operation_capacity',
   'agent_session_legacy_required',
+  // Resume refused by the live-session collision guard (agent-session-resume-refusal.ts).
+  'agent_session_live_elsewhere',
+  'agent_session_multiple_live_owners',
+  'agent_session_materializing',
+  'agent_session_presence_unknown',
+  // The requested resume directory is not inside the workspace being resumed into.
+  'agent_session_resume_context_unauthorized',
   'execution_owner_reconciling',
   'execution_owner_unavailable'
 ] as const
@@ -110,6 +117,8 @@ export type RuntimeEnsureAgentSessionRequest =
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
+      /** The directory this session was recorded in. Omission keeps the workspace root. */
+      startupCwd?: string
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
     }

@@ -19,6 +19,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca status', 'orca status --json']
   },
   {
+    path: ['park'],
+    summary: 'Put every terminal to sleep, save the session, and quit Orca',
+    usage: 'orca park [--dry-run] [--include-pinned] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dry-run', 'include-pinned'],
+    examples: ['orca park --dry-run', 'orca park', 'orca park --json'],
+    notes: [
+      'Refuses, and changes nothing, while any workspace has running work (a busy agent, a draft, a dev server, a phone driving a terminal, or a pinned tab).',
+      'Exit code 0 means Orca is quitting with everything asleep; 2 means it stayed open on purpose; 1 means it could not park.'
+    ]
+  },
+  {
     path: ['claude-teams'],
     argumentMode: 'passthrough',
     summary: 'Start Claude Code Agent Teams in the current Orca terminal',

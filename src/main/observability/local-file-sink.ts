@@ -124,9 +124,13 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
         /* keep going — partial rotation is preferable to crash */
       }
     }
-    // The post-cascade slot is empty; reopen the base file fresh.
+    // Reopen and take the size from the descriptor rather than assuming the cascade moved
+    // anything: every failure above is swallowed, so a rename the filesystem refused (open
+    // handle, AV scanner, read-only volume) leaves the *same* full file here. Assuming zero
+    // told the accounting an over-cap file was empty, which suppressed the next rotation
+    // until another full maxBytes accumulated. A successful rotation still reads back zero.
     fd = openAppend(filePath)
-    currentBytes = 0
+    currentBytes = safeFstatSize(fd)
   }
 
   function flushBuffer(): void {
@@ -170,6 +174,11 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       pendingChunkBytes = 0
     }
 
+    // Now that a failed rotation leaves the true (over-cap) size in place, an unrotatable
+    // file would otherwise re-attempt the cascade on every line. Cap it at one attempt per
+    // flush pass: proportional to the existing flush cadence, and still rotating on the very
+    // next pass once the obstruction clears.
+    let rotationAttempted = false
     for (const line of lines) {
       const lineBytes = Buffer.byteLength(line, 'utf8')
       if (lineBytes > maxBytes) {
@@ -180,7 +189,8 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
         flushPendingChunk()
       }
       // Skip empty-file rotations (currentBytes > 0) so a new install never produces zero-byte `.N` files.
-      if (currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
+      if (!rotationAttempted && currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
+        rotationAttempted = true
         rotate()
       }
       pendingChunk.push(line)

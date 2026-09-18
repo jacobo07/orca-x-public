@@ -19,6 +19,7 @@ import {
 } from '../tab-bar/terminal-tab-activity-status'
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { buildTerminalRailRows, findActiveTerminalRailRow } from './terminal-rail-rows'
+import { TerminalPreviewHoverTrigger } from '../terminal-preview/TerminalPreviewHoverTrigger'
 import { TerminalRailPaneRow, TerminalRailTabRow } from './TerminalRailRow'
 import { useTerminalRailResize } from './use-terminal-rail-resize'
 
@@ -73,7 +74,8 @@ function TerminalRailTab({
       agentStatusEpoch: s.agentStatusEpoch,
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
       ptyIdsByTabId: s.ptyIdsByTabId,
-      terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
+      terminalLayout: s.terminalLayoutsByTabId?.[tab.id],
+      lastTerminalOutputAtByPaneKey: s.lastTerminalOutputAtByPaneKey
     })
   )
   const hasUnreadActivity = useAppStore((s) =>
@@ -265,15 +267,20 @@ export default function TerminalRail({
         )}
       />
       <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-1">
-          {rows.map((row) => {
-            if (row.kind === 'tab') {
-              const tab = tabsById.get(row.tabId)
-              if (!tab) {
-                return null
-              }
-              return (
+        {rows.map((row) => {
+          if (row.kind === 'tab') {
+            const tab = tabsById.get(row.tabId)
+            if (!tab) {
+              return null
+            }
+            return (
+              <TerminalPreviewHoverTrigger
+                key={`tab-${row.tabId}`}
+                tabId={row.tabId}
+                leafId={row.leafId}
+                title={tab.customTitle ?? tab.title}
+              >
                 <TerminalRailTab
-                  key={`tab-${row.tabId}`}
                   tab={tab}
                   paneCount={row.paneCount}
                   isActive={activeRow === row}
@@ -282,28 +289,35 @@ export default function TerminalRail({
                   tabIndex={tabIds.indexOf(row.tabId)}
                   tabCount={tabIds.length}
                 />
-              )
-            }
-            // Why: makePaneKey rejects legacy numeric leaf ids, and a pane whose key cannot be
-            // built simply has no status to show — better than fabricating one for it.
-            const agentState = isTerminalLeafId(row.leafId)
-              ? (agentStatusByPaneKey?.[makePaneKey(row.tabId, row.leafId)]?.state ?? null)
-              : null
-            const customTitle = layoutsByTabId?.[row.tabId]?.titlesByLeafId?.[row.leafId]
-            return (
+              </TerminalPreviewHoverTrigger>
+            )
+          }
+          // Why: makePaneKey rejects legacy numeric leaf ids, and a pane whose key cannot be
+          // built simply has no status to show — better than fabricating one for it.
+          const agentState = isTerminalLeafId(row.leafId)
+            ? (agentStatusByPaneKey?.[makePaneKey(row.tabId, row.leafId)]?.state ?? null)
+            : null
+          const customTitle = layoutsByTabId?.[row.tabId]?.titlesByLeafId?.[row.leafId]
+          const paneLabel =
+            customTitle ??
+            `${translate('auto.components.terminal.rail.TerminalRail.pane', 'Pane')} ${row.position}`
+          return (
+            <TerminalPreviewHoverTrigger
+              key={`pane-${row.leafId}`}
+              tabId={row.tabId}
+              leafId={row.leafId}
+              title={paneLabel}
+            >
               <TerminalRailPaneRow
-                key={`pane-${row.leafId}`}
-                label={
-                  customTitle ??
-                  `${translate('auto.components.terminal.rail.TerminalRail.pane', 'Pane')} ${row.position}`
-                }
+                label={paneLabel}
                 agentState={agentState}
                 isActive={activeRow === row}
                 onSelect={() => activateTabAndFocusPane(row.tabId, row.leafId)}
                 onContextMenu={(event) => event.preventDefault()}
               />
-            )
-          })}
+            </TerminalPreviewHoverTrigger>
+          )
+        })}
       </div>
     </div>
   )

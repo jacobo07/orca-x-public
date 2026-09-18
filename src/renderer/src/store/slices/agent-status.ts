@@ -22,6 +22,14 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
+  afterAgentStarted,
+  isAgentExitedResumeBlock,
+  isLegacyWorkerResumeBlock,
+  withAgentExited,
+  withLegacyWorkerFence,
+  withoutLegacyWorkerFence
+} from '../../../../shared/agent-resume-block-precedence'
+import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
@@ -294,6 +302,8 @@ export type AgentStatusSlice = {
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
+  /** The pane's agent exited to its shell: keep its resume identity, stop automatic relaunch. */
+  markSleepingAgentExited: (paneKey: string) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
@@ -669,12 +679,14 @@ function carryOverAutomaticResumeBlock(
   record: SleepingAgentSessionRecord,
   previous: SleepingAgentSessionRecord | undefined
 ): void {
+  // Why afterAgentStarted: an exit drops live and retained rows, so a captured row postdates it.
+  const carried = afterAgentStarted(previous?.automaticResumeBlockedBy)
   if (
-    previous?.automaticResumeBlockedBy === 'legacy-orchestration-worker' &&
-    previous.agent === record.agent &&
+    carried &&
+    previous?.agent === record.agent &&
     agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
   ) {
-    record.automaticResumeBlockedBy = previous.automaticResumeBlockedBy
+    record.automaticResumeBlockedBy = carried
   }
 }
 
@@ -1527,6 +1539,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             s.lastTerminalInputAtByPaneKey,
             retiredPaneKeySet
           ),
+          lastTerminalOutputAtByPaneKey: removePaneKeys(
+            s.lastTerminalOutputAtByPaneKey,
+            retiredPaneKeySet
+          ),
+          terminalInputPendingByPaneKey: removePaneKeys(
+            s.terminalInputPendingByPaneKey,
+            retiredPaneKeySet
+          ),
           cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
@@ -1600,6 +1620,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
         unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
         lastTerminalInputAtByPaneKey: movePaneKeyedRecord(s.lastTerminalInputAtByPaneKey, from, to),
+        lastTerminalOutputAtByPaneKey: movePaneKeyedRecord(
+          s.lastTerminalOutputAtByPaneKey,
+          from,
+          to
+        ),
+        terminalInputPendingByPaneKey: movePaneKeyedRecord(
+          s.terminalInputPendingByPaneKey,
+          from,
+          to
+        ),
         cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
         retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
       }))
@@ -1850,8 +1880,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
           ...(existingRecordMatchesProviderSession &&
-          existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' }
+          afterAgentStarted(existingRecord.automaticResumeBlockedBy)
+            ? {
+                automaticResumeBlockedBy: afterAgentStarted(existingRecord.automaticResumeBlockedBy)
+              }
             : {}),
           origin: 'live'
         }
@@ -2290,7 +2322,27 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           delete nextLaunchConfigs[paneKey]
         }
         if (liveRecoveryRecord) {
-          if (!recoveryRecordMatches(existingSleepingRecord, liveRecoveryRecord)) {
+          const existingBlock = existingSleepingRecord?.automaticResumeBlockedBy
+          const sameSession = recoveryRecordTargetsSameSession(
+            existingSleepingRecord,
+            liveRecoveryRecord
+          )
+          // Why: a report older than the exit stamp cannot prove the agent restarted.
+          const staleForExit =
+            sameSession &&
+            isAgentExitedResumeBlock(existingBlock) &&
+            updatedAt < (existingSleepingRecord?.updatedAt ?? 0)
+          const nextBlock = sameSession ? afterAgentStarted(existingBlock) : undefined
+          if (nextBlock) {
+            liveRecoveryRecord.automaticResumeBlockedBy = nextBlock
+          }
+          // Why the block compare: recoveryRecordMatches ignores it, so a restart of the same
+          // session would otherwise keep a stale exit block forever.
+          if (
+            !staleForExit &&
+            (!recoveryRecordMatches(existingSleepingRecord, liveRecoveryRecord) ||
+              existingBlock !== nextBlock)
+          ) {
             nextSleepingAgentSessions = {
               ...s.sleepingAgentSessionsByPaneKey,
               [paneKey]: liveRecoveryRecord
@@ -3122,17 +3174,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
       set((s) => {
         const current = s.sleepingAgentSessionsByPaneKey[paneKey]
-        if (
-          !current ||
-          (blocked
-            ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            : current.automaticResumeBlockedBy === undefined)
-        ) {
+        if (!current || isLegacyWorkerResumeBlock(current.automaticResumeBlockedBy) === blocked) {
           return s
         }
+        // Why: the fence and an exit are independent; toggling one must keep the other.
+        const nextBlock = blocked
+          ? withLegacyWorkerFence(current.automaticResumeBlockedBy)
+          : withoutLegacyWorkerFence(current.automaticResumeBlockedBy)
         const next = { ...current }
-        if (blocked) {
-          next.automaticResumeBlockedBy = 'legacy-orchestration-worker'
+        if (nextBlock) {
+          next.automaticResumeBlockedBy = nextBlock
         } else {
           delete next.automaticResumeBlockedBy
         }
@@ -3140,6 +3191,28 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           sleepingAgentSessionsByPaneKey: {
             ...s.sleepingAgentSessionsByPaneKey,
             [paneKey]: next
+          }
+        }
+      })
+    },
+
+    markSleepingAgentExited: (paneKey) => {
+      paneKey = resolveAgentPaneAuthorityKey(paneKey)
+      set((s) => {
+        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
+        if (!current || isAgentExitedResumeBlock(current.automaticResumeBlockedBy)) {
+          return s
+        }
+        return {
+          sleepingAgentSessionsByPaneKey: {
+            ...s.sleepingAgentSessionsByPaneKey,
+            // Why: advancing updatedAt rejects a pre-exit provider-session report that would lift the block.
+            [paneKey]: {
+              ...current,
+              // Why: a fenced worker keeps its fence and also records the exit.
+              automaticResumeBlockedBy: withAgentExited(current.automaticResumeBlockedBy),
+              updatedAt: Math.max(current.updatedAt, Date.now())
+            }
           }
         }
       })

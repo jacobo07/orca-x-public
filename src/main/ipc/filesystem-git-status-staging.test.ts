@@ -383,6 +383,45 @@ describe('registerFilesystemHandlers', () => {
     expect(discardChangesMock).not.toHaveBeenCalled()
   })
 
+  it('carries the observed content from a discard request through to the host', async () => {
+    // The hop between the renderer transport and the destruction. Both ends are covered elsewhere, so
+    // without this the one layer that translates the request into a precondition is the one nothing
+    // watches -- and a discard that silently arrives without it destroys whatever is at the path.
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:discard')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      filePath: 'src/file.ts',
+      expectedContent: 'sha256:abc'
+    })
+
+    expect(discardChangesMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      path.join('src', 'file.ts'),
+      {},
+      { expectedContent: 'sha256:abc' }
+    )
+  })
+
+  it('passes no precondition when the request states nothing, rather than an empty one', async () => {
+    // An empty-string precondition would compare against nothing and pass, which is the guard defeating
+    // itself. Absence has to arrive as absence so the layers above can refuse it.
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:discard')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      filePath: 'src/file.ts',
+      expectedContent: ''
+    })
+
+    expect(discardChangesMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      path.join('src', 'file.ts'),
+      {},
+      undefined
+    )
+  })
+
   it('rejects git operations for unknown worktrees', async () => {
     listWorktreesMock.mockResolvedValue([])
 
@@ -415,19 +454,30 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('normalizes git file paths for bulk discard requests', async () => {
-    bulkDiscardChangesMock.mockResolvedValue(undefined)
+    bulkDiscardChangesMock.mockResolvedValue({ discarded: [], refused: [] })
 
     registerFilesystemHandlers(store as never)
 
     await handlers.get('git:bulkDiscard')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH,
-      filePaths: ['./src/../src/file.ts', 'nested//child.ts']
+      filePaths: ['./src/../src/file.ts', 'nested//child.ts'],
+      observed: [
+        { filePath: './src/../src/file.ts', expectedContent: 'sha256:a' },
+        { filePath: 'nested//child.ts', expectedContent: 'sha256:b' }
+      ]
     })
 
+    // Why the fourth argument matters here: normalization rewrites the paths, so the observed map has to
+    // be re-keyed the same way. Keyed by the caller's spelling every lookup would miss and the host would
+    // refuse the whole set for a reason nobody could see.
     expect(bulkDiscardChangesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
-      {}
+      {},
+      new Map([
+        [path.join('src', 'file.ts'), 'sha256:a'],
+        [path.join('nested', 'child.ts'), 'sha256:b']
+      ])
     )
   })
 

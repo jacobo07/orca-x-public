@@ -20,11 +20,13 @@ export type ProcessMemoryMetric = 'rss' | 'working-set'
 
 export type HostAvailableMemorySource = 'memory-pressure' | 'proc-meminfo' | 'free-memory'
 
-/** The top-level cpu/memory are the sum of main + renderer + other. */
+/** The top-level cpu/memory are the sum of main + renderer + other + terminalHost. */
 export type AppMemory = UsageValues & {
   main: UsageValues
   renderer: UsageValues
   other: UsageValues
+  /** The terminal daemon process itself; it is detached, so Electron's metrics never list it. Absent from older hosts. */
+  terminalHost?: UsageValues
   /** Oldest-first memory samples (bytes) for the whole Orca app; empty before the first snapshot. */
   history: number[]
 }
@@ -33,7 +35,11 @@ export type SessionMemory = UsageValues & {
   sessionId: string
   paneKey: string | null
   pid: number
+  /** The processes this session claimed in this sweep, with their bytes. Absent from older hosts. */
+  processes?: ProcessMemorySample[]
 }
+
+export type ProcessMemorySample = { pid: number; memory: number }
 
 /** The top-level cpu/memory are the sum of sessions. */
 export type WorktreeMemory = UsageValues & {
@@ -70,5 +76,32 @@ export type MemorySnapshot = {
   totalCpu: number
   /** Sum of per-process samples. Shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number
+  /**
+   * Daemon descendants no registered PTY claimed (ConPTY hosts, sessions without a published pid).
+   * Counted in totalMemory but not in app: the owner cannot be named. Absent from older hosts.
+   */
+  terminalHostDescendants?: UsageValues
+  /** 'failed' when the host process sweep returned nothing, so every per-process value is unmeasured, not zero. */
+  processSweep?: ProcessSweepOutcome
+  /** When the process table read began. collectedAt is stamped after it, and merged callers share one sweep. */
+  sweepStartedAt?: number
   collectedAt: number
 }
+
+export type ProcessSweepOutcome = 'measured' | 'failed'
+
+/**
+ * Which of the asked pids a fresh host sweep still lists. Only 'measured' says
+ * anything: a failed sweep lists nothing, and that is not every process gone.
+ * Both times are main-process clock, so their order is comparable; the caller
+ * proves "request after effect" by control flow, never by comparing its own clock.
+ */
+export type ProcessPresenceProbe =
+  | {
+      sweep: 'measured'
+      requestedAt: number
+      sweepStartedAt: number
+      metric: ProcessMemoryMetric
+      presentPids: number[]
+    }
+  | { sweep: 'failed'; requestedAt: number; sweepStartedAt: number }

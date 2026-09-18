@@ -3,10 +3,13 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { LiveSessionResumeRefusal } from '../../shared/live-agent-session-presence-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
+import type { PtyProcessInspection } from '../../shared/pty-process-inspection'
+import type { PtyProcessInspectionBatchEntry } from '../../shared/pty-process-inspection-batch'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
@@ -65,6 +68,8 @@ export type PtyApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    /** The session is live, starting or unconfirmed elsewhere; a plain shell started instead. */
+    agentResumeRefused?: LiveSessionResumeRefusal
   }>
   write: (id: string, data: string) => void
   writeAccepted: (id: string, data: string) => Promise<boolean>
@@ -106,11 +111,9 @@ export type PtyApi = {
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
   hasChildProcesses: (id: string) => Promise<boolean>
   getForegroundProcess: (id: string) => Promise<string | null>
-  inspectProcess: (id: string) => Promise<{
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-    unavailable?: true
-  }>
+  inspectProcess: (id: string) => Promise<PtyProcessInspection>
+  /** One answer per id; optional so surfaces without it fall back to per-pane calls. */
+  inspectProcesses?: (ids: string[]) => Promise<PtyProcessInspectionBatchEntry[]>
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>

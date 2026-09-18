@@ -1,4 +1,94 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "Todo está dormido y guardado. Orca se está cerrando.",
+      "stayedOpen": "Orca sigue abierto",
+      "refused": "{{count}} espacio(s) de trabajo tienen trabajo en curso, así que no se durmió nada.",
+      "incomplete": "Algunos espacios de trabajo están dormidos; {{count}} no se pudieron dormir y siguen en ejecución.",
+      "sealFailed": "No se pudo guardar la sesión, así que Orca sigue abierto.",
+      "unavailable": "Aparcar y salir no está disponible ahora en esta ventana."
+    }
+  },
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "Restaurada, sin ejecutar",
+      "sleptTitle": "Dormida, sin ejecutar",
+      "sleptFreshBody": "Al abrirla se vuelve a iniciar esta terminal en su carpeta.",
+      "resumeBody": "Al abrirla se reanuda la sesión de {{agent}}.",
+      "freshBody": "Al abrirla se inicia una terminal nueva en su carpeta.",
+      "open": "Abrir"
+    },
+    "history": {
+      "menu": "Snapshots…",
+      "title": "Snapshots · {{name}}",
+      "description": "Distribuciones de terminales guardadas de este espacio de trabajo. Al restaurar, las pestañas vuelven sin ejecutarse; cada una se inicia solo cuando la abres. Los archivos no cambian.",
+      "loading": "Cargando snapshots…",
+      "unavailable": "Las snapshots no están disponibles en este cliente.",
+      "invalidRequest": "Este espacio de trabajo no se puede asociar a un almacén de snapshots.",
+      "unreadable": "No se pudo leer el almacén de snapshots ({{code}}).",
+      "empty": "Aún no hay snapshots guardadas para este espacio de trabajo.",
+      "listLabel": "Snapshots guardadas",
+      "untitled": "Snapshot sin título",
+      "tabCount": "Pestañas: {{count}}",
+      "latest": "Más reciente",
+      "problemsTitle": "No restaurables",
+      "problem": {
+        "unsupportedVersion": "Guardada con una versión más reciente de Orca X",
+        "corrupt": "Archivo dañado",
+        "unreadable": "No se pudo leer",
+        "missing": "Ya no está en el disco",
+        "unverified": "No se confirmó el guardado",
+        "unrecognized": "Archivo no reconocido en la carpeta de snapshots"
+      },
+      "checkingProfiles": "Comprobando opciones de inicio…",
+      "previewLoading": "Comprobando qué puede recuperar esta snapshot…",
+      "profilesUnresolved": "No se pudieron comprobar las opciones de inicio, así que algunas pestañas pueden aparecer como desconocidas.",
+      "capability": {
+        "exactResume": "Reanudar sesión: {{count}}",
+        "restartable": "Volver a iniciar: {{count}}",
+        "recreateContext": "Terminal nueva en su carpeta: {{count}}",
+        "historyOnly": "Solo historial: {{count}}",
+        "notRestorable": "No se pueden restaurar: {{count}}",
+        "unknown": "Desconocido: {{count}}"
+      },
+      "liveElsewhere": "Abiertas en otro sitio, no se reanudarán aquí: {{count}}",
+      "blocker": {
+        "currentWork": "Este espacio de trabajo tiene pestañas abiertas. Ciérralas antes de restaurar; no se reemplaza nada.",
+        "scopeMismatch": "Esta snapshot pertenece a otro espacio de trabajo.",
+        "hostUnavailable": "El host de este espacio de trabajo no está disponible."
+      },
+      "read": {
+        "missing": "Esta snapshot ya no está en el disco. Se ha actualizado la lista.",
+        "unsupportedVersion": "Esta snapshot se guardó con una versión más reciente de Orca X.",
+        "corrupt": "El archivo de esta snapshot está dañado.",
+        "unreadable": "No se pudo leer esta snapshot ({{code}}).",
+        "invalidRequest": "La solicitud de esta snapshot no era válida."
+      },
+      "selectPrompt": "Selecciona una snapshot para restaurarla.",
+      "restore": "Restaurar",
+      "restoring": "Restaurando…",
+      "close": "Cerrar",
+      "restored": "Snapshot restaurada. Sus pestañas solo se inician cuando las abres.",
+      "result": {
+        "targetChanged": "El espacio de trabajo cambió durante la restauración; no se reemplazó nada.",
+        "failedRolledBack": "La restauración falló y se deshizo; el espacio de trabajo no ha cambiado.",
+        "failedNotRolledBack": "La restauración falló y no se pudo deshacer por completo. Revisa las pestañas de este espacio de trabajo."
+      }
+    },
+    "save": {
+      "action": "Guardar snapshot",
+      "saved": "Snapshot guardada.",
+      "savedWithoutSomeHistory": "Snapshot guardada; no se pudo copiar parte del historial de las terminales.",
+      "noTerminals": "Este espacio de trabajo no tiene terminales que guardar.",
+      "notCapturable": "No se pudieron capturar las terminales de este espacio de trabajo ({{reason}}).",
+      "refusedInvalid": "La snapshot se rechazó por no ser válida ({{reason}}).",
+      "unsupportedVersion": "Esta versión no puede escribir ese formato de snapshot.",
+      "identityCollision": "Ya existe una snapshot con este identificador. Inténtalo de nuevo.",
+      "writeFailed": "No se pudo escribir la snapshot ({{code}}).",
+      "readBackFailed": "Se guardó, pero no se pudo confirmar. Puede aparecer al actualizar.",
+      "verifyFailed": "La snapshot guardada no coincidía con lo enviado y se apartó."
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca tuvo un error de renderizado.",
@@ -49,6 +139,7 @@
     "reportCrash": "Informar fallo...",
     "file": "Archivo",
     "newWindow": "Nueva ventana",
+    "parkAndExit": "Dormir todo y salir",
     "exit": "Salir",
     "edit": "Editar",
     "appearance": "Apariencia",
@@ -2685,6 +2776,9 @@
             "stop_command_title": "¿Detener comando en ejecución?",
             "stop_agent_description": "Al cerrar esta terminal, se detendrá el trabajo actual del agente.",
             "stop_command_description": "Al cerrar esta terminal, se detendrá el comando que se está ejecutando en ella.",
+            "discard_unsent_input_title": "¿Descartar lo que escribiste?",
+            "discard_unsent_input_confirm": "Descartar y cerrar",
+            "discard_unsent_input_description": "Esta terminal tiene algo escrito en el prompt que nunca se envió. Al cerrarla, se descartará esa línea.",
             "dont_ask_again": "No volver a preguntar para terminales en ejecución",
             "stop_agent_confirm": "Detener agente",
             "stop_command_confirm": "Detener y cerrar"
@@ -3497,6 +3591,61 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "Memoria de agentes inactivos",
+              "idleOne": "1 agente inactivo puede dormir",
+              "idleMany": "{{value0}} agentes inactivos pueden dormir",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "1 de ellos no se ha medido, así que no está en esta cifra",
+              "unknownMany": "{{value0}} de ellos no se han medido, así que no están en esta cifra",
+              "protectedOne": "1 panel se mantiene despierto",
+              "protectedMany": "{{value0}} paneles se mantienen despiertos",
+              "sleeping": "Durmiendo agentes…",
+              "sleepOne": "Dormir 1 agente ahora",
+              "sleepMany": "Dormir {{value0}} agentes ahora",
+              "resultSlept": "{{value0}} dormidos",
+              "resultKept": "{{value0}} siguen despiertos porque cambiaron desde que se mostraron",
+              "resultFailed": "{{value0}} no se pudieron dormir",
+              "observed": {
+                "pending": "Comprobando qué procesos suyos terminaron…",
+                "unmeasured": "No se midió la memoria liberada: {{value0}}",
+                "released": "Sus procesos terminados usaban {{value0}} {{value1}}",
+                "noneExited": "Ninguno de sus procesos medidos ha terminado aún",
+                "stillRunning": "{{value0}} de sus procesos siguen en ejecución",
+                "unmeasuredPanes": "{{value0}} dormidos sin medición",
+                "reason": {
+                  "noBaseline": "no había una lectura previa de sus procesos",
+                  "sweepUnavailable": "la lectura posterior no estuvo disponible",
+                  "sweepFailed": "la lectura posterior falló",
+                  "sweepTooEarly": "la lectura posterior empezó demasiado pronto",
+                  "metricChanged": "las dos lecturas usaron medidas distintas"
+                }
+              },
+              "reason": {
+                "featureDisabled": "El reposo de agentes está desactivado",
+                "worktreeActive": "En el espacio de trabajo abierto",
+                "runtimeLivenessUnknown": "Estado del terminal remoto sin confirmar",
+                "tabForeground": "La pestaña está abierta en primer plano",
+                "agentBusy": "El agente sigue trabajando",
+                "agentInterrupted": "El agente fue interrumpido",
+                "hasSubagents": "Hay subagentes en ejecución",
+                "dispatchUnsettled": "Envío sin completar",
+                "alreadySleeping": "Ya está dormido",
+                "paneMismatch": "El panel se movió",
+                "notResumable": "No se podría reanudar",
+                "notIdleLongEnough": "Inactivo muy poco tiempo",
+                "recentInput": "Se escribió hace poco",
+                "noLivePane": "Sin terminal activo",
+                "mobileLocked": "Retenido por un cliente móvil",
+                "tabPinned": "Pestaña fijada"
+              }
+            },
+            "terminalHost": {
+              "label": "Host de terminal",
+              "unattributedLabel": "Procesos de terminal sin atribuir",
+              "unmeasured": "Sin medir",
+              "unmeasuredDescription": "El barrido de procesos falló, así que la memoria por proceso es desconocida, no cero."
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "Suma del conjunto de trabajo (WS). Las páginas compartidas pueden aparecer en más de un proceso.",
@@ -14644,6 +14793,47 @@
         "invalidPath": "Orca's data folder may be missing, moved, or at a path that is too long. Restore it or use a shorter path, then restart Orca.",
         "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
         "unknown": "Restart Orca to try again."
+      }
+    }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "Esta sesión ya está abierta",
+      "activeInPane": "Ya está activa en otro pane.",
+      "activeInPanes": "Ya está activa en {{count}} panes más.",
+      "unknownTitle": "Puede que esta sesión ya esté abierta",
+      "unknownDescription": "Orca no pudo confirmar si está activa en otro pane.",
+      "startingTitle": "Esta sesión ya se está iniciando",
+      "startingDescription": "Otra reanudación de esta sesión todavía se está abriendo.",
+      "resumedHereTitle": "Esta sesión también está abierta en otro pane",
+      "resumedHereTitleMany": "Esta sesión también está abierta en {{count}} panes más",
+      "resumedHereDescription": "Se reanudó aquí mientras ya estaba en ejecución. Ambas copias están activas y Orca no puede garantizar que funcionen correctamente a la vez.",
+      "continueRisk": "Si continúas, se abrirá una segunda copia activa. Orca no puede garantizar que ambas funcionen bien a la vez.",
+      "back": "Atrás",
+      "continue": "Continuar"
+    },
+    "paneResume": {
+      "ended": "Sesión finalizada",
+      "resume": "Reanudar esta sesión",
+      "resuming": "Reanudando…",
+      "waitForPrompt": "Disponible cuando el shell vuelva a su prompt.",
+      "shellUnsupported": "Este shell no informa de su prompt, así que Orca no puede saber si está inactivo.",
+      "shellBusy": "Todavía hay un comando en ejecución en este shell.",
+      "shellUnsentInput": "Este shell tiene algo escrito en el prompt. Envíalo o bórralo y luego reanuda.",
+      "hostOutdated": "Reinicia los terminales para reanudar aquí: este servicio de terminal es anterior a Orca.",
+      "failed": "No se pudo reanudar esta sesión. Inténtalo de nuevo.",
+      "blocked": {
+        "open": "Esta sesión está abierta en otro pane.",
+        "starting": "Esta sesión ya se está iniciando en otro pane.",
+        "unknown": "Orca no pudo confirmar que esta sesión esté libre."
+      },
+      "unavailable": {
+        "fenced": "Orca está recuperando este worker.",
+        "remote": "Reanudar aún no está disponible para terminales remotos.",
+        "runtime": "Reanudar aún no está disponible para este host.",
+        "missing": "Este espacio de trabajo no existe.",
+        "deleting": "Este espacio de trabajo se está eliminando.",
+        "noPlan": "Esta sesión no se puede reanudar aquí."
       }
     }
   }

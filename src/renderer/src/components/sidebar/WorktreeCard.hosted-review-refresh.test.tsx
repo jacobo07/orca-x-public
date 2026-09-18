@@ -151,7 +151,9 @@ describe('WorktreeCard hosted review refresh', () => {
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null,
-      staleWhileRevalidate: true
+      staleWhileRevalidate: true,
+      // Why: 90% of the interval, so a late-stamped answer cannot skip the next tick.
+      maxAgeMs: 54_000
     })
   })
 

@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { Store } from '../persistence'
+import { resolveSessionWriteScope } from './session-write-scope'
 
 type StageBeforeUnloadSyncArgs = {
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
@@ -48,8 +49,11 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
   ipcMain.on('app:stage-before-unload-sync', (event, args: StageBeforeUnloadSyncArgs) => {
     let ok = true
     try {
+      // Why here and not only on session:set-sync: beforeunload publishes through this channel, so
+      // this is the closing window's last write and the one that can erase another window's tabs.
+      const scope = resolveSessionWriteScope(event.sender.id)
       for (const { state, hostId } of args.sessions) {
-        store.stageWorkspaceSessionBeforeUnload(state, hostId)
+        store.stageWorkspaceSessionBeforeUnload(state, hostId, scope)
       }
       store.updateUI(args.ui)
     } catch (error) {

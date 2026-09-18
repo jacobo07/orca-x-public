@@ -183,7 +183,7 @@ describe('useIpcEvents rate-limit hydration', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} },
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} },
         ui: makeEvents({
           consumePendingOpenSettings: () => Promise.resolve(false),
           getZoomLevel: vi.fn(() => 0)

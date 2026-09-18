@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// An IpcMainEvent always carries its sender, and the handler derives the window write scope from it.
+type ShutdownEvent = { sender: { id: number }; returnValue?: unknown }
+
+function makeEvent(): ShutdownEvent {
+  return { sender: { id: 1 } }
+}
+
 const { syncHandlers, invokeHandlers } = vi.hoisted(() => ({
   syncHandlers: new Map<
     string,
-    (event: { returnValue?: unknown }, args: Record<string, unknown>) => void
+    (
+      event: { sender: { id: number }; returnValue?: unknown },
+      args: Record<string, unknown>
+    ) => void
   >(),
   invokeHandlers: new Map<string, () => Promise<{ ok: boolean }>>()
 }))
@@ -13,7 +23,10 @@ vi.mock('electron', () => ({
     on: vi.fn(
       (
         channel: string,
-        handler: (event: { returnValue?: unknown }, args: Record<string, unknown>) => void
+        handler: (
+          event: { sender: { id: number }; returnValue?: unknown },
+          args: Record<string, unknown>
+        ) => void
       ) => {
         syncHandlers.set(channel, handler)
       }
@@ -54,7 +67,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
     expect(handler).toBeDefined()
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     const localSession = { activeWorktreeId: 'local-worktree' }
     const remoteSession = { activeWorktreeId: 'remote-worktree' }
     handler?.(event, {
@@ -62,15 +75,19 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       ui: { activeView: 'settings' }
     })
 
+    // The empty scope is what one window means: it speaks for every project it has visited.
+    // Scoping across windows is pinned in shutdown-checkpoint-window-scope.test.ts.
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
       1,
       localSession,
-      undefined
+      undefined,
+      {}
     )
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
       2,
       remoteSession,
-      'runtime:host-1'
+      'runtime:host-1',
+      {}
     )
     expect(store.updateUI).toHaveBeenCalledWith({ activeView: 'settings' })
     expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
@@ -93,7 +110,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(event.returnValue).toEqual({ ok: false })
@@ -111,7 +128,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       throw new Error('invalid state')
     })
     const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
@@ -128,7 +145,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(event.returnValue).toEqual({ ok: true })
@@ -148,7 +165,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
+    syncHandlers.get('app:stage-before-unload-sync')?.(makeEvent(), { sessions: [], ui: {} })
     const checkpoint = invokeHandlers.get(AWAIT_CHANNEL)?.()
     let settled: unknown = 'pending'
     void checkpoint?.then((result) => {
@@ -171,7 +188,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     syncHandlers.get('app:stage-before-unload-sync')?.(event, { sessions: [], ui: {} })
 
     expect(event.returnValue).toEqual({ ok: true })
@@ -190,7 +207,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     vi.useFakeTimers()
     try {
       registerRendererShutdownCheckpointHandler(store as never)
-      syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
+      syncHandlers.get('app:stage-before-unload-sync')?.(makeEvent(), { sessions: [], ui: {} })
       const checkpoint = invokeHandlers.get(AWAIT_CHANNEL)?.()
 
       await vi.advanceTimersByTimeAsync(SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)

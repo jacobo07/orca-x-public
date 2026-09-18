@@ -1,4 +1,94 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "Everything is asleep and saved. Orca is closing.",
+      "stayedOpen": "Orca stayed open",
+      "refused": "{{count}} workspace(s) have running work, so nothing was put to sleep.",
+      "incomplete": "Some workspaces are asleep; {{count}} could not be put to sleep and are still running.",
+      "sealFailed": "The session could not be saved, so Orca stays open.",
+      "unavailable": "Park and exit is not available in this window right now."
+    }
+  },
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "Restored, not running",
+      "sleptTitle": "Asleep, not running",
+      "sleptFreshBody": "Opening it starts this terminal again in its folder.",
+      "resumeBody": "Opening it resumes the {{agent}} session.",
+      "freshBody": "Opening it starts a new terminal in its folder.",
+      "open": "Open"
+    },
+    "history": {
+      "menu": "Snapshots…",
+      "title": "Snapshots · {{name}}",
+      "description": "Saved terminal layouts for this workspace. Restoring brings the tabs back without starting them; each one starts only when you open it. Files are not changed.",
+      "loading": "Loading snapshots…",
+      "unavailable": "Snapshots aren't available in this client.",
+      "invalidRequest": "This workspace can't be matched to a snapshot store.",
+      "unreadable": "The snapshot store couldn't be read ({{code}}).",
+      "empty": "No snapshots saved for this workspace yet.",
+      "listLabel": "Saved snapshots",
+      "untitled": "Untitled snapshot",
+      "tabCount": "Tabs: {{count}}",
+      "latest": "Latest",
+      "problemsTitle": "Not restorable",
+      "problem": {
+        "unsupportedVersion": "Saved by a newer version of Orca X",
+        "corrupt": "Damaged file",
+        "unreadable": "Couldn't be read",
+        "missing": "No longer on disk",
+        "unverified": "Save wasn't confirmed",
+        "unrecognized": "Unrecognized file in the snapshot folder"
+      },
+      "checkingProfiles": "Checking launch options…",
+      "previewLoading": "Checking what this snapshot can bring back…",
+      "profilesUnresolved": "Launch options couldn't be checked, so some tabs may show as unknown.",
+      "capability": {
+        "exactResume": "Resume session: {{count}}",
+        "restartable": "Relaunch: {{count}}",
+        "recreateContext": "New terminal in its folder: {{count}}",
+        "historyOnly": "History only: {{count}}",
+        "notRestorable": "Can't be restored: {{count}}",
+        "unknown": "Unknown: {{count}}"
+      },
+      "liveElsewhere": "Open elsewhere, won't resume here: {{count}}",
+      "blocker": {
+        "currentWork": "This workspace has open tabs. Close them before restoring; nothing is replaced.",
+        "scopeMismatch": "This snapshot belongs to a different workspace.",
+        "hostUnavailable": "This workspace's host isn't available."
+      },
+      "read": {
+        "missing": "This snapshot is no longer on disk. The list has been refreshed.",
+        "unsupportedVersion": "This snapshot was saved by a newer version of Orca X.",
+        "corrupt": "This snapshot file is damaged.",
+        "unreadable": "This snapshot couldn't be read ({{code}}).",
+        "invalidRequest": "The request for this snapshot was malformed."
+      },
+      "selectPrompt": "Select a snapshot to restore.",
+      "restore": "Restore",
+      "restoring": "Restoring…",
+      "close": "Close",
+      "restored": "Snapshot restored. Its tabs start only when you open them.",
+      "result": {
+        "targetChanged": "The workspace changed while restoring; nothing was replaced.",
+        "failedRolledBack": "Restore failed and was undone; the workspace is unchanged.",
+        "failedNotRolledBack": "Restore failed and couldn't be fully undone. Check this workspace's tabs."
+      }
+    },
+    "save": {
+      "action": "Save current terminals",
+      "saved": "Snapshot saved.",
+      "savedWithoutSomeHistory": "Snapshot saved; some terminal history couldn't be copied.",
+      "noTerminals": "This workspace has no terminals to save.",
+      "notCapturable": "This workspace's terminals couldn't be captured ({{reason}}).",
+      "refusedInvalid": "The snapshot was rejected as invalid ({{reason}}).",
+      "unsupportedVersion": "This build can't write that snapshot version.",
+      "identityCollision": "A snapshot with this id already exists. Try again.",
+      "writeFailed": "The snapshot couldn't be written ({{code}}).",
+      "readBackFailed": "Saved, but it couldn't be confirmed. It may appear after refreshing.",
+      "verifyFailed": "The saved snapshot didn't match what was sent and was set aside."
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
@@ -76,6 +166,7 @@
     "reportCrash": "Report Crash...",
     "file": "File",
     "newWindow": "New Window",
+    "parkAndExit": "Sleep Everything and Exit",
     "exit": "Exit",
     "edit": "Edit",
     "appearance": "Appearance",
@@ -2873,6 +2964,9 @@
             "stop_command_title": "Stop running command?",
             "stop_agent_description": "Closing this terminal will stop the agent's current work.",
             "stop_command_description": "Closing this terminal will stop the command running inside it.",
+            "discard_unsent_input_title": "Discard what you typed?",
+            "discard_unsent_input_confirm": "Discard and Close",
+            "discard_unsent_input_description": "This terminal has something typed at its prompt that was never submitted. Closing it discards that line.",
             "dont_ask_again": "Don't ask again for running terminals",
             "stop_agent_confirm": "Stop Agent",
             "stop_command_confirm": "Stop and Close"
@@ -3735,6 +3829,61 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "Idle agent memory",
+              "idleOne": "1 idle agent can sleep",
+              "idleMany": "{{value0}} idle agents can sleep",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "1 of them has not been measured, so it is not in this figure",
+              "unknownMany": "{{value0}} of them have not been measured, so they are not in this figure",
+              "protectedOne": "1 pane is kept awake",
+              "protectedMany": "{{value0}} panes are kept awake",
+              "sleeping": "Putting agents to sleep…",
+              "sleepOne": "Sleep 1 agent now",
+              "sleepMany": "Sleep {{value0}} agents now",
+              "resultSlept": "{{value0}} put to sleep",
+              "resultKept": "{{value0}} kept awake because they changed since shown",
+              "resultFailed": "{{value0}} could not be put to sleep",
+              "observed": {
+                "pending": "Checking which of their processes exited…",
+                "unmeasured": "Memory released was not measured: {{value0}}",
+                "released": "Their exited processes had used {{value0}} {{value1}}",
+                "noneExited": "None of their measured processes has exited yet",
+                "stillRunning": "{{value0}} of their processes still running",
+                "unmeasuredPanes": "{{value0}} slept without a measurement",
+                "reason": {
+                  "noBaseline": "there was no reading of their processes from before",
+                  "sweepUnavailable": "the follow-up reading was unavailable",
+                  "sweepFailed": "the follow-up reading failed",
+                  "sweepTooEarly": "the follow-up reading started too early",
+                  "metricChanged": "the two readings used different measures"
+                }
+              },
+              "reason": {
+                "featureDisabled": "Agent sleep is off",
+                "worktreeActive": "In the open workspace",
+                "runtimeLivenessUnknown": "Remote terminal state not confirmed",
+                "tabForeground": "Tab is open in front",
+                "agentBusy": "Agent still working",
+                "agentInterrupted": "Agent was interrupted",
+                "hasSubagents": "Subagents still running",
+                "dispatchUnsettled": "Dispatch not settled",
+                "alreadySleeping": "Already asleep",
+                "paneMismatch": "Pane moved",
+                "notResumable": "Could not be resumed",
+                "notIdleLongEnough": "Idle too briefly",
+                "recentInput": "Typed in recently",
+                "noLivePane": "No live terminal",
+                "mobileLocked": "Held by a mobile client",
+                "tabPinned": "Pinned tab"
+              }
+            },
+            "terminalHost": {
+              "label": "Terminal host",
+              "unattributedLabel": "Unattributed terminal processes",
+              "unmeasured": "Unmeasured",
+              "unmeasuredDescription": "The process sweep failed, so per-process memory is unknown, not zero."
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "Summed working set (WS). Shared pages can appear in more than one process.",
@@ -16452,6 +16601,47 @@
       "unassignedInstruction": "Assign a dictation shortcut before starting voice dictation in a focused pane.",
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
+    }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "This session is already open",
+      "activeInPane": "It is already active in another pane.",
+      "activeInPanes": "It is already active in {{count}} other panes.",
+      "unknownTitle": "This session may already be open",
+      "unknownDescription": "Orca could not confirm whether it is active in another pane.",
+      "startingTitle": "This session is already starting",
+      "startingDescription": "Another resume of it is still opening.",
+      "resumedHereTitle": "This session is also open in another pane",
+      "resumedHereTitleMany": "This session is also open in {{count}} other panes",
+      "resumedHereDescription": "It was resumed here while it was already running. Both copies are live, and Orca can't guarantee they work correctly at the same time.",
+      "continueRisk": "Continuing opens a second live copy. Orca can't guarantee both copies work correctly at the same time.",
+      "back": "Back",
+      "continue": "Continue"
+    },
+    "paneResume": {
+      "ended": "Session ended",
+      "resume": "Resume this session",
+      "resuming": "Resuming…",
+      "waitForPrompt": "Available when the shell is back at its prompt.",
+      "shellUnsupported": "This shell doesn't report its prompt, so Orca can't tell it's idle.",
+      "shellBusy": "A command is still running in this shell.",
+      "shellUnsentInput": "This shell has something typed at its prompt. Submit or clear it, then resume.",
+      "hostOutdated": "Restart terminals to resume here: this terminal service is older than Orca.",
+      "failed": "Couldn't resume this session. Try again.",
+      "blocked": {
+        "open": "This session is open in another pane.",
+        "starting": "This session is already starting in another pane.",
+        "unknown": "Orca couldn't confirm this session is free."
+      },
+      "unavailable": {
+        "fenced": "Orca is recovering this worker.",
+        "remote": "Resume isn't available for remote terminals yet.",
+        "runtime": "Resume isn't available for this host yet.",
+        "missing": "This workspace is missing.",
+        "deleting": "This workspace is being deleted.",
+        "noPlan": "This session can't be resumed here."
+      }
     }
   }
 }

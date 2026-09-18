@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { planRecordedAgentResume } from '@/lib/recorded-agent-resume-plan'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import {
@@ -9,10 +9,6 @@ import {
 } from '@/lib/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { translate } from '@/i18n/i18n'
 
@@ -68,25 +64,12 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
-  const resumeTarget = getResumeLaunchTarget(record.worktreeId)
-  const startupPlan = buildAgentResumeStartupPlan({
+  const startupPlan = planRecordedAgentResume({
     agent: record.agent,
     providerSession: record.providerSession,
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
-    agentEnv:
-      launchConfig !== undefined
-        ? launchConfig.agentEnv
-        : resolveTuiAgentLaunchEnv(record.agent, state.settings?.agentDefaultEnv),
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    ...(launchConfig?.ompResumeFilePath
-      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-      : {}),
-    platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    launchConfig,
+    settings: state.settings,
+    target: getResumeLaunchTarget(record.worktreeId)
   })
   if (!startupPlan) {
     toast.error(

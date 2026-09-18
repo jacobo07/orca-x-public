@@ -226,11 +226,16 @@ describe('runDiscardAllForArea', () => {
         throw overrides.bulkUnstageError
       }
     })
+    // Why this returns a shape rather than nothing: the host now reports which paths it actually
+    // destroyed, and a double that answered `undefined` made the sequence fall through to the per-file
+    // loop on a TypeError -- so two tests here were asserting the bulk branch while measuring the
+    // fallback. A double looser than the contract is a test of the wrong code path.
     const discardMany = vi.fn(async (paths: string[]) => {
       discardManyCalls.push([...paths])
       if (overrides.discardManyError !== undefined) {
         throw overrides.discardManyError
       }
+      return { discarded: [...paths], refused: [] }
     })
     const discardOne = vi.fn(async (path: string) => {
       discardOneCalls.push(path)
@@ -262,7 +267,7 @@ describe('runDiscardAllForArea', () => {
   it('no-ops when the path list is empty', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('staged', [], ctx.deps)
-    expect(result).toEqual({ discarded: [], failed: [], aborted: false })
+    expect(result).toEqual({ discarded: [], refused: [], failed: [], aborted: false })
     expect(ctx.bulkUnstage).not.toHaveBeenCalled()
     expect(ctx.discardOne).not.toHaveBeenCalled()
   })
@@ -270,7 +275,7 @@ describe('runDiscardAllForArea', () => {
   it('discards unstaged paths one-by-one without bulk-unstaging', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts'], ctx.deps)
-    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], refused: [], failed: [], aborted: false })
     expect(ctx.bulkUnstage).not.toHaveBeenCalled()
     expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
   })
@@ -278,7 +283,7 @@ describe('runDiscardAllForArea', () => {
   it('discards untracked paths one-by-one without bulk-unstaging', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('untracked', ['new.ts'], ctx.deps)
-    expect(result).toEqual({ discarded: ['new.ts'], failed: [], aborted: false })
+    expect(result).toEqual({ discarded: ['new.ts'], refused: [], failed: [], aborted: false })
     expect(ctx.bulkUnstage).not.toHaveBeenCalled()
     expect(ctx.discardOneCalls).toEqual(['new.ts'])
   })
@@ -286,7 +291,7 @@ describe('runDiscardAllForArea', () => {
   it('bulk-unstages staged paths before the per-file discard loop', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.deps)
-    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], refused: [], failed: [], aborted: false })
     expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
     // Why: bulk unstage MUST happen strictly before any discard, otherwise
@@ -300,7 +305,7 @@ describe('runDiscardAllForArea', () => {
   it('uses bulk discard when the dependency is available', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
-    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], refused: [], failed: [], aborted: false })
     expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardOne).not.toHaveBeenCalled()
   })
@@ -308,7 +313,7 @@ describe('runDiscardAllForArea', () => {
   it('bulk-unstages staged paths before bulk discard', async () => {
     const ctx = makeDeps()
     const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
-    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], refused: [], failed: [], aborted: false })
     expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardOne).not.toHaveBeenCalled()
@@ -322,7 +327,7 @@ describe('runDiscardAllForArea', () => {
   it('falls back to per-file discard when bulk discard rejects', async () => {
     const ctx = makeDeps({ discardManyError: new Error('unknown method') })
     const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
-    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], refused: [], failed: [], aborted: false })
     expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
     expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
     expect(ctx.onError).not.toHaveBeenCalled()
@@ -332,7 +337,7 @@ describe('runDiscardAllForArea', () => {
     const error = new Error('index locked')
     const ctx = makeDeps({ bulkUnstageError: error })
     const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.deps)
-    expect(result).toEqual({ discarded: [], failed: [], aborted: true })
+    expect(result).toEqual({ discarded: [], refused: [], failed: [], aborted: true })
     // Why: a failed unstage + successful discard would leave the index with
     // the staged delta and the worktree at HEAD — a worse state than we
     // started in. The discard loop must not run.
@@ -350,6 +355,7 @@ describe('runDiscardAllForArea', () => {
     // rest of a bulk action the user explicitly triggered.
     expect(result).toEqual({
       discarded: ['a.ts', 'c.ts'],
+      refused: [],
       failed: ['b.ts'],
       aborted: false
     })

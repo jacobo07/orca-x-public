@@ -283,6 +283,7 @@ describe('connectPanePty', () => {
 
     expect(getForegroundProcess).toHaveBeenCalledTimes(readsBeforeFinish + 1)
     expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+    expect(mockStoreState.markSleepingAgentExited).not.toHaveBeenCalled()
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
       routingTrusted: true,
@@ -323,6 +324,7 @@ describe('connectPanePty', () => {
     dataCallbackRef.current?.('\x1b]133;D;0\x07')
     await vi.advanceTimersByTimeAsync(350)
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
+    expect(mockStoreState.markSleepingAgentExited).toHaveBeenCalledExactlyOnceWith(paneKey)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: null,
       shellForeground: true
@@ -636,5 +638,6 @@ describe('connectPanePty', () => {
 
     expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalled()
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.markSleepingAgentExited).toHaveBeenCalledWith(paneKey)
   })
 })

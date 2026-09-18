@@ -116,10 +116,17 @@ export type GitOperationApi = {
     worktreePath: string
     filePath: string
     connectionId?: string
+    /** Identity of the working-tree bytes the caller observed, from the status row it acted on. The
+     *  host refuses when the file no longer matches. Omitted means the caller cannot say, not that
+     *  nothing changed. */
+    expectedContent?: string
   }) => Promise<void>
   bulkDiscard: (args: {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
-  }) => Promise<void>
+    /** One entry per requested path, naming the working-tree content the caller observed. A list rather
+     *  than a map because a Map does not survive the IPC boundary. */
+    observed: readonly { filePath: string; expectedContent: string }[]
+  }) => Promise<{ discarded: string[]; refused: string[] }>
 }

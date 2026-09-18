@@ -56,6 +56,7 @@ import {
 } from '../../shared/agent-status-types'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import type { AgentSessionResumeSubject } from '../agent-hooks/resume-spawn-gate-slot'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -77,6 +78,8 @@ import {
   createEphemeralAgentSessionClaimSigner,
   type AgentSessionClaimSigner
 } from './agent-session-claim-identity'
+import { resolveAgentSessionResumeStartupCwd } from './agent-session-resume-startup-cwd'
+import { agentSessionClaimKey } from '../../shared/claimed-agent-pty-owner-snapshot'
 import {
   hasCompatibleAgentTitleIdentity,
   normalizeCompatibleAgentStatusEntryForOwner,
@@ -367,6 +370,10 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
+import {
+  isLegacyWorkerResumeBlock,
+  withLegacyWorkerFence
+} from '../../shared/agent-resume-block-precedence'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -604,6 +611,7 @@ import {
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -1528,6 +1536,7 @@ type TerminalCreateOptions = {
   // Why: only the host-derived structured resume path may attach provider
   // identity; opaque terminal.create commands remain ordinary shells.
   agentSessionClaim?: AgentSessionExecutionClaim
+  agentSessionResumeSubject?: AgentSessionResumeSubject
   agentSessionCreateOperationId?: string
   signal?: AbortSignal
   // Why: idempotent create operations must retain their fence after the PTY
@@ -1831,6 +1840,8 @@ type RuntimePtyController = {
       claim: AgentSessionExecutionClaim
       surface: AgentSessionSurfaceBinding
     }
+    /** The exact session an ensure resumes; the spawn gate reads presence for it. */
+    agentSessionResumeSubject?: AgentSessionResumeSubject
     agentSessionCreateOperationId?: string
     signal?: AbortSignal
     onPtySpawnCommitted?: () => void
@@ -4158,7 +4169,7 @@ export class OrcaRuntimeService {
         if (
           !record ||
           !runtimeWorktreeIdsEqual(record.worktreeId, blocked.worktreeId) ||
-          record.automaticResumeBlockedBy === 'legacy-orchestration-worker'
+          isLegacyWorkerResumeBlock(record.automaticResumeBlockedBy)
         ) {
           continue
         }
@@ -4166,7 +4177,8 @@ export class OrcaRuntimeService {
           ...state.next.sleepingAgentSessionsByPaneKey,
           [blocked.paneKey]: {
             ...record,
-            automaticResumeBlockedBy: 'legacy-orchestration-worker'
+            // Why: fencing an exited pane must keep the exit for when the fence is released.
+            automaticResumeBlockedBy: withLegacyWorkerFence(record.automaticResumeBlockedBy)
           }
         }
         changedHostIds.add(hostId)
@@ -5910,7 +5922,12 @@ export class OrcaRuntimeService {
         // so "new client, old host" can be exercised rather than only asserted. It can only
         // withdraw a capability, which moves a client toward caution, never away from it.
         (process.env.ORCA_E2E_DISABLE_GIT_DISCARD_STALE_STATE !== '1' ||
-          capability !== GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY)
+          capability !== GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY) &&
+        // Same for the bulk variant, and separately, because the two are separate claims: a host can
+        // enforce the single-path check and know nothing about the bulk one, and standing in for that
+        // host is the only way to exercise it rather than reason about it.
+        (process.env.ORCA_E2E_DISABLE_GIT_BULK_DISCARD_STALE_STATE !== '1' ||
+          capability !== GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY)
     )
     if (hasOffscreen) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
@@ -6636,7 +6653,10 @@ export class OrcaRuntimeService {
     windowId: number,
     graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
   ): RuntimeSyncWindowGraphResult {
-    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID && this.graphOwners.has(HEADLESS_RUNTIME_WINDOW_ID)) {
+    if (
+      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.graphOwners.has(HEADLESS_RUNTIME_WINDOW_ID)
+    ) {
       if (!this.headlessGraphFallbackAvailable) {
         throw new Error('Runtime graph publisher does not match the authoritative window')
       }
@@ -11573,6 +11593,13 @@ export class OrcaRuntimeService {
           this.retirePtyAgentLaunchAuthority(ptyId)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
         },
+        // Why: without these the renderer cannot tell an idle prompt from a running command.
+        onCommandStarted: () => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-started' })
+        },
+        onPromptShown: () => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'prompt-shown' })
+        },
         onBell: () => {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         },
@@ -13184,6 +13211,21 @@ export class OrcaRuntimeService {
       lines = await this.readRendererVisibleSnapshotLines(ptyId)
     }
     return lines.length > 0 ? buildPreview(lines, '') : preview
+  }
+
+  /**
+   * The terminal's visible rows, for a surface that shows a terminal without being one.
+   *
+   * Public so the Windows taskbar adapter reads the same headless screen the hover preview reads,
+   * rather than standing up a second ANSI interpreter or capturing pixels. Null means there is no
+   * readable state — never an empty screen, which is a different fact.
+   *
+   * `sequence` and `generation` come back with the lines on purpose: an observer that rasterizes
+   * asynchronously needs to know which output position and which PTY lifetime it drew, or a slow
+   * render of an older screen can overwrite a newer one.
+   */
+  readVisibleTerminalLines(ptyId: string): Promise<RuntimeVisibleTerminalState | null> {
+    return this.readVisibleTerminalState(ptyId)
   }
 
   private async readVisibleTerminalState(
@@ -14848,6 +14890,17 @@ export class OrcaRuntimeService {
       const cols = override.previousCols ?? fallback.cols
       const rows = override.previousRows ?? fallback.rows
       void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
+    }
+  }
+
+  /**
+   * Marks a caller-owned stop that keeps history (Sleep), so the exit it causes keeps the row
+   * instead of retiring it from the host-authoritative session. Call the result once it settles.
+   */
+  retainSurfaceThroughPtyStop(ptyId: string): () => void {
+    this.intentionalHandlelessPtyStops.set(ptyId, this.ptysById.get(ptyId)?.incarnationId ?? null)
+    return () => {
+      this.intentionalHandlelessPtyStops.delete(ptyId)
     }
   }
 
@@ -24111,9 +24164,7 @@ export class OrcaRuntimeService {
     let didStartInProcessSetupHook = false
     if (shouldRunSetup && hooks?.scripts.setup) {
       const shouldUseSetupRunner =
-        this.graphOwners.size > 0 ||
-        Boolean(effectiveStartup) ||
-        Boolean(this.ptyController?.spawn)
+        this.graphOwners.size > 0 || Boolean(effectiveStartup) || Boolean(this.ptyController?.spawn)
       if (shouldUseSetupRunner) {
         try {
           // Why: setup+startup must share the terminal runner path even without
@@ -26657,6 +26708,42 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** Worktree-independent claim key for one provider session, or null when this host
+   *  cannot place the session in an execution namespace (SSH, unresolvable workspace,
+   *  non-resumable identity). Null is "cannot compare", never "different". */
+  async resolveAgentSessionPresenceKey(args: {
+    worktreeId: string
+    agent: TuiAgent
+    providerSession: AgentProviderSessionMetadata
+  }): Promise<string | null> {
+    let workspace: TerminalWorkspaceLaunchScope
+    let identity: ReturnType<typeof canonicalizeAgentSessionIdentity>
+    try {
+      workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${args.worktreeId}`)
+      identity = canonicalizeAgentSessionIdentity(args.agent, args.providerSession)
+    } catch {
+      // Why: a deleted worktree or an unreadable transcript leaves identity undetermined.
+      return null
+    }
+    const namespace = this.getAgentSessionExecutionNamespace(workspace, args.agent)
+    if (!namespace) {
+      return null
+    }
+    return agentSessionClaimKey(
+      this.agentSessionClaimSigner.createClaim({
+        namespace,
+        identity,
+        canonicalWorktreeId: workspace.id
+      })
+    )
+  }
+
+  /** Routed PTY liveness: true / false only when the owning provider can prove it. */
+  async probePtyLiveness(ptyId: string): Promise<boolean | null> {
+    const probe = this.ptyController?.probePtyLiveness
+    return probe ? await probe.call(this.ptyController, ptyId) : null
+  }
+
   private async executionOwnerSupportsAgentSessionOperation(
     workspace: TerminalWorkspaceLaunchScope,
     operation: 'resume' | 'create',
@@ -26764,19 +26851,34 @@ export class OrcaRuntimeService {
     } else {
       this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
     }
+    // Why: a resume re-enters one exact session, so its directory is decided before the
+    // effect and never silently widened to the workspace root (see the resolver).
+    const resumeCwd = resolveAgentSessionResumeStartupCwd(workspace.path, request.startupCwd)
+    if (resumeCwd.status === 'outside-workspace') {
+      throw new Error('agent_session_resume_context_unauthorized')
+    }
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
       env: startup.env,
+      ...(resumeCwd.status === 'resolved' ? { cwd: resumeCwd.cwd } : {}),
       launchConfig: startup.launchConfig,
       launchAgent: request.agent,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
       persistHostSessionBinding: true,
+      // Why: the spawn layer resolves which account home this session belongs to from the
+      // subject itself (prepareCodexResumeHome). Without it a Codex resume inherits
+      // whichever home the host happens to carry — the right session, the wrong account.
+      resumeProviderSession: request.providerSession,
       agentSessionClaim: claim,
+      agentSessionResumeSubject: {
+        agent: request.agent,
+        providerSession: request.providerSession
+      },
       signal: _caller.signal
     })
     return {
@@ -27224,7 +27326,10 @@ export class OrcaRuntimeService {
                       leafId,
                       terminalHandle: preAllocatedHandle
                     }
-                  }
+                  },
+                  ...(launchOpts.agentSessionResumeSubject
+                    ? { agentSessionResumeSubject: launchOpts.agentSessionResumeSubject }
+                    : {})
                 }
               : {}),
             ...(launchOpts.agentSessionCreateOperationId
@@ -29954,7 +30059,11 @@ export class OrcaRuntimeService {
 
   markRendererReloadCancelled(windowId: number, fence: RuntimeRendererReloadFence): boolean {
     const owner = this.graphOwners.get(windowId)
-    if (!owner || owner.status !== 'reloading' || !owner.reload.settle(fence.revision, 'cancelled')) {
+    if (
+      !owner ||
+      owner.status !== 'reloading' ||
+      !owner.reload.settle(fence.revision, 'cancelled')
+    ) {
       return false
     }
     if (fence.recovery === 'headless' && this.shouldRestoreHeadlessGraph(windowId)) {

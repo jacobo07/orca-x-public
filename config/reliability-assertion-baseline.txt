@@ -1,0 +1,79 @@
+# Gates whose assertionRefs name assertions that do not appear verbatim in the files they cite.
+#
+# Measured 2026-09-13: the field holds two conventions. Some gates record the test title, which
+# names a test a machine can find. Others record a faithful paraphrase of what the test asserts,
+# which reads the same and cannot be resolved -- and nothing distinguishes a paraphrase from a
+# pointer that rotted. The tests behind these entries were checked and do exist; this is unproven
+# evidence, not absent protection.
+#
+# This is a RATCHET: <gate-id> <unresolved-count>, and a count may only SHRINK. Do NOT add an
+# entry or raise a count to get CI green -- reword the assertionRef to the real test title
+# instead. A gate absent from this list must resolve every assertion it claims.
+# Prune after fixing: pnpm check:reliability-gates --prune
+agent-launch.discovery-authority 8
+agent-session.provider-ownership 17
+agent-session.remote-host-authority 49
+agent-status.manual-compact-identity 8
+agent-status.pi-hook-liveness 7
+browser-session.remote-html-preview-ownership 39
+browser-session.remote-terminal-link-ownership 9
+browser-stream.bounded-reconnect 11
+desktop-relay.assignment-backpressure 6
+editor.live-log-append-stability 14
+editor.restored-sibling-owner-reparent 8
+ephemeral-vm-runtime.rollback-readable-sidecar 30
+git-worktree.refresh-event-semantics 40
+mobile-relay.endpoint-recovery 6
+mobile-transport.lifecycle-liveness 24
+orchestration.context-only-dispatch-release 9
+orchestration.notification-mailbox-consistency 51
+orchestration.settled-worker-terminal-release 9
+orchestration.worker-terminal-delivery 65
+pty-delivery.renderer-lifecycle-accounting-reset 10
+runtime-files.watcher-process-isolation 158
+runtime-routing.active-server-preference 36
+runtime.headless-desktop-promotion-continuity 35
+runtime.headless-serve-graceful-signal-exit 14
+runtime.renderer-graph-reload-termination 23
+runtime.streaming-subscription-close-delivery 9
+runtime.websocket-heartbeat-cadence 9
+ssh-managed-hooks.node18-runtime-compatibility 4
+ssh-port-forward.renderer-snapshot-continuity 2
+ssh-relay.staged-upload-recovery 6
+terminal-geometry.visible-convergence 19
+terminal-history.daemon-checkpoint-session-isolation 11
+terminal-input.agent-prompt-injection 20
+terminal-input.cli-agent-prompt-submit 11
+terminal-input.cooked-reply-queue 15
+terminal-input.guarded-agent-send-authorization 22
+terminal-input.ime-and-synthetic-forwarding 43
+terminal-input.plugin-explicit-worktree-routing 6
+terminal-input.remote-write-rejection-recovery 11
+terminal-input.windows-modified-enter-routing 65
+terminal-mirror.parser-parity 2
+terminal-output.scrollback-restore 4
+terminal-performance.cold-restore-replay-budget 5
+terminal-performance.no-hot-list-sessions 26
+terminal-performance.output-backpressure-budget 102
+terminal-performance.remote-hidden-retention-budget 36
+terminal-platform.windows-conpty-liveness 4
+terminal-provider.daemon-startup-degraded-contract 9
+terminal-provider.login-session-retirement 2
+terminal-provider.snapshot-capability-renderer-responsiveness 3
+terminal-provider.ssh-remote-reattach-contract 102
+terminal-provider.startup-shutdown-authority 8
+terminal-query.mobile-view-authority 11
+terminal-render.atlas-identity-invalidation 2
+terminal-runtime.mobile-stream-budget 31
+terminal-scroll.intent-preservation 3
+terminal-scroll.streaming-refocus-intent 5
+terminal-session.daemon-generation-reconnect-safety 28
+terminal-session.explicit-close-retirement 26
+terminal-session.kill-all-surface-cleanup 15
+terminal-session.layout-pty-ownership 1
+terminal-session.shell-ready-exec-prompt-fallback 21
+terminal-session.snapshot-freshness 4
+terminal-session.startup-cwd-missing-dir-recovery 15
+terminal-session.windows-main-crash-survival 7
+workspace-presentation.information-survives-rendering 2
+xterm-addon.boundary-containment 7

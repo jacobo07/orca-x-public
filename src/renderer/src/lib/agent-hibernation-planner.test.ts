@@ -5,6 +5,7 @@ import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
+  classifyAgentHibernationPanes,
   getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
   type AgentHibernationPlannerSnapshot
@@ -69,6 +70,7 @@ function snapshot(
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     mobileLockedPtyIds: [],
+    pinnedTerminalTabIds: [],
     agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
     sleepingAgentSessionsByPaneKey: {},
     lastTerminalInputAtByPaneKey: {},
@@ -665,5 +667,199 @@ describe('agent sleep planner', () => {
     expect(getEffectiveAgentHibernationIdleMs(DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
       DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
     )
+  })
+})
+
+function reasonFor(
+  input: AgentHibernationPlannerSnapshot,
+  paneKey = `tab-1:${LEAF}`
+): string | null {
+  const found = classifyAgentHibernationPanes(input).find((pane) => pane.paneKey === paneKey)
+  return found ? found.reason : 'pane-absent'
+}
+
+describe('agent sleep exclusion reasons', () => {
+  // The one-authority proof: the classifier's eligible set must be exactly what
+  // the planner admits. If these ever diverge, a second eligibility authority exists.
+  it('admits exactly the panes the planner admits', () => {
+    const inputs: AgentHibernationPlannerSnapshot[] = [
+      snapshot(),
+      snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ state: 'working' }) } }),
+      snapshot({ mobileLockedPtyIds: ['pty-1'] }),
+      snapshot({ foregroundTerminalTabIds: ['tab-1'] }),
+      snapshot({ activeWorktreeId: 'wt-bg' }),
+      snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }),
+      snapshot({ pinnedTerminalTabIds: ['tab-1'] })
+    ]
+    for (const input of inputs) {
+      const admitted = classifyAgentHibernationPanes(input)
+        .filter((pane) => pane.eligible)
+        .map((pane) => pane.paneKey)
+        .sort()
+      expect(admitted).toEqual(plannedPaneKeys(input).sort())
+    }
+  })
+
+  it('reports an eligible pane with no reason', () => {
+    const classified = classifyAgentHibernationPanes(snapshot())
+    expect(classified).toHaveLength(1)
+    expect(classified[0].eligible).toBe(true)
+    expect(classified[0].reason).toBeNull()
+    expect(classified[0].worktreeId).toBe('wt-bg')
+  })
+
+  it('separates a busy agent from an interrupted one', () => {
+    expect(
+      reasonFor(
+        snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ state: 'working' }) } })
+      )
+    ).toBe('agent-busy')
+    expect(
+      reasonFor(
+        snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ interrupted: true }) } })
+      )
+    ).toBe('agent-interrupted')
+  })
+
+  it('names a mobile-locked pane rather than calling it dead', () => {
+    expect(reasonFor(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toBe('mobile-locked')
+  })
+
+  // Why: this guard came from a real lost-draft class; it must stay legible as itself.
+  it('names recent input as its own reason', () => {
+    expect(reasonFor(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }))).toBe(
+      'recent-input'
+    )
+  })
+
+  it('names an already-sleeping pane', () => {
+    const sleeping = snapshot({
+      sleepingAgentSessionsByPaneKey: {
+        [`tab-1:${LEAF}`]: {
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          worktreeId: 'wt-bg',
+          sleptAt: OLD
+        } as never
+      }
+    })
+    expect(reasonFor(sleeping)).toBe('already-sleeping')
+  })
+
+  it('names a pane that has not been idle long enough', () => {
+    expect(
+      reasonFor(
+        snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ updatedAt: NOW }) } })
+      )
+    ).toBe('not-idle-long-enough')
+  })
+
+  it('names a foreground tab and an active worktree distinctly', () => {
+    expect(reasonFor(snapshot({ foregroundTerminalTabIds: ['tab-1'] }))).toBe('tab-foreground')
+    expect(reasonFor(snapshot({ activeWorktreeId: 'wt-bg' }))).toBe('worktree-active')
+  })
+
+  it('reports the feature being off as its own reason, not as ineligibility', () => {
+    const off = snapshot({
+      settings: {
+        experimentalAgentHibernation: false,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
+      }
+    })
+    expect(reasonFor(off)).toBe('feature-disabled')
+  })
+})
+
+describe('pinned tabs are kept awake', () => {
+  const pinned = (overrides: Partial<AgentHibernationPlannerSnapshot> = {}) =>
+    snapshot({ pinnedTerminalTabIds: ['tab-1'], ...overrides })
+
+  it('never offers an otherwise eligible pane in a pinned tab, and says why', () => {
+    expect(plannedPaneKeys(snapshot())).toEqual([`tab-1:${LEAF}`])
+    expect(plannedPaneKeys(pinned())).toEqual([])
+    expect(reasonFor(pinned())).toBe('tab-pinned')
+  })
+
+  it('makes the pane a candidate again once the tab is unpinned', () => {
+    expect(plannedPaneKeys(pinned())).toEqual([])
+    expect(plannedPaneKeys(pinned({ pinnedTerminalTabIds: [] }))).toEqual([`tab-1:${LEAF}`])
+  })
+
+  // Why: reasons are recomputed from live state; losing a transient blocker must not lose the pin.
+  it('keeps the pin when a transient blocker clears', () => {
+    const busy = { [`tab-1:${LEAF}`]: entry({ state: 'working' }) }
+    for (const withBlocker of [
+      pinned({ mobileLockedPtyIds: ['pty-1'] }),
+      pinned({ foregroundTerminalTabIds: ['tab-1'] }),
+      pinned({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }),
+      pinned({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ updatedAt: NOW }) } }),
+      pinned({ agentStatusByPaneKey: busy })
+    ]) {
+      expect(reasonFor(withBlocker)).toBe('tab-pinned')
+    }
+    expect(reasonFor(pinned())).toBe('tab-pinned')
+  })
+
+  it('keys the pin by tab id, not by a shared title', () => {
+    const second = entry({ paneKey: `tab-2:${OTHER_LEAF}`, tabId: 'tab-2' })
+    const twoTabs = snapshot({
+      pinnedTerminalTabIds: ['tab-2'],
+      tabsByWorktree: { 'wt-bg': [tab('tab-1'), tab('tab-2')] },
+      terminalLayoutsByTabId: { 'tab-1': layout(), 'tab-2': layout(OTHER_LEAF, 'pty-2') },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'] },
+      agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [second.paneKey]: second }
+    })
+    expect(plannedPaneKeys(twoTabs)).toEqual([`tab-1:${LEAF}`])
+    expect(reasonFor(twoTabs, second.paneKey)).toBe('tab-pinned')
+  })
+
+  it('keeps every agent leaf of a pinned split tab awake', () => {
+    const split = {
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', leafId: LEAF },
+        second: { type: 'leaf', leafId: OTHER_LEAF }
+      },
+      activeLeafId: LEAF,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [LEAF]: 'pty-1', [OTHER_LEAF]: 'pty-2' }
+    } as unknown as TerminalLayoutSnapshot
+    const sibling = entry({ paneKey: `tab-1:${OTHER_LEAF}` })
+    const both = {
+      terminalLayoutsByTabId: { 'tab-1': split },
+      ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] },
+      agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [sibling.paneKey]: sibling }
+    }
+    expect(plannedPaneKeys(snapshot(both)).sort()).toEqual(
+      [`tab-1:${LEAF}`, sibling.paneKey].sort()
+    )
+    expect(plannedPaneKeys(pinned(both))).toEqual([])
+    expect(reasonFor(pinned(both), sibling.paneKey)).toBe('tab-pinned')
+  })
+
+  // Why: pinning keeps a live pane awake; it does not turn a slept pane back into a live one.
+  it('still names a pinned pane that is already asleep as asleep', () => {
+    const asleep = pinned({
+      sleepingAgentSessionsByPaneKey: {
+        [`tab-1:${LEAF}`]: {
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          worktreeId: 'wt-bg',
+          sleptAt: OLD
+        } as never
+      }
+    })
+    expect(reasonFor(asleep)).toBe('already-sleeping')
+  })
+
+  it('lets the feature switch outrank the pin', () => {
+    const off = pinned({
+      settings: {
+        experimentalAgentHibernation: false,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
+      }
+    })
+    expect(reasonFor(off)).toBe('feature-disabled')
   })
 })

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { resetAgentCompletionCoordinatorIdentitiesForTest } from './agent-completion-coordinator'
-import { resetAgentProcessInspectionQueueForTests } from './agent-process-inspection-queue'
+import { resetAgentProcessBackstopForTests } from './agent-process-backstop'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
 export const HOOK_DONE_QUIET_MS = 1_500
@@ -34,7 +34,7 @@ export function useAgentCompletionCoordinatorLifecycle(): void {
   })
 
   afterEach(() => {
-    resetAgentProcessInspectionQueueForTests()
+    resetAgentProcessBackstopForTests()
     resetAgentCompletionCoordinatorIdentitiesForTest()
     vi.useRealTimers()
     vi.restoreAllMocks()

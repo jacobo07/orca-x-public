@@ -2,8 +2,7 @@ import type { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type {
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab
+  TerminalPaneLayoutNode
 } from '../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -63,22 +62,6 @@ function hasMatchingStablePaneLayout(
   // Why: hibernation intentionally clears the live PTY binding after the pane
   // exits, but the preserved leaf still owns cold-restore for its session.
   return layoutContainsLeaf(terminalLayoutsByTabId[tabId]?.root, leafId)
-}
-
-function hasRestorableStablePanePty(
-  tab: TerminalTab,
-  tabId: string,
-  leafId: string,
-  ptyIdsByTabId: Record<string, string[] | undefined>,
-  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
-): boolean {
-  const layout = terminalLayoutsByTabId[tabId]
-  const hasLeafPty = Boolean(layout?.ptyIdsByLeafId?.[leafId])
-  const isSingleLeafLayout = layout?.root?.type === 'leaf' && layout.root.leafId === leafId
-
-  return Boolean(
-    hasLeafPty || (isSingleLeafLayout && (tab.ptyId || (ptyIdsByTabId[tabId]?.length ?? 0) > 0))
-  )
 }
 
 // Why: a pane whose PTY is live *right now* already owns its running session
@@ -152,17 +135,10 @@ export function recordPaneIsOwnedByPreservedPane(
     ) {
       return true
     }
-    // Why: active sessions rely on pane-level cold restore. A preserved leaf
-    // without a PTY/session id can repaint scrollback but cannot resume.
-    return (
-      hasRestorableStablePanePty(
-        tab,
-        tabId,
-        stable.leafId,
-        state.ptyIdsByTabId,
-        state.terminalLayoutsByTabId
-      ) && paneWillConnectOnActivation(record.worktreeId, tabId, state)
-    )
+    // Why: the preserved leaf resumes its own record when it mounts, PTY binding or not (its fresh
+    // spawn reads the record). Forking a new tab cleared that record first, which left the original
+    // pane a plain shell and reopened the session at the end of the tab strip.
+    return paneWillConnectOnActivation(record.worktreeId, tabId, state)
   }
 
   const tabId = getLegacyPaneTabId(record)

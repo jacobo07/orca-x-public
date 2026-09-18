@@ -99,3 +99,23 @@ The harness covers the terminal stream only. It does **not** cover the session-t
 sync channel, agent-session publications, file or Git RPCs, mobile/E2EE framing, or
 the relay transport. A change on those paths still needs its own reasoning against
 the three rules above.
+
+## Not covered here: the local daemon protocol
+
+`PROTOCOL_VERSION` in `src/main/daemon/daemon-protocol-version.ts` is a **different**
+authority from `RUNTIME_PROTOCOL_VERSION`, with different rules, and this page does not
+govern it. Client and daemon are always the same build on the same machine; the skew is
+temporal, not spatial — an app update leaves the previous build's daemon running.
+
+The rules there are close to the opposite of Rule 1. The endpoint name embeds the
+generation, so each generation owns its own socket, `createLegacyDaemonAdapters` adopts
+previous generations rather than replacing them, and only the current generation is ever
+a target for automatic replacement. That makes the version number the capability
+negotiation: a feature constant plus a `supports…` predicate, one per capability.
+
+**A capability whose absence can destroy user work therefore requires a new generation,
+not an optional field.** Measured 2026-09-14: `retireIfNoLiveWork` shipped into v35
+without moving the number, so two builds advertised 35 — one answering it, one rejecting
+it as an unknown request type — and the older one was replaced under a racy count because
+no predicate could be written to tell them apart. Assuming *this* page governed that
+change is what deferred the fix for a session.

@@ -6,10 +6,7 @@ import {
   recognizeAgentProcess,
   type RecognizedAgentProcess
 } from '../../../../shared/agent-process-recognition'
-import {
-  enqueueAgentProcessInspection,
-  type InspectionPriority
-} from './agent-process-inspection-queue'
+import { getAgentProcessBackstop } from './agent-process-backstop'
 import type {
   AgentCompletionCoordinator,
   AgentCompletionCoordinatorOptions,
@@ -26,6 +23,8 @@ type CompletionSource = 'hook' | 'title' | 'process-exit'
 type CompletionIdentitySource = 'hook' | 'title' | 'process-exit'
 
 type PollCadenceTier = 'active' | 'idle' | 'hidden' | 'no-evidence'
+
+type InspectionPriority = 'cadence' | 'pending-title'
 
 type LastCompletionIdentity = {
   source: CompletionIdentitySource
@@ -87,7 +86,9 @@ export function createAgentCompletionCoordinator(
   let lastAttentionToken: string | null = null
   let lastForegroundAgent: RecognizedAgentProcess | null = null
   let requiresFreshWorking = false
-  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: this pane's slot in the window's shared backstop; it owns no timer of its own.
+  const backstopOwner = {}
+  let pollScheduled = false
   let pendingTitleTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
@@ -113,11 +114,11 @@ export function createAgentCompletionCoordinator(
   let lastPaneActivityAt = 0
 
   function clearPollTimer(): void {
-    if (pollTimer === null) {
+    if (!pollScheduled) {
       return
     }
-    clearTimeout(pollTimer)
-    pollTimer = null
+    getAgentProcessBackstop().cancel(backstopOwner)
+    pollScheduled = false
     pollTimerTier = null
   }
 
@@ -541,13 +542,27 @@ export function createAgentCompletionCoordinator(
     inspectionInFlight = true
     const generationAtRequest = inspectionGeneration
     const pendingTitleIdAtRequest = priority === 'pending-title' ? pendingTitle?.id : null
-    enqueueAgentProcessInspection({
-      priority,
-      run: async () => {
+    void getAgentProcessBackstop()
+      .inspect({
+        ptyId,
+        settings: options.getSettings(),
+        inspectProcess: options.inspectProcess,
+        ...(options.inspectProcesses ? { inspectProcesses: options.inspectProcesses } : {}),
+        // Why: a pane disposed while waiting for the window's next call must cost no IPC.
+        isActive: () => !disposed
+      })
+      .then((outcome) => {
+        if (outcome.status === 'skipped') {
+          inspectionInFlight = false
+          return
+        }
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
-          const result = await options.inspectProcess(options.getSettings(), ptyId)
+          if (outcome.status === 'failed') {
+            throw new Error('process inspection failed')
+          }
+          const result = outcome.inspection
           if (!disposed && generationAtRequest === inspectionGeneration) {
             const appliesToCurrentPendingTitle =
               !pendingTitle ||
@@ -588,8 +603,7 @@ export function createAgentCompletionCoordinator(
             scheduleNextPoll()
           }
         }
-      }
-    })
+      })
   }
 
   function shouldRunCadenceInspection(): boolean {
@@ -646,7 +660,7 @@ export function createAgentCompletionCoordinator(
       return
     }
     const tier = currentPollTier()
-    if (pollTimer !== null) {
+    if (pollScheduled) {
       // Why: a pane whose tier moved to a faster cadence has a slow timer armed; re-arm now instead of waiting it out.
       if (
         pollTimerTier !== null &&
@@ -665,17 +679,18 @@ export function createAgentCompletionCoordinator(
       return
     }
     pollTimerTier = tier
-    pollTimer = setTimeout(() => {
-      pollTimer = null
+    pollScheduled = true
+    getAgentProcessBackstop().schedule(backstopOwner, nextPollInterval(tier), () => {
+      pollScheduled = false
       pollTimerTier = null
       requestInspection('cadence')
-    }, nextPollInterval(tier))
+    })
   }
 
   function recordPaneActivity(): void {
     lastPaneActivityAt = Date.now()
     // Why: activity ends the relaxed no-evidence cadence; re-arm only when the armed timer is slow (or none) so per-chunk calls stay near-free.
-    if (pollTimer === null || pollTimerTier === 'no-evidence') {
+    if (!pollScheduled || pollTimerTier === 'no-evidence') {
       scheduleNextPoll()
     }
   }

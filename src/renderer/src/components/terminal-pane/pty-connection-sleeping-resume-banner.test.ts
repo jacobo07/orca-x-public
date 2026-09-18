@@ -313,6 +313,66 @@ describe('connectPanePty', () => {
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
   })
 
+  it('keeps the sleep record and says so when main refused the resume', async () => {
+    // Why: the session is live or starting elsewhere; main spawned a plain shell, so the
+    // record is the only way back and the banner must not claim a restore.
+    const { connectPanePty } = await import('./pty-connection')
+    const spawn = createDeferred<{ id: string; agentResumeRefused: 'live-elsewhere' }>()
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(() => spawn.promise)
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_2)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_2 },
+          activeLeafId: LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      },
+      settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: 'finish the task',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({ restoredLeafId: LEAF_2, restoredPtyIdByLeafId: {} })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(4)
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
+        launchAgent: 'codex'
+      })
+    )
+
+    spawn.resolve({ id: 'fresh-pty', agentResumeRefused: 'live-elsewhere' })
+    await flushAsyncTicks(10)
+
+    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-refused')
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
+  })
+
   it('lets a declined resume replace an already-shown restored banner', async () => {
     // Why: the banner latch is one-shot per pane. A pane that showed "session restored"
     // and then respawned into a session main declined must stop claiming the restore.

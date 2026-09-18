@@ -195,6 +195,41 @@
         "The dangerous shape here was never the barrier, it was collapse-into-empty. A quit closes every window one at a time, so the last close is the write that would publish an empty set over a good one, and an unreadable value returned as [] would do the same on the next publish. Both are refused in window-topology.ts rather than in the writer, which is why the proof is a pure test and not a syscall trace.",
         "No completion marker gates the restore: the plan is re-derived from the recorded entries on every launch, so there is no 'topology restored' flag that could become durable ahead of the state it certifies."
       ]
+    },
+    {
+      "id": "working-set.sealed-manifest",
+      "state": "<profile>/project-working-sets/<host+owner hash>/<workingSetId>.json — one immutable file per saved project working set",
+      "writer": "src/main/project-working-set/working-set-store.ts",
+      "tier": "crash-durable",
+      "lostIf": "It is the only record of a rail the user asked to keep, and later waves may release processes on the strength of it. A save reports success only after the published file is read back through readWorkingSetArtifact and matches what was submitted, so 'saved' names bytes on disk, not an attempted write.",
+      "provenBy": [
+        "src/main/durable-file-write-exclusive.test.ts",
+        "src/main/project-working-set/working-set-store.test.ts"
+      ],
+      "knownGaps": [
+        "Published by hard link, not rename, so an existing name is refused rather than replaced; a filesystem without hard links therefore fails every save as publish-failed instead of degrading to an overwriting publish.",
+        "Directory fsync is best-effort and does nothing on Windows: the file bytes are flushed before publication, but the new directory entry's survival across power loss rests on NTFS metadata journaling.",
+        "History is derived by scanning the partition, with no index. A read-back failure leaves the artifact in place, so the operation can report failure for a file a later listing finds valid; a verify mismatch renames the file aside as .unverified, and if that rename fails the drifted file stays listed.",
+        "scrollbackRef names the live terminal-scrollback blob, which the session rewrites and deletes; restore reads the working set's own sealed copy (working-set.sealed-scrollback), never the live blob.",
+        "Snapshots are desktop-local: another desktop or a paired mobile client does not see this history, even for a working set whose execution host is remote."
+      ]
+    },
+    {
+      "id": "working-set.sealed-scrollback",
+      "state": "<profile>/project-working-sets/sealed-scrollback/<host+owner hash>/<workingSetId>/<ref>.bin — a working set's own copy of each pane's persisted scrollback",
+      "writer": "src/main/project-working-set/working-set-scrollback-seal.ts",
+      "tier": "crash-durable",
+      "lostIf": "It is the referent of a crash-durable manifest and the only history left once the live blob is rewritten or its tab closes; a manifest published ahead of its copies would name history that a crash erased. Every copy is flushed and linked before the manifest is published, and copies are discarded when the manifest never lands.",
+      "provenBy": [
+        "src/main/project-working-set/working-set-scrollback-seal.test.ts",
+        "src/main/durable-file-write-exclusive.test.ts"
+      ],
+      "knownGaps": [
+        "Copied from the last persisted session, not from the live terminal: scrollback reaches disk at shutdown capture, so the copy is history as of that write, not as of the save.",
+        "A copy that fails is reported per pane and the save still succeeds; that pane has no history rather than a partial one.",
+        "Nothing collects copies of a working set that is later removed by hand; there is no deletion path yet.",
+        "Same best-effort directory fsync as the manifest: new directory entries rest on NTFS metadata journaling on Windows."
+      ]
     }
   ]
 }

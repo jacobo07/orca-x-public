@@ -56,6 +56,14 @@ function snapshotReadPaths(ref: string, storage?: TerminalScrollbackSnapshotStor
   return fallbackPath ? [primaryPath, fallbackPath] : [primaryPath]
 }
 
+/** Where a ref's bytes may live, primary first. Empty for a ref that is not canonical. */
+export function resolveTerminalScrollbackSnapshotReadPaths(
+  ref: string,
+  storage: TerminalScrollbackSnapshotStorage
+): string[] {
+  return snapshotReadPaths(ref, storage)
+}
+
 function trailingUtf8Bytes(value: string, maxBytes: number): Buffer {
   const bytes = Buffer.from(value, 'utf-8')
   if (bytes.length <= maxBytes) {

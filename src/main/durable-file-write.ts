@@ -4,7 +4,7 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { open, readdir, rename, rm, stat } from 'node:fs/promises'
+import { link, open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 /** `mode` is applied when the temp file is created, so the payload is never briefly world-readable. */
@@ -15,7 +15,7 @@ export type DurableWriteOptions = { mode?: number }
  * directory for fsync, and some filesystems reject it. The file fsync above it is the load-bearing
  * part; this closes the "rename recorded but not persisted" window where the platform allows it.
  */
-async function syncDirectory(directory: string): Promise<void> {
+export async function syncDirectory(directory: string): Promise<void> {
   let handle: Awaited<ReturnType<typeof open>> | null = null
   try {
     handle = await open(directory, 'r')
@@ -99,6 +99,60 @@ export async function writeFileDurableIfCurrent(
       await rm(tmpPath, { force: true }).catch(() => {})
     }
   }
+}
+
+export type DurablePublishStage = 'write' | 'barrier' | 'publish'
+
+/** Names the step that failed, so a caller can tell "nothing was written" from "not flushed". */
+export class DurablePublishError extends Error {
+  readonly stage: DurablePublishStage
+  /** The OS error code; EEXIST at `publish` means the final name was already taken. */
+  readonly code: string | null
+
+  constructor(stage: DurablePublishStage, cause: unknown) {
+    super(
+      `durable publish failed at ${stage}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      {
+        cause
+      }
+    )
+    this.name = 'DurablePublishError'
+    this.stage = stage
+    const code = (cause as NodeJS.ErrnoException | null)?.code
+    this.code = typeof code === 'string' ? code : null
+  }
+}
+
+/**
+ * `writeFileDurable` for immutable artifacts: publishes by hard link, which fails with EEXIST
+ * instead of replacing an existing file the way rename does. Throws `DurablePublishError`; the temp
+ * file is removed on every path.
+ */
+export async function writeFileDurableExclusive(
+  tmpPath: string,
+  finalPath: string,
+  payload: string | Buffer,
+  options: DurableWriteOptions = {}
+): Promise<void> {
+  let stage: DurablePublishStage = 'write'
+  try {
+    const handle = await open(tmpPath, 'wx', options.mode)
+    try {
+      await handle.writeFile(payload)
+      stage = 'barrier'
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    stage = 'publish'
+    await link(tmpPath, finalPath)
+  } catch (error) {
+    throw new DurablePublishError(stage, error)
+  } finally {
+    // Why unconditional: after a successful link the temp is a second name for the published bytes.
+    await rm(tmpPath, { force: true }).catch(() => {})
+  }
+  await syncDirectory(dirname(finalPath))
 }
 
 /** Temp path for a durable write. Shared shape so `removeStaleDurableWriteTempFiles` can reclaim orphans. */

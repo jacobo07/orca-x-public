@@ -1,3 +1,33 @@
+// Reliability gates: what this estate claims to protect, and what backs each claim.
+//
+// This file disciplines CLAIMS. Its siblings cover adjacent concerns -- durability-contracts.jsonc
+// says what a write owes if state is lost, variant-parity.jsonc says what a variant inherits.
+//
+// A gate's evidence chain has levels, and they are not interchangeable. Do not promote one using
+// evidence from the level below it:
+//
+//   testFiles       the file exists                     CHECKED (fs.stat)
+//   assertionRefs   the assertion exists                CHECKED (substring, see below)
+//   commands        every testFile appears in a command CHECKED
+//   evidenceRuns    the run actually happened           NOT CHECKED -- hand-written, see below
+//
+// assertionRefs.assertions must be VERBATIM TEST TITLES -- the exact string passed to it()/test(),
+// copied, so a machine can find the test. It is a pointer, not a summary.
+//
+// It has not always been used that way. Measured 2026-09-13 across 1598 assertions, the field held
+// two conventions from the commit that introduced it: verbatim titles, and faithful paraphrases of
+// what a test asserts. Both read alike, and nothing distinguishes an honest paraphrase from a
+// pointer that rotted -- which is the whole job of the field. The paraphrased gates are recorded in
+// reliability-assertion-baseline.txt as a shrink-only ratchet: their tests exist and do assert what
+// is claimed, so this is unproven evidence rather than absent protection. A gate not in that list
+// must resolve every assertion it names. Four shapes resist rewording and need the test restructured
+// or the claim re-cut, not a looser matcher: a claim merging several it() blocks, an it.each table
+// whose title is generated, a paraphrase sharing no tokens with the title, and a title split across
+// source lines.
+//
+// evidenceRuns is DECLARED, not verified. Its date, result, duration and summary are hand-written
+// and nothing joins them to a real run -- no reporter output, no artifact, no CI run id is recorded
+// anywhere in this file. Read a run as a developer's note that they ran it, never as provenance.
 {
   "schemaVersion": 1,
   "updatedAt": "2026-08-14",
@@ -10,6 +40,101 @@
     }
   },
   "gates": [
+    {
+      "id": "window-representation.a-takeover-must-beat-the-default-it-displaces",
+      "title": "A window may replace its own OS representation only in the state where the platform's answer is the worse one",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-windows",
+      "layer": "main-window-native",
+      "surfaces": [
+        "Windows taskbar thumbnail",
+        "Windows taskbar live preview (Peek)",
+        "ALT+TAB representation"
+      ],
+      "platforms": ["windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Windows only because DWM iconic representation is a Windows capability; on macOS and Linux there is no takeover to scope. The unit cases pin the posture transitions, which is what regresses silently -- an HRESULT of zero is returned whether the window was handed back or not. They cannot see which surface DWM actually served, so the OS-level reading is carried as a manual evidence run rather than claimed by the automated ones.",
+      "motivatingLinks": ["docs/reference/terminal-preview-observers.md"],
+      "invariant": "Forcing an iconic representation does not ADD a preview, it REPLACES the one the compositor builds from the window's own surface -- and a supplied bitmap is capped at the size the shell asked for, so it can never be sharper than what it displaced. The takeover is therefore engaged only while the window is minimized, which is the one state where the platform's own answer is worse (sharp and complete, but frozen at the moment of minimize). A visible window is left to the platform. A posture change is reported, because engaged and released are indistinguishable on every other field.",
+      "oracle": "Drive the posture transitions against a fake addon and require the DWM calls that correspond to them: nothing forced at start for a visible window, HAS+FORCE on minimize, both cleared on restore, engaged at start for a window that attaches already minimized, and no native call repeated for a state the window is already in. Separately, and this is the half no unit test can reach: register a DWM thumbnail against every visible top-level window and read DwmQueryThumbnailSourceSize, which returns the real window rect when the compositor is compositing the window and the supplied bitmap's size when the app has taken over. The subject must report its real rect while visible and the iconic size while minimized, in a sample where unrelated windows report their real rect -- that is the control proving the reading is about the takeover rather than about the instrument.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/window/taskbar-preview-controller.test.ts src/main/window/attach-taskbar-preview.test.ts",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/helpers/dwm-thumbnail-source-size.ps1"
+      ],
+      "testFiles": [
+        "src/main/window/taskbar-preview-controller.test.ts",
+        "src/main/window/attach-taskbar-preview.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/window/taskbar-preview-controller.test.ts",
+          "assertions": [
+            "leaves a visible window to DWM at start",
+            "engages the takeover when the window is minimized",
+            "hands the window back to DWM on restore",
+            "engages at start for a window that is already minimized",
+            "records which posture the window is in"
+          ]
+        },
+        {
+          "file": "src/main/window/attach-taskbar-preview.test.ts",
+          "assertions": [
+            "hooks the demand messages and answers from its own worktree",
+            "records the iconic edges around the demands, so a zero can be read"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-13",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/window/taskbar-preview-controller.test.ts src/main/window/attach-taskbar-preview.test.ts",
+          "durationSeconds": 3,
+          "summary": "55 passed across the four taskbar files. The five posture cases were driven RED first at 5 failed / 21 passed, so the green is attributable to the fix rather than to the assertions being unreachable."
+        },
+        {
+          "date": "2026-09-13",
+          "runner": "manual",
+          "platform": "windows",
+          "result": "passed",
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/helpers/dwm-thumbnail-source-size.ps1",
+          "durationSeconds": 60,
+          "summary": "A build carrying the fix, launched on its own profile, reported thumbnail source 1927x1142 (its real rect) while visible and 250x148 while minimized -- the same process giving two different answers. In both samples the previously installed build reported 250x148 while NOT minimized, and five unrelated windows reported their real rect, so the reading is differential rather than absolute. Iconic state was asserted at both ends of each observation window."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "The two unit files. The OS-level reading is manual and costs about a minute, most of it waiting for a window to exist."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Landed 2026-09-13; no soak has run. The unit half has no timing in it. The manual half depends on a window appearing, which is bounded by a poll rather than a fixed wait."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "RED at 2e46a6bfe (5 failed / 21 passed, _logs/w2-red-203728.log), GREEN at a49dfe9fb (55 passed, _logs/w2-green-204039.log). The OS-level half is red-by-construction against the previous build, which is present in the same sample as the fixed one and still reports 250x148 while visible."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The posture change is two DwmSetWindowAttribute calls on a window edge, and the guard means a repeated edge issues none. Nothing here is on the message path or on a frame budget."
+      },
+      "promotionCriteria": [
+        "The packaged taskbar liveness gate runs against an artifact it can verify, so the minimized half is proven on the build a user installs rather than on a local one.",
+        "The OS-level reading is automated behind a spec rather than invoked by hand.",
+        "A soak establishes that the window-appears poll does not flake on a loaded host."
+      ],
+      "demotionRule": "Demote to protection none if the posture assertions are weakened to counting native calls without checking the forceIconic argument, or if the OS-level evidence run is dropped: the unit half alone cannot tell a window DWM is compositing from one being served a bitmap, because both return HRESULT zero.",
+      "knownGaps": [
+        "tests/e2e/packaged-taskbar-thumbnail-liveness.spec.ts cannot currently run: its precondition refuses a packaged artifact whose app.asar entry for out/main/index.js differs from the built one, which is the state the last repack left. So the minimized half is unproven on a packaged build.",
+        "The live-preview (Peek) channel is sized to the window and was not re-measured after this change.",
+        "Whether a supplied 250x148 bitmap is actually preferable to the platform's sharp-but-frozen thumbnail while minimized is a product judgement this gate does not make; it only holds that the visible case is not a judgement call."
+      ]
+    },
     {
       "id": "workspace-presentation.information-survives-rendering",
       "title": "A surface cannot drop information the user needs, to geometry or to a collapsed state",
@@ -880,6 +1005,101 @@
         "No multi-process aggregate throttle is added; each stale daemon independently obeys the same non-preemptible observation window."
       ],
       "demotionRule": "Keep experimental or demote if any activity trigger shortens the rejection window, a transient burst reaches resolver retirement authority, sustained dead-session evidence no longer converges, shutdown permits late retirement, or the focused gate flakes without an identified product or harness fault."
+    },
+    {
+      "id": "daemon-replacement.atomic-retirement-is-version-negotiated",
+      "title": "A daemon generation that predates atomic retirement is adopted, never replaced under the racy count",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "daemon-terminal",
+      "layer": "daemon-protocol-generation",
+      "surfaces": [
+        "automatic stale-daemon replacement",
+        "previous-generation daemon adoption",
+        "local PTY survival across an app update"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Real Electron daemons with real PTY sessions in a disposable runtime namespace, driving the real adoption authority and the real killStaleDaemon path including its process-identity check. Run on Windows only. The Playwright daemon-generation suites have not been run against this boundary, and the transport-fault fallback for a v36-or-later peer is not reachable from any fixture here because every daemon in this repo is current code.",
+      "motivatingLinks": [
+        "RESUMPTION_FILE.md, sealed 2026-09-14 session 6 — the capability can now be negotiated",
+        "docs/reference/remote-wire-compatibility.md — Not covered here: the local daemon protocol",
+        "85c15d6da — the last daemon build advertising generation 35 without the retirement request"
+      ],
+      "invariant": "Atomic safe retirement begins at daemon protocol generation 36. Every generation below it is adoptable and its live sessions stay reachable through its own adapter, the current generation is never adoptable so a genuinely stale daemon stays replaceable, and a request for safe replacement of a pre-boundary generation is refused by name rather than downgraded to the pre-signal session count.",
+      "oracle": "Launch a real daemon at generation 35 with a real live PTY session and require createLegacyDaemonAdapters to return exactly one adapter that still lists that session, with the daemon alive. Launch a real daemon at the current generation with a live session and require zero adapters, so the adoption rule cannot swallow every generation. Drive killStaleDaemon with preserveLiveWork against the pre-boundary daemon and require preservedBy to name the generation guard, not the daemon's answer; classify a run whose process-identity probe degraded as inconclusive by raising rather than passing.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/daemon-version-skew-adoption.unit.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-protocol-version.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "tests/e2e/daemon-version-skew-adoption.unit.test.ts",
+        "src/main/daemon/daemon-protocol-version.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/daemon-version-skew-adoption.unit.test.ts",
+          "assertions": [
+            "declares the capability boundary above every previously shipped generation",
+            "adopts a pre-atomic daemon and keeps its live session reachable",
+            "leaves the current generation out of the adoptable population",
+            "refuses safe replacement of a pre-atomic daemon instead of falling back to the count"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-protocol-version.test.ts",
+          "assertions": ["withholds atomic retirement from every generation that predates it"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-14",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/daemon-version-skew-adoption.unit.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 49,
+          "summary": "4/4 conclusive at 881 MB free physical memory, so the process-identity probe genuinely answered rather than the inconclusive branch being taken. Two earlier attempts at 1046 MB and below were classified resource-confounded and discarded: the whole file failed at suite level on a failed PowerShell process-table spawn, including a constants-only test. Run without --reporter=dot; the reporter does not change what is exercised."
+        },
+        {
+          "date": "2026-09-14",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-protocol-version.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "The generation boundary and its exhaustive predicate sweep over every previous generation. Taken inside a same-scope differential over 136 files of src/main/daemon and src/main/local-builds: at 0016eabb1, 5 files and 10 tests failed with 1410 passed; at 6dbd58898, the identical 5 files and 10 tests failed with 1411 passed. No attributable new red; the one red the change produced was the generation pin in daemon-foreground-confirmation-protocol.test.ts, updated deliberately in its own commit."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "four real Electron daemons with real PTY sessions, including the Windows process-identity probe"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Not flaky by product behaviour, but resource-sensitive by construction: the Windows process-identity query spawns powershell.exe under a 3-second cap and fails outright below roughly 1 GB free physical memory. The gate raises INCONCLUSIVE rather than passing when that happens, so a green always means the probe answered."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Mutating ATOMIC_RETIREMENT_DAEMON_PROTOCOL_VERSION from 36 to 35 flips the refusal from atomic_retirement_unsupported_generation to atomic_retirement_refused while the daemon survives in BOTH worlds with killed false and liveOwnerSurvived true. An assertion on the outcome alone would have stayed green with the negotiation severed, which is why the gate names the decider. The two adoption cases stayed green under the mutation, and the file was restored byte-exact by SHA-256."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The generation check is an integer comparison taken before the retirement request, so the safe path makes strictly fewer round trips than before: a pre-boundary peer is now refused without a connect at all. No timer, listener, poll or retained payload was added."
+      },
+      "promotionCriteria": [
+        "Run the Playwright daemon-generation suites against the boundary on at least one platform.",
+        "Exercise the same oracle on macOS or Linux, where the identity probe does not spawn PowerShell.",
+        "Replace the pre-boundary subject with a daemon built from a real pre-atomic commit rather than current source at an older generation number."
+      ],
+      "knownGaps": [
+        "The pre-boundary subject is built from current source and therefore DOES implement the retirement request; the gate proves the caller decides from the generation rather than from the peer's answer, which is the property that matters, but it is not a historically faithful peer. A real pre-atomic daemon built from 85c15d6da was run out-of-band this session and answered `Unknown request type: retireIfNoLiveWork`; that observation is recorded in RESUMPTION_FILE.md and is not pinned by any committed test.",
+        "The generation guard cannot fire in production today, because the only caller that requests preserveLiveWork targets the current generation. It is a structural backstop for the next such caller, not a path under load.",
+        "Windows only. The Playwright daemon-generation suites were not run."
+      ],
+      "demotionRule": "Keep experimental or demote if a preserveLiveWork caller is added for a non-current generation without extending this oracle, if the adoptable population ever includes the current generation, if a pre-boundary refusal stops naming its own guard, or if the gate reports green on a run whose identity probe degraded."
     },
     {
       "id": "ssh-filesystem.stream-inactivity-lifecycle",

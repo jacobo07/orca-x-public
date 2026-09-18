@@ -219,6 +219,18 @@ export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
 })
 
+/** Bulk discard additionally names the working-tree content the caller observed for each path. */
+export const GitBulkDiscardPaths = GitBulkPaths.extend({
+  observed: z
+    .array(
+      z.object({
+        filePath: z.string().min(1, 'Missing file path'),
+        expectedContent: z.string().min(1).max(200)
+      })
+    )
+    .optional()
+})
+
 const GitPushTargetParam = z.object({
   remoteName: z.string(),
   branchName: z.string(),

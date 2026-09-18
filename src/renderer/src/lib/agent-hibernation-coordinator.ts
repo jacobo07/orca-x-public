@@ -1,28 +1,22 @@
 import { useAppStore } from '@/store'
 import {
+  candidateIdFor,
+  classifyAgentHibernationPanes,
   planAgentHibernationCandidates,
-  type AgentHibernationCandidate,
-  type AgentHibernationPlannerSnapshot
+  type AgentHibernationExclusionReason
 } from './agent-hibernation-planner'
 import {
   confirmAgentHibernationCandidates,
   type AgentHibernationConfirmationState
 } from './agent-hibernation-confirmation'
-import type { AppState } from '@/store/types'
-import { getAllDrivers } from './pane-manager/mobile-driver-state'
 import {
-  getForegroundTerminalTabIds,
-  getForegroundTerminalTabLastSeenAtById
-} from './foreground-terminal-tabs'
-import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
-import { mergePendingTerminalInputActivity } from './terminal-input-activity-coalescing'
+  buildAgentHibernationPlannerSnapshot,
+  fenceRuntimePtyLivenessSample
+} from './agent-hibernation-planner-snapshot'
+import { withAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import type {
-  RuntimeTerminalListResult,
-  RuntimeTerminalSummary
-} from '../../../shared/runtime-types'
+import { sampleRuntimePtyLiveness } from './runtime-pty-liveness-sample'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -49,153 +43,216 @@ const coordinator: AgentHibernationCoordinatorState = {
   now: () => Date.now()
 }
 
-type RuntimePtyLivenessSample = {
-  runtimeLivePtyIdsByWorktreeId: Record<string, string[]>
-  runtimeLivenessRequiredWorktreeIds: string[]
-}
-
-function snapshotFromState(
-  state: AppState,
-  now: number,
-  runtimeLiveness: RuntimePtyLivenessSample
-): AgentHibernationPlannerSnapshot {
-  return {
-    settings: state.settings,
-    activeWorktreeId: state.activeWorktreeId,
-    foregroundTerminalTabIds: getForegroundTerminalTabIds(),
-    tabsByWorktree: state.tabsByWorktree,
-    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-    ptyIdsByTabId: state.ptyIdsByTabId,
-    runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
-    runtimeLivenessRequiredWorktreeIds: runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
-    mobileLockedPtyIds: [...getAllDrivers()]
-      .filter(([, driver]) => driver.kind === 'mobile')
-      .map(([ptyId]) => ptyId),
-    agentStatusByPaneKey: state.agentStatusByPaneKey,
-    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
-    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
-      state.lastTerminalInputAtByPaneKey
-    ),
-    foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
-    now
-  }
-}
-
-function getRuntimeLivenessTargetWorktrees(state: AppState): Map<string, string> {
-  const targets = new Map<string, string>()
-  for (const worktreeId of Object.keys(state.tabsByWorktree)) {
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    if (runtimeEnvironmentId) {
-      targets.set(worktreeId, runtimeEnvironmentId)
+/**
+ * One snapshot, read two ways: the panes that may sleep, and why each of the others may
+ * not. They must come from the same snapshot — asking twice would sample the hosts twice
+ * and could answer about two different worlds.
+ */
+async function currentPlan(now: number) {
+  const sample = await sampleRuntimePtyLiveness(useAppStore.getState())
+  const freshState = useAppStore.getState()
+  const snapshot = buildAgentHibernationPlannerSnapshot(
+    freshState,
+    now,
+    // Why: judged against post-await state, so a worktree re-homed mid-sample is unknown.
+    fenceRuntimePtyLivenessSample(freshState, sample)
+  )
+  const causeByCandidateId = new Map<string, AgentSleepCause>()
+  for (const pane of classifyAgentHibernationPanes(snapshot)) {
+    if (pane.reason) {
+      causeByCandidateId.set(candidateIdFor(pane.worktreeId, pane.paneKey), pane.reason)
     }
   }
-  return targets
-}
-
-function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
-  if (terminal.ptyId) {
-    return terminal.ptyId
-  }
-  if (terminal.tabId.startsWith('pty:') && terminal.tabId === terminal.leafId) {
-    return terminal.tabId.slice('pty:'.length) || null
-  }
-  return null
-}
-
-async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLivenessSample> {
-  const targets = getRuntimeLivenessTargetWorktrees(state)
-  const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
-  const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
-  await Promise.all(
-    [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
-      try {
-        const result = await callRuntimeRpc<RuntimeTerminalListResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
-          'terminal.list',
-          {
-            worktree: toRuntimeWorktreeSelector(worktreeId),
-            limit: 10_000,
-            requireFreshPtyLiveness: true,
-            includeVisualLayouts: false
-          },
-          { timeoutMs: 10_000 }
-        )
-        if (result.truncated) {
-          return
-        }
-        const ptyIds = new Set<string>()
-        for (const terminal of result.terminals) {
-          if (!terminal.connected || terminal.worktreeId !== worktreeId) {
-            continue
-          }
-          const ptyId = getTypedRuntimePtyId(terminal)
-          if (ptyId) {
-            ptyIds.add(ptyId)
-          }
-        }
-        runtimeLivePtyIdsByWorktreeId[worktreeId] = [...ptyIds].sort()
-      } catch {
-        // Why: stale runtime liveness is unsafe for all-or-nothing hibernation;
-        // omitting the worktree makes the planner fail closed for this pass.
-      }
-    })
-  )
-  return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
-}
-
-async function currentCandidates(now: number) {
-  const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState())
-  const freshState = useAppStore.getState()
-  return planAgentHibernationCandidates(snapshotFromState(freshState, now, runtimeLiveness))
+  const candidates = planAgentHibernationCandidates(snapshot)
     .filter((candidate) => {
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         freshState,
         candidate.worktreeId
       )
-      return !runtimeEnvironmentId || candidate.expectedRuntimePtyIds.length === 1
+      if (!runtimeEnvironmentId || candidate.expectedRuntimePtyIds.length === 1) {
+        return true
+      }
+      // Why: the planner admitted it, but its handle resolves to no single host PTY, so
+      // there is nothing exact to stop. Without a name this reads as an ordinary refusal.
+      causeByCandidateId.set(candidate.id, 'runtime-pty-not-exact')
+      return false
     })
-    .map((candidate) => ({
-      ...candidate,
-      // Why: terminal output after the first stable tick can mean the session
-      // is still alive even when agent status remains done; require it to stay quiet.
-      signature: `${candidate.signature}|output:${getAgentHibernationOutputSignature(candidate.paneKeys)}`
-    }))
+    .map(withAgentHibernationOutputSignature)
+  return { candidates, causeByCandidateId }
+}
+
+async function currentCandidates(now: number) {
+  return (await currentPlan(now)).candidates
+}
+
+/** A pane as it was when someone decided to sleep it: evidence, never authority. */
+export type AgentSleepAuthorization = { candidateId: string; signature: string }
+
+export type AgentSleepOutcome =
+  /** Re-planned on live state, still the pane that was authorized, and shut down. */
+  | 'slept'
+  /** Still a candidate, but not the one authorized (new PTY, input, output, state). */
+  | 'changed'
+  /** No longer a candidate at all: the planner now keeps it awake. */
+  | 'not-eligible'
+  /** Another sleep of this pane is already running. */
+  | 'in-progress'
+  /** Authorized and still eligible, but the shutdown itself threw. */
+  | 'failed'
+
+/**
+ * Why an attempt ended where it did, at the strongest boundary that knew.
+ *
+ * For a refusal this is the planner's own exclusion reason, so a host that could not be
+ * re-sampled (`runtime-liveness-unknown`) stops reading like a user's pin. For a failure it
+ * is the token the effect threw — every one of these was already named and then discarded.
+ * Internal: diagnosis, tests and logs. The user-facing word stays `AgentSleepOutcome`.
+ */
+export type AgentSleepCause =
+  | AgentHibernationExclusionReason
+  /** Admitted by the planner, but its handle resolves to no single host PTY. */
+  | 'runtime-pty-not-exact'
+  /** The pane was gone entirely — no longer a pane the planner walks. */
+  | 'pane-absent'
+  | 'pane-binding-mismatch'
+  | 'capture-missing'
+  | 'runtime-missing'
+  | 'stop-targeted-wrong-pty'
+  | 'stop-unverified'
+  | 'stop-still-live'
+  | 'liveness-unavailable'
+  | 'effect-threw'
+  /** The host still holds a line for a pane this renderer has no input record of. */
+  | 'host-unsent-input'
+
+export type AgentSleepResult = {
+  candidateId: string
+  outcome: AgentSleepOutcome
+  /** Absent exactly when the outcome is `slept`. */
+  cause?: AgentSleepCause
+}
+
+const CAUSE_BY_THROWN_TOKEN: Record<string, AgentSleepCause> = {
+  agent_hibernation_pane_binding_mismatch: 'pane-binding-mismatch',
+  agent_hibernation_capture_missing: 'capture-missing',
+  missing_runtime_for_exact_terminal_stop: 'runtime-missing',
+  exact_terminal_stop_mismatch: 'stop-targeted-wrong-pty',
+  exact_terminal_stop_unverified: 'stop-unverified',
+  terminal_worktree_sleep_still_live: 'stop-still-live',
+  terminal_liveness_unavailable: 'liveness-unavailable'
+}
+
+function toSleepCause(error: unknown): AgentSleepCause {
+  const message = error instanceof Error ? error.message : String(error)
+  // Why: a transport re-wraps the token into a longer message, so match the token it ends on.
+  for (const [token, cause] of Object.entries(CAUSE_BY_THROWN_TOKEN)) {
+    if (message === token || message.endsWith(token)) {
+      return cause
+    }
+  }
+  return 'effect-threw'
+}
+
+/**
+ * A draft this renderer cannot know about.
+ *
+ * The planner's own input guard is the better instrument and keeps owning every pane it has
+ * evidence for: it attributes input to the agent state segment it landed in, so a mid-turn
+ * permission answer does not block forever. But that evidence is renderer-only, and the shell
+ * outlives the renderer — after a reload the map is empty and a pane with a line waiting reads
+ * as untouched. So this asks the pty's own owner, and ONLY for panes the renderer has no record
+ * of, which leaves normal operation entirely to the planner.
+ *
+ * Ordering: this sits after the signature check, so it widens the gap between that check and the
+ * shutdown by one inspect. That is the deliberate trade — a stale signature still shuts down the
+ * explicit pty ids it authorized, while a missed draft is gone for good.
+ */
+async function hostHoldsLineThisRendererNeverSaw(current: {
+  paneKey: string
+  targetPtyIds: readonly string[]
+}): Promise<boolean> {
+  const state = useAppStore.getState()
+  const recorded = state.lastTerminalInputAtByPaneKey?.[current.paneKey]
+  if (typeof recorded === 'number' && Number.isFinite(recorded)) {
+    return false
+  }
+  const ptyId = current.targetPtyIds[0]
+  if (!ptyId) {
+    return false
+  }
+  try {
+    const inspection = await inspectRuntimeTerminalProcess(state.settings, ptyId)
+    // Why only a positive 'typed': an authority that cannot see the line is not evidence of one,
+    // and refusing on silence would stop every older host from ever sleeping a pane.
+    return inspection.inputSincePrompt === 'typed' && inspection.unavailable !== true
+  } catch {
+    // A probe that failed says nothing about a draft; the planner's verdict stands.
+    return false
+  }
 }
 
 async function hibernatePaneIfStillEligible(
-  confirmedCandidate: AgentHibernationCandidate
-): Promise<void> {
-  const { id, worktreeId } = confirmedCandidate
+  authorization: AgentSleepAuthorization
+): Promise<{ outcome: AgentSleepOutcome; cause?: AgentSleepCause }> {
+  const id = authorization.candidateId
   if (coordinator.shuttingDownCandidateIds.has(id)) {
-    return
+    return { outcome: 'in-progress' }
   }
-  const candidates = await currentCandidates(coordinator.now())
-  const stillEligible = candidates.some(
-    (candidate) =>
-      candidate.id === confirmedCandidate.id && candidate.signature === confirmedCandidate.signature
-  )
-  if (!stillEligible) {
-    return
+  const plan = await currentPlan(coordinator.now())
+  const current = plan.candidates.find((candidate) => candidate.id === id)
+  if (!current) {
+    return { outcome: 'not-eligible', cause: plan.causeByCandidateId.get(id) ?? 'pane-absent' }
+  }
+  // Why: the signature covers pty, runtime pty and provider session, so a match
+  // also proves the fresh candidate's shutdown targets are the authorized ones.
+  if (current.signature !== authorization.signature) {
+    return { outcome: 'changed' }
   }
   coordinator.shuttingDownCandidateIds.add(id)
   try {
+    // Why inside the single-flight guard: this await must not let a second tick past the
+    // eligibility checks for the same candidate, and immediately before the shutdown is
+    // where an effect-time question belongs anyway.
+    if (await hostHoldsLineThisRendererNeverSaw(current)) {
+      return { outcome: 'not-eligible', cause: 'host-unsent-input' }
+    }
     const state = useAppStore.getState()
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    await state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
-      paneKey: confirmedCandidate.paneKey,
-      tabId: confirmedCandidate.tabId,
-      leafId: confirmedCandidate.leafId,
-      ptyId: confirmedCandidate.targetPtyIds[0],
-      ...(runtimeEnvironmentId
-        ? { expectedRuntimePtyId: confirmedCandidate.expectedRuntimePtyIds[0] }
-        : {})
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, current.worktreeId)
+    await state.shutdownCompletedAgentPaneForHibernation(current.worktreeId, {
+      paneKey: current.paneKey,
+      tabId: current.tabId,
+      leafId: current.leafId,
+      ptyId: current.targetPtyIds[0],
+      ...(runtimeEnvironmentId ? { expectedRuntimePtyId: current.expectedRuntimePtyIds[0] } : {})
     })
+    return { outcome: 'slept' }
   } catch (err) {
-    console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
+    const cause = toSleepCause(err)
+    console.warn('[agent-hibernation] failed to hibernate agent pane:', id, cause, err)
+    return { outcome: 'failed', cause }
   } finally {
     coordinator.shuttingDownCandidateIds.delete(id)
   }
+}
+
+/**
+ * A user's explicit "sleep these now". The click replaces the two-tick wait and
+ * nothing else: each pane is re-planned on live state immediately before its own
+ * shutdown — setting, idle threshold and every exclusion included — and slept
+ * only if it is still exactly the pane that was shown.
+ */
+export async function sleepAuthorizedAgentPanes(
+  authorizations: readonly AgentSleepAuthorization[]
+): Promise<AgentSleepResult[]> {
+  const results: AgentSleepResult[] = []
+  // Why: sequential, so a later pane is judged after the earlier shutdown, not before it.
+  for (const authorization of authorizations) {
+    results.push({
+      candidateId: authorization.candidateId,
+      ...(await hibernatePaneIfStillEligible(authorization))
+    })
+  }
+  return results
 }
 
 export async function runAgentHibernationTick(): Promise<void> {
@@ -210,7 +267,10 @@ export async function runAgentHibernationTick(): Promise<void> {
     )
     coordinator.confirmationState = plan.confirmationState
     for (const candidate of plan.candidates) {
-      void hibernatePaneIfStillEligible(candidate)
+      void hibernatePaneIfStillEligible({
+        candidateId: candidate.id,
+        signature: candidate.signature
+      })
     }
   } finally {
     coordinator.tickInFlight = false

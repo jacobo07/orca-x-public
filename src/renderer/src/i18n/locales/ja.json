@@ -1,4 +1,94 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "すべてスリープして保存しました。Orca を終了します。",
+      "stayedOpen": "Orca は開いたままです",
+      "refused": "{{count}} 個のワークスペースで作業が実行中のため、何もスリープしませんでした。",
+      "incomplete": "一部のワークスペースはスリープしました。{{count}} 個はスリープできず、実行中のままです。",
+      "sealFailed": "セッションを保存できなかったため、Orca は開いたままです。",
+      "unavailable": "このウィンドウでは現在「スリープして終了」を使用できません。"
+    }
+  },
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "復元済み・未実行",
+      "sleptTitle": "スリープ中・未実行",
+      "sleptFreshBody": "開くとこのターミナルをそのフォルダーで再び起動します。",
+      "resumeBody": "開くと {{agent}} のセッションを再開します。",
+      "freshBody": "開くとそのフォルダーで新しいターミナルを起動します。",
+      "open": "開く"
+    },
+    "history": {
+      "menu": "スナップショット…",
+      "title": "スナップショット · {{name}}",
+      "description": "このワークスペースに保存されたターミナル構成です。復元するとタブは起動せずに戻り、開いたときにだけ起動します。ファイルは変更されません。",
+      "loading": "スナップショットを読み込み中…",
+      "unavailable": "このクライアントではスナップショットを利用できません。",
+      "invalidRequest": "このワークスペースをスナップショットの保存先に対応付けられません。",
+      "unreadable": "スナップショットの保存先を読み取れませんでした（{{code}}）。",
+      "empty": "このワークスペースにはまだスナップショットがありません。",
+      "listLabel": "保存済みスナップショット",
+      "untitled": "無題のスナップショット",
+      "tabCount": "タブ: {{count}}",
+      "latest": "最新",
+      "problemsTitle": "復元できません",
+      "problem": {
+        "unsupportedVersion": "新しいバージョンの Orca X で保存されています",
+        "corrupt": "ファイルが破損しています",
+        "unreadable": "読み取れませんでした",
+        "missing": "ディスク上にありません",
+        "unverified": "保存を確認できませんでした",
+        "unrecognized": "スナップショットフォルダー内の不明なファイル"
+      },
+      "checkingProfiles": "起動オプションを確認中…",
+      "previewLoading": "このスナップショットで復元できる内容を確認中…",
+      "profilesUnresolved": "起動オプションを確認できなかったため、一部のタブは不明と表示される場合があります。",
+      "capability": {
+        "exactResume": "セッションを再開: {{count}}",
+        "restartable": "再起動: {{count}}",
+        "recreateContext": "そのフォルダーで新しいターミナル: {{count}}",
+        "historyOnly": "履歴のみ: {{count}}",
+        "notRestorable": "復元不可: {{count}}",
+        "unknown": "不明: {{count}}"
+      },
+      "liveElsewhere": "別の場所で開いているためここでは再開しません: {{count}}",
+      "blocker": {
+        "currentWork": "このワークスペースには開いているタブがあります。復元する前に閉じてください。何も置き換えられません。",
+        "scopeMismatch": "このスナップショットは別のワークスペースのものです。",
+        "hostUnavailable": "このワークスペースのホストを利用できません。"
+      },
+      "read": {
+        "missing": "このスナップショットはディスク上にありません。一覧を更新しました。",
+        "unsupportedVersion": "このスナップショットは新しいバージョンの Orca X で保存されました。",
+        "corrupt": "このスナップショットのファイルは破損しています。",
+        "unreadable": "このスナップショットを読み取れませんでした（{{code}}）。",
+        "invalidRequest": "このスナップショットの要求が不正でした。"
+      },
+      "selectPrompt": "復元するスナップショットを選択してください。",
+      "restore": "復元",
+      "restoring": "復元中…",
+      "close": "閉じる",
+      "restored": "スナップショットを復元しました。タブは開いたときにだけ起動します。",
+      "result": {
+        "targetChanged": "復元中にワークスペースが変更されたため、何も置き換えていません。",
+        "failedRolledBack": "復元に失敗したため元に戻しました。ワークスペースは変更されていません。",
+        "failedNotRolledBack": "復元に失敗し、完全には元に戻せませんでした。このワークスペースのタブを確認してください。"
+      }
+    },
+    "save": {
+      "action": "現在のターミナルを保存",
+      "saved": "スナップショットを保存しました。",
+      "savedWithoutSomeHistory": "スナップショットを保存しましたが、一部のターミナル履歴をコピーできませんでした。",
+      "noTerminals": "このワークスペースには保存するターミナルがありません。",
+      "notCapturable": "このワークスペースのターミナルを取得できませんでした（{{reason}}）。",
+      "refusedInvalid": "スナップショットは無効として拒否されました（{{reason}}）。",
+      "unsupportedVersion": "このビルドではそのバージョンのスナップショットを書き込めません。",
+      "identityCollision": "この ID のスナップショットはすでに存在します。もう一度お試しください。",
+      "writeFailed": "スナップショットを書き込めませんでした（{{code}}）。",
+      "readBackFailed": "保存しましたが確認できませんでした。更新すると表示される場合があります。",
+      "verifyFailed": "保存されたスナップショットが送信内容と一致しなかったため、隔離しました。"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca でレンダラーエラーが発生しました。",
@@ -49,6 +139,7 @@
     "reportCrash": "クラッシュを報告…",
     "file": "ファイル",
     "newWindow": "新しいウィンドウ",
+    "parkAndExit": "すべてスリープして終了",
     "exit": "終了",
     "edit": "編集",
     "appearance": "外観",
@@ -2679,6 +2770,9 @@
             "stop_command_title": "実行中のコマンドを停止しますか?",
             "stop_agent_description": "このターミナルを閉じると、Agent の現在の作業が停止します。",
             "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
+            "discard_unsent_input_title": "入力内容を破棄しますか?",
+            "discard_unsent_input_confirm": "破棄して閉じる",
+            "discard_unsent_input_description": "このターミナルのプロンプトには、まだ送信されていない入力があります。閉じるとその行は破棄されます。",
             "dont_ask_again": "実行中のターミナルでは今後確認しない",
             "stop_agent_confirm": "Agent を停止",
             "stop_command_confirm": "停止して閉じる"
@@ -3477,6 +3571,61 @@
             "updatedOne": "1台のサーバーを更新完了"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "アイドル中のエージェントのメモリ",
+              "idleOne": "アイドル中のエージェント1件をスリープできます",
+              "idleMany": "アイドル中のエージェント{{value0}}件をスリープできます",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "そのうち1件は未計測のため、この数値に含まれていません",
+              "unknownMany": "そのうち{{value0}}件は未計測のため、この数値に含まれていません",
+              "protectedOne": "1個のペインはスリープしません",
+              "protectedMany": "{{value0}}個のペインはスリープしません",
+              "sleeping": "エージェントをスリープ中…",
+              "sleepOne": "エージェント1件を今すぐスリープ",
+              "sleepMany": "エージェント{{value0}}件を今すぐスリープ",
+              "resultSlept": "{{value0}}件をスリープしました",
+              "resultKept": "{{value0}}件は表示後に変化したためスリープしませんでした",
+              "resultFailed": "{{value0}}件をスリープできませんでした",
+              "observed": {
+                "pending": "終了したプロセスを確認しています…",
+                "unmeasured": "解放されたメモリは測定されていません: {{value0}}",
+                "released": "終了したプロセスは {{value0}} {{value1}} を使用していました",
+                "noneExited": "測定したプロセスはまだ終了していません",
+                "stillRunning": "{{value0}}件のプロセスがまだ実行中です",
+                "unmeasuredPanes": "{{value0}}件は測定なしでスリープしました",
+                "reason": {
+                  "noBaseline": "事前のプロセスの測定がありませんでした",
+                  "sweepUnavailable": "事後の測定を取得できませんでした",
+                  "sweepFailed": "事後の測定に失敗しました",
+                  "sweepTooEarly": "事後の測定の開始が早すぎました",
+                  "metricChanged": "2回の測定で指標が異なりました"
+                }
+              },
+              "reason": {
+                "featureDisabled": "エージェントのスリープはオフです",
+                "worktreeActive": "開いているワークスペース内です",
+                "runtimeLivenessUnknown": "リモートターミナルの状態を確認できません",
+                "tabForeground": "タブが前面に開いています",
+                "agentBusy": "エージェントが作業中です",
+                "agentInterrupted": "エージェントが中断されました",
+                "hasSubagents": "サブエージェントが実行中です",
+                "dispatchUnsettled": "ディスパッチが完了していません",
+                "alreadySleeping": "すでにスリープ中です",
+                "paneMismatch": "ペインが移動しました",
+                "notResumable": "再開できません",
+                "notIdleLongEnough": "アイドル時間が短すぎます",
+                "recentInput": "最近入力がありました",
+                "noLivePane": "稼働中のターミナルがありません",
+                "mobileLocked": "モバイルクライアントが保持しています",
+                "tabPinned": "ピン留めされたタブ"
+              }
+            },
+            "terminalHost": {
+              "label": "ターミナルホスト",
+              "unattributedLabel": "帰属先不明のターミナルプロセス",
+              "unmeasured": "未計測",
+              "unmeasuredDescription": "プロセスの走査に失敗したため、プロセスごとのメモリは不明です(ゼロではありません)。"
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
@@ -14624,6 +14773,47 @@
         "invalidPath": "Orca のデータフォルダーが存在しないか、移動されたか、パスが長すぎる可能性があります。復元するか短いパスに変更してから、Orca を再起動してください。",
         "addressInUse": "別のプロセスがポートを使用している可能性があります。Orca を再起動してから、もう一度お試しください。",
         "unknown": "Orca を再起動してから、もう一度お試しください。"
+      }
+    }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "このセッションはすでに開いています",
+      "activeInPane": "別のペインですでにアクティブです。",
+      "activeInPanes": "ほかの {{count}} 個のペインですでにアクティブです。",
+      "unknownTitle": "このセッションはすでに開いている可能性があります",
+      "unknownDescription": "別のペインでアクティブかどうかを Orca で確認できませんでした。",
+      "startingTitle": "このセッションはすでに起動中です",
+      "startingDescription": "このセッションの別の再開がまだ開いている途中です。",
+      "resumedHereTitle": "このセッションは別のペインでも開いています",
+      "resumedHereTitleMany": "このセッションは他の {{count}} 個のペインでも開いています",
+      "resumedHereDescription": "すでに実行中の状態でここで再開されました。両方のコピーがアクティブで、Orca は同時に正しく動作することを保証できません。",
+      "continueRisk": "続行すると、2 つ目のコピーが起動します。両方が同時に正しく動作することは Orca では保証できません。",
+      "back": "戻る",
+      "continue": "続行"
+    },
+    "paneResume": {
+      "ended": "セッションが終了しました",
+      "resume": "このセッションを再開",
+      "resuming": "再開中…",
+      "waitForPrompt": "シェルがプロンプトに戻ると利用できます。",
+      "shellUnsupported": "このシェルはプロンプトを通知しないため、Orca はアイドル状態か判断できません。",
+      "shellBusy": "このシェルではまだコマンドが実行中です。",
+      "shellUnsentInput": "このシェルのプロンプトに入力途中のテキストがあります。送信するか消去してから再開してください。",
+      "hostOutdated": "ここで再開するにはターミナルを再起動してください。このターミナルサービスは Orca より古いバージョンです。",
+      "failed": "このセッションを再開できませんでした。もう一度お試しください。",
+      "blocked": {
+        "open": "このセッションは別のペインで開いています。",
+        "starting": "このセッションは別のペインですでに起動中です。",
+        "unknown": "このセッションが空いているかを Orca で確認できませんでした。"
+      },
+      "unavailable": {
+        "fenced": "Orca がこのワーカーを復旧しています。",
+        "remote": "リモートターミナルではまだ再開できません。",
+        "runtime": "このホストではまだ再開できません。",
+        "missing": "このワークスペースが見つかりません。",
+        "deleting": "このワークスペースは削除中です。",
+        "noPlan": "このセッションはここでは再開できません。"
       }
     }
   }

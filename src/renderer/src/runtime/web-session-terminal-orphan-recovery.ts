@@ -6,6 +6,7 @@ import type {
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { runOnRuntimeHost } from './runtime-host-query-queue'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 import {
@@ -23,6 +24,8 @@ type RuntimeCall = (args: {
   params: unknown
   timeoutMs: number
 }) => Promise<RuntimeRpcResponse<unknown>>
+
+const ORPHAN_RECOVERY_LIST_TIMEOUT_MS = 15_000
 
 const inFlightRecoveryByWorktree = new Map<string, Promise<RuntimeMobileSessionTabsResult | null>>()
 
@@ -85,18 +88,31 @@ async function recoverTerminalOrphans(
   if (candidateHandles.size > 64) {
     return null
   }
-  const listedResponse = await call({
-    selector: environmentId,
-    method: 'terminal.list',
-    params: {
-      worktree: toRuntimeWorktreeSelector(snapshot.worktree),
-      handles: [...candidateHandles],
-      requireFreshPtyLiveness: true,
-      includeVisualLayouts: false
-    },
-    timeoutMs: 15_000
-  })
-  if (listedResponse.ok === false || !isTerminalListResult(listedResponse.result)) {
+  // Why: this host cannot answer two fresh listings at once, and a sync fans recovery
+  // across every worktree of one host at a time — unqueued, all but the last are failed
+  // closed and those worktrees' snapshots are dropped entirely.
+  // Why: one budget covers the wait and the call, so queueing cannot double the time a
+  // caller already allowed itself.
+  const listDeadline = Date.now() + ORPHAN_RECOVERY_LIST_TIMEOUT_MS
+  const listedResponse = await runOnRuntimeHost(environmentId, listDeadline, () =>
+    call({
+      selector: environmentId,
+      method: 'terminal.list',
+      params: {
+        worktree: toRuntimeWorktreeSelector(snapshot.worktree),
+        handles: [...candidateHandles],
+        requireFreshPtyLiveness: true,
+        includeVisualLayouts: false
+      },
+      timeoutMs: Math.max(1, listDeadline - Date.now())
+    })
+  )
+  // Why: null is "never got to ask", which is the same unknown as a failed listing.
+  if (
+    !listedResponse ||
+    listedResponse.ok === false ||
+    !isTerminalListResult(listedResponse.result)
+  ) {
     return null
   }
   const listed = listedResponse.result

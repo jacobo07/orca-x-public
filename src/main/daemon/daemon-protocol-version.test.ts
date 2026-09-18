@@ -3,6 +3,7 @@ import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION,
+  ATOMIC_RETIREMENT_DAEMON_PROTOCOL_VERSION,
   CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
@@ -13,12 +14,14 @@ import {
   WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
+  supportsAtomicRetirement,
   supportsMode2031UnsubscribeFact
 } from './daemon-protocol-version'
 
 describe('daemon protocol version', () => {
   it('ships bounded history transfer after the 2031-unsubscribe fact', () => {
-    expect(PROTOCOL_VERSION).toBe(35)
+    expect(PROTOCOL_VERSION).toBe(36)
+    expect(ATOMIC_RETIREMENT_DAEMON_PROTOCOL_VERSION).toBe(36)
     expect(ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION).toBe(35)
     expect(CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION).toBe(34)
     expect(WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION).toBe(33)
@@ -31,8 +34,21 @@ describe('daemon protocol version', () => {
     expect(AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toEqual(
-      Array.from({ length: 34 }, (_, index) => index + 1)
+      Array.from({ length: 35 }, (_, index) => index + 1)
     )
+  })
+
+  it('withholds atomic retirement from every generation that predates it', () => {
+    // Why 35 by hand rather than PROTOCOL_VERSION - 1: two builds shipped as v35, one with the
+    // request and one without, so 35 is the generation this boundary exists to exclude. Deriving
+    // it from the current constant would let the next bump carry the exclusion forward silently
+    // and erase the evidence of this upgrade boundary.
+    expect(supportsAtomicRetirement(36)).toBe(true)
+    expect(supportsAtomicRetirement(35)).toBe(false)
+    expect(supportsAtomicRetirement(PROTOCOL_VERSION)).toBe(true)
+    for (const version of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
+      expect(supportsAtomicRetirement(version)).toBe(false)
+    }
   })
 
   it('withholds 2031-unsubscribe support only before its v29 boundary', () => {

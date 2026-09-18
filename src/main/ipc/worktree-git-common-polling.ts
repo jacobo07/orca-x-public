@@ -11,6 +11,7 @@ import {
   snapshotGitCommonEntry,
   type GitCommonEntrySnapshot
 } from './worktree-git-common-entry-snapshot'
+import { getWorktreeObservationClock } from './worktree-observation-clock'
 
 // Shared with the darwin primary-metadata poll so platforms cannot drift.
 // `logs/HEAD` catches head moves; `config.worktree` carries the sparse flag;
@@ -237,63 +238,53 @@ export async function startGitCommonPolling(
     false,
     new Set(getStatusRefPaths())
   )
-  let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
-  const tick = async (forceFullScan = false): Promise<void> => {
-    timer = null
-    if (disposed) {
-      return
-    }
-    if (!visibility.isWindowVisible()) {
-      parkedWhileHidden = true
-      return
-    }
-    if (ticking) {
-      return
-    }
-    ticking = true
-    // Why: measure from tick start so cadence is start-to-start, not gap-after-completion (which would
-    // land each visible refresh a full scan-duration late every tick).
-    const startedAt = Date.now()
-    tickCount++
-    const shouldForceFullScan = forceFullScan || tickCount % INDEX_BACKSTOP_TICKS === 0
-    try {
-      const next = await snapshotGitCommon(
-        commonDirPath,
-        snapshot,
-        includePrimary,
-        shouldForceFullScan,
-        new Set(getStatusRefPaths())
-      )
+  const registration = getWorktreeObservationClock(pollIntervalMs).register(
+    async (forceFullScan) => {
       if (disposed) {
-        return
+        return 'observed'
       }
-      if (next.didFullScan) {
-        onFullScan?.()
+      if (!visibility.isWindowVisible()) {
+        parkedWhileHidden = true
+        return 'parked'
       }
-      const events = diffGitCommon(commonDirPath, snapshot, next)
-      snapshot = next
-      if (events.length > 0) {
-        onEvents(events)
+      if (ticking) {
+        return 'observed'
       }
-    } catch {
-      // Transient fs error: keep the previous snapshot and retry next tick.
-    } finally {
-      ticking = false
-    }
-    if (!disposed) {
-      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
-      // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
-      // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
-      const nextDelay = Math.max(
-        0,
-        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
-      )
-      timer = setTimeout(() => void tick(), nextDelay)
-      timer.unref?.()
-    }
-  }
+      ticking = true
+      tickCount++
+      const shouldForceFullScan = forceFullScan || tickCount % INDEX_BACKSTOP_TICKS === 0
+      try {
+        const next = await snapshotGitCommon(
+          commonDirPath,
+          snapshot,
+          includePrimary,
+          shouldForceFullScan,
+          new Set(getStatusRefPaths())
+        )
+        if (disposed) {
+          return 'observed'
+        }
+        if (next.didFullScan) {
+          onFullScan?.()
+        }
+        const events = diffGitCommon(commonDirPath, snapshot, next)
+        snapshot = next
+        if (events.length > 0) {
+          registration.noteActivity()
+          onEvents(events)
+        }
+      } catch {
+        // Transient fs error: keep the previous snapshot and retry next tick.
+      } finally {
+        ticking = false
+      }
+      return 'observed'
+    },
+    // The repo whose git status is on screen keeps the full cadence.
+    { isPinnedActive: () => getStatusRefPaths().length > 0 }
+  )
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
     if (disposed || !parkedWhileHidden) {
@@ -302,18 +293,13 @@ export async function startGitCommonPolling(
     parkedWhileHidden = false
     // Why: a linked index can change without its parent dir signature moving;
     // force the leaf read when diffing the retained pre-hide snapshot.
-    void tick(true)
+    registration.runNow(true)
   })
-
-  timer = setTimeout(() => void tick(), pollIntervalMs)
-  timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      if (timer) {
-        clearTimeout(timer)
-      }
+      registration.unregister()
       unsubscribeVisibility()
     }
   }

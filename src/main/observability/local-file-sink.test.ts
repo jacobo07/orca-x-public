@@ -2,6 +2,7 @@
 
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   rmSync,
   readFileSync,
@@ -213,6 +214,72 @@ describe('local-file-sink — rotation', () => {
     // 1.5× headroom so the test isn't flaky on rotation timing — what
     // matters is that we're not unbounded.
     expect(total).toBeLessThan(3 * 500 * 2)
+  })
+})
+
+describe('local-file-sink — rotation failure', () => {
+  // A non-empty directory at the cascade destination fails both `unlinkSync(dst)` and
+  // `renameSync(src, dst)` on every platform, so rotation fails for real rather than
+  // through a patched `fs` that could disagree with the syscalls production makes.
+  function blockRotationDestination(file: string): string {
+    const blocker = `${file}.1`
+    mkdirSync(blocker)
+    writeFileSync(join(blocker, 'occupant'), 'x')
+    return blocker
+  }
+
+  it('rotates on the next write once a failed rotation becomes possible again', () => {
+    const file = join(dir, 'test.ndjson')
+    const blocker = blockRotationDestination(file)
+    const sink = createLocalFileSink({
+      filePath: file,
+      maxBytes: 500,
+      maxFiles: 2,
+      batchWindowMs: 100_000,
+      flushBufferThreshold: 1
+    })
+
+    // Push past the cap: rotation is attempted and cannot move the base file.
+    for (let i = 0; i < 8; i++) {
+      sink.push(makeRecord(i))
+    }
+    sink.flush()
+    expect(statSync(file).size).toBeGreaterThan(500)
+    expect(statSync(blocker).isDirectory()).toBe(true)
+
+    // Clear the obstruction, then write one small record.
+    rmSync(blocker, { recursive: true, force: true })
+    sink.push({ ok: true })
+    sink.flush()
+    sink.close()
+
+    // The sink still knew the base file was over cap, so this write rotated.
+    // Under the unconditional `currentBytes = 0` reset it believed the file was
+    // empty and would not rotate again until another full maxBytes accumulated.
+    expect(existsSync(blocker)).toBe(true)
+    expect(statSync(blocker).isFile()).toBe(true)
+    expect(statSync(file).size).toBeLessThan(500)
+  })
+
+  it('keeps writing while rotation is impossible', () => {
+    const file = join(dir, 'test.ndjson')
+    blockRotationDestination(file)
+    const sink = createLocalFileSink({
+      filePath: file,
+      maxBytes: 500,
+      maxFiles: 2,
+      batchWindowMs: 100_000,
+      flushBufferThreshold: 1
+    })
+    for (let i = 0; i < 12; i++) {
+      sink.push(makeRecord(i))
+    }
+    sink.flush()
+    sink.close()
+
+    // Degrading the cap is the correct trade against losing the lane entirely.
+    const written = readFileSync(file, 'utf8').split('\n').filter(Boolean)
+    expect(written).toHaveLength(12)
   })
 })
 

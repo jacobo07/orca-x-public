@@ -150,7 +150,7 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('routes ssh git:bulkDiscard through the SSH provider', async () => {
-    const sshBulkDiscardMock = vi.fn().mockResolvedValue(undefined)
+    const sshBulkDiscardMock = vi.fn().mockResolvedValue({ discarded: [], refused: [] })
     getSshGitProviderMock.mockReturnValue({ bulkDiscardChanges: sshBulkDiscardMock })
 
     registerFilesystemHandlers(store as never)
@@ -161,7 +161,7 @@ describe('registerFilesystemHandlers', () => {
       connectionId: 'conn-1'
     })
 
-    expect(sshBulkDiscardMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
+    expect(sshBulkDiscardMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'], new Map())
     expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
   })
 

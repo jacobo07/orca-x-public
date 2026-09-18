@@ -2004,6 +2004,11 @@ export class Store {
     })
   }
 
+  /** The profile file this store publishes, for callers that must read what reached the disk. */
+  getDataFilePath(): string {
+    return this.dataFile
+  }
+
   flushActiveViewPreferenceOrThrow(): void {
     this.activeViewPreference.flushOrThrow()
   }
@@ -2867,14 +2872,18 @@ export class Store {
 
   stageWorkspaceSessionBeforeUnload(
     session: PersistedState['workspaceSession'],
-    hostId?: string | null
+    hostId?: string | null,
+    scope: WorkspaceSessionWriteScope = {}
   ): void {
     const resolved = this.resolveHostId(hostId)
+    // Why: a closing window publishes every worktree it holds, so without the same scope the other
+    // session writes carry, its last act overwrites the projects other windows own.
+    const next = this.applyWorkspaceSessionOwnerScope(session, resolved, scope)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      this.setLocalWorkspaceSession(session, true)
+      this.setLocalWorkspaceSession(next, true)
       return
     }
-    this.setHostWorkspaceSession(resolved, session)
+    this.setHostWorkspaceSession(resolved, next)
   }
 
   /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */

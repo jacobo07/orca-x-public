@@ -21,8 +21,10 @@ import type {
 } from '../../../shared/agent-session-resume'
 import {
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
+import { agentSessionResumeNeedsRecordedContext } from '../../../shared/agent-session-resume-context'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery,
@@ -68,6 +70,7 @@ import {
 } from './remote-runtime-session-tabs-inflight'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
+import { runtimeResumeRefusalMessage } from './runtime-resume-refusal-message'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
@@ -304,6 +307,10 @@ async function createWebRuntimeSessionTerminalResult(
                       ...(args.launchPreferences
                         ? { launchPreferences: args.launchPreferences }
                         : {}),
+                      // Why: the session's own directory, so the host re-enters it there
+                      // instead of at the workspace root. Its provider account home is
+                      // resolved host-side from the transcript this session names.
+                      ...(args.cwd ? { startupCwd: args.cwd } : {}),
                       presentation: 'background'
                     },
                     timeoutMs: 15_000
@@ -342,9 +349,21 @@ async function createWebRuntimeSessionTerminalResult(
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(args.agentSessionKind === 'resume' && agent === 'omp'
-          ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
-          : {}),
+        // Why: decided before sending. A host that cannot reproduce this session's
+        // directory and account home must take the legacy launch, which does — sending
+        // anyway would resume the right session id in the wrong place.
+        ...(args.agentSessionKind === 'resume' &&
+        agent &&
+        agentSessionResumeNeedsRecordedContext({
+          agent,
+          sessionCwd: args.cwd,
+          // Why: this layer addresses the workspace by selector, not by path.
+          workspacePath: null
+        })
+          ? { hostAuthorityCapability: AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY }
+          : args.agentSessionKind === 'resume' && agent === 'omp'
+            ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+            : {}),
         legacy: async () => {
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
@@ -442,7 +461,8 @@ async function createWebRuntimeSessionTerminalResult(
       ...(createdTabId ? { hostTabId: createdTabId } : {})
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message =
+      runtimeResumeRefusalMessage(error) ?? (error instanceof Error ? error.message : String(error))
     console.warn(
       hostCreated
         ? '[web-runtime-session] terminal created but reconciliation failed:'

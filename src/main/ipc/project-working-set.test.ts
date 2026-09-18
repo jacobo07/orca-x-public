@@ -1,0 +1,121 @@
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it, vi } from 'vitest'
+import { representativeManifest } from '../../shared/project-working-set-test-fixtures'
+
+const { handlers, profileDir } = vi.hoisted(() => ({
+  handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
+  profileDir: { path: '' }
+}))
+
+vi.mock('electron', () => ({
+  app: { getPath: () => profileDir.path },
+  ipcMain: {
+    handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    }
+  }
+}))
+
+// Why: the real search walks this machine's agent session directories.
+vi.mock('../native-chat/session-file-resolver', () => ({
+  resolveSessionFilePath: async () => null
+}))
+
+vi.mock('../persistence/loading-store/user-data-path', () => ({
+  getDataFile: () => join(profileDir.path, 'orca-data.json')
+}))
+
+vi.mock('../orca-profiles/profile-index-store', () => ({
+  ensureActiveOrcaProfile: () => ({ dataFile: join(profileDir.path, 'orca-data.json') })
+}))
+
+profileDir.path = mkdtempSync(join(tmpdir(), 'orca-working-set-ipc-'))
+const { registerProjectWorkingSetHandlers } = await import('./project-working-set')
+const { makeTerminalScrollbackSnapshotRef } = await import('../terminal-scrollback-snapshots')
+registerProjectWorkingSetHandlers()
+
+const invoke = (channel: string, ...args: unknown[]) => handlers.get(channel)!({}, ...args)
+const scope = { executionHostId: 'local', ownerKey: 'repo-1::C:/work/orca' }
+
+describe('project working-set IPC', () => {
+  afterAll(() => {
+    rmSync(profileDir.path, { recursive: true, force: true })
+  })
+
+  it('saves under the active profile and serves the same artifact back', async () => {
+    const manifest = representativeManifest()
+    // The handler must seal from the same profile scrollback directory the session store writes.
+    const liveRoot = join(profileDir.path, 'terminal-scrollback')
+    mkdirSync(liveRoot, { recursive: true })
+    const leaf = manifest.entries[0].panes[0].leafId
+    writeFileSync(
+      join(liveRoot, `${makeTerminalScrollbackSnapshotRef(manifest.entries[0].tabId, leaf)}.bin`),
+      'history'
+    )
+    expect(await invoke('workingSet:save', manifest)).toMatchObject({
+      status: 'saved',
+      scrollback: { sealed: 1 }
+    })
+    expect(existsSync(join(profileDir.path, 'project-working-sets'))).toBe(true)
+    expect(await invoke('workingSet:list', scope)).toMatchObject({
+      status: 'listed',
+      latestWorkingSetId: manifest.workingSetId
+    })
+    expect(await invoke('workingSet:read', { scope, workingSetId: manifest.workingSetId })).toEqual(
+      { status: 'valid', manifest }
+    )
+  })
+
+  it('refuses malformed renderer arguments instead of touching the filesystem with them', async () => {
+    expect(await invoke('workingSet:save', 'not a manifest')).toMatchObject({
+      status: 'refused-invalid'
+    })
+    for (const bad of [
+      null,
+      {},
+      { executionHostId: 'nope', ownerKey: 'x' },
+      { ...scope, ownerKey: '' }
+    ]) {
+      expect(await invoke('workingSet:list', bad)).toEqual({
+        status: 'invalid-request',
+        field: 'scope'
+      })
+      expect(await invoke('workingSet:read', { scope: bad, workingSetId: 'x' })).toEqual({
+        status: 'invalid-request',
+        field: 'scope'
+      })
+    }
+    for (const workingSetId of ['../../escape', 42, undefined]) {
+      expect(await invoke('workingSet:read', { scope, workingSetId })).toEqual({
+        status: 'invalid-request',
+        field: 'workingSetId'
+      })
+    }
+  })
+
+  it('probes restore evidence only for a working set main can read itself', async () => {
+    expect(await invoke('workingSet:probeRestoreEvidence', { scope: null })).toEqual({
+      status: 'invalid-request',
+      field: 'scope'
+    })
+    const unknownId = '0b9e7d2c-4a1f-4e3b-8c6d-2f1a9e8b7c54'
+    expect(
+      await invoke('workingSet:probeRestoreEvidence', { scope, workingSetId: unknownId })
+    ).toEqual({ status: 'missing' })
+    const manifest = representativeManifest()
+    const probed = await invoke('workingSet:probeRestoreEvidence', {
+      scope,
+      workingSetId: manifest.workingSetId
+    })
+    expect(probed).toMatchObject({ status: 'probed', workingSetId: manifest.workingSetId })
+    const { evidence } = probed as { evidence: { panes: Record<string, unknown> } }
+    expect(Object.keys(evidence.panes)).toHaveLength(manifest.entries.length)
+  })
+
+  it('answers missing only for a well-formed id the store does not hold', async () => {
+    const workingSetId = '0b9e7d2c-4a1f-4e3b-8c6d-2f1a9e8b7c54'
+    expect(await invoke('workingSet:read', { scope, workingSetId })).toEqual({ status: 'missing' })
+  })
+})

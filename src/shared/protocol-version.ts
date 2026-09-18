@@ -99,6 +99,15 @@ export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
+// Why a capability rather than just sending the field: a resume means one exact session, and the
+// context that gives it that meaning is its recorded directory and its provider account home. An
+// older host starts every resume at the workspace root under whichever home it carries, so it
+// returns the right session id in the wrong place -- and because the ensure params are strict, the
+// added field is rejected outright rather than ignored. This says the host re-enters the recorded
+// directory and applies the session's own account provenance; absence means use the legacy launch,
+// which reproduces both.
+export const AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY =
+  'agent-session.resume-context.v1' as const
 // Why a capability for an additive optional field: absence has to mean something. An older host
 // omits resume provenance from every row, which is indistinguishable from a newer host saying every
 // resume succeeded -- and a client that reads silence as success tells the user their session
@@ -111,6 +120,12 @@ export const AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY =
 // there. This says the host both stamps the identity on status rows and refuses a discard whose
 // stated content no longer matches -- absence means the client must not offer the safe operation.
 export const GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY = 'git.discard-stale-state.v1' as const
+// Why a second capability rather than reusing the one above: a host can enforce the single-path check and
+// know nothing about the bulk one, and an already-deployed host advertising the first is exactly that
+// host. One flag for both would tell a client the bulk call was fenced when it was not, which is the
+// fail-open it exists to prevent.
+export const GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY =
+  'git.bulk-discard-stale-state.v1' as const
 // Why its own code rather than reusing stale_worktree_state: the two refusals are opposites. A stale
 // state means the file DID change and the user's newer work was kept; this means nothing changed and
 // the client could not say what it saw. Sharing one code made the client tell a user with an
@@ -159,8 +174,10 @@ export const RUNTIME_CAPABILITIES = [
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RESUME_CONTEXT_RUNTIME_CAPABILITY,
   AGENT_RESUME_PROVENANCE_RUNTIME_CAPABILITY,
   GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
+  GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,

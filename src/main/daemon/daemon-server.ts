@@ -1398,6 +1398,44 @@ export class DaemonServer {
         return { retiring: true }
       }
 
+      case 'retireIfNoLiveWork': {
+        const authenticatedClient = this.clients.get(clientId)
+        // Why each of these is checked HERE and not by the caller: this whole block runs in one
+        // turn of the event loop, so no create can be admitted between proving emptiness and
+        // fencing admissions. A client that asks 'how many sessions?' and then signals has a
+        // gap between the answer and the signal, and work admitted in that gap dies.
+        if (
+          authenticatedClient === undefined ||
+          this.idleShutdownState !== 'running' ||
+          this.shutdownPromise
+        ) {
+          return { retiring: false, reason: 'not_retirable' }
+        }
+        // Why in-flight creates count as live work: a create that is open has already committed
+        // someone to a terminal, and retiring under it would destroy work nobody could see yet.
+        // Measured 2026-09-14: a session becomes visible to listSessions early enough that the
+        // clause below is what refuses in practice, so this one is a mirror of shutdownIfIdle's
+        // own check rather than a separately demonstrated gate -- kept because the two must not
+        // disagree about what "no work" means, not because a test drives it.
+        if (this.createOrAttachInFlight > 0) {
+          return { retiring: false, reason: 'create_in_flight' }
+        }
+        if (this.host.listSessions().length > 0) {
+          return { retiring: false, reason: 'live_sessions' }
+        }
+        this.idleShutdownState = 'shutting-down'
+        this.initialAdoptionDeadlineMs = null
+        this.retirementRequested = false
+        this.cancelInitialAdoptionTimer()
+        // Why close before acknowledging: same ordering as shutdownIfIdle, so no terminal races
+        // between the empty proof and disposal.
+        const serverClose = this.beginServerClose()
+        this.deferShutdownUntilReply(clientId, request.id, authenticatedClient.controlSocket, () =>
+          this.finishIdleShutdown(serverClose)
+        )
+        return { retiring: true, reason: 'retiring' }
+      }
+
       case 'getSnapshot': {
         const snapshotStart = performance.now()
         const requestedScrollbackRows = request.payload.scrollbackRows

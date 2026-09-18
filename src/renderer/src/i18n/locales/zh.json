@@ -1,4 +1,94 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "所有内容已休眠并保存。Orca 正在关闭。",
+      "stayedOpen": "Orca 保持打开",
+      "refused": "{{count}} 个工作区有正在运行的工作，因此没有休眠任何内容。",
+      "incomplete": "部分工作区已休眠；{{count}} 个无法休眠，仍在运行。",
+      "sealFailed": "无法保存会话，因此 Orca 保持打开。",
+      "unavailable": "此窗口当前无法使用“休眠并退出”。"
+    }
+  },
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "已恢复，未运行",
+      "sleptTitle": "已休眠，未运行",
+      "sleptFreshBody": "打开后将在其文件夹中重新启动此终端。",
+      "resumeBody": "打开后将恢复 {{agent}} 会话。",
+      "freshBody": "打开后将在其文件夹中启动新终端。",
+      "open": "打开"
+    },
+    "history": {
+      "menu": "快照…",
+      "title": "快照 · {{name}}",
+      "description": "此工作区保存的终端布局。恢复后标签页会回来但不会运行，只有打开时才会启动。文件不会被更改。",
+      "loading": "正在加载快照…",
+      "unavailable": "此客户端不支持快照。",
+      "invalidRequest": "无法将此工作区与快照存储对应。",
+      "unreadable": "无法读取快照存储（{{code}}）。",
+      "empty": "此工作区尚未保存任何快照。",
+      "listLabel": "已保存的快照",
+      "untitled": "未命名快照",
+      "tabCount": "标签页：{{count}}",
+      "latest": "最新",
+      "problemsTitle": "无法恢复",
+      "problem": {
+        "unsupportedVersion": "由更新版本的 Orca X 保存",
+        "corrupt": "文件已损坏",
+        "unreadable": "无法读取",
+        "missing": "已不在磁盘上",
+        "unverified": "保存未得到确认",
+        "unrecognized": "快照文件夹中有无法识别的文件"
+      },
+      "checkingProfiles": "正在检查启动选项…",
+      "previewLoading": "正在检查此快照可以恢复的内容…",
+      "profilesUnresolved": "无法检查启动选项，因此部分标签页可能显示为未知。",
+      "capability": {
+        "exactResume": "恢复会话：{{count}}",
+        "restartable": "重新启动：{{count}}",
+        "recreateContext": "在其文件夹中新建终端：{{count}}",
+        "historyOnly": "仅历史记录：{{count}}",
+        "notRestorable": "无法恢复：{{count}}",
+        "unknown": "未知：{{count}}"
+      },
+      "liveElsewhere": "已在别处打开，不会在此恢复：{{count}}",
+      "blocker": {
+        "currentWork": "此工作区有打开的标签页。请先关闭再恢复；不会替换任何内容。",
+        "scopeMismatch": "此快照属于其他工作区。",
+        "hostUnavailable": "此工作区的主机不可用。"
+      },
+      "read": {
+        "missing": "此快照已不在磁盘上。列表已刷新。",
+        "unsupportedVersion": "此快照由更新版本的 Orca X 保存。",
+        "corrupt": "此快照文件已损坏。",
+        "unreadable": "无法读取此快照（{{code}}）。",
+        "invalidRequest": "此快照的请求格式不正确。"
+      },
+      "selectPrompt": "请选择要恢复的快照。",
+      "restore": "恢复",
+      "restoring": "正在恢复…",
+      "close": "关闭",
+      "restored": "快照已恢复。标签页只有在打开时才会启动。",
+      "result": {
+        "targetChanged": "恢复期间工作区发生了变化；未替换任何内容。",
+        "failedRolledBack": "恢复失败并已撤销；工作区未更改。",
+        "failedNotRolledBack": "恢复失败且未能完全撤销。请检查此工作区的标签页。"
+      }
+    },
+    "save": {
+      "action": "保存当前终端",
+      "saved": "快照已保存。",
+      "savedWithoutSomeHistory": "快照已保存；部分终端历史记录无法复制。",
+      "noTerminals": "此工作区没有可保存的终端。",
+      "notCapturable": "无法捕获此工作区的终端（{{reason}}）。",
+      "refusedInvalid": "快照因无效而被拒绝（{{reason}}）。",
+      "unsupportedVersion": "此版本无法写入该快照版本。",
+      "identityCollision": "已存在具有此 ID 的快照。请重试。",
+      "writeFailed": "无法写入快照（{{code}}）。",
+      "readBackFailed": "已保存，但无法确认。刷新后可能会出现。",
+      "verifyFailed": "保存的快照与发送的内容不一致，已被隔离。"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误。",
@@ -49,6 +139,7 @@
     "reportCrash": "发送崩溃报告...",
     "file": "文件",
     "newWindow": "新建窗口",
+    "parkAndExit": "全部休眠并退出",
     "exit": "退出",
     "edit": "编辑",
     "appearance": "外观",
@@ -2691,6 +2782,9 @@
             "stop_command_title": "停止运行中的命令？",
             "stop_agent_description": "关闭此终端将停止智能体当前任务。",
             "stop_command_description": "关闭此终端将停止其中正在运行的命令。",
+            "discard_unsent_input_title": "要放弃已输入的内容吗？",
+            "discard_unsent_input_confirm": "放弃并关闭",
+            "discard_unsent_input_description": "此终端的提示符中有尚未提交的输入。关闭后该行内容将被丢弃。",
             "dont_ask_again": "对有运行中进程的终端不再询问",
             "stop_agent_confirm": "停止智能体",
             "stop_command_confirm": "停止并关闭"
@@ -3489,6 +3583,61 @@
             "updatedOne": "1 server updated"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "空闲智能体内存",
+              "idleOne": "1 个空闲智能体可以休眠",
+              "idleMany": "{{value0}} 个空闲智能体可以休眠",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "其中 1 个尚未测量,因此不计入此数值",
+              "unknownMany": "其中 {{value0}} 个尚未测量,因此不计入此数值",
+              "protectedOne": "1 个窗格保持唤醒",
+              "protectedMany": "{{value0}} 个窗格保持唤醒",
+              "sleeping": "正在让智能体休眠…",
+              "sleepOne": "立即休眠 1 个智能体",
+              "sleepMany": "立即休眠 {{value0}} 个智能体",
+              "resultSlept": "{{value0}} 个已休眠",
+              "resultKept": "{{value0}} 个在显示后已变化,保持唤醒",
+              "resultFailed": "{{value0}} 个无法休眠",
+              "observed": {
+                "pending": "正在检查哪些进程已退出…",
+                "unmeasured": "未测量释放的内存：{{value0}}",
+                "released": "已退出的进程曾占用 {{value0}} {{value1}}",
+                "noneExited": "已测量的进程尚未退出",
+                "stillRunning": "{{value0}} 个进程仍在运行",
+                "unmeasuredPanes": "{{value0}} 个在未测量的情况下休眠",
+                "reason": {
+                  "noBaseline": "没有之前的进程读数",
+                  "sweepUnavailable": "后续读数不可用",
+                  "sweepFailed": "后续读数失败",
+                  "sweepTooEarly": "后续读数开始得太早",
+                  "metricChanged": "两次读数使用了不同的度量"
+                }
+              },
+              "reason": {
+                "featureDisabled": "智能体休眠已关闭",
+                "worktreeActive": "位于当前打开的工作区",
+                "runtimeLivenessUnknown": "远程终端状态未确认",
+                "tabForeground": "标签页在前台打开",
+                "agentBusy": "智能体仍在工作",
+                "agentInterrupted": "智能体已被中断",
+                "hasSubagents": "子智能体仍在运行",
+                "dispatchUnsettled": "调度尚未完成",
+                "alreadySleeping": "已在休眠",
+                "paneMismatch": "窗格已移动",
+                "notResumable": "无法恢复",
+                "notIdleLongEnough": "空闲时间太短",
+                "recentInput": "最近有输入",
+                "noLivePane": "没有运行中的终端",
+                "mobileLocked": "被移动客户端占用",
+                "tabPinned": "已固定的标签页"
+              }
+            },
+            "terminalHost": {
+              "label": "终端宿主",
+              "unattributedLabel": "未归属的终端进程",
+              "unmeasured": "未测量",
+              "unmeasuredDescription": "进程扫描失败,因此各进程内存未知,而非为零。"
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "工作集 (WS) 的总和。共享页可能会出现在多个进程中。",
@@ -14644,6 +14793,47 @@
         "invalidPath": "Orca 的数据文件夹可能缺失、被移动或路径过长。请恢复它或使用更短的路径，然后重启 Orca。",
         "addressInUse": "另一个进程可能占用了端口。请重启 Orca 以重试。",
         "unknown": "请重启 Orca 以重试。"
+      }
+    }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "此会话已打开",
+      "activeInPane": "它已在另一个窗格中处于活动状态。",
+      "activeInPanes": "它已在其他 {{count}} 个窗格中处于活动状态。",
+      "unknownTitle": "此会话可能已打开",
+      "unknownDescription": "Orca 无法确认它是否在另一个窗格中处于活动状态。",
+      "startingTitle": "此会话已在启动中",
+      "startingDescription": "此会话的另一个恢复仍在打开中。",
+      "resumedHereTitle": "此会话也在另一个窗格中打开",
+      "resumedHereTitleMany": "此会话也在其他 {{count}} 个窗格中打开",
+      "resumedHereDescription": "它在已经运行时于此处被恢复。两个副本都处于活动状态，Orca 无法保证它们同时正常工作。",
+      "continueRisk": "继续将打开第二个活动副本。Orca 无法保证两个副本能同时正常工作。",
+      "back": "返回",
+      "continue": "继续"
+    },
+    "paneResume": {
+      "ended": "会话已结束",
+      "resume": "恢复此会话",
+      "resuming": "正在恢复…",
+      "waitForPrompt": "Shell 回到提示符后即可使用。",
+      "shellUnsupported": "此 Shell 不会报告其提示符，因此 Orca 无法判断它是否空闲。",
+      "shellBusy": "此 Shell 中仍有命令正在运行。",
+      "shellUnsentInput": "此 Shell 的提示符中有尚未提交的输入。请先提交或清除，然后再恢复。",
+      "hostOutdated": "请重启终端后在此恢复：此终端服务的版本早于 Orca。",
+      "failed": "无法恢复此会话。请重试。",
+      "blocked": {
+        "open": "此会话已在另一个窗格中打开。",
+        "starting": "此会话已在另一个窗格中启动。",
+        "unknown": "Orca 无法确认此会话是否空闲。"
+      },
+      "unavailable": {
+        "fenced": "Orca 正在恢复此工作进程。",
+        "remote": "远程终端暂不支持恢复。",
+        "runtime": "此主机暂不支持恢复。",
+        "missing": "此工作区不存在。",
+        "deleting": "此工作区正在删除。",
+        "noPlan": "此会话无法在此处恢复。"
       }
     }
   }

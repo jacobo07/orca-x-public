@@ -1,5 +1,9 @@
 import type { TelemetryConsentState } from '../../shared/telemetry-consent-types'
-import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
+import type {
+  MemorySnapshot,
+  ProcessPresenceProbe,
+  StatsSummary
+} from '../../shared/process-stats-types'
 
 export type StatsApi = {
   getSummary: () => Promise<StatsSummary>
@@ -32,6 +36,8 @@ export type DiagnosticsUploadPayload =
 
 export type MemoryApi = {
   getSnapshot: () => Promise<MemorySnapshot>
+  /** A fresh, uncoalesced sweep: which of these pids still exist. */
+  probeProcessPresence: (pids: number[]) => Promise<ProcessPresenceProbe>
 }
 
 export type DiagnosticsApi = {

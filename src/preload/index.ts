@@ -4,6 +4,10 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { ParkPhaseRequest } from '../shared/durable-exit-types'
+import type { ProcessPresenceProbe } from '../shared/process-stats-types'
+import type { PtyProcessInspection } from '../shared/pty-process-inspection'
+import type { PtyProcessInspectionBatchEntry } from '../shared/pty-process-inspection-batch'
 import type { TerminalMenuCommand } from '../shared/terminal-menu-command'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../shared/app-menu-strip'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
@@ -235,6 +239,14 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
+import type {
+  LiveAgentSessionPresenceRequest,
+  LiveAgentSessionPresenceResponse,
+  LiveSessionCollisionNotice,
+  LiveSessionMaterializationRequest,
+  LiveSessionMaterializationResponse,
+  LiveSessionResumeRefusal
+} from '../shared/live-agent-session-presence-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
@@ -1031,6 +1043,7 @@ const api = {
       coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
       agentResumeUnavailable?: true
+      agentResumeRefused?: LiveSessionResumeRefusal
     }> => ipcRenderer.invoke('pty:spawn', opts),
 
     write: (id: string, data: string): void => {
@@ -1185,13 +1198,10 @@ const api = {
     /** Return the PTY foreground process basename when available (e.g. "codex"). */
     getForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:getForegroundProcess', { id }),
-    inspectProcess: (
-      id: string
-    ): Promise<{
-      foregroundProcess: string | null
-      hasChildProcesses: boolean
-      unavailable?: true
-    }> => ipcRenderer.invoke('pty:inspectProcess', { id }),
+    inspectProcess: (id: string): Promise<PtyProcessInspection> =>
+      ipcRenderer.invoke('pty:inspectProcess', { id }),
+    inspectProcesses: (ids: string[]): Promise<PtyProcessInspectionBatchEntry[]> =>
+      ipcRenderer.invoke('pty:inspectProcesses', { ids }),
     confirmForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
 
@@ -3175,6 +3185,30 @@ const api = {
     }
   } satisfies PreloadApi['session'],
 
+  workingSet: {
+    save: (candidate) => ipcRenderer.invoke('workingSet:save', candidate),
+    list: (scope) => ipcRenderer.invoke('workingSet:list', scope),
+    read: (args) => ipcRenderer.invoke('workingSet:read', args),
+    probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args)
+  } satisfies PreloadApi['workingSet'],
+  durableExit: {
+    park: (request) => ipcRenderer.invoke('durableExit:park', request),
+    onParkPhaseRequest: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, request: ParkPhaseRequest): void =>
+        callback(request)
+      ipcRenderer.on('durableExit:parkPhaseRequest', listener)
+      return () => ipcRenderer.removeListener('durableExit:parkPhaseRequest', listener)
+    },
+    respondParkPhase: (response) => {
+      ipcRenderer.send('durableExit:parkPhaseResponse', response)
+    },
+    onParkFromMenu: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('durableExit:parkFromMenu', listener)
+      return () => ipcRenderer.removeListener('durableExit:parkFromMenu', listener)
+    }
+  } satisfies PreloadApi['durableExit'],
+
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
     setForConnectedTargets: (args) =>
@@ -3448,6 +3482,7 @@ const api = {
       bypassEffectiveUpstreamNegativeCache?: boolean
       reuseLineStats?: boolean
       branchLineTotalMergeBase?: string
+      worktreeContentIdentity?: boolean
       requestToken?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
     cancelStatus: (args: { requestToken: string }): Promise<void> =>
@@ -3619,12 +3654,15 @@ const api = {
       worktreePath: string
       filePath: string
       connectionId?: string
+      expectedContent?: string
     }): Promise<void> => ipcRenderer.invoke('git:discard', args),
     bulkDiscard: (args: {
       worktreePath: string
       filePaths: string[]
       connectionId?: string
-    }): Promise<void> => ipcRenderer.invoke('git:bulkDiscard', args),
+      observed: readonly { filePath: string; expectedContent: string }[]
+    }): Promise<{ discarded: string[]; refused: string[] }> =>
+      ipcRenderer.invoke('git:bulkDiscard', args),
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string
@@ -3678,9 +3716,7 @@ const api = {
       ipcRenderer.on('ui:openCrashReport', listener)
       return () => ipcRenderer.removeListener('ui:openCrashReport', listener)
     },
-    onTerminalCommand: (
-      callback: (command: TerminalMenuCommand) => void
-    ): (() => void) => {
+    onTerminalCommand: (callback: (command: TerminalMenuCommand) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, command: TerminalMenuCommand) =>
         callback(command)
       ipcRenderer.on('ui:terminalCommand', listener)
@@ -4395,7 +4431,9 @@ const api = {
   },
 
   memory: {
-    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
+    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot'),
+    probeProcessPresence: (pids: number[]): Promise<ProcessPresenceProbe> =>
+      ipcRenderer.invoke('memory:probeProcessPresence', pids)
   },
 
   claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),
@@ -4989,6 +5027,24 @@ const api = {
     },
     getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
       ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
+    readLivePresence: (
+      request: LiveAgentSessionPresenceRequest
+    ): Promise<LiveAgentSessionPresenceResponse> =>
+      ipcRenderer.invoke('agentSession:readLivePresence', request),
+    reserveMaterialization: (
+      request: LiveSessionMaterializationRequest
+    ): Promise<LiveSessionMaterializationResponse> =>
+      ipcRenderer.invoke('agentSession:reserveMaterialization', request),
+    attachMaterializationTab: (args: { operationId: string; tabId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('agentSession:attachMaterializationTab', args),
+    releaseMaterialization: (args: { operationId: string }): Promise<void> =>
+      ipcRenderer.invoke('agentSession:releaseMaterialization', args),
+    onLiveCollision: (callback: (notice: LiveSessionCollisionNotice) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, notice: LiveSessionCollisionNotice) =>
+        callback(notice)
+      ipcRenderer.on('agentSession:liveCollision', listener)
+      return () => ipcRenderer.removeListener('agentSession:liveCollision', listener)
+    },
     /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)

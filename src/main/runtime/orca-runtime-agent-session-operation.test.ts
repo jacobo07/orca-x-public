@@ -105,6 +105,28 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 
+  it('names the exact session it resumes so the spawn gate can read presence', async () => {
+    const provider = {
+      supportsAgentSessionClaims: vi.fn(() => true),
+      supportsAgentSessionCreateOperations: vi.fn(() => true)
+    }
+    const runtime = createRuntime(provider)
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const providerSession = { key: 'session_id' as const, id: 'provider-session-1' }
+
+    await runtime.ensureAgentSession({
+      kind: 'explicit',
+      worktree: 'id:worktree-1',
+      agent: 'codex',
+      providerSession
+    })
+
+    expect(createTerminal.mock.calls[0]?.[1]).toMatchObject({
+      agentSessionClaim: expect.any(Object),
+      agentSessionResumeSubject: { agent: 'codex', providerSession }
+    })
+  })
+
   it('requests exact client legacy fallback before nested SSH side effects', async () => {
     const runtime = createRuntime()
     const internal = runtime as unknown as {

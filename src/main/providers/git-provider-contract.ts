@@ -46,7 +46,14 @@ export type IGitProvider = {
     filePath: string,
     precondition?: { expectedContent?: string | null }
   ): Promise<void>
-  bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
+  /** `observed` names the content the caller saw for each path, and the answer says which paths were
+   *  destroyed and which were kept back. A provider that cannot enforce it must fail rather than
+   *  discard the set unchecked. */
+  bulkDiscardChanges(
+    worktreePath: string,
+    filePaths: string[],
+    observed?: ReadonlyMap<string, string>
+  ): Promise<{ discarded: string[]; refused: string[] }>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>

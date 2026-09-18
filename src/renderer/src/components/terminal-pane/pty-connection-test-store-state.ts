@@ -117,6 +117,7 @@ export type StoreState = {
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  markSleepingAgentExited: ReturnType<typeof vi.fn>
   retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   setPaneForegroundAgent: ReturnType<typeof vi.fn>
   clearPaneForegroundAgent: ReturnType<typeof vi.fn>

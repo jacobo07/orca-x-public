@@ -15,12 +15,10 @@ import { z } from 'zod'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TuiAgent } from './tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { isValidTerminalTabId } from './terminal-tab-id'
 import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
-import { isTuiAgent } from './tui-agent-config'
 import { isWorkspaceKey } from './workspace-scope'
+import { terminalTabIdSchema, terminalTabSchema } from './workspace-session-terminal-tab-schema'
 import {
   browserHistoryEntriesSchema,
   browserPageSchema,
@@ -32,10 +30,6 @@ import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
 const terminalPaneSplitDirectionSchema = z.enum(['vertical', 'horizontal'])
-const terminalTabIdSchema = z
-  .string()
-  .min(1)
-  .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
@@ -68,50 +62,6 @@ const terminalLayoutSnapshotSchema = z.object({
   buffersByLeafId: salvagedOptional('buffersByLeafId', leafStringsSchema),
   scrollbackRefsByLeafId: salvagedOptional('scrollbackRefsByLeafId', leafStringsSchema),
   titlesByLeafId: salvagedOptional('titlesByLeafId', leafStringsSchema)
-})
-
-// ─── Terminal tab (legacy) ──────────────────────────────────────────
-
-const terminalTabSchema = z.object({
-  id: terminalTabIdSchema,
-  ptyId: z.string().nullable(),
-  worktreeId: z.string(),
-  title: z.string(),
-  defaultTitle: z.string().optional(),
-  generatedTitle: z.string().nullable().optional(),
-  aiVaultTitle: z
-    .object({
-      agent: z.enum(['claude', 'codex']),
-      sessionId: z.string(),
-      title: z.string()
-    })
-    .nullable()
-    .optional()
-    .catch(undefined),
-  quickCommandLabel: z.string().nullable().optional(),
-  customTitle: z.string().nullable(),
-  color: z.string().nullable(),
-  isPinned: z.boolean().optional(),
-  sortOrder: z.number(),
-  createdAt: z.number(),
-  generation: z.number().optional(),
-  startupCwd: z.string().min(1).optional(),
-  // Why: persist the launched agent so a restored idle agent tab keeps its
-  // provider icon before any hook fires. `.catch(undefined)` keeps a stale or
-  // unknown agent id from failing the whole-session parse (which would reset
-  // every terminal/editor/browser to defaults).
-  launchAgent: z
-    .custom<TuiAgent>((v) => isTuiAgent(v))
-    .optional()
-    .catch(undefined),
-  // Why these are here at all: z.object strips what it does not name, so a field absent from this
-  // schema is written to disk and silently discarded on the next cold load. Both describe how the
-  // terminal was launched, and losing them returns a WSL or Git Bash tab as the default shell.
-  // `.catch(undefined)` degrades a bad value to "host default" rather than dropping the terminal —
-  // forgetting a shell preference is recoverable, losing the tab is not.
-  shellOverride: z.string().min(1).optional().catch(undefined),
-  forceHostRuntime: z.boolean().optional().catch(undefined),
-  launchProfileId: z.string().min(1).optional().catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

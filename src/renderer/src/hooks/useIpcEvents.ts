@@ -6,6 +6,7 @@ import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-hos
 import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
+import { subscribeLiveSessionCollisionNotices } from '@/lib/live-session-collision-notice'
 import { activateAndRevealWorktree, activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
@@ -92,6 +93,7 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
+import { attachParkPhaseBridge } from '@/lib/durable-exit/park-phase-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
@@ -799,6 +801,7 @@ export function useIpcEvents(): void {
     let lastLiveAgentStatusApplyAt = 0
 
     unsubs.push(attachMobileMarkdownBridge())
+    unsubs.push(attachParkPhaseBridge())
 
     const handleWorktreesChanged = async (
       repoId: string,
@@ -3606,6 +3609,7 @@ export function useIpcEvents(): void {
         enqueueLiveAgentStatus(data)
       })
     )
+    unsubs.push(subscribeLiveSessionCollisionNotices())
     const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
       (data: AgentStatusClearIpcPayload) => {
         if (typeof data !== 'object' || data === null) {

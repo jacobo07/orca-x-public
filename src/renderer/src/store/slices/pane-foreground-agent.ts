@@ -12,6 +12,8 @@ export type PaneForegroundAgentEntry = {
   /** True once the foreground is proven back at the shell (OSC 133;D) —
    *  process-grade launched-agent exit evidence, independent of titles. */
   shellForeground: boolean
+  /** The pane's shell emits no prompt markers, so an idle prompt can't be proven. */
+  shellPromptUnsupported?: boolean
 }
 
 /**
@@ -44,7 +46,8 @@ export const createPaneForegroundAgentSlice: StateCreator<
         current.agent === entry.agent &&
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&
-        current.shellForeground === entry.shellForeground
+        current.shellForeground === entry.shellForeground &&
+        current.shellPromptUnsupported === entry.shellPromptUnsupported
       ) {
         return s
       }

@@ -25,6 +25,8 @@ export type GitInspectionApi = {
     reuseLineStats?: boolean
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
     branchLineTotalMergeBase?: string
+    /** Stamp each row with the identity of its working-tree bytes; only destructive surfaces ask. */
+    worktreeContentIdentity?: boolean
     requestToken?: string
   }) => Promise<GitStatusResult>
   cancelStatus: (args: { requestToken: string }) => Promise<void>

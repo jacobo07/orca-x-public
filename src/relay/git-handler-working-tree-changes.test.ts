@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import type { GitHandler } from './git-handler'
 import { gitInit, gitCommit, type MockDispatcher } from './git-handler-test-setup'
+import { readWorktreeContentIdentity } from '../shared/worktree-content-identity'
 import {
   createGitHandlerRelay,
   createGitTempDir,
@@ -400,6 +401,102 @@ describe('GitHandler', () => {
       } finally {
         await fs.rm(outsideDir, { recursive: true, force: true })
       }
+    })
+  })
+
+  describe('a writer between two members of one bulk discard', () => {
+    it('keeps back an untracked member that moved while the tracked members were being destroyed', async () => {
+      // Parity with the local host, where this was reproduced with real git. The relay destroys tracked
+      // files before untracked ones and chunks each group, so a member's authorization is one whole
+      // destruction old by its own turn -- and here every destruction is a remote round-trip, which makes
+      // the gap wider than it is locally rather than narrower.
+      //
+      // The interleaving is positioned rather than hoped for: the subprocess boundary is the barrier, and
+      // the competing write calls through to real git so the destruction it races is the genuine one.
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'tracked.txt'), 'committed\n')
+      gitCommit(tmpDir, 'initial')
+      await fs.writeFile(path.join(tmpDir, 'tracked.txt'), 'the tracked edit the user reviewed\n')
+      await fs.writeFile(path.join(tmpDir, 'untracked.txt'), 'the draft the user reviewed\n')
+
+      const observed = [
+        {
+          filePath: 'tracked.txt',
+          expectedContent: await readWorktreeContentIdentity(tmpDir, 'tracked.txt')
+        },
+        {
+          filePath: 'untracked.txt',
+          expectedContent: await readWorktreeContentIdentity(tmpDir, 'untracked.txt')
+        }
+      ]
+
+      const relay = handler as unknown as {
+        git: (args: string[], ...rest: unknown[]) => Promise<unknown>
+      }
+      const originalGit = relay.git.bind(relay)
+      const subcommands: string[] = []
+      vi.spyOn(relay, 'git').mockImplementation(async (args: string[], ...rest: unknown[]) => {
+        if (args[0] === 'restore') {
+          await fs.writeFile(path.join(tmpDir, 'untracked.txt'), 'work that arrived mid-discard\n')
+        }
+        subcommands.push(args[0] ?? '')
+        return originalGit(args, ...rest)
+      })
+
+      const result = (await dispatcher.callRequest('git.bulkDiscardIfUnchanged', {
+        worktreePath: tmpDir,
+        filePaths: ['tracked.txt', 'untracked.txt'],
+        observed
+      })) as { discarded: string[]; refused: string[] }
+
+      expect(result.discarded).toEqual(['tracked.txt'])
+      expect(result.refused).toEqual(['untracked.txt'])
+      // Line endings of a restored tracked file follow the host's autocrlf, which this fixture does not
+      // pin and which is not the subject here.
+      expect(
+        (await fs.readFile(path.join(tmpDir, 'tracked.txt'), 'utf8')).replace(/\r\n/g, '\n')
+      ).toBe('committed\n')
+      expect(await fs.readFile(path.join(tmpDir, 'untracked.txt'), 'utf8')).toBe(
+        'work that arrived mid-discard\n'
+      )
+      // No false serialization: the deletion this write was racing never ran once the member was kept
+      // back, so the surviving bytes cannot be explained by a writer that arrived after the effect.
+      expect(subcommands).toContain('restore')
+      expect(subcommands).not.toContain('clean')
+    })
+
+    it('destroys both members when nothing writes during the discard', async () => {
+      // The negative control: with nothing moved the whole selection still goes, so the case above
+      // cannot pass by refusing everything.
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'tracked.txt'), 'committed\n')
+      gitCommit(tmpDir, 'initial')
+      await fs.writeFile(path.join(tmpDir, 'tracked.txt'), 'the tracked edit the user reviewed\n')
+      await fs.writeFile(path.join(tmpDir, 'untracked.txt'), 'the draft the user reviewed\n')
+
+      const result = (await dispatcher.callRequest('git.bulkDiscardIfUnchanged', {
+        worktreePath: tmpDir,
+        filePaths: ['tracked.txt', 'untracked.txt'],
+        observed: [
+          {
+            filePath: 'tracked.txt',
+            expectedContent: await readWorktreeContentIdentity(tmpDir, 'tracked.txt')
+          },
+          {
+            filePath: 'untracked.txt',
+            expectedContent: await readWorktreeContentIdentity(tmpDir, 'untracked.txt')
+          }
+        ]
+      })) as { discarded: string[]; refused: string[] }
+
+      expect(result.discarded.toSorted()).toEqual(['tracked.txt', 'untracked.txt'])
+      expect(result.refused).toEqual([])
+      // Line endings of a restored tracked file follow the host's autocrlf, which this fixture does not
+      // pin and which is not the subject here.
+      expect(
+        (await fs.readFile(path.join(tmpDir, 'tracked.txt'), 'utf8')).replace(/\r\n/g, '\n')
+      ).toBe('committed\n')
+      await expect(fs.access(path.join(tmpDir, 'untracked.txt'))).rejects.toThrow()
     })
   })
 })

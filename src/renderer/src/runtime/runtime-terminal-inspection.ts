@@ -8,12 +8,16 @@ import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from './runtime-terminal-stream'
+import type { ShellInputSincePrompt } from '../../../shared/terminal-osc133-prompt-state'
 
 export type RuntimeTerminalProcessInspection = {
   foregroundProcess: string | null
   hasChildProcesses: boolean
   // Why: callers must not treat a stale remote handle as authoritative idle evidence.
   unavailable?: true
+  /** Present only from authorities that track it; a runtime host that does not answers
+   *  undefined, which readers must treat as unknown rather than as an empty line. */
+  inputSincePrompt?: ShellInputSincePrompt
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
@@ -67,10 +71,24 @@ export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Da
   }
 }
 
+/** Whether this pane's process inspection is answered by this app's main process. */
+export function isLocallyInspectedRuntimePty(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string
+): boolean {
+  const target = getRemoteRuntimePtyEnvironmentId(ptyId)
+    ? 'environment'
+    : getActiveRuntimeTarget(settings).kind
+  return target !== 'environment' || !getRemoteRuntimeTerminalHandle(ptyId)
+}
+
 export async function inspectRuntimeTerminalProcess(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string
 ): Promise<RuntimeTerminalProcessInspection> {
+  if (isLocallyInspectedRuntimePty(settings, ptyId)) {
+    return window.api.pty.inspectProcess(ptyId)
+  }
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)

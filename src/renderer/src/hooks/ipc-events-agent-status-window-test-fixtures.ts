@@ -15,6 +15,7 @@ export function buildWindowApi(args: {
   getSnapshot?: () => Promise<AgentStatusSetData[]>
   getMigrationUnsupportedSnapshot?: () => Promise<MigrationUnsupportedPtyEntry[]>
   drop?: (paneKey: string) => void
+  onLiveCollision?: (cb: (notice: unknown) => void) => () => void
   remoteWorkspace?: Record<string, unknown>
   runtime?: Record<string, unknown>
   ssh?: Record<string, unknown>
@@ -122,6 +123,7 @@ export function buildWindowApi(args: {
         ...args.ssh
       },
       agentStatus: {
+        onLiveCollision: args.onLiveCollision ?? (() => () => {}),
         onSet: args.onSet,
         onClear: args.onClear ?? vi.fn(() => () => {}),
         onLegacyWorkerTerminalRecovery:

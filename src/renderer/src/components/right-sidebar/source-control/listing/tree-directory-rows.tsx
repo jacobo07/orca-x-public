@@ -2,6 +2,7 @@ import React from 'react'
 import { ChevronDown, Folder, FolderOpen, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { DiscardAllArea } from '../commit/discard-all-sequence'
 import type {
   BranchSourceControlTreeDirectoryNode,
@@ -69,7 +70,7 @@ export function SourceControlTreeDirectoryRow({
   isExecutingBulk,
   isCollapsed,
   onToggle,
-  onRequestDiscardPaths,
+  onRequestDiscardEntries,
   onStagePaths,
   onUnstagePaths
 }: {
@@ -79,14 +80,14 @@ export function SourceControlTreeDirectoryRow({
   isExecutingBulk: boolean
   isCollapsed: boolean
   onToggle: () => void
-  onRequestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
+  onRequestDiscardEntries: (area: DiscardAllArea, entries: readonly GitStatusEntry[]) => void
   onStagePaths: (paths: readonly string[]) => Promise<void>
   onUnstagePaths: (paths: readonly string[]) => Promise<void>
 }): React.JSX.Element {
   // Why: filtered tree nodes only contain visible descendants, so folder-wide bulk labels would overpromise on the subset.
   const canStage = !hideBulkActions && actionPaths.stagePaths.length > 0
   const canUnstage = !hideBulkActions && actionPaths.unstagePaths.length > 0
-  const canDiscard = !hideBulkActions && actionPaths.discardPaths.length > 0
+  const canDiscard = !hideBulkActions && actionPaths.discardEntries.length > 0
 
   return (
     <SourceControlTreeDirectoryHeader node={node} isCollapsed={isCollapsed} onToggle={onToggle}>
@@ -108,7 +109,7 @@ export function SourceControlTreeDirectoryRow({
               }
               onClick={(event) => {
                 event.stopPropagation()
-                onRequestDiscardPaths(node.area, actionPaths.discardPaths)
+                onRequestDiscardEntries(node.area, actionPaths.discardEntries)
               }}
               disabled={isExecutingBulk}
             />

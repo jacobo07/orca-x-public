@@ -5,10 +5,11 @@ import { bulkUnstageRuntimeGitPaths, type RuntimeGitContext } from '@/runtime/ru
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import {
-  getDiscardAllPaths,
+  getDiscardAllEntries,
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
+import { discardRefusalMessage } from './discard-refusal-message'
 import type { PendingDiscardConfirmation } from './discard-dialog'
 import type { SourceControlEntryGroups } from '../listing/section-order'
 
@@ -31,8 +32,13 @@ export function useSourceControlDiscardConfirmation({
   isExecutingBulk: boolean
   setIsExecutingBulk: (value: boolean) => void
   clearSelection: () => void
-  discardMany: (paths: string[]) => Promise<void>
-  discardSingle: (path: string) => Promise<void>
+  discardMany: (
+    paths: string[],
+    observed: ReadonlyMap<string, string>
+  ) => Promise<{ discarded: string[]; refused: string[] }>
+  /** The second argument is the working-tree content the caller observed; omitting it means it could
+   *  not say, never that nothing changed. */
+  discardSingle: (path: string, expectedContent?: string) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -43,13 +49,25 @@ export function useSourceControlDiscardConfirmation({
     setPendingDiscard(null)
   }
 
+  // Why the entry rather than its path: the pending confirmation already holds the whole row, and the
+  // row is the only record of what the user actually looked at. Passing the path alone -- which is what
+  // this did -- discarded that record one frame before the destruction, so the host was asked to remove
+  // whatever happened to be at the path by then. A dialog waiting on a human is the longest of the
+  // windows between the two, and an external editor or formatter needs none of Orca's own machinery to
+  // land inside it.
   const handleDiscard = useCallback(
-    async (filePath: string) => {
+    async (entry: GitStatusEntry) => {
       try {
-        await discardSingle(filePath)
+        await discardSingle(entry.path, entry.worktreeContentId)
         await refreshActiveGitStatusAfterMutation()
-      } catch {
-        // Why: per-row discard is fire-and-forget; bulk callers use discardSingle directly to aggregate failures into one toast.
+      } catch (error) {
+        // Why not silent: this used to be fire-and-forget because every failure was a genuine error.
+        // A refusal is not a failure -- it means the file moved and the user's newer work was kept --
+        // and saying nothing would read as a successful discard of work that is still there.
+        const message = discardRefusalMessage(error)
+        if (message) {
+          toast.message(message)
+        }
       }
     },
     [discardSingle, refreshActiveGitStatusAfterMutation]
@@ -58,14 +76,24 @@ export function useSourceControlDiscardConfirmation({
   // Why: "Discard all" skips unresolved/resolved_locally rows (discarding can re-create the conflict or lose the resolution; no v1 UX for it).
   // Why: sequencing/filter rules live in discard-all-sequence.ts for independent unit tests, with per-file fallback when an older SSH relay lacks bulk discard.
   const handleRevertAllInArea = useCallback(
-    async (area: DiscardAllArea, confirmedPaths?: readonly string[]) => {
+    async (area: DiscardAllArea, confirmedEntries?: readonly GitStatusEntry[]) => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
-      if (paths.length === 0) {
+      const entries = confirmedEntries
+        ? [...confirmedEntries]
+        : getDiscardAllEntries(grouped[area], area)
+      if (entries.length === 0) {
         return
       }
+      const paths = entries.map((entry) => entry.path)
+      // The rows the user was looking at, keyed for the host. Built here rather than resolved further
+      // down, because every layer below this one deals in paths and a path cannot say what it held.
+      const observed = new Map(
+        entries
+          .filter((entry) => typeof entry.worktreeContentId === 'string')
+          .map((entry) => [entry.path, entry.worktreeContentId as string])
+      )
       setIsExecutingBulk(true)
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
@@ -83,8 +111,8 @@ export function useSourceControlDiscardConfirmation({
               },
               filePaths
             ),
-          discardMany,
-          discardOne: discardSingle,
+          discardMany: (filePaths) => discardMany(filePaths, observed),
+          discardOne: (filePath) => discardSingle(filePath, observed.get(filePath)),
           onError: (error) => {
             errors.push(error)
             console.error('[SourceControl] discard-all failure', error)
@@ -120,6 +148,22 @@ export function useSourceControlDiscardConfirmation({
             }
           )
         }
+        if (result.refused.length > 0) {
+          // Its own notice, not folded into the failure toast above. These files moved after the user
+          // looked at them and nothing was destroyed, so the newer work is still there -- reporting that
+          // as a failure would send someone hunting for a fault, and reporting nothing at all would let
+          // the survivors read as a bug in the discard. A count and a sample; never a hash.
+          const sample = result.refused.slice(0, 3).join(', ')
+          const more = result.refused.length > 3 ? `, +${result.refused.length - 3} more` : ''
+          toast.message(
+            translate(
+              'auto.components.right.sidebar.SourceControl.discardRefusedCount',
+              'Kept {{value0}} file{{value1}} that changed after you opened them',
+              { value0: result.refused.length, value1: result.refused.length === 1 ? '' : 's' }
+            ),
+            { description: `${sample}${more}` }
+          )
+        }
         if (!result.aborted) {
           await refreshActiveGitStatusAfterMutation()
           clearSelection()
@@ -143,15 +187,17 @@ export function useSourceControlDiscardConfirmation({
   )
 
   const requestDiscardAllInArea = useCallback(
-    (area: DiscardAllArea, confirmedPaths?: readonly string[]): void => {
+    (area: DiscardAllArea, confirmedEntries?: readonly GitStatusEntry[]): void => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
-      const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
-      if (paths.length === 0) {
+      const entries = confirmedEntries
+        ? [...confirmedEntries]
+        : getDiscardAllEntries(grouped[area], area)
+      if (entries.length === 0) {
         return
       }
-      setPendingDiscard({ kind: 'area', area, paths })
+      setPendingDiscard({ kind: 'area', area, entries })
     },
     [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
   )
@@ -164,13 +210,13 @@ export function useSourceControlDiscardConfirmation({
     },
     [activeWorktreeId, isExecutingBulk, worktreePath]
   )
-  const requestDiscardPaths = useCallback(
-    (area: DiscardAllArea, paths: readonly string[]): void => {
+  const requestDiscardEntries = useCallback(
+    (area: DiscardAllArea, entries: readonly GitStatusEntry[]): void => {
       // Why: same gate as the other request handlers — handleRevertAllInArea rejects these states silently, so the dialog would confirm into a no-op.
-      if (!worktreePath || !activeWorktreeId || isExecutingBulk || paths.length === 0) {
+      if (!worktreePath || !activeWorktreeId || isExecutingBulk || entries.length === 0) {
         return
       }
-      setPendingDiscard({ kind: 'area', area, paths: [...paths] })
+      setPendingDiscard({ kind: 'area', area, entries: [...entries] })
     },
     [activeWorktreeId, isExecutingBulk, worktreePath]
   )
@@ -182,17 +228,17 @@ export function useSourceControlDiscardConfirmation({
     }
     setPendingDiscard(null)
     if (pending.kind === 'entry') {
-      void handleDiscard(pending.entry.path)
+      void handleDiscard(pending.entry)
       return
     }
-    void handleRevertAllInArea(pending.area, pending.paths)
+    void handleRevertAllInArea(pending.area, pending.entries)
   }, [handleDiscard, handleRevertAllInArea, pendingDiscard])
 
   return {
     pendingDiscard,
     requestDiscardAllInArea,
     requestDiscardEntry,
-    requestDiscardPaths,
+    requestDiscardEntries,
     cancelPendingDiscard,
     confirmPendingDiscard
   }

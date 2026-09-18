@@ -960,20 +960,55 @@ export class RuntimeGitCommands {
 
   async bulkDiscardRuntimeGitPaths(
     worktreeSelector: string,
-    filePaths: string[]
-  ): Promise<{ ok: true }> {
+    filePaths: string[],
+    observed?: readonly { filePath: string; expectedContent: string }[]
+  ): Promise<{ ok: true; discarded: string[]; refused: string[] }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    // Normalization rewrites each path, so the observed map has to be keyed the same way or every lookup
+    // misses and the host refuses the whole set for a reason nobody can see.
+    const normalized = filePaths.map((filePath) => ({
+      requested: filePath,
+      relative: normalizeRuntimeGitRelativePath(filePath)
+    }))
+    const relativePaths = normalized.map((each) => each.relative)
+    const stated = new Map((observed ?? []).map((each) => [each.filePath, each.expectedContent]))
+    const relativeObserved = observed
+      ? new Map(
+          normalized
+            .filter(({ requested }) => stated.has(requested))
+            .map(({ requested, relative }) => [relative, stated.get(requested) as string])
+        )
+      : undefined
+    const requestedFor = new Map(normalized.map(({ requested, relative }) => [relative, requested]))
+    const inCallerTerms = (paths: string[]): string[] =>
+      paths.map((each) => requestedFor.get(each) ?? each)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      await provider.bulkDiscardChanges(target.worktree.path, relativePaths)
-      return { ok: true }
+      const result = await provider.bulkDiscardChanges(
+        target.worktree.path,
+        relativePaths,
+        relativeObserved
+      )
+      return {
+        ok: true,
+        discarded: inCallerTerms(result.discarded),
+        refused: inCallerTerms(result.refused)
+      }
     }
-    await bulkDiscardChanges(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
-    return { ok: true }
+    const result = await bulkDiscardChanges(
+      target.worktree.path,
+      relativePaths,
+      localGitOptionsForTarget(target),
+      relativeObserved
+    )
+    return {
+      ok: true,
+      discarded: inCallerTerms(result.discarded),
+      refused: inCallerTerms(result.refused)
+    }
   }
 
   /**

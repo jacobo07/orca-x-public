@@ -2302,17 +2302,41 @@ async function cleanUntrackedPaths(
   }
 }
 
+/** Which of the requested paths were destroyed, and which were kept back because they had moved. */
+export type BulkDiscardResult = {
+  discarded: string[]
+  /** Kept back: the bytes no longer matched what the caller said it saw, or could not be read to check. */
+  refused: string[]
+}
+
 /**
  * Discard working tree changes for many paths in a small number of subprocesses.
+ *
+ * `observed` maps every requested path to the working-tree content the caller saw, and it must cover all
+ * of them: authorizing a subset would perform the unprotected operation on the remainder, inside the
+ * protected one. That is a caller error and raises, rather than surfacing as a per-file conflict a user
+ * cannot act on.
+ *
+ * Per item rather than one token for the snapshot, because the user selected rows they were looking at and
+ * authorized destroying THOSE. A single token would let an unrelated row's movement refuse the rest, which
+ * is more annoying and no safer. A member that moved is kept back and reported; the rest are discarded --
+ * the contract the per-file path already had, which completes past what it cannot do and says so.
+ *
+ * The check sits after the tracked/untracked probe and immediately before both destructions, for the
+ * reason spelled out on `assertWorktreeStateUnchanged`: every millisecond between the check and the write
+ * is a window an edit can land in. A batch cannot make that window zero the way a single path nearly can
+ * -- the first member is checked before the last is destroyed -- so this narrows it rather than claiming
+ * to close it, and `refused` is honest about what it could prove.
  */
 export async function bulkDiscardChanges(
   worktreePath: string,
   filePaths: string[],
-  options: GitRuntimeOptions = {}
-): Promise<void> {
+  options: GitRuntimeOptions = {},
+  observed?: ReadonlyMap<string, string>
+): Promise<BulkDiscardResult> {
   invalidateGitReadCaches()
   if (filePaths.length === 0) {
-    return
+    return { discarded: [], refused: [] }
   }
 
   try {
@@ -2323,21 +2347,54 @@ export async function bulkDiscardChanges(
         throw new Error(`Path "${filePath}" resolves outside the worktree`)
       }
     }
+    if (observed) {
+      const undescribed = filePaths.filter((filePath) => !observed.has(filePath))
+      if (undescribed.length > 0) {
+        throw new Error(
+          `No observed content was stated for ${undescribed.map((each) => `"${each}"`).join(', ')}, so nothing was discarded`
+        )
+      }
+    }
 
     const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const trackedPaths = filePaths.filter((filePath) =>
+    const { authorized } = await partitionByObservedState(worktreePath, filePaths, observed)
+    const trackedPaths = authorized.filter((filePath) =>
       isTrackedPathSpec(filePath, trackedPathSpecs)
     )
-    const untrackedPaths = filePaths.filter(
+    const untrackedPaths = authorized.filter(
       (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
     )
+    // A batch cannot share one authorization moment: tracked files are destroyed before untracked ones,
+    // and each group is chunked, so a member's authorization is already one whole destruction old when
+    // its own turn comes. Re-checking per destructive call is the same reasoning that makes the untracked
+    // path re-validate containment here -- that recheck covered path safety and not state authorization,
+    // which is how a member deleted after it moved was also reported as discarded.
+    const destroyed = new Set<string>()
+    const stillAuthorized = async (candidates: readonly string[]): Promise<string[]> => {
+      if (!observed) {
+        return [...candidates]
+      }
+      return (await partitionByObservedState(worktreePath, candidates, observed)).authorized
+    }
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
-      (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
+      async (targetPaths) => {
+        const fresh = await stillAuthorized(targetPaths)
+        if (fresh.length === 0) {
+          return
+        }
+        await cleanUntrackedPaths(worktreePath, fresh, options)
+        for (const filePath of fresh) {
+          destroyed.add(filePath)
+        }
+      },
       async () => {
         for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-          const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+          const chunk = await stillAuthorized(trackedPaths.slice(i, i + BULK_CHUNK_SIZE))
+          if (chunk.length === 0) {
+            continue
+          }
           await gitExecFileAsync(
             [
               'restore',
@@ -2350,11 +2407,58 @@ export async function bulkDiscardChanges(
               ...gitOptionsForWorktree(worktreePath, options)
             }
           )
+          for (const filePath of chunk) {
+            destroyed.add(filePath)
+          }
         }
       }
     )
+    // Reported from what the destructions actually covered, never from what was requested: a member kept
+    // back late is exactly the one an aggregate built from the request would have counted as discarded.
+    return {
+      discarded: filePaths.filter((filePath) => destroyed.has(filePath)),
+      refused: filePaths.filter((filePath) => !destroyed.has(filePath))
+    }
   } finally {
     invalidateGitReadCaches()
+  }
+}
+
+/**
+ * Split the requested paths into the ones still holding what the caller described and the ones that moved.
+ *
+ * A path whose current content cannot be read at all is refused rather than destroyed: the read could not
+ * prove a match, and the safe answer to "I cannot tell" is never "remove it". Bounded by the same
+ * concurrency the status stamping uses, because each read holds a whole file and the fan-out is a memory
+ * budget rather than a speed knob.
+ */
+async function partitionByObservedState(
+  worktreePath: string,
+  filePaths: readonly string[],
+  observed: ReadonlyMap<string, string> | undefined
+): Promise<{ authorized: string[]; refused: string[] }> {
+  if (!observed) {
+    return { authorized: [...filePaths], refused: [] }
+  }
+  const moved = new Set<string>()
+  await forEachWithConcurrency(
+    [...filePaths],
+    WORKTREE_CONTENT_IDENTITY_CONCURRENCY,
+    async (filePath) => {
+      try {
+        if (
+          (await readWorktreeContentIdentity(worktreePath, filePath)) !== observed.get(filePath)
+        ) {
+          moved.add(filePath)
+        }
+      } catch {
+        moved.add(filePath)
+      }
+    }
+  )
+  return {
+    authorized: filePaths.filter((filePath) => !moved.has(filePath)),
+    refused: filePaths.filter((filePath) => moved.has(filePath))
   }
 }
 
