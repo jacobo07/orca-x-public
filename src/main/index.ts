@@ -103,7 +103,9 @@ import {
   type OrchestrationEnvironmentTransport
 } from './runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
-import { resolveEnvironment } from '../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../shared/runtime-environment-store'
+import { installFleetObservation } from './fleet/fleet-observation-slot'
+import { readE2EEPublicKey } from './runtime/e2ee-keypair'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import {
@@ -2814,6 +2816,26 @@ void app.whenReady().then(async () => {
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()
   publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
+  // Why: each input comes from its own owner's path — the key beside the pairing registry,
+  // the environments beside the transport that proves them.
+  installFleetObservation({
+    now: Date.now,
+    readLocalPublicKey: () => readE2EEPublicKey(getCanonicalUserDataPath()),
+    getLocalStatus: () => runtimeService.getStatus(),
+    collectLocalSnapshot: () => runtimeService.getMemorySnapshot(),
+    listEnvironments: () => listEnvironments(app.getPath('userData')),
+    callEnvironment: ({ environmentId, method, pairingRevision, timeoutMs, signal }) =>
+      callRuntimeEnvironment(
+        app.getPath('userData'),
+        environmentId,
+        method,
+        undefined,
+        timeoutMs,
+        pairingRevision,
+        undefined,
+        { signal }
+      )
+  })
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })
