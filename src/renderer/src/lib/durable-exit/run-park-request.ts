@@ -40,7 +40,8 @@ function parkSnapshot(state: AppState): ParkPlanSnapshot {
     // Why: input stamps are coalesced; a keystroke not yet flushed is still a draft.
     lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
       state.lastTerminalInputAtByPaneKey
-    )
+    ),
+    terminalInputPendingByPaneKey: state.terminalInputPendingByPaneKey
   }
 }
 

@@ -67,6 +67,7 @@ function snapshot(overrides: Partial<ParkPlanSnapshot> = {}): ParkPlanSnapshot {
     pinnedTerminalTabIds: [],
     agentStatusByPaneKey: { [entry.paneKey]: entry },
     lastTerminalInputAtByPaneKey: {},
+    terminalInputPendingByPaneKey: {},
     ...overrides
   }
 }
@@ -160,7 +161,7 @@ describe('planParkWorkspaces', () => {
   })
 
   it('releases an agent pane with no stamp when the host holds no line', () => {
-    expect(reasons(snapshot(), idleShell, false, new Set(['pty-shell']))).toEqual([
+    expect(reasons(snapshot(), idleShell, false, new Set(['pty-elsewhere']))).toEqual([
       { worktreeId: WT, keepReasons: [] }
     ])
   })
@@ -177,6 +178,19 @@ describe('planParkWorkspaces', () => {
         new Set(['pty-agent'])
       )
     ).toEqual([{ worktreeId: WT, keepReasons: [] }])
+  })
+
+  // Sleep kills a shell with no input check of its own; an idle prompt is not an empty line.
+  it('keeps an idle shell holding a line the host vouches for', () => {
+    expect(reasons(snapshot(), idleShell, false, new Set(['pty-shell']))).toEqual([
+      { worktreeId: WT, keepReasons: ['unsent-input'] }
+    ])
+  })
+
+  it('keeps an idle shell holding a line only the renderer saw', () => {
+    expect(
+      reasons(snapshot({ terminalInputPendingByPaneKey: { [`shell-tab:${LEAF_S}`]: true } }))
+    ).toEqual([{ worktreeId: WT, keepReasons: ['unsent-input'] }])
   })
 
   it('keeps a workspace a phone is driving', () => {

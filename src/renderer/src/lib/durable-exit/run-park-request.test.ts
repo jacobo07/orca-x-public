@@ -61,7 +61,8 @@ function world(overrides: { agentState?: AgentStatusEntry['state'] } = {}): Worl
     ptyIdsByTabId: { 'a-tab': ['pty-a'], 'b-tab': ['pty-b'], 'idle-tab': [] },
     unifiedTabsByWorktree: {},
     agentStatusByPaneKey: { [agent.paneKey]: agent },
-    lastTerminalInputAtByPaneKey: {}
+    lastTerminalInputAtByPaneKey: {},
+    terminalInputPendingByPaneKey: {}
   } as unknown as AppState
   const w: World = {
     state,
@@ -114,6 +115,20 @@ describe('runParkPhase', () => {
     expect(result.status).toBe('refused')
     expect(result.workspaces).toContainEqual({
       worktreeId: 'wt-a',
+      outcome: 'kept',
+      reasons: ['unsent-input'],
+      livePtyCount: 1
+    })
+    expect(w.events).toEqual([])
+  })
+
+  it('refuses when an idle shell holds a line the host vouches for', async () => {
+    const w = world()
+    w.hostHoldsLine = ['pty-b']
+    const result = await runParkPhase(park, w.deps)
+    expect(result.status).toBe('refused')
+    expect(result.workspaces).toContainEqual({
+      worktreeId: 'wt-b',
       outcome: 'kept',
       reasons: ['unsent-input'],
       livePtyCount: 1

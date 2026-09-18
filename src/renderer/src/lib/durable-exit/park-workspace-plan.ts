@@ -18,7 +18,10 @@ export type ParkPlanSnapshot = Pick<
   | 'pinnedTerminalTabIds'
   | 'agentStatusByPaneKey'
   | 'lastTerminalInputAtByPaneKey'
->
+> & {
+  /** A shell line typed at a prompt and not yet submitted, as this renderer saw it. */
+  terminalInputPendingByPaneKey: Readonly<Record<string, true>>
+}
 
 /** Whether a shell is busy: true, proven idle: false, or `unknown` when nothing can prove it. */
 export type ChildProcessAnswer = boolean | 'unknown'
@@ -178,6 +181,14 @@ export function planParkWorkspaces(
             reasons.add(reason)
           }
           continue
+        }
+        // Why: Sleep kills the shell with no input check of its own, so a line typed at an idle
+        // prompt dies with it. Either witness is enough: the renderer's flag is gone after a reload.
+        if (
+          options.hostHoldsLinePtyIds.has(ptyId) ||
+          (paneKey !== null && snapshot.terminalInputPendingByPaneKey[paneKey] === true)
+        ) {
+          reasons.add('unsent-input')
         }
         // Why: a shell's children (a dev server, a build) die with it and nothing can resume them.
         const children = childProcessesByPtyId[ptyId]
