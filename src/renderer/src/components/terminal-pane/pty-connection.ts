@@ -1274,9 +1274,12 @@ export function connectPanePty(
     )
   const clearSleepingRecordProviderDuplicates = (
     state: ReturnType<typeof useAppStore.getState>,
-    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
+    consumed: { paneKey: string; record: SleepingAgentSessionRecord },
+    options: { keepOwnRecord?: boolean } = {}
   ): void => {
-    state.clearSleepingAgentSession(consumed.paneKey)
+    if (!options.keepOwnRecord || consumed.paneKey !== cacheKey) {
+      state.clearSleepingAgentSession(consumed.paneKey)
+    }
     for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
       if (
         paneKey !== consumed.paneKey &&
@@ -5116,11 +5119,18 @@ export function connectPanePty(
       })
       return true
     }
+    // Why: after a restart a started shell is not a resumed agent — the pane keeps its own quit/live
+    // record until the provider's hook replaces it, so a resume line that fails is retried next
+    // launch. Sleep records still clear here: they also mean "this pane is asleep".
     const clearSleepingRecordAfterColdRestoreSpawn = (
-      startup: ColdRestoreAgentResumeStartup | null
+      startup: ColdRestoreAgentResumeStartup | null,
+      resumeUnavailable: boolean
     ): void => {
       if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-        clearSleepingRecordProviderDuplicates(useAppStore.getState(), startup.sleepingRecordEntry)
+        const origin = startup.sleepingRecordEntry.record.origin
+        clearSleepingRecordProviderDuplicates(useAppStore.getState(), startup.sleepingRecordEntry, {
+          keepOwnRecord: !resumeUnavailable && (origin === 'quit' || origin === 'live')
+        })
       }
     }
     const mergeStartupEnvWithPaneIdentity = (
@@ -5444,7 +5454,14 @@ export function connectPanePty(
               showSessionRestoredBanner()
             }
             if (!resumeRefused) {
-              clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+              clearSleepingRecordAfterColdRestoreSpawn(
+                coldRestoreOverride,
+                Boolean(
+                  spawnedPtyId &&
+                  typeof spawnedPtyId === 'object' &&
+                  spawnedPtyId.agentResumeUnavailable
+                )
+              )
             }
           } else if (
             paneStartup?.launchConfig ||
@@ -8548,7 +8565,10 @@ export function connectPanePty(
               } else if (preparedStartup?.hasSleepingRecord) {
                 showSessionRestoredBanner()
               }
-              clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
+              clearSleepingRecordAfterColdRestoreSpawn(
+                preparedStartup,
+                Boolean(connectResult.agentResumeUnavailable)
+              )
             }
           }
           // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.

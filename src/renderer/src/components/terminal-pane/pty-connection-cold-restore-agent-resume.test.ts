@@ -304,7 +304,10 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('resumes from the quit-captured sleeping record when cold-restoring after an app restart', async () => {
+  it.each([
+    ['quit', true],
+    ['worktree-sleep', false]
+  ] as const)('resumes from a %s sleeping record when cold-restoring after an app restart', async (origin, keepsRecord) => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -345,7 +348,8 @@ describe('connectPanePty', () => {
           prompt: 'finish the task',
           state: 'working',
           capturedAt: 1,
-          updatedAt: 1
+          updatedAt: 1,
+          origin
         }
       }
     } as StoreState
@@ -389,8 +393,13 @@ describe('connectPanePty', () => {
         })
       })
     )
-    // Why: consuming the record prevents a later worktree activation from launching a duplicate resume tab.
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    // Why: after a restart a started shell is not a resumed agent; if the resume line fails the pane
+    // must still own the session. A sleep record also marks the pane asleep, so it is spent here.
+    if (keepsRecord) {
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+    } else {
+      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    }
   })
 
   it('marks the pane as freshly started when main declined an unverifiable resume', async () => {
