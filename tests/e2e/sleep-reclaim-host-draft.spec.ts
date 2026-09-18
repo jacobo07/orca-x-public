@@ -140,7 +140,9 @@ test('explicit Sleep keeps an agent pane whose unsent line only the host knows',
 
   await page.getByTestId('sleep-reclaim-action').click()
   const result = page.getByTestId('sleep-reclaim-result')
-  await expect(result).toHaveAttribute('data-kept-count', '1', { timeout: 30_000 })
+  // The refusal gets its own count and its own sentence: nothing changed, nothing failed.
+  await expect(result).toHaveAttribute('data-kept-unsent-input-count', '1', { timeout: 30_000 })
+  await expect(result).toHaveAttribute('data-kept-count', '0')
   await expect(result).toHaveAttribute('data-slept-count', '0')
   await expect(result).toHaveAttribute('data-failed-count', '0')
   expect(await hostTerminalCount(page, agentWorktreeId)).toBe(1)

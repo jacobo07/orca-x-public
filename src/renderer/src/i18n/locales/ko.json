@@ -3585,6 +3585,7 @@
               "sleepMany": "에이전트 {{value0}}개 지금 절전",
               "resultSlept": "{{value0}}개 절전됨",
               "resultKept": "{{value0}}개는 표시 후 변경되어 절전하지 않았습니다",
+              "resultKeptUnsentInput": "{{value0}}개는 전송하지 않은 입력을 보호하기 위해 절전하지 않았습니다",
               "resultFailed": "{{value0}}개를 절전하지 못했습니다",
               "observed": {
                 "pending": "종료된 프로세스를 확인하는 중…",

@@ -124,8 +124,13 @@ function SleepReclaimResultSummary({
 }): React.JSX.Element {
   const slept = results.filter((r) => r.outcome === 'slept').length
   const failed = results.filter((r) => r.outcome === 'failed').length
+  // Why its own line: nothing changed and nothing failed — a line the user typed was protected,
+  // and "changed since shown" would tell them something false about their own pane.
+  const keptUnsentInput = results.filter(
+    (r) => r.outcome !== 'slept' && r.outcome !== 'failed' && r.cause === 'host-unsent-input'
+  ).length
   // Why: changed, no-longer-eligible and already-running all mean "left awake on purpose".
-  const kept = results.length - slept - failed
+  const kept = results.length - slept - failed - keptUnsentInput
   const parts: string[] = []
   if (slept > 0) {
     parts.push(
@@ -147,6 +152,15 @@ function SleepReclaimResultSummary({
       )
     )
   }
+  if (keptUnsentInput > 0) {
+    parts.push(
+      translate(
+        'auto.components.status.bar.resource.sleepReclaim.resultKeptUnsentInput',
+        '{{value0}} kept awake to protect a line typed but never sent',
+        { value0: keptUnsentInput }
+      )
+    )
+  }
   if (failed > 0) {
     parts.push(
       translate(
@@ -163,6 +177,7 @@ function SleepReclaimResultSummary({
       data-testid="sleep-reclaim-result"
       data-slept-count={slept}
       data-kept-count={kept}
+      data-kept-unsent-input-count={keptUnsentInput}
       data-failed-count={failed}
     >
       {parts.join(' · ')}

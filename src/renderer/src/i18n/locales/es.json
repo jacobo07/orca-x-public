@@ -3605,6 +3605,7 @@
               "sleepMany": "Dormir {{value0}} agentes ahora",
               "resultSlept": "{{value0}} dormidos",
               "resultKept": "{{value0}} siguen despiertos porque cambiaron desde que se mostraron",
+              "resultKeptUnsentInput": "{{value0}} siguen despiertos para conservar una línea escrita y nunca enviada",
               "resultFailed": "{{value0}} no se pudieron dormir",
               "observed": {
                 "pending": "Comprobando qué procesos suyos terminaron…",

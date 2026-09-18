@@ -3597,6 +3597,7 @@
               "sleepMany": "立即休眠 {{value0}} 个智能体",
               "resultSlept": "{{value0}} 个已休眠",
               "resultKept": "{{value0}} 个在显示后已变化,保持唤醒",
+              "resultKeptUnsentInput": "{{value0}} 个因保护尚未提交的输入而保持唤醒",
               "resultFailed": "{{value0}} 个无法休眠",
               "observed": {
                 "pending": "正在检查哪些进程已退出…",
