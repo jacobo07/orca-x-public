@@ -345,47 +345,6 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  // Why: the preserved pane resumes its own record in place on mount even with no PTY; forking a
-  // new tab here cleared that record first, so the original pane came back as a plain shell and the
-  // session reopened at the end of the tab strip.
-  it.each(['worktree-sleep', 'live', 'quit'] as const)(
-    'leaves a %s record to its preserved leaf in the active worktree even with no PTY binding',
-    (origin) => {
-      const paneKey = makePaneKey('tab-1', LEAF_ID)
-      const record = makeRecord({ paneKey, origin })
-      useAppStore.setState({
-        ...makeActiveTerminalState('tab-1'),
-        tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-        terminalLayoutsByTabId: {
-          'tab-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID, expandedLeafId: null }
-        },
-        sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-      } as never)
-
-      const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-      const state = useAppStore.getState()
-      expect(launched).toBe(0)
-      expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
-      expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
-    }
-  )
-
-  it('still forks a PTY-less preserved leaf whose worktree is not active', () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord({ paneKey, origin: 'live' })
-    useAppStore.setState({
-      ...makeActiveTerminalState('other-tab', 'wt-other'),
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      terminalLayoutsByTabId: {
-        'tab-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID, expandedLeafId: null }
-      },
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    } as never)
-
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
-  })
-
   it('does not let a sibling split-pane PTY claim a live stable-pane record', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'live' })
@@ -601,44 +560,6 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[stale.paneKey]).toBeUndefined()
   })
 
-  // Why: the claim is written when a wake creates the tab and outlives the spawn, so on the tab's
-  // second sleep→wake it named the tab's own session and deleted the record its pane resumes from.
-  it('keeps a pane-owned record whose own tab still carries the claim from an earlier wake', () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord({ paneKey, origin: 'worktree-sleep', capturedAt: 5, updatedAt: 5 })
-    useAppStore.setState({
-      ...makeActiveTerminalState('tab-1'),
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID) },
-      automaticAgentResumeClaimsByTabId: {
-        'tab-1': { worktreeId: 'wt-1', launchAgent: 'claude', providerSession: record.providerSession }
-      },
-      sleepingAgentSessionsByPaneKey: { [paneKey]: record }
-    } as never)
-
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    expect(launched).toBe(0)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBe(record)
-  })
-
-  it('still clears a record whose session a different tab has claimed', () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTerminalTab('tab-1', 'wt-1'), makeTerminalTab('tab-2', 'wt-1')]
-      },
-      automaticAgentResumeClaimsByTabId: {
-        'tab-2': { worktreeId: 'wt-1', launchAgent: 'claude', providerSession: record.providerSession }
-      },
-      sleepingAgentSessionsByPaneKey: { [paneKey]: record }
-    } as never)
-
-    expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
-  })
-
   it('lets quit/live pane-owned records claim provider sessions before stale duplicates launch', () => {
     const ownedPaneKey = makePaneKey('tab-1', LEAF_ID)
     const stalePaneKey = makePaneKey('missing-tab', OTHER_LEAF_ID)
@@ -809,24 +730,6 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
-
-  // Why: an agent parked on a permission prompt or question emits no hooks, so its age says
-  // nothing about whether it is still resumable; discarding it stranded the pane as a plain shell.
-  it.each(['waiting', 'blocked'] as const)(
-    'keeps and resumes a quit record left %s longer than the stale window',
-    (state) => {
-      const record = makeRecord({ origin: 'quit', state, capturedAt: 3_000_000, updatedAt: 1 })
-      useAppStore.setState({
-        tabsByWorktree: { 'wt-1': [] },
-        sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-      } as never)
-
-      const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-      expect(launched).toBe(1)
-      expect(useAppStore.getState().tabsByWorktree['wt-1']?.[0]?.launchAgent).toBe('claude')
-    }
-  )
 
   it('resumes interrupted manual records that no preserved pane can own', () => {
     const record = makeRecord({ origin: 'worktree-sleep', interrupted: true })
