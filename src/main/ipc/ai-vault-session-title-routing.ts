@@ -21,6 +21,10 @@ export async function resolveAiVaultSessionTitlesByHost(
   resolveRuntime?: RuntimeAiVaultSessionTitleResolver
 ): Promise<AiVaultSessionTitlesResult> {
   const executionHostScope = requestedExecutionHostScope(args.executionHostScope)
+  // A scope that names no host resolves to no titles — never to every host.
+  if (executionHostScope === null) {
+    return { titles: [] }
+  }
   if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
     return resolveLocalAiVaultSessionTitles(args.requests)
   }

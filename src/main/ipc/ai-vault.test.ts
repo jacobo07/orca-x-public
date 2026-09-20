@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type { ExecutionHostScope } from '../../shared/execution-host'
 import type { IFilesystemProvider } from '../providers/types'
 import type * as CachedSessionListModule from '../ai-vault/cached-session-list'
 import type * as SessionParseCacheModule from '../ai-vault/session-scanner-parse-cache'
@@ -332,6 +333,36 @@ describe('listAiVaultSessions host routing', () => {
       'local'
     ])
   })
+
+  // Why: a caller that named one host badly must not be upgraded to reading every
+  // host's transcripts. 'bogus' is the legacy pre-prefix shape a stale persisted
+  // scope carries; 'ssh:%E0%A4%A' is an incomplete percent escape decodeURIComponent
+  // throws on. Both are unresolvable, and neither is a request for the fan-out.
+  it.each(['bogus', 'ssh:%E0%A4%A'])(
+    'refuses to fan out to every host for the unresolvable scope %s',
+    async (scope) => {
+      registerAiVaultHandlers({
+        getActiveRuntimeAiVaultHostInfos: () => [
+          { environmentId: 'remote-server', executionHostId: 'runtime:remote-server' }
+        ],
+        scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
+      })
+
+      // The cast is the point: the typed API forbids this shape, which is why the
+      // widening stayed invisible — these values arrive from persisted profiles and
+      // untyped wire callers, never from a typed call site.
+      const result = await _internals.listAiVaultSessions({
+        executionHostScope: scope as ExecutionHostScope
+      })
+
+      expect(mocks.scanRemoteAiVaultSessions).not.toHaveBeenCalled()
+      expect(mocks.requestActiveSshAiVaultSessionList).not.toHaveBeenCalled()
+      expect(mocks.scanRuntimeAiVaultSessions).not.toHaveBeenCalled()
+      expect(mocks.scanAiVaultSessionsInWorker).not.toHaveBeenCalled()
+      expect(result.sessions).toEqual([])
+      expect(result.issues?.length ?? 0).toBeGreaterThan(0)
+    }
+  )
 
   it('keeps local and SSH results when runtime host discovery fails', async () => {
     registerAiVaultHandlers({

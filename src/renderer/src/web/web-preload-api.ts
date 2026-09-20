@@ -1657,8 +1657,14 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
       const requestedScope = normalizeExecutionHostScope(
         args?.executionHostScope ?? executionHostId
       )
+      // Why: this guard admits the all-hosts scope, so an unresolvable value that
+      // used to fall back to it walked straight through and scanned the paired
+      // runtime. A scope that names no host is refused before the guard runs.
+      if (requestedScope === null) {
+        return Promise.resolve(webAiVaultUnavailableResult(args?.executionHostScope ?? ''))
+      }
       if (requestedScope !== 'all' && requestedScope !== executionHostId) {
-        return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
+        return Promise.resolve(webAiVaultUnavailableResult(requestedScope, requestedScope))
       }
       // Why: no local filesystem in the browser, so every history scan runs on and is stamped as the paired runtime host.
       return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
@@ -1704,14 +1710,18 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
   }
 }
 
-function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultListResult {
+function webAiVaultUnavailableResult(
+  path: string,
+  executionHostId?: ExecutionHostId
+): AiVaultListResult {
   return {
     sessions: [],
     issues: [
       {
-        executionHostId,
+        // Omitted when the request named no resolvable host — there is no id to report.
+        ...(executionHostId ? { executionHostId } : {}),
         agent: 'codex',
-        path: executionHostId,
+        path,
         message: translate(
           'auto.web.webPreloadApi.aiVaultUnavailableForHost',
           'Agent Session History is not available for this execution host.'

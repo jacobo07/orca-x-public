@@ -11,6 +11,7 @@ import {
   normalizeVisibleExecutionHostIds,
   parseExecutionHostId,
   requestedExecutionHostScope,
+  resolveExecutionHostScope,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
@@ -59,22 +60,50 @@ describe('execution host identity', () => {
     expect(getLocalExecutionHostLabel()).toBe(getLocalExecutionHostLabel(process.platform))
   })
 
-  it('falls back invalid scopes to all hosts', () => {
+  // Superseded characterization: until 2026-09-20 an unresolvable value fell back to
+  // the all-hosts scope, so a stale or corrupt host id widened a one-host request into
+  // a fan-out. Absence still defaults; a parse failure now refuses.
+  it('separates an absent scope from one that cannot be resolved', () => {
+    expect(resolveExecutionHostScope(null)).toEqual({ kind: 'absent' })
+    expect(resolveExecutionHostScope('   ')).toEqual({ kind: 'absent' })
+    expect(resolveExecutionHostScope('all')).toEqual({
+      kind: 'scope',
+      scope: ALL_EXECUTION_HOSTS_SCOPE
+    })
+    expect(resolveExecutionHostScope('ssh:dev%20box')).toEqual({
+      kind: 'scope',
+      scope: 'ssh:dev%20box'
+    })
+    expect(resolveExecutionHostScope('bogus')).toEqual({ kind: 'unresolvable', value: 'bogus' })
+    expect(resolveExecutionHostScope('ssh:')).toEqual({ kind: 'unresolvable', value: 'ssh:' })
+    // An incomplete percent escape makes decodeURIComponent throw.
+    expect(resolveExecutionHostScope('ssh:%E0%A4%A')).toEqual({
+      kind: 'unresolvable',
+      value: 'ssh:%E0%A4%A'
+    })
+  })
+
+  it('never widens an unresolvable scope to all hosts', () => {
+    // Absence is the listing default and stays the all-hosts view.
     expect(normalizeExecutionHostScope(null)).toBe(ALL_EXECUTION_HOSTS_SCOPE)
     expect(normalizeExecutionHostScope('')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-    expect(normalizeExecutionHostScope('bogus')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-    expect(normalizeExecutionHostScope('ssh:')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    // Explicitly asking for every host still works — that is the path this guards.
     expect(normalizeExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    expect(normalizeExecutionHostScope('ssh:dev%20box')).toBe('ssh:dev%20box')
+    // A value that is not a host is refused, never upgraded.
+    expect(normalizeExecutionHostScope('bogus')).toBeNull()
+    expect(normalizeExecutionHostScope('ssh:')).toBeNull()
+    expect(normalizeExecutionHostScope('ssh:%E0%A4%A')).toBeNull()
   })
 
   it('defaults an omitted scope request to this host, not a fan-out', () => {
     expect(requestedExecutionHostScope(undefined)).toBe(LOCAL_EXECUTION_HOST_ID)
     expect(requestedExecutionHostScope(null)).toBe(LOCAL_EXECUTION_HOST_ID)
-    // An empty or unrecognized scope is a real value, so it still fans out.
-    expect(requestedExecutionHostScope('')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-    expect(requestedExecutionHostScope('bogus')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    // An empty string carries no host, so it is absence and not a request to fan out.
+    expect(requestedExecutionHostScope('')).toBe(LOCAL_EXECUTION_HOST_ID)
     expect(requestedExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
     expect(requestedExecutionHostScope('ssh:dev%20box')).toBe('ssh:dev%20box')
+    expect(requestedExecutionHostScope('bogus')).toBeNull()
   })
 
   it('normalizes visible host id arrays', () => {

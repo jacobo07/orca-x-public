@@ -92,6 +92,16 @@ async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
+  if (executionHostScope === null) {
+    // Why: a scope that names no host is answered about that host. Before this
+    // refusal existed the value was coerced to the all-hosts scope, so a stale or
+    // malformed id read every paired host's transcripts. No executionHostId here —
+    // the request did not carry one.
+    return aiVaultScanIssueResult({
+      path: args?.executionHostScope ?? '',
+      message: 'Agent Session History is not available for this execution host.'
+    })
+  }
   // Scope paths change the result set, so they must be part of the cache key.
   // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
   // can share a snapshot regardless of which worktree was selected first.
