@@ -47,7 +47,12 @@ export function hasDurabilityBarrier(source) {
   return (
     /from\s+['"][^'"]*durable-file-write['"]/.test(source) ||
     /\bfsync(?:Sync)?\s*\(/.test(source) ||
-    /\.sync\s*\(\s*\)/.test(source)
+    /\.sync\s*\(\s*\)/.test(source) ||
+    // shared/secure-file's durable variants fsync the staged handle before the rename, the same
+    // barrier by a different name. Credential and identity writers need its 0600/ACL publish, so
+    // routing them through durable-file-write instead would trade the barrier for the permissions.
+    /\bwriteDurableSecure(?:Json)?File\s*\(/.test(source) ||
+    /\bdurable:\s*true\b/.test(source)
   )
 }
 
@@ -131,8 +136,7 @@ export async function collectUnclassifiedPublishers(manifest, root) {
   return unclassified.sort()
 }
 
-const WRITE_CALL =
-  /\b(?:writeFileSync|writeFile|appendFileSync|appendFile|createWriteStream)\s*\(/
+const WRITE_CALL = /\b(?:writeFileSync|writeFile|appendFileSync|appendFile|createWriteStream)\s*\(/
 /**
  * Destinations that outlive the process and belong to the user's install, as
  * opposed to a temp dir, a build output, a worktree checkout, or a path the

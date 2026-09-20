@@ -22,7 +22,7 @@ import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
-import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
+import { E2EEKeypairUnusableError, loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from './rpc/unpaired-device-auth-throttle'
 import {
   MobileSocketWiring,
@@ -125,6 +125,11 @@ const DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE =
   'The pairing registry is unavailable. Verify that the Orca data directory is writable.'
 const E2EE_KEY_UNAVAILABLE_GUIDANCE =
   'The E2EE identity is unavailable. Verify that the Orca data directory is writable.'
+// Why a second message under the same reason code: a damaged key is not a permissions problem, and
+// telling the Owner to check writability sends them to the wrong fix. Replacing the key would void
+// every paired device, so recovery stays an explicit act.
+const E2EE_KEY_UNUSABLE_GUIDANCE =
+  'This computer’s E2EE identity file exists but is damaged. Orca will not replace it automatically, because a new identity would unpair every device. Re-pair this computer to create a new identity.'
 
 type MobileRelayPairingProvider = {
   createPairingRelay(
@@ -1143,7 +1148,12 @@ export class OrcaRuntimeRpcServer {
       console.error('[runtime] Failed to initialize E2EE identity:', error)
       return {
         ok: false,
-        failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
+        failure: pairingUnavailable(
+          'e2ee_key_unavailable',
+          error instanceof E2EEKeypairUnusableError
+            ? E2EE_KEY_UNUSABLE_GUIDANCE
+            : E2EE_KEY_UNAVAILABLE_GUIDANCE
+        )
       }
     }
     return { ok: true, deviceRegistry, e2eeKeypair }

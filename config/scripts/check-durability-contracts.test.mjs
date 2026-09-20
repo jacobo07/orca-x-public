@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   collectUnclassifiedPublishers,
   diffBaseline,
+  hasDurabilityBarrier,
   looksLikeAtomicPublisher,
   looksLikeDirectStateWriter,
   main,
@@ -17,9 +18,10 @@ import {
 
 const tempDirs = []
 
-const DURABLE_WRITER = "import { writeFileDurable } from './durable-file-write'\nexport const w = 1\n"
+const DURABLE_WRITER =
+  "import { writeFileDurable } from './durable-file-write'\nexport const w = 1\n"
 const BARE_WRITER = "import { writeFile } from 'node:fs/promises'\nexport const w = 1\n"
-const PUBLISHER = "const tmp = `${p}.tmp`\nawait rename(tmp, p)\n"
+const PUBLISHER = 'const tmp = `${p}.tmp`\nawait rename(tmp, p)\n'
 // The exact shape of the OpenAI speech key before it was fixed: a plain write
 // onto a path under the user's ~/.orca, with no temp file to announce it.
 const D7_SHAPED_WRITER =
@@ -37,7 +39,11 @@ function makeTempRoot(manifest, files = {}, baseline = '', directBaseline = '') 
   mkdirSync(path.join(root, 'config'), { recursive: true })
   writeFileSync(path.join(root, 'config', 'durability-contracts.jsonc'), manifest, 'utf8')
   if (baseline !== null) {
-    writeFileSync(path.join(root, 'config', 'durability-unclassified-baseline.txt'), baseline, 'utf8')
+    writeFileSync(
+      path.join(root, 'config', 'durability-unclassified-baseline.txt'),
+      baseline,
+      'utf8'
+    )
   }
   if (directBaseline !== null) {
     writeFileSync(
@@ -249,7 +255,9 @@ describe('durability ratchet', () => {
     const output = errors.join('\n')
     // The whole point of the ratchet: existing debt does not license more of it.
     expect(output).toContain('brand-new-publisher.ts')
-    expect(output).not.toContain('::error::New unclassified durability publisher: src/main/legacy-publisher.ts')
+    expect(output).not.toContain(
+      '::error::New unclassified durability publisher: src/main/legacy-publisher.ts'
+    )
   })
 
   it('passes when every publisher is grandfathered', async () => {
@@ -265,11 +273,7 @@ describe('durability ratchet', () => {
 
   it('fails a stale baseline entry so the list can only shrink', async () => {
     captureErrors()
-    const root = makeTempRoot(
-      validManifest(),
-      COMPLIANT_FILES,
-      'src/main/already-classified.ts\n'
-    )
+    const root = makeTempRoot(validManifest(), COMPLIANT_FILES, 'src/main/already-classified.ts\n')
     await expect(main(root)).resolves.toBe(1)
     expect(errors.join('\n')).toContain('Stale durability baseline entry')
   })
@@ -376,5 +380,46 @@ describe('ratchet helpers', () => {
     const { added, stale } = diffBaseline(['b.ts', 'c.ts'], new Set(['a.ts', 'b.ts']))
     expect(added).toEqual(['c.ts'])
     expect(stale).toEqual(['a.ts'])
+  })
+})
+
+describe('hasDurabilityBarrier', () => {
+  // Synthetic subjects on purpose: a drill pinned to whichever real writer is durable today stops
+  // discriminating the moment that file is refactored.
+
+  it('accepts the shared durable primitive', () => {
+    expect(hasDurabilityBarrier(DURABLE_WRITER)).toBe(true)
+  })
+
+  it('accepts a hand-rolled fsync, which is the barrier by another name', () => {
+    expect(hasDurabilityBarrier("import { fsyncSync } from 'node:fs'\nfsyncSync(fd)\n")).toBe(true)
+  })
+
+  it("accepts secure-file's durable variant, which fsyncs before it renames", () => {
+    expect(
+      hasDurabilityBarrier(
+        "import { writeDurableSecureJsonFile } from '../../shared/secure-file'\n" +
+          'writeDurableSecureJsonFile(filePath, data)\n'
+      )
+    ).toBe(true)
+  })
+
+  it('accepts an explicit durable option on the secure writer', () => {
+    expect(hasDurabilityBarrier('writeSecureFile(p, body, { durable: true })')).toBe(true)
+  })
+
+  // The green half above is worthless without this: a predicate that returned true for everything
+  // would satisfy every one of them.
+  it("REFUSES secure-file's non-durable variant, which renames without an fsync", () => {
+    expect(
+      hasDurabilityBarrier(
+        "import { writeSecureJsonFile } from '../../shared/secure-file'\n" +
+          'writeSecureJsonFile(filePath, data)\n'
+      )
+    ).toBe(false)
+  })
+
+  it('refuses a bare write', () => {
+    expect(hasDurabilityBarrier(BARE_WRITER)).toBe(false)
   })
 })
