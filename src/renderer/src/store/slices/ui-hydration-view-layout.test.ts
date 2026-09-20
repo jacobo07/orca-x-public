@@ -470,6 +470,19 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().visibleWorkspaceHostIds).toEqual(['local'])
   })
 
+  it('narrows to this computer when every persisted visible host id is unreadable', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        visibleWorkspaceHostIds: ['bogus', 'ssh:'] as PersistedUIState['visibleWorkspaceHostIds']
+      })
+    )
+
+    // The list was narrowing the view; an unreadable list must not become "no filter".
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local'])
+  })
+
   it('keeps the all-hosts view when no workspace host scope was persisted', () => {
     const store = createUIStore()
 

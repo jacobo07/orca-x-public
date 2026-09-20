@@ -101,6 +101,7 @@ import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
+  resolveVisibleExecutionHostIds,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import {
@@ -316,9 +317,14 @@ function hydratedWorkspaceHostScope(value: string | null | undefined): Workspace
 }
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
-  const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
-  if (visibleHostIds) {
-    return visibleHostIds
+  const visible = resolveVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
+  if (visible.kind === 'ids') {
+    return visible.ids
+  }
+  if (visible.kind === 'unresolvable') {
+    // The user had narrowed the view and none of it can be read; null here would mean
+    // "no filter", so fall back to this computer rather than widening to every host.
+    return [LOCAL_EXECUTION_HOST_ID]
   }
   const legacyScope = hydratedWorkspaceHostScope(ui.workspaceHostScope)
   return legacyScope === 'all' ? null : [legacyScope]

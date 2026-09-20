@@ -173,6 +173,28 @@ export function normalizeVisibleExecutionHostIds(
   return ids.length > 0 ? ids : null
 }
 
+// Why: for a visible-host list, null means "no filter", which is every host. A list
+// the user narrowed to and that can no longer be read must not collapse into the same
+// answer as no list at all — that is the scope widening one container out. Dropping
+// unreadable members from a list that still has survivors is a narrowing and stays.
+export type VisibleExecutionHostIdsResolution =
+  | { kind: 'ids'; ids: ExecutionHostId[] }
+  | { kind: 'absent' }
+  | { kind: 'unresolvable' }
+
+export function resolveVisibleExecutionHostIds(
+  value: readonly string[] | null | undefined
+): VisibleExecutionHostIdsResolution {
+  if (!Array.isArray(value)) {
+    return { kind: 'absent' }
+  }
+  const ids = normalizeVisibleExecutionHostIds(value)
+  if (ids) {
+    return { kind: 'ids', ids }
+  }
+  return value.length > 0 ? { kind: 'unresolvable' } : { kind: 'absent' }
+}
+
 export function normalizeExecutionHostOrder(
   value: readonly string[] | null | undefined
 ): ExecutionHostId[] {

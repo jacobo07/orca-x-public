@@ -12,6 +12,7 @@ import {
   parseExecutionHostId,
   requestedExecutionHostScope,
   resolveExecutionHostScope,
+  resolveVisibleExecutionHostIds,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
@@ -113,6 +114,20 @@ describe('execution host identity', () => {
       'local',
       'ssh:win%20vm'
     ])
+  })
+
+  // Why: for a visible-host list, null means "no filter", which is every host. So a
+  // list that was narrowing the view and can no longer be read must not collapse into
+  // the same answer as no list at all — that is the scope widening one container out.
+  it('separates an absent visible host list from one that cannot be read', () => {
+    expect(resolveVisibleExecutionHostIds(null)).toEqual({ kind: 'absent' })
+    expect(resolveVisibleExecutionHostIds([])).toEqual({ kind: 'absent' })
+    expect(resolveVisibleExecutionHostIds(['local', 'bogus'])).toEqual({
+      kind: 'ids',
+      ids: ['local']
+    })
+    // Every member unreadable, but the user had chosen a narrower view.
+    expect(resolveVisibleExecutionHostIds(['bogus', 'ssh:'])).toEqual({ kind: 'unresolvable' })
   })
 
   it('normalizes host order arrays', () => {
