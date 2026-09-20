@@ -1,6 +1,10 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
+import {
+  createCodexInboundRouter,
+  type CodexAppServerHandlers
+} from './codex-app-server-inbound-router'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -50,6 +54,12 @@ export type CodexAppServerRpc = {
   request: (method: string, params?: Record<string, unknown>) => Promise<unknown>
   notify: (method: string, params?: Record<string, unknown>) => void
 }
+
+export type {
+  CodexAppServerHandlers,
+  CodexServerRequestOutcome,
+  CodexTransportDiagnosticKind
+} from './codex-app-server-inbound-router'
 
 const JSON_RPC_METHOD_NOT_FOUND = -32601
 const STDERR_TAIL_MAX_BYTES = 8192
@@ -103,7 +113,11 @@ function isMethodNotFoundError(error: { code?: number; message?: string }): bool
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
   body: (rpc: CodexAppServerRpc) => Promise<T>,
-  spawnImpl: typeof spawn = spawn
+  spawnImpl: typeof spawn = spawn,
+  // Why installed before the spawn rather than handed to `body`: W0 observed
+  // `remoteControl/status/changed` arriving DURING the handshake. A sink the body registers is
+  // already too late for the traffic that motivated having one.
+  handlers: CodexAppServerHandlers = {}
 ): Promise<T> {
   // Why: a default-home grant must run against the real ~/.codex, so strip an
   // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
@@ -174,17 +188,29 @@ export async function runCodexAppServerSession<T>(
       if (!line) {
         continue
       }
-      let message: JsonRpcResponse
+      let parsed: unknown
       try {
-        message = JSON.parse(line) as JsonRpcResponse
+        parsed = JSON.parse(line)
       } catch {
+        router.reportUnparsable(line)
         continue
       }
-      if (typeof message.id === 'number' && pending.has(message.id)) {
-        const waiter = pending.get(message.id)!
-        pending.delete(message.id)
-        waiter.resolve(message)
+      router.route(parsed)
+    }
+  })
+
+  const router = createCodexInboundRouter({
+    handlers,
+    sendLine: (payload) => sendLine(payload),
+    isClosed: () => exited || timedOut,
+    deliverResponse: (response) => {
+      const waiter = pending.get(response.id)
+      if (!waiter) {
+        return false
       }
+      pending.delete(response.id)
+      waiter.resolve(response)
+      return true
     }
   })
 
@@ -297,6 +323,7 @@ export async function runCodexAppServerSession<T>(
     }
     throw error
   } finally {
+    await router.drain()
     try {
       child.stdin.end()
     } catch {
