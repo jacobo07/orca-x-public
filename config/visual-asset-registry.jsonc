@@ -13,7 +13,10 @@
 // regenerating an APPROVED asset produces r(NN+1) as a candidate and marks its predecessor
 // superseded. There is no `final-v2`.
 //
-// `pnpm check:visual-assets` enforces all of it. See docs/visual/CONSTITUTION.md.
+// `pnpm check:visual-assets` enforces all of it, from `lint`. The lifecycle is written up in
+// docs/visual/README.md and the visual rules themselves live in docs/STYLEGUIDE.md; there is no
+// separate constitution file, and an earlier revision of this comment pointed at one that was
+// never written.
 {
   "schemaVersion": 1,
   "policy": {
