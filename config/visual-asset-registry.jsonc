@@ -1,0 +1,35 @@
+// Every canonical visual reference for Orca X is indexed here.
+//
+// A reference asset is a claim about how a surface looks. Two claims need policing that a
+// folder of PNGs cannot give: an APPROVED asset must never change under the people
+// implementing from it, and a picture of a surface Orca does not have yet must never be
+// mistaken for a picture of one it does.
+//
+// So `sha256` pins the bytes and `truth` separates the two worlds:
+//   current — observed pixels, captured from the running app
+//   target  — designed intent for a surface on the roadmap; carries a visible TARGET label
+//
+// Status lives here and nowhere else. The filename carries the revision (`.rNN.`), so
+// regenerating an APPROVED asset produces r(NN+1) as a candidate and marks its predecessor
+// superseded. There is no `final-v2`.
+//
+// `pnpm check:visual-assets` enforces all of it. See docs/visual/CONSTITUTION.md.
+{
+  "schemaVersion": 1,
+  "policy": {
+    "referenceRoot": "docs/visual/references",
+    "generatedRoot": "docs/visual/generated",
+    "statuses": ["draft", "candidate", "approved", "superseded", "rejected"],
+    "immutableStatuses": ["approved"],
+    "truths": ["current", "target"],
+    "producers": ["capture", "html"],
+    "devices": ["desktop", "laptop", "tablet", "mobile"],
+    // surface.subsurface.device.state.rNN.png — the record must agree with every segment,
+    // so a file cannot be filed under a slot its own name contradicts.
+    "fileNamePattern": "^([a-z0-9-]+)\\.([a-z0-9-]+)\\.([a-z]+)\\.([a-z0-9-]+)\\.r([0-9]{2})\\.png$",
+    // Raised as waves land. A floor is what tells a sweep that found nothing apart from an
+    // estate that has nothing.
+    "minimumAssets": 0
+  },
+  "assets": []
+}

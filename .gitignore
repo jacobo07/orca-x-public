@@ -93,6 +93,8 @@ docs/**
 !docs/
 !docs/assets/
 !docs/assets/**
+!docs/visual/
+!docs/visual/**
 !docs/readme/
 !docs/readme/**
 !docs/STYLEGUIDE.md
