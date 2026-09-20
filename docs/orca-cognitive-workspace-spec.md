@@ -344,11 +344,61 @@ explicit that private chain-of-thought is **never persisted merely because a pro
 Reasoning may render transiently; it does not enter the durable store. This is a W1 store-schema
 constraint, not a W2 rendering preference.
 
+### Live observation — the ladder's last rung, reached
+
+A real turn was executed against the installed binary. Sandbox pinned `read-only` (enum measured:
+`read-only | workspace-write | danger-full-access`), throwaway `cwd` under `%TEMP%`, a prompt needing
+no tools, and any server-initiated approval request auto-denied.
+
+| gate | result |
+|---|---|
+| `V-W0-THREAD-START` | PASS — `threadId 01a0bff4-a9bc-7833-bd9f-c74a8aea4608` |
+| `V-W0-TURN-STREAMED` | PASS — **5** `item/agentMessage/delta` (genuine incremental streaming) |
+| `V-W0-TURN-COMPLETED` | PASS — `turn/completed`, no `error` |
+| `V-W0-SENTINEL` | PASS — assistant text exactly `ORCA_W0_OK` |
+| `V-W0-THREAD-PERSISTED` | PASS — a **new** app-server process lists the thread |
+| `V-W0-THREAD-RESUME` | PASS — `thread/resume` accepted |
+| `V-W0-CONTINUITY` | PASS — after provider process death, the model recalled `ORCA_W0_OK` |
+| `V-W0-CLAUDE-HEADLESS` | PASS — `claude -p --output-format stream-json`, 40 KB NDJSON, sentinel returned |
+
+26 notifications in one turn, including `thread/started`, `turn/started`, `item/started`,
+`item/completed`, `thread/status/changed`, `thread/tokenUsage/updated`, `account/rateLimits/updated`
+and `hook/started`/`hook/completed`.
+
+**Authentication measured, not assumed:** ChatGPT account, `planType: plus`, `requiresOpenaiAuth:
+true`, identical under **both** the Orca-managed `CODEX_HOME`
+(`…\Roaming\orca\codex-runtime-home\home`) and the real `~/.codex`. Rate limits at probe time:
+primary 3 % of a 300-min window, secondary 0 %. `credits.hasCredits` is `false` with balance `0` —
+plan limits carry the turns, not credits.
+
+**Provider continuity does NOT discharge W1.** It is keyed to a Codex `threadId`, lives in a
+`CODEX_HOME` that Orca manages and can rotate, and disappears under provider rotation. Decision 3
+therefore stands unchanged: Orca owns the user-visible conversation; the Codex thread is provenance
+and a continuation aid. Codex's own `thread/list` row is far richer than "a transcript file" — it
+carries `projectId`, `agentNickname`, `agentRole`, `name`, `gitInfo`, `forkedFromId`,
+`parentThreadId`, `status`, `cwd`, `cliVersion`. **W1 must state the boundary explicitly so a future
+reader does not mistake that richness for authority.**
+
+**Two wire facts the driver must honour:**
+
+- **`params` is mandatory, even when empty.** `account/read` with no `params` returns
+  `-32600 Invalid request: missing field 'params'`. Orca's `requestRpc` omits `params` when
+  `undefined` (l.241), so **it structurally cannot call any no-argument method.** Send `{}`.
+- **Unsolicited traffic starts immediately.** `remoteControl/status/changed` arrived during the
+  handshake itself, before any product request — live confirmation that the l.183 drop is reached in
+  practice, not only in theory.
+
+**Gateway must not overfit either provider.** Claude's headless path is non-PTY and resumable
+(`-p`, `--output-format stream-json`, `--input-format stream-json`, `--resume <session-id>`) but is
+**process-per-invocation NDJSON**, not a long-lived bidirectional peer, and it has no server→client
+request channel. It also emitted **one terminal `assistant` event** where Codex streamed five deltas.
+So `AgentTurnEngine` may assume neither a persistent socket nor delta-granular output.
+
 ### Still open after W0
 
-- **Behaviour, not just presence.** No `thread/start` or `turn/start` has been executed. A method
-  that exists in a schema and a method that works are different claims.
-- **Authentication state unmeasured.** `auth.json` exists in `~/.codex`; whether it holds a valid
-  session was not probed, and must not be assumed.
-- **Claude headless path not yet probed** (§5 W0 requires it, so the gateway does not overfit Codex).
+- **The approval path is unexercised.** 0 server requests arrived, because a read-only prompt needs
+  no tools. Approval handling is proven *necessary* (the methods are in `ServerRequest`) and is **not
+  proven working**. W2 owns driving it with a prompt that actually requests a command.
 - **Daemon vs spawned child undecided** — see the transport finding in §4.2.
+- **No Orca code has been changed yet.** Every result above came from standalone probes, so nothing
+  here is evidence about Orca's own runtime.
