@@ -7,6 +7,7 @@ import {
   diffBaseline,
   looksLikeAtomicPublisher,
   looksLikeDirectStateWriter,
+  looksLikePrimitiveDelegate,
   main,
   parseBaseline
 } from './check-durability-contracts.mjs'
@@ -30,8 +31,19 @@ const D7_SHAPED_WRITER =
 // never calls it, so it would pass the destination clause without exercising it.
 const NON_STATE_WRITER =
   "import { writeFileSync } from 'node:fs'\nwriteFileSync(join(outDir, 'report.pdf'), bytes)\n"
+// The shape that was invisible to both older ratchets: a module doing it exactly right, handing
+// the whole publish to the shared primitive, so there is no temp-and-rename and no bare write.
+const DELEGATING_PUBLISHER =
+  "import { durableWriteTempPath, writeFileDurable } from './durable-file-write'\n" +
+  'await writeFileDurable(durableWriteTempPath(p), p, payload)\n'
 
-function makeTempRoot(manifest, files = {}, baseline = '', directBaseline = '') {
+function makeTempRoot(
+  manifest,
+  files = {},
+  baseline = '',
+  directBaseline = '',
+  delegateBaseline = ''
+) {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-durability-contracts-'))
   tempDirs.push(root)
   mkdirSync(path.join(root, 'config'), { recursive: true })
@@ -43,6 +55,13 @@ function makeTempRoot(manifest, files = {}, baseline = '', directBaseline = '') 
     writeFileSync(
       path.join(root, 'config', 'durability-direct-writer-baseline.txt'),
       directBaseline,
+      'utf8'
+    )
+  }
+  if (delegateBaseline !== null) {
+    writeFileSync(
+      path.join(root, 'config', 'durability-primitive-delegate-baseline.txt'),
+      delegateBaseline,
       'utf8'
     )
   }
@@ -357,6 +376,78 @@ describe('durability ratchet', () => {
       'src/main/legacy-publisher.ts': PUBLISHER
     })
     await expect(collectUnclassifiedPublishers(manifest, root)).resolves.toEqual([])
+  })
+})
+
+describe('durable-primitive delegates', () => {
+  const errors = []
+
+  afterEach(() => {
+    errors.length = 0
+    vi.restoreAllMocks()
+  })
+
+  function captureErrors() {
+    vi.spyOn(console, 'error').mockImplementation((message) => {
+      errors.push(String(message))
+    })
+  }
+
+  it('recognizes a module that publishes through the shared primitive', () => {
+    expect(looksLikePrimitiveDelegate(DELEGATING_PUBLISHER)).toBe(true)
+  })
+
+  it('does not flag an import with no publish call', () => {
+    // A module that imports a type, or re-exports the helper, publishes nothing.
+    expect(looksLikePrimitiveDelegate(DURABLE_WRITER)).toBe(false)
+  })
+
+  it('does not flag a writer that never touches the primitive', () => {
+    expect(looksLikePrimitiveDelegate(D7_SHAPED_WRITER)).toBe(false)
+    expect(looksLikePrimitiveDelegate(BARE_WRITER)).toBe(false)
+  })
+
+  // The hole this ratchet exists to close, stated as an assertion: the two shape-based detectors
+  // are looking for a module that rolls its own publish, so the MOST correct implementation
+  // matched neither and shipped unclassified.
+  it('is invisible to both of the older detectors', () => {
+    expect(looksLikeAtomicPublisher(DELEGATING_PUBLISHER)).toBe(false)
+    expect(looksLikeDirectStateWriter(DELEGATING_PUBLISHER)).toBe(false)
+  })
+
+  it('fails when a new delegate appears with no contract', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), {
+      ...COMPLIANT_FILES,
+      'src/main/conversation-store.ts': DELEGATING_PUBLISHER
+    })
+    await expect(main(root)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain(
+      'New unclassified durable-primitive delegate: src/main/conversation-store.ts'
+    )
+  })
+
+  it('passes once that delegate is named by a contract', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest({ writer: ['src/main/demo-writer.ts', 'src/main/conversation-store.ts'] }),
+      { ...COMPLIANT_FILES, 'src/main/conversation-store.ts': DELEGATING_PUBLISHER }
+    )
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  it('passes with the delegate grandfathered instead', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest(),
+      { ...COMPLIANT_FILES, 'src/main/conversation-store.ts': DELEGATING_PUBLISHER },
+      '',
+      '',
+      'src/main/conversation-store.ts\n'
+    )
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
   })
 })
 

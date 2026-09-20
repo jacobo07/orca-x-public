@@ -1,0 +1,8 @@
+# Modules under src/main that publish state through src/main/durable-file-write.ts but carry no
+# durability contract in config/durability-contracts.jsonc.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — classify
+# the module instead. Existing debt stays visible here; new debt is blocked at the gate.
+# Prune after classifying: pnpm check:durability-contracts --prune
+src/main/sidecar-snapshot-file.ts
+src/main/usage-cache-snapshot-writer.ts

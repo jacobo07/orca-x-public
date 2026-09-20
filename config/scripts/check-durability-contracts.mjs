@@ -11,6 +11,13 @@ const BASELINE_PATH = path.join('config', 'durability-unclassified-baseline.txt'
 // things, and merging them would make "classified it" indistinguishable from
 // "rewrote it to stage and rename" when an entry moves between them.
 const DIRECT_BASELINE_PATH = path.join('config', 'durability-direct-writer-baseline.txt')
+// Third list, same reason the second exists. Both shapes above are detected by how the module
+// writes, so a module that delegates to the durable primitive matches NEITHER — and that is the
+// most correct implementation there is. Measured 2026-09-20: a new crash-durable conversation
+// store routed through durable-file-write was invisible to both ratchets, so the gate reported
+// "no new ones" while an unclassified state owner shipped. Keying discovery on the safest shape
+// is the same inversion the direct-writer list was added to fix, one level up.
+const DELEGATE_BASELINE_PATH = path.join('config', 'durability-primitive-delegate-baseline.txt')
 const SCAN_ROOT = path.join('src', 'main')
 
 function isRecord(value) {
@@ -186,6 +193,42 @@ export async function collectUnclassifiedDirectWriters(manifest, root) {
   return unclassified.sort()
 }
 
+const DELEGATE_CALL =
+  /\b(?:writeFileDurable|writeFileDurableSync|writeFileDurableIfCurrent|renameDurable)\s*\(/
+
+/**
+ * A module that publishes through the shared durable primitive. This is the RIGHT way to write
+ * durable state — which is exactly why it needs its own detector: the other two shapes describe
+ * writers that roll their own publish, so doing it properly made a module invisible.
+ *
+ * Requires the call as well as the import: a module that only imports a type, or re-exports the
+ * helper, is not publishing anything.
+ */
+export function looksLikePrimitiveDelegate(source) {
+  return /from\s+['"][^'"]*durable-file-write['"]/.test(source) && DELEGATE_CALL.test(source)
+}
+
+/** Modules that publish through the durable primitive but carry no durability classification. */
+export async function collectUnclassifiedPrimitiveDelegates(manifest, root) {
+  const registered = new Set(
+    (Array.isArray(manifest?.contracts) ? manifest.contracts : [])
+      .filter(isRecord)
+      .flatMap(contractWriters)
+  )
+  const primitive = manifest?.policy?.durablePrimitive
+  const unclassified = []
+  for (const relativePath of await collectSourceFiles(root, SCAN_ROOT)) {
+    if (registered.has(relativePath) || relativePath === primitive) {
+      continue
+    }
+    const source = await readFileOrNull(root, relativePath)
+    if (source !== null && looksLikePrimitiveDelegate(source)) {
+      unclassified.push(relativePath)
+    }
+  }
+  return unclassified.sort()
+}
+
 function validatePolicy(manifest, failures) {
   if (!isRecord(manifest.policy)) {
     failures.push('policy must be an object')
@@ -280,6 +323,13 @@ const RATCHETS = [
     noun: 'direct state writer',
     shape: "write straight onto a path in the user's data directory",
     headerShape: "write state directly into the user's data directory (no temp file, no rename)"
+  },
+  {
+    baselinePath: DELEGATE_BASELINE_PATH,
+    collect: collectUnclassifiedPrimitiveDelegates,
+    noun: 'durable-primitive delegate',
+    shape: 'publish state through the shared durable primitive',
+    headerShape: 'publish state through src/main/durable-file-write.ts'
   }
 ]
 
