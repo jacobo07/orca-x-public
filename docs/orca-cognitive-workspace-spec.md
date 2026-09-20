@@ -1,6 +1,7 @@
 # Orca Cognitive Workspace — Spec of Record
 
-Status: **APPROVED (Owner, 2026-09-20) — W0 in progress.** Six Owner decisions settled; see §9.
+Status: **APPROVED (Owner, 2026-09-20) — W0 sealed, W1 primitive landed and NOT YET REACHABLE.**
+Six Owner decisions settled; see §9. W1 evidence and its honest limits: §10.
 Mode: EXECUTION (ULTRA-PLAN closed). Scope reduced ~65% by Reality Scan.
 Date: 2026-09-20. Branch at scan time: `orca-x/w0-durability-repros` @ `6e74986a7`, 34 dirty paths,
 7 worktrees live. **Program worktree: `C:\Users\User\Apps\orca-cogws-wt`, branch
@@ -402,3 +403,148 @@ So `AgentTurnEngine` may assume neither a persistent socket nor delta-granular o
 - **Daemon vs spawned child undecided** — see the transport finding in §4.2.
 - **No Orca code has been changed yet.** Every result above came from standalone probes, so nothing
   here is evidence about Orca's own runtime.
+
+---
+
+## 10. W1 evidence — conversation identity and durability, measured 2026-09-20
+
+**One-line status: the primitive is IMPLEMENTED and VERIFIED in isolation, and NOT YET REACHABLE
+from any production path.** No Orca code calls it. W1 deliberately built the entity and its
+durability; the ingest, IPC and render wiring is a later wave. Nothing below is evidence that a
+user has a durable conversation today.
+
+### 10.1 The defect, as production actually had it
+
+`resolveNativeChatSession` (`src/renderer/src/components/native-chat/native-chat-pane-resolution.ts`)
+was the only route to a "conversation", and it takes a `paneKey`. Three consequences, all pinned as
+a characterization in `conversation-presentation-dependency.test.ts` (4/4):
+
+1. **No pane, no conversation.** With no agent-status entry and no PTY the resolver returns `null`.
+   The conversation does not become detached — it stops existing, because no id survives to ask
+   about it with.
+2. **Identity was the provider's.** `sessionId` is `agentStatusEntry.providerSession.id`, so a
+   provider-side session rotation reads downstream as a different conversation.
+3. **No Orca-owned content anywhere.** `PersistedState` (`src/shared/persisted-state-types.ts`) owns
+   repos, projects, workspace sessions, settings, UI and caches — and no conversation content. The
+   product's chat history is read out of the **provider's transcript files**.
+
+The characterization asserts today's behaviour, not the desired one: the pane resolver is expected
+to keep behaving exactly this way. It is a pane resolver. What W1 changes is that it stops being
+the only way to reach a conversation.
+
+### 10.2 Store selection — decided by measurement, not preference
+
+| candidate | verdict |
+|---|---|
+| profile JSON (`PersistedState`) | **rejected** — rewritten whole on every save, so appending one chat message republishes every repo, project and workspace session |
+| orchestration SQLite (`src/main/runtime/orchestration/db.ts`) | **rejected** — scoped to orchestration runs, and opens WAL with `synchronous = NORMAL` (db.ts:342-344): survives an app crash, **not** power loss, so a crash-durable claim on it would be false |
+| AI Vault | **rejected** — a read-only scanner over provider transcripts; it observes provider artifacts, it does not own product state |
+| one JSON record per conversation via `src/main/durable-file-write.ts` | **chosen** — the manifest's declared `durablePrimitive`, already owning the fsync-before-rename barrier and a syscall-order proof |
+
+### 10.3 Identity algebra (VERIFIED in isolation)
+
+`mintConversationId()` **takes no arguments**. That is the enforcement, not a convention: there is
+no parameter a pane key, leaf, tab, PTY, provider session, incarnation or host could be threaded
+through, so an id cannot inherit a lifetime from any of them.
+
+- A conversation has **zero or one** presentation attachment; a pane shows at most one conversation.
+- Attachment lives in an in-memory registry with **no path to any store**, so a pane binding cannot
+  become persisted state by accident. Detaching a pane structurally cannot reach the record.
+- Provider bindings are **append-only provenance**. A rotation adds evidence about the same
+  conversation; re-observing the head binding is a no-op so idle re-reports cannot grow the record.
+- `latestProviderProvenance` returns `null` for "no continuation evidence" — which is not empty and
+  not failed.
+- Turn vocabulary **extends** `NATIVE_CHAT_TURN_LIFECYCLE_STATES` (adding only `pending` and
+  `failed`, the two a live decoder has no use for) rather than shadowing it, and a test asserts every
+  transcript state stays admissible so the two cannot drift. Roles and blocks are the existing shared
+  native-chat model — one content vocabulary, no translation layer.
+
+### 10.4 Durability (VERIFIED for process death; power loss proven only at the syscall level)
+
+- Reading has **four** outcomes: `loaded`, `absent`, `unreadable`, `schema-too-new`. `unreadable` is
+  never `absent` and never an empty conversation — the caller's next act is a read-modify-write, so a
+  record "recovered" by defaulting its arrays to empty would be published back over the user's
+  messages. A truncated record fails loudly and its bytes are left on disk untouched.
+- Refusals run **before** the barrier, so state that must not be durable never reaches disk: hidden
+  reasoning (§9 reasoning decision, now enforced), a `seq` at or beyond the ordering watermark, and a
+  settled turn with no end time. Each is paired with a control proving the same record without the
+  defect does write.
+- Deleting a conversation removes the **Orca record only**; a test asserts a provider transcript
+  sitting beside it is untouched.
+
+Two gates, and their apertures were measured against each other rather than assumed:
+
+| gate | proves | blind to |
+|---|---|---|
+| `conversation-store-syscall-proof.test.ts` | `fsync(file)` precedes `rename`, directory fsync where the platform allows it | nothing about real crashes |
+| `config/scripts/conversation-durability-process-boundary.mjs` | the record survives a **SIGKILLed** writer and is recovered by a cold process, with the unfinished turn still unfinished | **a missing barrier** — with the fsync removed entirely it still exits 0, because the page cache carries bytes across process death |
+
+Run both. Neither substitutes for the other.
+
+### 10.5 Migration and legacy provider sessions (SPECIFIED, not implemented)
+
+W1 does not migrate history, and nothing about the primitive requires it to. The semantics it fixes:
+
+- Opening an old AI Vault session creates **no** conversation implicitly. A record is minted only
+  when something deliberately adopts the session, so a browse cannot mint thousands of records.
+- On adoption the provider session becomes the record's **first provenance entry**; the transcript is
+  never copied into the record as identity, and its path is never a key.
+- Duplicate adoption is prevented by the provenance lineage, not by the filename: an adopter looks
+  for an existing conversation whose provenance already names that provider session id.
+- A missing transcript is **unknown**, not empty, and a provider-deleted session leaves the Orca
+  record intact and readable — that is the whole point of owning it.
+- Un-adopted legacy sessions keep working exactly as today through AI Vault. This is additive.
+
+### 10.6 Evidence
+
+| gate | result |
+|---|---|
+| `conversation-presentation-dependency.test.ts` (the defect, pinned) | 4/4 |
+| `conversation-identity.test.ts` (identity + algebra) | 13/13 |
+| `conversation-store.test.ts` (durability, refusals, controls) | 13/13 |
+| `conversation-identity-inheritance.test.ts` | 7/7 |
+| `conversation-store-syscall-proof.test.ts` | 1/1 |
+| process-boundary gate (3 OS processes) | exit 0 |
+| `check-durability-contracts.test.mjs` | 34/34 (was 27) |
+| `check:durability-contracts` | PASS — 14 contracts, 19 + 38 + 2 grandfathered |
+| `typecheck` (node, cli, web) | PASS / PASS / PASS |
+| `oxlint`, changed files | clean (repo-wide oxlint is red on pre-existing files this wave never touched) |
+
+Six mutations driven, all caught, every restore SHA-256 verified:
+
+| mutation | caught by |
+|---|---|
+| M1 identity derived from a pane key | identity gate, 2 failed |
+| M2 durability barrier bypassed | syscall proof (and **not** the boundary gate — see §10.4) |
+| M3 provenance overwrites identity | identity gate |
+| M4 truncation collapses to `absent` | store gate, 2 failed |
+| M5 reasoning becomes durable | store gate |
+| M6 **optional** `paneKey` added to the record type | `tsc` TS2322 — the runtime half passed 7/7 and could not see it |
+
+### 10.7 A gate that could not see a writer doing it right
+
+Classifying the new store surfaced a real defect in the durability ratchet, measured by removing
+the contract and re-running: the gate reported *"13 contracts … no new ones", exit 0*. Both existing
+detectors key on **how** a module writes — a bare write to a user-data path, or a self-staged
+temp-and-rename — so a module that hands the whole publish to the durable primitive matched neither.
+Delegating correctly is what made it invisible, which is the same inversion the direct-writer list
+was added to fix, one level up.
+
+Closed with a third shrink-only ratchet over modules that import **and call** the primitive. Two
+existing delegates (`sidecar-snapshot-file`, `usage-cache-snapshot-writer`) are grandfathered rather
+than classified by guesswork from their names. Driven both ways: with the ratchet installed,
+removing the conversation contract now fails by name.
+
+### 10.8 Still open after W1
+
+- **NOT REACHABLE.** No production path creates, loads or renders an `OrcaConversation`. The
+  durability contract says so in `knownGaps`.
+- **No real-app run.** Nothing here went through Electron; the Playwright MCP server was also
+  unavailable this session. The full Production Reality Gate the directive describes — create,
+  render through NativeChat, destroy the pane, restart, resolve the same id — **cannot** be run yet,
+  and not for resource reasons: the wiring it would drive does not exist.
+- **No power-loss test.** The barrier is proven by syscall order, not by cutting power.
+- **Migration is specified, not implemented** (§10.5), and no legacy session has been adopted.
+- **Approval path still UNVERIFIED**, unchanged from W0 — W2 owns it.
+- The W0 transport bugs (`requestRpc` dropping empty `params`; unsolicited notifications reaching
+  the drop path) are **untouched by W1** and remain W2's, as planned.
