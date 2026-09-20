@@ -238,10 +238,10 @@ export async function runCodexAppServerSession<T>(
     const id = nextRequestId++
     const response = await new Promise<JsonRpcResponse>((resolve, reject) => {
       pending.set(id, { resolve, reject })
-      const payload: Record<string, unknown> = { method, id }
-      if (params !== undefined) {
-        payload.params = params
-      }
+      // Why always present: JSON-RPC 2.0 lets params be omitted, and this server does not.
+      // Measured against the installed binary — `account/read` with no params member came back
+      // -32600 Invalid Request, so a parameterless call silently failed for every caller.
+      const payload: Record<string, unknown> = { method, id, params: params ?? {} }
       try {
         sendLine(payload)
       } catch (error) {
