@@ -1,0 +1,35 @@
+# Status-token contrast debt, frozen as measured.
+#
+# `pnpm check:status-semantics` computes every status token's contrast from the live values in
+# main.css. The offenders below predate the gate. They are frozen rather than exempted: a NEW
+# offender fails the build, and an entry here that stops offending ALSO fails, so the list can
+# only shrink.
+#
+# Format:  STATE|token|theme|surface  # why it is still here
+#
+# One reason per line, mandatory. An exemption nobody can argue with is an exemption nobody
+# removes.
+
+# --ring is #a1a1a1 in the light theme, which is 2.37-2.58:1 against every surface it can sit
+# on — below WCAG 1.4.11's 3:1 for a non-text UI component. This is the app-wide focus
+# indicator, not a status token: darkening it changes the focus appearance of every control in
+# Orca and belongs to a focus-visibility change with its own screenshots, not to the status
+# semantics wave. Recorded here because it was measured here.
+SELECTED|ring|light|background  # app-wide focus ring, 2.58:1 vs #fff; fixing it restyles every focused control
+SELECTED|ring|light|card  # same token and value as above; --card is #fff in the light theme
+SELECTED|ring|light|muted  # 2.37:1, the worst of the four; same single fix
+SELECTED|ring|light|sidebar  # 2.48:1 vs #fafafa; same single fix
+
+# --muted-foreground on --muted is 4.35:1, 0.15 short of AA. It is the deliberate pairing for
+# de-emphasised text on a muted surface and predates this gate by the whole codebase. Moving it
+# reflows the contrast of every caption, placeholder and disabled label in the app.
+IDLE|muted-foreground|light|muted  # 4.35:1 vs 4.5 floor; de-emphasis pairing used app-wide
+
+# Phantom variable references: named in main.css, declared nowhere in the repo, so the literal
+# fallback wins on every render. Harmless today and dishonest in the source — the code claims a
+# token exists where none does. Both were traced (no writer in src/, main/, preload/ or any
+# stylesheet) rather than assumed. Frozen because collapsing them touches surfaces this wave
+# did not measure, not because they are acceptable.
+PHANTOM|bg-titlebar  # 6 read sites, all var(--bg-titlebar, var(--card)); the titlebar has only ever been --card. Collapse touches StatusBar, FloatingTerminalPanel, TerminalInstanceColumn, AppRootSurfaces.
+PHANTOM|ui-zoom-factor  # main.css width: calc(80px / var(--ui-zoom-factor, 1)) — always 80px. The macOS traffic-light gutter has never actually compensated for UI zoom; wiring it needs a real zoom measurement, not a token.
+
