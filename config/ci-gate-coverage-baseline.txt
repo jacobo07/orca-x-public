@@ -1,0 +1,13 @@
+# Gate scripts (check:* / verify:* in package.json) that no file under .github/workflows or
+# .github/actions invokes, so they refuse nothing in CI and run only when someone types them by
+# hand. Note that no workflow runs `pnpm lint`, so being chained into `lint` is not coverage.
+#
+# Format: script-name  # why it is not wired yet
+# A reason is mandatory. An exemption nobody can evaluate later is a permanent excuse, not debt.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — wire the gate
+# into a workflow instead. An entry whose gate is now wired, or whose script no longer exists, is
+# stale and fails the check.
+# Prune after wiring: node config/scripts/check-ci-gate-coverage.mjs --prune
+verify:built-skills-cli  # post-build gate: reads the built out/ tree, so it belongs in a job that has run a build, not in static analysis. Placement unverified — needs one CI run to confirm which package job produces out/cli.
+verify:cli-bin  # post-build gate: verifies out/cli/index.js. Passes locally only because a previous build left out/ behind; on a fresh static-analysis runner there is no out/. Same placement question as verify:built-skills-cli.

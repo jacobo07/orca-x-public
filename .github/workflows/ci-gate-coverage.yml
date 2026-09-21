@@ -1,0 +1,39 @@
+name: CI Gate Coverage
+
+# Why its own workflow rather than a step in pr.yml: pr.yml fires on `pull_request`, and this
+# repository merges locally and pushes — of the last 100 Actions runs, 94 were `schedule`, 3 were
+# `pull_request`. A gate whose job is to find gates mounted on events that never fire cannot be one
+# of them. This runs on every event that actually carries a change into main.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-gate-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    name: every gate script is invoked by CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      # The drill first: if the checker itself is broken, its verdict about the estate is worthless.
+      - name: Drill the coverage checker
+        run: pnpm exec vitest run --config config/vitest.config.ts config/scripts/check-ci-gate-coverage.test.mjs
+
+      - name: Check CI gate coverage
+        run: pnpm run check:ci-gate-coverage
