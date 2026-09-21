@@ -94,6 +94,16 @@ The lowercase `agentType` **wire** field is a different thing and does not move:
 
 `pnpm check:provider-noun-debt` freezes the identifiers that still spell it the old way (`baselineAgentType`, `resolveExplicitTerminalTitleAgentType`) in `config/provider-noun-debt-baseline.txt`. The list only shrinks: a new one fails the build, and an entry whose identifier was renamed must be pruned with `--update` or the list stops being a ratchet.
 
+## Workspace Execution Consent
+
+A third-party CLI's "Do you trust this folder?" prompt is its safety control against executing untrusted repository content. Orca may pre-write the artifact that answers it — which lives in the user's **real** home, globally and permanently — only once the user has actually granted consent for that workspace. "Orca launched an agent here" is not "the user trusts this folder".
+
+[`src/main/workspace-execution-consent.ts`](./src/main/workspace-execution-consent.ts) is the only authority. It fails closed on everything that is not an explicit recorded grant, and distinguishes three refusals — `denied`, `unrecorded`, `unreadable` — because they need different fixes. A grant is keyed by provider and by host, after canonicalization, and for Codex by the **resolved trust root** rather than the caller's path: a linked worktree's artifact trusts the repository root, so keying on the argument would let consent for one worktree authorize the whole repository.
+
+The gate lives in the four producer functions, not in their callers. The effect has five call sites across desktop launch prep, desktop resume, a renderer-callable IPC channel, remote worktrees and the runtime/headless host; guarding callers would fence those five and leave every future one open. A refusal is not a failure — the provider shows its own prompt, which is the control working. There is no product grant surface yet, so today every call degrades that way.
+
+`pnpm check:workspace-trust-authority` enforces it. The population is enumerated by what code **does** (writes one of the three artifacts), never by searching for the guard, with a floor so a blinded sweep cannot read as a clean bill. `preflightTrust` in `src/shared/tui-agent-config.ts` is an optional field, so a new provider that adds one line would otherwise inherit the whole effect silently: the gate fails until a gated producer handles that preset.
+
 ## Forked IPC Children
 
 Fork through `forkIpcChild()` ([`src/shared/ipc-message-listener-floor.ts`](./src/shared/ipc-message-listener-floor.ts)), or call `installIpcMessageListenerFloor(child)` when the fork itself is injectable. `pnpm check:ipc-message-floor` fails on any file under `src/` that owns an IPC child without one, and `config/ipc-message-floor-baseline.txt` only shrinks.
