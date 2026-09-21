@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
+  openConversationsPage: vi.fn(),
   openArtifactsPage: vi.fn(),
   openSkillsPage: vi.fn(),
   openWorkspacePage: vi.fn(),
@@ -87,6 +88,7 @@ function renderRail(settings: Record<string, unknown> = {}): void {
     openAutomationsPage: mocks.openAutomationsPage,
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
+    openConversationsPage: mocks.openConversationsPage,
     openArtifactsPage: mocks.openArtifactsPage,
     openSkillsPage: mocks.openSkillsPage,
     openWorkspacePage: mocks.openWorkspacePage
@@ -140,6 +142,42 @@ describe('WorkspaceActivityRailSection', () => {
 
     act(() => activity('workspace')?.click())
     expect(mocks.openWorkspacePage).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Every visible entry, not a sample of two.
+   *
+   * `conversations` shipped visible with no branch in the rail's `select`, so it rendered, took
+   * focus and dispatched nothing — a dead control, indistinguishable from a working one until
+   * somebody clicked it in the real app. The two entries this file happened to cover were both
+   * wired, so nothing went red. Driving the whole visible set is what makes the next one fail here
+   * instead of in a product-reality run.
+   */
+  it('leaves no visible activity that dispatches nothing', () => {
+    renderRail({
+      showConversationsButton: true,
+      showArtifactsButton: true,
+      showSkillsButton: true,
+      experimentalActivity: true
+    })
+
+    const dispatched: [string, ReturnType<typeof vi.fn>][] = [
+      ['workspace', mocks.openWorkspacePage],
+      ['conversations', mocks.openConversationsPage],
+      ['automations', mocks.openAutomationsPage],
+      ['agents', mocks.openActivityPage],
+      ['artifacts', mocks.openArtifactsPage],
+      ['skills', mocks.openSkillsPage],
+      ['mobile', mocks.openMobilePage]
+    ]
+
+    for (const [id, open] of dispatched) {
+      const button = activity(id)
+      // A missing button would make the click a no-op and the assertion below vacuous.
+      expect(button, `${id} is not rendered`).not.toBeNull()
+      act(() => button?.click())
+      expect(open, `clicking ${id} dispatched nothing`).toHaveBeenCalledTimes(1)
+    }
   })
 
   it('retires the Mobile "New" marker by opening the surface, as the row did', () => {

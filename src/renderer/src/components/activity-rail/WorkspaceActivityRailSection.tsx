@@ -317,6 +317,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
+  const openConversationsPage = useAppStore((s) => s.openConversationsPage)
 
   const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
   const showsAgents = visible.includes('agents')
@@ -338,10 +339,12 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
   )
 
   const select = React.useCallback(
-    (activity: WorkspaceActivityId) => {
+    (activity: WorkspaceActivityId): void => {
       switch (activity) {
         case 'workspace':
           return openWorkspacePage()
+        case 'conversations':
+          return openConversationsPage()
         case 'tasks':
           return openTaskPage()
         case 'automations':
@@ -356,6 +359,14 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
           // Opening the surface retires the "New" marker, exactly as the row did.
           mobileOnboardingBadge.dismiss()
           return openMobilePage()
+        default: {
+          // A rail entry that dispatches nothing is a dead control, and it looks identical to a
+          // working one: it renders, it takes focus, and it does nothing. `conversations` shipped
+          // exactly that way — visible, with no case here — and only a run that clicked it in the
+          // real app noticed. This makes the next omission a compile error instead.
+          const unhandled: never = activity
+          return unhandled
+        }
       }
     },
     [
@@ -363,6 +374,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
       openActivityPage,
       openArtifactsPage,
       openAutomationsPage,
+      openConversationsPage,
       openMobilePage,
       openSkillsPage,
       openTaskPage,

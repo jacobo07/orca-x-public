@@ -741,6 +741,7 @@ export type UISlice = {
   closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  openConversationsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1530,6 +1531,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   // No closeWorkspacePage twin: the launcher is left by opening a project, which is a real
   // navigation to that workspace, not a dismissal that has to restore where you came from.
   openWorkspacePage: () => set({ activeView: 'workspace' }),
+  // No previous-view tracking: conversations has no close or back affordance yet, and state that
+  // nothing reads is worse than state that does not exist.
+  openConversationsPage: () => set({ activeView: 'conversations' }),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',
