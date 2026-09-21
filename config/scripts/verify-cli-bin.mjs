@@ -18,6 +18,17 @@ const OUT_COMMONJS_PACKAGE_JSON = `${JSON.stringify(
 /**
  * Verifies the published CLI entrypoint and the module-type boundary for the
  * compiled output tree that the packaged CLI loads at runtime.
+ *
+ * There is deliberately no bare `verify:cli-bin` package script. Measured 2026-09-21, a strict
+ * run proves nothing the build does not already prove:
+ *   - bin declared, present, non-empty, Node shebang: build:cli runs these and fails on them.
+ *   - out/package.json exists and is type=commonjs: tautological. --fix-package-json WRITES that
+ *     file and is its only producer in the estate, so a strict check can only ever read back what
+ *     the repair just made. electron-builder packages it; nothing else creates it.
+ *   - the executable bit: repaired here, and nothing strips it after the build.
+ *   - --run-help: no caller, and dominated by smoke-packaged-cli.mjs, which exercises the real
+ *     packaged artifact rather than the pre-package tree.
+ * Zero debt was reached by deleting a gate that could not fail, not by wiring one for symmetry.
  */
 export function verifyPackageCliBin({
   projectDir = path.resolve(import.meta.dirname, '..', '..'),

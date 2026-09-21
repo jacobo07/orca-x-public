@@ -10,4 +10,4 @@
 # into a workflow instead. An entry whose gate is now wired, or whose script no longer exists, is
 # stale and fails the check.
 # Prune after wiring: node config/scripts/check-ci-gate-coverage.mjs --prune
-verify:cli-bin  # the only CI invocation of verify-cli-bin.mjs is inside build:cli, which passes --fix-executable --fix-package-json and so REPAIRS two of the things the bare gate refuses; the strict gate runs nowhere. Wiring it means a step after "Build package inputs" (pr.yml) in the packaging job that has an out/ tree, not a static-analysis step.
+
