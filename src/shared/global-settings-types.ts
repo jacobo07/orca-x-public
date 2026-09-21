@@ -237,6 +237,10 @@ export type GlobalSettings = {
   showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
+  /** Opt-in, like Artifacts and Skills: a new surface must never appear for someone who did not
+   *  ask for it. Conversations are durable whether or not this is on — the flag governs the rail
+   *  entry, not the data. */
+  showConversationsButton?: boolean
   /** Only toggles the sidebar shortcut; the workspace launcher stays reachable from Settings. */
   showWorkspaceButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */

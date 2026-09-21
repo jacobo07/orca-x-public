@@ -16643,5 +16643,24 @@
         "noPlan": "This session can't be resumed here."
       }
     }
+  },
+  "conversations": {
+    "railLabel": "Chats",
+    "newChat": "New chat",
+    "empty": "No conversations yet.",
+    "rowUnreadable": "Unreadable conversation",
+    "rowTooNew": "Saved by a newer Orca",
+    "untitled": "Untitled",
+    "noticeAuthRequired": "Codex is not signed in. Sign in, then send again — your message was kept.",
+    "noticeBusy": "This conversation is still answering. Wait for it to finish before sending again.",
+    "noticeNotDurable": "The answer arrived but could not be saved, so it is not in your history. Send again rather than relying on it.",
+    "noticeFailed": "The turn failed. Your message was kept.",
+    "noticeInterrupted": "The turn was interrupted before it finished. Your message was kept.",
+    "noticeAbsent": "This conversation is no longer on disk. Nothing was sent.",
+    "noticeApprovalDeclined": "The agent asked to run a command and Orca declined it. Approving actions from a conversation is not built yet.",
+    "composerLabel": "Message",
+    "composerHint": "Enter sends. Shift+Enter starts a new line.",
+    "sending": "Working…",
+    "send": "Send"
   }
 }

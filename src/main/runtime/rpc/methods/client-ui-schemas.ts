@@ -177,7 +177,13 @@ const TopLevelViewSchema = z.enum([
   'space',
   'skills',
   'artifacts',
-  'mobile'
+  'mobile',
+  // Accepting a value is the safe direction: a paired client that never sends it is unaffected.
+  // PUBLISHING it is the direction that reaches old clients, and it only happens once someone
+  // turns on an opt-in surface and navigates to it; an older decoder then sees an activeView it
+  // does not know. Tracked as remote-wire debt rather than hidden, per
+  // docs/reference/remote-wire-compatibility.md.
+  'conversations'
 ])
 const UiUpdateFields = z
   .object({

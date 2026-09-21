@@ -38,17 +38,24 @@ describe('getVisibleWorkspaceActivities', () => {
     expect(getVisibleWorkspaceActivities({ showArtifactsButton: true })).toContain('artifacts')
     expect(getVisibleWorkspaceActivities({ showSkillsButton: true })).toContain('skills')
     expect(getVisibleWorkspaceActivities({ experimentalActivity: true })).toContain('agents')
+    expect(getVisibleWorkspaceActivities({ showConversationsButton: true })).toContain(
+      'conversations'
+    )
 
     // A truthy-looking absence must not switch them on.
     expect(getVisibleWorkspaceActivities({ showArtifactsButton: false })).not.toContain('artifacts')
     expect(getVisibleWorkspaceActivities({ showSkillsButton: false })).not.toContain('skills')
     expect(getVisibleWorkspaceActivities({ experimentalActivity: false })).not.toContain('agents')
+    // The one that matters most for a brand-new surface: an unset key is not consent.
+    expect(getVisibleWorkspaceActivities({})).not.toContain('conversations')
+    expect(getVisibleWorkspaceActivities(null)).not.toContain('conversations')
   })
 
   it('keeps one canonical order regardless of which activities are enabled', () => {
     const all = getVisibleWorkspaceActivities({
       showArtifactsButton: true,
       showSkillsButton: true,
+      showConversationsButton: true,
       experimentalActivity: true
     })
 

@@ -9,6 +9,7 @@ import {
   Github,
   Gitlab,
   List,
+  MessageSquare,
   Smartphone
 } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -53,6 +54,7 @@ const ACTIVITY_ICONS: Record<
   React.ComponentType<{ size?: number; className?: string }>
 > = {
   workspace: AppWindow,
+  conversations: MessageSquare,
   tasks: List,
   automations: CalendarClock,
   agents: Bell,
@@ -63,6 +65,8 @@ const ACTIVITY_ICONS: Record<
 
 function activityLabel(activity: WorkspaceActivityId): string {
   switch (activity) {
+    case 'conversations':
+      return translate('conversations.railLabel', 'Chats')
     case 'workspace':
       return translate('auto.components.sidebar.SidebarNav.workspace', 'Workspace')
     case 'tasks':
@@ -256,6 +260,9 @@ function TasksActivityRailButton({
  */
 const HIDE_SETTING_BY_ACTIVITY: Record<WorkspaceActivityId, keyof GlobalSettings | null> = {
   workspace: 'showWorkspaceButton',
+  // Hideable like the other opt-in surfaces: something you turned on, you can turn off from the
+  // rail itself rather than having to find the setting again.
+  conversations: 'showConversationsButton',
   tasks: 'showTasksButton',
   automations: 'showAutomationsButton',
   mobile: 'showMobileButton',

@@ -15,6 +15,7 @@ import type { TopLevelView } from '../../../../shared/ui-chrome-types'
 
 export type WorkspaceActivityId =
   | 'workspace'
+  | 'conversations'
   | 'tasks'
   | 'automations'
   | 'agents'
@@ -27,9 +28,15 @@ export type WorkspaceActivityId =
  * feeds it, then the scheduled work behind it. The opt-in surfaces follow, and the companion
  * device — reached once during setup, rarely after — is last. Deliberately not the historical
  * sidebar order, which grew by append.
+ *
+ * Conversations sit SECOND, next to the workspace they think about, and not first: "entry point
+ * first" is a product decision this file's own test pins, and the reference information
+ * architecture that leads with a chat entry is a navigation decision for that wave to make
+ * deliberately, not something a new surface should take by arriving.
  */
 export const WORKSPACE_ACTIVITY_ORDER: readonly WorkspaceActivityId[] = [
   'workspace',
+  'conversations',
   'tasks',
   'automations',
   'agents',
@@ -47,11 +54,13 @@ export type WorkspaceActivitySettings = Partial<
     | 'showMobileButton'
     | 'showArtifactsButton'
     | 'showSkillsButton'
+    | 'showConversationsButton'
     | 'experimentalActivity'
   >
 > | null | undefined
 
 const ACTIVE_VIEW_BY_ACTIVITY: Record<WorkspaceActivityId, TopLevelView> = {
+  conversations: 'conversations',
   workspace: 'workspace',
   tasks: 'tasks',
   automations: 'automations',
@@ -82,6 +91,8 @@ function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySet
       return settings?.showArtifactsButton === true
     case 'skills':
       return settings?.showSkillsButton === true
+    case 'conversations':
+      return settings?.showConversationsButton === true
     case 'agents':
       return settings?.experimentalActivity === true
   }
