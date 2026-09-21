@@ -120,6 +120,31 @@ describe('ConversationService — the user message is durable before anything el
     expect(loaded.record.messages).toHaveLength(1)
   })
 
+  it('lands every concurrent append to one conversation', async () => {
+    const svc = service()
+    const created = await svc.create({})
+
+    // The regression this pins: the service used to build a NEW ConversationStore per call, so the
+    // per-conversation append queue was empty every time and nothing serialized. These three then
+    // all read the same ordering watermark, the on-disk fence correctly refused two of them, and
+    // the losers came back `superseded` and were dropped. The fence was doing its job; the queue
+    // was simply never reached.
+    const results = await Promise.all([
+      svc.commitUserMessage(created.id, 'first', 'item-a'),
+      svc.commitUserMessage(created.id, 'second', 'item-b'),
+      svc.commitUserMessage(created.id, 'third', 'item-c')
+    ])
+
+    expect(results.map((result) => result.outcome)).toEqual(['published', 'published', 'published'])
+    const loaded = await service().read(created.id)
+    if (loaded.outcome !== 'loaded') {
+      throw new Error(`expected loaded, got ${loaded.outcome}`)
+    }
+    expect(loaded.record.messages).toHaveLength(3)
+    // Orca-assigned ordering: every message got a distinct slot.
+    expect(new Set(loaded.record.messages.map((message) => message.seq)).size).toBe(3)
+  })
+
   it('refuses to commit into a conversation that does not exist', async () => {
     const result = await service().commitUserMessage(mintConversationId(), 'hi', 'item-1')
     expect(result.outcome).toBe('absent')

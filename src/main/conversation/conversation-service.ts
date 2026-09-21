@@ -44,8 +44,29 @@ export class ConversationService {
 
   constructor(private readonly directoryForActiveProfile: () => string) {}
 
+  /**
+   * Cached PER DIRECTORY, and this is load-bearing rather than an optimization.
+   *
+   * ConversationStore owns the per-conversation append queue that serializes writers. A fresh store
+   * per call gives every append its own empty queue, so nothing contends and nothing serializes —
+   * concurrent appends then all read the same ordering watermark, the on-disk fence correctly
+   * refuses every one after the first, and the losers are reported `superseded` and silently
+   * dropped. Measured exactly that way: an assistant message vanished while the user message stayed.
+   *
+   * Keying on the directory keeps the per-call profile resolution above honest: a different profile
+   * is a different directory and therefore a different store, so no queue is shared across profiles.
+   */
+  private readonly storesByDirectory = new Map<string, ConversationStore>()
+
   private store(): ConversationStore {
-    return new ConversationStore(this.directoryForActiveProfile())
+    const directory = this.directoryForActiveProfile()
+    const existing = this.storesByDirectory.get(directory)
+    if (existing) {
+      return existing
+    }
+    const created = new ConversationStore(directory)
+    this.storesByDirectory.set(directory, created)
+    return created
   }
 
   async create(input: CreateConversationInput = {}): Promise<ConversationRecord> {
