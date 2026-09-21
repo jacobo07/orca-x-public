@@ -53,6 +53,34 @@ jobs:
       - name: Check durability contracts
         run: pnpm run check:durability-contracts
 
+      # Why these are listed individually rather than via `pnpm lint`: no workflow runs `pnpm lint`,
+      # and it chains nineteen commands with `&&`, so the first failure prevents every later gate
+      # from running at all while reporting as one red. A step per gate keeps each one's verdict its
+      # own. check:ci-gate-coverage fails if a future gate script is added and left unwired.
+      - name: Check recurring-work inventory
+        run: pnpm run check:recurring-work
+
+      - name: Check IPC message listener floor
+        run: pnpm run check:ipc-message-floor
+
+      - name: Check runtime host query queue
+        run: pnpm run check:runtime-host-queue
+
+      - name: Check execution host scope widening
+        run: pnpm run check:execution-host-scope
+
+      - name: Check variant parity
+        run: pnpm run check:variant-parity
+
+      - name: Check mobile capability aperture
+        run: pnpm run check:mobile-aperture
+
+      - name: Check visual asset registry
+        run: pnpm run check:visual-assets
+
+      - name: Check status semantics
+        run: pnpm run check:status-semantics
+
       - name: Check VM runtime rollback compatibility
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
