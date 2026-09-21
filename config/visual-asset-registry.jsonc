@@ -38,7 +38,7 @@
     "fileNamePattern": "^([a-z0-9-]+)\\.([a-z0-9-]+)\\.([a-z]+)\\.([a-z0-9-]+)\\.r([0-9]{2})\\.png$",
     // Raised as waves land. A floor is what tells a sweep that found nothing apart from an
     // estate that has nothing.
-    "minimumAssets": 1
+    "minimumAssets": 2
   },
   "assets": [
     {
@@ -52,7 +52,7 @@
       "truth": "target",
       "targetLabel": true,
       "producer": "generated",
-      "status": "candidate",
+      "status": "superseded",
       "file": "shell/shell.global.desktop.at-rest.r01.png",
       "sha256": "f7090cf2e634025d500f083220a8fce6ac920c107a1c3ebd4e45b36e6514a5fc",
       "date": "2026-09-21",
@@ -74,7 +74,27 @@
       //      this asset is not usable as a copy reference at all.
       // Both are deltas the renderer settles, which is why the next revision should be a
       // token-true render rather than another generation.
-      "notes": "W1 pipeline proof. Selection fill and a label typo block approval; see critique in docs/visual/codex-image-generation-contract.md."
+      "notes": "W1 pipeline proof. Selection fill and a label typo block approval; see critique in docs/visual/codex-image-generation-contract.md. Superseded by r02, which fixes both in the renderer rather than by re-rolling."
+    },
+    {
+      "assetId": "shell.global.desktop.at-rest.r02",
+      "surface": "shell",
+      "subsurface": "global",
+      "device": "desktop",
+      "state": "at-rest",
+      "revision": 2,
+      "class": "north-star",
+      // Rendered, not photographed: this is designed intent for a composition the app does
+      // not ship yet, so it carries the TARGET label even though every pixel in it comes from
+      // the live tokens.
+      "truth": "target",
+      "targetLabel": true,
+      "producer": "html",
+      "status": "candidate",
+      "file": "shell/shell.global.desktop.at-rest.r02.png",
+      "sha256": "99160c1c211bc339f82e2b5e03595a46ff17d97430d165b19a55a947f6beec73",
+      "date": "2026-09-21",
+      "notes": "Rendered from docs/visual/producers/shell.global.desktop.at-rest.html at 1440x900 CSS, 2x (2880x1800). Corrects r01's two blocking deltas: the selected row is an accent surface plus data-current rather than a saturated fill, and the Spanish is right. All five status marks are the W1 tokens, UNKNOWN hollow among filled."
     }
   ]
 }

@@ -17,6 +17,15 @@
       and this page changes. The Tailwind @import at the top of main.css 404s when this file is
       opened directly; :root and .dark are plain CSS and still apply, which is all this reads.
     -->
+    <!--
+      Tailwind's own palette, from the installed version, loaded FIRST because main.css
+      forwards two Orca tokens into it (--status-error -> var(--color-red-400),
+      --agent-question -> var(--color-orange-500)). Without it those two resolve to nothing and
+      the CRITICAL and NEEDS_APPROVAL states render as no dot at all — measured on the first
+      capture of this page. This is upstream's palette, not an Orca token: Orca's semantics
+      still come only from main.css below.
+    -->
+    <link rel="stylesheet" href="../../../node_modules/tailwindcss/theme.css" />
     <link rel="stylesheet" href="../../../src/renderer/src/assets/main.css" />
 
     <style>

@@ -12,6 +12,13 @@
       that is fine — the :root and .dark custom-property blocks are plain CSS and still apply,
       which is the only part this sheet reads. Nothing here hardcodes a colour.
     -->
+    <!--
+      Tailwind's own palette first: main.css forwards --status-error and --agent-question into
+      it, and a browser ignores @theme blocks entirely, so without this those two states render
+      as no colour at all. config/scripts/capture-visual-producer.mjs materialises the same
+      declarations when capturing; this link is what makes the page right when a human opens it.
+    -->
+    <link rel="stylesheet" href="../../../node_modules/tailwindcss/theme.css" />
     <link rel="stylesheet" href="../../../src/renderer/src/assets/main.css" />
 
     <style>
