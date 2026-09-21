@@ -3,6 +3,7 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()
 const requestListeners = new Set<() => void>()
@@ -131,6 +132,30 @@ export function shouldMountBackgroundWorktreeTab(
   tabId: string
 ): boolean {
   return restrictedTabIds === null || restrictedTabIds.has(tabId)
+}
+
+export type TerminalTabMountDecision = 'mount' | 'render-deferred' | 'dormant'
+
+/** Dormant means positively marked and not yet opened — never merely "has no PTY". */
+export function isTerminalTabDormant(
+  tab: Pick<TerminalTab, 'dormancy' | 'dormantOpenRequested'>
+): boolean {
+  return tab.dormancy !== undefined && tab.dormantOpenRequested !== true
+}
+
+/**
+ * The one answer to "does this terminal tab get a pane now?". Dormancy is checked before the
+ * restriction because the restriction dissolves (threshold, full reveal, kill switch) and
+ * dormancy must not: a pane mount is a PTY spawn and, with a sleeping record, a resume.
+ */
+export function decideTerminalTabMount(
+  restrictedTabIds: ReadonlySet<string> | null,
+  tab: Pick<TerminalTab, 'id' | 'dormancy' | 'dormantOpenRequested'>
+): TerminalTabMountDecision {
+  if (isTerminalTabDormant(tab)) {
+    return 'dormant'
+  }
+  return shouldMountBackgroundWorktreeTab(restrictedTabIds, tab.id) ? 'mount' : 'render-deferred'
 }
 
 // Why deferral exists: activating a worktree used to mount a TerminalPane for

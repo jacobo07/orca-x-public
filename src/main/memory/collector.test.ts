@@ -37,6 +37,10 @@ vi.mock('./pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
+vi.mock('./terminal-host-daemon-pids', () => ({
+  listConnectedDaemonPids: () => []
+}))
+
 async function loadCollector() {
   vi.resetModules()
   return await import('./collector')
@@ -651,6 +655,25 @@ describe('collectMemorySnapshot', () => {
     await collectMemorySnapshot(emptyStore)
 
     expectProcessSweepCount(2)
+  })
+
+  // Why: post-effect reclaim compares exact pids, so each session names the processes behind its bytes.
+  it('lists the processes each session claimed and when the sweep began', async () => {
+    mockPsResponse(['10 1 0 1024', '11 10 0 2048', '99 1 0 4096'].join('\n'))
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'p', worktreeId: 'repo-1::/repo', sessionId: 's', paneKey: 'pane-1', pid: 10 }
+    ])
+    const { collectMemorySnapshot } = await loadCollector()
+    const before = Date.now()
+
+    const snap = await collectMemorySnapshot(emptyStore)
+
+    expect(snap.worktrees[0].sessions[0].processes).toEqual([
+      { pid: 10, memory: 1024 * 1024 },
+      { pid: 11, memory: 2048 * 1024 }
+    ])
+    expect(snap.sweepStartedAt).toBeGreaterThanOrEqual(before)
+    expect(snap.sweepStartedAt).toBeLessThanOrEqual(snap.collectedAt)
   })
 
   it('uses host process RSS for Electron app metrics when available', async () => {

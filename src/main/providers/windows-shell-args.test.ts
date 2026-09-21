@@ -8,6 +8,7 @@ import {
 } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import { getPowerShellStartupCommandBoundary } from '../powershell-osc133-bootstrap'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 const CMD_CODEX_LAUNCH_PREFLIGHT =
@@ -199,6 +200,33 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).toContain('function Global:prompt')
     expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+  })
+
+  it('brackets an embedded startup command like a typed one, so its exit emits 133;D', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "& 'claude' '--resume' 'session-s'"
+    )
+    const command = decodePowerShellCommand(result)
+    const boundary = command.indexOf(getPowerShellStartupCommandBoundary())
+    const startup = command.indexOf("& 'claude' '--resume' 'session-s'")
+    const cwdRestore = command.indexOf(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
+    expect(boundary).toBeGreaterThan(cwdRestore)
+    expect(startup).toBeGreaterThan(boundary)
+    expect(getPowerShellStartupCommandBoundary()).toContain('HasSeenPrompt = $true')
+    expect(getPowerShellStartupCommandBoundary()).toContain(')]133;C$(')
+  })
+
+  it('adds no command boundary to a bare shell', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice'
+    )
+    expect(decodePowerShellCommand(result)).not.toContain(getPowerShellStartupCommandBoundary())
   })
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {

@@ -1,4 +1,5 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
+import { ORCA_PROMPT_MARKER_TAG } from '../shared/terminal-osc133-prompt-state'
 import { getPowerShellCodexShellLaunchPreflight } from './pty/codex-shell-launch-preflight'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
@@ -32,6 +33,7 @@ ${getPowerShellCodexShellLaunchPreflight()}
         HasPSReadLine = $null -ne (Get-Module -Name PSReadLine)
         Esc = [char]27
         Bel = [char]7
+        PromptTag = ""
     }
 
     function Global:prompt {
@@ -43,11 +45,11 @@ ${getPowerShellCodexShellLaunchPreflight()}
         # Emit D from prompt, not readline state. Some profile setups bypass
         # PSConsoleHostReadLine; the consumer only needs completion.
         if ($Global:__OrcaOsc133State.HasSeenPrompt) {
-            $result += "$($Global:__OrcaOsc133State.Esc)]133;D;$fakeExitCode$($Global:__OrcaOsc133State.Bel)"
+            $result += "$($Global:__OrcaOsc133State.Esc)]133;D;$fakeExitCode$($Global:__OrcaOsc133State.PromptTag)$($Global:__OrcaOsc133State.Bel)"
         }
         $Global:__OrcaOsc133State.HasSeenPrompt = $true
 
-        $result += "$($Global:__OrcaOsc133State.Esc)]133;A$($Global:__OrcaOsc133State.Bel)"
+        $result += "$($Global:__OrcaOsc133State.Esc)]133;A$($Global:__OrcaOsc133State.PromptTag)$($Global:__OrcaOsc133State.Bel)"
         # Preserve the previous success/failure value for prompts that inspect it.
         if ($fakeExitCode -ne 0) { Write-Error "failure" -ea ignore }
         $result += $Global:__OrcaOsc133State.OriginalPrompt.Invoke()
@@ -62,12 +64,26 @@ ${getPowerShellCodexShellLaunchPreflight()}
             [Console]::Write("$($Global:__OrcaOsc133State.Esc)]133;C$($Global:__OrcaOsc133State.Bel)")
             return $commandLine
         }
+        # Only a shell whose commands emit 133;C may vouch for its prompt.
+        $Global:__OrcaOsc133State.PromptTag = ";${ORCA_PROMPT_MARKER_TAG}"
     }
 }
 `
 
 export function getPowerShellOsc133Bootstrap(): string {
   return POWERSHELL_OSC133_BOOTSTRAP
+}
+
+// Why: a startup command embedded in -EncodedCommand runs before the first prompt, so it
+// never passes readline (no 133;C) and that prompt skips 133;D. Bracket it like a typed
+// command, or its exit (an agent leaving to the shell) is never observed.
+const POWERSHELL_STARTUP_COMMAND_BOUNDARY = `if (Test-Path variable:global:__OrcaOsc133State) {
+    $Global:__OrcaOsc133State.HasSeenPrompt = $true
+    [Console]::Write("$($Global:__OrcaOsc133State.Esc)]133;C$($Global:__OrcaOsc133State.Bel)")
+}`
+
+export function getPowerShellStartupCommandBoundary(): string {
+  return POWERSHELL_STARTUP_COMMAND_BOUNDARY
 }
 
 export function isPowerShellExecutableName(shellName: string): boolean {

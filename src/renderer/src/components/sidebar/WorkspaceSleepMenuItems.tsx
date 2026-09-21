@@ -27,7 +27,11 @@ export function WorkspaceSleepMenuItems({
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <DropdownMenuItem onSelect={onSleep} disabled={sleepDisabled}>
+          <DropdownMenuItem
+            data-testid="worktree-menu-sleep"
+            onSelect={onSleep}
+            disabled={sleepDisabled}
+          >
             <Moon className="size-3.5" />
             {sleepLabel}
           </DropdownMenuItem>

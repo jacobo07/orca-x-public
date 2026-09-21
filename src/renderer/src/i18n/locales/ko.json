@@ -1,4 +1,94 @@
 {
+  "durableExit": {
+    "toast": {
+      "parked": "모든 항목이 절전 상태로 저장되었습니다. Orca를 종료합니다.",
+      "stayedOpen": "Orca가 열린 상태로 유지됩니다",
+      "refused": "작업이 실행 중인 워크스페이스가 {{count}}개 있어 아무것도 절전하지 않았습니다.",
+      "incomplete": "일부 워크스페이스는 절전되었지만 {{count}}개는 절전하지 못해 계속 실행 중입니다.",
+      "sealFailed": "세션을 저장하지 못해 Orca가 열린 상태로 유지됩니다.",
+      "unavailable": "지금 이 창에서는 절전 후 종료를 사용할 수 없습니다."
+    }
+  },
+  "workingSet": {
+    "dormantTerminal": {
+      "title": "복원됨, 실행 안 함",
+      "sleptTitle": "절전 중, 실행 안 함",
+      "sleptFreshBody": "열면 해당 폴더에서 이 터미널을 다시 시작합니다.",
+      "resumeBody": "열면 {{agent}} 세션을 재개합니다.",
+      "freshBody": "열면 해당 폴더에서 새 터미널을 시작합니다.",
+      "open": "열기"
+    },
+    "history": {
+      "menu": "스냅샷…",
+      "title": "스냅샷 · {{name}}",
+      "description": "이 작업 공간에 저장된 터미널 구성입니다. 복원하면 탭이 실행되지 않은 상태로 돌아오며, 열 때만 시작됩니다. 파일은 변경되지 않습니다.",
+      "loading": "스냅샷을 불러오는 중…",
+      "unavailable": "이 클라이언트에서는 스냅샷을 사용할 수 없습니다.",
+      "invalidRequest": "이 작업 공간을 스냅샷 저장소와 연결할 수 없습니다.",
+      "unreadable": "스냅샷 저장소를 읽을 수 없습니다({{code}}).",
+      "empty": "이 작업 공간에 저장된 스냅샷이 아직 없습니다.",
+      "listLabel": "저장된 스냅샷",
+      "untitled": "제목 없는 스냅샷",
+      "tabCount": "탭: {{count}}",
+      "latest": "최신",
+      "problemsTitle": "복원할 수 없음",
+      "problem": {
+        "unsupportedVersion": "최신 버전의 Orca X에서 저장됨",
+        "corrupt": "손상된 파일",
+        "unreadable": "읽을 수 없음",
+        "missing": "디스크에 더 이상 없음",
+        "unverified": "저장이 확인되지 않음",
+        "unrecognized": "스냅샷 폴더의 알 수 없는 파일"
+      },
+      "checkingProfiles": "실행 옵션을 확인하는 중…",
+      "previewLoading": "이 스냅샷으로 복원할 수 있는 항목을 확인하는 중…",
+      "profilesUnresolved": "실행 옵션을 확인할 수 없어 일부 탭이 알 수 없음으로 표시될 수 있습니다.",
+      "capability": {
+        "exactResume": "세션 재개: {{count}}",
+        "restartable": "다시 실행: {{count}}",
+        "recreateContext": "해당 폴더의 새 터미널: {{count}}",
+        "historyOnly": "기록만: {{count}}",
+        "notRestorable": "복원 불가: {{count}}",
+        "unknown": "알 수 없음: {{count}}"
+      },
+      "liveElsewhere": "다른 곳에서 열려 있어 여기서 재개하지 않음: {{count}}",
+      "blocker": {
+        "currentWork": "이 작업 공간에 열린 탭이 있습니다. 복원하기 전에 닫으세요. 아무것도 대체되지 않습니다.",
+        "scopeMismatch": "이 스냅샷은 다른 작업 공간에 속합니다.",
+        "hostUnavailable": "이 작업 공간의 호스트를 사용할 수 없습니다."
+      },
+      "read": {
+        "missing": "이 스냅샷은 더 이상 디스크에 없습니다. 목록을 새로 고쳤습니다.",
+        "unsupportedVersion": "이 스냅샷은 최신 버전의 Orca X에서 저장되었습니다.",
+        "corrupt": "이 스냅샷 파일이 손상되었습니다.",
+        "unreadable": "이 스냅샷을 읽을 수 없습니다({{code}}).",
+        "invalidRequest": "이 스냅샷 요청의 형식이 잘못되었습니다."
+      },
+      "selectPrompt": "복원할 스냅샷을 선택하세요.",
+      "restore": "복원",
+      "restoring": "복원하는 중…",
+      "close": "닫기",
+      "restored": "스냅샷을 복원했습니다. 탭은 열 때만 시작됩니다.",
+      "result": {
+        "targetChanged": "복원 중에 작업 공간이 변경되어 아무것도 대체하지 않았습니다.",
+        "failedRolledBack": "복원에 실패하여 되돌렸습니다. 작업 공간은 변경되지 않았습니다.",
+        "failedNotRolledBack": "복원에 실패했고 완전히 되돌리지 못했습니다. 이 작업 공간의 탭을 확인하세요."
+      }
+    },
+    "save": {
+      "action": "현재 터미널 저장",
+      "saved": "스냅샷을 저장했습니다.",
+      "savedWithoutSomeHistory": "스냅샷을 저장했지만 일부 터미널 기록을 복사하지 못했습니다.",
+      "noTerminals": "이 작업 공간에는 저장할 터미널이 없습니다.",
+      "notCapturable": "이 작업 공간의 터미널을 캡처할 수 없습니다({{reason}}).",
+      "refusedInvalid": "스냅샷이 유효하지 않아 거부되었습니다({{reason}}).",
+      "unsupportedVersion": "이 빌드는 해당 버전의 스냅샷을 쓸 수 없습니다.",
+      "identityCollision": "이 ID의 스냅샷이 이미 있습니다. 다시 시도하세요.",
+      "writeFailed": "스냅샷을 쓸 수 없습니다({{code}}).",
+      "readBackFailed": "저장했지만 확인하지 못했습니다. 새로 고치면 나타날 수 있습니다.",
+      "verifyFailed": "저장된 스냅샷이 보낸 내용과 일치하지 않아 따로 보관했습니다."
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",
@@ -49,6 +139,7 @@
     "reportCrash": "크래시 신고...",
     "file": "파일",
     "newWindow": "새 창",
+    "parkAndExit": "모두 절전 후 종료",
     "exit": "종료",
     "edit": "편집",
     "appearance": "외관",
@@ -2679,6 +2770,9 @@
             "stop_command_title": "실행 중인 명령을 중지할까요?",
             "stop_agent_description": "이 terminal을 닫으면 agent의 현재 작업이 중지됩니다.",
             "stop_command_description": "이 terminal을 닫으면 내부에서 실행 중인 명령이 중지됩니다.",
+            "discard_unsent_input_title": "입력한 내용을 버릴까요?",
+            "discard_unsent_input_confirm": "버리고 닫기",
+            "discard_unsent_input_description": "이 terminal의 프롬프트에 아직 전송하지 않은 입력이 있습니다. 닫으면 그 줄은 사라집니다.",
             "dont_ask_again": "실행 중인 terminals에 대해 다시 묻지 않기",
             "stop_agent_confirm": "Agent 중지",
             "stop_command_confirm": "중지하고 닫기"
@@ -3477,6 +3571,61 @@
             "updatedOne": "1개 서버 업데이트 완료"
           },
           "resource": {
+            "sleepReclaim": {
+              "sectionLabel": "유휴 에이전트 메모리",
+              "idleOne": "유휴 에이전트 1개를 절전할 수 있습니다",
+              "idleMany": "유휴 에이전트 {{value0}}개를 절전할 수 있습니다",
+              "measured": "~{{value0}} {{value1}}",
+              "unknownOne": "그중 1개는 측정되지 않아 이 수치에 포함되지 않습니다",
+              "unknownMany": "그중 {{value0}}개는 측정되지 않아 이 수치에 포함되지 않습니다",
+              "protectedOne": "창 1개는 절전하지 않고 유지됩니다",
+              "protectedMany": "창 {{value0}}개는 절전하지 않고 유지됩니다",
+              "sleeping": "에이전트를 절전 중…",
+              "sleepOne": "에이전트 1개 지금 절전",
+              "sleepMany": "에이전트 {{value0}}개 지금 절전",
+              "resultSlept": "{{value0}}개 절전됨",
+              "resultKept": "{{value0}}개는 표시 후 변경되어 절전하지 않았습니다",
+              "resultFailed": "{{value0}}개를 절전하지 못했습니다",
+              "observed": {
+                "pending": "종료된 프로세스를 확인하는 중…",
+                "unmeasured": "해제된 메모리를 측정하지 못했습니다: {{value0}}",
+                "released": "종료된 프로세스가 {{value0}} {{value1}}를 사용했습니다",
+                "noneExited": "측정된 프로세스 중 아직 종료된 것이 없습니다",
+                "stillRunning": "프로세스 {{value0}}개가 아직 실행 중입니다",
+                "unmeasuredPanes": "{{value0}}개는 측정 없이 절전되었습니다",
+                "reason": {
+                  "noBaseline": "이전 프로세스 측정값이 없었습니다",
+                  "sweepUnavailable": "사후 측정을 사용할 수 없었습니다",
+                  "sweepFailed": "사후 측정에 실패했습니다",
+                  "sweepTooEarly": "사후 측정이 너무 일찍 시작되었습니다",
+                  "metricChanged": "두 측정이 서로 다른 지표를 사용했습니다"
+                }
+              },
+              "reason": {
+                "featureDisabled": "에이전트 절전이 꺼져 있습니다",
+                "worktreeActive": "열려 있는 워크스페이스에 있습니다",
+                "runtimeLivenessUnknown": "원격 터미널 상태를 확인하지 못했습니다",
+                "tabForeground": "탭이 앞에 열려 있습니다",
+                "agentBusy": "에이전트가 아직 작업 중입니다",
+                "agentInterrupted": "에이전트가 중단되었습니다",
+                "hasSubagents": "하위 에이전트가 실행 중입니다",
+                "dispatchUnsettled": "디스패치가 완료되지 않았습니다",
+                "alreadySleeping": "이미 절전 중입니다",
+                "paneMismatch": "창이 이동했습니다",
+                "notResumable": "재개할 수 없습니다",
+                "notIdleLongEnough": "유휴 시간이 너무 짧습니다",
+                "recentInput": "최근에 입력했습니다",
+                "noLivePane": "실행 중인 터미널이 없습니다",
+                "mobileLocked": "모바일 클라이언트가 사용 중입니다",
+                "tabPinned": "고정된 탭"
+              }
+            },
+            "terminalHost": {
+              "label": "터미널 호스트",
+              "unattributedLabel": "소속을 알 수 없는 터미널 프로세스",
+              "unmeasured": "측정 안 됨",
+              "unmeasuredDescription": "프로세스 스캔에 실패하여 프로세스별 메모리를 알 수 없습니다(0이 아닙니다)."
+            },
             "memory": {
               "metric": {
                 "workingSetDescription": "합산된 워킹 세트(WS). 공유 페이지가 둘 이상의 프로세스에 나타날 수 있습니다.",
@@ -14635,6 +14784,47 @@
         "invalidPath": "Orca's data folder may be missing, moved, or at a path that is too long. Restore it or use a shorter path, then restart Orca.",
         "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
         "unknown": "Restart Orca to try again."
+      }
+    }
+  },
+  "agentSession": {
+    "liveCollision": {
+      "title": "이 세션은 이미 열려 있습니다",
+      "activeInPane": "다른 창에서 이미 활성 상태입니다.",
+      "activeInPanes": "다른 창 {{count}}개에서 이미 활성 상태입니다.",
+      "unknownTitle": "이 세션이 이미 열려 있을 수 있습니다",
+      "unknownDescription": "Orca에서 다른 창에서 활성 상태인지 확인할 수 없습니다.",
+      "startingTitle": "이 세션은 이미 시작하는 중입니다",
+      "startingDescription": "이 세션의 다른 재개가 아직 열리는 중입니다.",
+      "resumedHereTitle": "이 세션은 다른 창에서도 열려 있습니다",
+      "resumedHereTitleMany": "이 세션은 다른 {{count}}개의 창에서도 열려 있습니다",
+      "resumedHereDescription": "이미 실행 중인 상태에서 여기서 재개되었습니다. 두 복사본이 모두 활성 상태이며 Orca는 동시에 올바르게 작동한다고 보장할 수 없습니다.",
+      "continueRisk": "계속하면 두 번째 활성 복사본이 열립니다. Orca는 두 복사본이 동시에 올바르게 동작한다고 보장할 수 없습니다.",
+      "back": "뒤로",
+      "continue": "계속"
+    },
+    "paneResume": {
+      "ended": "세션이 종료되었습니다",
+      "resume": "이 세션 재개",
+      "resuming": "재개하는 중…",
+      "waitForPrompt": "셸이 프롬프트로 돌아오면 사용할 수 있습니다.",
+      "shellUnsupported": "이 셸은 프롬프트를 알리지 않으므로 Orca가 유휴 상태인지 알 수 없습니다.",
+      "shellBusy": "이 셸에서 아직 명령이 실행 중입니다.",
+      "shellUnsentInput": "이 셸의 프롬프트에 입력한 내용이 있습니다. 전송하거나 지운 뒤 재개하세요.",
+      "hostOutdated": "여기서 재개하려면 터미널을 다시 시작하세요. 이 터미널 서비스가 Orca보다 오래되었습니다.",
+      "failed": "이 세션을 재개하지 못했습니다. 다시 시도하세요.",
+      "blocked": {
+        "open": "이 세션은 다른 창에서 열려 있습니다.",
+        "starting": "이 세션은 다른 창에서 이미 시작하는 중입니다.",
+        "unknown": "Orca에서 이 세션이 비어 있는지 확인할 수 없습니다."
+      },
+      "unavailable": {
+        "fenced": "Orca가 이 워커를 복구하는 중입니다.",
+        "remote": "원격 터미널에서는 아직 재개할 수 없습니다.",
+        "runtime": "이 호스트에서는 아직 재개할 수 없습니다.",
+        "missing": "이 작업 공간이 없습니다.",
+        "deleting": "이 작업 공간을 삭제하는 중입니다.",
+        "noPlan": "이 세션은 여기서 재개할 수 없습니다."
       }
     }
   }

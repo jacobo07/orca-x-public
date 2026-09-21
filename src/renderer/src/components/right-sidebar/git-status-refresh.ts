@@ -131,6 +131,15 @@ export async function refreshGitStatusForWorktree({
         connectionId
       },
       {
+        // Why every refresh and not only the visible one: a row the panel can discard must carry the
+        // state it was rendered from, and a row that arrives unstamped is refused. Stamping on some
+        // refreshes and not others would make the destructive action work or refuse depending on which
+        // poll painted the row last, which is worse than either answer. Cost is a read per CHANGED
+        // file, so a clean worktree pays nothing; measured on this repo's shapes it is inside git's
+        // own run-to-run variance below roughly a hundred changed files, and about 3ms each above
+        // that. Past the status cap the host stamps nothing and the panel is already in its
+        // too-many-changes state.
+        worktreeContentIdentity: true,
         ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(request?.signal ? { signal: request.signal } : {}),
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
@@ -259,6 +268,9 @@ export async function refreshGitStatusForWorktreeStrict({
       // Why: strict refreshes are user-triggered reconciliation and must not reuse
       // automatic polling's no-upstream backoff window.
       bypassEffectiveUpstreamNegativeCache: true,
+      // Why here too: this is the refresh a user triggers right before acting, so a row it painted
+      // without an identity would be a row the discard refuses. Same reason as the automatic path.
+      worktreeContentIdentity: true,
       // Why: an absent total clears the chip, so a path that skipped the gate
       // would blank it right after the commit or push that moved the number.
       ...(strictBranchLineTotalMergeBase

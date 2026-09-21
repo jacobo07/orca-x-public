@@ -170,7 +170,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
       FAKE_RUNTIME_DIR,
       '/fake/socket',
-      '/fake/token'
+      '/fake/token',
+      undefined,
+      { preserveLiveWork: true }
     )
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,
@@ -382,7 +384,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
       FAKE_RUNTIME_DIR,
       '/fake/socket',
-      '/fake/token'
+      '/fake/token',
+      undefined,
+      { preserveLiveWork: true }
     )
     expect(forkMock).toHaveBeenCalled()
   })
@@ -425,7 +429,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
       FAKE_RUNTIME_DIR,
       '/fake/socket',
-      '/fake/token'
+      '/fake/token',
+      undefined,
+      { preserveLiveWork: true }
     )
     expect(forkMock).toHaveBeenCalledWith(
       FAKE_DAEMON_ENTRY_PATH,

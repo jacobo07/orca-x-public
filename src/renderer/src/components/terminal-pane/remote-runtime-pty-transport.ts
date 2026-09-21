@@ -10,6 +10,9 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../../../shared/agent-session-host-authority'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { LiveSessionResumeRefusal } from '../../../../shared/live-agent-session-presence-types'
+import { readAgentSessionResumeRefusal } from '../../../../shared/agent-session-resume-refusal'
+import { withoutRuntimeAgentResume } from './remote-runtime-resume-refusal'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type {
   RuntimeMobileSessionTerminalClientTab,
@@ -2070,18 +2073,49 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
-        const created = launchAgentToSend
-          ? agentSessionRequiresHostAuthorityReplay
-            ? await hostAuthorityCreate()
-            : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
-                environmentId: createEnvironmentId,
-                hostAuthority: hostAuthorityCreate,
-                ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
-                  ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
-                  : {}),
-                legacy: legacyCreate
-              })
-          : await legacyCreate()
+        const refusal: { reason: LiveSessionResumeRefusal | null } = { reason: null }
+        const launchCreate = async () => {
+          try {
+            return launchAgentToSend
+              ? agentSessionRequiresHostAuthorityReplay
+                ? await hostAuthorityCreate()
+                : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
+                    environmentId: createEnvironmentId,
+                    hostAuthority: hostAuthorityCreate,
+                    ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
+                      ? {
+                          hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY
+                        }
+                      : {}),
+                    legacy: legacyCreate
+                  })
+              : await legacyCreate()
+          } catch (error) {
+            refusal.reason = resumeProviderSessionToSend
+              ? readAgentSessionResumeRefusal(error)
+              : null
+            if (!refusal.reason) {
+              throw error
+            }
+            // Why: the host started nothing; like the desktop gate, the pane gets a plain shell.
+            return await createWithUnknownOutcomeRecovery(
+              'terminal',
+              (timeoutMs, reconcileExisting) =>
+                callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
+                  createEnvironmentId,
+                  'terminal.create',
+                  {
+                    ...withoutRuntimeAgentResume(legacyCreateParams),
+                    ...(reconcileExisting ? { reconcileExisting: true } : {})
+                  },
+                  timeoutMs
+                ),
+              createEnvironmentId,
+              connectLifecycleEpoch
+            )
+          }
+        }
+        const created = await launchCreate()
         if (!created) {
           if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
             connecting = false
@@ -2151,7 +2185,8 @@ export function createRemoteRuntimePtyTransport(
         return {
           id: remotePtyId,
           replay: '',
-          ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
+          ...(createdTerminal.isReattach === true ? { isReattach: true } : {}),
+          ...(refusal.reason ? { agentResumeRefused: refusal.reason } : {})
         } satisfies PtyConnectResult
       } catch (error) {
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {

@@ -4,8 +4,9 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs'
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
+import { forkIpcChild } from '../../shared/ipc-message-listener-floor'
 import {
   DaemonSpawner,
   getDaemonPidPath,
@@ -35,6 +36,7 @@ import {
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { killStaleDaemon } from './daemon-stale-kill'
+import { getAliveDaemonSessionCount } from './daemon-live-session-count'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import {
   collectPinnedDaemonVersions,
@@ -172,23 +174,6 @@ function probeSocket(socketPath: string): Promise<boolean> {
   })
 }
 
-async function getAliveDaemonSessionCount(
-  socketPath: string,
-  tokenPath: string,
-  protocolVersion = PROTOCOL_VERSION
-): Promise<number | null> {
-  const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
-  try {
-    await client.ensureConnected()
-    const result = await client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions.filter((session) => session.isAlive).length
-  } catch {
-    return null
-  } finally {
-    client.disconnect()
-  }
-}
-
 function createPreservedDaemonHandle(
   runtimeDir: string,
   protocolVersion = PROTOCOL_VERSION,
@@ -241,8 +226,36 @@ async function reconcileDaemonPidOwnership(
   pidPath?: string
 ): Promise<void> {
   const endpointIdentity = readDaemonEndpointIdentity(client)
-  if (!pidPath || !endpointIdentity || pidRecordMatchesEndpoint(pidPath, endpointIdentity)) {
+  if (!pidPath || !endpointIdentity) {
     return
+  }
+  const agreement = classifyPidRecordAgainstEndpoint(pidPath, endpointIdentity)
+  if (agreement.verdict === 'agrees') {
+    return
+  }
+  // Why these are two log lines and not one: a record that names a DIFFERENT incarnation is
+  // positive evidence -- of a stale record, a recycled pid, a second daemon, or a leaked token --
+  // and it is worth investigating. A record that is absent or says nothing about any incarnation
+  // is the lack of a second opinion. Both are repaired the same way, and only one is a finding.
+  // Reporting them with one sentence sent an operator hunting for a conflict that never happened,
+  // or worse, let a real one read as routine housekeeping.
+  //
+  // This names the disagreement; it does not resolve it with new authority. The hello still gets
+  // no say over any OS effect -- the record is durable metadata, the endpoint is an authenticated
+  // protocol peer, and the process binding stays with the process query where it belongs.
+  if (agreement.verdict === 'contradicts') {
+    console.warn(
+      '[daemon] PID record contradicts the authenticated endpoint; repairing ownership: ' +
+        `recordPid=${agreement.recordPid ?? 'unknown'}, endpointPid=${endpointIdentity.pid}, ` +
+        `disagreeing=${agreement.disagreeingFields.join('+')}`
+    )
+  } else {
+    // Naming the fields, never their values: a launch nonce identifies an incarnation and has no
+    // business in a log the user may paste into an issue.
+    console.warn(
+      '[daemon] PID record could not be read as an incarnation; publishing ownership for the ' +
+        `authenticated endpoint: endpointPid=${endpointIdentity.pid}`
+    )
   }
   // Why: the mismatched record's metadata describes a different daemon and must not be copied
   // onto this one. Re-derive it from the authenticated owner instead, so the repaired record
@@ -292,21 +305,59 @@ async function readDaemonOwnerMetadata(
   return metadata
 }
 
-function pidRecordMatchesEndpoint(pidPath: string, identity: DaemonEndpointIdentity): boolean {
+/**
+ * Three answers, because the two authorities can fail to agree for opposite reasons.
+ *
+ * 'agrees'      — the record describes this incarnation on every field.
+ * 'contradicts' — the record HAS a field and it names a different incarnation. Positive evidence.
+ * 'unreadable'  — missing, unparseable, or carrying no incarnation fields at all. Absence of a
+ *   second opinion, which is not the same as a second opinion that differs.
+ *
+ * A field the record omits is deliberately NOT a contradiction: a legacy record that predates
+ * launchNonce is incomplete, not conflicting, and calling it a conflict would report the estate's
+ * own history as an incident. Conflict requires positive contradictory evidence.
+ */
+type PidRecordAgreement =
+  | { verdict: 'agrees' }
+  | { verdict: 'contradicts'; recordPid: number | null; disagreeingFields: readonly string[] }
+  | { verdict: 'unreadable' }
+
+function classifyPidRecordAgainstEndpoint(
+  pidPath: string,
+  identity: DaemonEndpointIdentity
+): PidRecordAgreement {
+  let record: { pid?: unknown; startedAtMs?: unknown; launchNonce?: unknown }
   try {
-    const record = JSON.parse(readFileSync(pidPath, 'utf8')) as {
-      pid?: unknown
-      startedAtMs?: unknown
-      launchNonce?: unknown
-    }
-    return (
-      record.pid === identity.pid &&
-      record.startedAtMs === identity.startedAtMs &&
-      record.launchNonce === identity.launchNonce
-    )
+    record = JSON.parse(readFileSync(pidPath, 'utf8')) as typeof record
   } catch {
-    return false
+    return { verdict: 'unreadable' }
   }
+  if (typeof record !== 'object' || record === null) {
+    return { verdict: 'unreadable' }
+  }
+  const comparisons = [
+    ['pid', record.pid, identity.pid],
+    ['startedAtMs', record.startedAtMs, identity.startedAtMs],
+    ['launchNonce', record.launchNonce, identity.launchNonce]
+  ] as const
+  const stated = comparisons.filter(([, actual]) => actual !== undefined)
+  if (stated.length === 0) {
+    return { verdict: 'unreadable' }
+  }
+  const disagreeingFields = stated
+    .filter(([, actual, expected]) => actual !== expected)
+    .map(([field]) => field)
+  if (disagreeingFields.length > 0) {
+    return {
+      verdict: 'contradicts',
+      recordPid: typeof record.pid === 'number' ? record.pid : null,
+      disagreeingFields
+    }
+  }
+  // Everything the record states agrees. A record missing a field it never carried cannot confirm
+  // this incarnation either, so it is republished rather than trusted -- same behaviour as before,
+  // now with a reason that does not accuse it of conflicting.
+  return stated.length === comparisons.length ? { verdict: 'agrees' } : { verdict: 'unreadable' }
 }
 
 function releaseDaemonAdoptionLease(handle: DaemonProcessHandle | null): void {
@@ -622,7 +673,15 @@ function createOutOfProcessLauncher(
       // Why: a raw socket can outlive a broken daemon; kill by PID before respawn so the new daemon doesn't race the stale one.
       adoptionClient?.disconnect()
       adoptionClient = null
-      const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath)
+      // Why preserveLiveWork: this branch is automatic replacement, which promises not to
+      // destroy live work — and the session count that authorized it was read before a
+      // process-identity query costing a subprocess. Another client can admit a session in
+      // that gap, so the authorization is re-taken at the effect itself. The user-authorized
+      // paths (restart, quit) go through cleanupDaemonForProtocol and must NOT acquire this
+      // refusal: there the user asked for the sessions to end.
+      const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath, undefined, {
+        preserveLiveWork: true
+      })
       if (killOutcome.liveOwnerSurvived) {
         // Why: forking beside a daemon we could not prove dead is precisely how the endpoint
         // owner and the session host diverge. But refusing outright would leave the user with
@@ -666,7 +725,7 @@ function createOutOfProcessLauncher(
       const relocatedHost = materializeRelocatedDaemonHost()
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
-      const child = fork(
+      const child = forkIpcChild(
         forkEntryPath,
         [
           '--socket',

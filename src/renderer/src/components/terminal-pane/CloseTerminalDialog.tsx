@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
 
-export type CloseTerminalDialogCopyKind = 'command' | 'agent'
+export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'unsent-input'
 
 export default function CloseTerminalDialog({
   open,
@@ -57,8 +57,53 @@ export default function CloseTerminalDialog({
     }
   }
 
-  const isAgent = copyKind === 'agent'
   const trimmedTabLabel = tabLabel?.trim()
+  // Why a lookup: a typed line is not a running command, and wording it as one would tell the
+  // user their work is still executing when it is sitting at a prompt waiting for them.
+  const copy = {
+    agent: {
+      title: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
+        'Stop this agent?'
+      ),
+      description: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
+        "Closing this terminal will stop the agent's current work."
+      ),
+      confirm: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_confirm',
+        'Stop Agent'
+      )
+    },
+    command: {
+      title: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.stop_command_title',
+        'Stop running command?'
+      ),
+      description: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
+        'Closing this terminal will stop the command running inside it.'
+      ),
+      confirm: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.stop_command_confirm',
+        'Stop and Close'
+      )
+    },
+    'unsent-input': {
+      title: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.discard_unsent_input_title',
+        'Discard what you typed?'
+      ),
+      description: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.discard_unsent_input_description',
+        'This terminal has something typed at its prompt that was never submitted. Closing it discards that line.'
+      ),
+      confirm: translate(
+        'auto.components.terminal.pane.CloseTerminalDialog.discard_unsent_input_confirm',
+        'Discard and Close'
+      )
+    }
+  }[copyKind]
 
   return (
     <Dialog
@@ -71,28 +116,8 @@ export default function CloseTerminalDialog({
     >
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {isAgent
-              ? translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title',
-                  'Stop this agent?'
-                )
-              : translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_title',
-                  'Stop running command?'
-                )}
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            {isAgent
-              ? translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
-                  "Closing this terminal will stop the agent's current work."
-                )
-              : translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
-                  'Closing this terminal will stop the command running inside it.'
-                )}
-          </DialogDescription>
+          <DialogTitle className="text-sm">{copy.title}</DialogTitle>
+          <DialogDescription className="text-xs">{copy.description}</DialogDescription>
         </DialogHeader>
         {trimmedTabLabel ? (
           <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
@@ -123,15 +148,7 @@ export default function CloseTerminalDialog({
             autoFocus
             onClick={() => onConfirm(dontAskAgain)}
           >
-            {isAgent
-              ? translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_confirm',
-                  'Stop Agent'
-                )
-              : translate(
-                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_confirm',
-                  'Stop and Close'
-                )}
+            {copy.confirm}
           </Button>
         </DialogFooter>
       </DialogContent>

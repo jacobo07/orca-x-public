@@ -63,6 +63,7 @@ import {
   useWorkspaceLineageMenuActions
 } from './workspace-lineage-menu-actions'
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
+import { WorkspaceSnapshotsMenuItem } from './WorkspaceSnapshotsMenuItem'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { unnestWorktrees } from './worktree-unnest'
@@ -1013,6 +1014,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               <WorktreeDeveloperMenu worktreeId={worktree.id} disabled={isDeleting} />
               <DropdownMenuSeparator />
             </>
+          ) : null}
+          {!isMultiContext ? (
+            <WorkspaceSnapshotsMenuItem
+              ownerKey={worktree.id}
+              displayName={worktree.displayName}
+              disabled={isDeleting}
+            />
           ) : null}
           <WorkspaceSleepMenuItems
             isMultiContext={isMultiContext}

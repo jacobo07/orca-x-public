@@ -1,7 +1,7 @@
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import {
-  getDiscardAllPaths,
+  getDiscardAllEntries,
   getUnstageAllPaths,
   isStageableStatusEntry
 } from '../commit/discard-all-sequence'
@@ -28,7 +28,9 @@ export type BranchSourceControlTreeDirectoryNode = Extract<
 export type SourceControlDirectoryActionPaths = {
   stagePaths: string[]
   unstagePaths: string[]
-  discardPaths: string[]
+  /** Rows, not paths: a folder-wide discard authorizes destroying the states these rows were rendered
+   *  from, and a path cannot say what it held. Count them for the button; send them to the host. */
+  discardEntries: GitStatusEntry[]
 }
 
 export function getSourceControlDirectoryActionPaths(
@@ -38,9 +40,9 @@ export function getSourceControlDirectoryActionPaths(
   return {
     stagePaths: entries.filter(isStageableStatusEntry).map((entry) => entry.path),
     unstagePaths: getUnstageAllPaths(entries),
-    discardPaths:
+    discardEntries:
       node.area === 'unstaged' || node.area === 'untracked'
-        ? getDiscardAllPaths(entries, node.area)
+        ? getDiscardAllEntries(entries, node.area)
         : []
   }
 }

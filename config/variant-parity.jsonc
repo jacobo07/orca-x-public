@@ -245,6 +245,30 @@
         "mobile/src/components/HostProtocolGate.test.ts"
       ],
       "notes": "Desktop is 'Orca X' via src/shared/product.ts. Mobile named itself 'Orca' on its icon, about screen, onboarding, diagnostics and OS permission prompts, and called the desktop 'Orca' throughout its prose. Both halves are done; doing only the first would have reproduced the split-label defect this registry opened on. The rename deliberately does not reach scheme 'orca', bundle id com.stably.orca.mobile, slug orca-mobile, or the 'orca:' storage-key prefix -- those are what deep links, the stores and already-paired devices resolve against."
+    },
+    {
+      "id": "emulator.device-control",
+      "title": "Driving an Android or iOS device from the workspace",
+      "disposition": "desktop-only",
+      "reason": "The emulator pane launches and drives an emulator running on the developer machine: emulator.launch, .install, .tap, .type, .gesture, .logcat and twelve more. A phone cannot host an emulator, and pointing a phone at a remote one duplicates what the phone already is -- the useful mobile equivalent of 'test this on a handset' is the handset. All 19 methods are host-only and should stay so. Enumerated by config/scripts/check-mobile-capability-aperture.mjs; classified in config/mobile-capability-aperture-audit.md."
+    },
+    {
+      "id": "updater.application-self-update",
+      "title": "The application updates itself in place",
+      "disposition": "not-applicable",
+      "reason": "updater.check/download/install drive electron-updater against a signed release feed. Mobile has no such surface by construction: an APK or IPA is replaced by the store or the installer, not by the running app, and both platforms forbid an app updating its own binary. There is no mobile expression of this capability to be behind on."
+    },
+    {
+      "id": "terminal.pane-geometry",
+      "title": "Arranging terminals within a window",
+      "disposition": "not-applicable",
+      "reason": "terminal.split, .resolvePane, .recoverPane, .restoreFit, .resizeForClient, .getDisplayMode, .show and session.tabs.updatePaneLayout all address a pane grid inside a desktop window. Mobile presents one terminal at a time and has no split, no pane identity and no layout to persist, so there is no state these would act on. Note the deliberate boundary: terminal LIFECYCLE on mobile (stop, stopExact, sleep, inspectProcess) is a real gap and is recorded as such in the aperture audit, not here -- only the geometry is inapplicable."
+    },
+    {
+      "id": "plugins.panel-surface",
+      "title": "A plugin renders and receives actions in a workspace panel",
+      "disposition": "not-applicable",
+      "reason": "plugins.panelAction and plugins.readPanelEntry drive a desktop panel that mobile does not render. Scoped narrowly on purpose: the rest of the plugins namespace -- list, setEnabled, consent, invokeCommand -- is a genuine gap, because deciding whether a plugin may run is a question a phone can reasonably be asked. Only the panel-bound pair is inapplicable."
     }
   ]
 }

@@ -36,6 +36,8 @@ import { registerComputerUsePermissionHandlers } from './computer-use-permission
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from './browser'
 import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { registerSessionHandlers } from './session'
+import { registerProjectWorkingSetHandlers } from './project-working-set'
+import { registerDurableExitHandlers } from './durable-exit'
 import { registerWorkspaceWindowClaimHandlers } from './workspace-window-claim'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -57,6 +59,11 @@ import { registerTerminalRenderDesyncEvidenceHandler } from './terminal-render-d
 import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
+import { registerAgentSessionLivePresenceHandlers } from './agent-session-live-presence-ipc'
+import {
+  createLiveAgentSessionPresenceDeps,
+  getLiveSessionMaterializationReservations
+} from './agent-session-live-presence-deps'
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
 import { registerAgentTrustHandlers } from './agent-trust'
@@ -147,6 +154,10 @@ export function registerCoreHandlers(
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
+  registerAgentSessionLivePresenceHandlers(
+    () => createLiveAgentSessionPresenceDeps(store, runtime),
+    getLiveSessionMaterializationReservations
+  )
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
@@ -202,6 +213,8 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store)
+  registerProjectWorkingSetHandlers()
+  registerDurableExitHandlers(() => store.getDataFilePath())
   registerWorkspaceWindowClaimHandlers({
     openNewWindow: lifecycleOptions.onOpenNewWindow,
     onTopologyChanged: lifecycleOptions.onWindowTopologyChanged

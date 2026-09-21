@@ -21,6 +21,10 @@ export type TerminalSideEffectFact =
   | { kind: 'agent-exited' }
   /** OSC 133;D — foreground shell command exited (exit code best-effort). */
   | { kind: 'command-finished'; exitCode: number | null }
+  /** OSC 133;C — a command started, so the shell is no longer provably at its prompt. */
+  | { kind: 'command-started' }
+  /** OSC 133;A — the shell drew a prompt (a never-used shell emits no other marker). */
+  | { kind: 'prompt-shown' }
   /** Carries the parsed link so the renderer store consumer never re-parses
    *  the URL (parse drift would break the per-PTY dedupe contract). */
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }

@@ -164,7 +164,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       expect(killStaleDaemonMock).toHaveBeenCalledWith(
         FAKE_RUNTIME_DIR,
         '/fake/socket',
-        '/fake/token'
+        '/fake/token',
+        undefined,
+        { preserveLiveWork: true }
       )
       expect(forkMock).toHaveBeenCalled()
       // The launcher probes the full grace budget: 1 initial probe + WEDGED_DAEMON_GRACE_RETRIES retries.
@@ -279,7 +281,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
       FAKE_RUNTIME_DIR,
       '/fake/socket',
-      '/fake/token'
+      '/fake/token',
+      undefined,
+      { preserveLiveWork: true }
     )
     expect(forkMock).toHaveBeenCalled()
     // 'rejected' gets no grace window (probed once): count = initial adoption + rejected probe + fresh daemon lease.

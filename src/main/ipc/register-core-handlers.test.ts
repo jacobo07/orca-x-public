@@ -23,6 +23,8 @@ const {
   registerShellHandlersMock,
   registerPetHandlersMock,
   registerSessionHandlersMock,
+  registerProjectWorkingSetHandlersMock,
+  registerDurableExitHandlersMock,
   registerWorkspaceWindowClaimHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
@@ -89,6 +91,8 @@ const {
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
+  registerProjectWorkingSetHandlersMock: vi.fn(),
+  registerDurableExitHandlersMock: vi.fn(),
   registerWorkspaceWindowClaimHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
@@ -264,6 +268,14 @@ vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
 
+vi.mock('./durable-exit', () => ({
+  registerDurableExitHandlers: registerDurableExitHandlersMock
+}))
+
+vi.mock('./project-working-set', () => ({
+  registerProjectWorkingSetHandlers: registerProjectWorkingSetHandlersMock
+}))
+
 vi.mock('./workspace-window-claim', () => ({
   registerWorkspaceWindowClaimHandlers: registerWorkspaceWindowClaimHandlersMock
 }))
@@ -319,6 +331,15 @@ vi.mock('./codex-accounts', () => ({
 
 vi.mock('./agent-hooks', () => ({
   registerAgentHookHandlers: registerAgentHookHandlersMock
+}))
+
+vi.mock('./agent-session-live-presence-ipc', () => ({
+  registerAgentSessionLivePresenceHandlers: vi.fn()
+}))
+
+vi.mock('./agent-session-live-presence-deps', () => ({
+  createLiveAgentSessionPresenceDeps: vi.fn(),
+  getLiveSessionMaterializationReservations: vi.fn()
 }))
 
 vi.mock('./agent-trust', () => ({
@@ -415,6 +436,7 @@ describe('registerCoreHandlers', () => {
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
+    registerProjectWorkingSetHandlersMock.mockReset()
     registerWorkspaceWindowClaimHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
@@ -541,6 +563,8 @@ describe('registerCoreHandlers', () => {
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerOrcaProfileHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerProjectWorkingSetHandlersMock).toHaveBeenCalledOnce()
+    expect(registerDurableExitHandlersMock).toHaveBeenCalledOnce()
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store, {
       isDashboardPopoutRenderer: isDashboardPopoutRendererMock
     })

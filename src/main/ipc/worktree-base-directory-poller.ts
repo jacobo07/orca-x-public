@@ -7,6 +7,10 @@ import type {
   WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 import { startGitCommonWatch } from './worktree-git-common-watch'
+import {
+  getWorktreeObservationClock,
+  type WorktreeObservationClock
+} from './worktree-observation-clock'
 
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 
@@ -203,8 +207,8 @@ function diffBase(prev: BaseSnapshot, next: BaseSnapshot): WorktreeBasePollEvent
 async function startBasePoller(
   target: WorktreeBaseWatchTarget,
   getRepos: () => ReadonlyMap<string, WorktreeBaseRepoWatchConfig>,
-  onEvents: (events: WorktreeBasePollEvent[]) => void,
-  pollIntervalMs: number,
+  onTargetEvents: (events: WorktreeBasePollEvent[]) => void,
+  clock: WorktreeObservationClock,
   visibility: WorktreePollerWindowVisibility,
   options: WorktreeBasePollerOptions
 ): Promise<WorktreeBaseSubscription> {
@@ -212,8 +216,11 @@ async function startBasePoller(
   let ticking = false
   let tickCount = 0
   let snapshot = await snapshotBase(target.path, getRepos())
-  let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
+  const onEvents = (events: WorktreeBasePollEvent[]): void => {
+    registration.noteActivity()
+    onTargetEvents(events)
+  }
   const pendingMarkerMaxTicks = options.pendingMarkerMaxTicks ?? PENDING_MARKER_MAX_TICKS
   // dir → first probe tick; null means backstop scans only
   const markerProbeStartedAt = new Map<string, number | null>()
@@ -292,22 +299,18 @@ async function startBasePoller(
     }
   }
 
-  const tick = async (forceFullScan = false): Promise<void> => {
-    timer = null
+  const registration = clock.register(async (forceFullScan) => {
     if (disposed) {
-      return
+      return 'observed'
     }
     if (!visibility.isWindowVisible()) {
       parkedWhileHidden = true
-      return
+      return 'parked'
     }
     if (ticking) {
-      return
+      return 'observed'
     }
     ticking = true
-    // Why: measure from tick start so the cadence is start-to-start (like the old setInterval), not
-    // gap-after-completion — otherwise each visible refresh lands a full scan-duration late every tick.
-    const startedAt = Date.now()
     try {
       await poll(forceFullScan)
     } catch {
@@ -315,18 +318,8 @@ async function startBasePoller(
     } finally {
       ticking = false
     }
-    if (!disposed) {
-      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
-      // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
-      // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
-      const nextDelay = Math.max(
-        0,
-        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
-      )
-      timer = setTimeout(() => void tick(), nextDelay)
-      timer.unref?.()
-    }
-  }
+    return 'observed'
+  })
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
     if (disposed || !parkedWhileHidden) {
@@ -335,18 +328,13 @@ async function startBasePoller(
     parkedWhileHidden = false
     // Why: the ordinary dir-signature gate can miss same-granule changes made
     // while hidden; resume must diff a fresh full snapshot against the baseline.
-    void tick(true)
+    registration.runNow(true)
   })
-
-  timer = setTimeout(() => void tick(), pollIntervalMs)
-  timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      if (timer) {
-        clearTimeout(timer)
-      }
+      registration.unregister()
       unsubscribeVisibility()
     }
   }
@@ -376,5 +364,6 @@ export async function startWorktreeBaseDirectoryPoller(
       options.onWatchError
     )
   }
-  return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options)
+  const clock = getWorktreeObservationClock(pollIntervalMs)
+  return startBasePoller(target, getRepos, onEvents, clock, visibility, options)
 }

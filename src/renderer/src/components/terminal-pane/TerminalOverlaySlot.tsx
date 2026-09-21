@@ -5,6 +5,7 @@ import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
+import DormantTerminalPlaceholder from './DormantTerminalPlaceholder'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
 
@@ -45,6 +46,8 @@ type TerminalOverlaySlotProps = {
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   leaveWorktreeIfEmpty: () => void
+  /** Occupies the group body with the dormant placeholder instead of a TerminalPane. */
+  dormant?: boolean
 }
 
 export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
@@ -60,7 +63,8 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
-  leaveWorktreeIfEmpty
+  leaveWorktreeIfEmpty,
+  dormant = false
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
@@ -214,7 +218,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
   }, [groupId, onFocusOwningGroup])
 
-  const terminalPane = (
+  const terminalPane = dormant ? (
+    <DormantTerminalPlaceholder tabId={terminalTabId} />
+  ) : (
     <TerminalPane
       key={`${terminalTabId}-${terminalGeneration ?? 0}`}
       tabId={terminalTabId}

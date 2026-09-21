@@ -469,19 +469,25 @@ describe('killStaleDaemon ownership decisions', () => {
     })
   }
 
-  it.each<{ outcome: SocketProbeOutcome; liveOwnerSurvived: boolean }>([
-    { outcome: 'connected', liveOwnerSurvived: true },
+  // preservedBy says WHICH guard kept the daemon alive; toEqual ignores an undefined
+  // property, so the rows that preserve nothing assert the absence of a reason too.
+  it.each<{
+    outcome: SocketProbeOutcome
+    liveOwnerSurvived: boolean
+    preservedBy?: 'endpoint_still_serving'
+  }>([
+    { outcome: 'connected', liveOwnerSurvived: true, preservedBy: 'endpoint_still_serving' },
     { outcome: 'refused', liveOwnerSurvived: false },
     { outcome: 'missing', liveOwnerSurvived: false },
     { outcome: 'unknown', liveOwnerSurvived: false }
   ])(
     'reports liveOwnerSurvived=$liveOwnerSurvived for a $outcome endpoint',
-    async ({ outcome, liveOwnerSurvived }) => {
+    async ({ outcome, liveOwnerSurvived, preservedBy }) => {
       const probeEndpoint = vi.fn(async () => outcome)
 
       await expect(
         killStaleDaemon(dir, socketPath, tokenPath, undefined, { probeEndpoint })
-      ).resolves.toEqual({ killed: false, liveOwnerSurvived })
+      ).resolves.toEqual({ killed: false, liveOwnerSurvived, preservedBy })
       expect(probeEndpoint).toHaveBeenCalledOnce()
       expect(probeEndpoint).toHaveBeenCalledWith(socketPath)
     }
@@ -503,7 +509,14 @@ describe('killStaleDaemon ownership decisions', () => {
         killStaleDaemon(dir, socketPath, tokenPath, undefined, {
           probeEndpoint: async () => 'unknown'
         })
-      ).resolves.toEqual({ killed: false, liveOwnerSurvived: true })
+        // EPERM from the liveness signal is not ESRCH, so identity degrades to 'unknown' and
+        // an endpoint that cannot be proven dead is no second opinion. Naming the reason keeps
+        // this distinct from a refusal about live work, which is the opposite evidence.
+      ).resolves.toEqual({
+        killed: false,
+        liveOwnerSurvived: true,
+        preservedBy: 'identity_unverifiable'
+      })
       expect(readFileSync(getDaemonPidPath(dir), 'utf8')).toBe(record)
     } finally {
       killSpy.mockRestore()

@@ -205,6 +205,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
             <ActionButton
+              testId="source-control-entry-discard"
               icon={entry.area === 'untracked' ? Trash : Undo2}
               title={
                 entry.area === 'untracked'

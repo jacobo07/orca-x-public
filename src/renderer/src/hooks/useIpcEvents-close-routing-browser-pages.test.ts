@@ -220,7 +220,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 
@@ -441,7 +441,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 
@@ -657,7 +657,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 

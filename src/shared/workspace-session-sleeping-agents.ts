@@ -99,7 +99,9 @@ const sleepingAgentSessionRecordSchema = z
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
-    automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional(),
+    automaticResumeBlockedBy: z
+      .enum(['legacy-orchestration-worker', 'agent-exited', 'legacy-orchestration-worker-exited'])
+      .optional(),
     restoreOnTabOpenOnly: z.boolean().optional()
   })
   .refine(

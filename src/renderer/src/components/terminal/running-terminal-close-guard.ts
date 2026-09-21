@@ -94,11 +94,15 @@ export function guardRunningTerminalClose(params: {
     decided = true
     onClose()
   }
-  const confirmClose = (busyPtyIds: readonly string[]): void => {
+  const confirmClose = (busyPtyIds: readonly string[], unsentInputOnly = false): void => {
     if (decided) {
       return
     }
-    const copyKind = resolveBusyPtyCloseCopyKind(terminalTabId, busyPtyIds)
+    // Why the running reason wins: a command still executing is the costlier surprise, and a
+    // typed line is only the headline when nothing is running behind it.
+    const copyKind = unsentInputOnly
+      ? 'unsent-input'
+      : resolveBusyPtyCloseCopyKind(terminalTabId, busyPtyIds)
     useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
       terminalTabId,
       tabLabel,
@@ -138,11 +142,28 @@ export function guardRunningTerminalClose(params: {
           result.value.unavailable !== true
         )
       })
-      if (busyPtyIds.length === 0) {
+      if (busyPtyIds.length > 0) {
+        confirmClose(busyPtyIds)
+        return
+      }
+      // Why a typed line also stops this close: closing kills the pty, so the line goes with
+      // it, and the user never submitted it. Why only on a positive 'typed': this close fails
+      // open on an answered probe by policy above, and an authority that cannot see the line
+      // is not evidence of one — being stricter about a draft than about a running command
+      // would be incoherent.
+      const unsentInputPtyIds = ptyIds.filter((_, index) => {
+        const result = results[index]
+        return (
+          result?.status === 'fulfilled' &&
+          result.value.inputSincePrompt === 'typed' &&
+          result.value.unavailable !== true
+        )
+      })
+      if (unsentInputPtyIds.length === 0) {
         closeNow()
         return
       }
-      confirmClose(busyPtyIds)
+      confirmClose(unsentInputPtyIds, true)
     })
     // Why: allSettled never rejects, so this only fires when the decision above throws (a
     // copy-kind lookup, a store subscriber). Without it the tab would silently never close

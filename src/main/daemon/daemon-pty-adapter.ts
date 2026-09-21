@@ -395,6 +395,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.lastAuthenticatedIdentity ? { ...this.lastAuthenticatedIdentity } : null
   }
 
+  /** Attribution only: a live socket pins the pid, but a self-reported pid never authorizes a signal. */
+  getConnectedDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.client.isConnected() ? this.client.getDaemonIdentity() : null
+  }
+
   getLastAuditObservation(): DaemonAuditObservation | null {
     return this.lastAuditObservation
   }
@@ -1553,10 +1558,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
         hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
       }
     }
-    return this.client.request<{
-      foregroundProcess: string | null
-      hasChildProcesses: boolean
-    }>('inspectProcess', { sessionId: id })
+    // Why the pass-through: a daemon that predates prompt tracking simply omits promptState.
+    return this.client.request<PtyProcessInspection>('inspectProcess', { sessionId: id })
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {

@@ -1,5 +1,6 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { forkIpcChild } from '../../shared/ipc-message-listener-floor'
 import { join } from 'node:path'
 import {
   PLUGIN_WORKER_INVOKE_TIMEOUT_MS,
@@ -85,7 +86,7 @@ export async function startPluginWorker(
   const eventTimeoutMs = options.eventTimeoutMs ?? PLUGIN_WORKER_EVENT_TIMEOUT_MS
   const tag = `[plugin:${pluginId}]`
 
-  const child: ChildProcess = fork(entryPath, [], {
+  const child: ChildProcess = forkIpcChild(entryPath, [], {
     // Why: ELECTRON_RUN_AS_NODE makes the forked Electron binary behave as
     // plain Node. The env is a scrubbed allowlist — never ...process.env,
     // which can carry shell-exported secrets into third-party code.

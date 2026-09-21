@@ -22,6 +22,7 @@ import {
 } from './agent-hibernation-output-activity'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../runtime/runtime-rpc-client'
+import { resetRuntimePtyLivenessQueueForTests } from './runtime-pty-liveness-sample'
 import type { AppState } from '@/store/types'
 
 const NOW = 10_000_000
@@ -29,11 +30,20 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 const mockRuntimeEnvironmentCall = vi.fn()
+// Default answers exactly what a host with nothing to report answers, so the effect-time draft
+// probe is a no-op for every test that is not about it.
+const mockInspectProcess = vi.fn(async () => ({
+  foregroundProcess: null,
+  hasChildProcesses: false
+}))
 
 vi.stubGlobal('window', {
   api: {
     runtimeEnvironments: {
       call: mockRuntimeEnvironmentCall
+    },
+    pty: {
+      inspectProcess: mockInspectProcess
     }
   }
 })
@@ -174,6 +184,7 @@ function deferred<T>(): {
 
 afterEach(() => {
   resetAgentHibernationCoordinatorForTests()
+  resetRuntimePtyLivenessQueueForTests()
   clearRuntimeCompatibilityCacheForTests()
   resetForegroundTerminalTabIdsForTests()
   resetAgentHibernationOutputActivityForTests()
@@ -183,6 +194,83 @@ afterEach(() => {
 })
 
 describe('agent sleep coordinator', () => {
+  // The planner's input guard is the better instrument and owns every pane it has evidence for.
+  // But its evidence is renderer-only and the shell outlives the renderer, so after a reload a
+  // pane with a line waiting at it reads as untouched. These cover only that hole.
+  describe('a line the host holds and this renderer never saw', () => {
+    // mockResolvedValue replaces the implementation for good, so without this a 'typed' answer
+    // leaks into every later test in the file and keeps their panes awake.
+    afterEach(() => {
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false
+      })
+    })
+
+    it('keeps a pane awake when the host still holds a line', async () => {
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'typed'
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).not.toHaveBeenCalled()
+    })
+
+    it('sleeps when the host vouches the prompt is clean', async () => {
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'clean'
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).toHaveBeenCalled()
+    })
+
+    it('leaves a pane the renderer does have input for to the planner', async () => {
+      // Not second-guessed: the segment logic already decided this pane, and it is the
+      // instrument that can tell a draft from a submission.
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        inputSincePrompt: 'typed'
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+        lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: 1 }
+      })
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).toHaveBeenCalled()
+    })
+
+    it('sleeps when no authority can see the line, so an older host is not frozen awake', async () => {
+      vi.useFakeTimers()
+      mockInspectProcess.mockResolvedValue({
+        foregroundProcess: null,
+        hasChildProcesses: false
+      } as never)
+      const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
+      startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+      await vi.advanceTimersByTimeAsync(2000)
+
+      expect(shutdown).toHaveBeenCalled()
+    })
+  })
+
   it('hibernates an eligible background worktree after two stable ticks', async () => {
     vi.useFakeTimers()
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined))
@@ -317,8 +405,9 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
 
     await runAgentHibernationTick()
-    await Promise.resolve()
-    await Promise.resolve()
+    // Why not a fixed number of microtask flushes: the tick dispatches its shutdown
+    // fire-and-forget, so hand-counting hops pins the assertion to the call depth of the day.
+    await vi.advanceTimersByTimeAsync(0)
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       paneKey: `tab-1:${LEAF}`,
       tabId: 'tab-1',
@@ -406,8 +495,9 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
 
     await runAgentHibernationTick()
-    await Promise.resolve()
-    await Promise.resolve()
+    // Why not a fixed number of microtask flushes: the tick dispatches its shutdown
+    // fire-and-forget, so hand-counting hops pins the assertion to the call depth of the day.
+    await vi.advanceTimersByTimeAsync(0)
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       paneKey: `tab-1:${LEAF}`,
       tabId: 'tab-1',
@@ -628,6 +718,90 @@ describe('agent sleep coordinator', () => {
       ptyId: 'pty-2',
       expectedRuntimePtyId: 'pty-2'
     })
+  })
+
+  it('samples every runtime worktree on one host, which rejects overlapping listings', async () => {
+    vi.useFakeTimers()
+    let inFlight = 0
+    mockRuntimeEnvironmentCall.mockImplementation(
+      (args: { method: string; params: { worktree: string } }) => {
+        const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (compatible) {
+          return Promise.resolve(compatible)
+        }
+        if (args.method !== 'terminal.list') {
+          return Promise.resolve({ id: 'x', ok: true, result: {}, _meta: { runtimeId: 'r' } })
+        }
+        // Like the host: a listing overtaken by another fails closed.
+        inFlight += 1
+        const overlapped = inFlight > 1
+        const worktreeId = args.params.worktree.replace(/^id:/, '')
+        return new Promise((resolve) => setTimeout(resolve, 5)).then(() => {
+          inFlight -= 1
+          if (overlapped) {
+            throw new Error('terminal_liveness_unavailable')
+          }
+          const result = runtimeListResult([worktreeId === 'wt-bg' ? 'pty-1' : 'pty-2'])
+          return {
+            id: 'terminal-list',
+            ok: true,
+            result: {
+              ...result,
+              terminals: result.terminals.map((t) => ({ ...t, worktreeId }))
+            },
+            _meta: { runtimeId: 'r' }
+          }
+        })
+      }
+    )
+    const leaf2 = '22222222-2222-4222-8222-222222222222'
+    const second = {
+      ...entry(),
+      paneKey: `tab-2:${leaf2}`,
+      tabId: 'tab-2',
+      worktreeId: 'wt-bg2',
+      providerSession: { key: 'session_id' as const, id: 'session-2' }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      worktreesByRepo: {
+        'fixture-repo': ['wt-bg', 'wt-bg2'].map((id) => ({
+          id,
+          repoId: 'fixture-repo',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'runtime-1'
+        }))
+      } as never,
+      tabsByWorktree: {
+        'wt-bg': [tab()],
+        'wt-bg2': [{ ...tab(), id: 'tab-2', worktreeId: 'wt-bg2' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': layout(),
+        'tab-2': {
+          root: { type: 'leaf', leafId: leaf2 },
+          activeLeafId: leaf2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leaf2]: 'pty-2' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': [], 'tab-2': [] },
+      agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [second.paneKey]: second }
+    })
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(shutdown.mock.calls.map(([worktreeId]) => worktreeId).sort()).toEqual([
+      'wt-bg',
+      'wt-bg2'
+    ])
   })
 
   it('fails closed on truncated runtime liveness samples', async () => {

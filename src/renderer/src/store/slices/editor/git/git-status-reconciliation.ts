@@ -84,6 +84,11 @@ export function toOpenConflictMetadata(entry: GitStatusEntry): OpenConflictMetad
 }
 
 // Why: conflict state can change (unresolved↔resolved_locally) without the base status changing, so also compare conflict fields.
+// Why worktreeContentId: this comparator gates whether a refresh reaches the store, so a field it
+// ignores freezes at whatever it held when some other field last changed. Harmless for a rendered
+// value; not for the state a discard is authorized against -- an edit that replaces one line with
+// another of the same length moves nothing else, so the host would go on refusing against content the
+// user replaced, and no later refresh could clear it.
 export function areGitStatusEntriesEqual(prev: GitStatusEntry[], next: GitStatusEntry[]): boolean {
   return (
     prev.length === next.length &&
@@ -97,7 +102,8 @@ export function areGitStatusEntriesEqual(prev: GitStatusEntry[], next: GitStatus
         entry.conflictStatus === next[index].conflictStatus &&
         entry.conflictStatusSource === next[index].conflictStatusSource &&
         entry.added === next[index].added &&
-        entry.removed === next[index].removed
+        entry.removed === next[index].removed &&
+        entry.worktreeContentId === next[index].worktreeContentId
     )
   )
 }

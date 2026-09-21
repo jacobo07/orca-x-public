@@ -1,10 +1,7 @@
 import type { IPtyProvider } from './types'
+import type { PtyProcessInspection } from '../../shared/pty-process-inspection'
 
-export type PtyProcessInspection = {
-  foregroundProcess: string | null
-  hasChildProcesses: boolean
-  unavailable?: true
-}
+export type { PtyProcessInspection }
 
 type CompletionSensitivePtyProvider = IPtyProvider & {
   inspectProcess?: (id: string) => Promise<PtyProcessInspection>

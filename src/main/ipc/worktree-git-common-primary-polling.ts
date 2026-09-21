@@ -6,6 +6,7 @@ import type {
   WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-polling'
+import { getWorktreeObservationClock } from './worktree-observation-clock'
 
 type PrimaryMetadataSnapshot = {
   signatures: Map<string, string>
@@ -83,65 +84,55 @@ export async function startGitCommonPrimaryPolling(
   let disposed = false
   let ticking = false
   let snapshot = await snapshotPrimaryCheckoutMetadata(commonDirPath, getStatusRefPaths)
-  let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
-  const tick = async (): Promise<void> => {
-    timer = null
-    if (disposed) {
-      return
-    }
-    if (!visibility.isWindowVisible()) {
-      parkedWhileHidden = true
-      return
-    }
-    if (ticking) {
-      return
-    }
-    ticking = true
-    const startedAt = Date.now()
-    onFullScan?.()
-    try {
-      const next = await snapshotPrimaryCheckoutMetadata(commonDirPath, getStatusRefPaths)
+  const registration = getWorktreeObservationClock(pollIntervalMs).register(
+    async () => {
       if (disposed) {
-        return
+        return 'observed'
       }
-      const events = diffPrimaryMetadata(snapshot, next)
-      snapshot = next
-      if (events.length > 0) {
-        onEvents(events)
+      if (!visibility.isWindowVisible()) {
+        parkedWhileHidden = true
+        return 'parked'
       }
-    } catch {
-      // Transient fs error: keep the previous snapshot and retry next tick.
-    } finally {
-      ticking = false
-    }
-    if (!disposed) {
-      const nextDelay = Math.max(
-        0,
-        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
-      )
-      timer = setTimeout(() => void tick(), nextDelay)
-      timer.unref?.()
-    }
-  }
+      if (ticking) {
+        return 'observed'
+      }
+      ticking = true
+      onFullScan?.()
+      try {
+        const next = await snapshotPrimaryCheckoutMetadata(commonDirPath, getStatusRefPaths)
+        if (disposed) {
+          return 'observed'
+        }
+        const events = diffPrimaryMetadata(snapshot, next)
+        snapshot = next
+        if (events.length > 0) {
+          registration.noteActivity()
+          onEvents(events)
+        }
+      } catch {
+        // Transient fs error: keep the previous snapshot and retry next tick.
+      } finally {
+        ticking = false
+      }
+      return 'observed'
+    },
+    { isPinnedActive: () => getStatusRefPaths().length > 0 }
+  )
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
     if (disposed || !parkedWhileHidden) {
       return
     }
     parkedWhileHidden = false
-    void tick()
+    registration.runNow(false)
   })
-  timer = setTimeout(() => void tick(), pollIntervalMs)
-  timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      if (timer) {
-        clearTimeout(timer)
-      }
+      registration.unregister()
       unsubscribeVisibility()
     }
   }

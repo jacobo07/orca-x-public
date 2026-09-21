@@ -10,13 +10,12 @@ import type { RpcClient } from '../transport/rpc-client'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
-  buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal,
   type MobileAiVaultResumeSettings
 } from '../session/ai-vault-resume-launch'
+import { materializeMobileAiVaultResume } from '../session/ai-vault-resume-materialization'
 import {
   prepareMobileAiVaultSessionResume,
   RESUME_RPC_TIMEOUT_MS
@@ -201,21 +200,25 @@ export function MobileAgentSessionHistoryPanel({
         }
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
-        const launch = buildMobileAiVaultResumeLaunch({
+        const outcome = await materializeMobileAiVaultResume(client, {
           session: preparedSession,
+          worktreeId: target.worktreeId,
+          workspacePath: target.workspacePath,
           hostPlatform: platform,
           hostTerminalWindowsShell,
-          settings
-        })
-        await resumeAiVaultSessionInTerminal(client, target.worktreeId, {
-          ...launch,
+          settings,
           clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
         })
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
-        setResumeMessage('Agent session queued.')
+        setResumeMessage(
+          outcome.path === 'structured' && outcome.disposition === 'adopted'
+            ? 'This session was already running here. Opened it.'
+            : 'Agent session queued.'
+        )
+        // Why: a refused resume threw above, so navigation only follows a session that started.
         router.push(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
+          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(outcome.worktreeId)}` as Parameters<
             typeof router.push
           >[0]
         )

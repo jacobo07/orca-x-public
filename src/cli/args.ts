@@ -21,6 +21,7 @@ export const BOOLEAN_FLAGS = new Set([
   'connect',
   'current',
   'dry-run',
+  'include-pinned',
   'enter',
   'focus',
   'force',

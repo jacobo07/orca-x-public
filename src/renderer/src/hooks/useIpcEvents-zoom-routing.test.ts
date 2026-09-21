@@ -218,7 +218,7 @@ describe('useIpcEvents zoom routing', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} },
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} },
         ui: makeEvents({
           consumePendingOpenSettings: () => Promise.resolve(false),
           onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {
@@ -361,7 +361,7 @@ describe('useIpcEvents zoom routing', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} },
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} },
         ui: makeEvents({
           consumePendingOpenSettings: () => Promise.resolve(false),
           onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {

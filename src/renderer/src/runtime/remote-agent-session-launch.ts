@@ -1,4 +1,5 @@
 import { AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from '../../../shared/agent-session-host-authority'
+import { isAgentSessionLegacyFallbackErrorCode } from '../../../shared/agent-session-legacy-fallback'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { RuntimeRpcCallError, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
@@ -34,10 +35,7 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
   try {
     return await args.hostAuthority()
   } catch (error) {
-    if (
-      error instanceof RuntimeRpcCallError &&
-      (error.code === 'agent_session_legacy_required' || error.code === 'method_not_found')
-    ) {
+    if (error instanceof RuntimeRpcCallError && isAgentSessionLegacyFallbackErrorCode(error.code)) {
       // Why: both responses prove no structured side effect began: the new host rejected an old
       // lower owner before dispatch, or an old host never recognized the method.
       return await args.legacy({ skipCompatibilityCheck: true })

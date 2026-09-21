@@ -5,6 +5,15 @@ import process from 'node:process'
 
 import { parse, printParseErrorCode } from 'jsonc-parser'
 
+import {
+  ASSERTION_BASELINE_PATH,
+  createAssertionSourceReader,
+  extractBaselineHeader,
+  parseAssertionBaseline,
+  pruneBaseline,
+  resolveGateAssertions
+} from './reliability-assertion-resolution.mjs'
+
 const MANIFEST_PATH = path.join('config', 'reliability-gates.jsonc')
 const RED_GREEN_STATUSES = new Set(['missing', 'partial', 'complete', 'not-required'])
 const FLAKE_STATUSES = new Set(['not-started', 'unknown', 'soaking', 'stable', 'flaky'])
@@ -307,7 +316,45 @@ async function fileExists(root, filePath) {
   }
 }
 
-async function validateGate(gate, maturities, root) {
+/**
+ * A gate must resolve every assertion it claims, unless it is carrying recorded legacy debt.
+ *
+ * Three outcomes, and the third is what keeps the ratchet turning: unrecorded debt is refused so
+ * new work cannot add unverifiable evidence, a recorded count may only shrink, and a gate that has
+ * been fixed must be pruned from the baseline or the list becomes a permanent excuse.
+ */
+async function validateAssertionResolution(gate, readSource, baseline, failures) {
+  const resolution = await resolveGateAssertions(gate, readSource)
+  if (resolution.unreadable > 0) {
+    failures.push(
+      `${gate.id}: ${resolution.unreadable} assertionRef(s) name a file that could not be read`
+    )
+  }
+  const recorded = baseline.get(gate.id)
+  if (resolution.unresolved > 0) {
+    const shown = resolution.missing[0]
+    if (recorded === undefined) {
+      failures.push(
+        `${gate.id}: ${resolution.unresolved} claimed assertion(s) do not appear in the files cited; ` +
+          `use the real test title (first: ${shown.file} -> "${shown.assertion}")`
+      )
+    } else if (resolution.unresolved > recorded) {
+      failures.push(
+        `${gate.id}: unverifiable assertion evidence grew from ${recorded} to ${resolution.unresolved}; ` +
+          `${ASSERTION_BASELINE_PATH} may only shrink`
+      )
+    }
+    return
+  }
+  if (recorded !== undefined) {
+    failures.push(
+      `${gate.id}: every claimed assertion now resolves, so its ${ASSERTION_BASELINE_PATH} entry is stale; ` +
+        `remove it (pnpm check:reliability-gates --prune)`
+    )
+  }
+}
+
+async function validateGate(gate, maturities, root, readSource, baseline) {
   const failures = []
   if (!isRecord(gate)) {
     return ['gate entry must be an object']
@@ -364,6 +411,7 @@ async function validateGate(gate, maturities, root) {
   validateProtection(gate, failures)
   validateEvidenceRuns(gate, failures)
   validateAssertionRefs(gate, failures)
+  await validateAssertionResolution(gate, readSource, baseline, failures)
   validateCoveredScope(gate, failures)
   validatePerformanceBudget(gate, failures)
   if (!Array.isArray(gate.knownGaps) || !gate.knownGaps.every(isNonEmptyString)) {
@@ -389,6 +437,29 @@ export async function validateManifest(manifest, root) {
     failures.push('manifest must be an object')
     return { failures, internalFailures }
   }
+  // Why an absent baseline is empty rather than fatal: every gate must then resolve its own
+  // assertions, which is the strict direction. A baseline we cannot PARSE is different -- that is
+  // the checker failing to judge, not the manifest being wrong, so it outranks as exit 2.
+  let baseline = new Map()
+  try {
+    baseline = parseAssertionBaseline(
+      await fs.readFile(path.join(root, ASSERTION_BASELINE_PATH), 'utf8')
+    )
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      internalFailures.push(`the checker could not read the assertion baseline (${error.message})`)
+      return { failures, internalFailures }
+    }
+  }
+  const readSource = createAssertionSourceReader(root)
+  await readSource.prefetch(
+    (Array.isArray(manifest.gates) ? manifest.gates : [])
+      .flatMap((gate) =>
+        isRecord(gate) && Array.isArray(gate.assertionRefs) ? gate.assertionRefs : []
+      )
+      .map((ref) => (isRecord(ref) ? ref.file : null))
+      .filter(isNonEmptyString)
+  )
   if (manifest.schemaVersion !== 1) {
     failures.push('schemaVersion must be 1')
   }
@@ -407,7 +478,7 @@ export async function validateManifest(manifest, root) {
       seenIds.add(gate.id)
     }
     try {
-      failures.push(...(await validateGate(gate, maturities, root)))
+      failures.push(...(await validateGate(gate, maturities, root, readSource, baseline)))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       internalFailures.push(`${gateId}: the checker threw while validating this gate (${message})`)
@@ -431,6 +502,54 @@ export function resolveVerdict({ failures, internalFailures }) {
   return { verdict: VERDICT_CONTRACT_VALID, code: 0 }
 }
 
+/**
+ * Rewrite the baseline from measured reality, dropping gates that now resolve and lowering counts
+ * that have fallen. Refuses to record anything new, so this cannot become the way debt is added.
+ */
+async function pruneAssertionBaseline(manifest, root) {
+  const baselinePath = path.join(root, ASSERTION_BASELINE_PATH)
+  let existing
+  try {
+    existing = await fs.readFile(baselinePath, 'utf8')
+  } catch (error) {
+    console.error(`${ASSERTION_BASELINE_PATH}: unable to read (${error.message})`)
+    return 1
+  }
+  const readSource = createAssertionSourceReader(root)
+  await readSource.prefetch(
+    (Array.isArray(manifest.gates) ? manifest.gates : [])
+      .flatMap((gate) =>
+        isRecord(gate) && Array.isArray(gate.assertionRefs) ? gate.assertionRefs : []
+      )
+      .map((ref) => (isRecord(ref) ? ref.file : null))
+      .filter(isNonEmptyString)
+  )
+  const measured = new Map()
+  for (const gate of Array.isArray(manifest.gates) ? manifest.gates : []) {
+    if (!isRecord(gate) || !isNonEmptyString(gate.id)) {
+      continue
+    }
+    const { unresolved } = await resolveGateAssertions(gate, readSource)
+    if (unresolved > 0) {
+      measured.set(gate.id, unresolved)
+    }
+  }
+  const recorded = parseAssertionBaseline(existing)
+  const { kept, refused } = pruneBaseline(recorded, measured)
+  if (refused.length > 0) {
+    console.error('Refusing to prune: that would record new unverifiable assertion evidence.')
+    for (const line of refused) {
+      console.error(`- ${line}`)
+    }
+    return 1
+  }
+  await fs.writeFile(baselinePath, `${extractBaselineHeader(existing)}${kept.join('\n')}\n`, 'utf8')
+  console.log(
+    `${ASSERTION_BASELINE_PATH}: ${recorded.size} entr(ies) -> ${kept.length} after pruning.`
+  )
+  return 0
+}
+
 export async function main(root = process.cwd()) {
   const manifestPath = path.join(root, MANIFEST_PATH)
   let raw
@@ -452,6 +571,9 @@ export async function main(root = process.cwd()) {
     }
     console.error(`Verdict: ${VERDICT_UNREADABLE_INPUT}`)
     return 1
+  }
+  if (process.argv.includes('--prune')) {
+    return await pruneAssertionBaseline(manifest, root)
   }
   let result
   try {

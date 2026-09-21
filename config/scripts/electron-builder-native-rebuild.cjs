@@ -14,6 +14,13 @@ function runElectronBuilderNativeRebuild(context, runner = execFileSync, runtime
       cwd: projectDir,
       stdio: 'inherit'
     })
+    // Why here rather than in rebuild-native-deps.mjs: that script drives @electron/rebuild over
+    // node_modules packages. This addon is first-party repo source and Node-API, so it needs
+    // compiling for the target platform but not against a particular Electron ABI.
+    runner(process.execPath, ['config/scripts/build-taskbar-preview-addon.mjs'], {
+      cwd: projectDir,
+      stdio: 'inherit'
+    })
   }
   runner(process.execPath, args, {
     cwd: projectDir,

@@ -56,6 +56,18 @@ The same circularity silently disables overflow guards. `AppMenuStrip` collapses
 
 Two habits follow. Header content width is often **localized**, so a layout defect can exist in one language and not another; a gap that reproduces in Spanish may be invisible in English. And diagnose voids by measuring the rendered gap between two *named* surfaces in the running app — a generic "large element with no children" scan flags legitimate cases such as `xterm-viewport`. `tests/e2e/workspace-left-column-geometry.spec.ts` is the worked example.
 
+## Terminal Preview Observers
+
+A surface that *shows* a terminal without being it — a hover card, a thumbnail, an inspector — reads
+the main-process headless emulator, never a second ANSI interpreter and never a screen capture. It
+must not call `terminalPreview.fit` (which resizes the PTY and parks the host pane), must not route
+input, and must not take focus. See [`docs/reference/terminal-preview-observers.md`](./docs/reference/terminal-preview-observers.md).
+
+That note also carries the Windows taskbar capability trace, and the correction behind it: Electron
+exposes no way to supply a thumbnail bitmap, but Windows has since 7, so a missing binding in the
+framework is not a missing capability in the platform. Before recording any feature as blocked by the
+OS, trace it down to the OS.
+
 ## Durable State
 
 If a feature persists state that a crash or power loss could destroy, it needs a contract in [`config/durability-contracts.jsonc`](./config/durability-contracts.jsonc), not just a working write. Say what the state is, what breaks if it disappears, and its tier.
@@ -67,6 +79,20 @@ Three failure shapes recur and are worth checking for by name. A **durable point
 A state file also owes a rule about its own backup: never spend the last known-good copy on a degenerate one. Rolling a backup forward from a file that is empty or unparseable destroys both copies in a single operation, so gate the rotation on the current file actually being worth keeping (`profile-index-store.ts` and `config-toml-trust.ts` both do this).
 
 `pnpm check:durability-contracts` enforces this. Modules that stage a temp file and rename it into place but carry no contract are ratcheted in `config/durability-unclassified-baseline.txt`: the existing ones are grandfathered and the list may only shrink, so a **new** unclassified publisher fails the gate. Prune with `--prune` after classifying one.
+
+## Recurring Work
+
+A timer, poll, watcher, worker or retry loop must say what multiplies it. `pnpm check:recurring-work` finds every recurring producer in `src/` and fails until it is classified in [`config/recurring-work-inventory.jsonc`](./config/recurring-work-inventory.jsonc) with its cadence, lifetime, scaling, hidden/dormant behaviour and spawned binaries.
+
+Cost should follow the live or visible set, not everything the user has ever opened. A producer that multiplies with panes, rows, worktrees, hosts or subscriptions and never stops on its own needs a stated `bound`, or it is `debt` — and the debt list in `config/recurring-work-debt-baseline.txt` only shrinks. Prefer one shared producer over one per consumer, and an existing event over a poll; but a safety check at the moment of a destructive action keeps its own fresh read. Renaming a producer re-keys it, so it must be classified again. Local worktree and git-metadata polls register with `src/main/ipc/worktree-observation-clock.ts` instead of owning a timer, and fewer timers alone is not a shrink: measure the repeated work at several counts, and keep an external-change test that does not go through Orca's own write path. See [`docs/reference/resource-elasticity-fabric.md`](./docs/reference/resource-elasticity-fabric.md) (R4).
+
+## Forked IPC Children
+
+Fork through `forkIpcChild()` ([`src/shared/ipc-message-listener-floor.ts`](./src/shared/ipc-message-listener-floor.ts)), or call `installIpcMessageListenerFloor(child)` when the fork itself is injectable. `pnpm check:ipc-message-floor` fails on any file under `src/` that owns an IPC child without one, and `config/ipc-message-floor-baseline.txt` only shrinks.
+
+Node delivers an IPC message a tick after reading it and checks the channel only when it *schedules*. On that later tick a child with no `'message'` listener sends node into `target.channel[kPendingMessages]` — and `channel` is null once `disconnect()` ran or the child exited. The host then dies on `TypeError: Cannot read properties of null (reading 'Symbol(kPendingMessages)')` thrown from a tick, which no call site can catch; in main that is the "A JavaScript error occurred in the main process" dialog. The floor keeps one no-op listener attached for the child's whole life, so node can only take the branch that never touches the channel, and it replays what it absorbs so the queue-until-someone-listens behaviour is not lost.
+
+`fork()` always creates an IPC channel, so a site is exposed even with no `'ipc'` in its `stdio`. The teardown that arms the crash — dropping the last `'message'` listener, then disconnecting or killing — usually lives in a different function from the fork, which is why this is a gate rather than a code-review note. `removeAllListeners()` on a child is the sharpest form: it takes node's own internal handlers with it.
 
 ## Git Binary Compatibility
 

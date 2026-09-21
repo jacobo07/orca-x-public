@@ -60,6 +60,19 @@ export type TerminalTab = {
    *  `sortEpoch` increments. Split layouts use a numeric count because one tab
    *  can remount several panes. Never persisted — it is a transient handoff. */
   pendingActivationSpawn?: boolean | number
+  /** Why: positive evidence that this row is meant to have no process until someone opens it.
+   *  A tab without a PTY is not dormant on its own — a new or failed terminal looks the same.
+   *  Cleared only when a PTY binds, so a failed open stays dormant across a restart. */
+  dormancy?: TerminalTabDormancy
+  /** Someone explicitly asked to open this dormant tab in this session. Never persisted (the
+   *  session schema drops it), so a restart returns the tab to dormant until a PTY binds. */
+  dormantOpenRequested?: true
+}
+
+export type TerminalTabDormancyReason = 'working-set-restore' | 'workspace-sleep'
+
+export type TerminalTabDormancy = {
+  reason: TerminalTabDormancyReason
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'

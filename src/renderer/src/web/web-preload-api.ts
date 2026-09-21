@@ -79,6 +79,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { isStaleWorktreeStateError } from '../../../shared/stale-worktree-state'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { callAbortableRuntimeEnvironment } from '../runtime/abortable-runtime-environment-call'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
@@ -855,6 +856,28 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         return next
       }
     },
+    // Why explicit: the fallback would answer list with [], which reads as "no snapshots".
+    workingSet: {
+      save: () => Promise.resolve({ status: 'unavailable' as const }),
+      list: () => Promise.resolve({ status: 'unavailable' as const }),
+      read: () => Promise.resolve({ status: 'unavailable' as const }),
+      probeRestoreEvidence: () => Promise.resolve({ status: 'unavailable' as const })
+    },
+    // Why explicit: a web client cannot quit the desktop app or its daemon.
+    durableExit: {
+      park: () =>
+        Promise.resolve({
+          operationId: 'web',
+          status: 'unavailable' as const,
+          workspaces: [],
+          alreadyAsleepCount: 0,
+          exiting: false,
+          detail: 'web-client'
+        }),
+      onParkPhaseRequest: () => () => {},
+      respondParkPhase: () => {},
+      onParkFromMenu: () => () => {}
+    },
     cache: {
       getGitHub: () =>
         Promise.resolve(
@@ -891,7 +914,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }))
     },
     memory: {
-      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
+      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot()),
+      // Why: the web client sees no host process table; "could not look" is not "all gone".
+      probeProcessPresence: () => Promise.reject(new Error('process presence is unavailable here'))
     },
     aiVault: createAiVaultApi(),
     preflight: createPreflightApi(),
@@ -937,6 +962,30 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       onLegacyWorkerTerminalRecovery: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
+      // Why: the web client sees no host hook rows, so it cannot rule an owner out.
+      readLivePresence: () =>
+        Promise.resolve({
+          kind: 'unknown',
+          liveElsewhere: [],
+          ownersRevision: '',
+          unknownCount: 0,
+          staleCount: 0
+        }),
+      // Why: web launches are runtime-routed; the host's claim registry owns duplicates there.
+      reserveMaterialization: () =>
+        Promise.resolve({
+          outcome: 'blocked',
+          presence: {
+            kind: 'unknown',
+            liveElsewhere: [],
+            ownersRevision: '',
+            unknownCount: 0,
+            staleCount: 0
+          }
+        }),
+      attachMaterializationTab: () => Promise.resolve(false),
+      releaseMaterialization: () => Promise.resolve(),
+      onLiveCollision: () => noopUnsubscribe,
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},
@@ -2306,12 +2355,42 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkUnstage', worktreePath, filePaths),
-    discard: async ({ worktreePath, filePath }) =>
-      mutateGitPath('git.discard', worktreePath, filePath),
-    bulkDiscard: async ({ worktreePath, filePaths }) => {
+    // Why these forward expectedContent: this is a third client reaching the same destructive host, and a
+    // request that arrives without the observed state is one the host cannot fence. Dropping the field
+    // here would have left the web client on the unprotected path while the desktop and mobile ones were
+    // fenced -- the aperture that gets forgotten because its file lives somewhere else.
+    discard: async ({ worktreePath, filePath, expectedContent }) =>
+      mutateGitPath(
+        'git.discard',
+        worktreePath,
+        filePath,
+        expectedContent === undefined ? undefined : { expectedContent }
+      ),
+    bulkDiscard: async ({ worktreePath, filePaths, observed }) => {
+      // One request per path rather than the bulk method: this loop predates the bulk RPC and each hop
+      // already costs a round trip, so per-path is what the wire does either way -- and it lets a single
+      // refused member be reported as refused instead of failing the set.
+      const stated = new Map((observed ?? []).map((each) => [each.filePath, each.expectedContent]))
+      const discarded: string[] = []
+      const refused: string[] = []
       for (const filePath of filePaths) {
-        await mutateGitPath('git.discard', worktreePath, filePath)
+        const expectedContent = stated.get(filePath)
+        try {
+          await mutateGitPath(
+            'git.discard',
+            worktreePath,
+            filePath,
+            expectedContent === undefined ? undefined : { expectedContent }
+          )
+          discarded.push(filePath)
+        } catch (error) {
+          if (!isStaleWorktreeStateError(error)) {
+            throw error
+          }
+          refused.push(filePath)
+        }
       }
+      return { discarded, refused }
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -3364,6 +3443,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     inspectProcess: () => Promise.reject(new Error('terminal_liveness_unavailable')),
+    inspectProcesses: (ids) => Promise.resolve(ids.map((id) => ({ id, status: 'failed' }))),
     // Why: paired web panes cannot provide a local post-boundary process scan.
     confirmForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
@@ -4445,12 +4525,14 @@ async function resolveRuntimeFilePath(
 async function mutateGitPath(
   method: string,
   worktreePath: string,
-  filePath: string
+  filePath: string,
+  extra?: Record<string, unknown>
 ): Promise<void> {
   const file = await resolveRuntimeFilePath(filePath, worktreePath)
   await callRuntimeResult(method, {
     worktree: toRuntimeWorktreeSelector(file.worktree.id),
-    filePath: file.relativePath
+    filePath: file.relativePath,
+    ...extra
   })
 }
 

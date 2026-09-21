@@ -224,7 +224,7 @@ describe('useIpcEvents updater integration', () => {
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 

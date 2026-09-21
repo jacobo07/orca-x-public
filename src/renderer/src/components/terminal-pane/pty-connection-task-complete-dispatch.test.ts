@@ -189,7 +189,8 @@ describe('connectPanePty', () => {
 
     titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
     titleHandler('experimental-agent-observability', 'experimental-agent-observability')
-    await flushAsyncTicks()
+    // Why more ticks: the probe travels through the window's shared backstop call.
+    await flushAsyncTicks(30)
 
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
 

@@ -1,0 +1,12 @@
+# Client callers that ask a runtime for a fresh PTY listing WITHOUT going through
+# src/renderer/src/runtime/runtime-host-query-queue.ts.
+#
+# A runtime refreshes its inventory under one generation counter, so overlapping fresh
+# listings at one host fail all but the last (proved in
+# src/main/runtime/terminal-list-fresh-liveness-overlap.test.ts).
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add a line to get the gate green —
+# route the caller through runOnRuntimeHost instead. An entry that is no longer unqueued
+# must be deleted, or the gate fails on it.
+#
+# Empty since 2026-09-17: all three client callers are queued.

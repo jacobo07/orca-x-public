@@ -214,7 +214,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 
@@ -475,7 +475,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 

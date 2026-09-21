@@ -32,7 +32,11 @@ import { useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
-import type { AppMemory, UsageValues } from '../../../../shared/process-stats-types'
+import type {
+  AppMemory,
+  ProcessSweepOutcome,
+  UsageValues
+} from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
@@ -68,7 +72,15 @@ import {
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
+import {
+  getTerminalHostLabel,
+  getUnattributedTerminalProcessesLabel,
+  getUnmeasuredMemoryDescription,
+  getUnmeasuredMemoryLabel
+} from './resource-terminal-host-copy'
+import { formatMemory } from './resource-memory-byte-format'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
+import { SleepReclaimAuthorizationPanel } from './SleepReclaimAuthorizationPanel'
 import {
   countUnboundDaemonSessions,
   selectUnboundDaemonSessions,
@@ -88,16 +100,6 @@ const MEM_COLUMN_CLS = 'w-16 text-right'
 const ROW_TRAILING_GUTTER_CLS = 'w-5 shrink-0 flex items-center justify-end'
 
 // ─── Formatters ─────────────────────────────────────────────────────
-
-function formatMemory(bytes: number): string {
-  if (bytes < 1024 * 1024) {
-    return `${Math.round(bytes / 1024)} KB`
-  }
-  if (bytes < 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
 
 function formatCpu(percent: number): string {
   return `${percent.toFixed(1)}%`
@@ -228,17 +230,30 @@ function AppSubRow({ label, values }: { label: string; values: UsageValues }): R
   )
 }
 
-function AppSection({
+function hasUsage(values: UsageValues | undefined): values is UsageValues {
+  return values !== undefined && (values.cpu > 0 || values.memory > 0)
+}
+
+export function AppSection({
   app,
+  terminalHostDescendants,
+  processSweep,
   isCollapsed,
   onToggle
 }: {
   app: AppMemory
+  terminalHostDescendants?: UsageValues
+  processSweep?: ProcessSweepOutcome
   isCollapsed: boolean
   onToggle: () => void
 }): React.JSX.Element {
   return (
     <div className="border-t border-border/50">
+      {processSweep === 'failed' && (
+        <div role="status" className="px-3 py-1.5 text-[11px] text-muted-foreground">
+          {getUnmeasuredMemoryDescription()}
+        </div>
+      )}
       <div className="flex items-center">
         <button
           type="button"
@@ -299,7 +314,17 @@ function AppSection({
               values={app.other}
             />
           )}
+          {hasUsage(app.terminalHost) && (
+            <AppSubRow label={getTerminalHostLabel()} values={app.terminalHost} />
+          )}
         </div>
+      )}
+      {/* Why: outside the Orca group because these are not part of its total — their owner is unknown. */}
+      {hasUsage(terminalHostDescendants) && (
+        <AppSubRow
+          label={getUnattributedTerminalProcessesLabel()}
+          values={terminalHostDescendants}
+        />
       )}
     </div>
   )
@@ -959,13 +984,15 @@ export function ResourceUsageStatusSegment({
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
-  const { totalMemory, totalCpu, memBadgeLabel } = useMemo(() => {
-    const memory = resourceSnapshot?.totalMemory ?? 0
+  const { totalCpu, memBadgeLabel } = useMemo(() => {
     const cpu = resourceSnapshot?.totalCpu ?? 0
     return {
-      totalMemory: memory,
       totalCpu: cpu,
-      memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—'
+      memBadgeLabel: !resourceSnapshot
+        ? '—'
+        : resourceSnapshot.processSweep === 'failed'
+          ? getUnmeasuredMemoryLabel()
+          : formatMemory(resourceSnapshot.totalMemory)
     }
   }, [resourceSnapshot])
 
@@ -1127,6 +1154,7 @@ export function ResourceUsageStatusSegment({
             <button
               type="button"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
+              data-testid="resource-manager-trigger"
               className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={
                 daemonUnreachable
@@ -1328,7 +1356,7 @@ export function ResourceUsageStatusSegment({
                     tabIndex={0}
                     className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
                   >
-                    {formatMemory(totalMemory)}{' '}
+                    {memBadgeLabel}{' '}
                     <span className="font-normal text-muted-foreground">
                       {memoryMetricCopy.summaryLabel}
                     </span>
@@ -1422,6 +1450,8 @@ export function ResourceUsageStatusSegment({
           )}
 
           <div className="flex-1 overflow-y-auto scrollbar-sleek">
+            {resourceSnapshot && <SleepReclaimAuthorizationPanel />}
+
             {unifiedRepos.length > 0 && (
               <ResourceTree
                 repos={unifiedRepos}
@@ -1450,6 +1480,8 @@ export function ResourceUsageStatusSegment({
             {resourceSnapshot && (
               <AppSection
                 app={resourceSnapshot.app}
+                terminalHostDescendants={resourceSnapshot.terminalHostDescendants}
+                processSweep={resourceSnapshot.processSweep}
                 isCollapsed={appCollapsed}
                 onToggle={() => setAppCollapsed((v) => !v)}
               />

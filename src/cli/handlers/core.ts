@@ -3,6 +3,8 @@ import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
+import { formatParkResult, parkExitCode } from '../park-result-format'
+import type { ParkResult } from '../../shared/durable-exit-types'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -132,6 +134,14 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       projectRoot
     })
     process.exitCode = exitCode
+  },
+  park: async ({ client, flags, json }) => {
+    const response = await client.call<ParkResult>('app.park', {
+      mode: flags.get('dry-run') === true ? 'plan' : 'park',
+      includePinned: flags.get('include-pinned') === true
+    })
+    process.exitCode = parkExitCode(response.result)
+    printResult(response, json, (result) => formatParkResult(result))
   },
   status: async ({ client, json }) => {
     const result = await client.getCliStatus()

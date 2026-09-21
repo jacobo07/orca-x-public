@@ -3,8 +3,9 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 export type SessionRestoredBannerPane = Pick<ManagedPane, 'id' | 'container'>
 
 /** `resume-unavailable`: the pane asked to resume a provider session Orca could not
- *  verify, so it launched a fresh one — silence would read as a successful restore. */
-export type SessionRestoredBannerReason = 'restored' | 'resume-unavailable'
+ *  verify, so it launched a fresh one — silence would read as a successful restore.
+ *  `resume-refused`: the session is open or starting elsewhere, so only a shell started. */
+export type SessionRestoredBannerReason = 'restored' | 'resume-unavailable' | 'resume-refused'
 
 export type SessionRestoredBannerPaneReasons = ReadonlyMap<number, SessionRestoredBannerReason>
 

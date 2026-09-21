@@ -41,6 +41,40 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it.each(['agent-exited', 'legacy-orchestration-worker-exited'] as const)(
+    'preserves a %s resume block through hydration',
+    (block) => {
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        sleepingAgentSessionsByPaneKey: {
+          'tab1:pane-1': {
+            paneKey: 'tab1:pane-1',
+            tabId: 'tab1',
+            worktreeId: 'wt',
+            agent: 'claude',
+            providerSession: { key: 'session_id', id: 'claude-session' },
+            prompt: '',
+            state: 'working',
+            capturedAt: 10,
+            updatedAt: 10,
+            origin: 'live',
+            automaticResumeBlockedBy: block
+          }
+        }
+      })
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(
+          result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.automaticResumeBlockedBy
+        ).toBe(block)
+      }
+    }
+  )
+
   it('preserves the authoritative Pi session file through hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

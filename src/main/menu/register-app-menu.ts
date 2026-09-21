@@ -8,6 +8,7 @@ import {
 import type { TerminalMenuCommand } from '../../shared/terminal-menu-command'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
+import { requestParkFromMenu } from '../durable-exit/park-menu-command'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { buildAppearanceSubmenu } from './appearance-menu'
 import { buildTerminalMenu } from './terminal-menu'
@@ -45,10 +46,7 @@ type RegisterAppMenuOptions = {
   onZoomReset: (window?: Electron.BaseWindow | null) => void
   onToggleLeftSidebar: (window?: Electron.BaseWindow | null) => void
   onToggleRightSidebar: (window?: Electron.BaseWindow | null) => void
-  onTerminalCommand: (
-    command: TerminalMenuCommand,
-    window?: Electron.BaseWindow | null
-  ) => void
+  onTerminalCommand: (command: TerminalMenuCommand, window?: Electron.BaseWindow | null) => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -154,6 +152,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   // the system menu bar. On Windows/Linux that menu would render as a
   // redundant "Orca" entry with roles that don't apply, so we omit it there
   // and distribute its items across File / Help instead.
+  // Why beside Quit: it is the quit that also puts every terminal to sleep first.
+  const parkAndExitItem: Electron.MenuItemConstructorOptions = {
+    id: 'park-and-exit',
+    label: translateMain('menu.parkAndExit', 'Sleep Everything and Exit'),
+    click: () => requestParkFromMenu()
+  }
+
   const macAppMenu: Electron.MenuItemConstructorOptions = {
     label: options.appMenuLabel ?? app.name,
     submenu: [
@@ -167,6 +172,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { role: 'hideOthers' },
       { role: 'unhide' },
       { type: 'separator' },
+      parkAndExitItem,
       { role: 'quit' }
     ]
   }
@@ -186,6 +192,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       settingsItem,
       { type: 'separator' },
+      parkAndExitItem,
       { role: 'quit', label: translateMain('menu.exit', 'Exit') }
     ]
   }

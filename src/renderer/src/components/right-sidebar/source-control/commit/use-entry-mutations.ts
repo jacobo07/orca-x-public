@@ -75,8 +75,12 @@ export function useSourceControlEntryMutations({
   )
 
   // Why: discardSingle throws so bulk callers can aggregate failures into one toast; handleDiscard swallows for per-row fire-and-forget.
+  // Why the second argument: the caller has to say which working-tree content it is authorizing the
+  // destruction of, and the only party that knows is the surface the user acted on. Taking it here
+  // rather than reading the file ourselves is the whole point -- a read taken now would describe state
+  // the user never saw, which is the race this protects against rather than the protection.
   const discardSingle = useCallback(
-    async (filePath: string) => {
+    async (filePath: string, expectedContent?: string) => {
       if (!worktreePath || !activeWorktreeId) {
         return
       }
@@ -98,7 +102,8 @@ export function useSourceControlEntryMutations({
           worktreePath,
           connectionId
         },
-        filePath
+        filePath,
+        expectedContent === undefined ? undefined : { expectedContent }
       )
       notifyEditorExternalFileChange({
         worktreeId: activeWorktreeId,
@@ -110,10 +115,13 @@ export function useSourceControlEntryMutations({
     [activeRepoSettings, activeWorktreeId, worktreePath]
   )
 
+  // Why the observed map: the user selected rows they were looking at and authorized destroying THOSE.
+  // Per item rather than one token for the whole snapshot, so an unrelated row moving cannot refuse the
+  // rest, and so the host can say which single member it kept back.
   const discardMany = useCallback(
-    async (filePaths: string[]) => {
+    async (filePaths: string[], observed: ReadonlyMap<string, string>) => {
       if (!worktreePath || !activeWorktreeId) {
-        return
+        return { discarded: [], refused: [] }
       }
       const runtimeEnvironmentId =
         useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
@@ -129,7 +137,7 @@ export function useSourceControlEntryMutations({
         )
       )
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      await bulkDiscardRuntimeGitPaths(
+      const outcome = await bulkDiscardRuntimeGitPaths(
         {
           // Why: route the discard by the repo OWNER host, not the focused runtime.
           settings: activeRepoSettings,
@@ -137,9 +145,12 @@ export function useSourceControlEntryMutations({
           worktreePath,
           connectionId
         },
-        filePaths
+        filePaths,
+        observed
       )
-      for (const relativePath of filePaths) {
+      // Only the paths that actually changed on disk. Telling the editor a refused file changed would
+      // make it re-read a file nobody touched and imply the discard happened.
+      for (const relativePath of outcome.discarded) {
         notifyEditorExternalFileChange({
           worktreeId: activeWorktreeId,
           worktreePath,
@@ -147,6 +158,7 @@ export function useSourceControlEntryMutations({
           runtimeEnvironmentId
         })
       }
+      return outcome
     },
     [activeRepoSettings, activeWorktreeId, worktreePath]
   )

@@ -39,6 +39,20 @@ export function getAgentHibernationOutputSignature(paneKeys: readonly string[]):
     .join('|')
 }
 
+/**
+ * The signature effect-time authorization compares. Terminal output after a
+ * candidate was seen can mean a "done" session is still alive, so what the user
+ * was shown and what the coordinator re-plans must both carry it.
+ */
+export function withAgentHibernationOutputSignature<
+  T extends { signature: string; paneKeys: readonly string[] }
+>(candidate: T): T {
+  return {
+    ...candidate,
+    signature: `${candidate.signature}|output:${getAgentHibernationOutputSignature(candidate.paneKeys)}`
+  }
+}
+
 export function resetAgentHibernationOutputActivityForTests(): void {
   outputEpochByPaneKey.clear()
 }

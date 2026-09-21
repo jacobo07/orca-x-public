@@ -83,6 +83,7 @@ import {
   inspectPtyProviderProcess,
   inspectPtyProviderProcessForRenderer
 } from '../providers/pty-process-inspection'
+import { inspectPtyProcessesForRenderer } from '../providers/pty-process-inspection-batch'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
@@ -234,6 +235,13 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../../shared/setup-agent-sequencing'
 import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
+import type { LiveSessionResumeRefusal } from '../../shared/live-agent-session-presence-types'
+import { getResumeSpawnGate, type ResumeSpawnSender } from '../agent-hooks/resume-spawn-gate-slot'
+import {
+  admitAgentSessionEnsureSpawn,
+  admitRecordedResumeSpawn
+} from './pty-agent-session-ensure-admission'
+import { withoutAgentResume } from './pty-resume-spawn-refusal'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
 import {
@@ -355,6 +363,16 @@ const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
+}
+
+export function hasPtyForTabId(tabId: string): boolean {
+  const prefix = `${tabId}:`
+  for (const paneKey of paneKeyPtyId.keys()) {
+    if (paneKey.startsWith(prefix)) {
+      return true
+    }
+  }
+  return false
 }
 
 // Why: let consumers tear down paneKey-scoped state on PTY exit so their timers can't leak; a callback registry keeps the cross-module dependency narrow.
@@ -2480,6 +2498,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:inspectProcess')
+  ipcMain.removeHandler('pty:inspectProcesses')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
@@ -5099,12 +5118,25 @@ export function registerPtyHandlers(
               pendingRegistrationPtyId = recoveredOwner.ptyId
             }
             let providerResult: PtySpawnResult | null = null
+            const ensureRequest = args.agentSessionEnsure
             const ensured = await agentSessionOwners.ensure({
               claim: args.agentSessionEnsure.claim,
               surface: args.agentSessionEnsure.surface,
               spawn: async () => {
                 assertClientStillConnected()
-                providerResult = await provider.spawn(spawnOptions)
+                // Why: adoption above is not a new runtime; only a fresh spawn contends with desktop.
+                const releaseGrant = await admitAgentSessionEnsureSpawn({
+                  connectionId: args.connectionId,
+                  ensure: ensureRequest,
+                  subject: args.agentSessionResumeSubject
+                })
+                try {
+                  assertClientStillConnected()
+                  providerResult = await provider.spawn(spawnOptions)
+                } catch (error) {
+                  releaseGrant?.()
+                  throw error
+                }
                 rejectedRegistrationCandidate = providerResult
                 // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
                 reportPtySpawnCommitted()
@@ -5149,6 +5181,18 @@ export function registerPtyHandlers(
             result.agentSessionEnsure = ensured
           } else {
             assertClientStillConnected()
+            // Why: a fresh host-side resume is a new runtime; reattaching an existing PTY is not.
+            const releaseRecordedResume =
+              preAdoptedStablePane || stablePaneOwnerCandidate || !args.resumeProviderSession
+                ? null
+                : await admitRecordedResumeSpawn({
+                    connectionId: args.connectionId,
+                    worktreeId: args.worktreeId,
+                    tabId: args.tabId,
+                    leafId: args.leafId,
+                    agent: args.launchAgent,
+                    providerSession: args.resumeProviderSession
+                  })
             const stablePaneSpawn = preAdoptedStablePane
               ? preAdoptedStablePane
               : await spawnForStablePane({
@@ -5168,6 +5212,9 @@ export function registerPtyHandlers(
                       args.connectionId
                     ),
                   onFreshSpawn: reportPtySpawnCommitted
+                }).catch((error: unknown) => {
+                  releaseRecordedResume?.()
+                  throw error
                 })
             result = stablePaneSpawn.result
             stablePaneOwner = stablePaneSpawn.owner
@@ -6132,6 +6179,8 @@ export function registerPtyHandlers(
       let snapshotKittyFlagsCoverReconciledSeq = true
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
+      let agentResumeRefused: LiveSessionResumeRefusal | undefined
+      let releaseResumeSpawnGrant: (() => void) | undefined
       try {
         if (!earlyStablePaneOwner) {
           await assertFolderWorkspacePtyPathUsable(args.worktreeId)
@@ -6154,6 +6203,35 @@ export function registerPtyHandlers(
         spawnTiming.mark('stable_adoption')
         if (earlyStablePaneOwner && !preAdoptedStablePane) {
           await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+        }
+        // Why: every local Orca-selected resume crosses here, whatever asked for it; the
+        // session may already be live or starting elsewhere, so the effect is decided now.
+        const resumeSpawnGate = preAdoptedStablePane ? null : getResumeSpawnGate()
+        if (
+          resumeSpawnGate &&
+          !args.connectionId &&
+          args.resumeProviderSession &&
+          initialLeafId &&
+          initialPaneKey &&
+          typeof args.worktreeId === 'string' &&
+          typeof args.tabId === 'string'
+        ) {
+          const sender = (spawnEvent?.sender ?? null) as ResumeSpawnSender | null
+          const decision = await resumeSpawnGate.decide({
+            sender,
+            worktreeId: args.worktreeId,
+            tabId: args.tabId,
+            leafId: initialLeafId,
+            agent: args.launchAgent,
+            providerSession: args.resumeProviderSession
+          })
+          if (decision.outcome === 'refused') {
+            agentResumeRefused = decision.reason
+            args = withoutAgentResume(args)
+          } else if (decision.operationId) {
+            const operationId = decision.operationId
+            releaseResumeSpawnGrant = () => resumeSpawnGate.release(operationId, sender)
+          }
         }
         if (!preAdoptedStablePane) {
           // Why: reattach needs exact cwd, SSH cannot probe locally, and successful stable-pane adoption needs no launch preflight.
@@ -7154,7 +7232,10 @@ export function registerPtyHandlers(
           // renderer can say so, and a reattach never ran this launch command.
           ...(codexResumeLaunch.notifyResumeUnavailable && !result.isReattach
             ? { agentResumeUnavailable: true as const }
-            : {})
+            : {}),
+          // Why: the pane asked to resume a session that is live or starting elsewhere; it got a
+          // plain shell and its recovery record must survive for a later explicit resume.
+          ...(agentResumeRefused ? { agentResumeRefused } : {})
         }
         // Why claimed here: the renderer that asked for this terminal is the one its output
         // belongs to, and this is the first point where the pty id and the requester are both
@@ -7203,6 +7284,8 @@ export function registerPtyHandlers(
         // for this pane awaits a promise that never resolves. reject is a
         // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(paneSpawnReservationKey, paneSpawnReservation, err)
+        // Why: a spawn that failed never materialized; the session is free for the next attempt.
+        releaseResumeSpawnGrant?.()
         throw err
       } finally {
         releaseWorktreeSpawn?.()
@@ -7346,8 +7429,7 @@ export function registerPtyHandlers(
       return ownerWebContentsId === sender.id
     }
     return (
-      isAppWindowRenderer(sender.id) ||
-      isPtyWriteEventFromMainWindow(event, mainWindow.webContents)
+      isAppWindowRenderer(sender.id) || isPtyWriteEventFromMainWindow(event, mainWindow.webContents)
     )
   }
 
@@ -7751,38 +7833,47 @@ export function registerPtyHandlers(
     if (startupPromise) {
       await startupPromise
     }
-    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
-    if (!provider && connectionId) {
-      // Why: detached SSH PTYs intentionally keep ownership after their
-      // provider is unregistered; hydrated app-scoped ids can also arrive
-      // before ownership is rebuilt. Tombstone instead of falling back local.
-      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
-      return
-    }
-    const shutdownProvider = provider ?? getProviderForPty(args.id)
-    let providerExitObserved = false
+    // Why: a keep-history kill is Sleep. Its exit must keep the row the renderer keeps, or the
+    // host-authoritative session drops it and a relaunch loses the slept terminal.
+    const releaseSurface = args.keepHistory
+      ? runtime?.retainSurfaceThroughPtyStop(args.id)
+      : undefined
     try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
-        immediate: true,
-        keepHistory: args.keepHistory ?? false
-      })
-    } catch (err) {
-      if (!isPtyAlreadyGoneError(err)) {
-        // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
-        throw err
+      const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+      if (!provider && connectionId) {
+        // Why: detached SSH PTYs intentionally keep ownership after their
+        // provider is unregistered; hydrated app-scoped ids can also arrive
+        // before ownership is rebuilt. Tombstone instead of falling back local.
+        const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+        runtime?.onPtyExit(args.id, -1, incarnationId)
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+        return
       }
-      /* session already dead — cleanup below handles the rest */
-    }
-    // Why: some shutdown paths do not emit onExit through the provider listener.
-    // Explicit cleanup is idempotent and covers already-dead PTYs.
-    const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-    if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
+      const shutdownProvider = provider ?? getProviderForPty(args.id)
+      let providerExitObserved = false
+      try {
+        providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
+          immediate: true,
+          keepHistory: args.keepHistory ?? false
+        })
+      } catch (err) {
+        if (!isPtyAlreadyGoneError(err)) {
+          // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
+          throw err
+        }
+        /* session already dead — cleanup below handles the rest */
+      }
+      // Why: some shutdown paths do not emit onExit through the provider listener.
+      // Explicit cleanup is idempotent and covers already-dead PTYs.
+      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+      if (!providerExitObserved) {
+        runtime?.onPtyExit(args.id, -1, incarnationId)
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+      }
+    } finally {
+      releaseSurface?.()
     }
   })
 
@@ -7912,6 +8003,11 @@ export function registerPtyHandlers(
 
   ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) =>
     inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
+  )
+
+  // Why: the renderer's process-exit backstop sends every due pane in one call per tick.
+  ipcMain.handle('pty:inspectProcesses', async (_event, args: { ids: unknown }) =>
+    inspectPtyProcessesForRenderer(args?.ids, getProviderForPty)
   )
 
   ipcMain.handle(

@@ -18,6 +18,13 @@ export type LaunchAiVaultSessionInNewTabResult =
   | { tabId: string; groupId?: string }
   | { tabId: null; groupId?: string; runtimeLaunch: Promise<WebRuntimeTerminalCreateOutcome> }
 
+/** True when the launch will go through a paired runtime, whose host claim registry owns duplicates. */
+export function willLaunchAiVaultSessionThroughRuntime(worktreeId: string): boolean {
+  return isWebRuntimeSessionActive(
+    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+  )
+}
+
 export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
   worktreeId: string

@@ -20,6 +20,7 @@ import type {
   TerminalSnapshot
 } from './types'
 import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
+import { SessionShellPromptState } from './session-shell-prompt-state'
 
 export class Session {
   readonly sessionId: string
@@ -37,6 +38,7 @@ export class Session {
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
   private readonly startupIngress: PtyStartupIngress
+  readonly shellPromptState = new SessionShellPromptState(() => this.subprocess.shellPath)
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -137,6 +139,10 @@ export class Session {
       return
     }
 
+    // Why here: the query replies above never reach the shell, but everything from this point
+    // does — including data that only queues — so this is where a line starts existing.
+    this.shellPromptState.noteWrite(data)
+
     // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
     // direct write would race fresh input ahead of the buffered startup command.
     if (this.shellReady.tryEnqueue(data)) {
@@ -147,10 +153,7 @@ export class Session {
   }
 
   resize(cols: number, rows: number): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    if (!isValidPtySize(cols, rows)) {
+    if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {
       return
     }
     this.output.resize(cols, rows)
@@ -339,6 +342,7 @@ export class Session {
     if (this._disposed) {
       return
     }
+    this.shellPromptState.observe(data)
     this.shellReady.ingestSubprocessData(data)
   }
 

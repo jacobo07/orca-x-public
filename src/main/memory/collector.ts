@@ -30,12 +30,14 @@ import { app } from 'electron'
 import type {
   AppMemory,
   MemorySnapshot,
+  ProcessMemorySample,
   SessionMemory,
   WorktreeMemory
 } from '../../shared/process-stats-types'
 import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
+import { listConnectedDaemonPids } from './terminal-host-daemon-pids'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { collectHostMemory, fallbackHostMemory } from './host-memory'
 import { getProcessMemoryMetric } from './process-memory-metric'
@@ -84,7 +86,7 @@ type ProcRow = {
 }
 
 /** Indexed view of a single host process sweep. */
-type ProcIndex = {
+export type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
 }
@@ -99,12 +101,14 @@ function clampNumber(value: unknown): number {
 function emptySnapshot(): MemorySnapshot {
   const zero = { cpu: 0, memory: 0 }
   return {
-    app: { ...zero, main: zero, renderer: zero, other: zero, history: [] },
+    app: { ...zero, main: zero, renderer: zero, other: zero, terminalHost: zero, history: [] },
     worktrees: [],
     host: fallbackHostMemory(),
     processMemoryMetric: getProcessMemoryMetric(),
     totalCpu: 0,
     totalMemory: 0,
+    terminalHostDescendants: zero,
+    processSweep: 'failed',
     collectedAt: Date.now()
   }
 }
@@ -150,7 +154,8 @@ function sweepStaleHistory(now: number): void {
 
 // ─── Host process enumeration ───────────────────────────────────────
 
-async function enumerateProcesses(): Promise<ProcIndex> {
+/** One host process sweep. An empty index means the sweep failed, not that nothing runs. */
+export async function enumerateProcesses(): Promise<ProcIndex> {
   const rows = os.platform() === 'win32' ? await enumerateWindows() : await enumerateUnix()
 
   const byPid = new Map<number, ProcRow>()
@@ -260,12 +265,13 @@ function electronMetricMemoryBytes(
   return clampNumber(proc.memory?.workingSetSize) * 1024
 }
 
-function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
+function bucketElectronMetrics(processIndex: ProcIndex, claimed: Set<number>): AppBucketsRaw {
   const main = { cpu: 0, memory: 0 }
   const renderer = { cpu: 0, memory: 0 }
   const other = { cpu: 0, memory: 0 }
 
   for (const proc of app.getAppMetrics()) {
+    claimed.add(proc.pid)
     const cpu = clampNumber(proc.cpu?.percentCPUUsage)
     const memoryBytes = electronMetricMemoryBytes(proc, processIndex)
 
@@ -340,15 +346,15 @@ function makeEmptyBucket(
 // ─── Main collection path ───────────────────────────────────────────
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
+  const sweepStartedAt = Date.now()
   const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
-  const appBuckets = bucketElectronMetrics(processIndex)
-  const ptys = listRegisteredPtys()
-
   // Why: when two PTYs share an ancestor in the process tree (e.g. a
   // supervisor, or a shell that re-execed), a naive walk would double-count
   // that ancestor's memory. Track which pids have already been claimed and
   // attribute to the first PTY (registration order) to see each pid.
   const claimed = new Set<number>()
+  const electronBuckets = bucketElectronMetrics(processIndex, claimed)
+  const ptys = listRegisteredPtys()
 
   const orphan = makeEmptyBucket(
     ORPHAN_WORKTREE_ID,
@@ -361,6 +367,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   for (const pty of ptys) {
     let sessionCpu = 0
     let sessionMemory = 0
+    const processes: ProcessMemorySample[] = []
 
     if (pty.pid != null) {
       for (const pid of collectSubtree(processIndex, pty.pid)) {
@@ -374,6 +381,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
         claimed.add(pid)
         sessionCpu += row.cpu
         sessionMemory += row.memory
+        processes.push({ pid, memory: clampNumber(row.memory) })
       }
     }
 
@@ -381,6 +389,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       sessionId: pty.sessionId ?? pty.ptyId,
       paneKey: pty.paneKey,
       pid: pty.pid ?? 0,
+      processes,
       cpu: clampNumber(sessionCpu),
       memory: clampNumber(sessionMemory)
     }
@@ -402,6 +411,28 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     bucket.cpu += session.cpu
     bucket.memory += session.memory
     bucket.sessions.push(session)
+  }
+
+  // Why: walked after every PTY so a registered session's subtree stays workload, never host overhead.
+  const terminalHost = { cpu: 0, memory: 0 }
+  const terminalHostDescendants = { cpu: 0, memory: 0 }
+  for (const daemonPid of listConnectedDaemonPids()) {
+    for (const pid of collectSubtree(processIndex, daemonPid)) {
+      const row = processIndex.byPid.get(pid)
+      if (claimed.has(pid) || !row) {
+        continue
+      }
+      claimed.add(pid)
+      const target = pid === daemonPid ? terminalHost : terminalHostDescendants
+      target.cpu += row.cpu
+      target.memory += row.memory
+    }
+  }
+  const appBuckets: AppBucketsRaw = {
+    ...electronBuckets,
+    terminalHost,
+    cpu: electronBuckets.cpu + terminalHost.cpu,
+    memory: electronBuckets.memory + terminalHost.memory
   }
 
   const bucketList: WorktreeBucket[] = [...worktreeBuckets.values()]
@@ -436,8 +467,11 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     worktrees,
     host,
     processMemoryMetric: getProcessMemoryMetric(),
-    totalCpu: appBuckets.cpu + sessionCpuTotal,
-    totalMemory: appBuckets.memory + sessionMemoryTotal,
+    totalCpu: appBuckets.cpu + terminalHostDescendants.cpu + sessionCpuTotal,
+    totalMemory: appBuckets.memory + terminalHostDescendants.memory + sessionMemoryTotal,
+    terminalHostDescendants,
+    processSweep: processIndex.byPid.size > 0 ? 'measured' : 'failed',
+    sweepStartedAt,
     collectedAt: now
   }
 }

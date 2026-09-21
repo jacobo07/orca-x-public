@@ -192,7 +192,7 @@ describe('useIpcEvents updater integration', () => {
             return () => {}
           }
         },
-        agentStatus: { onSet: () => () => {} }
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} }
       }
     })
 
@@ -317,7 +317,7 @@ describe('useIpcEvents updater integration', () => {
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {}
         },
-        agentStatus: { onSet: () => () => {} },
+        agentStatus: { onSet: () => () => {}, onLiveCollision: () => () => {} },
         ui: makeEvents({
           onOpenSettings: () => {
             onOpenSettingsRegistered = true

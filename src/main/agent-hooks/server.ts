@@ -722,6 +722,11 @@ export class AgentHookServer {
     return this.buildStatusChangeNotification().providerSessions
   }
 
+  /** False for rows only hydrated from disk; those are continuity, not liveness. */
+  isPaneStatusObservedInCurrentRuntime(paneKey: string): boolean {
+    return this.runtimeObservedStatusPaneKeys.has(paneKey)
+  }
+
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
     const entry = this.state.lastStatusByPaneKey.get(paneKey)
     return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []

@@ -117,7 +117,13 @@ function activeOrQueuedResumeClaimsProviderSession(
     }
   }
 
+  const recordTabId = getAgentStatusTabId(record)
   for (const [tabId, claim] of Object.entries(state.automaticAgentResumeClaimsByTabId)) {
+    // Why: a claim outlives the spawn it guarded; a record from a pane of the claimed tab can only
+    // exist once that tab's agent ran, so the claim is that very session, not a competing resume.
+    if (tabId === recordTabId) {
+      continue
+    }
     if (
       worktreeTabIds.has(tabId) &&
       claim.worktreeId === record.worktreeId &&
@@ -135,6 +141,11 @@ function activeOrQueuedResumeClaimsProviderSession(
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
   if (!record.origin && record.state === 'done') {
     return true
+  }
+  // Why: an agent parked on a permission prompt or question emits no hooks until the user answers,
+  // so hook age measures how long it waited, not whether the session is still resumable.
+  if (record.state === 'waiting' || record.state === 'blocked') {
+    return false
   }
   return (
     record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
@@ -172,7 +183,7 @@ export function resumeSleepingAgentSessionsForWorktree(
     if (options?.skipClaimKeys?.has(claimKey)) {
       continue
     }
-    if (record.automaticResumeBlockedBy === 'legacy-orchestration-worker') {
+    if (record.automaticResumeBlockedBy !== undefined) {
       continue
     }
     if (isInvalidWorktreeActivationRecord(record)) {

@@ -923,14 +923,20 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi,
             // Why: the cold-restore path re-runs the launch command, so it needs the
             // same "main declined the resume" signal the fresh-spawn path gets.
-            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
+            ...(spawnResult.agentResumeUnavailable
+              ? { agentResumeUnavailable: true as const }
+              : {}),
+            ...(spawnResult.agentResumeRefused
+              ? { agentResumeRefused: spawnResult.agentResumeRefused }
+              : {})
           } satisfies PtyConnectResult
         }
         if (
           resultLaunchAgent ||
           spawnResult.launchConfig ||
           spawnResult.startupCwdFallback ||
-          spawnResult.agentResumeUnavailable
+          spawnResult.agentResumeUnavailable ||
+          spawnResult.agentResumeRefused
         ) {
           return {
             id: spawnResult.id,
@@ -939,7 +945,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             ...(spawnResult.startupCwdFallback
               ? { startupCwdFallback: spawnResult.startupCwdFallback }
               : {}),
-            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
+            ...(spawnResult.agentResumeUnavailable
+              ? { agentResumeUnavailable: true as const }
+              : {}),
+            ...(spawnResult.agentResumeRefused
+              ? { agentResumeRefused: spawnResult.agentResumeRefused }
+              : {})
           } satisfies PtyConnectResult
         }
         return spawnResult.id

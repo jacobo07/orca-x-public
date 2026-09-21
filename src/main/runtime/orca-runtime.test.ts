@@ -22055,75 +22055,83 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('fences an unresolved folder legacy worker in its exact retained session partition', () => {
-    const connectionId = 'ssh-unresolved-folder'
-    const worktreeId = 'folder:missing-folder'
-    const workerPaneKey = `legacy-unresolved-folder-worker:${HEADLESS_LEAF_ID}`
-    const remoteInitialSession: WorkspaceSessionState = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [worktreeId]: [] },
-      sleepingAgentSessionsByPaneKey: {
-        [workerPaneKey]: {
-          paneKey: workerPaneKey,
-          tabId: 'legacy-unresolved-folder-worker',
-          worktreeId,
-          agent: 'codex',
-          providerSession: { key: 'session_id', id: 'legacy-unresolved-folder-session' },
-          prompt: 'continue',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1,
-          origin: 'live',
-          connectionId
+  // W3.0: fencing an exited worker must keep the exit for when the fence is released.
+  it.each([
+    [undefined, 'legacy-orchestration-worker'],
+    ['agent-exited', 'legacy-orchestration-worker-exited']
+  ] as const)(
+    'fences an unresolved folder legacy worker in its exact retained session partition (prior block %s)',
+    (priorBlock, expectedBlock) => {
+      const connectionId = 'ssh-unresolved-folder'
+      const worktreeId = 'folder:missing-folder'
+      const workerPaneKey = `legacy-unresolved-folder-worker:${HEADLESS_LEAF_ID}`
+      const remoteInitialSession: WorkspaceSessionState = {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [worktreeId]: [] },
+        sleepingAgentSessionsByPaneKey: {
+          [workerPaneKey]: {
+            paneKey: workerPaneKey,
+            tabId: 'legacy-unresolved-folder-worker',
+            worktreeId,
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'legacy-unresolved-folder-session' },
+            prompt: 'continue',
+            state: 'working',
+            capturedAt: 1,
+            updatedAt: 1,
+            origin: 'live',
+            connectionId,
+            ...(priorBlock ? { automaticResumeBlockedBy: priorBlock } : {})
+          }
         }
       }
-    }
-    const localSession = getDefaultWorkspaceSession()
-    let remoteSession = remoteInitialSession
-    const getWorkspaceSession = vi.fn((hostId?: string | null) =>
-      hostId === `ssh:${connectionId}` ? remoteSession : localSession
-    )
-    const setWorkspaceSession = vi.fn((next: WorkspaceSessionState, hostId?: string | null) => {
-      if (hostId !== `ssh:${connectionId}`) {
-        throw new Error(`unexpected workspace-session host ${hostId ?? 'default'}`)
-      }
-      remoteSession = next
-    })
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getFolderWorkspaces: () => [],
-      getWorkspaceSession,
-      getWorkspaceSessionHostIds: () => ['local', `ssh:${connectionId}`],
-      setWorkspaceSession,
-      flushOrThrow: vi.fn()
-    } as never)
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-unresolved-folder',
-          task_id: 'task-unresolved-folder',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_unresolved_folder',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: 'pty-unresolved-folder:68686868-6868-4868-8868-686868686868',
-          worker_state: 'ready',
-          worktree_id: worktreeId,
-          agent_terminal_handle: 'term_unresolved_folder'
+      const localSession = getDefaultWorkspaceSession()
+      let remoteSession = remoteInitialSession
+      const getWorkspaceSession = vi.fn((hostId?: string | null) =>
+        hostId === `ssh:${connectionId}` ? remoteSession : localSession
+      )
+      const setWorkspaceSession = vi.fn((next: WorkspaceSessionState, hostId?: string | null) => {
+        if (hostId !== `ssh:${connectionId}`) {
+          throw new Error(`unexpected workspace-session host ${hostId ?? 'default'}`)
         }
-      ]
-    } as unknown as OrchestrationDb)
+        remoteSession = next
+      })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getFolderWorkspaces: () => [],
+        getWorkspaceSession,
+        getWorkspaceSessionHostIds: () => ['local', `ssh:${connectionId}`],
+        setWorkspaceSession,
+        flushOrThrow: vi.fn()
+      } as never)
+      runtime.setOrchestrationDb({
+        listLegacyWorkerTerminalRecoveryRows: () => [
+          {
+            dispatch_id: 'dispatch-unresolved-folder',
+            task_id: 'task-unresolved-folder',
+            dispatch_status: 'completed',
+            contract_version: 0,
+            assignee_handle: 'term_unresolved_folder',
+            assignee_pane_key: workerPaneKey,
+            process_incarnation: 'pty-unresolved-folder:68686868-6868-4868-8868-686868686868',
+            worker_state: 'ready',
+            worktree_id: worktreeId,
+            agent_terminal_handle: 'term_unresolved_folder'
+          }
+        ]
+      } as unknown as OrchestrationDb)
 
-    expect(runtime.prepareLegacyWorkerTerminalRecovery()).toMatchObject({
-      blockedPanes: [expect.objectContaining({ paneKey: workerPaneKey, worktreeId })]
-    })
-    expect(
-      remoteSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
-    expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
-    expect(setWorkspaceSession).toHaveBeenCalledOnce()
-    expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), `ssh:${connectionId}`)
-  })
+      expect(runtime.prepareLegacyWorkerTerminalRecovery()).toMatchObject({
+        blockedPanes: [expect.objectContaining({ paneKey: workerPaneKey, worktreeId })]
+      })
+      expect(
+        remoteSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
+      ).toBe(expectedBlock)
+      expect(localSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
+      expect(setWorkspaceSession).toHaveBeenCalledOnce()
+      expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), `ssh:${connectionId}`)
+    }
+  )
 
   it('adopts an SSH legacy worker only after its matching relay is ready', async () => {
     const connectionId = 'ssh-legacy-worker'

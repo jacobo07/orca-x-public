@@ -10,8 +10,11 @@ afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
-describe('legacy worker sleeping-session recovery', () => {
-  it('never resumes a proven-exited legacy worker on workspace activation', () => {
+describe('blocked sleeping-session recovery', () => {
+  it.each([
+    ['a proven-exited legacy worker', 'legacy-orchestration-worker'],
+    ['an agent the user exited to its shell', 'agent-exited']
+  ] as const)('never resumes %s on workspace activation', (_label, blockedBy) => {
     const record: SleepingAgentSessionRecord = {
       paneKey: 'tab-legacy:leaf-legacy',
       tabId: 'tab-legacy',
@@ -23,7 +26,7 @@ describe('legacy worker sleeping-session recovery', () => {
       capturedAt: 1,
       updatedAt: 1,
       origin: 'live',
-      automaticResumeBlockedBy: 'legacy-orchestration-worker'
+      automaticResumeBlockedBy: blockedBy
     }
     useAppStore.setState({
       tabsByWorktree: {
