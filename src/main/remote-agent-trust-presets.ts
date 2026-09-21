@@ -7,19 +7,32 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
 } from '../shared/cross-platform-path'
+import { refusalFor, type WorkspaceTrustWriteOutcome } from './workspace-execution-consent'
 
 export async function markRemoteAgentWorkspaceTrusted(args: {
   preset: AgentTrustPreset
   connectionId: string
   workspacePath: string
-}): Promise<void> {
+}): Promise<WorkspaceTrustWriteOutcome> {
   const home = await resolveRemoteHome(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
   if (!home || !fsProvider) {
-    return
+    // Could not reach the host, so nothing is known about it. That is not consent.
+    return { written: false, refusedBecause: 'unreadable' }
   }
 
   const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
+  // Gated after the remote host has canonicalized the path and before any write, so the key the
+  // grant is looked up by is the identity the artifact would be written under. A grant is scoped to
+  // this connection: the same path on another host is a different workspace and is not covered.
+  const refused = refusalFor({
+    scope: { kind: 'ssh', connectionId: args.connectionId },
+    workspacePath,
+    preset: args.preset
+  })
+  if (refused) {
+    return refused
+  }
   if (args.preset === 'codex') {
     await markRemoteCodexProjectTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'cursor') {
@@ -27,6 +40,7 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
   }
+  return { written: true }
 }
 
 async function resolveRemoteHome(connectionId: string): Promise<string | null> {

@@ -1,23 +1,23 @@
-// Characterization of the defect the workspace-execution-consent boundary exists to remove.
+// The defect this file pinned, now inverted in place.
 //
-// Today Orca answers a third-party CLI's "Do you trust this folder?" prompt on the user's behalf.
-// That prompt is a safety control against executing untrusted repository content; the artifact is
-// written into the user's REAL home, permanently, globally, and is still in force when they run the
-// CLI from a plain terminal months later. It is keyed to "Orca launched an agent here", never to
-// "the user trusts this folder".
+// Orca used to answer each third-party CLI's "Do you trust this folder?" prompt on the user's
+// behalf — a safety control against executing untrusted repository content, answered permanently
+// and globally in the user's real home, keyed to "Orca launched an agent here". The previous
+// revision of this file asserted that a workspace nobody consented to still acquired provider
+// trust. Every one of those cases now asserts the opposite, against the same calls. The diff
+// between the two revisions is the evidence that the boundary landed; a new file beside a deleted
+// one would not be.
 //
-// These assertions pin CURRENT behaviour: with no consent recorded anywhere, every preset writes.
-// When the consent authority lands, this file inverts in place — same calls, no consent, nothing
-// written — and the diff between the two versions is the evidence. A new test beside a deleted one
-// would not be.
-//
-// Discriminating by construction: each case asserts on the ARTIFACT ON DISK, not on a helper's
-// return value. A guard that returns early but still writes, or writes to a different path, fails
-// here; a lexical "does it call the authority" check would not.
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+// Discriminating by construction: assertions are on the ARTIFACT ON DISK, not on a return value,
+// so a guard that reports a refusal and writes anyway still fails here. Every refusal case is
+// paired with a grant case in which the same call DOES write — a gate that refused everything
+// would satisfy the refusals alone and is indistinguishable from a broken feature.
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { AgentTrustPreset } from './agent-trust-presets'
 
 const testState = {
   fakeHomeDir: '',
@@ -47,13 +47,13 @@ vi.mock('node:os', async () => {
 
 const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
   await import('./agent-trust-presets')
+const { LOCAL_WORKSPACE_SCOPE, workspaceConsentKey } = await import('./workspace-execution-consent')
 
 const workspaces: string[] = []
 
 function unconsentedWorkspace(): string {
   // Why a real directory: the producers realpath() their input, and a path that does not exist
-  // falls through canonicalize() unresolved — which would exercise a different branch than the one
-  // every production call site takes.
+  // falls through canonicalization unresolved — a different branch than every production call site.
   //
   // Why the prefix carries no product name: the workspace path is embedded verbatim in the trust
   // artifact, so a fixture named after anything an assertion below searches for would satisfy that
@@ -63,6 +63,39 @@ function unconsentedWorkspace(): string {
   workspaces.push(dir)
   return dir
 }
+
+function consentStorePath(): string {
+  return join(testState.userDataDir, 'workspace-execution-consent.json')
+}
+
+/** Writes the store the product reads. Keys come from the production key builder, so a change to
+ *  the key format cannot leave this harness silently granting nothing. */
+function recordConsent(
+  entries: {
+    workspacePath: string
+    preset: AgentTrustPreset
+    decision: 'granted' | 'denied'
+  }[]
+): void {
+  const grants: Record<string, { decision: string; at: string }> = {}
+  for (const entry of entries) {
+    grants[
+      workspaceConsentKey({
+        scope: LOCAL_WORKSPACE_SCOPE,
+        workspacePath: entry.workspacePath,
+        preset: entry.preset
+      })
+    ] = { decision: entry.decision, at: new Date().toISOString() }
+  }
+  mkdirSync(dirname(consentStorePath()), { recursive: true })
+  writeFileSync(consentStorePath(), `${JSON.stringify({ version: 1, grants }, null, 2)}\n`)
+}
+
+const codexRealHomeConfig = (): string => join(testState.fakeHomeDir, '.codex', 'config.toml')
+const codexManagedHomeConfig = (): string =>
+  join(testState.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+const cursorProjectsDir = (): string => join(testState.fakeHomeDir, '.cursor', 'projects')
+const copilotConfig = (): string => join(testState.fakeHomeDir, '.copilot', 'config.json')
 
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-consent-home-'))
@@ -87,76 +120,132 @@ afterEach(() => {
   testState.previousUserDataPath = undefined
 })
 
-describe('a workspace nobody consented to still acquires provider trust', () => {
-  // The precondition every case below stands on. Stated as its own assertion so a harness that
-  // silently pre-seeded consent could not make the rest of the file pass for the wrong reason.
-  it('starts with no consent record anywhere in the profile or the home', () => {
-    expect(readdirSync(testState.userDataDir)).toEqual([])
-    expect(readdirSync(testState.fakeHomeDir)).toEqual([])
+describe('a workspace nobody consented to does not acquire provider trust', () => {
+  // The precondition every case below stands on, asserted rather than assumed: a harness that
+  // silently pre-seeded consent would make the grant cases pass for the wrong reason.
+  it('starts with no consent record and no provider artifacts', () => {
+    expect(existsSync(consentStorePath())).toBe(false)
+    expect(existsSync(codexRealHomeConfig())).toBe(false)
+    expect(existsSync(cursorProjectsDir())).toBe(false)
+    expect(existsSync(copilotConfig())).toBe(false)
   })
 
-  it('writes Codex project trust into the real home config.toml', () => {
+  it('refuses Codex trust in the real home, and says nobody was asked', () => {
+    const workspace = unconsentedWorkspace()
+
+    const outcome = markCodexProjectTrusted(workspace)
+
+    expect(outcome).toEqual({ written: false, refusedBecause: 'unrecorded' })
+    expect(existsSync(codexRealHomeConfig())).toBe(false)
+  })
+
+  it('refuses the Orca-managed CODEX_HOME too', () => {
     const workspace = unconsentedWorkspace()
 
     markCodexProjectTrusted(workspace)
 
-    const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
-    expect(existsSync(configPath)).toBe(true)
-    expect(readFileSync(configPath, 'utf-8')).toContain('trust_level = "trusted"')
+    // Two artifacts, two homes: the managed home is what an Orca-launched Codex actually reads, so
+    // a boundary that only covered the real home would leave the effect intact where it matters.
+    expect(existsSync(codexManagedHomeConfig())).toBe(false)
   })
 
-  it('writes Codex project trust into the Orca-managed CODEX_HOME as well', () => {
+  it('refuses the Cursor per-workspace marker', () => {
     const workspace = unconsentedWorkspace()
 
-    markCodexProjectTrusted(workspace)
+    const outcome = markCursorWorkspaceTrusted(workspace)
 
-    // Two artifacts, two homes, one unconsented call: the managed home is what an Orca-launched
-    // Codex actually reads, so a fix that only covers the real home would leave the effect intact.
-    const managed = join(
-      testState.userDataDir,
-      'codex-runtime-home',
-      'home',
-      'config.toml'
-    )
-    expect(existsSync(managed)).toBe(true)
-    expect(readFileSync(managed, 'utf-8')).toContain('trust_level = "trusted"')
+    expect(outcome).toEqual({ written: false, refusedBecause: 'unrecorded' })
+    expect(existsSync(cursorProjectsDir())).toBe(false)
   })
 
-  it('writes the Cursor per-workspace trust marker', () => {
+  it('refuses to add the workspace to Copilot trustedFolders', () => {
     const workspace = unconsentedWorkspace()
 
-    markCursorWorkspaceTrusted(workspace)
+    const outcome = markCopilotFolderTrusted(workspace)
 
-    const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
-    const slugs = readdirSync(projectsDir)
-    expect(slugs.length).toBe(1)
-    expect(existsSync(join(projectsDir, slugs[0], '.workspace-trusted'))).toBe(true)
+    expect(outcome).toEqual({ written: false, refusedBecause: 'unrecorded' })
+    expect(existsSync(copilotConfig())).toBe(false)
+  })
+})
+
+describe('an explicit grant still materializes the artifact', () => {
+  // Without these, "refuses everything" would pass every assertion above and be indistinguishable
+  // from the boundary working.
+  it('writes Codex trust into both homes once consent is recorded', () => {
+    const workspace = unconsentedWorkspace()
+    recordConsent([{ workspacePath: workspace, preset: 'codex', decision: 'granted' }])
+
+    const outcome = markCodexProjectTrusted(workspace)
+
+    expect(outcome).toEqual({ written: true })
+    expect(readFileSync(codexRealHomeConfig(), 'utf-8')).toContain('trust_level = "trusted"')
+    expect(readFileSync(codexManagedHomeConfig(), 'utf-8')).toContain('trust_level = "trusted"')
   })
 
-  it('adds the workspace to Copilot trustedFolders', () => {
+  it('writes the Cursor marker once consent is recorded', () => {
     const workspace = unconsentedWorkspace()
+    recordConsent([{ workspacePath: workspace, preset: 'cursor', decision: 'granted' }])
 
-    markCopilotFolderTrusted(workspace)
-
-    const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
-    expect(existsSync(configPath)).toBe(true)
-    const config = JSON.parse(readFileSync(configPath, 'utf-8'))
-    expect(Array.isArray(config.trustedFolders)).toBe(true)
-    expect(config.trustedFolders).toHaveLength(1)
+    expect(markCursorWorkspaceTrusted(workspace)).toEqual({ written: true })
+    expect(existsSync(cursorProjectsDir())).toBe(true)
   })
 
-  // The blast radius, stated as a measurement rather than a sentence: the grant is global and
-  // outlives the launch that caused it. Nothing scopes it to Orca, to this session, or to a period.
-  it('leaves a grant that survives after the launch that caused it is over', () => {
+  it('writes Copilot trustedFolders once consent is recorded', () => {
     const workspace = unconsentedWorkspace()
+    recordConsent([{ workspacePath: workspace, preset: 'copilot', decision: 'granted' }])
 
-    markCodexProjectTrusted(workspace)
-    const afterLaunch = readFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), 'utf-8')
+    expect(markCopilotFolderTrusted(workspace)).toEqual({ written: true })
+    expect(JSON.parse(readFileSync(copilotConfig(), 'utf-8')).trustedFolders).toHaveLength(1)
+  })
+})
 
-    expect(afterLaunch).toContain('trust_level = "trusted"')
-    // Nothing bounds the grant: no expiry, no issuing session, no Orca-scoping key. Anchored to
-    // key position (`^key =`) rather than a bare substring, because the workspace path is written
-    // into this same file and would otherwise answer the search on the record's behalf.
-    expect(afterLaunch).not.toMatch(/^\s*(expires|expires_at|granted_by|granted_at|session_id)\s*=/m)
+describe('the refusals are distinguishable, because they need different fixes', () => {
+  it('reports an explicit denial as denied, not as unasked', () => {
+    const workspace = unconsentedWorkspace()
+    recordConsent([{ workspacePath: workspace, preset: 'codex', decision: 'denied' }])
+
+    expect(markCodexProjectTrusted(workspace)).toEqual({
+      written: false,
+      refusedBecause: 'denied'
+    })
+    expect(existsSync(codexRealHomeConfig())).toBe(false)
+  })
+
+  it('reports a corrupt store as unreadable, and refuses rather than treating it as empty', () => {
+    const workspace = unconsentedWorkspace()
+    mkdirSync(dirname(consentStorePath()), { recursive: true })
+    writeFileSync(consentStorePath(), '{ this is not json')
+
+    expect(markCodexProjectTrusted(workspace)).toEqual({
+      written: false,
+      refusedBecause: 'unreadable'
+    })
+    expect(existsSync(codexRealHomeConfig())).toBe(false)
+  })
+})
+
+describe('a grant covers exactly what was granted', () => {
+  it('does not let consent for one provider authorize another', () => {
+    const workspace = unconsentedWorkspace()
+    recordConsent([{ workspacePath: workspace, preset: 'codex', decision: 'granted' }])
+
+    expect(markCodexProjectTrusted(workspace)).toEqual({ written: true })
+    expect(markCursorWorkspaceTrusted(workspace)).toEqual({
+      written: false,
+      refusedBecause: 'unrecorded'
+    })
+    expect(existsSync(cursorProjectsDir())).toBe(false)
+  })
+
+  it('does not let consent for one workspace authorize another', () => {
+    const consented = unconsentedWorkspace()
+    const other = unconsentedWorkspace()
+    recordConsent([{ workspacePath: consented, preset: 'codex', decision: 'granted' }])
+
+    expect(markCodexProjectTrusted(other)).toEqual({
+      written: false,
+      refusedBecause: 'unrecorded'
+    })
+    expect(existsSync(codexRealHomeConfig())).toBe(false)
   })
 })
