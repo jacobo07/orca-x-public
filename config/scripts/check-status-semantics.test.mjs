@@ -167,7 +167,8 @@ function makeRoot({
   schemaVersion = 1,
   manifestText,
   debt = '',
-  omitDebtFile = false
+  omitDebtFile = false,
+  consumerFiles = {}
 } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-status-semantics-'))
   tempDirs.push(root)
@@ -183,6 +184,11 @@ function makeRoot({
     writeFileSync(path.join(root, 'config', 'status-contrast-debt-baseline.txt'), debt, 'utf8')
   }
   writeFileSync(path.join(root, TOKEN_SOURCE), css ?? buildCss(), 'utf8')
+  for (const [relative, body] of Object.entries(consumerFiles)) {
+    const full = path.join(root, relative)
+    mkdirSync(path.dirname(full), { recursive: true })
+    writeFileSync(full, body, 'utf8')
+  }
   return root
 }
 
@@ -417,6 +423,55 @@ describe('the debt baseline is a ratchet, not an exemption list', () => {
     const debt = parseDebtBaseline('# header\n\n  A|b|light|c  # why  \n')
     expect(debt.size).toBe(1)
     expect(debt.get('A|b|light|c')).toBe('why')
+  })
+})
+
+describe('a token-true sheet has to actually resolve its tokens', () => {
+  const SHEET = 'docs/visual/sheets/example.html'
+  const withConsumer = (body) => ({
+    policy: { ...POLICY, tokenConsumers: [SHEET] },
+    consumerFiles: { [SHEET]: body }
+  })
+
+  it('passes a sheet whose every token exists', async () => {
+    const { code, out } = await run(
+      withConsumer(
+        '<style>.a{color:var(--status-warning);background:var(--status-unknown)}</style>'
+      )
+    )
+    expect(code).toBe(EXIT_OK)
+    expect(out).toContain('2 token reference(s)')
+  })
+
+  it('fails a typo, which would otherwise render as nothing at all', async () => {
+    const { code, errors } = await run(
+      withConsumer('<style>.a{color:var(--status-warnng)}</style>')
+    )
+    expect(code).toBe(EXIT_INVALID)
+    expect(errors).toContain('main.css does not declare')
+    expect(errors).toContain('render as nothing')
+  })
+
+  it('accepts a token the sheet declares itself', async () => {
+    const { code } = await run(
+      withConsumer(
+        '<style>:root{--sheet-gap:8px}.a{gap:var(--sheet-gap);color:var(--status-unknown)}</style>'
+      )
+    )
+    expect(code).toBe(EXIT_OK)
+  })
+
+  it('fails a "token-true" sheet that references no tokens', async () => {
+    // Otherwise a sheet that was rewritten with hardcoded hexes keeps its label and its green.
+    const { code, errors } = await run(withConsumer('<style>.a{color:#b45309}</style>'))
+    expect(code).toBe(EXIT_INVALID)
+    expect(errors).toContain('references no tokens at all')
+  })
+
+  it('reports a consumer it cannot read rather than skipping it', async () => {
+    const { code, errors } = await run({ policy: { ...POLICY, tokenConsumers: [SHEET] } })
+    expect(code).toBe(EXIT_INVALID)
+    expect(errors).toContain('could not be read')
   })
 })
 

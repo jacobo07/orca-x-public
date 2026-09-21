@@ -94,7 +94,10 @@ describe('the store is discovered, not hardcoded', () => {
     const errors = []
     const code = await main({
       argv: [],
-      env: { CODEX_HOME: path.join(tmpdir(), 'definitely-not-here-4a7c'), APPDATA: path.join(tmpdir(), 'nor-here-4a7c') },
+      env: {
+        CODEX_HOME: path.join(tmpdir(), 'definitely-not-here-4a7c'),
+        APPDATA: path.join(tmpdir(), 'nor-here-4a7c')
+      },
       log: () => {},
       error: (m) => errors.push(String(m))
     })

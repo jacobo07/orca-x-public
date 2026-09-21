@@ -117,7 +117,12 @@ export async function discoverGeneratedImages({ root, since = null } = {}) {
   return images
 }
 
-export async function main({ argv = [], env = process.env, log = console.log, error = console.error } = {}) {
+export async function main({
+  argv = [],
+  env = process.env,
+  log = console.log,
+  error = console.error
+} = {}) {
   const sinceIndex = argv.indexOf('--since')
   const since = sinceIndex === -1 ? null : (argv[sinceIndex + 1] ?? null)
   if (sinceIndex !== -1 && (since === null || Number.isNaN(Date.parse(since)))) {
@@ -161,7 +166,9 @@ export async function main({ argv = [], env = process.env, log = console.log, er
       `${image.modified}  ${size.padEnd(22)} ${String(image.bytes).padStart(9)} B  ${image.sha256.slice(0, 12)}  ${image.relative}`
     )
   }
-  log(`${shown.length} image(s)${since === null ? '' : ` newer than ${since}`}, of ${images.length} in the store.`)
+  log(
+    `${shown.length} image(s)${since === null ? '' : ` newer than ${since}`}, of ${images.length} in the store.`
+  )
   return EXIT_OK
 }
 

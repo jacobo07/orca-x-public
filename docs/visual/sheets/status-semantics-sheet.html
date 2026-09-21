@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orca X — Status Semantics</title>
+
+    <!--
+      Token-true by construction. This links the REAL main.css, so every swatch below is the
+      live value of its token: change --status-warning and this sheet changes with it. The
+      Tailwind @import at the top of main.css will 404 when this file is opened directly, and
+      that is fine — the :root and .dark custom-property blocks are plain CSS and still apply,
+      which is the only part this sheet reads. Nothing here hardcodes a colour.
+    -->
+    <link rel="stylesheet" href="../../../src/renderer/src/assets/main.css" />
+
+    <style>
+      /* Layout only. Every colour resolves through a token. */
+      body {
+        margin: 0;
+        padding: 40px 16px 80px;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        letter-spacing: 0.01em;
+        font-size: 13px;
+      }
+      main { max-width: 920px; margin: 0 auto; }
+      h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+      h2 {
+        font-size: 11px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.05em; color: var(--muted-foreground);
+        margin: 40px 0 12px;
+      }
+      p { color: var(--muted-foreground); margin: 0 0 8px; max-width: 68ch; line-height: 1.55; }
+      .lede { margin-bottom: 28px; }
+
+      /* Rows, not cards — see STYLEGUIDE.md. */
+      .row {
+        display: grid;
+        grid-template-columns: 148px 1fr 150px;
+        gap: 16px; align-items: start;
+        padding: 12px 0;
+        border-top: 1px solid var(--border);
+      }
+      .row:last-child { border-bottom: 1px solid var(--border); }
+      .state { font-weight: 600; font-size: 12px; }
+      .token { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--muted-foreground); }
+      .means { color: var(--foreground); line-height: 1.5; }
+      .notfor { color: var(--muted-foreground); font-size: 11px; margin-top: 4px; }
+
+      .pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        border-radius: 9999px; border: 1px solid;
+        padding: 2px 8px; font-size: 11px; font-weight: 500;
+        white-space: nowrap;
+      }
+      .dot { width: 6px; height: 6px; border-radius: 9999px; flex: none; }
+
+      /* The one state whose mark is a shape rather than a fill. */
+      .dot--hollow { background: transparent; border: 1px solid currentColor; }
+
+      .t-healthy { color: var(--status-success); background: var(--status-success-background); border-color: var(--status-success-border); }
+      .t-healthy .dot { background: var(--status-success); }
+      .t-pressured { color: var(--status-warning); background: var(--status-warning-background); border-color: var(--status-warning-border); }
+      .t-pressured .dot { background: var(--status-warning); }
+      .t-critical { color: var(--status-error); background: color-mix(in srgb, var(--status-error) 10%, transparent); border-color: color-mix(in srgb, var(--status-error) 25%, transparent); }
+      .t-critical .dot { background: var(--status-error); }
+      .t-unknown { color: var(--status-unknown); background: var(--status-unknown-background); border-color: var(--status-unknown-border); }
+      .t-approval { color: var(--agent-question-text); background: color-mix(in srgb, var(--agent-question) 10%, transparent); border-color: color-mix(in srgb, var(--agent-question) 25%, transparent); }
+      .t-approval .dot { background: var(--agent-question); }
+      .t-idle { color: var(--muted-foreground); background: transparent; border-color: var(--border); }
+      .t-selected { color: var(--foreground); background: var(--accent); border-color: var(--ring); }
+
+      .pairs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+      .pair { border-top: 1px solid var(--border); padding: 12px 0; }
+      .pair h3 { font-size: 12px; font-weight: 600; margin: 0 0 6px; }
+      .pair p { font-size: 12px; margin: 6px 0 0; }
+      .pair .specimens { display: flex; gap: 8px; }
+
+      /* Colour removed. If a state is unreadable here, its meaning lived only in the hue. */
+      .greyscale { filter: grayscale(1); }
+      .strip { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 0; }
+
+      .note {
+        border-left: 2px solid var(--status-unknown);
+        padding: 2px 0 2px 12px; margin: 14px 0;
+        color: var(--muted-foreground); font-size: 12px; line-height: 1.55;
+      }
+      .themebar { display: flex; gap: 8px; margin-bottom: 24px; }
+      button {
+        font: inherit; font-size: 11px; cursor: pointer;
+        background: var(--secondary); color: var(--secondary-foreground);
+        border: 1px solid var(--border); border-radius: var(--radius-md, 8px);
+        padding: 4px 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <h1>Status semantics</h1>
+      <p class="lede">
+        The canonical reference for what Orca's state colours mean. Rendered from the live tokens
+        in <code>main.css</code> — this is not a mockup of the system, it is the system. The rules
+        are in <code>docs/STYLEGUIDE.md</code>; the machine-checked list is
+        <code>config/status-semantics.jsonc</code>.
+      </p>
+
+      <div class="themebar">
+        <button onclick="document.documentElement.classList.toggle('dark')">Toggle theme</button>
+        <button onclick="document.body.classList.toggle('greyscale')">Toggle colour</button>
+      </div>
+
+      <h2>Two channels</h2>
+      <p>
+        <strong>Interaction</strong> is what the user is doing to a row. <strong>System</strong> is
+        what the row is doing on its own. A row can be selected <em>and</em> failing, so the two
+        must never share a colour — green-for-selected and blue-for-healthy are the same defect in
+        opposite directions.
+      </p>
+
+      <h2>System states</h2>
+
+      <div class="row">
+        <div>
+          <span class="pill t-healthy"><span class="dot"></span>Healthy</span>
+          <div class="token">--status-success</div>
+        </div>
+        <div>
+          <div class="means">Observed to be working — a positive reading, not the absence of a bad one.</div>
+          <div class="notfor">Not for: a selected row · a default with nothing behind it</div>
+        </div>
+        <div class="token">current · durable · synced</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <span class="pill t-pressured"><span class="dot"></span>Pressured</span>
+          <div class="token">--status-warning</div>
+        </div>
+        <div>
+          <div class="means">Working, and closer to a limit than it should be. A warning about the future.</div>
+          <div class="notfor">Not for: a failure · decoration · a highlight</div>
+        </div>
+        <div class="token">degraded · throttled · low headroom</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <span class="pill t-critical"><span class="dot"></span>Critical</span>
+          <div class="token">--status-error</div>
+        </div>
+        <div>
+          <div class="means">Ended badly, or failing now. A report about the present.</div>
+          <div class="notfor">Not for: a button the user is about to press — that is --destructive</div>
+        </div>
+        <div class="token">failed · conflict · revoked</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <span class="pill t-unknown"><span class="dot dot--hollow"></span>Unknown</span>
+          <div class="token">--status-unknown</div>
+        </div>
+        <div>
+          <div class="means">
+            Not measured, not reachable, or inconclusive. An epistemic state, never a verdict about
+            the system. Its mark is <strong>hollow</strong> where every other state is filled.
+          </div>
+          <div class="notfor">Not for: healthy · offline · disabled · idle · zero · not applicable</div>
+        </div>
+        <div class="token">unmeasured · unreachable · inconclusive</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <span class="pill t-approval"><span class="dot"></span>Needs approval</span>
+          <div class="token">--agent-question</div>
+        </div>
+        <div>
+          <div class="means">An agent is waiting on a human answer. A request addressed to the user.</div>
+          <div class="notfor">Not for: a warning · a failure</div>
+        </div>
+        <div class="token">waiting · permission</div>
+      </div>
+
+      <div class="row">
+        <div>
+          <span class="pill t-idle"><span class="dot dot--hollow"></span>Idle</span>
+          <div class="token">--muted-foreground</div>
+        </div>
+        <div>
+          <div class="means">Nothing is happening and nothing is wrong. The resting state.</div>
+          <div class="notfor">Not for: unknown · offline · failed</div>
+        </div>
+        <div class="token">dormant · parked · not running</div>
+      </div>
+
+      <h2>Interaction</h2>
+
+      <div class="row">
+        <div>
+          <span class="pill t-selected">Selected</span>
+          <div class="token">--ring / --accent</div>
+        </div>
+        <div>
+          <div class="means">The row the user is acting on, and the focus indicator.</div>
+          <div class="notfor">Not for: healthy · current · durable · any system verdict</div>
+        </div>
+        <div class="token">hover · focus · current</div>
+      </div>
+
+      <h2>With colour removed</h2>
+      <p>
+        Press <em>Toggle colour</em> above, or read this strip. Unknown and Idle stay legible
+        because their mark is a shape; anything that becomes ambiguous here encodes its meaning in
+        hue alone, which is a defect.
+      </p>
+      <div class="strip greyscale">
+        <span class="pill t-healthy"><span class="dot"></span>Healthy</span>
+        <span class="pill t-pressured"><span class="dot"></span>Pressured</span>
+        <span class="pill t-critical"><span class="dot"></span>Critical</span>
+        <span class="pill t-unknown"><span class="dot dot--hollow"></span>Unknown</span>
+        <span class="pill t-approval"><span class="dot"></span>Needs approval</span>
+        <span class="pill t-idle"><span class="dot dot--hollow"></span>Idle</span>
+      </div>
+
+      <h2>The pairs that get confused</h2>
+      <div class="pairs">
+        <div class="pair">
+          <h3>Selected vs Healthy</h3>
+          <div class="specimens">
+            <span class="pill t-selected">Selected</span>
+            <span class="pill t-healthy"><span class="dot"></span>Healthy</span>
+          </div>
+          <p>Different channels. Selection says <em>you pointed at this</em>; health says <em>it is well</em>.</p>
+        </div>
+
+        <div class="pair">
+          <h3>Dormant vs Offline</h3>
+          <div class="specimens">
+            <span class="pill t-idle"><span class="dot dot--hollow"></span>Dormant</span>
+            <span class="pill t-idle"><span class="dot dot--hollow"></span>Offline</span>
+          </div>
+          <p>Both Idle, distinguished by the word. Dormant is a release we chose; offline is a peer not answering <em>and we know it</em>. If we do not know, it is Unknown.</p>
+        </div>
+
+        <div class="pair">
+          <h3>Pressured vs Critical</h3>
+          <div class="specimens">
+            <span class="pill t-pressured"><span class="dot"></span>Pressured</span>
+            <span class="pill t-critical"><span class="dot"></span>Critical</span>
+          </div>
+          <p>Still serving, or not.</p>
+        </div>
+
+        <div class="pair">
+          <h3>Stale vs Unknown</h3>
+          <div class="specimens">
+            <span class="pill t-pressured"><span class="dot"></span>Stale · 4h</span>
+            <span class="pill t-unknown"><span class="dot dot--hollow"></span>Unknown</span>
+          </div>
+          <p>Stale means we hold a reading and it is old — show the age. Unknown means we hold no reading at all.</p>
+        </div>
+
+        <div class="pair">
+          <h3>Blocked vs Needs approval</h3>
+          <div class="specimens">
+            <span class="pill t-critical"><span class="dot"></span>Blocked</span>
+            <span class="pill t-approval"><span class="dot"></span>Needs approval</span>
+          </div>
+          <p>Blocked is a system condition. Needs approval is a request addressed to the user.</p>
+        </div>
+
+        <div class="pair">
+          <h3>Durable vs Synced</h3>
+          <div class="specimens">
+            <span class="pill t-healthy"><span class="dot"></span>Durable</span>
+            <span class="pill t-healthy"><span class="dot"></span>Synced</span>
+          </div>
+          <p>Both Healthy. The difference is the label, never the colour — a rainbow is not a semantic system.</p>
+        </div>
+      </div>
+
+      <div class="note">
+        This sheet is <strong>current</strong>, not target: every specimen is the live token value,
+        so it cannot drift from the product without the product having drifted first. If a swatch
+        here looks wrong, <code>main.css</code> is wrong.
+      </div>
+    </main>
+  </body>
+</html>

@@ -371,6 +371,50 @@ export function findPhantomVariableReferences(
   return [...seen.entries()].map(([name, line]) => ({ name, line }))
 }
 
+// A sheet or template that consumes tokens is only token-true while its token names resolve.
+// A typo renders as nothing at all -- no error, no colour, and a reference sheet that is
+// quietly lying about the system it claims to document.
+export async function checkTokenConsumers({ root, css, consumers, readFileImpl = readFile }) {
+  const declared = new Set(parseDeclarations(css).keys())
+  const problems = []
+  let checked = 0
+  for (const consumer of consumers) {
+    let text
+    try {
+      text = await readFileImpl(path.join(root, consumer), 'utf8')
+    } catch (cause) {
+      problems.push(`token consumer ${consumer} could not be read: ${cause.message}`)
+      continue
+    }
+    // Anything the consumer declares itself is fair game; it is only the ones it expects from
+    // main.css that have to exist there. Not parseDeclarations here: that is anchored to the
+    // start of a line, which is right for main.css and wrong for an inline <style> block or
+    // anything minified, where a self-declared token would read as a phantom.
+    const own = new Set([...text.matchAll(/--([a-zA-Z0-9-]+)\s*:/g)].map((match) => match[1]))
+    const seen = new Set()
+    for (const match of text.matchAll(/var\(\s*--([a-zA-Z0-9-]+)/g)) {
+      const name = match[1]
+      if (seen.has(name)) {
+        continue
+      }
+      seen.add(name)
+      checked += 1
+      if (declared.has(name) || own.has(name) || name.startsWith('color-')) {
+        continue
+      }
+      problems.push(
+        `${consumer} uses var(--${name}), which main.css does not declare. It will render as nothing.`
+      )
+    }
+    if (seen.size === 0) {
+      problems.push(
+        `token consumer ${consumer} references no tokens at all — it is either not token-true or the sweep stopped seeing it`
+      )
+    }
+  }
+  return { problems, checked }
+}
+
 export async function main({ root, log = console.log, error = console.error } = {}) {
   const manifestPath = path.join(root, 'config', 'status-semantics.jsonc')
 
@@ -472,6 +516,10 @@ export async function main({ root, log = console.log, error = console.error } = 
     }
   }
 
+  const consumers = manifest.policy.tokenConsumers ?? []
+  const consumerResult = await checkTokenConsumers({ root, css, consumers })
+  problems.push(...consumerResult.problems)
+
   // Floors, so a gate that silently stopped seeing anything cannot report a clean bill.
   if (manifest.states.length < manifest.policy.minimumStates) {
     problems.push(
@@ -496,7 +544,7 @@ export async function main({ root, log = console.log, error = console.error } = 
     log(`  known contrast debt: ${entry}`)
   }
   log(
-    `Status semantics: ${manifest.states.length} states, ${measuredComparisons} contrast measurements, ${Object.keys(manifest.channels).length} channels separated, ${knownDebt.length} frozen debt(s).`
+    `Status semantics: ${manifest.states.length} states, ${measuredComparisons} contrast measurements, ${Object.keys(manifest.channels).length} channels separated, ${consumerResult.checked} token reference(s) in ${consumers.length} consumer(s), ${knownDebt.length} frozen debt(s).`
   )
   return EXIT_OK
 }
