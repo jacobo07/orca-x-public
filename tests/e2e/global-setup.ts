@@ -26,6 +26,12 @@ const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
 const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
+/** The repo's own copy of a dependency's CLI. Windows ships the shim as `.CMD`. */
+function localBin(name: string): string {
+  const binary = process.platform === 'win32' ? `${name}.CMD` : name
+  return path.join(process.cwd(), 'node_modules', '.bin', binary)
+}
+
 export default function globalSetup(): void {
   // Why: workers and teardown need this run's path, never another concurrent run's.
   process.env[E2E_TEST_REPO_PATH_FILE_ENV] = TEST_REPO_PATH_FILE
@@ -40,8 +46,12 @@ export default function globalSetup(): void {
   } else {
     // Why: --mode e2e is the build-time signal that exposes window.__store;
     // the explicit env var keeps older local overrides working too.
+    //
+    // Why not npx: npx re-resolves a binary the repo already has, and on a host where npm is
+    // unhealthy it fails outright — which took the whole suite down with it and forced every run
+    // through a hand-build plus SKIP_BUILD=1. The local bin is deterministic and repo-owned.
     console.error('[e2e] Building Electron app with electron-vite build --mode e2e...')
-    execSync('npx electron-vite build --mode e2e', {
+    execSync(`"${localBin('electron-vite')}" build --mode e2e`, {
       env: { ...process.env, VITE_EXPOSE_STORE: 'true' },
       cwd: root,
       stdio: 'inherit',
