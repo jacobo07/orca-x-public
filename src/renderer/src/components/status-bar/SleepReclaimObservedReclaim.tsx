@@ -36,8 +36,10 @@ export function SleepReclaimObservedReclaim({
       return null
     }
     return (
+      // Not muted: muted is what a measured value and a pending check already use, so
+      // "we did not measure this" was rendering as "nothing to see here".
       <div
-        className="text-muted-foreground"
+        className="text-status-unknown"
         data-testid="sleep-reclaim-observed"
         data-status="unmeasured"
         data-reason={reclaim.reason}

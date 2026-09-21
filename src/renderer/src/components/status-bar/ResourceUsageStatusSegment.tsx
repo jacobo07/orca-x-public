@@ -984,13 +984,18 @@ export function ResourceUsageStatusSegment({
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
-  const { totalCpu, memBadgeLabel } = useMemo(() => {
+  const { totalCpu, memBadgeLabel, memBadgeUnmeasured } = useMemo(() => {
     const cpu = resourceSnapshot?.totalCpu ?? 0
+    // A failed sweep is a different fact from a number, and it used to render in the same
+    // colour as one. Not folding the no-snapshot '—' in here: that is "not measured yet",
+    // which is pending, not unknown.
+    const sweepFailed = resourceSnapshot?.processSweep === 'failed'
     return {
       totalCpu: cpu,
+      memBadgeUnmeasured: sweepFailed,
       memBadgeLabel: !resourceSnapshot
         ? '—'
-        : resourceSnapshot.processSweep === 'failed'
+        : sweepFailed
           ? getUnmeasuredMemoryLabel()
           : formatMemory(resourceSnapshot.totalMemory)
     }
@@ -1175,7 +1180,13 @@ export function ResourceUsageStatusSegment({
               <MemoryStick className="size-3 text-muted-foreground" />
               {!iconOnly && (
                 <>
-                  <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium tabular-nums',
+                      memBadgeUnmeasured ? 'text-status-unknown' : 'text-muted-foreground'
+                    )}
+                    data-unmeasured={memBadgeUnmeasured ? 'true' : undefined}
+                  >
                     {memBadgeLabel}
                   </span>
                   <span className="text-muted-foreground/50">·</span>
@@ -1354,7 +1365,11 @@ export function ResourceUsageStatusSegment({
                 <TooltipTrigger asChild>
                   <span
                     tabIndex={0}
-                    className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
+                    className={cn(
+                      'font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded',
+                      memBadgeUnmeasured ? 'text-status-unknown' : 'text-foreground'
+                    )}
+                    data-unmeasured={memBadgeUnmeasured ? 'true' : undefined}
                   >
                     {memBadgeLabel}{' '}
                     <span className="font-normal text-muted-foreground">
