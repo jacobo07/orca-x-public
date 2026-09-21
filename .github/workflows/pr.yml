@@ -53,6 +53,9 @@ jobs:
       - name: Check durability contracts
         run: pnpm run check:durability-contracts
 
+      - name: Check E2E fixture binding
+        run: pnpm run check:e2e-fixture-binding
+
       - name: Check VM runtime rollback compatibility
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

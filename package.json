@@ -31,6 +31,7 @@
     "check:durability-contracts": "node config/scripts/check-durability-contracts.mjs",
     "check:recurring-work": "node config/scripts/check-recurring-work-inventory.mjs",
     "check:ipc-message-floor": "node config/scripts/check-ipc-message-floor.mjs",
+    "check:e2e-fixture-binding": "node config/scripts/check-e2e-fixture-binding.mjs",
     "check:runtime-host-queue": "node config/scripts/check-runtime-host-query-queue.mjs",
     "check:variant-parity": "node config/scripts/check-variant-parity.mjs",
     "check:mobile-aperture": "node config/scripts/check-mobile-capability-aperture.mjs",

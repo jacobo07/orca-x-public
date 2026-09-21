@@ -6,6 +6,10 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 
+An E2E spec drives the app through **`orcaPage`**, never Playwright's `page`. Both resolve, which is the trap: `page` is a stock blank Chromium tab with no Orca in it, so every locator times out and — worse — every `toHaveCount(0)` passes. `pnpm check:e2e-fixture-binding` fails any spec under `tests/e2e/` that binds it; `{ orcaPage: page }` is a rename of the real window and is allowed.
+
+A negative assertion needs a **station control**: prove the containing surface is present before concluding something inside it is absent, using a handle that survives translation. Most rail and shell labels are localized and the E2E host may not be running in English — assert on `data-*` attributes the product already exposes (for example `[data-workspace-activity="…"]`) rather than on visible text.
+
 # Style
 ## Concise/Brief Non-obviosu comments ONLY
   * DO NOT: be verbose, explain the obvious, walk through the code ("WHY not HOW")
