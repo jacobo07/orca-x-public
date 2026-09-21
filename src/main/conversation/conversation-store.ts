@@ -8,6 +8,7 @@
 // on top of it would be false. writeFileDurable already owns the fsync-before-rename barrier this
 // tier requires and has a syscall-order proof, so this reuses it rather than minting a second one.
 
+import { readFileSync } from 'node:fs'
 import { readFile, readdir, rm } from 'node:fs/promises'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -19,14 +20,30 @@ import {
   type ConversationLoadResult,
   type ConversationRecord
 } from '../../shared/conversation-types'
-import { durableWriteTempPath, writeFileDurable } from '../durable-file-write'
+import { durableWriteTempPath, writeFileDurable, writeFileDurableIfCurrent } from '../durable-file-write'
 
+import { ConversationAppendQueue } from './conversation-append-queue'
 import { assertDurableConversationRecord } from './conversation-record-validation'
 import { parseConversationRecord } from './conversation-record-parse'
 
 const RECORD_SUFFIX = '.json'
 
+/**
+ * Why an outcome and not a throw: being superseded is a normal race, not a fault. A late provider
+ * event arriving after a newer turn was published is expected, and the caller's correct response is
+ * to re-read and re-apply — which is a different response from "the disk is broken".
+ */
+export type ConversationAppendResult =
+  | { outcome: 'published'; record: ConversationRecord }
+  | { outcome: 'superseded'; expectedNextSeq: number; actualNextSeq: number }
+  | { outcome: 'absent' }
+  | { outcome: 'unreadable'; reason: string }
+  | { outcome: 'schema-too-new'; storedVersion: number }
+  | { outcome: 'unchanged'; record: ConversationRecord }
+
 export class ConversationStore {
+  private readonly queue = new ConversationAppendQueue()
+
   constructor(private readonly directory: string) {}
 
   private pathFor(id: ConversationId): string {
@@ -38,8 +55,13 @@ export class ConversationStore {
     return join(this.directory, `${id}${RECORD_SUFFIX}`)
   }
 
-  /** Publish a record. Throws rather than writing when the record carries state that must never
-   *  become durable, so the refusal happens before the barrier, not after. */
+  /** Publish a record unconditionally. Throws rather than writing when the record carries state
+   *  that must never become durable, so the refusal happens before the barrier, not after.
+   *
+   *  This is last-write-wins by construction and has no fence: it is for establishing a record, not
+   *  for adding to one. Anything that grows a conversation goes through `append`, which serializes
+   *  and fences — an unconditional republish of a whole record is exactly how a concurrent append
+   *  loses the other writer's messages. */
   async save(record: ConversationRecord): Promise<void> {
     assertDurableConversationRecord(record)
     const finalPath = this.pathFor(record.id)
@@ -49,6 +71,86 @@ export class ConversationStore {
       finalPath,
       `${JSON.stringify(record, null, 2)}\n`
     )
+  }
+
+  /**
+   * The only way to grow a conversation. Reads, applies, and publishes inside a per-conversation
+   * critical section, so two in-process appends to one conversation cannot interleave and lose each
+   * other. Appends to DIFFERENT conversations still run concurrently.
+   *
+   * Serialization alone is not enough, because it binds only this process. `nextSeq` is captured
+   * from the record that was read and re-checked on disk immediately before the rename, inside the
+   * durable write's own commit veto — so a writer that was superseded between the read and the
+   * publish refuses instead of overwriting newer truth. That window is the rename itself; it is
+   * narrowed, not eliminated, and against a writer that honours nothing it cannot be.
+   *
+   * A late provider event that lost the race gets `superseded` with both watermarks, which is a
+   * different answer from a fault and calls for a re-read, not a retry of the same payload.
+   */
+  async append(
+    id: ConversationId,
+    apply: (current: ConversationRecord) => ConversationRecord
+  ): Promise<ConversationAppendResult> {
+    // Resolved outside the queue: a non-conversation id is a programming error and must stay loud
+    // rather than becoming a queued failure attributed to the conversation.
+    const finalPath = this.pathFor(id)
+    return this.queue.run(id, async () => {
+      const loaded = await this.load(id)
+      if (loaded.outcome === 'absent') {
+        return { outcome: 'absent' as const }
+      }
+      if (loaded.outcome === 'schema-too-new') {
+        // A newer Orca wrote this record. Appending would republish it in the older shape and
+        // silently drop whatever the newer schema carries, so this refuses on its own terms rather
+        // than as a read failure — the fix is to update Orca, not to retry.
+        return { outcome: 'schema-too-new' as const, storedVersion: loaded.storedVersion }
+      }
+      if (loaded.outcome === 'unreadable') {
+        return { outcome: 'unreadable' as const, reason: loaded.reason }
+      }
+      const current = loaded.record
+      const expectedNextSeq = current.nextSeq
+      const next = apply(current)
+      if (next === current) {
+        // Nothing to publish. Distinguished from a write so a caller cannot read "we wrote" from a
+        // fold that decided there was nothing to add.
+        return { outcome: 'unchanged' as const, record: current }
+      }
+      assertDurableConversationRecord(next)
+      await mkdir(this.directory, { recursive: true })
+      const published = await writeFileDurableIfCurrent(
+        durableWriteTempPath(finalPath),
+        finalPath,
+        `${JSON.stringify(next, null, 2)}\n`,
+        () => this.onDiskNextSeq(finalPath) === expectedNextSeq
+      )
+      if (!published) {
+        return {
+          outcome: 'superseded' as const,
+          expectedNextSeq,
+          actualNextSeq: this.onDiskNextSeq(finalPath) ?? -1
+        }
+      }
+      return { outcome: 'published' as const, record: next }
+    })
+  }
+
+  /**
+   * Synchronous on purpose: the durable write's commit veto runs between the fsync and the rename
+   * and cannot await. Reading the file again there is what keeps the check close to the effect.
+   *
+   * An unreadable or unparseable file answers `null`, which matches no expectation and therefore
+   * refuses. Absence of an answer is not evidence that publishing is safe.
+   */
+  private onDiskNextSeq(finalPath: string): number | null {
+    try {
+      const parsed = JSON.parse(readFileSync(finalPath, 'utf-8')) as { nextSeq?: unknown }
+      return typeof parsed.nextSeq === 'number' && Number.isFinite(parsed.nextSeq)
+        ? parsed.nextSeq
+        : null
+    } catch {
+      return null
+    }
   }
 
   /** Four outcomes, never three. `unreadable` is not `absent` and neither is an empty
