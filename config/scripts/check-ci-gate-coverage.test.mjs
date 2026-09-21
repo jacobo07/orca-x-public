@@ -9,6 +9,7 @@ import {
   buildCoverageIndex,
   collectGateScripts,
   evaluateCoverage,
+  expandChainedInvocations,
   extractInvocations,
   extractScriptTarget,
   isCovered,
@@ -118,6 +119,59 @@ describe('a step that runs in another package does not count for this one', () =
       }
     })
     expect(await main(root, SMALL)).toBe(0)
+  })
+})
+
+describe('a chain counts only from an entry point CI actually invokes', () => {
+  it('credits a gate chained into an invoked script', async () => {
+    const root = makeEstate({
+      scripts: {
+        'build:release': 'pnpm run build:cli && pnpm run verify:packaged',
+        'build:cli': 'tsc -p x',
+        'verify:packaged': 'node a.mjs'
+      },
+      workflows: { 'pr.yml': workflow('      - run: pnpm run build:release\n') }
+    })
+    expect(await main(root, SMALL)).toBe(0)
+  })
+
+  // The discriminating case, and the reason expansion is safe: no workflow runs `pnpm lint`, so it
+  // is not an entry point, and every gate chained into it stays debt. Lose this and a security gate
+  // wired into `lint` reads as covered while running nowhere.
+  it('credits nothing chained into a script no workflow runs', async () => {
+    const root = makeEstate({
+      scripts: { lint: 'oxlint && pnpm run check:trust', 'check:trust': 'node a.mjs' },
+      workflows: { 'pr.yml': workflow('      - run: pnpm exec oxlint --format github\n') }
+    })
+    expect(await main(root, SMALL)).toBe(1)
+  })
+
+  it('follows a chain more than one level deep', () => {
+    const resolved = expandChainedInvocations(new Set(['a']), {
+      a: 'pnpm run b',
+      b: 'pnpm run check:deep',
+      'check:deep': 'node x.mjs'
+    })
+    expect(resolved.has('check:deep')).toBe(true)
+  })
+
+  it('terminates on a cycle instead of hanging', () => {
+    const resolved = expandChainedInvocations(new Set(['a']), { a: 'pnpm run b', b: 'pnpm run a' })
+    expect([...resolved].sort()).toEqual(['a', 'b'])
+  })
+
+  // Same file, different contract: `build:cli` runs verify-cli-bin.mjs with --fix-* flags, which
+  // repairs what the bare gate refuses. Crediting it would report a gate as enforcing when the only
+  // invocation of it in CI cannot fail for those reasons.
+  it('does not credit a gate whose file a chained script runs with different flags', async () => {
+    const root = makeEstate({
+      scripts: {
+        'build:cli': 'tsc -p x && node config/scripts/verify-cli-bin.mjs --fix-package-json',
+        'verify:cli-bin': 'node config/scripts/verify-cli-bin.mjs'
+      },
+      workflows: { 'pr.yml': workflow('      - run: pnpm run build:release\n') }
+    })
+    expect(await main(root, SMALL)).toBe(1)
   })
 })
 

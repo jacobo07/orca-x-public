@@ -126,6 +126,36 @@ export function buildCoverageIndex(documents) {
   return { names, files }
 }
 
+/**
+ * Expand the invoked-name set through package.json script chains.
+ *
+ * A gate chained into a script CI actually runs does gate CI: `pnpm run build:release` is a step in
+ * the packaging job, and the gate inside it fails that step. Expansion starts ONLY from names a
+ * workflow invokes, which is what keeps the `lint` hole open on purpose — no workflow runs
+ * `pnpm lint`, so it is never an entry point and the gates chained into it stay debt.
+ *
+ * Names only, never the `node <file>` targets inside a script body. `build:cli` runs
+ * verify-cli-bin.mjs with --fix-executable --fix-package-json, which REPAIRS two of the things the
+ * bare gate refuses: same file, different contract, so it is not the same gate having run.
+ */
+export function expandChainedInvocations(invokedNames, scripts) {
+  const resolved = new Set(invokedNames)
+  const queue = [...invokedNames]
+  while (queue.length > 0) {
+    const command = scripts?.[queue.pop()]
+    if (typeof command !== 'string') {
+      continue
+    }
+    for (const next of extractInvocations(command).names) {
+      if (!resolved.has(next)) {
+        resolved.add(next)
+        queue.push(next)
+      }
+    }
+  }
+  return resolved
+}
+
 export function isCovered(scriptName, scriptCommand, index) {
   if (index.names.has(scriptName)) {
     return true
@@ -351,6 +381,7 @@ export async function main(
   }
 
   const index = buildCoverageIndex(definitions.documents)
+  index.names = expandChainedInvocations(index.names, scripts)
 
   if (process.argv.includes('--prune')) {
     return await pruneBaseline(root, gateScripts, scripts, index)
