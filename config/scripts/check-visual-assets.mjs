@@ -2,7 +2,6 @@
 import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 // Three verdicts, not two. A gate that died and a gate that rejected both exit non-zero, and
 // only one of them is about the assets — so an unreadable manifest must not read as "your
@@ -173,6 +172,34 @@ export function checkAssetShape(asset, policy) {
   if (asset.truth === 'current' && asset.targetLabel === true) {
     problems.push(`${id}: truth is "current" but the asset declares a TARGET label`)
   }
+  // An image model did not observe anything, so a generated asset can never be `current`.
+  // Without this, a mockup could be filed as a screenshot by setting one field.
+  if (asset.producer === 'generated') {
+    if (asset.truth !== 'target') {
+      problems.push(
+        `${id}: producer is "generated" but truth is "${String(asset.truth)}". A generated image is designed intent, never observed pixels.`
+      )
+    }
+    // A generated file with no provenance is an orphan PNG the moment anyone asks where it
+    // came from -- which model run, from what prompt, at what size it actually came out.
+    const provenance = asset.provenance
+    if (!provenance || typeof provenance !== 'object') {
+      problems.push(`${id}: producer is "generated" but the asset records no provenance`)
+    } else {
+      for (const field of ['tool', 'thread', 'sourcePath', 'actualSize']) {
+        if (!provenance[field]) {
+          problems.push(`${id}: provenance is missing "${field}"`)
+        }
+      }
+      // The size that was asked for and the size that arrived are different facts, and the
+      // second is the only one the file can be held to.
+      if (provenance.requestedSize && provenance.requestedSize === provenance.actualSize) {
+        problems.push(
+          `${id}: provenance records requestedSize identical to actualSize (${String(provenance.actualSize)}) — record what was actually asked for, or omit it`
+        )
+      }
+    }
+  }
   problems.push(...checkNameAgreement(asset, policy))
   return problems
 }
@@ -216,7 +243,10 @@ export async function main({ root, log = console.log, error = console.error } = 
     if (typeof asset.file !== 'string' || asset.file === '') {
       continue
     }
-    const absolute = path.join(root, policy.referenceRoot, asset.file)
+    // Generated lineage and canonical references live in separate trees on purpose: a
+    // mockup must not be reachable by someone browsing the reference folder.
+    const assetRoot = asset.producer === 'generated' ? policy.generatedRoot : policy.referenceRoot
+    const absolute = path.join(root, assetRoot, asset.file)
     registered.add(path.resolve(absolute))
 
     let bytes
@@ -239,9 +269,13 @@ export async function main({ root, log = console.log, error = console.error } = 
 
   // A PNG nobody registered is a reference nobody can trace, which is the graveyard this
   // registry exists to prevent.
+  // Both trees, or the graveyard just moves to whichever one is unswept.
   let onDisk
   try {
-    onDisk = await collectReferenceFiles(path.join(root, policy.referenceRoot))
+    onDisk = [
+      ...(await collectReferenceFiles(path.join(root, policy.referenceRoot))),
+      ...(await collectReferenceFiles(path.join(root, policy.generatedRoot)))
+    ]
   } catch (cause) {
     error(`Visual asset gate could not read the reference tree: ${cause.message}`)
     return EXIT_GATE_FAILED
@@ -249,7 +283,7 @@ export async function main({ root, log = console.log, error = console.error } = 
   for (const file of onDisk) {
     if (!registered.has(path.resolve(file))) {
       problems.push(
-        `unregistered reference on disk: ${path.relative(root, file)} — add it to config/visual-asset-registry.jsonc`
+        `unregistered image on disk: ${path.relative(root, file)} — add it to config/visual-asset-registry.jsonc`
       )
     }
   }
@@ -275,6 +309,6 @@ export async function main({ root, log = console.log, error = console.error } = 
   return EXIT_OK
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(await main({ root: path.join(import.meta.dirname, '..', '..') }))
 }

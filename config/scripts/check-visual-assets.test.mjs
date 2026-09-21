@@ -18,7 +18,7 @@ const POLICY = {
   statuses: ['draft', 'candidate', 'approved', 'superseded', 'rejected'],
   immutableStatuses: ['approved'],
   truths: ['current', 'target'],
-  producers: ['capture', 'html'],
+  producers: ['capture', 'html', 'generated'],
   devices: ['desktop', 'laptop', 'tablet', 'mobile'],
   fileNamePattern: '^([a-z0-9-]+)\\.([a-z0-9-]+)\\.([a-z]+)\\.([a-z0-9-]+)\\.r([0-9]{2})\\.png$',
   minimumAssets: 0
@@ -44,7 +44,14 @@ function validAsset(overrides = {}) {
 }
 
 /** Builds a temp repo root. `files` maps a path under referenceRoot to its bytes. */
-function makeRoot({ manifest, assets, policy = POLICY, files, schemaVersion = 1 }) {
+function makeRoot({
+  manifest,
+  assets,
+  policy = POLICY,
+  files,
+  schemaVersion = 1,
+  generatedFiles = {}
+}) {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-visual-assets-'))
   tempDirs.push(root)
   mkdirSync(path.join(root, 'config'), { recursive: true })
@@ -55,6 +62,11 @@ function makeRoot({ manifest, assets, policy = POLICY, files, schemaVersion = 1 
   const tree = files ?? { 'shell/shell.sidebar.desktop.default.r01.png': PNG }
   for (const [relative, bytes] of Object.entries(tree)) {
     const full = path.join(root, REFERENCE_ROOT, relative)
+    mkdirSync(path.dirname(full), { recursive: true })
+    writeFileSync(full, bytes)
+  }
+  for (const [relative, bytes] of Object.entries(generatedFiles)) {
+    const full = path.join(root, policy.generatedRoot, relative)
     mkdirSync(path.dirname(full), { recursive: true })
     writeFileSync(full, bytes)
   }
@@ -90,6 +102,85 @@ describe('visual asset registry gate', () => {
       makeRoot({ assets: [validAsset({ truth: 'target', producer: 'html', targetLabel: true })] })
     )
     expect(code).toBe(EXIT_OK)
+  })
+
+  // A generated mockup is the one thing in this corpus that observed nothing, so the registry
+  // has to be able to say so and has to refuse the one edit that would hide it.
+  describe('generated assets', () => {
+    const GENERATED_FILE = 'shell/shell.sidebar.desktop.default.r01.png'
+    const generatedAsset = (overrides = {}) =>
+      validAsset({
+        producer: 'generated',
+        truth: 'target',
+        targetLabel: true,
+        status: 'candidate',
+        provenance: {
+          tool: 'codex-cli imagegen',
+          thread: '01a0c18a-264b-7070-a643-d58633305ab3',
+          sourcePath: '<CODEX_HOME>/generated_images/…/exec-….png',
+          requestedSize: '16:10 landscape',
+          actualSize: '1586x992'
+        },
+        ...overrides
+      })
+
+    const rootFor = (asset) =>
+      makeRoot({ assets: [asset], files: {}, generatedFiles: { [GENERATED_FILE]: PNG } })
+
+    it('accepts one that lives in the generated tree and carries provenance', async () => {
+      const { code, out, text } = await run(rootFor(generatedAsset()))
+      expect(text).toBe('')
+      expect(code).toBe(EXIT_OK)
+      expect(out).toContain('1 asset(s)')
+    })
+
+    it('refuses a generated image filed as observed pixels', async () => {
+      // The single-field edit that would turn a mockup into a screenshot.
+      const { code, text } = await run(
+        rootFor(generatedAsset({ truth: 'current', targetLabel: false }))
+      )
+      expect(code).toBe(EXIT_INVALID)
+      expect(text).toContain('never observed pixels')
+    })
+
+    it('refuses one with no provenance at all', async () => {
+      const { code, text } = await run(rootFor(generatedAsset({ provenance: undefined })))
+      expect(code).toBe(EXIT_INVALID)
+      expect(text).toContain('records no provenance')
+    })
+
+    it('names the provenance field that is missing, one at a time', async () => {
+      for (const field of ['tool', 'thread', 'sourcePath', 'actualSize']) {
+        const asset = generatedAsset()
+        delete asset.provenance[field]
+        const { code, text } = await run(rootFor(asset))
+        expect(code).toBe(EXIT_INVALID)
+        expect(text).toContain(`provenance is missing "${field}"`)
+      }
+    })
+
+    it('refuses a requested size copied from the actual one', async () => {
+      // Recording the output as though it were the input erases the whole point of keeping
+      // both: a requested size is advisory and this generator does not honour it.
+      const asset = generatedAsset()
+      asset.provenance.requestedSize = asset.provenance.actualSize
+      const { code, text } = await run(rootFor(asset))
+      expect(code).toBe(EXIT_INVALID)
+      expect(text).toContain('record what was actually asked for')
+    })
+
+    it('sweeps the generated tree too, so the graveyard cannot just move', async () => {
+      const { code, text } = await run(
+        makeRoot({
+          assets: [],
+          files: {},
+          generatedFiles: { 'shell/orphan.png': PNG }
+        })
+      )
+      expect(code).toBe(EXIT_INVALID)
+      expect(text).toContain('unregistered image on disk')
+      expect(text).toContain('orphan.png')
+    })
   })
 
   // The verdict that is about the gate, not about the corpus.
@@ -235,7 +326,7 @@ describe('visual asset registry gate', () => {
       })
     )
     expect(code).toBe(EXIT_INVALID)
-    expect(text).toContain('unregistered reference on disk')
+    expect(text).toContain('unregistered image on disk')
   })
 
   // A floor is what tells a sweep that found nothing from an estate that has nothing.
