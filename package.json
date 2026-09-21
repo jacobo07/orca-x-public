@@ -39,6 +39,7 @@
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
     "check:visual-assets": "node config/scripts/check-visual-assets.mjs",
     "check:status-semantics": "node config/scripts/check-status-semantics.mjs",
+    "discover:generated-images": "node config/scripts/codex-generated-image-discovery.mjs",
     "generate:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --write",
     "verify:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --check",
     "generate:skill-bundle-manifest": "node config/scripts/generate-skill-bundle-manifest.mjs --write",

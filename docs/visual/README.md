@@ -49,6 +49,12 @@ a slot its name contradicts — the slot is what an implementer searches by.
 
 ## Producing an asset
 
+Image generation is for **ideation** — composition, direction, states that are hard to describe.
+What it actually does, and the several things about it that are not what they look like, are in
+[`codex-image-generation-contract.md`](./codex-image-generation-contract.md): a refusal message
+and a successful generation are the same text, so the artifact is confirmed with
+`pnpm discover:generated-images` and never from the agent's prose.
+
 A surface that exists is **captured** from the real app, extending the `@visual-corpus`
 Playwright rig in `tests/e2e/workspace-chrome-visual-corpus.spec.ts`. A surface that does not
 exist yet is built as token-true HTML that imports the same `main.css` and is rendered in the
