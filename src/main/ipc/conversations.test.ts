@@ -7,20 +7,54 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { mintConversationId } from '../../shared/conversation-identity'
 import { ConversationService } from '../conversation/conversation-service'
+import type { ConversationTurnDeps } from '../conversation/conversation-turn-runner'
 
 import { createConversationIpcHandlers, type ConversationIpcHandlers } from './conversations'
 
 let root = ''
 let handlers: ConversationIpcHandlers
 let readerService: ConversationService
+let emitted: { conversationId: string; event: AgentTurnEvent }[] = []
+let authReady = true
+
+function build(overrides: Partial<Omit<ConversationTurnDeps, 'service'>> = {}): void {
+  const directory = (): string => join(root, 'conversations')
+  emitted = []
+  handlers = createConversationIpcHandlers({
+    service: new ConversationService(directory),
+    turnDeps: {
+      driver: {
+        runTurn: async (request) => {
+          request.onEvent({ kind: 'turn-started', turnId: request.turnId })
+          request.onEvent({
+            kind: 'message-completed',
+            turnId: request.turnId,
+            itemId: 'item-1',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'an answer' }]
+          })
+          request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+          return { providerSessionId: 'thread-1' }
+        }
+      },
+      checkAuth: async () =>
+        authReady ? { ready: true } : { ready: false, detail: 'codex credential is missing' },
+      mintTurnId: () => 'turn-1',
+      mintItemId: () => 'user-item-1',
+      emit: (conversationId, event) => emitted.push({ conversationId, event }),
+      ...overrides
+    }
+  })
+  readerService = new ConversationService(directory)
+}
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-conv-ipc-'))
-  const directory = (): string => join(root, 'conversations')
-  handlers = createConversationIpcHandlers(new ConversationService(directory))
-  readerService = new ConversationService(directory)
+  authReady = true
+  build()
 })
 
 afterEach(() => {
@@ -29,12 +63,13 @@ afterEach(() => {
 
 describe('conversation IPC handlers', () => {
   it('exposes exactly the product operations, and no storage primitive', () => {
-    // Named explicitly rather than counted: a `toHaveLength(3)` would stay green if `read` were
+    // Named explicitly rather than counted: a `toHaveLength(4)` would stay green if `read` were
     // swapped for `writeFile`, which is the exact mistake this boundary exists to prevent.
     expect(Object.keys(handlers).sort()).toEqual([
       'conversations:create',
       'conversations:list',
-      'conversations:read'
+      'conversations:read',
+      'conversations:sendTurn'
     ])
   })
 
@@ -78,5 +113,67 @@ describe('conversation IPC handlers', () => {
   it('does not invent a project binding when the renderer sends none', async () => {
     const created = await handlers['conversations:create']({ title: 'unbound' })
     expect(created.projectId).toBeNull()
+  })
+})
+
+describe('conversation IPC — sending a turn', () => {
+  it('runs a turn end to end and leaves the exchange on disk', async () => {
+    const created = await handlers['conversations:create']({})
+    const outcome = await handlers['conversations:sendTurn']({
+      id: created.id,
+      text: 'what should we build?',
+      cwd: root
+    })
+
+    expect(outcome).toEqual({
+      outcome: 'completed',
+      turnId: 'turn-1',
+      providerSessionId: 'thread-1'
+    })
+
+    const loaded = await readerService.read(created.id)
+    if (loaded.outcome !== 'loaded') {
+      throw new Error(`expected loaded, got ${loaded.outcome}`)
+    }
+    expect(loaded.record.messages.map((message) => message.role)).toEqual(['user', 'assistant'])
+  })
+
+  it('streams the turn to the surface as it happens', async () => {
+    const created = await handlers['conversations:create']({})
+    await handlers['conversations:sendTurn']({ id: created.id, text: 'hi', cwd: root })
+
+    expect(emitted.every((entry) => entry.conversationId === created.id)).toBe(true)
+    expect(emitted.map((entry) => entry.event.kind)).toEqual([
+      'turn-started',
+      'message-completed',
+      'turn-completed'
+    ])
+  })
+
+  it('reports an unauthenticated provider as its own state, not as an empty answer', async () => {
+    authReady = false
+    const created = await handlers['conversations:create']({})
+    const outcome = await handlers['conversations:sendTurn']({
+      id: created.id,
+      text: 'hello',
+      cwd: root
+    })
+
+    expect(outcome).toEqual({ outcome: 'auth-required', detail: 'codex credential is missing' })
+
+    const loaded = await readerService.read(created.id)
+    if (loaded.outcome !== 'loaded') {
+      throw new Error(`expected loaded, got ${loaded.outcome}`)
+    }
+    // The user's words survived; no assistant message was fabricated.
+    expect(loaded.record.messages).toHaveLength(1)
+    expect(loaded.record.messages[0].role).toBe('user')
+  })
+
+  it('refuses an empty turn rather than sending one', async () => {
+    const created = await handlers['conversations:create']({})
+    await expect(
+      handlers['conversations:sendTurn']({ id: created.id, text: '   ', cwd: root })
+    ).rejects.toThrow(/needs text/)
   })
 })

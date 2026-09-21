@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { ConversationTurnEventPayload } from './api/conversation-api'
 import type { ParkPhaseRequest } from '../shared/durable-exit-types'
 import type { ProcessPresenceProbe } from '../shared/process-stats-types'
 import type { PtyProcessInspection } from '../shared/pty-process-inspection'
@@ -3212,7 +3213,16 @@ const api = {
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),
     create: (args) => ipcRenderer.invoke('conversations:create', args),
-    read: (args) => ipcRenderer.invoke('conversations:read', args)
+    read: (args) => ipcRenderer.invoke('conversations:read', args),
+    sendTurn: (args) => ipcRenderer.invoke('conversations:sendTurn', args),
+    onTurnEvent: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: ConversationTurnEventPayload
+      ): void => callback(payload)
+      ipcRenderer.on('conversations:turnEvent', listener)
+      return () => ipcRenderer.removeListener('conversations:turnEvent', listener)
+    }
   } satisfies PreloadApi['conversations'],
 
   remoteWorkspace: {

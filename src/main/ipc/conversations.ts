@@ -1,21 +1,41 @@
-import { ipcMain } from 'electron'
+import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
+import { BrowserWindow, ipcMain } from 'electron'
+
+import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { isConversationId } from '../../shared/conversation-identity'
 import type { ConversationSummary } from '../../shared/conversation-summary'
 import type { ConversationLoadResult, ConversationRecord } from '../../shared/conversation-types'
+import { readStoredCodexCredentialState } from '../codex-accounts/managed-codex-auth-readiness'
+import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import { ConversationService } from '../conversation/conversation-service'
+import {
+  runConversationTurn,
+  type ConversationTurnDeps,
+  type ConversationTurnOutcome
+} from '../conversation/conversation-turn-runner'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaConversationsDirectory } from '../orca-profiles/profile-storage-paths'
 
 /**
- * Why the renderer gets these four and not a file API: a conversation is a product entity, and the
- * durability that protects it — the temp path, the fsync-before-rename barrier, the ordering
- * watermark and the compare-and-swap that fences it — is main's to keep. A renderer that could send
- * a `nextSeq` could defeat the check that stops a stale writer overwriting newer messages.
+ * Why the renderer gets product operations and not a file API: a conversation is a product entity,
+ * and the durability that protects it — the temp path, the fsync-before-rename barrier, the
+ * ordering watermark and the compare-and-swap that fences it — is main's to keep. A renderer that
+ * could send a `nextSeq` could defeat the check that stops a stale writer overwriting newer
+ * messages.
  *
  * The active profile is resolved on every call rather than captured at registration, so switching
  * profile takes effect immediately instead of serving the old profile's conversations until restart.
  */
+
+export const CONVERSATION_TURN_EVENT_CHANNEL = 'conversations:turnEvent'
+
+export type ConversationTurnEventPayload = {
+  conversationId: string
+  event: AgentTurnEvent
+}
 
 export type ConversationIpcHandlers = {
   'conversations:list': () => Promise<ConversationSummary[]>
@@ -24,6 +44,11 @@ export type ConversationIpcHandlers = {
     projectId?: string | null
   }) => Promise<ConversationRecord>
   'conversations:read': (args: { id: string }) => Promise<ConversationLoadResult>
+  'conversations:sendTurn': (args: {
+    id: string
+    text: string
+    cwd: string
+  }) => Promise<ConversationTurnOutcome>
 }
 
 /**
@@ -39,13 +64,44 @@ function requireConversationId(value: unknown): string {
   return value
 }
 
-export function createConversationIpcHandlers(
+function requireText(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error('conversations: a turn needs text')
+  }
+  return value
+}
+
+/**
+ * Resolves the home the CHILD will read, not one we would like it to read. The driver applies no
+ * CODEX_HOME overlay, so the child inherits this process's environment — checking `~/.codex` while
+ * the child reads an inherited CODEX_HOME would report "signed in" about a different account.
+ */
+export function codexAuthPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env.CODEX_HOME ?? join(homedir(), '.codex'), 'auth.json')
+}
+
+export async function checkCodexAuth(): Promise<{ ready: true } | { ready: false; detail: string }> {
+  const state = readStoredCodexCredentialState(codexAuthPath())
+  if (state === 'present') {
+    return { ready: true }
+  }
+  // The state is carried through rather than flattened to "not signed in": `unreadable` is a
+  // rotation in flight and worth retrying, `no-credential` is a settled logout, and telling a user
+  // to sign in again during a token refresh turns a transient race into a support ticket.
+  return { ready: false, detail: `codex credential is ${state}` }
+}
+
+export type ConversationIpcDeps = {
   service: ConversationService
-): ConversationIpcHandlers {
-  // Every handler is `async` so a rejected input is a REJECTED PROMISE and not a synchronous
-  // throw. Electron would paper over the difference — ipcMain.handle catches both — but the type
-  // here says `Promise`, and a function that sometimes throws before returning one breaks every
-  // caller that reasonably does `.catch()` instead of wrapping in try/catch.
+  turnDeps: Omit<ConversationTurnDeps, 'service'>
+}
+
+export function createConversationIpcHandlers(deps: ConversationIpcDeps): ConversationIpcHandlers {
+  const { service } = deps
+  // Every handler is `async` so a rejected input is a REJECTED PROMISE and not a synchronous throw.
+  // Electron would paper over the difference — ipcMain.handle catches both — but the type here says
+  // `Promise`, and a function that sometimes throws before returning one breaks every caller that
+  // reasonably does `.catch()` instead of wrapping in try/catch.
   return {
     'conversations:list': async () => service.list(),
     'conversations:create': async (args) =>
@@ -53,7 +109,16 @@ export function createConversationIpcHandlers(
         title: typeof args?.title === 'string' ? args.title : null,
         projectId: typeof args?.projectId === 'string' ? args.projectId : null
       }),
-    'conversations:read': async (args) => service.read(requireConversationId(args?.id))
+    'conversations:read': async (args) => service.read(requireConversationId(args?.id)),
+    'conversations:sendTurn': async (args) =>
+      runConversationTurn(
+        { ...deps.turnDeps, service },
+        {
+          conversationId: requireConversationId(args?.id),
+          text: requireText(args?.text),
+          cwd: typeof args?.cwd === 'string' && args.cwd ? args.cwd : process.cwd()
+        }
+      )
   }
 }
 
@@ -66,8 +131,28 @@ export function getConversationService(): ConversationService {
   return cachedService
 }
 
+/** Broadcast rather than reply-to-sender: a conversation is not owned by the window that happened
+ *  to send the turn, and a second window showing the same conversation must see the same stream. */
+function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void {
+  const payload: ConversationTurnEventPayload = { conversationId, event }
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send(CONVERSATION_TURN_EVENT_CHANNEL, payload)
+    }
+  }
+}
+
 export function registerConversationHandlers(): void {
-  const handlers = createConversationIpcHandlers(getConversationService())
+  const handlers = createConversationIpcHandlers({
+    service: getConversationService(),
+    turnDeps: {
+      driver: createCodexConversationDriver(),
+      checkAuth: checkCodexAuth,
+      mintTurnId: () => `turn_${randomUUID()}`,
+      mintItemId: () => `usr_${randomUUID()}`,
+      emit: broadcastTurnEvent
+    }
+  })
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, (_event, args) =>

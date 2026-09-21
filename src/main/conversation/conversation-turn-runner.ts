@@ -6,6 +6,7 @@
 
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
+import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
 
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
@@ -35,18 +36,7 @@ export type ConversationTurnDriver = {
   runTurn: (request: ProviderTurnRequest) => Promise<ProviderTurnResult>
 }
 
-/**
- * Why this is not a nullable success: every one of these needs a different sentence in front of a
- * user, and four of them are routinely collapsed into "something went wrong". `auth-required` in
- * particular must never render as an assistant message — a 401 is not a conversation.
- */
-export type ConversationTurnOutcome =
-  | { outcome: 'completed'; turnId: string; providerSessionId: string | null }
-  | { outcome: 'busy'; activeTurnId: string }
-  | { outcome: 'conversation-absent' }
-  | { outcome: 'auth-required'; detail: string }
-  | { outcome: 'not-durable'; reason: string }
-  | { outcome: 'failed'; turnId: string; reason: string }
+export type { ConversationTurnOutcome }
 
 export type ConversationTurnDeps = {
   service: ConversationService
