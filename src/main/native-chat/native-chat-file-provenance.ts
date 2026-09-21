@@ -1,4 +1,4 @@
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import type { ProviderType, NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import type {
   RuntimeMobileSessionClientTab,
@@ -12,7 +12,7 @@ import { readNativeChatTranscriptTail } from './transcript-tail-reader'
 const NATIVE_CHAT_FILE_PROVENANCE_WINDOW = 2000
 
 type TranscriptRead = (args: {
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   transcriptPath?: string
   limit: number

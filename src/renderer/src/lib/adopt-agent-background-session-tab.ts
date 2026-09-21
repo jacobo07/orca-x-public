@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { makePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { ProviderType } from '../../../shared/agent-status-types'
 import { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { retireProvider, retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
@@ -13,7 +13,7 @@ type RegisterArgs = Parameters<Store['registerAgentLaunchConfig']>
 /** Reserves env-stable tab and pane identities before spawning the PTY. */
 export function reserveAgentBackgroundSessionIdentity(args: {
   store: Store
-  agentType: AgentType
+  agentType: ProviderType
   worktreeId: string
   launchConfig: RegisterArgs[1]
   env: Record<string, string> | undefined

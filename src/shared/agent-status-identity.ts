@@ -2,18 +2,18 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
   type AgentStatusState,
-  type AgentType
+  type ProviderType
 } from './agent-status-types'
 
 type ExistingAgentIdentity = {
-  agentType?: AgentType
+  agentType?: ProviderType
   state: AgentStatusState
   updatedAt: number
   restoredUnconfirmed?: boolean
 }
 
 type AgentIdentityResolution = {
-  agentType: AgentType
+  agentType: ProviderType
   inheritedFromActivePane: boolean
 }
 
@@ -26,7 +26,7 @@ export function shouldSuppressInheritedTerminalStatus(args: {
   return args.inheritedFromActivePane && args.incomingState === 'done'
 }
 
-function normalizedKnownAgentType(agentType: AgentType | null | undefined): AgentType | null {
+function normalizedKnownAgentType(agentType: ProviderType | null | undefined): ProviderType | null {
   if (!agentType || agentType === 'unknown') {
     return null
   }
@@ -43,7 +43,7 @@ function isActiveExistingIdentity(
 
 export function resolveAgentStatusIdentity(args: {
   existing?: ExistingAgentIdentity
-  incoming?: AgentType
+  incoming?: ProviderType
   now: number
   staleAfterMs?: number
 }): AgentIdentityResolution {

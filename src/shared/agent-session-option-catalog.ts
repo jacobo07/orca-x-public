@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG,
@@ -36,7 +36,7 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   grok: GROK_SESSION_OPTION_CATALOG
 }
 
-export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOptionCatalog | null {
+export function getAgentSessionOptionCatalog(agent: ProviderType): AgentSessionOptionCatalog | null {
   return CATALOGS[agent] ?? null
 }
 

@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import { sessionOptionValueIsValid } from './agent-session-option-catalog'
 import type {
   PersistedNativeChatSessionOptions,
@@ -7,7 +7,7 @@ import type {
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
-  agent: AgentType
+  agent: ProviderType
 ): Record<string, SessionOptionValue> | undefined {
   const entry = persisted?.[agent]
   // Why: untouched settings must preserve the agent CLI's configured defaults;
@@ -33,7 +33,7 @@ export function resolveNativeChatSessionOptionDefaults(
  *  `model` keeps the per-model option values for a later reselect. */
 export function clearNativeChatSessionOptionModel(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
-  agent: AgentType
+  agent: ProviderType
 ): PersistedNativeChatSessionOptions {
   const currentAgent = persisted?.[agent]
   if (!currentAgent?.model) {
@@ -45,7 +45,7 @@ export function clearNativeChatSessionOptionModel(
 
 export function updateNativeChatSessionOptionDefaults(args: {
   persisted: PersistedNativeChatSessionOptions | null | undefined
-  agent: AgentType
+  agent: ProviderType
   modelId: string
   optionId: string
   value: SessionOptionValue

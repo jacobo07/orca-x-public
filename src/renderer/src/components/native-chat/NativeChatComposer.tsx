@@ -299,7 +299,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         }
       }
       // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
-      // agent prop is the loose AgentType; the emitter narrows unknowns to 'other'.
+      // agent prop is the loose ProviderType; the emitter narrows unknowns to 'other'.
       emitNativeChatMessageSent({
         agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import {
   getAgentSessionOptionCatalog,
   type CatalogModel
@@ -65,7 +65,7 @@ function enqueueSessionOptionSettingsWrite(
  * probe that no longer lists it must retire it here too.
  */
 export async function retirePersistedModelMissingFromDiscovery(
-  agent: AgentType,
+  agent: ProviderType,
   models: readonly CatalogModel[]
 ): Promise<void> {
   if (!getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
@@ -84,7 +84,7 @@ export async function retirePersistedModelMissingFromDiscovery(
 }
 
 export function useNativeChatSessionOptions(args: {
-  agent: AgentType
+  agent: ProviderType
   terminalTabId: string
   targetPtyId: string | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand

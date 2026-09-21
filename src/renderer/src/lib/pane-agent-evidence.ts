@@ -6,7 +6,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
   type AgentStatusState,
-  type AgentType
+  type ProviderType
 } from '../../../shared/agent-status-types'
 
 // Why: explicit agent status entries (from hook-based reports) can go stale if
@@ -60,7 +60,7 @@ export type AgentActivityDecision = {
   /** Fresh (within AGENT_STATUS_STALE_AFTER_MS), pane-scoped hook state; null when absent or stale. */
   hookState: AgentStatusState | null
   /** Agent identity from the fresh hook row, when one exists. */
-  hookAgentType: AgentType | undefined
+  hookAgentType: ProviderType | undefined
   /** Title-derived status of the pane's live title, independent of hook state. */
   titleStatus: AgentStatus | null
   /** Which evidence layer holds the strongest current claim. */

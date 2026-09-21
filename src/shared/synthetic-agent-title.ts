@@ -1,4 +1,4 @@
-import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { AgentStatusState, ProviderType } from './agent-status-types'
 
 export type SyntheticAgentTitleProfile = {
   workingLabel: string
@@ -60,7 +60,7 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
 }
 
 export function getSyntheticAgentTitleProfile(
-  agentType: AgentType | null | undefined
+  agentType: ProviderType | null | undefined
 ): SyntheticAgentTitleProfile | null {
   if (!agentType) {
     return null
@@ -69,7 +69,7 @@ export function getSyntheticAgentTitleProfile(
 }
 
 export function getSyntheticAgentTerminalTitle(
-  agentType: AgentType | null | undefined,
+  agentType: ProviderType | null | undefined,
   state: AgentStatusState
 ): string | null {
   const profile = getSyntheticAgentTitleProfile(agentType)
@@ -80,7 +80,7 @@ export function getSyntheticAgentTerminalTitle(
 }
 
 export function shouldDriveSyntheticAgentTitleFromHook(
-  agentType: AgentType | null | undefined,
+  agentType: ProviderType | null | undefined,
   state: AgentStatusState
 ): boolean {
   const profile = getSyntheticAgentTitleProfile(agentType)

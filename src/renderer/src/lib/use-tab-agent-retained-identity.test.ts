@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry, ProviderType } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -36,7 +36,7 @@ function HookProbe({ tab }: { tab: TerminalTab }): null {
   return null
 }
 
-function statusEntry(paneKey: string, agentType: AgentType, state: AgentStatusEntry['state']) {
+function statusEntry(paneKey: string, agentType: ProviderType, state: AgentStatusEntry['state']) {
   return {
     paneKey,
     agentType,
@@ -48,7 +48,7 @@ function statusEntry(paneKey: string, agentType: AgentType, state: AgentStatusEn
   } satisfies AgentStatusEntry
 }
 
-function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntry {
+function retainedEntry(paneKey: string, agentType: ProviderType): RetainedAgentEntry {
   return {
     entry: statusEntry(paneKey, agentType, 'done'),
     worktreeId: WORKTREE_ID,

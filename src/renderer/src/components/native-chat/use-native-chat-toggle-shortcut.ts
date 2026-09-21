@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
@@ -19,8 +19,8 @@ export function resolveNativeChatToggleShortcutDetectedAgent({
 }: {
   terminalTabId: string
   terminalLayout?: TerminalLayoutSnapshot | null
-  agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
-}): AgentType | null {
+  agentStatusByPaneKey: Record<string, { agentType?: ProviderType }>
+}): ProviderType | null {
   const activeLeafId = resolveNativeChatActiveLayoutLeafId(terminalLayout)
   if (activeLeafId) {
     return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null

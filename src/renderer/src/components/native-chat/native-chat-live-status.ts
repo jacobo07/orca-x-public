@@ -5,7 +5,7 @@
 
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type {
-  AgentType,
+  ProviderType,
   NativeChatMessage,
   NativeChatSession,
   NativeChatSessionStatus,
@@ -16,7 +16,7 @@ export type NativeChatLiveMergeInput = {
   /** Already deduped, ordered, and transcript-normalized by the live assembler. */
   messages: NativeChatMessage[]
   sessionId: string | null
-  agent: AgentType
+  agent: ProviderType
   /** Live hook state for the pane, or null when no hook entry exists. */
   hookState: AgentStatusState | null
   /** Epoch ms when the current hook state began, or null when unknown. */

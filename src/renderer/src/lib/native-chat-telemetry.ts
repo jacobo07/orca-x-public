@@ -12,13 +12,13 @@ import type { NativeChatRuntime } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 /** Loose agent type accepted by these emitters: the strict launch `TuiAgent`, or
- *  the broader `AgentType` string carried by the chat view. Narrowing to the
+ *  the broader `ProviderType` string carried by the chat view. Narrowing to the
  *  closed `agent_kind` enum (with an `'other'` fallback) happens here so call
  *  sites never need an unsound `as TuiAgent` cast. */
 export type NativeChatTelemetryAgent = TuiAgent | (string & {}) | null | undefined
 
 // `launchAgent` is optional on terminal tabs (plain shells, manually-started
-// agents) and the chat view's `AgentType` may carry a string outside the
+// agents) and the chat view's `ProviderType` may carry a string outside the
 // `TuiAgent` union. When absent or unknown we fall back to `'other'` so the
 // closed `agent_kind` enum still validates instead of dropping the event.
 function resolveAgentKind(agent: NativeChatTelemetryAgent): ReturnType<typeof tuiAgentToAgentKind> {

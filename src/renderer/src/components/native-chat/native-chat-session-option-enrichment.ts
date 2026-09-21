@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
@@ -12,7 +12,7 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 
 type CatalogEnrichmentEntry = {
-  agent: AgentType
+  agent: ProviderType
   state: 'idle' | 'pending' | 'settled'
   models: CatalogModel[] | null
   listeners: Set<(models: CatalogModel[]) => void>
@@ -20,12 +20,12 @@ type CatalogEnrichmentEntry = {
 
 const enrichmentByAgentHost = new Map<string, CatalogEnrichmentEntry>()
 
-function enrichmentKey(agent: AgentType, hostKey: string): string {
+function enrichmentKey(agent: ProviderType, hostKey: string): string {
   return JSON.stringify([agent, hostKey])
 }
 
 export function readNativeChatEnrichedModels(
-  agent: AgentType,
+  agent: ProviderType,
   hostKey: string
 ): CatalogModel[] | null {
   const models = enrichmentByAgentHost.get(enrichmentKey(agent, hostKey))?.models
@@ -33,7 +33,7 @@ export function readNativeChatEnrichedModels(
 }
 
 export function subscribeNativeChatEnrichedModels(
-  agent: AgentType,
+  agent: ProviderType,
   hostKey: string,
   listener: (models: CatalogModel[]) => void
 ): () => void {
@@ -51,7 +51,7 @@ export function subscribeNativeChatEnrichedModels(
 
 export function resolveNativeChatLaunchSessionOptions(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
-  agent: AgentType
+  agent: ProviderType
 ): Record<string, SessionOptionValue> | undefined {
   const values = resolveNativeChatSessionOptionDefaults(persisted, agent)
   if (!values || !getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
@@ -70,7 +70,7 @@ export function resolveNativeChatLaunchSessionOptions(
 }
 
 export function ensureNativeChatModelEnrichment(args: {
-  agent: AgentType
+  agent: ProviderType
   hostKey: string
   discover: () => Promise<readonly CatalogModel[] | null>
 }): void {

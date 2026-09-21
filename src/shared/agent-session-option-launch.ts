@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import type { SessionOptionValue } from './native-chat-session-options'
 
@@ -8,7 +8,7 @@ export type ResolvedSessionOptionLaunch = {
 }
 
 export function removeOverriddenAgentSessionArgs(
-  agent: AgentType,
+  agent: ProviderType,
   values: Record<string, SessionOptionValue> | null | undefined,
   tokens: readonly string[]
 ): string[] {
@@ -29,7 +29,7 @@ export function removeOverriddenAgentSessionArgs(
 }
 
 export function resolveAgentSessionOptionLaunch(
-  agent: AgentType,
+  agent: ProviderType,
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[] = [],
   includeCatalogDefaults = true

@@ -1,6 +1,6 @@
 import type { FileHandle } from 'node:fs/promises'
 import type {
-  AgentType,
+  ProviderType,
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
@@ -30,7 +30,7 @@ const TAIL_CHUNK_BYTES = 64 * 1024
 
 export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
-export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
+export function nativeChatLineDecoderForAgent(agent: ProviderType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'claude') {
     return decodeClaudeTranscriptLine
@@ -241,7 +241,7 @@ async function findLastCompleteLineEnd(
 
 export async function readNativeChatTranscriptTail(
   args: ResolveSessionFileOptions & {
-    agent: AgentType
+    agent: ProviderType
     sessionId: string
     transcriptPath?: string
     filePath?: string

@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import {
   emitNativeChatMessageSent,
   emitNativeChatPickerItemAccepted,
@@ -19,7 +19,7 @@ import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
 
 export function useNativeChatPickerCommandDispatch(args: {
-  agent: AgentType
+  agent: ProviderType
   disabled: boolean
   isDispatchingSessionOption: boolean
   resolveTarget: () => NativeChatResolvedTarget | null

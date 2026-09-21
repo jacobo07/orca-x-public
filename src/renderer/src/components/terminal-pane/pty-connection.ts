@@ -194,7 +194,7 @@ import { e2eConfig } from '@/lib/e2e-config'
 import {
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry,
-  type AgentType
+  type ProviderType
 } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
@@ -1181,7 +1181,7 @@ export function connectPanePty(
   let suppressNativeWindowsIdleCodexFocusReports = false
   const setFocusReportSuppressionForAgentCompletion = (
     title: string | undefined,
-    agentType: AgentType | undefined
+    agentType: ProviderType | undefined
   ): void => {
     const titleAgentType = resolveCommittedTitleAgentType(title ?? '')
     suppressNativeWindowsIdleCodexFocusReports =
@@ -1572,14 +1572,14 @@ export function connectPanePty(
   }
   let pendingSuppressedTitleSideEffects: {
     title: string
-    agentType: AgentType | undefined
+    agentType: ProviderType | undefined
   } | null = null
   const clearSuppressedTitleSideEffects = (): void => {
     pendingSuppressedTitleSideEffects = null
   }
   const applyAgentCompletionSideEffects = (
     title: string,
-    agentType: AgentType | undefined
+    agentType: ProviderType | undefined
   ): void => {
     const settings = useAppStore.getState().settings
     if (
@@ -1731,7 +1731,7 @@ export function connectPanePty(
    * OMP-owned pane back to Pi; command ownership covers manually typed `omp`
    * in generic terminals where launch metadata does not exist.
    */
-  const getAuthoritativePaneAgent = (): AgentType | undefined => {
+  const getAuthoritativePaneAgent = (): ProviderType | undefined => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
       (entry) => entry.id === deps.tabId
@@ -1757,7 +1757,7 @@ export function connectPanePty(
   // agent's veto. Only live foreground command inference and a fresh, active
   // hook row count. A genuine OMP/Pi pane stays protected owner-independently by
   // the isPiAgentTitle guard inside isGeminiTerminalTitle.
-  const getPaneScopedRendererOwner = (): AgentType | undefined => {
+  const getPaneScopedRendererOwner = (): ProviderType | undefined => {
     const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
     return (
       commandInferredPaneAgent ?? (isFreshActivePaneAgentEntry(entry) ? entry.agentType : undefined)

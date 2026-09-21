@@ -5,7 +5,7 @@
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
@@ -55,7 +55,7 @@ function isIdentityStatusTitle(titleLower: string, identityLower: string): boole
 
 function isAgentIdentityStatusTitle(
   titleLower: string,
-  agentType: AgentType | null | undefined,
+  agentType: ProviderType | null | undefined,
   agentTypeLabelLower: string
 ): boolean {
   if (isIdentityStatusTitle(titleLower, agentTypeLabelLower)) {
@@ -80,7 +80,7 @@ function isCwdLikeTitle(title: string): boolean {
 
 function conversationNameFromLiveTitle(
   liveTitle: string,
-  agentType: AgentType | null | undefined,
+  agentType: ProviderType | null | undefined,
   agentTypeLabelLower: string,
   defaultTitle: string | undefined
 ): string | null {
@@ -112,7 +112,7 @@ function conversationNameFromLiveTitle(
  */
 export function getAgentRowConversationName(
   tab: ConversationNameTab,
-  agentType: AgentType | null | undefined,
+  agentType: ProviderType | null | undefined,
   generatedTitlesEnabled: boolean
 ): string | null {
   const customTitle = tab.customTitle?.trim()

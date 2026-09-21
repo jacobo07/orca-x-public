@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 
 export type SkillProvider = 'codex' | 'claude' | 'agent-skills'
@@ -30,7 +30,7 @@ export type SkillDiscoverySource = {
   sourceKind: SkillSourceKind
   providers: SkillProvider[]
   /** Agent that owns this root; null is the explicit shared-skills scope. */
-  owner: AgentType | null
+  owner: ProviderType | null
   exists: boolean
   /** `unavailable`: the root did not answer in time, so its skills are unknown rather than absent. */
   skippedReason?: 'missing' | 'remote-repo' | 'unavailable'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import { resolvePaneRendererPolicy } from './terminal-renderer-policy'
 
 const GEMINI_WORKING = '✦'
@@ -154,7 +154,7 @@ describe('resolvePaneRendererPolicy', () => {
 
     for (const token of AGENT_TOKENS) {
       it(`keeps GPU on when a title mentions "${token}" but owner is another agent`, () => {
-        const ownerAgentType: AgentType = token === 'claude' ? 'codex' : 'claude'
+        const ownerAgentType: ProviderType = token === 'claude' ? 'codex' : 'claude'
         const decision = resolvePaneRendererPolicy({
           rawTitle: token,
           ownerAgentType,

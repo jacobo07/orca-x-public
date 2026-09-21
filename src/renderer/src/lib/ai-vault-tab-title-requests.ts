@@ -1,5 +1,5 @@
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { ProviderType } from '../../../shared/agent-status-types'
 import type { AiVaultSessionTitle } from '../../../shared/ai-vault-session-title'
 import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -33,7 +33,7 @@ function registerCandidate(
   tabsById: ReadonlyMap<string, TerminalTab>,
   candidates: Map<string, RequestCandidate>,
   args: {
-    agent: AgentType | null | undefined
+    agent: ProviderType | null | undefined
     paneKey: string
     priority: number
     providerSession: AgentProviderSessionMetadata | undefined

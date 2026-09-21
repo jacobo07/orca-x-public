@@ -10,7 +10,7 @@
 //
 // Plain JSON only — these values cross IPC and are written to disk.
 
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import {
   NATIVE_CHAT_TURN_LIFECYCLE_STATES,
   type NativeChatBlock,
@@ -53,7 +53,7 @@ export type ConversationStatus = 'active' | 'archived'
 /** Evidence that this conversation has been carried by a provider session — continuation material,
  *  never identity. Append-only: a rotation adds an entry, it does not replace the conversation. */
 export type ConversationProviderProvenance = {
-  agent: AgentType
+  agent: ProviderType
   /** The provider's own session/thread id, or null when it never reported one. */
   providerSessionId: string | null
   transcriptPath: string | null

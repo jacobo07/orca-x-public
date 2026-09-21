@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 
 export type AgentInterruptInputIntent = 'plain-escape' | 'ctrl-c'
 
@@ -9,7 +9,7 @@ export type AgentInterruptInferenceRequest = {
   baselineUpdatedAt: number
   baselineStateStartedAt: number
   baselinePrompt: string
-  baselineAgentType: AgentType | undefined
+  baselineAgentType: ProviderType | undefined
   intent: AgentInterruptInputIntent
   inputCount?: number
 }

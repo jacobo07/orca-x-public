@@ -1,5 +1,5 @@
 import { isGeminiTerminalTitle } from '@/lib/agent-status'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type TerminalGpuAccelerationMode = GlobalSettings['terminalGpuAcceleration']
@@ -18,7 +18,7 @@ export type RendererPolicyDecision = {
 
 export type ResolvePaneRendererPolicyInput = {
   rawTitle: string | null
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: ProviderType | null | undefined
   userGpuMode: TerminalGpuAccelerationMode
   /** Set when the pane cannot obtain a WebGL context at all. */
   webglUnavailable?: boolean
@@ -29,7 +29,7 @@ export type ResolvePaneRendererPolicyInput = {
 // Why: an authoritative non-Gemini owner (OMP, Pi, Claude, a shell, …) outranks
 // raw title text. 'unknown' is not authoritative, so it does not veto the
 // title-derived Gemini fallback.
-function isKnownNonGeminiOwner(ownerAgentType: AgentType | null | undefined): boolean {
+function isKnownNonGeminiOwner(ownerAgentType: ProviderType | null | undefined): boolean {
   return (
     typeof ownerAgentType === 'string' &&
     ownerAgentType !== '' &&
@@ -48,7 +48,7 @@ type GeminiCompatFallback = {
 // forced onto the DOM renderer.
 function resolveGeminiCompatFallback(
   rawTitle: string | null,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: ProviderType | null | undefined
 ): GeminiCompatFallback {
   if (!isGeminiTerminalTitle(rawTitle ?? '')) {
     return { disable: false, confidence: 'authoritative' }

@@ -2,7 +2,7 @@ import {
   getAgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface,
@@ -43,7 +43,7 @@ export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
 }
 
 export type CreateNativeChatPtySessionOptionsArgs = {
-  agent: AgentType
+  agent: ProviderType
   scopeKey: string
   fallbackScopeKey?: string
   initialModels?: readonly CatalogModel[]

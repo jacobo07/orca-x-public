@@ -17,7 +17,7 @@ export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as 
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
 // accepted — these well-known names are just a convenience union for pattern-matching.
-export type WellKnownAgentType =
+export type WellKnownProviderType =
   | 'claude'
   | 'openclaude'
   | 'codex'
@@ -40,7 +40,7 @@ export type WellKnownAgentType =
   | 'ante'
   | 'trae'
   | 'unknown'
-export type AgentType = WellKnownAgentType | (string & {})
+export type ProviderType = WellKnownProviderType | (string & {})
 
 /** A snapshot of a previous agent state, used to render activity blocks.
  *  Why: intentionally narrower than AgentStatusEntry — tool/assistant context is
@@ -99,7 +99,7 @@ export type AgentStatusEntry = {
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number
-  agentType?: AgentType
+  agentType?: ProviderType
   /** Provider model currently used by this session. */
   model?: string
   /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
@@ -170,7 +170,7 @@ export type MigrationUnsupportedPtyEntry = {
 export type AgentStatusPayload = {
   state: AgentStatusState
   prompt?: string
-  agentType?: AgentType
+  agentType?: ProviderType
   model?: string
   toolName?: string
   toolInput?: string

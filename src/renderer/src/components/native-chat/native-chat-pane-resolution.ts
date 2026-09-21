@@ -1,4 +1,4 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, ProviderType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isNativeChatSupportedAgent } from './native-chat-availability'
 
@@ -26,7 +26,7 @@ export type NativeChatPaneResolutionInput = {
 }
 
 export type NativeChatPaneResolution = {
-  agent: AgentType
+  agent: ProviderType
   /** The agent's own captured session/conversation id, or null before the
    *  agent has reported one (entry exists but no providerSession yet). */
   sessionId: string | null

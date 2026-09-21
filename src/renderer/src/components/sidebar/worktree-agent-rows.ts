@@ -3,7 +3,7 @@ import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentType,
+  type ProviderType,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
@@ -34,7 +34,7 @@ import {
  * Resolves the sidebar row agent type, prioritizing launch agent configuration
  * and normalizing compatible agent kinds.
  */
-function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
+function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): ProviderType {
   const entryAgentType = resolveCompatibleAgentTypeForOwner(entry.agentType, tab?.launchAgent)
   if (entryAgentType && entryAgentType !== 'unknown') {
     return entryAgentType

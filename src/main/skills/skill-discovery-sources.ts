@@ -7,7 +7,7 @@ import type {
   SkillProvider,
   SkillSourceKind
 } from '../../shared/skills'
-import type { AgentType } from '../../shared/agent-status-types'
+import type { ProviderType } from '../../shared/agent-status-types'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
@@ -57,7 +57,7 @@ function source(
   path: string,
   sourceKind: SkillSourceKind,
   providers: SkillProvider[],
-  owner: AgentType | null
+  owner: ProviderType | null
 ): SkillScanRoot {
   return { id, label, path, sourceKind, providers, owner }
 }

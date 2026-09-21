@@ -1,4 +1,4 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, ProviderType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
@@ -19,13 +19,13 @@ export type TabBarAgentProjectionState = {
 
 export type TabBarAgentProjections = {
   nativeChatEnabled: boolean
-  tabAgentTypesByTabId: Record<string, AgentType>
+  tabAgentTypesByTabId: Record<string, ProviderType>
   nativeChatTabWideFallbackUnsafeTabsById: Record<string, true>
 }
 
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: Record<string, AgentStatusEntry> = Object.freeze({})
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: Record<string, TerminalLayoutSnapshot> = Object.freeze({})
-const EMPTY_TAB_AGENT_TYPES_BY_TAB_ID: Record<string, AgentType> = Object.freeze({})
+const EMPTY_TAB_AGENT_TYPES_BY_TAB_ID: Record<string, ProviderType> = Object.freeze({})
 const EMPTY_UNSAFE_TABS_BY_ID: Record<string, true> = Object.freeze({})
 const DISABLED_TAB_BAR_AGENT_PROJECTIONS: TabBarAgentProjections = Object.freeze({
   nativeChatEnabled: false,
@@ -51,8 +51,8 @@ function projectTabAgentTypesByTabId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>,
   dependencies?: TabBarAgentProjectionSelectorDependencies
-): Record<string, AgentType> {
-  const byTabId: Record<string, AgentType> = {}
+): Record<string, ProviderType> {
+  const byTabId: Record<string, ProviderType> = {}
   const claimed = new Set<string>()
   for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
     dependencies?.onAgentTypeLayoutVisited?.(tabId)
@@ -121,7 +121,7 @@ function projectNativeChatTabWideFallbackUnsafeTabsById(
 export function selectTabAgentTypesByTabId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
-): Record<string, AgentType> {
+): Record<string, ProviderType> {
   return projectTabAgentTypesByTabId(agentStatusByPaneKey, terminalLayoutsByTabId)
 }
 

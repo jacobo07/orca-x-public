@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
@@ -7,12 +7,12 @@ export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u'
 
 type WindowsShiftEnterAgentSignals = {
   foreground?: PaneForegroundAgentEntry
-  launchAgentType?: AgentType
+  launchAgentType?: ProviderType
 }
 
 type WindowsShiftEnterPaneState = {
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry | undefined>
-  agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
+  agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: ProviderType } } | undefined>
 }
 
 /** Resolve without key-path PTY I/O; current process/shell evidence overrides

@@ -1,5 +1,5 @@
 import { open, stat } from 'node:fs/promises'
-import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
+import type { ProviderType, NativeChatMessage } from '../../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
@@ -35,7 +35,7 @@ type WorkerTranscriptReadSuccess = {
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
 
 export async function readWorkerTranscript(args: {
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   transcriptPath?: string
   offset?: number

@@ -1,7 +1,7 @@
 import type {
   AgentStatusEntry,
   AgentStatusState,
-  AgentType
+  ProviderType
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
@@ -11,7 +11,7 @@ export type DashboardAgentRow = {
   paneKey: string
   entry: AgentStatusEntry
   tab: TerminalTab
-  agentType: AgentType
+  agentType: ProviderType
   rowSource?: 'live' | 'retained' | 'subagent'
   state: AgentStatusState | 'idle'
   /** Pane to focus when the row is activated, when it differs from paneKey.

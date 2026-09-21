@@ -1,5 +1,5 @@
 import type {
-  AgentType,
+  ProviderType,
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
@@ -38,7 +38,7 @@ export type ReadTranscriptOptions = ResolveSessionFileOptions & {
  * record-to-message mapping is shared with the live tailer.
  */
 export async function readNativeChatTranscript(
-  agent: AgentType,
+  agent: ProviderType,
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {

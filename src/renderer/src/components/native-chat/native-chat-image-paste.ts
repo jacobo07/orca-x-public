@@ -4,7 +4,7 @@
 // agents get a native attachment chip; unsupported/custom agents get a clear
 // message instead of silently injecting a path that the model reads as text.
 
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import { isImageDropPath } from '../terminal-pane/terminal-drop-image-path'
 
 /** How a given agent consumes a pasted image. `attachment` = bracket-paste the
@@ -12,7 +12,7 @@ import { isImageDropPath } from '../terminal-pane/terminal-drop-image-path'
  *  no confirmed mechanism. */
 export type AgentImageHandling = 'attachment' | 'unsupported'
 
-const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
+const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<ProviderType> = new Set<ProviderType>([
   'claude',
   'openclaude',
   'codex',
@@ -26,20 +26,20 @@ const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
   'grok'
 ])
 
-export function getAgentImageHandling(agent: AgentType): AgentImageHandling {
+export function getAgentImageHandling(agent: ProviderType): AgentImageHandling {
   return IMAGE_ATTACHMENT_AGENTS.has(agent) ? 'attachment' : 'unsupported'
 }
 
 export type ImagePasteResult =
   | { kind: 'attach'; path: string }
-  | { kind: 'unsupported'; agent: AgentType }
+  | { kind: 'unsupported'; agent: ProviderType }
 
 /**
  * Given the agent and the temp-file path the image was written to, decide what
  * (if anything) to attach. Attachment-capable agents receive the path through
  * the same bracketed image-paste channel as the terminal TUI.
  */
-export function resolveImagePaste(agent: AgentType, tempFilePath: string): ImagePasteResult {
+export function resolveImagePaste(agent: ProviderType, tempFilePath: string): ImagePasteResult {
   if (getAgentImageHandling(agent) === 'attachment') {
     return { kind: 'attach', path: tempFilePath }
   }

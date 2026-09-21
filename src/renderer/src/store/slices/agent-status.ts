@@ -8,7 +8,7 @@ import {
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext,
-  type AgentType,
+  type ProviderType,
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
@@ -65,7 +65,7 @@ export type RetainedAgentEntry = {
   worktreeId: string
   /** Snapshot of the tab at retention time; kept full (not just an id) because the tab may be gone from `tabsByWorktree` by render time. */
   tab: TerminalTab
-  agentType: AgentType
+  agentType: ProviderType
   startedAt: number
 }
 
@@ -91,7 +91,7 @@ type DropAgentStatusByTabPrefixOptions = {
 }
 
 type AgentLaunchConfigRegistrationMetadata = {
-  agentType?: AgentType
+  agentType?: ProviderType
   launchToken?: string
   tabId?: string
   leafId?: string
@@ -101,7 +101,7 @@ type AgentLaunchConfigRegistrationMetadata = {
 
 type AgentLaunchConfigStatusMetadata = {
   paneKey: string
-  agentType?: AgentType
+  agentType?: ProviderType
   tabId?: string
   terminalHandle?: string
   launchToken?: string
@@ -551,7 +551,7 @@ function retainedAgentEntryFromLive(
   state: AppState,
   worktreeId: string,
   entry: AgentStatusEntry,
-  agentType: AgentType
+  agentType: ProviderType
 ): RetainedAgentEntry {
   const tab =
     findTabForAgentEntry(state, worktreeId, entry) ?? getRetainedFallbackTab(entry, worktreeId)
@@ -992,7 +992,7 @@ function launchConfigRegistryEntriesEqual(
 function registryEntryMatchesStatus(args: {
   entry: AgentLaunchConfigRegistryEntry | undefined
   paneKey: string
-  agentType: AgentType | undefined
+  agentType: ProviderType | undefined
   tabId: string | undefined
   terminalHandle: string | undefined
   launchToken: string | undefined

@@ -1,7 +1,7 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 
 type CommandCodeTurnBoundaryInput = {
-  agentType: AgentType | undefined
+  agentType: ProviderType | undefined
   previousState?: string
   incomingState: string
   previousPrompt?: string

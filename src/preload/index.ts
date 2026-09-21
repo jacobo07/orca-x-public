@@ -302,7 +302,7 @@ import type {
 } from '../shared/ai-vault-types'
 import type { AiVaultSessionTitlesArgs } from '../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
-import type { AgentType } from '../shared/native-chat-types'
+import type { ProviderType } from '../shared/native-chat-types'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
@@ -4464,7 +4464,7 @@ const api = {
 
   nativeChat: {
     readSession: (
-      agent: AgentType,
+      agent: ProviderType,
       sessionId: string,
       limit?: number,
       transcriptPath?: string
@@ -4474,7 +4474,7 @@ const api = {
     subscribe: (
       args: {
         subscriptionId: string
-        agent: AgentType
+        agent: ProviderType
         sessionId: string
         transcriptPath?: string
         limit?: number

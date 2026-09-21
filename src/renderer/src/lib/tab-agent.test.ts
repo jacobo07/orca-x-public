@@ -7,7 +7,7 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry, ProviderType } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
@@ -25,7 +25,7 @@ function resolveTabAgent(
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
-function entry(paneKey: string, agentType: AgentType | undefined): AgentStatusEntry {
+function entry(paneKey: string, agentType: ProviderType | undefined): AgentStatusEntry {
   return {
     state: 'working',
     prompt: '',
@@ -41,7 +41,7 @@ function layout(activeLeafId: string | null): TerminalLayoutSnapshot {
   return { root: null, activeLeafId, expandedLeafId: null }
 }
 
-function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntry {
+function retainedEntry(paneKey: string, agentType: ProviderType): RetainedAgentEntry {
   const tabId = paneKey.slice(0, paneKey.indexOf(':'))
   const tab: TerminalTab = {
     id: tabId,

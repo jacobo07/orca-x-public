@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import { resolveImagePaste } from './native-chat-image-paste'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
 import {
@@ -10,7 +10,7 @@ import {
 } from './native-chat-attachment-upload'
 
 export type UseNativeChatComposerPasteArgs = {
-  agent: AgentType
+  agent: ProviderType
   /** Live composer-disabled state (no pty / presence-lock); read at await-resume
    *  via a ref so a flip mid-paste doesn't write into a guarded composer. */
   disabled: boolean

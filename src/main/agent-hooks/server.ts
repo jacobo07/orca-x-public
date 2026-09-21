@@ -58,7 +58,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusClearIpcPayload,
   type AgentStatusIpcPayload,
-  type AgentType,
+  type ProviderType,
   type AgentStatusState,
   type ParsedAgentStatusPayload,
   normalizeAgentStatusPayload
@@ -190,7 +190,7 @@ type AgentPromptSentDedupeEntry = {
   promptInteractionKey?: string
 }
 
-function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined): AgentKind {
+function agentTypeToPromptSentAgentKind(agentType: ProviderType | undefined): AgentKind {
   const normalized = agentType?.trim().toLowerCase()
   if (!normalized || normalized === 'unknown') {
     return 'other'
@@ -204,8 +204,8 @@ function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined): Agent
 }
 
 function equivalentInterruptAgentType(
-  actual: AgentType | undefined,
-  baseline: AgentType | undefined
+  actual: ProviderType | undefined,
+  baseline: ProviderType | undefined
 ): boolean {
   const normalizedActual = actual === 'unknown' ? undefined : actual
   const normalizedBaseline = baseline === 'unknown' ? undefined : baseline
@@ -239,7 +239,7 @@ function dropHydratedIdleClaudeSubagents(
 // Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
 function isValidPiProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
-  agentType: AgentType | undefined
+  agentType: ProviderType | undefined
 ): boolean {
   return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
 }
@@ -800,7 +800,7 @@ export class AgentHookServer {
       return false
     }
     const payload = existing.payload
-    const agentType: AgentType | undefined = payload.agentType
+    const agentType: ProviderType | undefined = payload.agentType
     // Why: Droid's Ctrl+C exits the CLI (handled by PTY lifecycle) rather than interrupting the current turn.
     if (agentType === 'droid' && request.intent === 'ctrl-c') {
       return false

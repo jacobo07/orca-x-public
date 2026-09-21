@@ -1,4 +1,4 @@
-import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { AgentStatusState, ProviderType } from './agent-status-types'
 
 export type NotificationSettings = {
   enabled: boolean
@@ -36,7 +36,7 @@ export type NotificationDispatchRequest = {
   hasMultipleActiveRepos?: boolean
   terminalTitle?: string
   isActiveWorktree?: boolean
-  agentType?: AgentType
+  agentType?: ProviderType
   agentState?: AgentStatusState
   agentPrompt?: string
   agentToolName?: string

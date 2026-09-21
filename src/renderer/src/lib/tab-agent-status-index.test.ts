@@ -12,7 +12,7 @@ import { isTerminalLeafId, parsePaneKey } from '../../../shared/stable-pane-id'
 import type {
   AgentStatusEntry,
   AgentStatusState,
-  AgentType
+  ProviderType
 } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -158,7 +158,7 @@ function leafId(n: number): string {
 
 const STATES: readonly AgentStatusState[] = ['working', 'blocked', 'waiting', 'done']
 // Mixes iconable agents with ones agentTypeToIconAgent rejects.
-const AGENT_TYPES: readonly (AgentType | undefined)[] = [
+const AGENT_TYPES: readonly (ProviderType | undefined)[] = [
   'claude',
   'codex',
   'gemini',
@@ -172,7 +172,7 @@ const AGENT_TYPES: readonly (AgentType | undefined)[] = [
 function statusEntry(
   paneKey: string,
   state: AgentStatusState,
-  agentType?: AgentType
+  agentType?: ProviderType
 ): AgentStatusEntry {
   return {
     state,
@@ -185,7 +185,7 @@ function statusEntry(
   }
 }
 
-function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntry {
+function retainedEntry(paneKey: string, agentType: ProviderType): RetainedAgentEntry {
   const tabId = paneKey.slice(0, paneKey.indexOf(':'))
   const tab: TerminalTab = {
     id: tabId,

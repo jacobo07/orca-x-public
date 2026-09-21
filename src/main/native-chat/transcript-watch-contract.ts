@@ -1,12 +1,12 @@
 import type {
-  AgentType,
+  ProviderType,
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   onAppend: (messages: NativeChatMessage[], lifecycle?: NativeChatTurnLifecycle) => void
   onInitialSnapshot?: (

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AskPrompt } from '../../../src/shared/native-chat-ask'
-import type { AgentType } from '../../../src/shared/native-chat-types'
+import type { ProviderType } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
@@ -45,7 +45,7 @@ describe('useMobileNativeChatAnswerSend', () => {
   let answerSend: AnswerSend | null = null
   let mountedClient: RpcClient | null = null
   let mountedOnSendError: ((message: string) => void) | null = null
-  let mountedAgent: AgentType = 'claude'
+  let mountedAgent: ProviderType = 'claude'
   // The route sends through useNativeChatAcceptedAction, whose accepted callback
   // retires the shared send-error banner (use-mobile-native-chat-controller.ts).
   let acceptedAnswerAsk: AnswerSend['answerAsk'] | null = null
@@ -87,7 +87,7 @@ describe('useMobileNativeChatAnswerSend', () => {
   async function mount(
     client: RpcClient,
     onSendError: (message: string) => void,
-    agent: AgentType = 'claude'
+    agent: ProviderType = 'claude'
   ): Promise<void> {
     mountedClient = client
     mountedOnSendError = onSendError

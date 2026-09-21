@@ -1,4 +1,4 @@
-import type { AgentType, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type { ProviderType, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { isNoiseMessage } from '../../shared/native-chat-noise'
 import {
@@ -21,7 +21,7 @@ export type NativeChatTurnLifecycleDecoder = (
 ) => NativeChatTurnLifecycle | null
 
 export function nativeChatTurnLifecycleDecoderForAgent(
-  agent: AgentType
+  agent: ProviderType
 ): NativeChatTurnLifecycleDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'codex') {

@@ -7,7 +7,7 @@ import {
 
 // The `agentType` WIRE field is emitted by processes outside Orca (hook integrations, OSC 9999)
 // and republished to paired clients, so its spelling is a compatibility contract — unlike the
-// `AgentType` TYPE beside it, which is ours to rename. A case-insensitive edit hits both.
+// `ProviderType` TYPE beside it, which is ours to rename. A case-insensitive edit hits both.
 
 const WIRE_PAYLOAD = '{"state":"working","prompt":"Fix the flaky assertion","agentType":"codex"}'
 

@@ -1,5 +1,5 @@
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import {
   resolvePaneRendererPolicy,
   type RendererPolicyDecision,
@@ -12,7 +12,7 @@ import {
  */
 export function resolvePaneDisplayTitle(
   title: string,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: ProviderType | null | undefined
 ): string {
   return normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
 }
@@ -34,11 +34,11 @@ export type ResolvePaneTitleDecisionInput = {
   rawTitle: string
   /** Owner used for the display label — may include sticky/tab-scoped launch
    *  identity, which is correct for the visible label. */
-  displayOwnerAgentType: AgentType | null | undefined
+  displayOwnerAgentType: ProviderType | null | undefined
   /** Owner used for the renderer veto — must be pane-scoped and current so a
    *  sibling/reused pane's launch identity cannot keep GPU for a genuine
    *  Gemini pane. */
-  rendererOwnerAgentType: AgentType | null | undefined
+  rendererOwnerAgentType: ProviderType | null | undefined
   userGpuMode: TerminalGpuAccelerationMode
   webglUnavailable?: boolean
   inContextLossContainment?: boolean

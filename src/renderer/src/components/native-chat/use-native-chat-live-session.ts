@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
-  type AgentType,
+  type ProviderType,
   type NativeChatMessage,
   type NativeChatSession
 } from '../../../../shared/native-chat-types'
@@ -26,7 +26,7 @@ import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 export type UseNativeChatLiveSessionArgs = {
   /** Composite `${tabId}:${leafId}` key — selects the live hook entry. */
   paneKey: string
-  agent: AgentType
+  agent: ProviderType
   /** The agent's own session id, or null before it reports one — nothing to read/tail, so the view shows live hook state. */
   sessionId: string | null
   /** Authoritative transcript path from the hook, preferred over reconstructing it from sessionId. Null when not reported. */

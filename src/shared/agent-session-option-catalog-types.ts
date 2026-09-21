@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice,
@@ -81,4 +81,4 @@ export type AgentSessionOptionCatalog = {
   }
 }
 
-export type AgentSessionOptionCatalogMap = Partial<Record<AgentType, AgentSessionOptionCatalog>>
+export type AgentSessionOptionCatalogMap = Partial<Record<ProviderType, AgentSessionOptionCatalog>>

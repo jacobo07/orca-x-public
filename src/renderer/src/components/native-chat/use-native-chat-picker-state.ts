@@ -9,7 +9,7 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import type { SlashCommandSuggestion } from '../../../../shared/native-chat-slash-commands'
 import {
@@ -40,7 +40,7 @@ export type NativeChatPickerState = {
 }
 
 export function useNativeChatPickerState(args: {
-  agent: AgentType
+  agent: ProviderType
   terminalTabId: string
   draftScopeKey: string
   draft: string

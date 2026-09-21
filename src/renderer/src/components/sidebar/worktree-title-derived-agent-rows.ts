@@ -7,7 +7,7 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentStatusState,
-  AgentType
+  ProviderType
 } from '../../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type {
@@ -26,7 +26,7 @@ const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
 const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> = {}
 
-const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
+const TITLE_AGENT_LABEL_TO_TYPE: Record<string, ProviderType> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
   Codex: 'codex',
@@ -129,7 +129,7 @@ function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
   title: string
-  ownerAgentType: AgentType | null
+  ownerAgentType: ProviderType | null
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
@@ -199,8 +199,8 @@ function buildTitleDerivedAgentRow(args: {
 export function resolveTitleDerivedAgentType(
   title: string,
   label: string,
-  ownerAgentType?: AgentType | null
-): AgentType | null {
+  ownerAgentType?: ProviderType | null
+): ProviderType | null {
   const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
   if (agentType !== 'claude') {
     return agentType
@@ -224,7 +224,7 @@ function resolveTitleDerivedPaneOwner(
   tab: TerminalTab,
   layout: TerminalLayoutSnapshot | undefined,
   leafId: string
-): AgentType | null {
+): ProviderType | null {
   // Why: launchAgent is tab-scoped, so it is pane ownership only while the tab has one
   // leaf; applying it inside a split would let one pane brand its sibling.
   if (layout?.root?.type !== 'leaf' || layout.root.leafId !== leafId) {
@@ -239,8 +239,8 @@ function resolveTitleDerivedPaneOwner(
  */
 export function resolveAgentTypeFromTerminalTitle(
   title: string | null | undefined,
-  ownerAgentType?: AgentType | null
-): AgentType | null {
+  ownerAgentType?: ProviderType | null
+): ProviderType | null {
   if (!title) {
     return null
   }
