@@ -13,6 +13,7 @@ the *pictures* those rules produce, and the index that makes each one traceable.
 |---|---|
 | `references/<surface>/` | canonical reference images, one file per slot revision |
 | `generated/<surface>/` | image-model mockups kept as design lineage, never shipped as the reference |
+| `producers/` | token-true HTML that renders a reference; links the real `main.css`, so it cannot drift from the product |
 | `sheets/` | token, typography, geometry and status-semantics sheets |
 | `anatomy/` | component anatomy sheets |
 | `storyboards/` | multi-frame interaction flows |

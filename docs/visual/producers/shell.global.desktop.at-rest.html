@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orca X — Shell global, escritorio, en reposo</title>
+
+    <!--
+      r02 of shell.global.desktop.at-rest, and deliberately NOT another generation.
+      r01 (docs/visual/generated/) was an image-model candidate. It got the composition right
+      and got two things wrong that only a renderer can settle: it painted the selected row as
+      a saturated full-bleed blue, which is not Orca's convention and outshouts the status dots
+      beside it, and it spelled a Spanish label wrong. Both are exactly the class of problem the
+      contract says to stop regenerating for.
+
+      Every colour here resolves through a token in the real main.css. Change --status-warning
+      and this page changes. The Tailwind @import at the top of main.css 404s when this file is
+      opened directly; :root and .dark are plain CSS and still apply, which is all this reads.
+    -->
+    <link rel="stylesheet" href="../../../src/renderer/src/assets/main.css" />
+
+    <style>
+      /* Geometry only. No colour literals below this line. */
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        letter-spacing: 0.01em;
+        font-size: 13px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .shell {
+        width: 1440px; height: 900px;
+        display: grid;
+        grid-template-rows: 36px 1fr 24px;
+        border: 1px solid var(--border);
+      }
+
+      /* Title bar ------------------------------------------------------------------ */
+      .titlebar {
+        display: flex; align-items: center; justify-content: center;
+        background: var(--card);
+        border-bottom: 1px solid var(--border);
+        font-size: 12px; color: var(--muted-foreground);
+      }
+
+      .body { display: grid; grid-template-columns: 40px 260px 1fr 280px; min-height: 0; }
+
+      /* Activity rail — 40px, icon-only, the existing far-left strip ----------------- */
+      .rail {
+        background: var(--sidebar);
+        border-right: 1px solid var(--border);
+        display: flex; flex-direction: column; align-items: center;
+        gap: 4px; padding-top: 8px;
+      }
+      .rail-item {
+        width: 28px; height: 28px; border-radius: var(--radius-md);
+        display: grid; place-items: center;
+        color: var(--muted-foreground);
+      }
+      /* Interaction, not health: an accent surface and the normal foreground. */
+      .rail-item[data-current='true'] { background: var(--sidebar-accent); color: var(--foreground); }
+      .rail-item svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+
+      /* Worktree sidebar ------------------------------------------------------------ */
+      .sidebar {
+        background: var(--worktree-sidebar);
+        border-right: 1px solid var(--border);
+        display: flex; flex-direction: column; min-height: 0;
+      }
+      .sidebar-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 12px 8px;
+        font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+        color: var(--muted-foreground);
+      }
+      .sidebar-actions { display: flex; gap: 2px; color: var(--muted-foreground); }
+      .rows { display: flex; flex-direction: column; padding: 0 6px; gap: 1px; }
+      .row {
+        display: flex; align-items: center; gap: 8px;
+        height: 30px; padding: 0 8px;
+        border-radius: var(--radius-md);
+        color: var(--worktree-sidebar-foreground);
+      }
+      /*
+        The r01 correction. Orca's list-row convention is an accent surface plus
+        data-current, never a saturated primary fill: selection is the quietest way to say
+        "here", and it has to coexist with a status dot without competing with it.
+      */
+      .row[data-current='true'] { background: var(--worktree-sidebar-accent); }
+      .row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .row-meta { font-size: 11px; color: var(--muted-foreground); }
+
+      /* One filled dot per known state; hollow is reserved for "we do not know". */
+      .dot { width: 7px; height: 7px; border-radius: 9999px; flex: none; }
+      .dot--healthy { background: var(--status-success); }
+      .dot--pressured { background: var(--status-warning); }
+      .dot--critical { background: var(--status-error); }
+      .dot--idle { background: var(--muted-foreground); opacity: 0.45; }
+      .dot--unknown { background: transparent; border: 1px solid var(--status-unknown); }
+
+      /* Terminal ------------------------------------------------------------------- */
+      .main { display: flex; flex-direction: column; min-width: 0; background: var(--background); }
+      .tabs { display: flex; align-items: center; gap: 2px; height: 34px; padding: 0 8px; border-bottom: 1px solid var(--border); }
+      .tab { padding: 4px 10px; border-radius: var(--radius-md); font-size: 12px; color: var(--muted-foreground); }
+      .tab[data-current='true'] { background: var(--accent); color: var(--foreground); }
+      .terminal {
+        flex: 1; min-height: 0; padding: 12px 16px;
+        background: var(--editor-surface);
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        font-size: 12.5px; line-height: 1.55;
+        color: var(--foreground);
+        white-space: pre-wrap;
+      }
+      .dim { color: var(--muted-foreground); }
+
+      /* Context panel --------------------------------------------------------------- */
+      .context { background: var(--sidebar); border-left: 1px solid var(--border); padding: 12px 14px; }
+      .context h2 {
+        font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+        color: var(--muted-foreground); margin: 0 0 10px;
+      }
+      .field { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 12px; }
+      .field dt { color: var(--muted-foreground); }
+      .field dd { margin: 0; }
+      .context hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        border-radius: 9999px; border: 1px solid; padding: 1px 8px; font-size: 11px; font-weight: 500;
+      }
+      .pill--unknown {
+        color: var(--status-unknown);
+        background: var(--status-unknown-background);
+        border-color: var(--status-unknown-border);
+      }
+      .pill--pressured {
+        color: var(--status-warning);
+        background: var(--status-warning-background);
+        border-color: var(--status-warning-border);
+      }
+
+      /* Status bar ------------------------------------------------------------------ */
+      .statusbar {
+        display: flex; align-items: center; gap: 16px;
+        padding: 0 12px;
+        background: var(--card);
+        border-top: 1px solid var(--border);
+        font-size: 11px; color: var(--muted-foreground);
+      }
+      .statusbar .spacer { flex: 1; }
+    </style>
+  </head>
+
+  <body>
+    <div class="shell">
+      <div class="titlebar">atlas-web — principal — Orca X</div>
+
+      <div class="body">
+        <nav class="rail" aria-label="Superficies">
+          <div class="rail-item" data-current="true" title="Espacio de trabajo">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+          </div>
+          <div class="rail-item" title="Control de código">
+            <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M8.5 6H14a4 4 0 0 1 4 4v.5"/></svg>
+          </div>
+          <div class="rail-item" title="Agentes">
+            <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15 19a4.5 4.5 0 0 1 5.5-4.4"/></svg>
+          </div>
+          <div class="rail-item" title="Tareas">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+          </div>
+          <div class="rail-item" title="Actividad">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+          </div>
+          <div class="rail-item" title="Ajustes">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/></svg>
+          </div>
+        </nav>
+
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <span>Espacios de trabajo</span>
+            <span class="sidebar-actions">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+            </span>
+          </div>
+          <div class="rows">
+            <div class="row" data-current="true">
+              <span class="dot dot--healthy" title="Correcto"></span>
+              <span class="row-name">atlas-web / principal</span>
+            </div>
+            <div class="row">
+              <span class="dot dot--pressured" title="Bajo presión"></span>
+              <span class="row-name">atlas-web / ajustes</span>
+              <span class="row-meta">2</span>
+            </div>
+            <div class="row">
+              <span class="dot dot--unknown" title="Sin medir"></span>
+              <span class="row-name">nexo-api / revisión</span>
+            </div>
+            <div class="row">
+              <span class="dot dot--idle" title="En reposo"></span>
+              <span class="row-name">nexo-api / principal</span>
+            </div>
+            <div class="row">
+              <span class="dot dot--critical" title="Falló"></span>
+              <span class="row-name">portal-cliente / pruebas</span>
+            </div>
+            <div class="row">
+              <span class="dot dot--idle" title="En reposo"></span>
+              <span class="row-name">biblioteca-ui / limpieza</span>
+            </div>
+          </div>
+        </aside>
+
+        <section class="main">
+          <div class="tabs">
+            <span class="tab" data-current="true">Terminal</span>
+            <span class="tab">Agente 01</span>
+          </div>
+          <div class="terminal">PS atlas-web&gt; pnpm test
+<span class="dim">&gt; atlas-web@1.4.0 test</span>
+24 pruebas completadas
+Sin cambios pendientes.
+
+PS atlas-web&gt; <span class="dim">▏</span></div>
+        </section>
+
+        <aside class="context">
+          <h2>Contexto</h2>
+          <dl>
+            <div class="field"><dt>Rama</dt><dd>principal</dd></div>
+            <div class="field"><dt>Estado</dt><dd>En reposo</dd></div>
+            <div class="field">
+              <dt>Memoria</dt>
+              <dd><span class="pill pill--unknown">Sin medir</span></dd>
+            </div>
+          </dl>
+          <hr />
+          <h2>Archivos</h2>
+          <div class="field"><dt>Sin cambios</dt><dd></dd></div>
+        </aside>
+      </div>
+
+      <div class="statusbar">
+        <span>Local</span>
+        <span>principal</span>
+        <span class="pill pill--pressured">2 avisos</span>
+        <span class="spacer"></span>
+        <span>UTF-8</span>
+        <span>Listo</span>
+      </div>
+    </div>
+  </body>
+</html>

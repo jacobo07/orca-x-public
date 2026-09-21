@@ -62,7 +62,10 @@
     // Files that claim to be token-true. Every var(--x) in them must resolve in main.css: a
     // typo'd token name renders as nothing at all, so a reference sheet can quietly stop
     // showing the system it documents while still looking like a reference sheet.
-    "tokenConsumers": ["docs/visual/sheets/status-semantics-sheet.html"],
+    "tokenConsumers": [
+      "docs/visual/sheets/status-semantics-sheet.html",
+      "docs/visual/producers/shell.global.desktop.at-rest.html"
+    ],
     // A floor is what tells a sweep that found nothing from an estate that has nothing.
     "minimumStates": 8
   },
