@@ -1,13 +1,30 @@
 ---
 covers: [presentation-cpu-residency, use-tab-agent, terminal-rail, tab-strip, subscriber-fan-out, w3]
-status: PLANNED
+status: LIVE
 ---
 
 # Presentation derivation is projected once per session, not thirteen times per row
 
-**Status: PLANNED.** Nothing in this document is implemented yet. It becomes the fourth shrink in
-[`resource-elasticity-fabric.md`](./resource-elasticity-fabric.md) when the code, its tests and the
-measured numbers land together — not before.
+**Status: LIVE.** Implemented in [`src/renderer/src/lib/tab-agent-projection.ts`](../../src/renderer/src/lib/tab-agent-projection.ts),
+consumed by `lib/use-tab-agent.ts`, measured by
+`components/terminal-rail/terminal-rail-derivation-fanout.test.tsx` and ratcheted by both
+presentation-residency files.
+
+Measured, 1/10/50/100 dormant rows, happy-dom:
+
+| | before | after |
+|---|---|---|
+| rail subscribers per row | 24 | **13** |
+| strip subscribers per tab | 21 | **10** |
+| resolver calls per row, unrelated write | 6 | **0** |
+| pane-key strings per row, unrelated write | 4 | **0** |
+| resolver calls per row, write that moves the inputs | 6 | **6** |
+| pane-key strings per row, write that moves the inputs | 4 | **4** |
+
+The last two rows are the point: necessary derivation is unchanged, and only repeated derivation was
+removed. They are also the control — a zero in the rows above is produced equally by a working
+projection, a mock that failed to bind, and a projection that stopped deriving anything, and only a
+non-zero measurement in the same run tells them apart.
 
 ## What is being fixed, and what is not
 
@@ -73,17 +90,33 @@ A characterization of today, which must fail the moment the fix lands and then b
 Both numbers come from the same instrument the existing ratchets use
 (`store/store-listener-census.ts`), which returns `null` for unmeasured rather than `0`.
 
-## Acceptance criteria
+## Acceptance criteria, and what was measured
 
-- Rail subscribers per row: 24 → ~12. Strip: 21 → ~9.
-- Allocations per store write attributable to `useTabAgent`: non-zero slope → ~zero slope.
-- Existing agent-identity behaviour unchanged: `use-tab-agent*.test.ts` (5 files) stay green with no
-  assertion edited.
-- The existing ratchets at `terminal-rail-presentation-residency.test.tsx:197` and the strip twin are
-  **lowered**, not loosened, so the next growth cannot hide in slack.
-- No cost transferred: a single giant object subscription is an explicit non-goal, and the projection
-  must still return a primitive per tab.
-- Retained JS heap does not materially regress (W1 envelope, ~55 KB/row).
+- Rail subscribers per row 24 → **13**, strip 21 → **10**. The estimate written before the work said
+  ~12 and ~9; it was one out on each, because `useTabAgent` keeps two subscriptions rather than one —
+  the projection, plus the stable `clearTabLaunchAgent` reference its exit effect needs.
+- Allocations per unrelated store write: **zero at every scale**, not merely a zero slope. A
+  slope-only assertion would let a constant per-write cost hide in the intercept.
+- Agent identity unchanged: **499 tests green** across the five `use-tab-agent*` files, `tab-agent`,
+  and the whole `terminal-rail` and `tab-bar` trees, **with no assertion edited**.
+- Both ratchets **lowered**, not loosened. The strip's was *added*: that file previously asserted only
+  integrality and linearity, so it passed through a 21 → 10 change without noticing either number.
+- No cost transferred. The projection is not one giant object subscription: it returns a per-tab entry
+  whose reference is reused while its fields are unchanged, so a change to one tab still re-renders
+  exactly one row.
+
+### What this does NOT claim
+
+`useTabAgent` did not become stateless. It still owns `hasObservedAgentSignal` and two effects, one of
+which clears a stale launch agent; those are per-row and stayed per-row. The projection replaced the
+thirteen **reads** only.
+
+Retained JS heap was **not** re-measured. The W1 envelope (~55 KB/row) is a real-app GC-forced figure
+and this host sits near 11% free RAM, so a heap claim made here would carry drift larger than the
+effect. Removing allocations while lowering subscriber counts makes a regression implausible — but
+implausible is not measured, and this line says so rather than implying otherwise.
+
+Nothing here has run in the real app. Every number above is happy-dom.
 
 ## Measurement protocol
 

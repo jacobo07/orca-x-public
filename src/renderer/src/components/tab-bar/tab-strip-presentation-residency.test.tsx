@@ -225,6 +225,13 @@ describe('tab strip presentation residency', () => {
       points.map((point) => listenerBase + point.tabs * listenersPerTab)
     )
 
+    // Ratchet, and it is new. This file previously asserted only that the cost was an integer and
+    // linear, which is satisfied by any per-tab number at all — so when `lib/tab-agent-projection.ts`
+    // took the strip from 21 subscribers per tab to 10, this test passed without noticing either the
+    // old figure or the new one. Linearity says the shape is right; only a pinned value says the
+    // size is. The rail's twin has carried one since it was written.
+    expect({ domPerTab, listenersPerTab }).toEqual({ domPerTab: 13, listenersPerTab: 10 })
+
     const report = { domPerTab, listenersPerTab, points }
     if (process.env.STRIP_RESIDENCY_REPORT) {
       // Vitest swallows console.info, so a measurement that must be read goes to a named file.

@@ -8,14 +8,20 @@
  * `setState` (`store/store-listener-census.ts:11-12`), so a subscriber count tells you how many
  * selectors exist and nothing about the work they do when one of them fires.
  *
- * `useTabAgent` (`lib/use-tab-agent.ts:187-265`) holds 13 of the rail row's 24 subscriptions, and two
- * of them allocate per evaluation — `hasRemoteRuntimePty` (:257-264) builds a Set and spreads it,
- * `focusedPaneKey` (:221-224) mints a string through `makePaneKey`. This file puts a number on that.
+ * `useTabAgent` USED TO hold 13 of the rail row's 24 subscriptions, two of which allocated on every
+ * evaluation: one built a Set and spread it, another minted a string through `makePaneKey`. This
+ * file put the number on that, and now holds the line at zero.
  *
- * CHARACTERIZATION OF TODAY, not a target. Both slopes below are expected to be linear and non-zero
- * right now. When the snapshot-keyed projection lands
- * (docs/reference/presentation-derivation-projection.md) these invert in place: the slope goes to
- * zero and the assertions here become the proof it did.
+ * INVERTED IN PLACE. Until `lib/tab-agent-projection.ts` landed, both slopes below were linear and
+ * non-zero: 6 resolver calls and 4 pane-key strings per row, per write, exactly linear with a zero
+ * intercept — 600 and 400 respectively at 100 rows, for a write about the side panel. The same
+ * assertions now demand zero, so this file is the proof the projection works rather than a second
+ * test written beside a deleted one (docs/reference/presentation-derivation-projection.md).
+ *
+ * The control below is what keeps that zero honest. A mock that silently failed to bind reports
+ * zero too, and a projection that quietly stopped deriving anything at all would report zero on
+ * BOTH writes. So a write that genuinely moves the projection's inputs must still cost the full
+ * per-row derivation, and that is asserted, at the same scales, in the same run.
  *
  * Counts, not timings. This host runs near 11% free RAM, where a wall-clock reading drifts further
  * than any effect this change could produce (docs/reference/resource-density-lab.md).
@@ -26,6 +32,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type * as I18nModule from '@/i18n/i18n'
+import type * as TabAgentModule from '@/lib/tab-agent'
+import type * as StablePaneIdModule from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import TerminalRail, { type TerminalRailTabActions } from './TerminalRail'
 
@@ -37,9 +45,10 @@ vi.mock('@/i18n/i18n', async (importOriginal) => ({
 }))
 
 // Why wrap rather than replace: the real precedence ladder must still run, or this would measure a
-// stub's cost. Counting is the only change.
+// stub's cost. Counting is the only change. The resolvers moved from the hook into the projection,
+// so mocking the module still intercepts them wherever they are called from.
 vi.mock('@/lib/tab-agent', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/tab-agent')>()
+  const actual = await importOriginal<typeof TabAgentModule>()
   const counted = <T extends (...args: never[]) => unknown>(fn: T): T =>
     ((...args: Parameters<T>) => {
       counters.resolverCalls += 1
@@ -56,9 +65,9 @@ vi.mock('@/lib/tab-agent', async (importOriginal) => {
   }
 })
 
-// makePaneKey is the string allocation inside useTabAgent's `focusedPaneKey` selector.
+// makePaneKey is the string allocation behind the focused pane key.
 vi.mock('../../../../shared/stable-pane-id', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../../shared/stable-pane-id')>()
+  const actual = await importOriginal<typeof StablePaneIdModule>()
   return {
     ...actual,
     makePaneKey: (...args: Parameters<typeof actual.makePaneKey>) => {
@@ -120,7 +129,22 @@ function tabActions(): TerminalRailTabActions {
   }
 }
 
-async function measureFanout(rows: number): Promise<FanoutMeasurement> {
+type StoreWrite = () => void
+
+/** A write no rail row depends on: the side panel opening says nothing about any terminal. */
+const unrelatedWrite: StoreWrite = () => {
+  useAppStore.setState({ rightSidebarOpen: true } as Partial<AppState>)
+}
+
+/**
+ * A new reference for a slice the projection reads. Content-equal on purpose: the derivation must
+ * re-run, so the counters move, while structural sharing still spares every row a re-render.
+ */
+const projectionInputWrite: StoreWrite = () => {
+  useAppStore.setState({ agentStatusByPaneKey: {} } as Partial<AppState>)
+}
+
+async function measureFanout(rows: number, write: StoreWrite): Promise<FanoutMeasurement> {
   const seeds = Array.from({ length: rows }, (_, index) => dormantTab(index))
   const layoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
   for (const seed of seeds) {
@@ -132,7 +156,11 @@ async function measureFanout(rows: number): Promise<FanoutMeasurement> {
 
   await act(async () => {
     root.render(
-      <TerminalRail tabs={seeds.map((seed) => seed.tab)} activeTabId={null} tabActions={tabActions()} />
+      <TerminalRail
+        tabs={seeds.map((seed) => seed.tab)}
+        activeTabId={null}
+        tabActions={tabActions()}
+      />
     )
   })
 
@@ -144,9 +172,8 @@ async function measureFanout(rows: number): Promise<FanoutMeasurement> {
   counters.resolverCalls = 0
   counters.paneKeyAllocations = 0
 
-  // A write no rail row depends on: the side panel opening says nothing about any terminal.
   await act(async () => {
-    useAppStore.setState({ rightSidebarOpen: true } as Partial<AppState>)
+    write()
   })
 
   const measurement: FanoutMeasurement = {
@@ -185,39 +212,53 @@ describe('terminal rail derivation fan-out', () => {
     useAppStore.setState(initialAppState, true)
   })
 
-  it('positive control: the counters can move at all', async () => {
-    // Why: every assertion below reads a count, and a mock that silently failed to bind would
-    // report zero — which is also what a perfectly projected implementation reports. Without this,
-    // the red and the green branches are the same observable.
-    const point = await measureFanout(1)
-    expect(point.resolverCalls).toBeGreaterThan(0)
-    expect(point.paneKeyAllocations).toBeGreaterThan(0)
+  it('control: a write the projection DOES depend on still derives every row', async () => {
+    // Load-bearing. The assertion that matters in this file is a zero, and three different worlds
+    // produce a zero: the projection working, a mock that failed to bind, and a projection that
+    // stopped deriving anything at all. Only this case tells them apart, so it runs at the same
+    // scales, in the same run, against the same counters.
+    const points = [
+      await measureFanout(1, projectionInputWrite),
+      await measureFanout(50, projectionInputWrite)
+    ]
+
+    expect(points[0].resolverCalls).toBeGreaterThan(0)
+    expect(points[0].paneKeyAllocations).toBeGreaterThan(0)
+
+    // Still linear, and that is correct: when the inputs genuinely move, every row's identity is
+    // genuinely stale. The projection removes repeated derivation, never necessary derivation.
+    const resolversPerRow = perRow(points, (p) => p.resolverCalls)
+    const allocationsPerRow = perRow(points, (p) => p.paneKeyAllocations)
+    expect(resolversPerRow).toBeGreaterThan(0)
+    expect(allocationsPerRow).toBeGreaterThan(0)
+
+    if (process.env.RAIL_FANOUT_CONTROL_REPORT) {
+      const { writeFileSync } = await import('node:fs')
+      writeFileSync(
+        process.env.RAIL_FANOUT_CONTROL_REPORT,
+        JSON.stringify({ resolversPerRow, allocationsPerRow, points }, null, 2)
+      )
+    }
   })
 
-  it('re-derives agent identity for every dormant row on an unrelated store write', async () => {
+  it('derives nothing for any row on a store write it does not depend on', async () => {
     const points: FanoutMeasurement[] = []
     for (const rows of SCALES) {
-      points.push(await measureFanout(rows))
+      points.push(await measureFanout(rows, unrelatedWrite))
     }
 
     const resolversPerRow = perRow(points, (p) => p.resolverCalls)
     const allocationsPerRow = perRow(points, (p) => p.paneKeyAllocations)
 
-    // TODAY: both are linear and non-zero — one store write anywhere re-runs every row's identity
-    // ladder and mints every row's pane key. The projection makes both slopes zero.
-    expect(resolversPerRow).toBeGreaterThan(0)
-    expect(allocationsPerRow).toBeGreaterThan(0)
+    // Was 6 and 4 before lib/tab-agent-projection.ts. A write about the side panel now costs a
+    // reference comparison per row and nothing else — no identity ladder, no pane-key string.
+    expect(resolversPerRow).toBe(0)
+    expect(allocationsPerRow).toBe(0)
 
-    // Predictive, not descriptive: the slope comes from the 1- and 100-row points and must land the
-    // intermediate points exactly. A per-row cost that is not linear fails here.
-    const resolverBase = points[0].resolverCalls - resolversPerRow
-    const allocationBase = points[0].paneKeyAllocations - allocationsPerRow
-    expect(points.map((p) => p.resolverCalls)).toEqual(
-      points.map((p) => resolverBase + p.rows * resolversPerRow)
-    )
-    expect(points.map((p) => p.paneKeyAllocations)).toEqual(
-      points.map((p) => allocationBase + p.rows * allocationsPerRow)
-    )
+    // Not just a zero slope: zero at every point, so a constant per-write cost cannot hide in the
+    // intercept the way a slope-only assertion would let it.
+    expect(points.map((p) => p.resolverCalls)).toEqual(SCALES.map(() => 0))
+    expect(points.map((p) => p.paneKeyAllocations)).toEqual(SCALES.map(() => 0))
 
     const report = { resolversPerRow, allocationsPerRow, points }
     if (process.env.RAIL_FANOUT_REPORT) {
