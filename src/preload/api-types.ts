@@ -7,6 +7,7 @@ import type {
   MinimaxCredentialsApi
 } from './api/agent-account-api'
 import type { AgentHooksApi, HooksApi } from './api/agent-hook-api'
+import type { ConversationApi } from './api/conversation-api'
 import type { SkillsApi } from './api/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
 import type {
@@ -127,6 +128,7 @@ export type PreloadApi = {
   remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
   workingSet: ProjectWorkingSetApi['workingSet']
   durableExit: DurableExitApi['durableExit']
+  conversations: ConversationApi['conversations']
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   stats: StatsApi

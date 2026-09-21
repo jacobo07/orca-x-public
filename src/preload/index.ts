@@ -3209,6 +3209,12 @@ const api = {
     }
   } satisfies PreloadApi['durableExit'],
 
+  conversations: {
+    list: () => ipcRenderer.invoke('conversations:list'),
+    create: (args) => ipcRenderer.invoke('conversations:create', args),
+    read: (args) => ipcRenderer.invoke('conversations:read', args)
+  } satisfies PreloadApi['conversations'],
+
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
     setForConnectedTargets: (args) =>
