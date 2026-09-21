@@ -26,8 +26,20 @@
 // source lines.
 //
 // evidenceRuns is DECLARED, not verified. Its date, result, duration and summary are hand-written
-// and nothing joins them to a real run -- no reporter output, no artifact, no CI run id is recorded
-// anywhere in this file. Read a run as a developer's note that they ran it, never as provenance.
+// and nothing joins them to a real run -- no reporter output, no artifact. Read a local, soak or
+// manual run as a developer's note that they ran it, never as provenance.
+//
+// A `ci` run is the exception, because GitHub holds the record. It must carry `runUrl`, a GitHub
+// Actions run URL, so a reader can open the run rather than trust the note -- and so that a local
+// run somebody labelled `ci` cannot pass as one. Three entries predate the requirement and are
+// frozen in check-reliability-gates.mjs (CI_EVIDENCE_WITHOUT_PROVENANCE); that list may only
+// shrink, and an entry whose run has since gained a runUrl fails the check.
+//
+// Worth knowing before adding one: measured 2026-09-21, this repository has not been assigned a
+// GitHub-hosted runner since 2026-09-13 01:51 UTC. Every run created since finished in seconds
+// with no runner and no steps, so there is currently no honest way to record a new `ci` run at
+// all. Use config/scripts/report-ci-execution-rungs.mjs to check what a run actually reached
+// before citing it.
 {
   "schemaVersion": 1,
   "updatedAt": "2026-08-14",

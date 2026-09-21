@@ -1,8 +1,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parse as parseJsonc } from 'jsonc-parser'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  CI_EVIDENCE_WITHOUT_PROVENANCE,
+  findStaleProvenanceExemptions,
   main,
   resolveVerdict,
   validateManifest,
@@ -10,6 +15,8 @@ import {
   VERDICT_CONTRACT_INVALID,
   VERDICT_CONTRACT_VALID
 } from './check-reliability-gates.mjs'
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 const tempDirs = []
 
@@ -610,5 +617,139 @@ describe('assertion evidence must name something that exists', () => {
     const root = withBaseline(makeTempRoot(validManifest()), 'this is not an entry\n')
 
     await expect(main(root)).resolves.toBe(2)
+  })
+})
+
+describe('a ci evidence run must name the run', () => {
+  const ciRun = (overrides = {}) => ({
+    date: '2026-09-20',
+    runner: 'ci',
+    platform: 'macos',
+    command: 'pnpm exec vitest run some.test.ts',
+    result: 'passed',
+    durationSeconds: 1.2,
+    summary: '1 file passed.',
+    ...overrides
+  })
+
+  it('rejects a ci run with no runUrl', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = makeTempRoot(validManifest({ evidenceRuns: [ciRun()] }))
+
+    await expect(main(root)).resolves.toBe(1)
+  })
+
+  // Green control. Without it, a clause that refused every ci run would pass the case above.
+  it('accepts a ci run that carries a GitHub Actions run URL', async () => {
+    const root = makeTempRoot(
+      validManifest({
+        evidenceRuns: [
+          ciRun({ runUrl: 'https://github.com/jacobo07/orca-x/actions/runs/34726494245' })
+        ]
+      })
+    )
+
+    await expect(main(root)).resolves.toBe(0)
+  })
+
+  it('rejects a runUrl that is not an Actions run', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    for (const runUrl of [
+      'https://github.com/jacobo07/orca-x/actions',
+      'https://example.com/jacobo07/orca-x/actions/runs/1',
+      'https://github.com/jacobo07/orca-x/actions/runs/not-a-number',
+      ''
+    ]) {
+      const root = makeTempRoot(validManifest({ evidenceRuns: [ciRun({ runUrl })] }))
+      await expect(main(root)).resolves.toBe(1)
+    }
+  })
+
+  // The requirement is about ci only. Nothing outside this repository witnessed a local run, so
+  // demanding provenance there would be asking for evidence that cannot exist.
+  it('asks nothing of local, soak or manual runs', async () => {
+    for (const runner of ['local', 'soak', 'manual']) {
+      const root = makeTempRoot(validManifest({ evidenceRuns: [ciRun({ runner })] }))
+      await expect(main(root)).resolves.toBe(0)
+    }
+  })
+
+  // Regression pin: the frozen list names gates in THIS repository's manifest. Judging a synthetic
+  // manifest against it read every exemption as stale and failed fixtures that have nothing to do
+  // with provenance.
+  it('does not judge a manifest that does not contain the exempted gates', () => {
+    expect(findStaleProvenanceExemptions({ gates: [{ id: 'unrelated.gate', evidenceRuns: [] }] })).toEqual([])
+    expect(findStaleProvenanceExemptions({})).toEqual([])
+  })
+
+  // Mutating the function is not enough: the two cases below call it directly, so severing the
+  // CALL from validateManifest left them green. This one drives the wiring, and it asserts on the
+  // reason, because a manifest can exit 1 for a dozen unrelated causes.
+  it('reaches the stale check from the checker itself, not just from a direct call', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = makeTempRoot(
+      validManifest({
+        id: 'browser-stream.bounded-reconnect',
+        evidenceRuns: [
+          ciRun({
+            date: '2026-08-07',
+            runUrl: 'https://github.com/jacobo07/orca-x/actions/runs/34726494245'
+          })
+        ]
+      })
+    )
+
+    await expect(main(root)).resolves.toBe(1)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('exempted from ci evidence provenance')
+    )
+  })
+
+  // Drives the stale branch, which nothing else reaches: against the real manifest the list is
+  // never stale, so without this the whole clause could be deleted and every case here would
+  // still pass. Uses a really-exempted id, because the branch is keyed to those ids.
+  it('refuses an exemption whose run has since gained provenance', () => {
+    expect(
+      findStaleProvenanceExemptions({
+        gates: [
+          {
+            id: 'browser-stream.bounded-reconnect',
+            evidenceRuns: [
+              {
+                date: '2026-08-07',
+                runner: 'ci',
+                runUrl: 'https://github.com/jacobo07/orca-x/actions/runs/34726494245'
+              }
+            ]
+          }
+        ]
+      })
+    ).toEqual(['browser-stream.bounded-reconnect::2026-08-07'])
+  })
+
+  it('refuses an exemption whose run no longer exists at all', () => {
+    expect(
+      findStaleProvenanceExemptions({
+        gates: [{ id: 'browser-stream.bounded-reconnect', evidenceRuns: [] }]
+      })
+    ).toEqual(['browser-stream.bounded-reconnect::2026-08-07'])
+  })
+
+  // The checker deliberately cannot police the real manifest from inside a synthetic one, so the
+  // real file is pinned here: the exemption set and the set of unproven ci runs must be equal.
+  // One direction stops the list rotting, the other stops it being padded.
+  it('matches this repository exactly, in both directions', async () => {
+    const raw = await readFile(path.join(REPO_ROOT, 'config', 'reliability-gates.jsonc'), 'utf8')
+    const manifest = parseJsonc(raw)
+    const unproven = new Set()
+    for (const gate of manifest.gates) {
+      for (const run of gate.evidenceRuns ?? []) {
+        if (run.runner === 'ci' && !/\/actions\/runs\/\d+$/.test(run.runUrl ?? '')) {
+          unproven.add(`${gate.id}::${run.date}`)
+        }
+      }
+    }
+    expect([...unproven].sort()).toEqual([...CI_EVIDENCE_WITHOUT_PROVENANCE].sort())
+    expect(findStaleProvenanceExemptions(manifest)).toEqual([])
   })
 })
