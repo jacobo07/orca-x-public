@@ -86,6 +86,14 @@ A timer, poll, watcher, worker or retry loop must say what multiplies it. `pnpm 
 
 Cost should follow the live or visible set, not everything the user has ever opened. A producer that multiplies with panes, rows, worktrees, hosts or subscriptions and never stops on its own needs a stated `bound`, or it is `debt` — and the debt list in `config/recurring-work-debt-baseline.txt` only shrinks. Prefer one shared producer over one per consumer, and an existing event over a poll; but a safety check at the moment of a destructive action keeps its own fresh read. Renaming a producer re-keys it, so it must be classified again. Local worktree and git-metadata polls register with `src/main/ipc/worktree-observation-clock.ts` instead of owning a timer, and fewer timers alone is not a shrink: measure the repeated work at several counts, and keep an external-change test that does not go through Orca's own write path. See [`docs/reference/resource-elasticity-fabric.md`](./docs/reference/resource-elasticity-fabric.md) (R4).
 
+## Provider Naming
+
+The provider brand — claude, codex, gemini, cursor — is `ProviderType`. Name new code after it. "Agent" is reserved for the durable Orca persona, so a record whose provider field reads `AgentType` is a bug in the vocabulary, not a style preference.
+
+The lowercase `agentType` **wire** field is a different thing and does not move: it arrives from processes Orca does not own (hook integrations, OSC 9999) and is republished to paired clients, so its spelling is a compatibility contract. The two tokens sit on the same lines (`agentType: ProviderType`), which is why any sweep over them must be case-sensitive. `src/shared/agent-status-wire-field-name.test.ts` pins the wire half.
+
+`pnpm check:provider-noun-debt` freezes the identifiers that still spell it the old way (`baselineAgentType`, `resolveExplicitTerminalTitleAgentType`) in `config/provider-noun-debt-baseline.txt`. The list only shrinks: a new one fails the build, and an entry whose identifier was renamed must be pruned with `--update` or the list stops being a ratchet.
+
 ## Forked IPC Children
 
 Fork through `forkIpcChild()` ([`src/shared/ipc-message-listener-floor.ts`](./src/shared/ipc-message-listener-floor.ts)), or call `installIpcMessageListenerFloor(child)` when the fork itself is injectable. `pnpm check:ipc-message-floor` fails on any file under `src/` that owns an IPC child without one, and `config/ipc-message-floor-baseline.txt` only shrinks.
