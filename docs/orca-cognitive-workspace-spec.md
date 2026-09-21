@@ -548,3 +548,166 @@ removing the conversation contract now fails by name.
 - **Approval path still UNVERIFIED**, unchanged from W0 — W2 owns it.
 - The W0 transport bugs (`requestRpc` dropping empty `params`; unsolicited notifications reaching
   the drop path) are **untouched by W1** and remain W2's, as planned.
+
+## 11. W2 evidence — provider gateway and turn semantics, measured 2026-09-21
+
+Against `codex-cli 0.153.4` at
+`C:\Users\User\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe`.
+
+### 11.1 The two defects W0 carried forward, as production actually had them
+
+`codex-app-server-session.ts` correlated every inbound line on `id` alone, and had **no `else`**.
+Two consequences, and the second is worse than W0 recorded:
+
+- **Notifications were discarded.** No branch existed for a line with no pending id.
+- **A server request could be answered as a client response.** `codex app-server` is a
+  bidirectional peer; the installed schema declares **11 server→client requests**, numbered in the
+  SERVER's id space. A request arriving while one of ours was in flight resolved that caller with
+  the server's question — `turn/start` returns `undefined`, the approval is never answered, and the
+  real response is then dropped because nothing is waiting for it.
+
+Both are now decided by DIRECTION and SHAPE before correlation (`codex-app-server-inbound.ts`),
+with routing in `codex-app-server-inbound-router.ts` so a long-lived session cannot grow a second
+copy that disagrees about whether an approval may be auto-granted.
+
+### 11.2 The approval boundary — there was nothing to connect to
+
+The directive assumed an existing approval owner to extend. There is none. Orca's only
+approval-shaped code (`codex-auto-approval-notification-suppression.ts`) **suppresses
+notifications** for a PTY-hosted Codex whose approvals are decided inside Codex's own TUI, from a
+permission mode read off launch args. Orca has never decided an approval, because in the PTY world
+it never saw one. The app-server path is a genuinely new authority boundary.
+
+`createAgentApprovalAuthority` fails closed: absent decider, unmodelled kind and a thrown decider
+all deny, and `no-authority` stays distinct from `policy` so a refusal nobody made cannot read as
+one somebody did. **W2 ships no decider on purpose** — until a user can see a request, the only
+honest answer is a refusal. That surface is W3.
+
+### 11.3 Four response vocabularies, not one — read from the schema
+
+The six approval methods do **not** share a response shape:
+
+| method | answers with |
+|---|---|
+| `item/commandExecution/requestApproval` | `{ decision: accept \| decline \| cancel \| … }` |
+| `item/fileChange/requestApproval` | `{ decision: accept \| decline \| cancel \| … }` |
+| `execCommandApproval`, `applyPatchApproval` (legacy) | `{ decision: approved \| denied \| abort \| … }` |
+| `item/permissions/requestApproval` | `{ permissions: GrantedPermissionProfile }` — **no denial shape** |
+| `item/tool/requestUserInput` | `{ answers: { … } }` — **no denial shape** |
+
+A single decision string would be wrong on four of six. The last two are refused at the protocol
+level: their success shape is a grant Orca would have to invent. `item/tool/call` is refused for a
+sharper reason — it asks the client to EXECUTE a tool, so a result is an effect, not an opinion.
+
+The 11-method inventory is frozen in `codex-server-request-classification.ts` and drift-checked
+against a freshly generated schema when `CODEX_SERVER_REQUEST_SCHEMA` points at one, so a twelfth
+request is a visible decision rather than a silent arrival in the unknown branch.
+
+### 11.4 Live observation — a real turn, a real approval, a real denial
+
+One run, production transport + bridge + mapping, `read-only` sandbox, `approvalPolicy: untrusted`,
+authority with no decider:
+
+```
+  697 ms  remoteControl/status/changed      <- DURING the handshake
+ 4381 ms  turn/started
+10984 ms  item/agentMessage/delta           (token-level streaming)
+34530 ms  SERVER REQUEST id=0  item/commandExecution/requestApproval
+34530 ms  -> Orca denies (no authority)
+34540 ms  serverRequest/resolved {requestId: 0}
+34570 ms  codex: Rejected("rejected by user")   <- the command never ran
+39500 ms  turn/completed
+```
+
+`id=0` is the finding. Under the previous reader `0` was not in the pending map, so the approval
+was **discarded and never answered** and the turn would sit on `waitingOnApproval` forever.
+
+### 11.5 Evidence
+
+| gate | result |
+|---|---|
+| `codex-app-server-inbound.test.ts` (shape taxonomy) | 9/9 |
+| `codex-app-server-inbound-classification.test.ts` (routing) | 7/7 |
+| `codex-app-server-readiness.test.ts` (spawn ≠ ready) | 4/4 |
+| `codex-server-request-bridge.test.ts` (approval + live schema drift) | 11/11 |
+| `codex-turn-event-mapping.test.ts` | 15/15 |
+| `conversation-turn-fold.test.ts` | 14/14 |
+| `coarse-provider-turn-contract.test.ts` | 5/5 |
+| **total change-scoped** | **65/65** |
+| `codex-provider-reality.test.ts` (REAL codex) | PASS, 39.1 s |
+| `tsc -p config/tsconfig.node.json` | PASS |
+| `oxlint` over every changed file | PASS |
+
+Mutations driven, all caught, every restore verified by SHA or by `git diff` against HEAD:
+
+| mutation | result |
+|---|---|
+| correlate on id alone (unit) | 6/16 red |
+| correlate on id alone (**REAL codex**) | turn hangs 200 s on `turn/completed`, file red |
+| drop the notification sink | red, exactly the handshake case |
+| approve when no authority exists | 3/11 red |
+| answer the not-expressible methods with a decision | 1/11 red |
+| let a late completion overwrite an interruption | 1/19 red, control green |
+| make `initialize` fire-and-forget | 3/4 red |
+
+### 11.6 Provider neutrality is driven by two shapes, not one
+
+`coarse-provider-turn-contract.test.ts` folds a Claude-style headless NDJSON run — one process per
+invocation, one terminal assistant message, **no deltas, no server-request channel** — through the
+same events and the same fold, and gets a complete conversation. Had the vocabulary been built
+around Codex's properties, that shape could not be expressed. Capabilities keep `unsupported` and
+`unknown` apart, so "nobody checked cancellation" cannot render as "this provider cannot cancel".
+
+This is a contract fixture, **not** a Claude driver. No Claude process was run.
+
+### 11.7 An instrument that could only ever return one answer
+
+The pre-existing `codex-app-server-session.test.ts` failures are **not** a subject verdict. Those
+cases spawn a real `node.exe` against a 5 000 ms session deadline, and a bare
+`node -e "process.stdout.write('x')"` on this host measured a **median 8 735 ms** across five runs
+(3 463 / 5 716 / 8 735 / 9 753 / 11 432) at ~600 MB free of 32 GB. The deadline is smaller than the
+host's own spawn cost, so those tests cannot pass regardless of the code. Classified INCONCLUSIVE,
+not red.
+
+That is why every W2 transport gate drives an in-process child double
+(`codex-app-server-child-double.ts`) instead: the thing under test is how inbound lines are
+classified, and a real process adds a cost that has nothing to do with it. The same files run in
+**43 ms** against 140 s.
+
+Second instrument note: the RTK proxy reported `PASS (0) FAIL (0)` for a test file containing a
+**syntax error** — a run that concluded nothing, presented as a clean summary. Invoking
+`node node_modules/vitest/vitest.mjs` directly surfaced the real parse error.
+
+Bracketing the wider suite, because a wide oracle's verdict is not about my change unless it can
+be attributed. `src/main/codex` + `src/main/codex-accounts` at HEAD, `maxWorkers=2`, ~600 MB free:
+**17 failed / 1050 passed / 37 skipped**, against the **13** the W1 handoff recorded.
+
+The +4 is not a regression, and it was measured rather than assumed:
+
+- **3 in `codex-app-server-client.test.ts`** — the file covering the module W2 rewrote, so this was
+  the one that had to be settled rather than explained. Run **alone at HEAD it is 22/22 green**,
+  including `decodes JSONL when a non-ASCII hook path is split across stdout chunks`, which is
+  exactly the stdout reader that changed. All three are spawn-and-deadline cases (4 526 / 3 108 /
+  2 860 ms); they fail only under parallel contention on a starved host.
+- **+1 in `codex-accounts/runtime-home-mirrored-status-home.test.ts`** — outside this change's
+  import reach, not re-measured in isolation, recorded as unattributed.
+- The original 13 (`codex-session-resume-home` ×9, `codex-session-resume-preparation` ×2,
+  `codex-accounts` ×2) reproduce exactly and are untouched.
+
+In the same run `codex-app-server-session.test.ts` **passed**, which is the tell: the three reds it
+showed earlier in this session were the host, not the subject.
+
+### 11.8 Still open after W2
+
+- **Still NOT REACHABLE.** No UI creates or renders a conversation; the gateway is production code
+  driven by a gate, not by a user. W3 owns this.
+- **Approval is refused, never granted, end to end.** The APPROVE path is unit-proven and has never
+  been exercised against the real provider, because doing so would execute a command.
+- **No long-lived multi-turn session object.** `runCodexAppServerSession` is still one session per
+  body; a conversation spanning many turns re-enters it. Adequate for W2, and W3/W4 will want an
+  owner that holds the peer open.
+- **`item/tool/call`, MCP elicitation, attestation and token refresh are all refused.** That is the
+  right default and it is not an implementation.
+- **The fold is not wired to the store by production code.** The reality gate calls both; nothing
+  else does.
+- **Unverified beyond one host**: one machine, one Codex build, one account, one turn.
