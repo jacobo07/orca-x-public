@@ -579,11 +579,27 @@ jobs:
       # Why: e2e is deliberately absent from needs. The suite is currently red on
       # main (every scheduled run), so gating merges on it would block any PR that
       # touches tests/e2e/** — including the ones fixing the suite. Until it is
-      # green the job runs and reports for E2E-path PRs without blocking. To flip
-      # it on: add `e2e` to needs, add E2E to the env below, and require
-      # `"$E2E" = success || skipped` after the loop — skipped is the normal
-      # result for a path-filtered job and must keep passing, so it has to be
-      # checked outside the loop or it would excuse the jobs above.
+      # green the job runs and reports for E2E-path PRs without blocking.
+      #
+      # E2E IS BLIND TWICE, AND ONLY THE FIRST IS THE RED SUITE. The second is the
+      # aperture: the e2e-paths filter above selects on changed `tests/e2e/*.spec.ts`
+      # files, not on the source those specs cover, so a PR that rewrites src/main/**
+      # and breaks every journey selects nothing and the job is `skipped`. Measured
+      # 2026-09-21: E2E failed 12 of 12 scheduled runs, and of the fork's last 100
+      # Actions runs only 3 were `pull_request` at all.
+      #
+      # So DO NOT flip this on by adding `e2e` to needs and accepting
+      # `success || skipped`. `skipped` is the normal result for a src-only PR, so
+      # that change yields a REQUIRED check that is skipped on nearly every PR — a
+      # gate that cannot fire, which is indistinguishable from one that passes and
+      # is worse than the honest gap documented here.
+      #
+      # The order is: (1) widen the filter so a source change selects the specs that
+      # cover it — today there is exactly one such mapping, the hand-written
+      # ephemeral-vm case above; (2) get the suite green without weakening
+      # assertions; (3) only then add `e2e` to needs, add E2E to the env below, and
+      # check `success || skipped` AFTER the loop — outside it, or it would excuse
+      # the jobs above.
       - name: Require successful checks
         env:
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
