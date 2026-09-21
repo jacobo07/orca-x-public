@@ -6,13 +6,22 @@
  * The rail's half of this question is measured in
  * `components/terminal-rail/terminal-rail-presentation-residency.test.tsx`, whose own docstring
  * names the hole this file fills: "the tab strip renders the same tabs and is measured nowhere
- * here." One restored dormant terminal tab mounts TWO presentation subtrees — a rail row and a
- * SortableTab — so a rail-only figure understates the per-row presentation tax by whatever the
- * strip costs.
+ * here."
  *
- * Deliberately the same instrument, the same population and the same scales as the rail file, so
- * the two slopes can be added rather than merely compared. Counts, not bytes: a count is
- * load-independent and a byte figure on this host is not (docs/reference/resource-density-lab.md).
+ * CORRECTION, measured in the real app after this file first landed
+ * (`tests/e2e/dormant-presentation-attribution.spec.ts`): THE TWO SLOPES MUST NOT BE ADDED. The
+ * rail and the strip are mutually exclusive and they swap — with the rail expanded the strip
+ * renders 0 terminal tabs, and collapsing the rail moves all of them into the strip. A dormant row
+ * therefore mounts ONE presentation subtree, never two, and `terminalRailCollapsed` only chooses
+ * which. The first version of this comment claimed a combined per-row cost; that was inferred from
+ * this fixture being *able* to mount N SortableTabs, which says nothing about what production
+ * mounts alongside what.
+ *
+ * So the number here is the cost of the strip WHEN THE STRIP IS THE MOUNTED SURFACE, and the right
+ * comparison against the rail file is a choice between the two, not a sum. Deliberately the same
+ * instrument, population and scales, so that comparison is like for like. Counts, not bytes: a
+ * count is load-independent and a byte figure on this host is not
+ * (docs/reference/resource-density-lab.md).
  *
  * Altitude: this is the STRIP's cost for a dormant tab. It is not the whole renderer's, and a
  * subscriber count is not a byte figure — 9 DOM nodes cannot be a megabyte and also cannot prove
