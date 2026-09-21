@@ -118,6 +118,46 @@ describe('runConversationTurn — the happy path', () => {
     expect(record.messages).toHaveLength(2)
   })
 
+  it('does not store the user message twice when the provider echoes it back', async () => {
+    const created = await service.create({})
+    await runConversationTurn(
+      deps({
+        driver: {
+          runTurn: async (request) => {
+            request.onEvent({ kind: 'turn-started', turnId: request.turnId })
+            // What the real `codex app-server` does: it reports the prompt back as a completed
+            // item, under ITS id. Orca already committed those words under its own id before the
+            // provider was asked anything, so the ids differ and the fold's id-keyed replace
+            // cannot collapse them. Found against the real provider; no earlier fixture echoed.
+            request.onEvent({
+              kind: 'message-completed',
+              turnId: request.turnId,
+              itemId: 'provider-echo-of-the-prompt',
+              role: 'user',
+              blocks: [{ type: 'text', text: 'what should we build?' }]
+            })
+            request.onEvent({
+              kind: 'message-completed',
+              turnId: request.turnId,
+              itemId: 'item-a',
+              role: 'assistant',
+              blocks: [{ type: 'text', text: 'an answer' }]
+            })
+            request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+            return { providerSessionId: 'thread-1' }
+          }
+        }
+      }),
+      { conversationId: created.id, text: 'what should we build?', cwd: root }
+    )
+
+    const record = await flush(created.id)
+    expect(record.messages.map((message) => message.role)).toEqual(['user', 'assistant'])
+    expect(record.messages.filter((message) => message.role === 'user')).toHaveLength(1)
+    // Orca's own id survived; the provider's copy did not displace it.
+    expect(record.messages[0].id).toBe('user-item-1')
+  })
+
   it('records the provider thread as provenance, not as identity', async () => {
     const created = await service.create({})
     await runConversationTurn(deps(), { conversationId: created.id, text: 'hi', cwd: root })

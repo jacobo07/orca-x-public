@@ -168,9 +168,19 @@ export async function runConversationTurn(
 /** Deltas are transport. Persisting each one would rewrite the same sentence a hundred times and
  *  make an interrupted turn indistinguishable from a finished one. */
 function isDurableEvent(event: AgentTurnEvent): boolean {
+  if (event.kind === 'message-completed') {
+    // A provider-echoed USER message is dropped, and this was found against the real provider:
+    // `codex app-server` reports the prompt back as `item/completed` with `type: 'userMessage'`,
+    // under ITS id. Orca already committed those words under its own id, before the provider was
+    // asked anything — so the echo carries nothing new, and because the two ids differ the fold's
+    // id-keyed replace cannot collapse them. Every user message was being stored twice.
+    //
+    // Orca is the author of what the user typed. A provider repeating it back has no authority
+    // over it. No fixture caught this, because a fake driver echoes nothing.
+    return event.role !== 'user'
+  }
   return (
     event.kind === 'turn-started' ||
-    event.kind === 'message-completed' ||
     event.kind === 'turn-completed' ||
     event.kind === 'turn-ended'
   )
