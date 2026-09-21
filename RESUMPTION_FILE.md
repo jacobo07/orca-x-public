@@ -42,6 +42,30 @@ outside `src/main/conversation/`. Before this slice it showed none — that was 
   M11 drop-profile-from-path (4 red), M12 drop-unreadable-rows (2 red), unregister-handlers (1 red),
   no-serialization (2 red), drop-user-echo-guard (1 red).
 
+### W3.1 — the Electron gate, and what it found (2026-09-22)
+
+The build was never the blocker. Three findings, in the order they fell:
+
+1. **The spec was bound to `page`, a fixture `orca-app.ts` does not define.** Playwright handed it a
+   stock blank Chromium tab. That is why `__store` was "missing", why the screenshot was blank, and
+   why the opt-in absence assertion passed. The app window is **`orcaPage`**. Guarded now by
+   `pnpm check:e2e-fixture-binding` (340 spec files, 715 callbacks, synthetic red control).
+2. **`run-electron-vite-build.mjs` vs the direct binary was a confounded comparison** — the wrapper
+   run simply had no `VITE_EXPOSE_STORE`, which `global-setup` supplies itself. The shipped bundle
+   bakes `String("true") === "true"`. Grepping a bundle for `__store` proves only that the branch
+   survived tree-shaking, never that the gate evaluates true; `import.meta.env.DEV` is folded out.
+3. **The Chats rail entry was a dead control.** `WorkspaceActivityRailSection`'s `select` switch had
+   no `case 'conversations'`, and `openConversationsPage` did not exist. It rendered, took focus and
+   did nothing. The router branch, the page, the list and the opt-in were all correct — only the
+   click was missing, and no unit test could see it. The switch is now exhaustive (`never`), so the
+   next omission is a compile error.
+
+`global-setup` no longer shells out to `npx`; it runs the repo's own `node_modules/.bin` binary, so
+a host with unhealthy npm no longer takes the whole suite down.
+
+The E2E host here runs the app in **Spanish**. `Chats` and `Workspace` survive only because those
+keys are absent from `es.json`. Station controls use `[data-workspace-activity="…"]`, not labels.
+
 ### NOT proven — this is the open gate
 
 - **No real Electron run.** `tests/e2e/conversations-reachability.spec.ts` is written and is
