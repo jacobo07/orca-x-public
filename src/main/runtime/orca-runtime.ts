@@ -711,6 +711,9 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
+import { collectHostMemory } from '../memory/host-memory'
+import { observeDispatchHostResources } from './orchestration/dispatch-host-observation'
+import type { DispatchObservationResult } from './orchestration/dispatch-admission'
 import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
@@ -13668,6 +13671,16 @@ export class OrcaRuntimeService {
         processIncarnation: `${pty.ptyId}:${incarnationId}`,
         hostScope: Object.freeze({ ...hostScope })
       })
+    )
+  }
+
+  // Why no new lookup: the dispatch paths already resolve this authority, and it already carries
+  // the executor's hostScope -- the admission gate needs a reading, not a second identity.
+  async observeHostResources(terminalHandle: string): Promise<DispatchObservationResult> {
+    return observeDispatchHostResources(
+      this.getOrchestrationDispatchAuthority(terminalHandle)?.hostScope,
+      terminalHandle,
+      collectHostMemory
     )
   }
 

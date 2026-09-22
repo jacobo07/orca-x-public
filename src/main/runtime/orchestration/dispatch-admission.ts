@@ -1,4 +1,6 @@
 /** What a task declares it needs, what the executing host reports, and the admission that joins them. */
+import type { HostAvailableMemorySource } from '../../../shared/process-stats-types'
+
 
 export const DISPATCH_ADMISSION_SCHEMA = 'orca.dispatch-admission/1'
 
@@ -15,7 +17,9 @@ export type DispatchRequirementParse =
   | { kind: 'declared'; requirement: DispatchResourceRequirement; strippedSpec: string }
   | { kind: 'malformed'; detail: string; strippedSpec: string }
 
-export type HostObservationSource = 'memory-pressure' | 'proc-meminfo' | 'free-memory'
+// Reuses the estate's own reading provenance rather than restating it: one vocabulary for
+// "how well do we know this number", shared with the memory snapshot surface.
+export type HostObservationSource = HostAvailableMemorySource
 
 export type DispatchHostObservation = {
   availableMemoryBytes: number
@@ -27,7 +31,11 @@ export type DispatchHostObservation = {
 // teaching the runtime to answer. Collapsing them hides which.
 export type DispatchObservationResult =
   | { kind: 'observed'; observation: DispatchHostObservation }
-  | { kind: 'unobservable'; cause: 'no-capability' | 'executor-not-local'; detail: string }
+  | {
+      kind: 'unobservable'
+      cause: 'no-capability' | 'executor-unknown' | 'executor-not-local'
+      detail: string
+    }
   | { kind: 'unavailable'; detail: string }
 
 export type DispatchRefusalReason =
