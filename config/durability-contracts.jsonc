@@ -105,7 +105,7 @@
       "lostIf": "This is the only copy. The provider transcript is evidence, not a substitute: it belongs to the provider, it rotates, the provider may delete it, and it carries no Orca conversation identity — so a lost record cannot be reconstructed from it, only guessed at. Losing one costs the conversation as a product entity: its id, anything later bound to that id, and the ability to reopen it at all.",
       "provenBy": ["src/main/conversation/conversation-store-syscall-proof.test.ts"],
       "knownGaps": [
-        "NOT YET REACHABLE: no production path writes a conversation record. The store is the durable owner and nothing calls it — W1 establishes the primitive, the ingest and render wiring is a later wave. Until then this contract describes a capability, not state any user has.",
+        "Reachable since W3: src/main/ipc/conversations.ts calls the service and src/preload/index.ts exposes conversations:create, so a user with the Conversations surface enabled writes real records. This contract now describes state users have, not a capability. The surface is still opt-in (showConversationsButton), so the population is small rather than absent.",
         "No backup ring. Unlike the profile file there is no .bak behind a conversation, so a record that fails to parse is refused rather than recovered; the bytes are preserved on disk for a later repair, but nothing rotates a known-good copy forward.",
         "Never exercised against a real power loss, and no real-app run: the syscall-order proof counts the barrier at the module boundary under vitest."
       ]
