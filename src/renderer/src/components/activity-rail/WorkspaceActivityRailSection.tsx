@@ -57,7 +57,7 @@ const ACTIVITY_ICONS: Record<
   conversations: MessageSquare,
   tasks: List,
   automations: CalendarClock,
-  agents: Bell,
+  activity: Bell,
   artifacts: Files,
   skills: BookOpen,
   mobile: Smartphone
@@ -73,8 +73,11 @@ function activityLabel(activity: WorkspaceActivityId): string {
       return translate('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')
     case 'automations':
       return translate('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')
-    case 'agents':
-      return translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')
+    // A new key, not the old `...9c95e1ce91`. That key's catalogue entries are the NOUN — "Agentes",
+    // "에이전트", "智能体" — and the noun belongs to the durable actor, not to a feed of running panes.
+    // It travels to the persistent Agents entry in W-C3C; this surface gets a name of its own.
+    case 'activity':
+      return translate('activity.railLabel', 'Activity')
     case 'artifacts':
       return translate('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')
     case 'skills':
@@ -268,8 +271,8 @@ const HIDE_SETTING_BY_ACTIVITY: Record<WorkspaceActivityId, keyof GlobalSettings
   mobile: 'showMobileButton',
   artifacts: 'showArtifactsButton',
   skills: 'showSkillsButton',
-  // Agents is an experiment toggle rather than a sidebar preference; it never offered hiding.
-  agents: null
+  // Activity is an experiment toggle rather than a sidebar preference; it never offered hiding.
+  activity: null
 }
 
 function HideActivityMenu({ onHide }: { onHide: () => void }): React.JSX.Element {
@@ -320,22 +323,22 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
 
   const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
-  const showsAgents = visible.includes('agents')
+  const showsActivity = visible.includes('activity')
   const showsMobile = visible.includes('mobile')
-  const agentsUnreadCount = useActivityUnreadCount(showsAgents, 'sidebar-badge')
+  const activityUnreadCount = useActivityUnreadCount(showsActivity, 'sidebar-badge')
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showsMobile)
 
   const badgeFor = React.useCallback(
     (activity: WorkspaceActivityId): ActivityBadge => {
-      if (activity === 'agents' && agentsUnreadCount > 0) {
-        return { count: agentsUnreadCount }
+      if (activity === 'activity' && activityUnreadCount > 0) {
+        return { count: activityUnreadCount }
       }
       if (activity === 'mobile' && mobileOnboardingBadge.visible) {
         return { dot: true }
       }
       return null
     },
-    [agentsUnreadCount, mobileOnboardingBadge.visible]
+    [activityUnreadCount, mobileOnboardingBadge.visible]
   )
 
   const select = React.useCallback(
@@ -349,7 +352,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
           return openTaskPage()
         case 'automations':
           return openAutomationsPage()
-        case 'agents':
+        case 'activity':
           return openActivityPage()
         case 'artifacts':
           return openArtifactsPage()
@@ -425,7 +428,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
               badgeLabel={
                 activity === 'mobile'
                   ? translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')
-                  : String(agentsUnreadCount)
+                  : String(activityUnreadCount)
               }
             />
           </ActivityRailItemWithHide>

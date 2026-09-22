@@ -37,7 +37,7 @@ describe('getVisibleWorkspaceActivities', () => {
   it('shows an opt-in activity only on an explicit true', () => {
     expect(getVisibleWorkspaceActivities({ showArtifactsButton: true })).toContain('artifacts')
     expect(getVisibleWorkspaceActivities({ showSkillsButton: true })).toContain('skills')
-    expect(getVisibleWorkspaceActivities({ experimentalActivity: true })).toContain('agents')
+    expect(getVisibleWorkspaceActivities({ experimentalActivity: true })).toContain('activity')
     expect(getVisibleWorkspaceActivities({ showConversationsButton: true })).toContain(
       'conversations'
     )
@@ -45,7 +45,7 @@ describe('getVisibleWorkspaceActivities', () => {
     // A truthy-looking absence must not switch them on.
     expect(getVisibleWorkspaceActivities({ showArtifactsButton: false })).not.toContain('artifacts')
     expect(getVisibleWorkspaceActivities({ showSkillsButton: false })).not.toContain('skills')
-    expect(getVisibleWorkspaceActivities({ experimentalActivity: false })).not.toContain('agents')
+    expect(getVisibleWorkspaceActivities({ experimentalActivity: false })).not.toContain('activity')
     // The one that matters most for a brand-new surface: an unset key is not consent.
     expect(getVisibleWorkspaceActivities({})).not.toContain('conversations')
     expect(getVisibleWorkspaceActivities(null)).not.toContain('conversations')
@@ -80,8 +80,9 @@ describe('getVisibleWorkspaceActivities', () => {
 
 describe('activeViewForWorkspaceActivity', () => {
   it('maps every ordered activity to a top-level view', () => {
-    // Guards the one entry whose view id differs from its activity id.
-    expect(activeViewForWorkspaceActivity('agents')).toBe('activity')
+    // W-C3B removed the one entry whose view id differed from its activity id: the feed the rail
+    // called `agents` was always TopLevelView 'activity', and now the rail says so too.
+    expect(activeViewForWorkspaceActivity('activity')).toBe('activity')
     for (const activity of WORKSPACE_ACTIVITY_ORDER) {
       expect(activeViewForWorkspaceActivity(activity)).toBeTruthy()
     }

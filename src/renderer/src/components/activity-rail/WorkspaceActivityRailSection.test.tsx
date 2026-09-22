@@ -174,7 +174,7 @@ describe('WorkspaceActivityRailSection', () => {
       conversations: mocks.openConversationsPage,
       tasks: mocks.openTaskPage,
       automations: mocks.openAutomationsPage,
-      agents: mocks.openActivityPage,
+      activity: mocks.openActivityPage,
       artifacts: mocks.openArtifactsPage,
       skills: mocks.openSkillsPage,
       mobile: mocks.openMobilePage
@@ -251,9 +251,9 @@ describe('WorkspaceActivityRailSection', () => {
     mocks.unreadCount = 3
     renderRail({ experimentalActivity: true })
 
-    const agents = activity('agents')
-    expect(agents?.textContent).toContain('3')
-    expect(agents?.getAttribute('aria-label')).toContain('3')
+    const feed = activity('activity')
+    expect(feed?.textContent).toContain('3')
+    expect(feed?.getAttribute('aria-label')).toContain('3')
   })
 
   it('renders nothing when every activity is hidden', () => {

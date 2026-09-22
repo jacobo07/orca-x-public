@@ -6,39 +6,47 @@ import {
 } from './workspace-activity-items'
 
 /**
- * CHARACTERIZATION — what the Agents noun reaches today, pinned before W-C3 moves it.
+ * Who holds the Agents noun. Inverted in place, wave by wave, so the diff is the evidence.
  *
- * Orca now owns a durable product actor (`src/shared/agent-types.ts`, PersistedState.agents[]),
- * and the rail entry a person reads as "Agents" does not reach it. It reaches
- * `ActivityPrototypePage`: a paneKey-keyed inbox of RUNNING agent panes, with unread counts, a
- * Bell icon and live terminal portals in its rows. Every row there dies with its pane.
+ * Wave A pinned the defect: the rail entry a person read as "Agents" resolved to
+ * ActivityPrototypePage — a paneKey-keyed inbox of RUNNING panes, whose rows die with their pane —
+ * while PersistedState.agents[] held durable actors that nobody could reach.
  *
- * These assertions state today's behaviour, not the wanted one. Wave C inverts them IN PLACE —
- * the diff between the two versions of this file is the evidence that the noun moved, which a new
- * test written beside a deleted one would not be.
+ * Wave B (here) released the noun without yet giving it away: the feed is now called `activity`,
+ * which is what it always was internally. Nothing carries the Agents noun for one commit, on
+ * purpose — the old surface must be proven intact under its true name before a new surface takes
+ * the name it was using.
  *
- * Nothing here asserts that the runtime feed is wrong. It asserts what it IS, so that the rename
- * cannot quietly take its function with it.
+ * Wave C gives the noun to the durable actor and turns the second assertion around.
  */
-describe('the Agents product noun, before W-C3', () => {
-  it('gives the Agents noun to the runtime activity feed, not to a durable actor surface', () => {
-    // 'activity' is ActivityPrototypePage — AgentStatusEntry keyed by paneKey, not Agent by AgentId.
-    expect(activeViewForWorkspaceActivity('agents')).toBe('activity')
+describe('the Agents product noun', () => {
+  it('no longer lets the runtime feed hold the Agents noun', () => {
+    // The rail id and the view id finally agree, and both say what the surface is.
+    expect(activeViewForWorkspaceActivity('activity')).toBe('activity')
+    expect([...WORKSPACE_ACTIVITY_ORDER]).not.toContain('agents')
   })
 
-  it('has no rail entry at all that reaches a persistent-agent surface', () => {
-    // The positive half of the same claim: it is not that the noun points somewhere odd, it is
-    // that the destination does not exist yet. Wave C is what makes this list non-empty.
+  it('has no rail entry yet that reaches a persistent-agent surface', () => {
+    // Still empty after wave B, and that is the point: the noun is unowned rather than
+    // misattributed. Wave C is what makes this list non-empty and inverts the assertion.
     const reachesPersistentAgents = WORKSPACE_ACTIVITY_ORDER.filter(
       (activity) => activeViewForWorkspaceActivity(activity) === ('agents' as string)
     )
     expect(reachesPersistentAgents).toEqual([])
   })
 
-  it('keeps the runtime feed behind the experiment toggle, so no default profile sees the noun', () => {
-    // Why this matters for the rename: nothing is being taken from a default user, because the
-    // entry carrying the wrong noun was never on for them in the first place.
-    expect(getVisibleWorkspaceActivities({})).not.toContain('agents')
-    expect(getVisibleWorkspaceActivities({ experimentalActivity: true })).toContain('agents')
+  it('keeps the runtime feed behind the same experiment toggle the rename did not touch', () => {
+    // Why this matters: the rename takes nothing from anyone, because the entry carrying the wrong
+    // noun was opt-in and off by default. The setting key is deliberately unchanged — renaming a
+    // persisted GlobalSettings key WOULD have needed a migration, and the rail id did not.
+    expect(getVisibleWorkspaceActivities({})).not.toContain('activity')
+    expect(getVisibleWorkspaceActivities({ experimentalActivity: true })).toContain('activity')
+  })
+
+  it('still routes the renamed entry to the page it always rendered', () => {
+    // The preservation half of the rename. A persisted `activeView: 'activity'` from any older
+    // profile resolves to exactly the same TopLevelView, so no navigation state was orphaned and
+    // no migration was needed — the function was never attached to the rail id.
+    expect(activeViewForWorkspaceActivity('activity')).toBe('activity')
   })
 })

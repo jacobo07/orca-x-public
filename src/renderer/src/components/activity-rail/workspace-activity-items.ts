@@ -18,7 +18,7 @@ export type WorkspaceActivityId =
   | 'conversations'
   | 'tasks'
   | 'automations'
-  | 'agents'
+  | 'activity'
   | 'artifacts'
   | 'skills'
   | 'mobile'
@@ -39,7 +39,7 @@ export const WORKSPACE_ACTIVITY_ORDER: readonly WorkspaceActivityId[] = [
   'conversations',
   'tasks',
   'automations',
-  'agents',
+  'activity',
   'artifacts',
   'skills',
   'mobile'
@@ -64,8 +64,11 @@ const ACTIVE_VIEW_BY_ACTIVITY: Record<WorkspaceActivityId, TopLevelView> = {
   workspace: 'workspace',
   tasks: 'tasks',
   automations: 'automations',
-  // The Agents surface predates its rail entry and kept the older view id.
-  agents: 'activity',
+  // Renamed from `agents` in W-C3. The view id was ALREADY 'activity': this rail entry was the only
+  // thing still calling a paneKey-keyed feed of RUNNING panes by the name of the durable actor it
+  // observes. That is why the rename needs no migration — the route identity never moved, and the
+  // persisted `activeView: 'activity'` a profile may hold still resolves to the same page.
+  activity: 'activity',
   artifacts: 'artifacts',
   skills: 'skills',
   mobile: 'mobile'
@@ -93,7 +96,7 @@ function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySet
       return settings?.showSkillsButton === true
     case 'conversations':
       return settings?.showConversationsButton === true
-    case 'agents':
+    case 'activity':
       return settings?.experimentalActivity === true
   }
 }
