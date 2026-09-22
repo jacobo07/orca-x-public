@@ -2,6 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
 
+import { describeScope, readOriginUrlFromGit, resolveRepoScope } from './ci-repo-scope.mjs'
+
 // A red icon in `gh run list` is not a test result. Between "a workflow exists" and "a gate
 // failed" there are rungs, and GitHub reports the same `conclusion: failure` for most of them.
 //
@@ -130,14 +132,27 @@ function gh(endpoint) {
 }
 
 function main(argv) {
-  const repo = argv.find((arg) => arg.startsWith('--repo='))?.slice('--repo='.length)
   const runIds = argv.filter((arg) => /^\d+$/.test(arg))
-  if (!repo || runIds.length === 0) {
-    console.error('usage: node config/scripts/report-ci-execution-rungs.mjs --repo=owner/name <runId>...')
+  if (runIds.length === 0) {
+    console.error('usage: node config/scripts/report-ci-execution-rungs.mjs [--repo=owner/name] <runId>...')
     return 2
   }
+
+  // This used to parse `--repo=` itself and require it. Two parsers for one question is two answers
+  // waiting to diverge, so the canonical owner resolves the subject -- which also means this report
+  // now derives the fork from `origin` rather than making the caller remember, and still refuses
+  // rather than inheriting `gh`'s ambient default (which resolves to `upstream` here).
+  let scope
+  try {
+    scope = resolveRepoScope({ argv, readOriginUrl: () => readOriginUrlFromGit() })
+  } catch (error) {
+    console.error(String(error.message ?? error))
+    return 2
+  }
+  console.log(describeScope(scope))
+
   for (const runId of runIds) {
-    const { jobs } = gh(`repos/${repo}/actions/runs/${runId}/jobs`)
+    const { jobs } = gh(`repos/${scope.repo}/actions/runs/${runId}/jobs`)
     const summary = classifyRun(jobs)
     const { executed, starved, skipped, unknown } = summary.counts
     console.log(
