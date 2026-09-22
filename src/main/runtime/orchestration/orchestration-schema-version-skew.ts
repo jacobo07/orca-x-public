@@ -32,7 +32,8 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 24, table: 'tasks', column: 'created_by_pane_key' },
   { version: 24, table: 'tasks', column: 'created_by_process_incarnation' },
   { version: 24, table: 'tasks', column: 'created_by_run_generation' },
-  { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' }
+  { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' },
+  { version: 29, table: 'dispatch_contexts', column: 'admission_envelope' }
 ] as const
 
 const POST_V6_INDEXES = [

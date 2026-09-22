@@ -271,6 +271,8 @@ export type DispatchContextRow = {
   capability_hash: string | null
   process_incarnation: string | null
   capability_revoked_at: string | null
+  /** JSON `DispatchAdmissionEnvelope`; null on rows created before v29 or by callers outside the gate. */
+  admission_envelope: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null

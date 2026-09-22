@@ -218,6 +218,53 @@ describe('OrchestrationDb version-skew migration', () => {
     reopened.close()
   })
 
+  it('repairs a database that claims the current schema but lost the v29 admission column', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v29-skew-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const run = db.createRun({
+      objective: 'survive a v29 repair',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'keep me', runId: run.id })
+    const dispatch = db.createDispatchContext(
+      task.id,
+      'term_worker',
+      'tab_w:leaf_w',
+      undefined,
+      undefined,
+      '{"schema":"orca.dispatch-admission/1","reason":"no-requirement-declared"}'
+    )
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    raw.exec('ALTER TABLE dispatch_contexts DROP COLUMN admission_envelope')
+    expect(claimed).toBeGreaterThanOrEqual(29)
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(6)
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    // The envelope's bytes went with the dropped column; the dispatch itself must not.
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+      task_id: task.id,
+      assignee_handle: 'term_worker',
+      admission_envelope: null
+    })
+    db.close()
+    db = undefined
+
+    const reopened = new Database(dbPath)
+    const columns = (
+      reopened.pragma('table_info(dispatch_contexts)') as { name: string }[]
+    ).map((c) => c.name)
+    expect(columns).toContain('admission_envelope')
+    expect(reopened.pragma('user_version', { simple: true })).toBe(claimed)
+    reopened.close()
+  })
+
   it('leaves a healthy current database at its stored version', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v24-healthy-'))
     const dbPath = join(tempDir, 'orchestration.db')
