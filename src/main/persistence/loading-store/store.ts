@@ -36,6 +36,7 @@ import type {
   PersistedMobileClientTabSelections,
   PersistedState
 } from '../../../shared/persisted-state-types'
+import type { Agent } from '../../../shared/agent-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type {
   Project,
@@ -348,6 +349,7 @@ import {
 import { getPersistedUI } from '../applying-settings/ui-state-read'
 import { updatePersistedUI, type UIUpdateOperations } from '../applying-settings/ui-state-update'
 import { ProjectGroupPersistenceOperations } from '../tracking-repos/project-group-operations'
+import { AgentPersistenceOperations } from '../tracking-agents/agent-operations'
 import { FolderWorkspacePersistenceOperations } from '../restoring-sessions/folder-workspace-operations'
 import { RepoOrderPersistenceOperations } from '../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../tracking-repos/repo-worktree-pruning'
@@ -2115,6 +2117,17 @@ export class Store {
 
   getProjectGroups(): ProjectGroup[] {
     return this.getProjectGroupOperations().getProjectGroups()
+  }
+
+  private agentOperations: AgentPersistenceOperations | null = null
+
+  private getAgentOperations(): AgentPersistenceOperations {
+    this.agentOperations ??= new AgentPersistenceOperations({ state: this.state })
+    return this.agentOperations
+  }
+
+  getAgents(): Agent[] {
+    return this.getAgentOperations().getAgents()
   }
 
   createProjectGroup(

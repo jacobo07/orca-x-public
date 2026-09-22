@@ -3225,6 +3225,10 @@ const api = {
     }
   } satisfies PreloadApi['conversations'],
 
+  agents: {
+    list: () => ipcRenderer.invoke('agents:list')
+  } satisfies PreloadApi['agents'],
+
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
     setForConnectedTargets: (args) =>
