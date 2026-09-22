@@ -66,6 +66,8 @@ cat > "$RUN_DIR/run.json" <<JSON
   "pid": $$,
   "pgid": $(ps -o pgid= -p $$ | tr -d ' '),
   "ppid": $PPID,
+  "//sid": "the run owns a SESSION, not one group: vitest's pool lands in a second pgid, so an abort keyed on pgid alone leaves every worker running (measured 2026-09-22)",
+  "sid": $(ps -o sid= -p $$ | tr -d ' '),
   "budgetSeconds": $BUDGET_SECONDS,
   "before": { "memAvailableMb": $(mem_available_mb), "load1": $(load1) }
 }
