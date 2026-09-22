@@ -18,8 +18,11 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 const PANE_KEY = 'tab_w:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const WORKER = 'term_worker'
 
-// No real machine has this, and none has less than one byte.
-const MORE_THAN_ANY_HOST = '1024PB'
+// No real machine has this, and none has less than one byte. TB not PB: the parser knows no
+// petabyte unit, so `1024PB` refused as malformed -- the right verdict for the wrong reason, which
+// the "nothing starts" case could not see and only the reason assertion caught. 8000TB is also the
+// largest round value that stays under the safe-integer ceiling the parser enforces.
+const MORE_THAN_ANY_HOST = '8000TB'
 const LESS_THAN_ANY_HOST = '1B'
 
 describe('orchestration.dispatch admission, against a real database and a real host reading', () => {
