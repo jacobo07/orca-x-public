@@ -11,6 +11,10 @@ const BASELINE_PATH = path.join('config', 'durability-unclassified-baseline.txt'
 // things, and merging them would make "classified it" indistinguishable from
 // "rewrote it to stage and rename" when an entry moves between them.
 const DIRECT_BASELINE_PATH = path.join('config', 'durability-direct-writer-baseline.txt')
+// A third list, for a third question: not "is the write atomic" or "is it durable", but "does the
+// caller tell the truth when it fails". Shrink-only, like its siblings.
+const FAILURE_SEMANTICS_BASELINE_NAME = 'durability-failure-semantics-baseline.txt'
+const FAILURE_SEMANTICS_BASELINE_PATH = path.join('config', FAILURE_SEMANTICS_BASELINE_NAME)
 const SCAN_ROOT = path.join('src', 'main')
 
 function isRecord(value) {
@@ -204,6 +208,15 @@ function validatePolicy(manifest, failures) {
   if (!isNonEmptyString(manifest.policy.durablePrimitive)) {
     failures.push('policy.durablePrimitive must be a non-empty string')
   }
+  // Optional by design: a manifest that predates this clause names no tiers and is simply not held
+  // to it. Requiring the key would have meant every fixture manifest gaining a field that has
+  // nothing to do with what it tests.
+  if (
+    manifest.policy.failureSemanticsRequiredForTiers !== undefined &&
+    !Array.isArray(manifest.policy.failureSemanticsRequiredForTiers)
+  ) {
+    failures.push('policy.failureSemanticsRequiredForTiers must be an array when present')
+  }
   return {
     tiers: new Set(Array.isArray(manifest.policy.tiers) ? manifest.policy.tiers : []),
     proofRequired: new Set(
@@ -211,8 +224,40 @@ function validatePolicy(manifest, failures) {
         ? manifest.policy.proofRequiredForTiers
         : []
     ),
+    failureSemanticsRequired: new Set(
+      Array.isArray(manifest.policy.failureSemanticsRequiredForTiers)
+        ? manifest.policy.failureSemanticsRequiredForTiers
+        : []
+    ),
     durablePrimitive: manifest.policy.durablePrimitive ?? null
   }
+}
+
+/**
+ * A durable write can fail, and what the caller does then is part of the contract. A gate that only
+ * asks "is there a barrier" cannot see a writer that fsyncs correctly and whose caller turns ENOSPC
+ * into null, false, a bare log, or a success the user believes. Measured twice in one sweep: a
+ * scrollback snapshot reported a full disk with the same null it used for "there was nothing to
+ * save", and a daemon checkpoint reported it as done while disabling history for the session.
+ *
+ * Grandfathered ids are frozen in the baseline beside this manifest and may only shrink, so the
+ * existing debt stays visible while a NEW contract at a covered tier must answer the question.
+ */
+function validateFailureSemantics(contract, policy, grandfathered, failures) {
+  const id = contract.id ?? '<unknown>'
+  if (!policy.failureSemanticsRequired.has(contract.tier)) {
+    return
+  }
+  if (isNonEmptyString(contract.onFailure)) {
+    if (grandfathered.has(id)) {
+      failures.push(`${id}: declares onFailure but is still baselined - remove the stale entry`)
+    }
+    return
+  }
+  if (grandfathered.has(id)) {
+    return
+  }
+  failures.push(`${id}: tier ${contract.tier} requires onFailure`)
 }
 
 async function validateContract(contract, policy, root, failures) {
@@ -373,6 +418,9 @@ export async function main(root = process.cwd()) {
       failures.push('contracts must be a non-empty array')
     } else {
       const seenIds = new Set()
+      const grandfathered = parseBaseline(
+        (await readFileOrNull(root, FAILURE_SEMANTICS_BASELINE_PATH)) ?? ''
+      )
       for (const contract of manifest.contracts) {
         if (isRecord(contract) && isNonEmptyString(contract.id)) {
           if (seenIds.has(contract.id)) {
@@ -381,6 +429,9 @@ export async function main(root = process.cwd()) {
           seenIds.add(contract.id)
         }
         await validateContract(contract, policy, root, failures)
+        if (isRecord(contract)) {
+          validateFailureSemantics(contract, policy, grandfathered, failures)
+        }
       }
     }
   }

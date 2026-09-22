@@ -1,0 +1,20 @@
+# Crash-durable contracts that do not yet say what their caller does when the write FAILS.
+#
+# The barrier question ("did the bytes reach disk") and the failure question ("what is the user
+# told when they did not") are different, and a contract can pass the first while its caller turns
+# ENOSPC into null, false, a bare log, or a success. Two such callers were found in one sweep:
+# terminal.scrollback-snapshot answered a full disk with the same null it used for "there was
+# nothing to save", and daemon.terminal-history-checkpoint reported it as 'done' while disabling
+# history for the rest of the session.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — answer the
+# contract's onFailure instead. An entry whose contract has since answered is reported as stale.
+runtime.e2ee-host-identity
+persistence.profile-data-file
+integrations.credential-file
+codex-accounts.managed-credential
+codex.config-toml-trust
+# Its seal DOES capture per-pane error codes into report.failed[], which is the pattern the others
+# want — but working-set-store's 'saved' outcome does not branch on report.failed.length, so the
+# cause is preserved and then unused. Answer this one by deciding what a partial seal reports.
+working-set.sealed-scrollback
