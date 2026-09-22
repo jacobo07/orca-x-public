@@ -19,6 +19,8 @@ export type ConversationNoticeKind =
   | 'interrupted'
   | 'not-durable'
   | 'absent'
+  | 'agent-missing'
+  | 'agent-unverifiable'
   | 'approval-declined'
 
 export type ConversationNotice = {
@@ -118,6 +120,13 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
       return { kind: 'failed', detail: outcome.reason, userMessageKept: true }
     case 'conversation-absent':
       return { kind: 'absent', detail: null, userMessageKept: false }
+    case 'agent-unavailable':
+      // Refused before anything was committed or sent. No id in the notice: that is machinery.
+      return {
+        kind: outcome.reason === 'missing' ? 'agent-missing' : 'agent-unverifiable',
+        detail: null,
+        userMessageKept: false
+      }
   }
 }
 

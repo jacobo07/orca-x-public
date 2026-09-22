@@ -57,6 +57,16 @@ function messageFor(notice: Notice): string {
         'conversations.noticeAbsent',
         'This conversation is no longer on disk. Nothing was sent.'
       )
+    case 'agent-missing':
+      return translate(
+        'conversations.noticeAgentMissing',
+        'The agent this conversation is with no longer exists. Nothing was sent.'
+      )
+    case 'agent-unverifiable':
+      return translate(
+        'conversations.noticeAgentUnverifiable',
+        'Orca could not check which agent this conversation is with, so nothing was sent. Restart Orca and try again.'
+      )
     case 'approval-declined':
       return translate(
         'conversations.noticeApprovalDeclined',

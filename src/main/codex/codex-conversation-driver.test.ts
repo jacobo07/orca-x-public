@@ -70,6 +70,7 @@ describe('codex conversation driver — starting and resuming', () => {
       resumeSessionId: null,
       cwd: '/tmp/work',
       text: 'hello',
+      developerInstructions: null,
       turnId: 'turn-1',
       onEvent: sink.onEvent
     })
@@ -98,6 +99,7 @@ describe('codex conversation driver — starting and resuming', () => {
       resumeSessionId: 'thread-old',
       cwd: '/tmp/work',
       text: 'again',
+      developerInstructions: null,
       turnId: 'turn-1',
       onEvent: sink.onEvent
     })
@@ -122,6 +124,7 @@ describe('codex conversation driver — starting and resuming', () => {
       resumeSessionId: 'thread-gone',
       cwd: '/tmp/work',
       text: 'still here?',
+      developerInstructions: null,
       turnId: 'turn-1',
       onEvent: sink.onEvent
     })
@@ -157,6 +160,7 @@ describe('codex conversation driver — starting and resuming', () => {
       resumeSessionId: 'thread-empty',
       cwd: '/tmp/work',
       text: 'hi',
+      developerInstructions: null,
       turnId: 'turn-1',
       onEvent: sink.onEvent
     })
@@ -182,6 +186,7 @@ describe('codex conversation driver — the turn advances by notification', () =
       resumeSessionId: null,
       cwd: '/tmp/work',
       text: 'hello',
+      developerInstructions: null,
       turnId: 'turn-1',
       onEvent: sink.onEvent
     })
@@ -220,6 +225,7 @@ describe('codex conversation driver — the turn advances by notification', () =
         resumeSessionId: null,
         cwd: '/tmp/work',
         text: 'slow',
+        developerInstructions: null,
         turnId: 'turn-1',
         onEvent: sink.onEvent
       })
@@ -236,5 +242,81 @@ describe('codex conversation driver — the turn advances by notification', () =
     const result = await running
     expect(returned).toBe(true)
     expect(result.providerSessionId).toBe('thread-new')
+  })
+})
+
+describe('codex conversation driver — an agent’s instructions', () => {
+  const ROLE = 'You are the Orca agent named "Ada".'
+
+  it('layers the agent onto a new thread as developer instructions', async () => {
+    const captured: Captured = { calls: [], command: null }
+    const driver = createCodexConversationDriver({
+      runSession: fakeSession(completingScript, captured)
+    })
+
+    await driver.runTurn({
+      resumeSessionId: null,
+      cwd: '/tmp/work',
+      text: 'hello',
+      developerInstructions: ROLE,
+      turnId: 'turn-1',
+      onEvent: collect().onEvent
+    })
+
+    const start = captured.calls.find((call) => call.method === 'thread/start')
+    expect(start?.params).toEqual({
+      cwd: '/tmp/work',
+      sandbox: 'read-only',
+      approvalPolicy: 'untrusted',
+      developerInstructions: ROLE
+    })
+  })
+
+  // Without this the role would apply to the first turn only: every later turn resumes.
+  it('sends the agent again when resuming the thread', async () => {
+    const captured: Captured = { calls: [], command: null }
+    const driver = createCodexConversationDriver({
+      runSession: fakeSession(completingScript, captured)
+    })
+
+    await driver.runTurn({
+      resumeSessionId: 'thread-old',
+      cwd: '/tmp/work',
+      text: 'again',
+      developerInstructions: ROLE,
+      turnId: 'turn-1',
+      onEvent: collect().onEvent
+    })
+
+    const resume = captured.calls.find((call) => call.method === 'thread/resume')
+    expect(resume?.params).toEqual({ threadId: 'thread-old', developerInstructions: ROLE })
+  })
+
+  // baseInstructions REPLACES the provider's own. A user-written role must never reach it.
+  it('never uses the slot that replaces the provider’s base instructions', async () => {
+    const captured: Captured = { calls: [], command: null }
+    const driver = createCodexConversationDriver({
+      runSession: fakeSession(completingScript, captured)
+    })
+
+    await driver.runTurn({
+      resumeSessionId: null,
+      cwd: '/tmp/work',
+      text: 'hello',
+      developerInstructions: ROLE,
+      turnId: 'turn-1',
+      onEvent: collect().onEvent
+    })
+
+    // Positive control first: the role DID travel, so its absence below is not a blind read.
+    // Compared on the field, not a JSON dump — stringify escapes the quotes inside ROLE.
+    expect(
+      captured.calls.some(
+        (call) => (call.params as Record<string, unknown>).developerInstructions === ROLE
+      )
+    ).toBe(true)
+    for (const call of captured.calls) {
+      expect(call.params as Record<string, unknown>).not.toHaveProperty('baseInstructions')
+    }
   })
 })

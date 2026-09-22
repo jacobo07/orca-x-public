@@ -128,10 +128,18 @@ async function startOrResumeThread(
   request: ProviderTurnRequest,
   emit: (event: AgentTurnEvent) => void
 ): Promise<string | null> {
+  // `developerInstructions` layers above Codex's own; `baseInstructions` would REPLACE them, and an
+  // agent role must never be able to override the provider layer that governs it. Absent — not
+  // null — for Brainstorming, so its request stays byte-identical to before agents existed.
+  const agentLayer =
+    request.developerInstructions === null
+      ? {}
+      : { developerInstructions: request.developerInstructions }
+
   if (request.resumeSessionId !== null) {
     try {
       const resumed = threadIdOf(
-        await rpc.request('thread/resume', { threadId: request.resumeSessionId })
+        await rpc.request('thread/resume', { threadId: request.resumeSessionId, ...agentLayer })
       )
       if (resumed !== null) {
         return resumed
@@ -156,7 +164,8 @@ async function startOrResumeThread(
       // A Brainstorming conversation reads; it does not write. Widening this is a separate decision
       // with an approval surface attached, and that surface does not exist yet.
       sandbox: 'read-only',
-      approvalPolicy: 'untrusted'
+      approvalPolicy: 'untrusted',
+      ...agentLayer
     })
   )
 }

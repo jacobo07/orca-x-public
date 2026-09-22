@@ -8,6 +8,7 @@ import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
 
+import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
 
@@ -23,6 +24,9 @@ export type ProviderTurnRequest = {
   resumeSessionId: string | null
   cwd: string
   text: string
+  /** What the conversation's agent contributes (agent-turn-instructions.ts), or null for
+   *  Brainstorming. Sent on resume too, so the role applies to every turn, not only the first. */
+  developerInstructions: string | null
   turnId: string
   onEvent: (event: AgentTurnEvent) => void
 }
@@ -65,6 +69,19 @@ export async function runConversationTurn(
     // and starting a provider turn for one would spend tokens producing an answer with nowhere to go.
     return { outcome: 'conversation-absent' }
   }
+
+  // Resolved BEFORE admission and the durable write: an agent chat whose agent cannot be found must
+  // not run as Brainstorming, and a refused send must not leave the user's message committed.
+  const binding = service.agentFor(existing.record)
+  if (binding.kind === 'agent-missing' || binding.kind === 'agent-unverifiable') {
+    return {
+      outcome: 'agent-unavailable',
+      agentId: binding.agentId,
+      reason: binding.kind === 'agent-missing' ? 'missing' : 'unverifiable'
+    }
+  }
+  const developerInstructions =
+    binding.kind === 'agent' ? compileAgentTurnInstructions(binding.agent) : null
 
   const turnId = deps.mintTurnId()
 
@@ -109,6 +126,7 @@ export async function runConversationTurn(
       resumeSessionId,
       cwd: request.cwd,
       text: request.text,
+      developerInstructions,
       turnId,
       onEvent: (event) => {
         deps.emit(conversationId, event)

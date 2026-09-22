@@ -11,12 +11,15 @@
 //                      must never render as ordinary success
 //   failed          -> the provider died, or ended without settling the turn
 //   conversation-absent -> nothing to append to; nothing was spent
+//   agent-unavailable -> this chat is with an agent that cannot be found (or checked). Nothing was
+//                      committed; running it as Brainstorming would be the lie
 //   completed       -> and the durable writes have LANDED, not merely been issued
 
 export type ConversationTurnOutcome =
   | { outcome: 'completed'; turnId: string; providerSessionId: string | null }
   | { outcome: 'busy'; activeTurnId: string }
   | { outcome: 'conversation-absent' }
+  | { outcome: 'agent-unavailable'; agentId: string; reason: 'missing' | 'unverifiable' }
   | { outcome: 'auth-required'; detail: string }
   | { outcome: 'not-durable'; reason: string }
   | { outcome: 'failed'; turnId: string; reason: string }
