@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { mintAgentId } from '../../shared/agent-identity'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import { checkCodexAuth, codexAuthPath } from '../ipc/conversations'
 
@@ -143,6 +144,100 @@ describe.skipIf(!ENABLED)('conversation product reality', () => {
         .map((block) => (block.type === 'text' ? block.text : ''))
         .join(' ')
       expect(secondAnswer).toContain(SENTINEL)
+
+      rmSync(root, { recursive: true, force: true })
+      rmSync(cwd, { recursive: true, force: true })
+    },
+    900_000
+  )
+
+  // W-C4. The unit tests prove the role reaches the envelope; only the real peer can prove it
+  // ACCEPTS developerInstructions on thread/start and thread/resume, and that the role changes
+  // behaviour. Wording is not the proof on its own: a Brainstorming control with the same prompt
+  // must NOT carry the mark, so the mark is attributable to the role and not to the question.
+  it(
+    'runs an agent-bound conversation whose role the real provider accepts and follows',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-wc4-reality-'))
+      const directory = (): string => join(root, 'conversations')
+      const cwd = mkdtempSync(join(tmpdir(), 'orca-wc4-cwd-'))
+      const MARK = 'ORCA_WC4_ROLE'
+      const roster = [
+        {
+          id: mintAgentId(),
+          name: 'Reality Agent',
+          role: `Whatever you are asked, end every reply with the exact token ${MARK}.`,
+          projectId: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+
+      const auth = await checkCodexAuth()
+      expect(auth.ready, `codex must be signed in at ${codexAuthPath()} for this gate`).toBe(true)
+
+      const driver = createCodexConversationDriver(
+        CODEX_BIN !== undefined ? { command: CODEX_BIN } : {}
+      )
+      let seq = 0
+      const deps = (service: ConversationService): ConversationTurnDeps => ({
+        service,
+        driver,
+        checkAuth: checkCodexAuth,
+        mintTurnId: () => `turn_wc4_${++seq}`,
+        mintItemId: () => `usr_wc4_${++seq}`,
+        emit: () => {}
+      })
+      const service = (): ConversationService =>
+        new ConversationService(directory, { readAgents: () => roster })
+      const assistantTexts = (messages: { role: string; blocks: { type: string }[] }[]): string[] =>
+        messages
+          .filter((message) => message.role === 'assistant')
+          .map((message) =>
+            message.blocks.map((b) => (b.type === 'text' ? (b as { text: string }).text : '')).join('')
+          )
+
+      // ── Leg 1: the agent's first turn starts a thread WITH developerInstructions ────────────────
+      const created = await service().createForAgent({ agentId: roster[0].id, title: 'wc4 reality' })
+      if (created.outcome !== 'created') throw new Error(`precondition: ${created.outcome}`)
+      const first = await runConversationTurn(deps(service()), {
+        conversationId: created.record.id,
+        text: 'Reply with the single word ready.',
+        cwd
+      })
+      expect(first.outcome, JSON.stringify(first)).toBe('completed')
+
+      // ── Leg 2: a cold service resumes the thread, again WITH developerInstructions ──────────────
+      const second = await runConversationTurn(deps(service()), {
+        conversationId: created.record.id,
+        text: 'Reply with the single word again.',
+        cwd
+      })
+      expect(second.outcome, JSON.stringify(second)).toBe('completed')
+      if (first.outcome !== 'completed' || second.outcome !== 'completed') throw new Error('unreachable')
+      expect(second.providerSessionId).toBe(first.providerSessionId)
+
+      const read = await service().read(created.record.id)
+      if (read.outcome !== 'loaded') throw new Error(`expected loaded, got ${read.outcome}`)
+      expect(read.record.agentId).toBe(roster[0].id)
+      expect(read.record.projectId).toBeNull()
+      const answers = assistantTexts(read.record.messages)
+      expect(answers).toHaveLength(2)
+      for (const answer of answers) expect(answer).toContain(MARK)
+      const users = read.record.messages.filter((message) => message.role === 'user')
+      expect(users).toHaveLength(2)
+
+      // ── Control: the same first prompt with no agent. The mark must not appear. ───────────────
+      const plain = await service().create({ title: 'wc4 control' })
+      const control = await runConversationTurn(deps(service()), {
+        conversationId: plain.id,
+        text: 'Reply with the single word ready.',
+        cwd
+      })
+      expect(control.outcome, JSON.stringify(control)).toBe('completed')
+      const controlRead = await service().read(plain.id)
+      if (controlRead.outcome !== 'loaded') throw new Error('control not loaded')
+      expect(assistantTexts(controlRead.record.messages).join(' ')).not.toContain(MARK)
 
       rmSync(root, { recursive: true, force: true })
       rmSync(cwd, { recursive: true, force: true })
