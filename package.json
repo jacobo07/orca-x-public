@@ -11,7 +11,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "format": "oxfmt --write .",
-    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:durability-contracts && pnpm run check:durable-actor-catalogs && pnpm run check:agent-identity-authority && pnpm run check:recurring-work && pnpm run check:ipc-message-floor && pnpm run check:runtime-host-queue && pnpm run check:variant-parity && pnpm run check:max-lines-ratchet && pnpm run check:provider-noun-debt && pnpm run check:workspace-trust-authority && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
+    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:durability-contracts && pnpm run check:durable-actor-catalogs && pnpm run check:agent-identity-authority && pnpm run check:agent-instruction-layer && pnpm run check:agent-turn-location-authority && pnpm run check:recurring-work && pnpm run check:ipc-message-floor && pnpm run check:runtime-host-queue && pnpm run check:variant-parity && pnpm run check:max-lines-ratchet && pnpm run check:provider-noun-debt && pnpm run check:workspace-trust-authority && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
@@ -32,6 +32,7 @@
     "check:durable-actor-catalogs": "node config/scripts/check-durable-actor-catalogs.mjs",
     "check:agent-identity-authority": "node config/scripts/check-agent-identity-authority.mjs",
     "check:agent-instruction-layer": "node config/scripts/check-agent-instruction-layer.mjs",
+    "check:agent-turn-location-authority": "node config/scripts/check-agent-turn-location-authority.mjs",
     "check:recurring-work": "node config/scripts/check-recurring-work-inventory.mjs",
     "check:ipc-message-floor": "node config/scripts/check-ipc-message-floor.mjs",
     "check:e2e-fixture-binding": "node config/scripts/check-e2e-fixture-binding.mjs",
