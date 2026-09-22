@@ -25,7 +25,13 @@ const POST_V6_COLUMNS = [
   ['legacy_mail_receipts', 'principal_id']
 ] as const
 
+// Why versioned: an entry here is required only of databases at or past its
+// version, so a legitimately older one is not dropped to a replay from v6.
+// A new post-v6 ladder column belongs here, never in the unversioned list above.
 const VERSIONED_POST_V6_COLUMNS = [
+  { version: 24, table: 'tasks', column: 'created_by_pane_key' },
+  { version: 24, table: 'tasks', column: 'created_by_process_incarnation' },
+  { version: 24, table: 'tasks', column: 'created_by_run_generation' },
   { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' }
 ] as const
 

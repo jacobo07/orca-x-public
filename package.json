@@ -35,6 +35,7 @@
     "check:execution-host-scope": "node config/scripts/check-execution-host-scope-widening.mjs",
     "check:variant-parity": "node config/scripts/check-variant-parity.mjs",
     "check:mobile-aperture": "node config/scripts/check-mobile-capability-aperture.mjs",
+    "check:orchestration-migration": "node config/scripts/check-orchestration-migration-coherence.mjs",
     "check:max-lines-ratchet": "node config/scripts/check-max-lines-ratchet.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
     "check:visual-assets": "node config/scripts/check-visual-assets.mjs",

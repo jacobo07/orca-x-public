@@ -1,0 +1,25 @@
+# Post-v6 orchestration columns registered in the UNVERSIONED list of
+# src/main/runtime/orchestration/orchestration-schema-version-skew.ts.
+#
+# An unversioned entry is required of EVERY database `hasCompletePostV6Schema`
+# inspects, whatever version it stores. That is safe only for columns old enough
+# that no reachable database predates them. For anything newer it is a footgun:
+# a database whose stored version legitimately predates the column fails the
+# probe, and resolveOrchestrationMigrationStartVersion drops it to
+# Math.min(stored, schema, 6) -- a full replay from v6.
+#
+# So this list is frozen legacy and SHRINK-ONLY. A new post-v6 ladder column
+# belongs in VERSIONED_POST_V6_COLUMNS with the version that introduces it;
+# `pnpm check:orchestration-migration` refuses one that lands here instead, and
+# refuses an entry here whose column has left the unversioned list.
+#
+# Entries not listed here are unversioned registrations with no corresponding
+# literal ALTER in the ladder (base CREATE TABLE columns, or the templated
+# run_id loop); the gate does not judge those.
+dispatch_contexts.capability_hash
+dispatch_contexts.process_incarnation
+dispatch_contexts.capability_revoked_at
+worker_dispatches.runtime_epoch
+federated_dispatches.to_home_imported_sequence
+remote_dispatch_attachments.to_worker_imported_sequence
+remote_dispatch_attachments.protocol_version

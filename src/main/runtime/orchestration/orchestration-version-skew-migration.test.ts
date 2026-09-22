@@ -180,6 +180,57 @@ describe('OrchestrationDb version-skew migration', () => {
     expect(db.getQuestion(question.message.id)).toMatchObject({ status: 'pending' })
   })
 
+  // Why: the v24 task columns were added to the ladder but never registered, so a
+  // database claiming v24+ without them was never probed and never repaired.
+  it('repairs a database that claims the current schema but lost a v24 task column', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v24-skew-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const run = db.createRun({
+      objective: 'survive a v24 repair',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'keep me', runId: run.id, createdByPaneKey: 'tab_a:leaf_a' })
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    raw.exec('ALTER TABLE tasks DROP COLUMN created_by_run_generation')
+    expect(claimed).toBeGreaterThanOrEqual(24)
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(6)
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    expect(db.getTask(task.id)).toMatchObject({
+      spec: 'keep me',
+      created_by_pane_key: 'tab_a:leaf_a',
+      created_by_run_generation: null
+    })
+    db.close()
+    db = undefined
+
+    const reopened = new Database(dbPath)
+    const columns = (reopened.pragma('table_info(tasks)') as { name: string }[]).map((c) => c.name)
+    expect(columns).toContain('created_by_run_generation')
+    expect(reopened.pragma('user_version', { simple: true })).toBe(claimed)
+    reopened.close()
+  })
+
+  it('leaves a healthy current database at its stored version', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v24-healthy-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(claimed)
+    raw.close()
+  })
+
   it('does not repair an incomplete schema written by a future binary', () => {
     const dbPath = createLegacySchemaClaimingVersion(20)
     const raw = new Database(dbPath)
