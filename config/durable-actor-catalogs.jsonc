@@ -1,0 +1,17 @@
+// Durable product actors — entities a user names, that survive restart, and that a Conversation,
+// Mission or Council can be attributed to. At most ONE catalog may own them.
+//
+// Measured 2026-09-22 across ~400 Agent-named modules: Orca has none. Every "Agent" in the estate
+// is one of three other things, and none of them is a durable product actor:
+//
+//   AgentStatusEntry      runtime, keyed by paneKey = `${tabId}:${leafId}`
+//   ProviderType          provider classification (which vendor CLI)
+//   AGENT_CATALOG         a hardcoded compile-time list of vendor CLIs, not a user roster
+//   AgentTeam / TeamPane  transport (tmux pane layout)
+//   AI Vault              a scanner over provider transcripts — "Agent Session History"
+//
+// So the list below is empty on purpose. W-C1 adds exactly one entry.
+// Enforced by `pnpm check:durable-actor-catalogs`.
+{
+  "actorCatalogs": []
+}
