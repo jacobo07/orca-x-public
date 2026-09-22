@@ -82,8 +82,25 @@ export type DormantResumeContinuity = 'exact' | 'unconfirmed' | 'claimed-elsewhe
 
 export type TerminalTabDormancy = {
   reason: TerminalTabDormancyReason
-  /** Absent for a row no classifier judged — an explicit sleep, or one persisted before this field. */
+  /** Absent only for a row persisted before this field existed. Every current producer states one,
+   *  through `terminalTabDormancy`; a legacy row stays absent because nobody judged it. */
   resumeContinuity?: DormantResumeContinuity
+}
+
+/**
+ * The only way a transition should write a dormancy marker: the verdict is a required argument.
+ *
+ * Not a required field on `TerminalTabDormancy` itself, measured: that type also describes rows
+ * hydrated from disk, and a row persisted before the field existed legitimately has none. Forcing
+ * the field there would make hydration invent a verdict for a row no classifier ever judged. So the
+ * obligation sits on the producer, and `terminal-tab-dormancy-producers.test.ts` fails when a
+ * production marker is written any other way.
+ */
+export function terminalTabDormancy(
+  reason: TerminalTabDormancyReason,
+  resumeContinuity: DormantResumeContinuity
+): Required<TerminalTabDormancy> {
+  return { reason, resumeContinuity }
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'

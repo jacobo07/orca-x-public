@@ -4,7 +4,11 @@ import type { AppState } from '../types'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import {
+  terminalTabDormancy,
+  type TerminalLayoutSnapshot,
+  type TerminalTab
+} from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
@@ -3331,11 +3335,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         sleptTabIds.has(tab.id) && !tab.dormancy
           ? {
               ...tab,
-              dormancy: {
-                reason: 'workspace-sleep',
-                // Why the fallback withholds rather than denies: a tab this sleep did not judge is unknown.
-                resumeContinuity: sleepContinuityByTabId?.get(tab.id) ?? 'unconfirmed'
-              }
+              // Why the fallback withholds rather than denies: a tab this sleep did not judge is unknown.
+              dormancy: terminalTabDormancy(
+                'workspace-sleep',
+                sleepContinuityByTabId?.get(tab.id) ?? 'unconfirmed'
+              )
             }
           : tab
       )
