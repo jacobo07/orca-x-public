@@ -5,6 +5,7 @@
 // back over the user's messages. A truncated file must therefore fail, loudly, and keep whatever
 // is on disk exactly as it is so a later fix can still read it.
 
+import { isAgentId } from '../../shared/agent-identity'
 import { isConversationId } from '../../shared/conversation-identity'
 import {
   CONVERSATION_RECORD_SCHEMA_VERSION,
@@ -121,6 +122,15 @@ export function parseConversationRecord(
   }
   if (parsed.projectId !== null && typeof parsed.projectId !== 'string') {
     return unreadable('record has an unusable project binding')
+  }
+  // Absent is the normal state — every conversation written before agents existed, and every
+  // Brainstorming chat since. Only a present-but-unreadable binding is a refusal.
+  if (
+    parsed.agentId !== undefined &&
+    parsed.agentId !== null &&
+    !isAgentId(parsed.agentId)
+  ) {
+    return unreadable('record has an unusable agent binding')
   }
   if (!isFiniteNumber(parsed.nextSeq)) {
     return unreadable('record has no usable ordering watermark')

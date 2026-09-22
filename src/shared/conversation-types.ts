@@ -11,6 +11,7 @@
 // Plain JSON only — these values cross IPC and are written to disk.
 
 import type { ProviderType } from './agent-status-types'
+import type { AgentId } from './agent-types'
 import {
   NATIVE_CHAT_TURN_LIFECYCLE_STATES,
   type NativeChatBlock,
@@ -92,6 +93,18 @@ export type ConversationRecord = {
   /** Project binding, or null for a conversation that belongs to no project. Uses the first-class
    *  Project id — this does not mint a chat-specific project concept. */
   projectId: string | null
+  /**
+   * The Agent this conversation is with, or absent/null for a Brainstorming chat that is with no
+   * persistent actor. Optional at schemaVersion 1 ON PURPOSE: a bump would make
+   * conversation-record-parse refuse every existing record as `unreadable`, i.e. tell every user
+   * their history is corrupt. Old builds preserve it on a read-modify-write because the parser
+   * passes unknown keys through and the store stringifies the object it was handed.
+   *
+   * A conversation deliberately does NOT carry its own project: the agent owns that relation, and
+   * only PersistedState can participate in Project id succession. Deriving it keeps one owner and
+   * makes an agent/conversation project mismatch unrepresentable rather than merely validated.
+   */
+  agentId?: AgentId | null
   provenance: ConversationProviderProvenance[]
   turns: ConversationTurn[]
   messages: ConversationMessage[]

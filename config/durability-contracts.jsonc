@@ -99,7 +99,7 @@
     },
     {
       "id": "conversation.orca-owned-record",
-      "state": "conversations/<conversationId>.json — the Orca-owned conversation: its minted identity, title, project binding, provider provenance, turn lifecycle and product-visible messages",
+      "state": "conversations/<conversationId>.json — the Orca-owned conversation: its minted identity, title, optional agent binding, provider provenance, turn lifecycle and product-visible messages. It deliberately carries no project of its own: the agent owns that relation, because only PersistedState can take part in Project id succession",
       "writer": "src/main/conversation/conversation-store.ts",
       "tier": "crash-durable",
       "lostIf": "This is the only copy. The provider transcript is evidence, not a substitute: it belongs to the provider, it rotates, the provider may delete it, and it carries no Orca conversation identity — so a lost record cannot be reconstructed from it, only guessed at. Losing one costs the conversation as a product entity: its id, anything later bound to that id, and the ability to reopen it at all.",
