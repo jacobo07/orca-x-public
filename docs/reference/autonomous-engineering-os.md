@@ -127,6 +127,52 @@ observer's `call` type admits only `'status.get' | 'diagnostics.memory'`, both p
 GEX44, or approve the observe-only scope as its own wave. GEX44 is not made eligible until one is
 chosen.
 
+## W3, measured: the REUSE argument, and why nothing was created
+
+The W3 row requires a REUSE→EXTEND→CREATE argument before a seventh ratchet. Measured 2026-09-22
+against both candidate incumbents:
+
+| Incumbent | Unit | Answers | Sees a missing consumer? |
+|---|---|---|---|
+| `config/reliability-gates.jsonc` (93 gates) | a claim | is it backed by tests? | **no** — a fully tested, unreachable capability passes |
+| `config/mobile-capability-aperture-*` | an RPC method, enumerated from `defineMethod` | is it reachable? | **yes, already** |
+
+The second one already answers W3's question. `pnpm check:mobile-aperture` on this revision:
+
+```
+260/567 host RPC methods reachable (45.9%), 307 host-only, 307 baselined
+205/260 allowlisted methods named by mobile source, 55 reach-without-surface
+```
+
+That is the three-rung taxonomy W3 set out to build: host-only · wire-reachable · consumer-reachable.
+"Reach-without-surface" is *a capability that exists which no consumer reaches*. It is structurally
+enumerated, positive-controlled, shrink-only, and carries a stale clause.
+
+**Verdict: REUSE. Nothing created.**
+
+- Where reachability can be enumerated structurally, the incumbent owns it.
+- What remains is a proposal with no apply path, or a field with no producer. That has **no
+  structural population**, so a registry for it would be declared by hand — what the aperture audit
+  itself calls *"a drift registry, not an inventory."* The honest home for such a check is the
+  domain gate that can enumerate it. `check:orchestration-migration` could, for example, grow a
+  column-with-no-writer check.
+- The spec's working hypothesis was half right: reliability-gates cannot answer reachability. It
+  does not need to, because the aperture already does.
+
+**Complementarity proven on the incumbents, not asserted.** Two drills, restore SHA-256 verified:
+
+| Drill | Aperture | Evidence at the same moment |
+|---|---|---|
+| unclassify `fleet.placementView` | **red** — names it as an unclassified host-only method | **green** — 11/11 fleet tests |
+| baseline an entry that does not exist | **red** — `[stale-baseline] … 1 no longer exist` | — |
+
+A capability can hold complete test evidence and lose its reachability classification, and only
+the aperture notices. The reverse also holds: the aperture never reads a test. The two owners are
+independent, which is why neither should absorb the other.
+
+Observed, not fixed: the aperture audit's prose still says 565 / 305 while the gate measures 567 /
+307. The gate is right and the prose drifted — a count written beside an inventory goes stale.
+
 ## Authority
 
 Ceiling is **L2**: isolated worktree, local code, tests, commits. No push, no PR, no merge, no
