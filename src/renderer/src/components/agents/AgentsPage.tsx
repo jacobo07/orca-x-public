@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import type { Agent } from '../../../../shared/agent-types'
 
 import { groupAgentsByProject } from './agent-project-grouping'
+import { resolveDefaultProjectId } from './default-agent-project'
 import { NewAgentDialog } from './NewAgentDialog'
 
 /**
@@ -48,7 +49,11 @@ export default function AgentsPage(): React.JSX.Element {
   // The canonical project list, from the store that already owns it. Not a second source: the
   // grouping below is a projection over it and the roster, computed per render and never written.
   const projects = useAppStore((s) => s.projects)
-  const activeRepoId = useAppStore((s) => s.lastActiveRepoId)
+  // `activeRepoId`, not `lastActiveRepoId`. The latter is a PersistedUIState key and is not on
+  // AppState, so the first version of this line read `undefined` on every render and the default
+  // project was silently always null. The node typecheck does not cover the renderer and the dialog
+  // test takes `defaultProjectId` as a prop, so neither could see it — only the web typecheck did.
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
 
   const refresh = useCallback(async () => {
     try {
@@ -68,18 +73,10 @@ export default function AgentsPage(): React.JSX.Element {
     void refresh()
   }, [refresh])
 
-  /**
-   * Which project the dialog opens on. A real current-product relation — the project holding the
-   * repo you were last in — and never "the first one" or "the most recent agent's". It is a
-   * pre-selection the user can see and change, not a decision made for them, and when nothing says
-   * which project they are in it pre-selects nothing rather than guessing.
-   */
-  const defaultProjectId = useMemo(() => {
-    if (!activeRepoId) {
-      return null
-    }
-    return projects.find((project) => project.sourceRepoIds.includes(activeRepoId))?.id ?? null
-  }, [activeRepoId, projects])
+  const defaultProjectId = useMemo(
+    () => resolveDefaultProjectId(activeRepoId, projects),
+    [activeRepoId, projects]
+  )
 
   const groups = useMemo(
     () => (state.status === 'ready' ? groupAgentsByProject(state.agents, projects) : []),

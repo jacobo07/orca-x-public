@@ -36,9 +36,11 @@ const CREATED: Agent = {
 
 let container: HTMLDivElement
 let root: Root
+// Typed explicitly rather than as ReturnType<typeof vi.fn>: under the web project's config that
+// infers a constructable-or-procedure union which satisfies neither prop signature.
 let create: ReturnType<typeof vi.fn>
-let onCreated: ReturnType<typeof vi.fn>
-let onOpenChange: ReturnType<typeof vi.fn>
+let onCreated: ReturnType<typeof vi.fn<(agent: Agent) => void>>
+let onOpenChange: ReturnType<typeof vi.fn<(open: boolean) => void>>
 
 function render(defaultProjectId: string | null = 'p1'): void {
   act(() => {
