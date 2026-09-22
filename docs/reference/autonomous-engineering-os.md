@@ -95,6 +95,38 @@ incomplete.
 from v6.** It is two lines to get wrong and a long night to discover. Every W4/W5 column touches
 both files plus a case in `orchestration-version-skew-migration.test.ts`.
 
+## W2, measured: observation and execution share one door
+
+Measured 2026-09-22 after W1. The W2 row above asks for GEX44 as an **eligible candidate in the
+read-only view, not an authorized host**. As scoped, that is not representable today:
+
+- The view's members are *this host plus paired runtimes*. SSH targets are explicitly not
+  enumerated (`observation.coverage.sshTargets: 'not-enumerated'`), so **pairing is the only way in**.
+- Every pairing scope carries execution authority. There are two, `runtime` and `mobile`, and
+  `device-registry.ts` says outright that `runtime` holds *"CLI powers"*. **No observe-only scope
+  exists.**
+- So making GEX44 appear means granting the workstation authority to drive GEX44 — the exact thing
+  W2 must not grant — plus minting a pairing credential and running a resident `orca serve` on a
+  shared host. W1 found that serve binds `0.0.0.0` with the firewall inactive and writes hooks into
+  the host's real agent homes, and those writes are still unreverted.
+
+This is the weld the global `scoped-side-effect-authority` rule names: observe and mutate behind one switch, which
+makes a non-mutating observation mode unrepresentable. The fix is additive and belongs in the
+pairing layer — an observe-only scope that can reach `status.get` and `diagnostics.memory` and
+nothing else. It is a wire change between independently-updated peers, so it follows
+`docs/reference/remote-wire-compatibility.md` and needs its own spec, not a slot inside W2.
+
+**What W2 delivered instead:** "a proposal authorizes nothing" was a comment at
+`fleet-placement.ts:63`. It is now a check. `fleet.placementView` is driven with a trap runtime
+that counts every access: zero, against a positive control proving the trap records. Its result
+must survive a JSON round trip unchanged, so it can carry no function or handle. Making the view
+touch the runtime, or return a callable, each turns it red. The remote half was already pinned: the
+observer's `call` type admits only `'status.get' | 'diagnostics.memory'`, both pure getters.
+
+**Owner decision, not engineering:** either authorize a pairing, accepting execution reach over
+GEX44, or approve the observe-only scope as its own wave. GEX44 is not made eligible until one is
+chosen.
+
 ## Authority
 
 Ceiling is **L2**: isolated worktree, local code, tests, commits. No push, no PR, no merge, no

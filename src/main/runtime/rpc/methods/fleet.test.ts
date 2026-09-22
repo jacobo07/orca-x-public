@@ -80,4 +80,28 @@ describe('fleet.placementView', () => {
     })
     expect(result.observation.coverage.sshTargets).toBe('not-enumerated')
   })
+
+  // Why: fleet-placement.ts says a proposal authorizes nothing. This makes that a check: the view
+  // never reaches the runtime service that could act, and what it returns carries no capability.
+  // The remote side is already pinned to status.get + diagnostics.memory in the observer's tests.
+  it('never touches the runtime it could act through, and returns inert data', async () => {
+    const touched: PropertyKey[] = []
+    const trap = new Proxy({} as RpcContext['runtime'], {
+      get: (_target, key) => {
+        touched.push(key)
+        throw new Error(`placement view reached runtime.${String(key)}`)
+      }
+    })
+    // Positive control: an access is recorded, so a zero below is a measurement, not a blind spot.
+    expect(() => (trap as unknown as Record<string, unknown>).probe).toThrow()
+    expect(touched).toEqual(['probe'])
+    touched.length = 0
+    installLocalOnly()
+
+    const result = await call({ minAvailableBytes: 1 * GB }, { runtime: trap })
+
+    expect(result.status).toBe('ok')
+    expect(touched).toEqual([])
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+  })
 })
