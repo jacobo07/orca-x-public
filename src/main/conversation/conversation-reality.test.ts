@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { mintAgentId } from '../../shared/agent-identity'
+import type { ConversationMessage } from '../../shared/conversation-types'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import { checkCodexAuth, codexAuthPath } from '../ipc/conversations'
 
@@ -190,11 +191,11 @@ describe.skipIf(!ENABLED)('conversation product reality', () => {
       })
       const service = (): ConversationService =>
         new ConversationService(directory, { readAgents: () => roster })
-      const assistantTexts = (messages: { role: string; blocks: { type: string }[] }[]): string[] =>
+      const assistantTexts = (messages: readonly ConversationMessage[]): string[] =>
         messages
           .filter((message) => message.role === 'assistant')
           .map((message) =>
-            message.blocks.map((b) => (b.type === 'text' ? (b as { text: string }).text : '')).join('')
+            message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
           )
 
       // ── Leg 1: the agent's first turn starts a thread WITH developerInstructions ────────────────
