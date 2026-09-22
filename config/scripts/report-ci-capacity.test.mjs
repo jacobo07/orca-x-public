@@ -81,10 +81,20 @@ describe('has execution capacity returned for this repository', () => {
     )
   })
 
-  it('defaults to the measured starvation boundary', () => {
-    expect(Date.parse(STARVATION_BOUNDARY)).toBeTypeOf('number')
-    expect(classifyCapacity({ runs: [run([ran()], '2026-09-13T02:00:00Z')] }).verdict).toBe(
+  // The boundary is the FIRST OBSERVED STARVATION, read from the recovery contract. It was once a
+  // constant copied from a note that wrote local CEST time as UTC; the API says the last run that
+  // executed was created 2026-09-12T23:51:28Z and the first starved one 2026-09-13T10:43:50Z.
+  it('defaults to the first observed starvation, and credits nothing before it', () => {
+    expect(STARVATION_BOUNDARY).toBe('2026-09-13T10:43:50Z')
+    expect(classifyCapacity({ runs: [run([ran()], STARVATION_BOUNDARY)] }).verdict).toBe(
       CAPACITY.RESTORED
+    )
+    // A run executing in the unobserved ten hours happened before capacity was lost. Under the old
+    // 01:51Z constant this read as RESTORED.
+    const window = '2026-09-13T05:00:00Z'
+    expect(classifyCapacity({ runs: [run([ran()], window)] }).verdict).toBe(CAPACITY.UNKNOWN)
+    expect(classifyCapacity({ runs: [run([ran()], window), run([starved()])] }).verdict).toBe(
+      CAPACITY.NOT_RESTORED
     )
   })
 })

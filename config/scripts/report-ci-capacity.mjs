@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import process from 'node:process'
+import { parse } from 'jsonc-parser'
 
 import { JOB_STATE, classifyJob } from './report-ci-execution-rungs.mjs'
 import { describeScope, readOriginUrlFromGit, resolveRepoScope } from './ci-repo-scope.mjs'
@@ -19,8 +21,29 @@ import { describeScope, readOriginUrlFromGit, resolveRepoScope } from './ci-repo
 // so it can never be a merge condition. It is also out of band on purpose -- a workflow cannot prove
 // that no runner is available, because proving it would require a runner.
 
-/** The moment this repository's runs stopped reaching a machine. Owned by the recovery contract. */
-export const STARVATION_BOUNDARY = '2026-09-13T01:51:00Z'
+export const RECOVERY_CONTRACT = fileURLToPath(
+  new URL('../ci-runner-recovery-contract.jsonc', import.meta.url)
+)
+
+/**
+ * The boundary lives in the recovery contract and only there. It used to be a constant here, copied
+ * from a note that recorded local CEST time as UTC -- two hours early, which would have credited a
+ * pre-outage run as capacity returning. One owner, read at load, and a contract whose boundary is
+ * not a timestamp refuses to load rather than defaulting to anything.
+ */
+export function loadRecoveryContract(file = RECOVERY_CONTRACT) {
+  const errors = []
+  const contract = parse(readFileSync(file, 'utf8'), errors, { allowTrailingComma: true })
+  if (errors.length > 0 || !contract || typeof contract !== 'object') {
+    throw new Error(`${file} is not valid JSONC`)
+  }
+  if (!Number.isFinite(Date.parse(contract.starvationBoundary ?? ''))) {
+    throw new Error(`${file} has no readable starvationBoundary`)
+  }
+  return contract
+}
+
+export const STARVATION_BOUNDARY = loadRecoveryContract().starvationBoundary
 
 export const CAPACITY = {
   /** A job after the boundary ran on a real machine. The only verdict that ends the incident. */
