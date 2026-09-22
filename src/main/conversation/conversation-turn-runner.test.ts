@@ -48,6 +48,10 @@ async function flush(id: ConversationId): Promise<ConversationRecord> {
 function deps(overrides: Partial<ConversationTurnDeps> = {}): ConversationTurnDeps {
   return {
     service,
+    // These cases are about the turn's failure ORDER, not about where it runs. No agent here owns
+    // a project, so location resolution is a no-op and the caller's cwd stands.
+    resolveProjectLocation: () => ({ outcome: 'no-project' }),
+    fallbackCwd: () => root,
     driver: {
       runTurn: async (request) => {
         driverCalls.push(request)

@@ -4,10 +4,12 @@
 // not decoration: the failure ORDER below is the product contract, and it has to be provable
 // without spending a real account's tokens on each of the six ways a turn can end.
 
+import type { Agent } from '../../shared/agent-types'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
 
+import type { AgentProjectLocation } from './agent-project-location'
 import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
@@ -15,8 +17,15 @@ import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-tur
 export type ConversationTurnRequest = {
   conversationId: ConversationId
   text: string
-  /** Where the provider should run. A conversation is not a workspace; the caller says. */
-  cwd: string
+  /**
+   * Where the provider should run WHEN NOTHING ELSE OWNS THAT ANSWER — a Brainstorming chat, or an
+   * agent that owns no project. `null` means the caller has no opinion, and it stays null: a
+   * directory nobody chose is not a smaller mistake than no directory.
+   *
+   * An agent that owns a project overrides this outright. The agent's project is the authority, so
+   * a window focused on another project cannot retarget the turn by supplying a cwd.
+   */
+  cwd: string | null
 }
 
 export type ProviderTurnRequest = {
@@ -48,11 +57,45 @@ export type ConversationTurnDeps = {
   /** Answers whether the provider can authenticate AT ALL. Separate from the turn, because an
    *  unauthenticated provider is a product state and not a turn that failed. */
   checkAuth: () => Promise<{ ready: true } | { ready: false; detail: string }>
+  /** Turns the agent's declared project into the directory its turn runs in. Injected rather than
+   *  imported so this file keeps holding no PersistedState, and read per call so a setup that
+   *  became ready is visible without a restart. */
+  resolveProjectLocation: (agent: Agent) => AgentProjectLocation
+  /** Where a turn runs when no project owns the answer. Never `process.cwd()`: on a packaged build
+   *  that is Orca's own install directory, and an agent rooted there answers about Orca. */
+  fallbackCwd: () => string
   mintTurnId: () => string
   mintItemId: () => string
   /** Live-only sink: deltas and status reach the surface here and never reach disk. */
   emit: (conversationId: ConversationId, event: AgentTurnEvent) => void
   now?: () => number
+}
+
+/** Three refusals, three sentences, three different fixes. A caller that only had "project
+ *  unavailable" would send someone to look at the wrong thing in two cases out of three. */
+function describeUnavailableProject(
+  location: Extract<AgentProjectLocation, { outcome: 'unresolved' | 'not-ready' | 'remote-host' }>
+): { projectId: string; reason: 'unresolved' | 'not-ready' | 'remote-host'; detail: string } {
+  switch (location.outcome) {
+    case 'unresolved':
+      return {
+        projectId: location.projectId,
+        reason: 'unresolved',
+        detail: 'This agent’s project is not set up on this computer.'
+      }
+    case 'not-ready':
+      return {
+        projectId: location.projectId,
+        reason: 'not-ready',
+        detail: `This agent’s project is ${location.setupState} on this computer.`
+      }
+    case 'remote-host':
+      return {
+        projectId: location.projectId,
+        reason: 'remote-host',
+        detail: 'This agent’s project lives on a remote host, and its chat runs on this computer.'
+      }
+  }
 }
 
 export async function runConversationTurn(
@@ -80,8 +123,26 @@ export async function runConversationTurn(
       reason: binding.kind === 'agent-missing' ? 'missing' : 'unverifiable'
     }
   }
+  // Resolved HERE, beside the agent and before admission, for the same reason the binding is: a
+  // turn that cannot be put in its agent's project must not commit the user's message, and must
+  // never quietly run somewhere else. This is also the only place the answer is decided, so the
+  // window's current focus has no way to reach it.
+  const location =
+    binding.kind === 'agent' ? deps.resolveProjectLocation(binding.agent) : { outcome: 'none' as const }
+  if (
+    location.outcome === 'unresolved' ||
+    location.outcome === 'not-ready' ||
+    location.outcome === 'remote-host'
+  ) {
+    return { outcome: 'project-unavailable', ...describeUnavailableProject(location) }
+  }
+
   const developerInstructions =
     binding.kind === 'agent' ? compileAgentTurnInstructions(binding.agent) : null
+
+  // An agent's project is the authority and overrides the caller outright. Everything else falls
+  // back to a DECLARED location rather than to whatever directory this process happens to be in.
+  const cwd = location.outcome === 'resolved' ? location.path : (request.cwd ?? deps.fallbackCwd())
 
   const turnId = deps.mintTurnId()
 
@@ -124,7 +185,7 @@ export async function runConversationTurn(
 
     const result = await deps.driver.runTurn({
       resumeSessionId,
-      cwd: request.cwd,
+      cwd,
       text: request.text,
       developerInstructions,
       turnId,

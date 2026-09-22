@@ -16,6 +16,10 @@ import type {
 import { readStoredCodexCredentialState } from '../codex-accounts/managed-codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import {
+  resolveAgentProjectLocation,
+  type ProjectLocationReader
+} from '../conversation/agent-project-location'
+import {
   ConversationService,
   type ConversationAgentRoster
 } from '../conversation/conversation-service'
@@ -59,7 +63,8 @@ export type ConversationIpcHandlers = {
   'conversations:sendTurn': (args: {
     id: string
     text: string
-    cwd: string
+    /** Optional: an agent that owns a project decides this itself. */
+    cwd?: string | null
   }) => Promise<ConversationTurnOutcome>
 }
 
@@ -141,7 +146,11 @@ export function createConversationIpcHandlers(deps: ConversationIpcDeps): Conver
         {
           conversationId: requireConversationId(args?.id),
           text: requireText(args?.text),
-          cwd: typeof args?.cwd === 'string' && args.cwd ? args.cwd : process.cwd()
+          // An absent cwd stays ABSENT. It used to become `process.cwd()`, which on a packaged
+          // build is Orca's own install directory — so an agent asked about "this repository"
+          // answered about Orca's packaged files. The runner decides from the agent's project, and
+          // falls back to a declared location when nothing owns the answer.
+          cwd: typeof args?.cwd === 'string' && args.cwd ? args.cwd : null
         }
       )
   }
@@ -169,13 +178,21 @@ function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void
 }
 
 /** `agentRoster` reads the same PersistedState roster `agents:list` does, so there is one answer
- *  to "does this agent exist" and it follows Project id promotion. */
-export function registerConversationHandlers(agentRoster: ConversationAgentRoster): void {
+ *  to "does this agent exist" and it follows Project id promotion. `projects` is read the same way
+ *  and for the same reason: a setup that became ready must be visible without a restart. */
+export function registerConversationHandlers(
+  agentRoster: ConversationAgentRoster,
+  projects: ProjectLocationReader
+): void {
   const handlers = createConversationIpcHandlers({
     service: getConversationService(agentRoster),
     turnDeps: {
       driver: createCodexConversationDriver(),
       checkAuth: checkCodexAuth,
+      resolveProjectLocation: (agent) => resolveAgentProjectLocation(agent, projects),
+      // The user's home, never `process.cwd()`. Both are "not a project"; only one of them is a
+      // place the person chose to have, and the other is wherever Orca was launched from.
+      fallbackCwd: () => homedir(),
       mintTurnId: () => `turn_${randomUUID()}`,
       mintItemId: () => `usr_${randomUUID()}`,
       emit: broadcastTurnEvent

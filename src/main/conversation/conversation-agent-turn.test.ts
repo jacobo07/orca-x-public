@@ -76,6 +76,10 @@ function deps(): ConversationTurnDeps {
       }
     },
     checkAuth: async () => ({ ready: true }),
+    // Every agent in this file owns no project, so location never overrides the caller's cwd and
+    // these cases keep measuring exactly what they measured before: the instruction envelope.
+    resolveProjectLocation: () => ({ outcome: 'no-project' }),
+    fallbackCwd: () => root,
     mintTurnId: () => `turn-${++counter}`,
     mintItemId: () => `user-${++counter}`,
     emit: () => {}

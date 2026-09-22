@@ -72,5 +72,20 @@ function messageFor(notice: Notice): string {
         'conversations.noticeApprovalDeclined',
         'The agent asked to run a command and Orca declined it. Approving actions from a conversation is not built yet.'
       )
+    case 'project-not-set-up':
+      return translate(
+        'conversations.noticeProjectNotSetUp',
+        "This agent's project is not set up on this computer, so nothing was sent. Set it up here, or talk to an agent that belongs to a project you have."
+      )
+    case 'project-setup-incomplete':
+      return translate(
+        'conversations.noticeProjectSetupIncomplete',
+        "This agent's project is still being set up on this computer, so nothing was sent. Try again once it is ready."
+      )
+    case 'project-remote-only':
+      return translate(
+        'conversations.noticeProjectRemoteOnly',
+        "This agent's project only exists on a remote host, and this chat runs on this computer, so nothing was sent."
+      )
   }
 }

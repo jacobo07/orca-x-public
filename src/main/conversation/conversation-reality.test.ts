@@ -53,6 +53,10 @@ describe.skipIf(!ENABLED)('conversation product reality', () => {
         service,
         driver,
         checkAuth: checkCodexAuth,
+        // This gate drives a REAL provider against a scratch directory it owns. Its agents hold no
+        // project, so the working directory stays the one this file created.
+        resolveProjectLocation: () => ({ outcome: 'no-project' }),
+        fallbackCwd: () => root,
         mintTurnId: () => `turn_real_${++turnSeq}`,
         mintItemId: () => `usr_real_${++itemSeq}`,
         emit: () => {}
@@ -185,6 +189,8 @@ describe.skipIf(!ENABLED)('conversation product reality', () => {
         service,
         driver,
         checkAuth: checkCodexAuth,
+        resolveProjectLocation: () => ({ outcome: 'no-project' }),
+        fallbackCwd: () => root,
         mintTurnId: () => `turn_wc4_${++seq}`,
         mintItemId: () => `usr_wc4_${++seq}`,
         emit: () => {}

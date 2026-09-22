@@ -45,6 +45,9 @@ function build(overrides: Partial<Omit<ConversationTurnDeps, 'service'>> = {}): 
       },
       checkAuth: async () =>
         authReady ? { ready: true } : { ready: false, detail: 'codex credential is missing' },
+      // No agent in this file owns a project, so the handler's own cwd handling stays observable.
+      resolveProjectLocation: () => ({ outcome: 'no-project' }),
+      fallbackCwd: () => root,
       mintTurnId: () => 'turn-1',
       mintItemId: () => 'user-item-1',
       emit: (conversationId, event) => emitted.push({ conversationId, event }),

@@ -161,7 +161,10 @@ export function registerCoreHandlers(
   )
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
-  registerConversationHandlers({ readAgents: () => store.getAgents() })
+  registerConversationHandlers(
+    { readAgents: () => store.getAgents() },
+    { readProjectHostSetups: () => store.getProjectHostSetups() }
+  )
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()

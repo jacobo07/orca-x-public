@@ -13,6 +13,9 @@
 //   conversation-absent -> nothing to append to; nothing was spent
 //   agent-unavailable -> this chat is with an agent that cannot be found (or checked). Nothing was
 //                      committed; running it as Brainstorming would be the lie
+//   project-unavailable -> the agent owns a project and we cannot put the provider in it. Nothing
+//                      was committed. Running anyway would root the provider somewhere nobody
+//                      chose, and an answer about the wrong directory is worse than no answer
 //   completed       -> and the durable writes have LANDED, not merely been issued
 
 export type ConversationTurnOutcome =
@@ -20,6 +23,14 @@ export type ConversationTurnOutcome =
   | { outcome: 'busy'; activeTurnId: string }
   | { outcome: 'conversation-absent' }
   | { outcome: 'agent-unavailable'; agentId: string; reason: 'missing' | 'unverifiable' }
+  /** `reason` carries the resolver's own four answers rather than one flattened failure: they need
+   *  four different sentences and have four different fixes. */
+  | {
+      outcome: 'project-unavailable'
+      projectId: string
+      reason: 'unresolved' | 'not-ready' | 'remote-host'
+      detail: string
+    }
   | { outcome: 'auth-required'; detail: string }
   | { outcome: 'not-durable'; reason: string }
   | { outcome: 'failed'; turnId: string; reason: string }
