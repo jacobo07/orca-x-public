@@ -34,3 +34,25 @@ export type Agent = {
   createdAt: number
   updatedAt: number
 }
+
+export type AgentCreationInput = {
+  name: string
+  role: string
+  /** The canonical Project id, or null for an agent owned by no project. Never optional: null is a
+   *  real choice a person makes, so an absent field must not be readable as one. */
+  projectId: string | null
+}
+
+/**
+ * Outcomes, not exceptions, for everything that is a statement about the user's request.
+ *
+ * These live in shared because they cross IPC. The three refusals need three different things said
+ * to a person and have three different fixes — look at it again, pick a project, try again — and
+ * one thrown Error loses exactly the part that helps. `not-persisted` is the one that matters most:
+ * it is the difference between an agent that exists and one that appeared to.
+ */
+export type AgentCreationResult =
+  | { outcome: 'created'; agent: Agent }
+  | { outcome: 'invalid'; reason: string }
+  | { outcome: 'project-not-found'; projectId: string }
+  | { outcome: 'not-persisted'; reason: string }

@@ -126,7 +126,10 @@ export function attachMainWindowServices(
   // Why here and not register-core-handlers: the agent roster lives in PersistedState, so it needs
   // the store, and this is where the store is. The handler reads through it per call rather than
   // capturing a snapshot, so a Project id promotion stays visible.
-  registerAgentHandlers({ readAgents: () => store.getAgents() })
+  registerAgentHandlers({
+    readAgents: () => store.getAgents(),
+    createAgent: (input) => store.createAgent(input)
+  })
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {

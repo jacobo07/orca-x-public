@@ -36,7 +36,7 @@ import type {
   PersistedMobileClientTabSelections,
   PersistedState
 } from '../../../shared/persisted-state-types'
-import type { Agent } from '../../../shared/agent-types'
+import type { Agent, AgentCreationInput, AgentCreationResult } from '../../../shared/agent-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type {
   Project,
@@ -2122,12 +2122,23 @@ export class Store {
   private agentOperations: AgentPersistenceOperations | null = null
 
   private getAgentOperations(): AgentPersistenceOperations {
-    this.agentOperations ??= new AgentPersistenceOperations({ state: this.state })
+    this.agentOperations ??= new AgentPersistenceOperations({
+      state: this.state,
+      scheduleSave: () => this.scheduleSave(),
+      // Why the durable flush and not scheduleSave alone: creating an agent reports success to a
+      // person, and a debounced write lets that success outlive a crash by up to 5s with nothing
+      // on disk. Same trade the pty binding makes before pty:spawn returns.
+      flushDurableStateOrThrowAsync: () => this.flushDurableStateOrThrowAsync()
+    })
     return this.agentOperations
   }
 
   getAgents(): Agent[] {
     return this.getAgentOperations().getAgents()
+  }
+
+  createAgent(input: AgentCreationInput): Promise<AgentCreationResult> {
+    return this.getAgentOperations().createAgent(input)
   }
 
   createProjectGroup(
