@@ -246,6 +246,11 @@ import type {
   LiveSessionMaterializationResponse,
   LiveSessionResumeRefusal
 } from '../shared/live-agent-session-presence-types'
+import {
+  AGENT_TRANSCRIPT_PRESENCE_CHANNEL,
+  type AgentTranscriptPresenceRequest
+} from '../shared/agent-transcript-presence-request'
+import type { WorkingSetFactPresence } from '../shared/project-working-set-store-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
@@ -5034,6 +5039,10 @@ const api = {
       request: LiveAgentSessionPresenceRequest
     ): Promise<LiveAgentSessionPresenceResponse> =>
       ipcRenderer.invoke('agentSession:readLivePresence', request),
+    readTranscriptPresence: (
+      request: AgentTranscriptPresenceRequest
+    ): Promise<WorkingSetFactPresence> =>
+      ipcRenderer.invoke(AGENT_TRANSCRIPT_PRESENCE_CHANNEL, request),
     reserveMaterialization: (
       request: LiveSessionMaterializationRequest
     ): Promise<LiveSessionMaterializationResponse> =>
