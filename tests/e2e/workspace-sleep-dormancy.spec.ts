@@ -160,10 +160,11 @@ test('a workspace slept from its menu stays asleep through navigation, selection
       window.__store!.getState().updateSettings({ agentCmdOverrides: { codex: 'echo' } })
     )
 
+    // The second row only has to be a terminal carrying no agent. Pinning cmd.exe made this spec
+    // Windows-only: elsewhere the PTY never spawns, the row never goes live, and the sleep is
+    // never reached. The platform's own default is what every sibling dormant spec uses.
     await page.evaluate((wt) => {
-      window.__store!.getState().createTab(wt, undefined, 'cmd.exe', {
-        launchProfileId: 'shell:cmd.exe'
-      })
+      window.__store!.getState().createTab(wt)
     }, worktreeId)
     await expect
       .poll(() => liveRowIds(page, worktreeId), {
