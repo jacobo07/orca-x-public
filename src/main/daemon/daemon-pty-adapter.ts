@@ -13,6 +13,9 @@ import {
   type HistoryCheckpointResult,
   type HistoryRecoveryFreeze
 } from './history-manager'
+// Why not through history-manager: it re-exports that module with `export type *`, so a value
+// arriving that way is a type and every call site fails with TS1362.
+import { checkpointDidNotLand } from './terminal-history-manager-options'
 import { HistoryReader, type ColdRestoreInfo } from './history-reader'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
@@ -2381,7 +2384,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
       if (result.snapshot && this.historyManager) {
         const checkpoint = await this.historyManager.checkpoint(sessionId, result.snapshot)
-        return checkpoint === 'retryable' ? 'deferred' : 'done'
+        return checkpointDidNotLand(checkpoint) ? 'deferred' : 'done'
       }
       return 'done'
     }
@@ -2396,7 +2399,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
         requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
       })
-      if (checkpoint.checkpoint === 'retryable') {
+      if (checkpointDidNotLand(checkpoint.checkpoint)) {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
@@ -2421,7 +2424,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         teardown: false,
         forceLiveSnapshot: true
       })
-      if (checkpoint.checkpoint === 'retryable') {
+      if (checkpointDidNotLand(checkpoint.checkpoint)) {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
@@ -2448,7 +2451,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         teardown: false,
         forceLiveSnapshot: true
       })
-      if (checkpoint.checkpoint === 'retryable') {
+      if (checkpointDidNotLand(checkpoint.checkpoint)) {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
@@ -2490,7 +2493,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       const checkpoint = await this.historyManager.checkpoint(sessionId, snapshot, {
         pendingOutputSeq: take.seq
       })
-      if (checkpoint === 'retryable') {
+      if (checkpointDidNotLand(checkpoint)) {
         // Why take.records is dropped, not appended: the pending output this take drained went into the snapshot that
         // failed to land, so appending the held tail at the next contiguous seq would splice it over that hole and
         // defeat the log's seq-gap detection. A stale prefix beats an undetectable hole.
