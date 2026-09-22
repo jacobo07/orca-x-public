@@ -44,6 +44,48 @@ export type TabAgentSignals = {
   isRemoteLike: boolean
 }
 
+/**
+ * What this projection actually derived, so a run in the real app can attribute it.
+ *
+ * Why counters live in production rather than in a test mock: the happy-dom fan-out test wraps
+ * `lib/tab-agent` with `vi.mock` and counts the calls, which a packaged Electron renderer cannot do.
+ * Without a counter here, a real-app claim would rest on timings — and this host's clock drifts
+ * further than the whole effect. Two integer increments against six resolver calls is not a cost
+ * worth gating behind a flag; only the window exposure is (`store/index.ts`).
+ */
+export type TabAgentProjectionCounters = {
+  /** Snapshots in which at least one input reference moved: the projection's generations. */
+  generations: number
+  /** Full per-tab derivations. Each runs the identity ladder and may mint a pane key. */
+  derivations: number
+  /** Pane-key strings minted by those derivations. */
+  paneKeys: number
+  /** Derivations whose every field equalled the prior generation's, so the reference was reused. */
+  reusedReferences: number
+  /** Asks answered from the current generation's map without deriving anything. */
+  cacheHits: number
+}
+
+const counters: TabAgentProjectionCounters = {
+  generations: 0,
+  derivations: 0,
+  paneKeys: 0,
+  reusedReferences: 0,
+  cacheHits: 0
+}
+
+export function readTabAgentProjectionCounters(): TabAgentProjectionCounters {
+  return { ...counters }
+}
+
+export function resetTabAgentProjectionCounters(): void {
+  counters.generations = 0
+  counters.derivations = 0
+  counters.paneKeys = 0
+  counters.reusedReferences = 0
+  counters.cacheHits = 0
+}
+
 /** The store references this projection reads. A write that changes none of them cannot change it. */
 type ProjectionInputs = readonly unknown[]
 
@@ -87,17 +129,25 @@ function reuseIfUnchanged(tabId: string, fresh: TabAgentSignals): TabAgentSignal
     return fresh
   }
   const keys = Object.keys(fresh) as (keyof TabAgentSignals)[]
-  return keys.every((key) => prior[key] === fresh[key]) ? prior : fresh
+  if (!keys.every((key) => prior[key] === fresh[key])) {
+    return fresh
+  }
+  counters.reusedReferences += 1
+  return prior
 }
 
 function computeSignals(
   state: AppState,
   tab: Pick<TerminalTab, 'id' | 'worktreeId'>
 ): TabAgentSignals {
+  counters.derivations += 1
   const layout = state.terminalLayoutsByTabId[tab.id]
   const activeLeafId = layout?.activeLeafId
-  const focusedPaneKey =
-    activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
+  let focusedPaneKey: string | null = null
+  if (activeLeafId && isTerminalLeafId(activeLeafId)) {
+    counters.paneKeys += 1
+    focusedPaneKey = makePaneKey(tab.id, activeLeafId)
+  }
   const foreground = focusedPaneKey ? state.paneForegroundAgentByPaneKey[focusedPaneKey] : undefined
 
   const leafPty = activeLeafId ? layout?.ptyIdsByLeafId?.[activeLeafId] : undefined
@@ -156,12 +206,14 @@ export function selectTabAgentSignals(
 ): TabAgentSignals {
   const inputs = readInputs(state)
   if (!sameInputs(inputs)) {
+    counters.generations += 1
     previousEntries = cachedEntries
     cachedEntries = new Map()
     cachedInputs = inputs
   }
   const hit = cachedEntries.get(tab.id)
   if (hit) {
+    counters.cacheHits += 1
     return hit
   }
   const entry = reuseIfUnchanged(tab.id, computeSignals(state, tab))
