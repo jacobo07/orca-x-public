@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_MAX_OBSERVATION_AGE_MS,
+  admitDispatch,
   decideDispatchAdmission,
+  observeDispatchHost,
   parseDispatchResourceRequirement,
   type DispatchObservationResult
 } from './dispatch-admission'
@@ -59,6 +61,35 @@ describe('parseDispatchResourceRequirement', () => {
     ['two conflicting declarations', 'min-available-memory: 1GB\nmin-available-memory: 2GB']
   ])('refuses to read %s as a requirement', (_label, spec) => {
     expect(parseDispatchResourceRequirement(spec).kind).toBe('malformed')
+  })
+})
+
+// Found by a surviving mutant: deleting the no-probe guard still refuses, because calling an
+// undefined probe throws into the catch. The dispatch is stopped either way and the REASON
+// degrades from "this runtime cannot answer" to "the reading failed" -- which sends whoever reads
+// it to the host instead of to the peer. Asserting the verdict alone cannot see that.
+describe('observeDispatchHost', () => {
+  it('reports a missing capability as such, not as a failed reading', async () => {
+    expect(await observeDispatchHost(undefined, 'term_a')).toMatchObject({
+      kind: 'unobservable',
+      cause: 'no-capability'
+    })
+  })
+
+  it('reports a probe that threw as a failed reading', async () => {
+    const result = await observeDispatchHost(async () => {
+      throw new Error('probe exploded')
+    }, 'term_a')
+    expect(result).toMatchObject({ kind: 'unavailable' })
+    expect(result.kind === 'unavailable' && result.detail).toContain('probe exploded')
+  })
+
+  it('refuses a declared requirement with the capability reason when no probe exists', async () => {
+    const { admission } = await admitDispatch({
+      spec: 'min-available-memory: 1GiB',
+      targetHandle: 'term_a'
+    })
+    expect(admission).toMatchObject({ verdict: 'refused', reason: 'executor-unobservable' })
   })
 })
 
