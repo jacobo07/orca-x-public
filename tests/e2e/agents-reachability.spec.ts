@@ -126,6 +126,20 @@ test('a person can create an agent and find the same one after a restart', async
 
     await session.close(second.app)
   } finally {
-    await session.dispose()
+    // Cleanup must not decide the verdict.
+    //
+    // `dispose()` removes a temp userDataDir, and on Windows that intermittently throws EPERM while
+    // a just-closed Electron still holds a handle. In a bare `finally { await dispose() }` — which
+    // is how this spec was first written, copying the conversations gate next door — that rejection
+    // REPLACES whatever the try block threw, so a real assertion failure is reported as a file
+    // permission error and the actual finding is lost.
+    //
+    // Measured: a mutation drill that removed `registerAgentHandlers` twice produced a run whose
+    // only recorded error was this EPERM, leaving it impossible to say whether the product broke or
+    // the temp directory was locked. Swallowing the cleanup error is what makes the drill able to
+    // answer.
+    await session.dispose().catch((error: unknown) => {
+      console.error(`[agents-e2e] cleanup failed (not a test result): ${String(error)}`)
+    })
   }
 })
