@@ -10,8 +10,14 @@
 //   AgentTeam / TeamPane  transport (tmux pane layout)
 //   AI Vault              a scanner over provider transcripts — "Agent Session History"
 //
-// So the list below is empty on purpose. W-C1 adds exactly one entry.
+// W-C1 added the first and only entry.
 // Enforced by `pnpm check:durable-actor-catalogs`.
 {
-  "actorCatalogs": []
+  "actorCatalogs": [
+    {
+      "source": "persisted-state",
+      "key": "agents",
+      "reason": "Orca's canonical durable product actor. Lives in PersistedState rather than its own store for one measured reason: `remappedProjectIds` is computed per read and discarded, so a dependent outside rebuildRepoBackedProjectState can never catch up on a Project id promotion. A second roster here would mean two answers to 'who is this agent'."
+    }
+  ]
 }

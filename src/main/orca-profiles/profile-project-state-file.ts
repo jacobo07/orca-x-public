@@ -7,6 +7,7 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shar
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import { carryProjectStateThroughIdentityChange } from '../../shared/project-identity-succession'
+import type { Agent } from '../../shared/agent-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
@@ -43,6 +44,7 @@ export function readProfileState(profileId: string, userDataPath: string): Trans
     projects: arrayOrEmpty<Project>(parsed.projects),
     projectHostSetups: arrayOrEmpty<ProjectHostSetup>(parsed.projectHostSetups),
     projectGroups: arrayOrEmpty(parsed.projectGroups),
+    agents: arrayOrEmpty<Agent>(parsed.agents),
     folderWorkspaces: arrayOrEmpty(parsed.folderWorkspaces),
     sparsePresetsByRepo: recordOrEmpty<SparsePreset[]>(parsed.sparsePresetsByRepo),
     retiredWorktreeNamesByRepo: recordOrEmpty<RetiredNameRegistry>(
@@ -135,8 +137,18 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+  // Why agents are remapped here rather than by a resolver of their own: `remappedProjectIds` is
+  // computed on each read and then discarded, so a durable dependent that misses this moment has
+  // no later opportunity — its owning project simply stops existing under the id it stored.
+  const agents = state.agents.map((agent) => {
+    const remappedProjectId = agent.projectId
+      ? succession.remappedProjectIds.get(agent.projectId)
+      : undefined
+    return remappedProjectId ? { ...agent, projectId: remappedProjectId } : agent
+  })
   return {
     ...state,
+    agents,
     projects: [...succession.projects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }
