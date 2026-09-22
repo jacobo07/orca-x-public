@@ -1,13 +1,13 @@
-// Characterization of what a full disk currently costs a scrollback snapshot.
+// What a full disk costs a scrollback snapshot.
 //
-// This file pins TODAY's behaviour, not the desired one: the writer catches ENOSPC, logs it, and
-// returns null — the same value it returns when there is no snapshot root to write to. A caller
-// holding that null cannot tell "the disk is full" from "there was nothing to store", so the
-// session file publishes without the ref and the save reports success. When the propagation is
-// fixed these expectations invert, and the diff between the two revisions is the evidence.
+// This file was born as a characterization: the writer caught ENOSPC, logged it, and returned null
+// — the same value it returned when there was no snapshot root. A caller holding that null could
+// not tell "the disk is full" from "there was nothing to store". These expectations have since
+// been inverted against the fix, so the diff between the two revisions is the evidence that the
+// cause now survives rather than a paragraph claiming it does.
 //
 // Every case proves the fault was actually planted before reading the outcome. An injector that
-// never fires produces null for the ordinary reason, which is indistinguishable from the defect.
+// never fires leaves the happy path running, which is indistinguishable from the defect being gone.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -102,8 +102,8 @@ describe('terminal scrollback snapshot under ENOSPC', () => {
       storage: { snapshotRoot: dir }
     })
 
-    // Without this, "returns null on ENOSPC" is satisfied by a writer that returns null always.
-    expect(ref, 'the happy path must produce a ref, or the ENOSPC case proves nothing').toBeTruthy()
+    // Without this, "reports storage-full on ENOSPC" is satisfied by a writer that never stores.
+    expect(ref.status, 'the happy path must store, or the ENOSPC case proves nothing').toBe('stored')
     expect(enospc.fired, 'the injector must not fire on the control').toBe(0)
   })
 
@@ -123,22 +123,37 @@ describe('terminal scrollback snapshot under ENOSPC', () => {
     // pass for the wrong reason — that is exactly how a failure-injection test reports a false green.
     expect(enospc.fired, 'ENOSPC was never injected; this run measured nothing').toBeGreaterThan(0)
 
-    // Today's truth: the disk-full cause is destroyed at the catch and the caller gets a bare null.
-    expect(onFullDisk).toBeNull()
+    // The cause now survives the catch, with the stage that failed and the OS code intact.
+    expect(onFullDisk).toStrictEqual({
+      status: 'not-stored',
+      failure: 'storage-full',
+      code: 'ENOSPC',
+      stage: 'write'
+    })
 
-    // And the null is not merely "falsy" — it is byte-identical to the null returned when the
-    // writer has nowhere to put the snapshot. That indistinguishability IS the defect: one means
-    // "your scrollback could not be saved", the other means "there was nothing to save".
-    const noWhereToWrite = await writeTerminalScrollbackSnapshot({
+    // Three outcomes that were once ONE null, now telling the caller three different things.
+    // A full disk asks the user to free space; an unreachable root is a broken install; an empty
+    // buffer is not a failure at all. Collapsing them is what made the first two unactionable.
+    const unreachableRoot = await writeTerminalScrollbackSnapshot({
       tabId: 'tab-nowhere',
       leafId: 'leaf-nowhere',
       buffer: 'scrollback-body',
       storage: { snapshotRoot: '' }
     })
-    expect(onFullDisk).toStrictEqual(noWhereToWrite)
+    const nothingToSave = await writeTerminalScrollbackSnapshot({
+      tabId: 'tab-empty',
+      leafId: 'leaf-empty',
+      buffer: '',
+      storage: { snapshotRoot: dir }
+    })
+
+    expect(unreachableRoot).toMatchObject({ status: 'not-stored', failure: 'storage-unavailable' })
+    expect(nothingToSave).toStrictEqual({ status: 'nothing-to-store' })
+    expect(onFullDisk).not.toStrictEqual(unreachableRoot)
+    expect(onFullDisk).not.toStrictEqual(nothingToSave)
   })
 
-  it('characterizes: the sync writer collapses ENOSPC the same way', async () => {
+  it('the sync writer reports storage-full the same way', async () => {
     const { writeTerminalScrollbackSnapshotSync } = await import('./terminal-scrollback-snapshots')
 
     enospc.armed = true
@@ -151,6 +166,12 @@ describe('terminal scrollback snapshot under ENOSPC', () => {
     enospc.armed = false
 
     expect(enospc.fired, 'ENOSPC was never injected; this run measured nothing').toBeGreaterThan(0)
-    expect(onFullDisk).toBeNull()
+    // The quit path uses this variant, so it must not be the one that still loses the cause.
+    expect(onFullDisk).toStrictEqual({
+      status: 'not-stored',
+      failure: 'storage-full',
+      code: 'ENOSPC',
+      stage: 'write'
+    })
   })
 })

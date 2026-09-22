@@ -19,10 +19,14 @@ export async function migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
     const refs = { ...layout.scrollbackRefsByLeafId }
     const remainingBuffers: Record<string, string> = {}
     for (const [leafId, buffer] of Object.entries(buffers)) {
-      const ref = await writeTerminalScrollbackSnapshot({ tabId, leafId, buffer, storage })
-      if (ref) {
-        refs[leafId] = ref
+      const outcome = await writeTerminalScrollbackSnapshot({ tabId, leafId, buffer, storage })
+      if (outcome.status === 'stored') {
+        refs[leafId] = outcome.ref
       } else {
+        // Why the buffer stays inline on BOTH remaining outcomes: it is the only copy, and
+        // dropping it for a snapshot that was never written would turn a storage failure into
+        // scrollback loss. That the two are now distinguishable is the point — this path happens
+        // to degrade the same way for either, and it can finally say which one it took.
         remainingBuffers[leafId] = buffer
         delete refs[leafId]
       }
