@@ -50,7 +50,11 @@ function syncDirectorySync(directory: string): void {
  * themselves and need the rename made durable.
  */
 export async function renameDurable(tmpPath: string, finalPath: string): Promise<void> {
-  await rename(tmpPath, finalPath)
+  try {
+    await rename(tmpPath, finalPath)
+  } catch (error) {
+    throw new DurablePublishError('publish', error)
+  }
   await syncDirectory(dirname(finalPath))
 }
 
@@ -78,11 +82,13 @@ export async function writeFileDurableIfCurrent(
   options: DurableWriteOptions = {}
 ): Promise<boolean> {
   let renamed = false
+  let stage: DurablePublishStage = 'write'
   try {
     const handle = await open(tmpPath, 'w', options.mode)
     try {
       await handle.writeFile(payload)
       // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
+      stage = 'barrier'
       await handle.sync()
     } finally {
       await handle.close()
@@ -90,10 +96,15 @@ export async function writeFileDurableIfCurrent(
     if (!isCurrent()) {
       return false
     }
+    stage = 'publish'
     await rename(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true
+  } catch (error) {
+    // Why re-wrap only once: a nested publisher may already have named a more precise stage, and
+    // replacing it here would move the blame outward to whichever frame caught it last.
+    throw error instanceof DurablePublishError ? error : new DurablePublishError(stage, error)
   } finally {
     if (!renamed) {
       await rm(tmpPath, { force: true }).catch(() => {})
@@ -208,17 +219,22 @@ export function writeFileDurableSync(
   options: DurableWriteOptions = {}
 ): void {
   let renamed = false
+  let stage: DurablePublishStage = 'write'
   try {
     writeFileSync(tmpPath, payload, { mode: options.mode })
+    stage = 'barrier'
     const fd = openSync(tmpPath, 'r+')
     try {
       fsyncSync(fd)
     } finally {
       closeSync(fd)
     }
+    stage = 'publish'
     renameSync(tmpPath, finalPath)
     renamed = true
     syncDirectorySync(dirname(finalPath))
+  } catch (error) {
+    throw error instanceof DurablePublishError ? error : new DurablePublishError(stage, error)
   } finally {
     if (!renamed) {
       try {
