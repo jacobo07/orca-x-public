@@ -7,7 +7,6 @@ import { mintAgentId } from '../../shared/agent-identity'
 import type { Agent } from '../../shared/agent-types'
 import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
 
-import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import { ConversationService } from './conversation-service'
 import {
   runConversationTurn,
@@ -178,16 +177,6 @@ describe('an agent chat across turns', () => {
   })
 })
 
-describe('compileAgentTurnInstructions', () => {
-  it('names the agent and carries the role in the creator’s words', () => {
-    const compiled = compileAgentTurnInstructions({ name: 'Ada', role: '  Finds data loss.  ' })
-    expect(compiled).toContain('"Ada"')
-    expect(compiled).toContain('Finds data loss.')
-  })
-
-  it('omits the role paragraph when the role is empty rather than sending a blank one', () => {
-    expect(compileAgentTurnInstructions({ name: 'Ada', role: '   ' })).toBe(
-      'You are the Orca agent named "Ada".'
-    )
-  })
-})
+// The compiler's own cases live in agent-turn-instructions.test.ts, beside what they test, rather
+// than in two places: a looser duplicate can satisfy the stricter copy's subject and disarm the
+// drill that proves the stricter one still works.

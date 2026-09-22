@@ -138,7 +138,9 @@ export async function runConversationTurn(
   }
 
   const developerInstructions =
-    binding.kind === 'agent' ? compileAgentTurnInstructions(binding.agent) : null
+    binding.kind === 'agent' && location.outcome !== 'none'
+      ? compileAgentTurnInstructions(binding.agent, location)
+      : null
 
   // An agent's project is the authority and overrides the caller outright. Everything else falls
   // back to a DECLARED location rather than to whatever directory this process happens to be in.
