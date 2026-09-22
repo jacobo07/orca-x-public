@@ -15,6 +15,8 @@
       "sleptTitle": "Asleep, not running",
       "sleptFreshBody": "Opening it starts this terminal again in its folder.",
       "resumeBody": "Opening it resumes the {{agent}} session.",
+      "unconfirmedResumeBody": "Opening it will try to resume the {{agent}} session. Its conversation could not be confirmed, so it may start fresh instead.",
+      "claimedElsewhereBody": "That session is open somewhere else, so this row will not take it. Opening it starts a new terminal in its folder.",
       "freshBody": "Opening it starts a new terminal in its folder.",
       "open": "Open"
     },
