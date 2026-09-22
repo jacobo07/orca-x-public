@@ -748,6 +748,10 @@ export type UISlice = {
   openMobilePage: () => void
   closeMobilePage: () => void
   openConversationsPage: () => void
+  /** The agent the conversations surface is opened FOR, or null for Brainstorming. Window-local
+   *  and never persisted: a restart returns to Brainstorming, and Agents is the way back. */
+  conversationAgentScope: string | null
+  openAgentChat: (agentId: string) => void
   openAgentsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
@@ -1540,7 +1544,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   openWorkspacePage: () => set({ activeView: 'workspace' }),
   // No previous-view tracking: conversations has no close or back affordance yet, and state that
   // nothing reads is worse than state that does not exist.
-  openConversationsPage: () => set({ activeView: 'conversations' }),
+  openConversationsPage: () => set({ activeView: 'conversations', conversationAgentScope: null }),
+  conversationAgentScope: null,
+  // The same surface as Brainstorming, scoped: one chat stack, not an agent-shaped second one.
+  openAgentChat: (agentId) => set({ activeView: 'conversations', conversationAgentScope: agentId }),
   // Same shape as conversations, and for the same reason: no close or back affordance exists yet,
   // so previous-view state would be written and never read.
   openAgentsPage: () => set({ activeView: 'agents' }),

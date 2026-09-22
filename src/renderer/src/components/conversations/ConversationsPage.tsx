@@ -3,10 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { ConversationSummary } from '../../../../shared/conversation-summary'
 import type { ConversationRecord } from '../../../../shared/conversation-types'
 import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 
+import { AgentChatHeader } from './AgentChatHeader'
+import { conversationsInScope, latestConversationForAgent } from './agent-chat-scope'
 import { ConversationList } from './ConversationList'
 import { ConversationNotice } from './ConversationNotice'
 import {
@@ -14,17 +17,25 @@ import {
   applyConversationTurnOutcome,
   beginConversationTurn,
   EMPTY_CONVERSATION_LIVE_STATE,
+  noticeForAgentCreateRefusal,
   type ConversationLiveState
 } from './conversation-live-state'
 import { conversationToNativeChatSession } from './conversation-native-chat-session'
+import { useScopedAgent } from './use-scoped-agent'
 
 /**
- * Brainstorming: a durable Orca conversation with no terminal anywhere.
+ * Brainstorming AND Direct Agent Chat: a durable Orca conversation with no terminal anywhere.
+ *
+ * One surface, two scopes. `conversationAgentScope` null is Brainstorming; an agent id is a chat
+ * with that agent — same list, same stream, same composer, same main-process owner. The only
+ * differences are which conversations are listed, which create is called on first send, and a
+ * header saying who you are talking to. An agent-shaped copy of this page would be a second chat
+ * stack that drifts from the first.
  *
  * "New chat" makes a DRAFT, not a record. The record is minted and the user's message is made
  * durable on the first send, before the provider is asked anything — which keeps empty
- * conversations from piling up every time someone clicks the button, and keeps a typed sentence
- * from being the one thing with no record of having existed.
+ * conversations from piling up every time someone clicks the button or browses an agent, and keeps
+ * a typed sentence from being the one thing with no record of having existed.
  *
  * There is no Stop control. `turn/interrupt` exists on the wire and Orca has no call site for it,
  * so the button would do nothing; the gap is named rather than mimed.
@@ -34,6 +45,9 @@ import { conversationToNativeChatSession } from './conversation-native-chat-sess
  * skipped by several screen readers.
  */
 export default function ConversationsPage(): React.JSX.Element {
+  const agentScope = useAppStore((s) => s.conversationAgentScope)
+  const openAgentsPage = useAppStore((s) => s.openAgentsPage)
+  const scopedAgent = useScopedAgent(agentScope)
   const [summaries, setSummaries] = useState<readonly ConversationSummary[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -45,6 +59,7 @@ export default function ConversationsPage(): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const activeIdRef = useRef<string | null>(null)
+  const openLatestPendingRef = useRef(false)
   activeIdRef.current = activeId
 
   const refreshList = useCallback(async () => {
@@ -74,9 +89,17 @@ export default function ConversationsPage(): React.JSX.Element {
     )
   }, [])
 
+  // Entering a scope starts from a clean draft and a fresh list, then opens the agent's latest
+  // conversation once that list has arrived — never from the previous scope's rows.
   useEffect(() => {
+    setDraftActive(true)
+    setActiveId(null)
+    setLive(EMPTY_CONVERSATION_LIVE_STATE)
+    setDraft('')
+    setListLoading(true)
+    openLatestPendingRef.current = agentScope !== null
     void refreshList()
-  }, [refreshList])
+  }, [agentScope, refreshList])
 
   useEffect(() => {
     if (activeId === null) {
@@ -104,6 +127,17 @@ export default function ConversationsPage(): React.JSX.Element {
     setLive(EMPTY_CONVERSATION_LIVE_STATE)
   }, [])
 
+  useEffect(() => {
+    if (!openLatestPendingRef.current || agentScope === null || listLoading) {
+      return
+    }
+    openLatestPendingRef.current = false
+    const latest = latestConversationForAgent(summaries, agentScope)
+    if (latest !== null) {
+      openConversation(latest)
+    }
+  }, [agentScope, listLoading, summaries, openConversation])
+
   const startDraft = useCallback(() => {
     setDraftActive(true)
     setActiveId(null)
@@ -123,9 +157,21 @@ export default function ConversationsPage(): React.JSX.Element {
     let conversationId = activeId
     if (conversationId === null) {
       // The draft becomes real here, and only here.
-      const created = await window.api.conversations.create({ title: text.slice(0, 60) })
-      conversationId = created.id
-      setActiveId(created.id)
+      if (agentScope !== null) {
+        const created = await window.api.conversations.createForAgent({
+          agentId: agentScope,
+          title: text.slice(0, 60)
+        })
+        if (created.outcome !== 'created') {
+          // Nothing was minted; the draft is left in the composer rather than thrown away.
+          setLive((current) => ({ ...current, notice: noticeForAgentCreateRefusal(created) }))
+          return
+        }
+        conversationId = created.record.id
+      } else {
+        conversationId = (await window.api.conversations.create({ title: text.slice(0, 60) })).id
+      }
+      setActiveId(conversationId)
       setDraftActive(false)
     }
 
@@ -138,7 +184,12 @@ export default function ConversationsPage(): React.JSX.Element {
     await loadRecord(conversationId)
     await refreshList()
     composerRef.current?.focus()
-  }, [activeId, draft, live.turnState, loadRecord, refreshList])
+  }, [activeId, agentScope, draft, live.turnState, loadRecord, refreshList])
+
+  const visibleSummaries = useMemo(
+    () => conversationsInScope(summaries, agentScope),
+    [summaries, agentScope]
+  )
 
   const session = useMemo(
     () => conversationToNativeChatSession({ record, live, loading: recordLoading, readError }),
@@ -148,9 +199,13 @@ export default function ConversationsPage(): React.JSX.Element {
   const working = live.turnState === 'working'
 
   return (
-    <div className="flex h-full min-h-0 w-full" data-testid="conversations-page">
+    <div
+      className="flex h-full min-h-0 w-full"
+      data-testid="conversations-page"
+      data-conversation-scope={agentScope === null ? 'brainstorming' : 'agent'}
+    >
       <ConversationList
-        summaries={summaries}
+        summaries={visibleSummaries}
         activeId={activeId}
         draftActive={draftActive}
         loading={listLoading}
@@ -159,6 +214,10 @@ export default function ConversationsPage(): React.JSX.Element {
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {scopedAgent !== null ? (
+          <AgentChatHeader lookup={scopedAgent} onBack={openAgentsPage} />
+        ) : null}
+
         <div className="min-h-0 flex-1">
           <NativeChatMessageList
             session={session}

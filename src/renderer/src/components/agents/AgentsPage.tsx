@@ -18,11 +18,9 @@ import { NewAgentDialog } from './NewAgentDialog'
  * provider, no host, no online dot, no "last message", no run count — every one of those has zero
  * producer today, and a plausible value with no producer is a lie that happens to be well-formed.
  *
- * Rows are not clickable, deliberately. The interaction a row of this shape promises is "talk to
- * this agent", and Direct Agent Chat does not exist: an Agent owns a `role` and nothing compiles it
- * into a turn, so opening one would be a Brainstorming chat wearing a label. A row that looks like
- * a conversation and opens nothing is worse than a row that never offered. They become buttons in
- * the wave that gives them somewhere to go.
+ * A row opens a chat with that agent. It was inert until the agent's role compiled into a turn
+ * (agent-turn-instructions.ts); before that, opening one would have been Brainstorming wearing a
+ * label. The chat is the ordinary conversations surface scoped to this agent, not a second stack.
  */
 
 type LoadState =
@@ -30,15 +28,24 @@ type LoadState =
   | { status: 'ready'; agents: readonly Agent[] }
   | { status: 'failed'; reason: string }
 
-function AgentRow({ agent }: { agent: Agent }): React.JSX.Element {
+function AgentRow({
+  agent,
+  onOpen
+}: {
+  agent: Agent
+  onOpen: (agentId: string) => void
+}): React.JSX.Element {
   return (
-    <li
-      data-testid="agents-list-row"
-      data-agent-id={agent.id}
-      className="flex flex-col rounded-md px-3 py-2 hover:bg-muted/40"
-    >
-      <span className="text-sm">{agent.name}</span>
-      {agent.role ? <span className="text-xs text-muted-foreground">{agent.role}</span> : null}
+    <li data-testid="agents-list-row" data-agent-id={agent.id}>
+      <button
+        type="button"
+        onClick={() => onOpen(agent.id)}
+        data-testid="agents-list-row-open"
+        className="flex w-full flex-col rounded-md px-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="text-sm">{agent.name}</span>
+        {agent.role ? <span className="text-xs text-muted-foreground">{agent.role}</span> : null}
+      </button>
     </li>
   )
 }
@@ -54,6 +61,7 @@ export default function AgentsPage(): React.JSX.Element {
   // project was silently always null. The node typecheck does not cover the renderer and the dialog
   // test takes `defaultProjectId` as a prop, so neither could see it — only the web typecheck did.
   const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const openAgentChat = useAppStore((s) => s.openAgentChat)
 
   const refresh = useCallback(async () => {
     try {
@@ -161,7 +169,7 @@ export default function AgentsPage(): React.JSX.Element {
             </h2>
             <ul className="flex flex-col gap-1" data-testid="agents-list">
               {group.agents.map((agent) => (
-                <AgentRow key={agent.id} agent={agent} />
+                <AgentRow key={agent.id} agent={agent} onOpen={openAgentChat} />
               ))}
             </ul>
           </section>

@@ -11,6 +11,7 @@
 
 import type { AgentTurnEvent } from '../../../../shared/agent-turn-event'
 import type { ConversationTurnOutcome } from '../../../../shared/conversation-turn'
+import type { ConversationForAgentResult } from '../../../../shared/conversation-types'
 
 export type ConversationNoticeKind =
   | 'auth-required'
@@ -127,6 +128,17 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
         detail: null,
         userMessageKept: false
       }
+  }
+}
+
+/** A refused agent-bound create: nothing was minted, and the typed message stays in the composer. */
+export function noticeForAgentCreateRefusal(
+  result: Exclude<ConversationForAgentResult, { outcome: 'created' }>
+): ConversationNotice {
+  return {
+    kind: result.outcome === 'agent-not-found' ? 'agent-missing' : 'agent-unverifiable',
+    detail: null,
+    userMessageKept: false
   }
 }
 
