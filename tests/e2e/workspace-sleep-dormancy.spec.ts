@@ -349,6 +349,12 @@ test('a workspace slept with its conversation gone promises only an attempt', as
     await page.evaluate(() =>
       window.__store!.getState().updateSettings({ agentCmdOverrides: { codex: 'echo' } })
     )
+    await expect
+      .poll(() => liveRowIds(page, worktreeId), {
+        timeout: 30_000,
+        message: 'the row is running before the sleep'
+      })
+      .toHaveLength(1)
     const ids = await rowIds(page, worktreeId)
 
     // Seeded so the fixture is provably sound, then recorded against a sibling path that was never
@@ -386,6 +392,18 @@ test('a workspace slept with its conversation gone promises only an attempt', as
         message: 'sleep released every row'
       })
       .toEqual([])
+
+    // Loud precondition: the verdict is ABOUT a captured record. Without this, a fixture that
+    // never registered an agent reads as the product honestly answering `none`, and the
+    // falsification below would pass for the wrong reason.
+    const sleptSessions = await page.evaluate(
+      (tabIds) =>
+        Object.values(window.__store!.getState().sleepingAgentSessionsByPaneKey)
+          .filter((record) => record.tabId && tabIds.includes(record.tabId))
+          .map((record) => record.tabId),
+      ids
+    )
+    expect(sleptSessions).toEqual([ids[0]])
 
     // Absent and unknown are different answers and neither earns a promise; this is the one a
     // conversation that is no longer there produces.
