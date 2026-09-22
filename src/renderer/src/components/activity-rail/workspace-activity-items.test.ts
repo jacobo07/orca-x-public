@@ -56,6 +56,7 @@ describe('getVisibleWorkspaceActivities', () => {
       showArtifactsButton: true,
       showSkillsButton: true,
       showConversationsButton: true,
+      showAgentsButton: true,
       experimentalActivity: true
     })
 

@@ -28,6 +28,7 @@ const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage')
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
 const ConversationsPage = lazy(() => import('../components/conversations/ConversationsPage'))
+const AgentsPage = lazy(() => import('../components/agents/AgentsPage'))
 const WorkspaceLauncher = lazy(() =>
   import('../components/workspace-launcher/WorkspaceLauncher').then((module) => ({
     default: module.WorkspaceLauncher
@@ -86,6 +87,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
       {activeView === 'conversations' ? <ConversationsPage /> : null}
+      {activeView === 'agents' ? <AgentsPage /> : null}
       {activeView === 'workspace' ? <WorkspaceLauncher /> : null}
       {activeView === 'terminal' && creationLayoutActive && activePendingCreationId ? (
         <WorktreeCreationPanel

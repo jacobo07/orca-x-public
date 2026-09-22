@@ -241,6 +241,11 @@ export type GlobalSettings = {
    *  ask for it. Conversations are durable whether or not this is on — the flag governs the rail
    *  entry, not the data. */
   showConversationsButton?: boolean
+  /** Opt-in, like Conversations: the persistent Agents directory must not appear for someone who
+   *  did not ask for it. The agents themselves are durable whether or not this is on — the flag
+   *  governs the rail entry, not the roster. Distinct from `experimentalActivity`, which gates the
+   *  runtime Activity feed; the two surfaces were one noun until W-C3 and are not one setting. */
+  showAgentsButton?: boolean
   /** Only toggles the sidebar shortcut; the workspace launcher stays reachable from Settings. */
   showWorkspaceButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */

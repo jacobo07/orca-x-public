@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   CalendarClock,
+  Contact,
   EyeOff,
   Files,
   Github,
@@ -55,6 +56,7 @@ const ACTIVITY_ICONS: Record<
 > = {
   workspace: AppWindow,
   conversations: MessageSquare,
+  agents: Contact,
   tasks: List,
   automations: CalendarClock,
   activity: Bell,
@@ -67,6 +69,11 @@ function activityLabel(activity: WorkspaceActivityId): string {
   switch (activity) {
     case 'conversations':
       return translate('conversations.railLabel', 'Chats')
+    // The noun's original key, moved here from the runtime feed. Its catalogue entries ARE the
+    // noun, already translated in all five locales, and they were always describing the durable
+    // actor rather than the inbox of panes that happened to be holding the name.
+    case 'agents':
+      return translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')
     case 'workspace':
       return translate('auto.components.sidebar.SidebarNav.workspace', 'Workspace')
     case 'tasks':
@@ -266,6 +273,7 @@ const HIDE_SETTING_BY_ACTIVITY: Record<WorkspaceActivityId, keyof GlobalSettings
   // Hideable like the other opt-in surfaces: something you turned on, you can turn off from the
   // rail itself rather than having to find the setting again.
   conversations: 'showConversationsButton',
+  agents: 'showAgentsButton',
   tasks: 'showTasksButton',
   automations: 'showAutomationsButton',
   mobile: 'showMobileButton',
@@ -321,6 +329,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
+  const openAgentsPage = useAppStore((s) => s.openAgentsPage)
 
   const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
   const showsActivity = visible.includes('activity')
@@ -348,6 +357,8 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
           return openWorkspacePage()
         case 'conversations':
           return openConversationsPage()
+        case 'agents':
+          return openAgentsPage()
         case 'tasks':
           return openTaskPage()
         case 'automations':
@@ -375,6 +386,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
     [
       mobileOnboardingBadge,
       openActivityPage,
+      openAgentsPage,
       openArtifactsPage,
       openAutomationsPage,
       openConversationsPage,

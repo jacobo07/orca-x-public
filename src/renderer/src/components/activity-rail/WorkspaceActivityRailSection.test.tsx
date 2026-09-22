@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
   openConversationsPage: vi.fn(),
+  openAgentsPage: vi.fn(),
   openArtifactsPage: vi.fn(),
   openSkillsPage: vi.fn(),
   openWorkspacePage: vi.fn(),
@@ -93,6 +94,7 @@ function renderRail(settings: Record<string, unknown> = {}): void {
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
     openConversationsPage: mocks.openConversationsPage,
+    openAgentsPage: mocks.openAgentsPage,
     openArtifactsPage: mocks.openArtifactsPage,
     openSkillsPage: mocks.openSkillsPage,
     openWorkspacePage: mocks.openWorkspacePage
@@ -160,6 +162,7 @@ describe('WorkspaceActivityRailSection', () => {
   it('leaves no visible activity that dispatches nothing', () => {
     renderRail({
       showConversationsButton: true,
+      showAgentsButton: true,
       showArtifactsButton: true,
       showSkillsButton: true,
       experimentalActivity: true
@@ -172,6 +175,7 @@ describe('WorkspaceActivityRailSection', () => {
     const dispatched: Record<WorkspaceActivityId, ReturnType<typeof vi.fn>> = {
       workspace: mocks.openWorkspacePage,
       conversations: mocks.openConversationsPage,
+      agents: mocks.openAgentsPage,
       tasks: mocks.openTaskPage,
       automations: mocks.openAutomationsPage,
       activity: mocks.openActivityPage,

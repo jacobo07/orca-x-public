@@ -524,7 +524,7 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
 
 function sanitizeHydratedActiveView(
   value: PersistedUIState['activeView'],
-  experimentalActivityEnabled: boolean
+  gates: { experimentalActivityEnabled: boolean; agentsEnabled: boolean }
 ): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have
   // falls back to terminal rather than rendering nothing.
@@ -532,7 +532,13 @@ function sanitizeHydratedActiveView(
     return 'terminal'
   }
   // Why: activity is hidden when its setting is off, so gate only it (mobile/automations stay functional when hidden).
-  if (value === 'activity' && !experimentalActivityEnabled) {
+  if (value === 'activity' && !gates.experimentalActivityEnabled) {
+    return 'terminal'
+  }
+  // Why agents joins that list rather than mobile's: it is reachable ONLY from the rail entry its
+  // setting controls. Restoring onto it with the entry hidden strands someone on a page whose own
+  // navigation is gone — where Mobile and Automations stay reachable from Settings and the menu.
+  if (value === 'agents' && !gates.agentsEnabled) {
     return 'terminal'
   }
   return value
@@ -742,6 +748,7 @@ export type UISlice = {
   openMobilePage: () => void
   closeMobilePage: () => void
   openConversationsPage: () => void
+  openAgentsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1534,6 +1541,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   // No previous-view tracking: conversations has no close or back affordance yet, and state that
   // nothing reads is worse than state that does not exist.
   openConversationsPage: () => set({ activeView: 'conversations' }),
+  // Same shape as conversations, and for the same reason: no close or back affordance exists yet,
+  // so previous-view state would be written and never read.
+  openAgentsPage: () => set({ activeView: 'agents' }),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',
@@ -2689,7 +2699,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'
-            ? sanitizeHydratedActiveView(ui.activeView, s.settings?.experimentalActivity === true)
+            ? sanitizeHydratedActiveView(ui.activeView, {
+                experimentalActivityEnabled: s.settings?.experimentalActivity === true,
+                agentsEnabled: s.settings?.showAgentsButton === true
+              })
             : s.activeView,
         persistedUIReady: true
       }

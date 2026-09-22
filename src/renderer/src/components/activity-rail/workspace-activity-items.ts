@@ -16,6 +16,7 @@ import type { TopLevelView } from '../../../../shared/ui-chrome-types'
 export type WorkspaceActivityId =
   | 'workspace'
   | 'conversations'
+  | 'agents'
   | 'tasks'
   | 'automations'
   | 'activity'
@@ -33,10 +34,17 @@ export type WorkspaceActivityId =
  * first" is a product decision this file's own test pins, and the reference information
  * architecture that leads with a chat entry is a navigation decision for that wave to make
  * deliberately, not something a new surface should take by arriving.
+ *
+ * Agents sit THIRD, immediately after the chats. They are the two halves of one idea — a chat is
+ * with nobody in particular, an agent is somebody you keep — and putting the durable half beside
+ * the transient one is the only ordering claim W-C3 makes. Nothing else moved: the rest of the
+ * rail is exactly where it was, because reordering the whole IA is a decision of its own and
+ * arriving is not a licence to take it.
  */
 export const WORKSPACE_ACTIVITY_ORDER: readonly WorkspaceActivityId[] = [
   'workspace',
   'conversations',
+  'agents',
   'tasks',
   'automations',
   'activity',
@@ -55,12 +63,14 @@ export type WorkspaceActivitySettings = Partial<
     | 'showArtifactsButton'
     | 'showSkillsButton'
     | 'showConversationsButton'
+    | 'showAgentsButton'
     | 'experimentalActivity'
   >
 > | null | undefined
 
 const ACTIVE_VIEW_BY_ACTIVITY: Record<WorkspaceActivityId, TopLevelView> = {
   conversations: 'conversations',
+  agents: 'agents',
   workspace: 'workspace',
   tasks: 'tasks',
   automations: 'automations',
@@ -96,6 +106,11 @@ function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySet
       return settings?.showSkillsButton === true
     case 'conversations':
       return settings?.showConversationsButton === true
+    // Its own key, not `experimentalActivity`. The two surfaces shared a noun until W-C3 and never
+    // shared a meaning: one is a roster of durable actors, the other an inbox of running panes.
+    // Reusing the flag would have made turning the feed off silently take the roster with it.
+    case 'agents':
+      return settings?.showAgentsButton === true
     case 'activity':
       return settings?.experimentalActivity === true
   }
