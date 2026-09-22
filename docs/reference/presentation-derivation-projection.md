@@ -105,6 +105,53 @@ Both numbers come from the same instrument the existing ratchets use
   whose reference is reused while its fields are unchanged, so a change to one tab still re-renders
   exactly one row.
 
+## Product Reality — the same result, in the real app
+
+Everything above was measured in happy-dom, against a hand-built store, with `vi.mock` around
+`lib/tab-agent`. That is a structural result about a composed fixture, and the mechanism it describes
+depends on things a fixture does not have: zustand's real listener set, the real store's slice
+identities, and which presentation surface is actually mounted.
+
+`tests/e2e/dormant-derivation-reality.spec.ts` drives it in Electron. Rows are seeded the way a user
+gets them — two real terminals captured through the real producer, cloned to scale, restored into an
+emptied workspace, verified to hold **no PTY** — and the counters read are the projection's own,
+because a packaged renderer cannot be mocked (`lib/tab-agent-projection-counters.test.ts` proves those
+counters move before this spec is allowed to read a zero out of them).
+
+Both surfaces separately, because W1 measured that the rail and the strip swap and that exactly one is
+always mounted: answering for one would answer for half the product.
+
+| scale | surface | unrelated write | relevant write |
+|---|---|---|---|
+| 10 | rail | `gen=0 derive=0 paneKeys=0` **hits=60** | `gen=1 derive=10 paneKeys=10 reused=10` |
+| 10 | strip | `gen=0 derive=0 paneKeys=0` **hits=70** | `gen=1 derive=10 paneKeys=10 reused=10` |
+| 50 | rail | `gen=0 derive=0 paneKeys=0` **hits=400** | `gen=1 derive=50 paneKeys=50 reused=50` |
+| 50 | strip | `gen=0 derive=0 paneKeys=0` **hits=350** | `gen=1 derive=50 paneKeys=50 reused=50` |
+
+The hit counts are the load-bearing half of the zero. A projection that had stopped deriving, a
+surface that had quietly unmounted, and an exposure that never bound all produce `derive=0`; only
+`hits ≥ rows` says the rows were genuinely asked. They also name something the happy-dom file could
+not see: each dormant row is consulted **6-10 times per store write** in the real app, not once, so
+what the cache absorbs is that multiple, and the pre-fix cost was correspondingly worse than the
+fixture suggested.
+
+### Both mutants were driven in Electron, and both restores SHA-256 verified
+
+- **An over-broad input list** (a store field the projection does not need joins `readInputs`, which
+  is the realistic regression): `unrelated{gen=1 derive=50 paneKeys=50}` at 50 rows — the pre-fix
+  world, reproduced in the product — failing on `rail@10 unrelated write opened no generation`.
+- **Structural sharing removed**: every derivation count stays **identical** and `reused` collapses to
+  **0**, failing on `rail@10 unchanged rows kept their reference`. This is the near-miss made real: an
+  optimization that leaves upstream work untouched while broadening downstream invalidation passes
+  every derivation assertion in this file and is a renderer regression.
+
+Two blunter mutants were discarded rather than reported: forcing the generation guard to `true`, and
+forcing every ask to miss the map. Both remove memoization outright, and zustand's object selector
+then never reaches a stable reference, so **the renderer never finished its first paint** — they fail
+on "never mounted N rows", which is a precondition failure rather than this assertion going red. That
+the app does not render at all without this memoization is itself worth knowing; it is not evidence
+about the counters.
+
 ### What this does NOT claim
 
 `useTabAgent` did not become stateless. It still owns `hasObservedAgentSignal` and two effects, one of
