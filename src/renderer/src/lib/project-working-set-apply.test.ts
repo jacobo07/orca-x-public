@@ -364,7 +364,7 @@ describe('restored rows at workspace activation (W6)', () => {
     const id = rows.find((row) => row.dormancy)!.id
     store.getState().requestDormantTerminalTabOpen(id)
     const requested = () => store.getState().tabsByWorktree[OWNER].find((row) => row.id === id)!
-    expect(requested().dormancy).toEqual({ reason: 'working-set-restore' })
+    expect(requested().dormancy).toEqual({ reason: 'working-set-restore', resumeContinuity: 'none' })
     expect(requested().dormantOpenRequested).toBe(true)
     store.getState().updateTabPtyId(id, 'pty-opened')
     expect(requested().dormancy).toBeUndefined()
@@ -382,7 +382,10 @@ describe('restored rows at workspace activation (W6)', () => {
     const row = persisted.ok
       ? persisted.value.tabsByWorktree[OWNER].find((candidate) => candidate.id === id)!
       : null
-    expect(row?.dormancy).toEqual({ reason: 'working-set-restore' })
+    // This row is read back through the session schema, so it also pins that the continuity verdict
+    // survives persistence — a field absent from that zod object is written and silently discarded
+    // on the next cold load, which is the same drop the verdict exists to close.
+    expect(row?.dormancy).toEqual({ reason: 'working-set-restore', resumeContinuity: 'none' })
     expect(row?.dormantOpenRequested).toBeUndefined()
     expect(isTerminalTabDormant(row!)).toBe(true)
   })

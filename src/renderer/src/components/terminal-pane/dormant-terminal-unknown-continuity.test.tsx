@@ -20,12 +20,16 @@
  * the evidence lost the one field that mattered one frame earlier. That is why this cannot be fixed
  * by editing a string: the surface has no field with which to be honest.
  *
- * CHARACTERIZATION, to be INVERTED IN PLACE when the fix lands, so the diff between two versions of
- * this file is the evidence rather than a new test beside a deleted one. Every `TODAY:` assertion
- * below asserts the wrong behaviour on purpose.
+ * INVERTED IN PLACE (c3502a0b1). This file first asserted the defect — `{ reason:
+ * 'working-set-restore' }` with no verdict on the row, and "Opening it resumes the Claude session."
+ * rendered verbatim — so the diff between the two versions is the evidence, rather than a new test
+ * beside a deleted one. The fix carries the verdict on the dormancy marker, which is the only thing
+ * that travels with a restored row, and the surface reads it.
  *
  * The first case is not a characterization: it proves through the REAL planner that the state exists
- * at all. Without it the rest would be a test of a world production never enters.
+ * at all. Without it the rest would be a test of a world production never enters. The exact-resume
+ * case is the other half of the same requirement — a row that had simply stopped saying anything
+ * satisfies every "does not promise" assertion here and looks exactly like the fix working.
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -107,21 +111,26 @@ function manifest(): ProjectWorkingSetManifest {
 }
 
 /**
- * The directory is there and the conversation is NOT. Not "proven deleted" — unreadable, which is
- * the ordinary case: another machine, a pruned cache, a provider home the probe could not reach.
+ * The directory is there; the conversation is whatever the case says.
+ *
+ * `unknown` is not "proven deleted" — it is unreadable, which is the ordinary case: another machine,
+ * a pruned cache, a provider home the probe could not reach.
  */
-function unconfirmedEvidence(): WorkingSetRestoreEvidence {
+function evidenceWith(transcript: 'present' | 'absent' | 'unknown'): WorkingSetRestoreEvidence {
   return {
     location: 'present',
     startupCwdByTabId: {},
     panes: {
-      [`${SOURCE_TAB}:${LEAF}`]: { sealedScrollback: 'absent', transcript: 'unknown' }
+      [`${SOURCE_TAB}:${LEAF}`]: { sealedScrollback: 'absent', transcript }
     }
   }
 }
 
 let nextId = 0
-function restoreOneRow() {
+function restoreOneRow(
+  transcript: 'present' | 'absent' | 'unknown' = 'unknown',
+  presence: 'no-live-owner' | 'live-elsewhere' = 'no-live-owner'
+) {
   useAppStore.setState({
     repos: [
       { id: 'repo-1', path: 'C:/work/orca', displayName: 'Orca', badgeColor: '#000', addedAt: 0 }
@@ -129,7 +138,7 @@ function restoreOneRow() {
   } as never)
   const source = manifest()
   const plan = planWorkingSetRestore(source, {
-    evidence: unconfirmedEvidence(),
+    evidence: evidenceWith(transcript),
     launchProfiles: [{ id: 'agent:claude' }],
     target: {
       executionHostId: 'local',
@@ -137,7 +146,7 @@ function restoreOneRow() {
       openTabCount: countWorkspaceOpenTabs(useAppStore.getState(), OWNER),
       hostAvailability: 'available'
     },
-    presence: { [`${SOURCE_TAB}:${LEAF}`]: 'no-live-owner' },
+    presence: { [`${SOURCE_TAB}:${LEAF}`]: presence },
     newTabId: () => `00000000-0000-4000-8000-${String(++nextId).padStart(12, '0')}`
   })
   const applied = applyWorkingSetRestorePlan(plan, {
@@ -150,6 +159,23 @@ function restoreOneRow() {
 
 let container: HTMLDivElement
 let root: Root
+
+async function renderRow(targetTabId: string): Promise<{ body: string; continuity: string | null }> {
+  await act(async () => {
+    root.render(<DormantTerminalSurface tabId={targetTabId} />)
+  })
+  const host = container.querySelector('[data-dormant-terminal-tab-id]')
+  // Precondition, not decoration: with nothing rendered, every "does not say" assertion below would
+  // pass for the wrong reason.
+  expect(host, 'the dormant row rendered nothing').not.toBeNull()
+  return {
+    body: container.textContent ?? '',
+    continuity: host!.getAttribute('data-resume-continuity')
+  }
+}
+
+/** `getAgentLabel` capitalizes, so this is the word the user actually reads. */
+const PROMISE = 'Opening it resumes the Claude session.'
 
 describe('a dormant row whose continuity is UNKNOWN', () => {
   beforeEach(() => {
@@ -180,7 +206,9 @@ describe('a dormant row whose continuity is UNKNOWN', () => {
     expect(pane.resumeOnOpen).toBe(true)
   })
 
-  it('TODAY: the verdict is dropped at the store boundary', () => {
+  it('carries the verdict across the store boundary', () => {
+    // INVERTED. This asserted `{ reason: 'working-set-restore' }` and nothing else: the classifier
+    // said `unknown`, apply wrote a resume handle, and the verdict stopped there.
     const { plan } = restoreOneRow()
     const state = useAppStore.getState()
     const targetTabId = plan.entries[0].targetTabId
@@ -189,32 +217,67 @@ describe('a dormant row whose continuity is UNKNOWN', () => {
     )
     const tab = (state.tabsByWorktree[OWNER] ?? []).find((row) => row.id === targetTabId)
 
-    // The record exists — so the surface sees an agent...
+    // The handle is still written — an unconfirmed resume is still attempted, unchanged.
     expect(record?.agent).toBe('claude')
-    // ...and nothing on the row says the classifier was unsure. INVERT: the dormancy marker must
-    // carry the verdict, because it is the only thing that travels with the row.
-    expect(record).not.toHaveProperty('continuity')
-    expect(tab?.dormancy).toEqual({ reason: 'working-set-restore' })
+    expect(tab?.dormancy).toEqual({
+      reason: 'working-set-restore',
+      resumeContinuity: 'unconfirmed'
+    })
   })
 
-  it('TODAY: the surface promises an exact resume anyway', async () => {
+  it('offers the row without promising the conversation', async () => {
+    // INVERTED. This asserted the promise, verbatim, as the defect.
+    const { plan } = restoreOneRow()
+    const { body, continuity } = await renderRow(plan.entries[0].targetTabId)
+
+    expect(continuity).toBe('unconfirmed')
+    expect(body).toContain('Claude')
+    expect(body).not.toContain(PROMISE)
+    // Still offered, and honest about both halves of what may happen.
+    expect(body).toContain('will try to resume')
+    expect(body).toContain('could not be confirmed')
+  })
+
+  it('promises the conversation when today confirmed it', async () => {
+    // The control. Without it, a row that had simply stopped saying anything would satisfy every
+    // "does not promise" assertion above and look exactly like the fix working.
+    const { plan } = restoreOneRow('present')
+    expect(plan.entries[0].panes[0].restoreTime.capability).toBe('exact-resume')
+
+    const { body, continuity } = await renderRow(plan.entries[0].targetTabId)
+    expect(continuity).toBe('exact')
+    expect(body).toContain(PROMISE)
+  })
+
+  it('says the session is taken rather than offering a silent fresh terminal', async () => {
+    // Apply deliberately writes no resume handle for a session live elsewhere, so before the marker
+    // carried the verdict this row read as an ordinary new terminal and the collision went unsaid.
+    const { plan } = restoreOneRow('present', 'live-elsewhere')
+    expect(plan.entries[0].panes[0].blockers).toContain('live-elsewhere')
+
+    const { body, continuity } = await renderRow(plan.entries[0].targetTabId)
+    expect(continuity).toBe('claimed-elsewhere')
+    expect(body).toContain('open somewhere else')
+    expect(body).not.toContain(PROMISE)
+  })
+
+  it('withholds the promise from a row no classifier ever judged', async () => {
+    // A row persisted before the marker carried a verdict, or one an explicit workspace sleep
+    // created — sleep records a live handle without asking whether the conversation can still be
+    // found. Absent is unknown, and unknown may not promise.
     const { plan } = restoreOneRow()
     const targetTabId = plan.entries[0].targetTabId
+    useAppStore.setState({
+      tabsByWorktree: {
+        [OWNER]: (useAppStore.getState().tabsByWorktree[OWNER] ?? []).map((row) =>
+          row.id === targetTabId ? { ...row, dormancy: { reason: 'workspace-sleep' as const } } : row
+        )
+      }
+    } as never)
 
-    await act(async () => {
-      root.render(<DormantTerminalSurface tabId={targetTabId} />)
-    })
-    const body = container.textContent ?? ''
-
-    // Precondition, not decoration: if the agent branch had not rendered at all, the assertion below
-    // would pass for the wrong reason.
-    expect(container.querySelector('[data-dormant-terminal-tab-id]')).not.toBeNull()
-    // `getAgentLabel` capitalizes, so the rendered word is the label, not the agent id.
-    expect(body).toContain('Claude')
-
-    // The defect, in the product's own words. INVERT: an unconfirmed conversation may be ATTEMPTED,
-    // never promised — "Opening it resumes the Claude session." asserts continuity that the
-    // canonical classifier explicitly declined to assert.
-    expect(body).toContain('Opening it resumes the Claude session.')
+    const { body, continuity } = await renderRow(targetTabId)
+    expect(continuity).toBe('unconfirmed')
+    expect(body).not.toContain(PROMISE)
+    expect(body).toContain('will try to resume')
   })
 })
