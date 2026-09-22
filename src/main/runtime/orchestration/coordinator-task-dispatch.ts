@@ -7,8 +7,9 @@ import {
   DISPATCH_STALE_THRESHOLD,
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
+import { admitDispatch, describeDispatchRefusal } from './dispatch-admission'
 
-export type TaskDispatchResult = 'dispatched' | 'stale-base-refused'
+export type TaskDispatchResult = 'dispatched' | 'stale-base-refused' | 'budget-refused'
 
 // Why: 10 min = documented heartbeat cadence (5 min) × 2, so one missed heartbeat is the earliest a dispatch can look stale.
 const HUNG_THRESHOLD_MS = 10 * 60 * 1000
@@ -88,6 +89,22 @@ export async function dispatchTaskToWorker(params: {
     return 'stale-base-refused'
   }
 
+  // Why here: beside the stale-base guard and before the reservation, for the same reason it is —
+  // a refusal must not create a dispatch row, bump failure_count, or burn the circuit-breaker budget.
+  const { admission, strippedSpec: admittedSpec } = await admitDispatch({
+    spec: strippedSpec,
+    targetHandle,
+    ...(runtime.observeHostResources
+      ? { probe: (handle: string) => runtime.observeHostResources!(handle) }
+      : {})
+  })
+  if (admission.verdict === 'refused') {
+    onLog(
+      `${describeDispatchRefusal(task.id, admission)} Task remains in 'ready'; coordinator will retry on the next tick.`
+    )
+    return 'budget-refused'
+  }
+
   const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(targetHandle)
   const assigneePaneKey =
     dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
@@ -100,15 +117,17 @@ export async function dispatchTaskToWorker(params: {
     targetHandle,
     assigneePaneKey,
     dispatchAuthority?.launchTokenHash ?? undefined,
-    processIncarnation
+    processIncarnation,
+    JSON.stringify(admission.envelope)
   )
 
   // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
   const preamble = buildDispatchPreamble({
     taskId: task.id,
     dispatchId: dispatch.id,
-    // Why (§3.4): strippedSpec drops the allow-stale-base line so the worker doesn't read the infra flag as an instruction.
-    taskSpec: strippedSpec,
+    // Why (§3.4): the stripped spec drops both infra lines — allow-stale-base and the resource
+    // declaration — so the worker doesn't read either as an instruction.
+    taskSpec: admittedSpec,
     coordinatorHandle: params.coordinatorHandle,
     workerHandle: targetHandle,
     devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),

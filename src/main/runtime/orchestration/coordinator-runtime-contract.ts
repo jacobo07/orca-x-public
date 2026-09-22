@@ -1,4 +1,6 @@
 /** The terminal/worktree capabilities the coordinator needs from the runtime it drives. */
+import type { DispatchObservationResult } from './dispatch-admission'
+
 export type WorktreeDrift = {
   base: string
   behind: number
@@ -34,4 +36,7 @@ export type CoordinatorRuntime = {
   } | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
+  // Why optional yet fail-closed: a runtime that cannot answer reports `unobservable`, and a task
+  // that declared a requirement is then refused. Absence is ignorance here, never permission.
+  observeHostResources?(handle: string): Promise<DispatchObservationResult>
 }

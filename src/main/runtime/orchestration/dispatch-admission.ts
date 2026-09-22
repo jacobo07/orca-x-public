@@ -224,6 +224,54 @@ export function decideDispatchAdmission(params: {
   }
 }
 
+export type DispatchHostProbe = (handle: string) => Promise<DispatchObservationResult>
+
+/**
+ * The one door both production dispatch paths cross. A runtime that cannot answer yields
+ * `unobservable` rather than a permissive default: an optional capability is fail-open only when
+ * its absence is read as permission, and here absence is read as ignorance.
+ */
+export async function admitDispatch(params: {
+  spec: string
+  targetHandle: string
+  probe?: DispatchHostProbe
+  now?: Date
+  maxObservationAgeMs?: number
+}): Promise<{ admission: DispatchAdmission; strippedSpec: string }> {
+  const parse = parseDispatchResourceRequirement(params.spec)
+  const observation = await observeDispatchHost(params.probe, params.targetHandle)
+  const admission = decideDispatchAdmission({
+    parse,
+    observation,
+    now: params.now ?? new Date(),
+    ...(params.maxObservationAgeMs === undefined
+      ? {}
+      : { maxObservationAgeMs: params.maxObservationAgeMs })
+  })
+  return { admission, strippedSpec: parse.strippedSpec }
+}
+
+export async function observeDispatchHost(
+  probe: DispatchHostProbe | undefined,
+  handle: string
+): Promise<DispatchObservationResult> {
+  if (!probe) {
+    return {
+      kind: 'unobservable',
+      cause: 'no-capability',
+      detail: `runtime cannot observe host resources for ${handle}`
+    }
+  }
+  try {
+    return await probe(handle)
+  } catch (err) {
+    return {
+      kind: 'unavailable',
+      detail: `host resource probe failed for ${handle}: ${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+}
+
 export function describeDispatchRefusal(
   taskId: string,
   refusal: Extract<DispatchAdmission, { verdict: 'refused' }>
