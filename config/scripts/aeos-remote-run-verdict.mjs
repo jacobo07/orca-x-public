@@ -132,7 +132,10 @@ export function readRemoteRun(runDir) {
 export const exitCodeFor = (verdict) =>
   verdict === REMOTE_RUN_VERDICT.pass ? 0 : verdict === REMOTE_RUN_VERDICT.fail ? 1 : 2
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Why: `file://${argv[1]}` never equals import.meta.url on Windows, so this exited 0
+// having classified nothing. The estate's tested helper compares real paths instead.
+const { isEntryPoint } = await import('./check-mobile-capability-aperture.mjs')
+if (isEntryPoint(process.argv[1], import.meta.filename)) {
   const runDir = process.argv[2]
   if (!runDir) {
     console.error('usage: aeos-remote-run-verdict.mjs <runDir>')

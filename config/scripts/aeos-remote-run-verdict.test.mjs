@@ -139,4 +139,22 @@ describe('exit codes keep a non-verdict distinct from a failure', () => {
       expect(exitCodeFor(verdict)).toBe(2)
     }
   })
+
+  // The entry guard once compared `file://${argv[1]}` to import.meta.url, which never matches
+  // on Windows: the CLI exited 0 having classified nothing. Only a subprocess sees that.
+  it('actually classifies when invoked as a script', async () => {
+    const { spawnSync } = await import('node:child_process')
+    const script = new URL('./aeos-remote-run-verdict.mjs', import.meta.url)
+    const dir = makeRunDir({
+      'run.json': JSON.stringify(manifest),
+      'run-end.json': JSON.stringify(endWith(59_000)),
+      'vitest.json': JSON.stringify(report(3, 1)),
+      rc: '1\n'
+    })
+
+    const result = spawnSync(process.execPath, [script.pathname.replace(/^\/([A-Za-z]:)/, '$1'), dir], { encoding: 'utf8' })
+
+    expect(result.status).toBe(1)
+    expect(JSON.parse(result.stdout).verdict).toBe(REMOTE_RUN_VERDICT.fail)
+  })
 })
