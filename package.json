@@ -30,6 +30,7 @@
     "check:reliability-gates": "node config/scripts/check-reliability-gates.mjs",
     "check:durability-contracts": "node config/scripts/check-durability-contracts.mjs",
     "check:durable-actor-catalogs": "node config/scripts/check-durable-actor-catalogs.mjs",
+    "check:agent-identity-authority": "node config/scripts/check-agent-identity-authority.mjs",
     "check:recurring-work": "node config/scripts/check-recurring-work-inventory.mjs",
     "check:ipc-message-floor": "node config/scripts/check-ipc-message-floor.mjs",
     "check:e2e-fixture-binding": "node config/scripts/check-e2e-fixture-binding.mjs",

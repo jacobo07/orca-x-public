@@ -75,6 +75,10 @@ vi.mock('@/components/ui/context-menu', () => ({
 }))
 
 import { WorkspaceActivityRailSection } from './WorkspaceActivityRailSection'
+import {
+  WORKSPACE_ACTIVITY_ORDER,
+  type WorkspaceActivityId
+} from './workspace-activity-items'
 
 let container: HTMLDivElement
 let root: Root
@@ -161,17 +165,27 @@ describe('WorkspaceActivityRailSection', () => {
       experimentalActivity: true
     })
 
-    const dispatched: [string, ReturnType<typeof vi.fn>][] = [
-      ['workspace', mocks.openWorkspacePage],
-      ['conversations', mocks.openConversationsPage],
-      ['automations', mocks.openAutomationsPage],
-      ['agents', mocks.openActivityPage],
-      ['artifacts', mocks.openArtifactsPage],
-      ['skills', mocks.openSkillsPage],
-      ['mobile', mocks.openMobilePage]
-    ]
+    // A Record, not an array: the array this replaced listed seven of the eight ordered activities
+    // — `tasks` was simply never added — so the gate written to catch the next dead control was
+    // itself blind to one. Keying by WorkspaceActivityId makes a missing entry a TYPECHECK failure,
+    // which is the only form of this gate that a new activity cannot be added around.
+    const dispatched: Record<WorkspaceActivityId, ReturnType<typeof vi.fn>> = {
+      workspace: mocks.openWorkspacePage,
+      conversations: mocks.openConversationsPage,
+      tasks: mocks.openTaskPage,
+      automations: mocks.openAutomationsPage,
+      agents: mocks.openActivityPage,
+      artifacts: mocks.openArtifactsPage,
+      skills: mocks.openSkillsPage,
+      mobile: mocks.openMobilePage
+    }
 
-    for (const [id, open] of dispatched) {
+    // Driven in the canonical order, and every ordered id must appear — so an id added to the union
+    // but left out of WORKSPACE_ACTIVITY_ORDER cannot hide from this loop either.
+    expect(Object.keys(dispatched).sort()).toEqual([...WORKSPACE_ACTIVITY_ORDER].sort())
+
+    for (const id of WORKSPACE_ACTIVITY_ORDER) {
+      const open = dispatched[id]
       const button = activity(id)
       // A missing button would make the click a no-op and the assertion below vacuous.
       expect(button, `${id} is not rendered`).not.toBeNull()
