@@ -23,7 +23,11 @@ const REPO = join(HERE, '..', '..')
 const SOURCE_ROOT = join(REPO, 'src')
 const INVENTORY_FILE = 'config/dispatch-admission-inventory.jsonc'
 
-export const RESERVATION_CALL = 'createDispatchContext('
+// The leading dot is load-bearing: without it the pattern matches the method's own DECLARATION in
+// db.ts and reports the reservation authority as an unclassified caller of itself.
+export const RESERVATION_CALL = '.createDispatchContext('
+export const RESERVATION_DECLARATION = 'createDispatchContext('
+export const DEFINING_MODULE = 'src/main/runtime/orchestration/db.ts'
 export const ADMISSION_CALL = 'admitDispatch('
 
 // A scan that silently stopped matching reports what a healthy estate reports.
@@ -44,6 +48,11 @@ export function isCommentLine(line) {
 export function collectSites(files) {
   const production = []
   let total = 0
+  // Positive control: a rename of the reservation method must report itself, not return zero
+  // call sites and a clean bill.
+  const declarationFound = files.some(
+    ({ path, text }) => path === DEFINING_MODULE && text.includes(RESERVATION_DECLARATION)
+  )
   for (const { path, text } of files) {
     const lines = text.split('\n')
     for (let i = 0; i < lines.length; i++) {
@@ -53,11 +62,17 @@ export function collectSites(files) {
       production.push({ path, line: i + 1, admitsInFile: text.includes(ADMISSION_CALL) })
     }
   }
-  return { production, total }
+  return { production, total, declarationFound }
 }
 
 export function checkDispatchAdmission({ sites, inventory, minimumSites = MINIMUM_RESERVATION_SITES }) {
   const failures = []
+  if (!sites.declarationFound) {
+    failures.push({
+      kind: 'SCAN_BLIND',
+      detail: `${DEFINING_MODULE} no longer declares ${RESERVATION_DECLARATION}; the reservation was renamed and this gate is looking for the wrong token`
+    })
+  }
   if (sites.total < minimumSites) {
     failures.push({
       kind: 'SCAN_BLIND',
@@ -117,7 +132,9 @@ export function readSourceFiles(root) {
       }
       if (!/\.tsx?$/.test(name)) continue
       const text = readFileSync(full, 'utf8')
-      if (!text.includes(RESERVATION_CALL)) continue
+      // Undotted on purpose: the defining module holds only the declaration, and the positive
+      // control below needs to see it.
+      if (!text.includes(RESERVATION_DECLARATION)) continue
       files.push({ path: relative(REPO, full).replace(/\\/g, '/'), text })
     }
   }
