@@ -639,17 +639,106 @@ describe('a ci evidence run must name the run', () => {
     await expect(main(root)).resolves.toBe(1)
   })
 
+  // The subject is injected: these temp roots have no git remote, and the checker must never guess
+  // one. The real checker resolves it from `origin` (see ci-repo-scope.mjs).
+  const SUBJECT = { resolveSubjectRepo: () => 'jacobo07/orca-x' }
+  // 34726494245 is the last run on this fork that reached real runners (12 jobs executed).
+  const EXECUTED_RUN = 'https://github.com/jacobo07/orca-x/actions/runs/34726494245'
+
   // Green control. Without it, a clause that refused every ci run would pass the case above.
   it('accepts a ci run that carries a GitHub Actions run URL', async () => {
     const root = makeTempRoot(
       validManifest({
+        evidenceRuns: [ciRun({ runUrl: EXECUTED_RUN, highestRung: 'VERDICT_OBSERVED' })]
+      })
+    )
+
+    await expect(main(root, SUBJECT)).resolves.toBe(0)
+  })
+
+  // This fork's `upstream` is alive: stablyai/orca's runs are real, well-formed, and show real
+  // verdicts about somebody else's code. The URL shape alone accepted them as evidence here.
+  it("rejects another repository's run as evidence for this one", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = makeTempRoot(
+      validManifest({
         evidenceRuns: [
-          ciRun({ runUrl: 'https://github.com/jacobo07/orca-x/actions/runs/34726494245' })
+          ciRun({
+            runUrl: 'https://github.com/stablyai/orca/actions/runs/35728335261',
+            highestRung: 'VERDICT_OBSERVED'
+          })
         ]
       })
     )
 
-    await expect(main(root)).resolves.toBe(0)
+    await expect(main(root, SUBJECT)).resolves.toBe(1)
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('names stablyai/orca'))
+  })
+
+  it('matches the repository without regard to case, as GitHub does', async () => {
+    const root = makeTempRoot(
+      validManifest({
+        evidenceRuns: [
+          ciRun({
+            runUrl: 'https://github.com/Jacobo07/Orca-X/actions/runs/34726494245',
+            highestRung: 'VERDICT_OBSERVED'
+          })
+        ]
+      })
+    )
+
+    await expect(main(root, SUBJECT)).resolves.toBe(0)
+  })
+
+  // Since 2026-09-13 every run on this fork finishes with no runner. 35738019166 is one: runner_id
+  // 0, no steps, conclusion "failure". Its URL is perfect and its red says nothing about any gate.
+  it('rejects a run that never reached a verdict, and one that does not say what it reached', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const starved = 'https://github.com/jacobo07/orca-x/actions/runs/35738019166'
+    for (const run of [
+      ciRun({ runUrl: starved, result: 'failed', highestRung: 'RUN_CREATED' }),
+      ciRun({ runUrl: EXECUTED_RUN })
+    ]) {
+      const root = makeTempRoot(validManifest({ evidenceRuns: [run] }))
+      await expect(main(root, SUBJECT)).resolves.toBe(1)
+    }
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('highestRung must be VERDICT_OBSERVED')
+    )
+  })
+
+  // "Could not tell which repository" is the checker failing to judge, not the manifest being
+  // wrong, and it must never fall back to a default repository.
+  it('reports an unresolvable subject as a checker failure, never as a rejection or a pass', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = makeTempRoot(
+      validManifest({
+        evidenceRuns: [ciRun({ runUrl: EXECUTED_RUN, highestRung: 'VERDICT_OBSERVED' })]
+      })
+    )
+    const unresolvable = {
+      resolveSubjectRepo: () => {
+        throw new Error('no origin remote')
+      }
+    }
+
+    await expect(main(root, unresolvable)).resolves.toBe(2)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('could not tell which repository')
+    )
+  })
+
+  // Lazy on purpose: a manifest with no ci URL has nothing to attribute, and must not acquire a
+  // dependency on git just to be checked.
+  it('never asks for the subject when no ci run names a URL', async () => {
+    const neverAsked = {
+      resolveSubjectRepo: () => {
+        throw new Error('resolved without a claim to judge')
+      }
+    }
+    const root = makeTempRoot(validManifest({ evidenceRuns: [ciRun({ runner: 'local' })] }))
+
+    await expect(main(root, neverAsked)).resolves.toBe(0)
   })
 
   it('rejects a runUrl that is not an Actions run', async () => {
@@ -693,13 +782,14 @@ describe('a ci evidence run must name the run', () => {
         evidenceRuns: [
           ciRun({
             date: '2026-08-07',
-            runUrl: 'https://github.com/jacobo07/orca-x/actions/runs/34726494245'
+            runUrl: EXECUTED_RUN,
+            highestRung: 'VERDICT_OBSERVED'
           })
         ]
       })
     )
 
-    await expect(main(root)).resolves.toBe(1)
+    await expect(main(root, SUBJECT)).resolves.toBe(1)
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('exempted from ci evidence provenance')
     )
