@@ -8,6 +8,7 @@
 // without a restart and a long-lived service cannot keep answering from the profile that was active
 // when it was constructed.
 
+import type { Agent, AgentId } from '../../shared/agent-types'
 import { mintConversationId } from '../../shared/conversation-identity'
 import {
   sortConversationSummaries,
@@ -15,6 +16,7 @@ import {
 } from '../../shared/conversation-summary'
 import {
   CONVERSATION_RECORD_SCHEMA_VERSION,
+  type ConversationForAgentResult,
   type ConversationId,
   type ConversationLoadResult,
   type ConversationRecord
@@ -29,6 +31,17 @@ export type CreateConversationInput = {
   projectId?: string | null
 }
 
+export type ConversationAgentRoster = {
+  readAgents: () => readonly Agent[]
+}
+
+/** `agent-missing` and `agent-unverifiable` are refusals about the conversation, never Brainstorming. */
+export type ConversationAgentBinding =
+  | { kind: 'none' }
+  | { kind: 'agent'; agent: Agent }
+  | { kind: 'agent-missing'; agentId: AgentId }
+  | { kind: 'agent-unverifiable'; agentId: AgentId }
+
 /**
  * Admission to run a turn. `busy` is a deliberate product answer, not an error: one conversation
  * runs one turn at a time, so two rapid sends resolve by refusal rather than by whoever's provider
@@ -42,7 +55,12 @@ export type TurnAdmission =
 export class ConversationService {
   private readonly activeTurns = new Map<ConversationId, string>()
 
-  constructor(private readonly directoryForActiveProfile: () => string) {}
+  /** `agentRoster` is the durable roster in PersistedState, read per call. Without it an agent
+   *  binding cannot be checked, and every agent operation refuses rather than guessing. */
+  constructor(
+    private readonly directoryForActiveProfile: () => string,
+    private readonly agentRoster?: ConversationAgentRoster
+  ) {}
 
   /**
    * Cached PER DIRECTORY, and this is load-bearing rather than an optimization.
@@ -70,15 +88,60 @@ export class ConversationService {
   }
 
   async create(input: CreateConversationInput = {}): Promise<ConversationRecord> {
+    return this.establish(input.title, { projectId: input.projectId ?? null })
+  }
+
+  /**
+   * The only producer of `ConversationRecord.agentId`. The agent is resolved against the live
+   * roster at effect time, and there is no project parameter: the agent owns that relation, so an
+   * agent/conversation project mismatch has no input through which to arrive.
+   */
+  async createForAgent(input: {
+    agentId: AgentId
+    title?: string | null
+  }): Promise<ConversationForAgentResult> {
+    if (!this.agentRoster) {
+      return { outcome: 'agent-unverifiable' }
+    }
+    if (!this.agentRoster.readAgents().some((agent) => agent.id === input.agentId)) {
+      return { outcome: 'agent-not-found', agentId: input.agentId }
+    }
+    const record = await this.establish(input.title, { projectId: null, agentId: input.agentId })
+    return { outcome: 'created', record }
+  }
+
+  /**
+   * Who this conversation is with, read through the roster on every call so a Project id
+   * promotion is visible without a remap here. A bound agent that cannot be found is never `none`:
+   * that would turn an agent chat into Brainstorming wearing its label.
+   */
+  agentFor(record: ConversationRecord): ConversationAgentBinding {
+    const agentId = record.agentId
+    if (agentId === undefined || agentId === null) {
+      return { kind: 'none' }
+    }
+    if (!this.agentRoster) {
+      return { kind: 'agent-unverifiable', agentId }
+    }
+    const agent = this.agentRoster.readAgents().find((entry) => entry.id === agentId)
+    return agent ? { kind: 'agent', agent } : { kind: 'agent-missing', agentId }
+  }
+
+  private async establish(
+    title: string | null | undefined,
+    binding: { projectId: string | null; agentId?: AgentId }
+  ): Promise<ConversationRecord> {
     const now = Date.now()
     const record: ConversationRecord = {
       schemaVersion: CONVERSATION_RECORD_SCHEMA_VERSION,
       id: mintConversationId(),
-      title: input.title?.trim() ? input.title.trim() : null,
+      title: title?.trim() ? title.trim() : null,
       createdAt: now,
       updatedAt: now,
       status: 'active',
-      projectId: input.projectId ?? null,
+      projectId: binding.projectId,
+      // Absent, not null, on Brainstorming: the legacy shape, byte for byte.
+      ...(binding.agentId === undefined ? {} : { agentId: binding.agentId }),
       provenance: [],
       turns: [],
       messages: [],
@@ -119,6 +182,7 @@ export class ConversationService {
           createdAt: record.createdAt,
           updatedAt: record.updatedAt,
           projectId: record.projectId,
+          agentId: record.agentId ?? null,
           messageCount: record.messages.length,
           lastTurnState: record.turns.at(-1)?.state ?? null
         }

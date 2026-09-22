@@ -16,6 +16,8 @@ export type ConversationSummary =
       createdAt: number
       updatedAt: number
       projectId: string | null
+      /** The agent this conversation is with, or null for Brainstorming. */
+      agentId: string | null
       messageCount: number
       /** State of the most recent turn, or null when nothing has been asked yet. */
       lastTurnState: ConversationTurnState | null

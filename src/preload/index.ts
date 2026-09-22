@@ -3213,6 +3213,7 @@ const api = {
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),
     create: (args) => ipcRenderer.invoke('conversations:create', args),
+    createForAgent: (args) => ipcRenderer.invoke('conversations:createForAgent', args),
     read: (args) => ipcRenderer.invoke('conversations:read', args),
     sendTurn: (args) => ipcRenderer.invoke('conversations:sendTurn', args),
     onTurnEvent: (callback) => {

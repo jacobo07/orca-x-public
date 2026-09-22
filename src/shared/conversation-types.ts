@@ -90,8 +90,9 @@ export type ConversationRecord = {
   createdAt: number
   updatedAt: number
   status: ConversationStatus
-  /** Project binding, or null for a conversation that belongs to no project. Uses the first-class
-   *  Project id — this does not mint a chat-specific project concept. */
+  /** Project binding for a Brainstorming chat, or null. Always null on an agent-bound record: there
+   *  the agent owns the project (see `agentId`). No production caller sets it today — the wire
+   *  accepts it and nothing sends it. */
   projectId: string | null
   /**
    * The Agent this conversation is with, or absent/null for a Brainstorming chat that is with no
@@ -100,9 +101,9 @@ export type ConversationRecord = {
    * their history is corrupt. Old builds preserve it on a read-modify-write because the parser
    * passes unknown keys through and the store stringifies the object it was handed.
    *
-   * A conversation deliberately does NOT carry its own project: the agent owns that relation, and
-   * only PersistedState can participate in Project id succession. Deriving it keeps one owner and
-   * makes an agent/conversation project mismatch unrepresentable rather than merely validated.
+   * Written only by `ConversationService.createForAgent`, which takes no project: the agent owns
+   * that relation and only PersistedState participates in Project id succession, so the effective
+   * project is read through the roster (`agentFor`) and the record holds no second value to disagree.
    */
   agentId?: AgentId | null
   provenance: ConversationProviderProvenance[]
@@ -121,6 +122,13 @@ export type ConversationLoadResult =
   | { outcome: 'absent' }
   | { outcome: 'unreadable'; reason: string }
   | { outcome: 'schema-too-new'; storedVersion: number }
+
+/** Creating a conversation with an agent can be refused, and the two refusals mean different
+ *  things: the agent is gone (pick another) versus this side could not check (a defect, not theirs). */
+export type ConversationForAgentResult =
+  | { outcome: 'created'; record: ConversationRecord }
+  | { outcome: 'agent-not-found'; agentId: AgentId }
+  | { outcome: 'agent-unverifiable' }
 
 export function isConversationTurnSettled(state: ConversationTurnState): boolean {
   return !CONVERSATION_UNSETTLED_TURN_STATES.includes(state)

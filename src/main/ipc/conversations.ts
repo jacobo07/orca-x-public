@@ -4,13 +4,21 @@ import { join } from 'node:path'
 
 import { BrowserWindow, ipcMain } from 'electron'
 
+import { isAgentId } from '../../shared/agent-identity'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { isConversationId } from '../../shared/conversation-identity'
 import type { ConversationSummary } from '../../shared/conversation-summary'
-import type { ConversationLoadResult, ConversationRecord } from '../../shared/conversation-types'
+import type {
+  ConversationForAgentResult,
+  ConversationLoadResult,
+  ConversationRecord
+} from '../../shared/conversation-types'
 import { readStoredCodexCredentialState } from '../codex-accounts/managed-codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
-import { ConversationService } from '../conversation/conversation-service'
+import {
+  ConversationService,
+  type ConversationAgentRoster
+} from '../conversation/conversation-service'
 import {
   runConversationTurn,
   type ConversationTurnDeps,
@@ -43,6 +51,10 @@ export type ConversationIpcHandlers = {
     title?: string | null
     projectId?: string | null
   }) => Promise<ConversationRecord>
+  'conversations:createForAgent': (args: {
+    agentId: string
+    title?: string | null
+  }) => Promise<ConversationForAgentResult>
   'conversations:read': (args: { id: string }) => Promise<ConversationLoadResult>
   'conversations:sendTurn': (args: {
     id: string
@@ -60,6 +72,13 @@ export type ConversationIpcHandlers = {
 function requireConversationId(value: unknown): string {
   if (!isConversationId(value)) {
     throw new Error(`conversations: refusing a value that is not a conversation id: ${String(value)}`)
+  }
+  return value
+}
+
+function requireAgentId(value: unknown): string {
+  if (!isAgentId(value)) {
+    throw new Error(`conversations: refusing a value that is not an agent id: ${String(value)}`)
   }
   return value
 }
@@ -109,6 +128,12 @@ export function createConversationIpcHandlers(deps: ConversationIpcDeps): Conver
         title: typeof args?.title === 'string' ? args.title : null,
         projectId: typeof args?.projectId === 'string' ? args.projectId : null
       }),
+    // A malformed id throws (renderer defect); an unknown agent is an outcome (the user's data).
+    'conversations:createForAgent': async (args) =>
+      service.createForAgent({
+        agentId: requireAgentId(args?.agentId),
+        title: typeof args?.title === 'string' ? args.title : null
+      }),
     'conversations:read': async (args) => service.read(requireConversationId(args?.id)),
     'conversations:sendTurn': async (args) =>
       runConversationTurn(
@@ -124,9 +149,10 @@ export function createConversationIpcHandlers(deps: ConversationIpcDeps): Conver
 
 let cachedService: ConversationService | null = null
 
-export function getConversationService(): ConversationService {
-  cachedService ??= new ConversationService(() =>
-    getOrcaConversationsDirectory(ensureActiveOrcaProfile().profile.id)
+export function getConversationService(agentRoster: ConversationAgentRoster): ConversationService {
+  cachedService ??= new ConversationService(
+    () => getOrcaConversationsDirectory(ensureActiveOrcaProfile().profile.id),
+    agentRoster
   )
   return cachedService
 }
@@ -142,9 +168,11 @@ function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void
   }
 }
 
-export function registerConversationHandlers(): void {
+/** `agentRoster` reads the same PersistedState roster `agents:list` does, so there is one answer
+ *  to "does this agent exist" and it follows Project id promotion. */
+export function registerConversationHandlers(agentRoster: ConversationAgentRoster): void {
   const handlers = createConversationIpcHandlers({
-    service: getConversationService(),
+    service: getConversationService(agentRoster),
     turnDeps: {
       driver: createCodexConversationDriver(),
       checkAuth: checkCodexAuth,

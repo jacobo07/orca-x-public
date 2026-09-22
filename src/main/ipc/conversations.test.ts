@@ -7,7 +7,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { mintAgentId } from '../../shared/agent-identity'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
+import type { Agent } from '../../shared/agent-types'
 import { mintConversationId } from '../../shared/conversation-identity'
 import { ConversationService } from '../conversation/conversation-service'
 import type { ConversationTurnDeps } from '../conversation/conversation-turn-runner'
@@ -19,12 +21,13 @@ let handlers: ConversationIpcHandlers
 let readerService: ConversationService
 let emitted: { conversationId: string; event: AgentTurnEvent }[] = []
 let authReady = true
+let roster: Agent[] = []
 
 function build(overrides: Partial<Omit<ConversationTurnDeps, 'service'>> = {}): void {
   const directory = (): string => join(root, 'conversations')
   emitted = []
   handlers = createConversationIpcHandlers({
-    service: new ConversationService(directory),
+    service: new ConversationService(directory, { readAgents: () => roster }),
     turnDeps: {
       driver: {
         runTurn: async (request) => {
@@ -67,6 +70,7 @@ describe('conversation IPC handlers', () => {
     // swapped for `writeFile`, which is the exact mistake this boundary exists to prevent.
     expect(Object.keys(handlers).sort()).toEqual([
       'conversations:create',
+      'conversations:createForAgent',
       'conversations:list',
       'conversations:read',
       'conversations:sendTurn'
@@ -113,6 +117,49 @@ describe('conversation IPC handlers', () => {
   it('does not invent a project binding when the renderer sends none', async () => {
     const created = await handlers['conversations:create']({ title: 'unbound' })
     expect(created.projectId).toBeNull()
+  })
+})
+
+describe('conversation IPC — creating a conversation with an agent', () => {
+  beforeEach(() => {
+    roster = []
+  })
+
+  it('binds the agent, and a separate reader sees the binding on disk', async () => {
+    const agentId = mintAgentId()
+    roster.push({ id: agentId, name: 'Ada', role: 'r', projectId: null, createdAt: 1, updatedAt: 1 })
+
+    const created = await handlers['conversations:createForAgent']({ agentId, title: 'hello' })
+    if (created.outcome !== 'created') throw new Error(`precondition: ${created.outcome}`)
+
+    const loaded = await readerService.read(created.record.id)
+    expect(loaded.outcome === 'loaded' && loaded.record.agentId).toBe(agentId)
+  })
+
+  it('answers an outcome for an agent that is not in the roster', async () => {
+    const agentId = mintAgentId()
+    expect(await handlers['conversations:createForAgent']({ agentId })).toEqual({
+      outcome: 'agent-not-found',
+      agentId
+    })
+  })
+
+  it('throws on a value that is not an agent id — a renderer defect, not the user’s data', async () => {
+    await expect(
+      handlers['conversations:createForAgent']({ agentId: 'conv_nope' })
+    ).rejects.toThrow(/not an agent id/)
+  })
+
+  // The agent path has no project parameter. A renderer that sends one anyway cannot plant it.
+  it('ignores a project a renderer tries to smuggle onto an agent-bound create', async () => {
+    const agentId = mintAgentId()
+    roster.push({ id: agentId, name: 'Ada', role: 'r', projectId: 'repo:a', createdAt: 1, updatedAt: 1 })
+
+    const created = await handlers['conversations:createForAgent']({
+      agentId,
+      projectId: 'repo:b'
+    } as never)
+    expect(created.outcome === 'created' && created.record.projectId).toBeNull()
   })
 })
 

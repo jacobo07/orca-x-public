@@ -1,7 +1,11 @@
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { ConversationSummary } from '../../shared/conversation-summary'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
-import type { ConversationLoadResult, ConversationRecord } from '../../shared/conversation-types'
+import type {
+  ConversationForAgentResult,
+  ConversationLoadResult,
+  ConversationRecord
+} from '../../shared/conversation-types'
 
 export type ConversationTurnEventPayload = {
   conversationId: string
@@ -29,6 +33,11 @@ export type ConversationApi = {
       title?: string | null
       projectId?: string | null
     }) => Promise<ConversationRecord>
+    /** The agent path takes no project: the agent owns it. Refusals are outcomes, not throws. */
+    createForAgent: (args: {
+      agentId: string
+      title?: string | null
+    }) => Promise<ConversationForAgentResult>
     read: (args: { id: string }) => Promise<ConversationLoadResult>
     sendTurn: (args: {
       id: string
