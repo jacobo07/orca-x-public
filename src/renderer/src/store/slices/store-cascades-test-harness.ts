@@ -15,6 +15,8 @@ export type StoreCascadesMockApi = {
   settings: { get: Mock; set: Mock }
   runtimeEnvironments: { call: Mock }
   cache: { getGitHub: Mock; setGitHub: Mock }
+  /** Real preload exposes this; a double without it makes every sleep look like a remote one. */
+  agentStatus: { readTranscriptPresence: Mock }
 }
 
 /** window.api double shared by the store cascade suites; installs itself on globalThis. */
@@ -51,7 +53,9 @@ export function createStoreCascadesMockApi(): StoreCascadesMockApi {
     cache: {
       getGitHub: vi.fn().mockResolvedValue(null),
       setGitHub: vi.fn().mockResolvedValue(undefined)
-    }
+    },
+    // Why 'unknown': a suite that proved no transcript must get a withheld promise, not a deletion.
+    agentStatus: { readTranscriptPresence: vi.fn().mockResolvedValue('unknown') }
   }
 
   // @ts-expect-error -- mock

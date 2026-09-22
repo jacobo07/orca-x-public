@@ -96,7 +96,7 @@ describe('shutdownWorktreeTerminals (manual sleep) — positive dormancy', () =>
 
     for (const tabId of ['agent-tab', 'shell-tab']) {
       const slept = tab(store, WT, tabId)
-      expect(slept.dormancy).toEqual({ reason: 'workspace-sleep' })
+      expect(slept.dormancy).toEqual({ reason: 'workspace-sleep', resumeContinuity: 'none' })
       expect(decideTerminalTabMount(null, slept)).toBe('dormant')
     }
     expect(tab(store, OTHER_WT, 'other-tab').dormancy).toBeUndefined()
@@ -136,7 +136,10 @@ describe('shutdownWorktreeTerminals (manual sleep) — positive dormancy', () =>
 
     await store.getState().shutdownWorktreeTerminals(WT, { keepIdentifiers: true })
 
-    expect(tab(store, WT, 'remote-tab').dormancy).toEqual({ reason: 'workspace-sleep' })
+    expect(tab(store, WT, 'remote-tab').dormancy).toEqual({
+      reason: 'workspace-sleep',
+      resumeContinuity: 'none'
+    })
   })
 
   it('does not mark a runtime-hosted workspace when its owner refuses and the stop rolls back', async () => {
@@ -179,10 +182,13 @@ describe('shutdownWorktreeTerminals (manual sleep) — positive dormancy', () =>
     await store.getState().shutdownWorktreeTerminals(WT, { keepIdentifiers: true })
 
     const parsed = terminalTabSchema.parse(tab(store, WT, 'shell-tab'))
-    expect(parsed.dormancy).toEqual({ reason: 'workspace-sleep' })
+    expect(parsed.dormancy).toEqual({ reason: 'workspace-sleep', resumeContinuity: 'none' })
 
     expect(store.getState().requestDormantTerminalTabOpen('shell-tab')).toBe(true)
-    expect(tab(store, WT, 'shell-tab').dormancy).toEqual({ reason: 'workspace-sleep' })
+    expect(tab(store, WT, 'shell-tab').dormancy).toEqual({
+      reason: 'workspace-sleep',
+      resumeContinuity: 'none'
+    })
     store.getState().updateTabPtyId('shell-tab', 'pty-9')
     expect(tab(store, WT, 'shell-tab').dormancy).toBeUndefined()
   })

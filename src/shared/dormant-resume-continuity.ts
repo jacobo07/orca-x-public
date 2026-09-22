@@ -1,5 +1,7 @@
 import type { DormantResumeContinuity } from './terminal-tab-types'
 import type { RestorePlanPane } from './project-working-set-restore-plan'
+import type { WorkingSetFactPresence } from './project-working-set-store-types'
+import { provenExactResume } from './proven-exact-resume'
 
 /**
  * What a restored row may HONESTLY say about resuming, derived from the plan that built it.
@@ -43,6 +45,49 @@ export function resolveDormantResumeContinuity(
   let worst: DormantResumeContinuity = 'none'
   for (const pane of panes) {
     const candidate = forPane(pane)
+    if (RANK[candidate] > RANK[worst]) {
+      worst = candidate
+    }
+  }
+  return worst
+}
+
+/**
+ * What a pane a workspace is about to SLEEP may honestly say, from the facts held before release.
+ *
+ * Sleep is the other transition that releases a live agent and promises it can come back, and it
+ * reaches `exact` through the same door: the conversation has to have been found. A live handle is
+ * not that. The pane was running a second ago and its provider session is recorded, which says a
+ * conversation was started — not that anything can still find it. So the probe answers, and a host
+ * with nothing local to stat, a search that missed and a stalled mount all arrive as `unknown` and
+ * withhold the promise rather than inventing one.
+ *
+ * `claimed-elsewhere` is deliberately unreachable here: the pane being slept IS the local owner, so
+ * its own handle is not a foreign claim. A session simultaneously live on another host is a case
+ * the collision authority owns, and minting the verdict here would say the wrong thing about it.
+ */
+export type SleptPaneEvidence = {
+  /** Whether this pane has a recorded session worth resuming at all. */
+  hasRecordedSession: boolean
+  /** Whether the conversation was FOUND. `unknown` for every host this process cannot stat. */
+  transcript: WorkingSetFactPresence
+  /** Whether the directory the pane belongs to is still one this workspace knows. */
+  location: WorkingSetFactPresence
+}
+
+function forSleptPane(pane: SleptPaneEvidence): DormantResumeContinuity {
+  if (!pane.hasRecordedSession) {
+    return 'none'
+  }
+  return provenExactResume(pane.transcript, pane.location) ? 'exact' : 'unconfirmed'
+}
+
+export function resolveSleptResumeContinuity(
+  panes: readonly SleptPaneEvidence[]
+): DormantResumeContinuity {
+  let worst: DormantResumeContinuity = 'none'
+  for (const pane of panes) {
+    const candidate = forSleptPane(pane)
     if (RANK[candidate] > RANK[worst]) {
       worst = candidate
     }
