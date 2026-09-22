@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { Agent } from '../../../../shared/agent-types'
+
+import { groupAgentsByProject } from './agent-project-grouping'
+import { NewAgentDialog } from './NewAgentDialog'
 
 /**
  * The persistent Agents directory: the durable actors in `PersistedState.agents[]`, which outlive
  * the pane, the provider session and the process.
  *
  * What a row may say is decided by what the record OWNS, and the record owns four things: an id, a
- * name, a role and a project relation. So the row shows a name and a role and nothing else. No
+ * name, a role and a project relation. So a row shows a name and a role and nothing else. No
  * provider, no host, no online dot, no "last message", no run count — every one of those has zero
  * producer today, and a plausible value with no producer is a lie that happens to be well-formed.
  *
@@ -17,9 +22,6 @@ import type { Agent } from '../../../../shared/agent-types'
  * into a turn, so opening one would be a Brainstorming chat wearing a label. A row that looks like
  * a conversation and opens nothing is worse than a row that never offered. They become buttons in
  * the wave that gives them somewhere to go.
- *
- * Grouping by project arrives in W-C3F; this wave establishes the surface, the read and the honest
- * empty state.
  */
 
 type LoadState =
@@ -27,8 +29,26 @@ type LoadState =
   | { status: 'ready'; agents: readonly Agent[] }
   | { status: 'failed'; reason: string }
 
+function AgentRow({ agent }: { agent: Agent }): React.JSX.Element {
+  return (
+    <li
+      data-testid="agents-list-row"
+      data-agent-id={agent.id}
+      className="flex flex-col rounded-md px-3 py-2 hover:bg-muted/40"
+    >
+      <span className="text-sm">{agent.name}</span>
+      {agent.role ? <span className="text-xs text-muted-foreground">{agent.role}</span> : null}
+    </li>
+  )
+}
+
 export default function AgentsPage(): React.JSX.Element {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [dialogOpen, setDialogOpen] = useState(false)
+  // The canonical project list, from the store that already owns it. Not a second source: the
+  // grouping below is a projection over it and the roster, computed per render and never written.
+  const projects = useAppStore((s) => s.projects)
+  const activeRepoId = useAppStore((s) => s.lastActiveRepoId)
 
   const refresh = useCallback(async () => {
     try {
@@ -48,18 +68,57 @@ export default function AgentsPage(): React.JSX.Element {
     void refresh()
   }, [refresh])
 
+  /**
+   * Which project the dialog opens on. A real current-product relation — the project holding the
+   * repo you were last in — and never "the first one" or "the most recent agent's". It is a
+   * pre-selection the user can see and change, not a decision made for them, and when nothing says
+   * which project they are in it pre-selects nothing rather than guessing.
+   */
+  const defaultProjectId = useMemo(() => {
+    if (!activeRepoId) {
+      return null
+    }
+    return projects.find((project) => project.sourceRepoIds.includes(activeRepoId))?.id ?? null
+  }, [activeRepoId, projects])
+
+  const groups = useMemo(
+    () => (state.status === 'ready' ? groupAgentsByProject(state.agents, projects) : []),
+    [state, projects]
+  )
+
+  const onCreated = useCallback(
+    (agent: Agent) => {
+      // Re-read rather than splicing the new agent in locally: main owns the roster, and a list
+      // assembled in the renderer would drift from it the first time a write was refused.
+      void refresh()
+      void agent
+    },
+    [refresh]
+  )
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col" data-testid="agents-page">
-      <header className="border-b border-border px-6 py-4">
-        <h1 className="text-lg font-medium" tabIndex={-1} data-testid="agents-page-heading">
-          {translate('agents.pageTitle', 'Agents')}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {translate(
-            'agents.pageSubtitle',
-            'People you keep. An agent stays between sessions; a chat does not.'
-          )}
-        </p>
+      <header className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
+        <div>
+          <h1 className="text-lg font-medium" tabIndex={-1} data-testid="agents-page-heading">
+            {translate('agents.pageTitle', 'Agents')}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {translate(
+              'agents.pageSubtitle',
+              'People you keep. An agent stays between sessions; a chat does not.'
+            )}
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          data-testid="agents-new"
+          // Enabled with no projects on purpose: "no project" is a legal, deliberate choice, so
+          // there is no prerequisite to explain and no state in which this button would fail.
+        >
+          {translate('agents.new', 'New agent')}
+        </Button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto px-6 py-4">
@@ -81,24 +140,44 @@ export default function AgentsPage(): React.JSX.Element {
           </p>
         ) : null}
 
-        {state.status === 'ready' && state.agents.length > 0 ? (
-          <ul className="flex flex-col gap-1" data-testid="agents-list">
-            {state.agents.map((agent) => (
-              <li
-                key={agent.id}
-                data-testid="agents-list-row"
-                data-agent-id={agent.id}
-                className="rounded-md px-3 py-2"
-              >
-                <span className="text-sm">{agent.name}</span>
-                {agent.role ? (
-                  <span className="ml-2 text-sm text-muted-foreground">{agent.role}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {groups.map((group) => (
+          <section
+            key={
+              group.kind === 'project'
+                ? `project:${group.project.id}`
+                : group.kind === 'unresolved'
+                  ? `unresolved:${group.projectId}`
+                  : 'none'
+            }
+            className="mb-4"
+            data-testid="agents-group"
+            data-group-kind={group.kind}
+          >
+            <h2 className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+              {group.kind === 'project'
+                ? group.project.displayName
+                : group.kind === 'none'
+                  ? translate('agents.group.noProject', 'No project')
+                  : // Named, not hidden and not relabelled: this agent's owner cannot be found
+                    // right now, which is a thing to say rather than an ownership change to invent.
+                    translate('agents.group.unresolved', 'Project unavailable')}
+            </h2>
+            <ul className="flex flex-col gap-1" data-testid="agents-list">
+              {group.agents.map((agent) => (
+                <AgentRow key={agent.id} agent={agent} />
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
+
+      <NewAgentDialog
+        open={dialogOpen}
+        projects={projects}
+        defaultProjectId={defaultProjectId}
+        onOpenChange={setDialogOpen}
+        onCreated={onCreated}
+      />
     </div>
   )
 }
