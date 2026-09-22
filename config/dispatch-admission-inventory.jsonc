@@ -1,0 +1,19 @@
+// Every production caller of db.createDispatchContext -- the dispatch reservation authority.
+//
+// `gated`  the file crosses admitDispatch before taking the reservation.
+// `exempt` it does not, with a reason someone can disagree with.
+//
+// Enforced by `pnpm check:dispatch-admission`. A new caller fails until it is classified, and an
+// entry whose file no longer reserves must be pruned.
+[
+  {
+    "path": "src/main/runtime/orchestration/coordinator-task-dispatch.ts",
+    "disposition": "gated",
+    "note": "autonomous coordinator loop; refuses with 'budget-refused' and returns the slot"
+  },
+  {
+    "path": "src/main/runtime/rpc/methods/orchestration.ts",
+    "disposition": "gated",
+    "note": "orchestration.dispatch RPC; refuses with OrchestrationError 'resource_admission_refused'"
+  }
+]
