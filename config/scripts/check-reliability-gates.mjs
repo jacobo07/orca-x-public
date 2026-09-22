@@ -36,7 +36,8 @@ const ACTIONS_RUN_URL = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/actions\/ru
  * something a reader can open, and it is the only runner value where the claim is checkable at all.
  *
  * Why it matters here specifically: measured 2026-09-21, this repository has not been assigned a
- * GitHub-hosted runner since 2026-09-13 01:51 UTC. Every run created since then finished in
+ * GitHub-hosted runner since 2026-09-13T10:43:50Z (first starved run; the earlier "01:51 UTC" was
+ * CEST wall-clock -- see config/ci-runner-recovery-contract.jsonc). Every run created since then finished in
  * seconds with no runner and no steps. In that world a `ci` claim is not merely unverified, it is
  * the one claim that has become impossible to honestly make, and nothing in the schema noticed.
  *

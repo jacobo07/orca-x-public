@@ -7,8 +7,9 @@ import { describeScope, readOriginUrlFromGit, resolveRepoScope } from './ci-repo
 // A red icon in `gh run list` is not a test result. Between "a workflow exists" and "a gate
 // failed" there are rungs, and GitHub reports the same `conclusion: failure` for most of them.
 //
-// Measured on this repository 2026-09-21: every run since 2026-09-13 01:51 UTC completed in
-// 2-6 seconds having been assigned no runner and having started no step. Read as test failures
+// Measured on this repository 2026-09-21: every run since 2026-09-13T10:43:50Z completed in
+// 2-6 seconds having been assigned no runner and having started no step. (An earlier "01:51 UTC"
+// here was CEST wall-clock; config/ci-runner-recovery-contract.jsonc holds the API values.) Read as test failures
 // they say the estate is broken; read correctly they say nothing about the estate at all.
 //
 // This is a REPORT, not a gate. It is deliberately not named check:* or verify:*, because it
