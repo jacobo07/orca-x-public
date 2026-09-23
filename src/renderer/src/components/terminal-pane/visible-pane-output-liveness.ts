@@ -2,18 +2,35 @@
  * A pane the user is looking at must advance when main's model of its PTY
  * advances. The hover preview reads that model, so the field symptom was a
  * live preview beside a frozen pane: bytes gated as hidden, lost in delivery,
- * or discarded by a certified-dead write pipeline whose one-shot recovery never
- * landed. None of those leaves ACK-starved in-flight bytes, so the push
- * watchdog was blind to all three. This judge compares the two sides per
- * on-screen pane on the watchdog's existing tick and asks for a remount, which
- * rebuilds the xterm, re-syncs the hidden gate and restores from the model.
+ * discarded by a certified-dead write pipeline whose one-shot recovery never
+ * landed, or parsed by an xterm whose canvas had stopped presenting. None of
+ * those leaves ACK-starved in-flight bytes, so the push watchdog was blind to
+ * all four. This judge compares the two sides per on-screen pane on the
+ * watchdog's existing tick and asks for a remount, which rebuilds the xterm,
+ * re-syncs the hidden gate and restores from the model.
+ *
+ * Presentation is judged from a SECOND generation, because parse progress is
+ * credited from xterm write callbacks — including an empty FIFO probe — and so
+ * advances upstream of the renderer. Until that was separated, a pane that
+ * parsed but never painted produced `parsed === true` and therefore no cause at
+ * all: the freeze was invisible here by construction. See
+ * `terminal-render-progress.ts`, including what it still cannot see.
  */
 import {
   captureTerminalParseProgressGeneration,
   isTerminalWritePipelineCertifiedDead
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import {
+  captureTerminalRenderProgressGeneration,
+  isTerminalRenderProgressObservable,
+  observeTerminalRenderProgress
+} from './terminal-render-progress'
 
-export type VisiblePaneStallCause = 'pipeline-dead' | 'output-not-received' | 'output-not-parsed'
+export type VisiblePaneStallCause =
+  | 'pipeline-dead'
+  | 'output-not-received'
+  | 'output-not-parsed'
+  | 'output-not-presented'
 
 export type VisiblePaneLivenessEntry = {
   terminal: object
@@ -35,17 +52,24 @@ type Observation = {
   modelSequence: number
   receivedChars: number
   parseGeneration: number
+  renderGeneration: number
   stallTicks: number
 }
 
 const entries = new Set<VisiblePaneLivenessEntry>()
 const observations = new WeakMap<VisiblePaneLivenessEntry, Observation>()
+const renderSubscriptions = new WeakMap<VisiblePaneLivenessEntry, () => void>()
 
 export function registerVisiblePaneLiveness(entry: VisiblePaneLivenessEntry): () => void {
   entries.add(entry)
+  // Why here and not at the pane: this judge is the only consumer of render progress, and owning
+  // the subscription keeps the entry contract — and pty-connection.ts — unchanged.
+  renderSubscriptions.set(entry, observeTerminalRenderProgress(entry.terminal))
   return () => {
     entries.delete(entry)
     observations.delete(entry)
+    renderSubscriptions.get(entry)?.()
+    renderSubscriptions.delete(entry)
   }
 }
 
@@ -61,7 +85,7 @@ export function collectOnScreenPtyIds(): string[] {
 }
 
 /** One observation per tick. Recovery needs CONSECUTIVE ticks in which the
- *  model advanced and the pane did not; a quiet tick or any parse progress
+ *  model advanced and the pane did not; a quiet tick or any pane-side progress
  *  resets the streak, so sparse healthy updates never accumulate. Unknown
  *  model progress (no sequence) or an off-screen pane forgets the observation. */
 export function judgeVisiblePaneLiveness(args: {
@@ -81,6 +105,7 @@ export function judgeVisiblePaneLiveness(args: {
     }
     const receivedChars = args.getReceivedChars(ptyId)
     const parseGeneration = captureTerminalParseProgressGeneration(entry.terminal)
+    const renderGeneration = captureTerminalRenderProgressGeneration(entry.terminal)
     const previous = observations.get(entry)
     if (!previous || previous.ptyId !== ptyId) {
       observations.set(entry, {
@@ -88,27 +113,40 @@ export function judgeVisiblePaneLiveness(args: {
         modelSequence,
         receivedChars,
         parseGeneration,
+        renderGeneration,
         stallTicks: 0
       })
       continue
     }
     const parsed = parseGeneration !== previous.parseGeneration
+    const presented = renderGeneration !== previous.renderGeneration
     // Why dead first: a dead pipeline still receives (and credits) bytes it discards.
     // Why parse outranks receive: parsing bytes received before the last tick is progress.
+    // Why presentation is judged only when observable: a terminal with no `onRender` never advances
+    // a render generation, so judging it would read every healthy parsed tick as a frozen canvas.
     const cause: VisiblePaneStallCause | null = isTerminalWritePipelineCertifiedDead(entry.terminal)
       ? 'pipeline-dead'
-      : parsed
-        ? null
-        : receivedChars === previous.receivedChars
+      : !parsed
+        ? receivedChars === previous.receivedChars
           ? 'output-not-received'
           : 'output-not-parsed'
+        : isTerminalRenderProgressObservable(entry.terminal) && !presented
+          ? 'output-not-presented'
+          : null
     let stallTicks =
       cause !== null && modelSequence > previous.modelSequence ? previous.stallTicks + 1 : 0
     if (stallTicks >= args.stallTicksToRecover && cause !== null) {
       verdicts.push({ entry, ptyId, cause, hiddenGated: gated.has(ptyId) })
       stallTicks = 0
     }
-    observations.set(entry, { ptyId, modelSequence, receivedChars, parseGeneration, stallTicks })
+    observations.set(entry, {
+      ptyId,
+      modelSequence,
+      receivedChars,
+      parseGeneration,
+      renderGeneration,
+      stallTicks
+    })
   }
   return verdicts
 }
