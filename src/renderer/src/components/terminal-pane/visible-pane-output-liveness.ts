@@ -60,9 +60,10 @@ export function collectOnScreenPtyIds(): string[] {
   return [...ids]
 }
 
-/** One observation per tick. A stall tick needs the model to advance while the
- *  pane did not; any pane progress resets the streak. Unknown model progress
- *  (no sequence) or an off-screen pane forgets the observation. */
+/** One observation per tick. Recovery needs CONSECUTIVE ticks in which the
+ *  model advanced and the pane did not; a quiet tick or any parse progress
+ *  resets the streak, so sparse healthy updates never accumulate. Unknown
+ *  model progress (no sequence) or an off-screen pane forgets the observation. */
 export function judgeVisiblePaneLiveness(args: {
   modelOutputSequenceByPty: Record<string, number> | undefined
   hiddenGatedPtyIds: readonly string[] | undefined
@@ -91,20 +92,18 @@ export function judgeVisiblePaneLiveness(args: {
       })
       continue
     }
+    const parsed = parseGeneration !== previous.parseGeneration
     // Why dead first: a dead pipeline still receives (and credits) bytes it discards.
+    // Why parse outranks receive: parsing bytes received before the last tick is progress.
     const cause: VisiblePaneStallCause | null = isTerminalWritePipelineCertifiedDead(entry.terminal)
       ? 'pipeline-dead'
-      : receivedChars === previous.receivedChars
-        ? 'output-not-received'
-        : parseGeneration === previous.parseGeneration
-          ? 'output-not-parsed'
-          : null
-    let stallTicks = previous.stallTicks
-    if (cause === null) {
-      stallTicks = 0
-    } else if (modelSequence > previous.modelSequence) {
-      stallTicks += 1
-    }
+      : parsed
+        ? null
+        : receivedChars === previous.receivedChars
+          ? 'output-not-received'
+          : 'output-not-parsed'
+    let stallTicks =
+      cause !== null && modelSequence > previous.modelSequence ? previous.stallTicks + 1 : 0
     if (stallTicks >= args.stallTicksToRecover && cause !== null) {
       verdicts.push({ entry, ptyId, cause, hiddenGated: gated.has(ptyId) })
       stallTicks = 0

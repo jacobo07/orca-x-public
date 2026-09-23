@@ -283,6 +283,7 @@ type E2eTerminalDeliveryWatchdogApi = {
     stallStreakTicks: number
     healCount: number
     blackholed: boolean
+    visiblePaneRecoveryCount: number
   }
 }
 
@@ -309,7 +310,8 @@ function exposeE2eTerminalDeliveryWatchdog(): void {
       receivedPtyDataEventCount,
       stallStreakTicks,
       healCount,
-      blackholed: blackholePtyPushDelivery
+      blackholed: blackholePtyPushDelivery,
+      visiblePaneRecoveryCount
     })
   }
 }

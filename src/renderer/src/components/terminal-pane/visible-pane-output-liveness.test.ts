@@ -131,6 +131,29 @@ describe('visible pane output liveness', () => {
     expect(tick(pane)).toEqual([])
   })
 
+  it('sparse updates separated by quiet ticks never accumulate into a recovery', () => {
+    const pane = makePane()
+    tick(pane)
+    for (let i = 0; i < 4; i++) {
+      pane.state.model += 5
+      expect(tick(pane)).toEqual([])
+      // Quiet tick: neither side moved.
+      expect(tick(pane)).toEqual([])
+    }
+  })
+
+  it('parsing bytes received before the previous tick counts as progress', () => {
+    const pane = makePane()
+    tick(pane)
+    pane.state.model += 5
+    expect(tick(pane)).toEqual([])
+    pane.state.model += 5
+    recordTerminalParseProgress(pane.terminal)
+    expect(tick(pane)).toEqual([])
+    pane.state.model += 5
+    expect(tick(pane)).toEqual([])
+  })
+
   it('pane progress resets the streak', () => {
     const pane = makePane()
     tick(pane)
