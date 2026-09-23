@@ -95,6 +95,11 @@ export function AgentChatHeader({
           title={location.detail ?? undefined}
           data-testid="agent-chat-location-chip"
           data-tone={location.tone}
+          data-outcome={
+            grounding?.status === 'loaded' && grounding.grounding.outcome === 'found'
+              ? grounding.grounding.location.outcome
+              : undefined
+          }
         >
           <Server className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <span

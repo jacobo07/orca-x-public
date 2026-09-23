@@ -58,16 +58,19 @@ export function ContextCard({
 export function ContextRow({
   term,
   children,
-  testId
+  testId,
+  state
 }: {
   term: string
   children: ReactNode
   testId?: string
+  /** Locale-free machine state of the row, or 'pending' while its owner has not answered. */
+  state?: string
 }): React.JSX.Element {
   return (
     <>
       <dt className="text-muted-foreground">{term}</dt>
-      <dd className="min-w-0 break-words" data-testid={testId}>
+      <dd className="min-w-0 break-words" data-testid={testId} data-state={state}>
         {children}
       </dd>
     </>
@@ -141,6 +144,7 @@ export function AgentContextRail({
         <ContextRow
           term={translate('workspace.context.name', 'Name')}
           testId="agent-context-project-name"
+          state={row?.project.kind ?? 'pending'}
         >
           {row ? projectRefLabel(row.project) : pending}
         </ContextRow>
@@ -159,6 +163,7 @@ export function AgentContextRail({
         <ContextRow
           term={translate('workspace.context.runsOn', 'Next turn')}
           testId="agent-context-location"
+          state={found?.location.outcome ?? 'pending'}
         >
           {location ? <Fact fact={location} /> : pending}
         </ContextRow>
@@ -171,6 +176,7 @@ export function AgentContextRail({
         <ContextRow
           term={translate('workspace.context.credential', 'Credential')}
           testId="agent-context-credential"
+          state={found?.provider.credential.state ?? 'pending'}
         >
           {provider ? <Fact fact={provider.credential} /> : pending}
         </ContextRow>
