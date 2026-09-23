@@ -3215,6 +3215,7 @@ const api = {
     create: (args) => ipcRenderer.invoke('conversations:create', args),
     createForAgent: (args) => ipcRenderer.invoke('conversations:createForAgent', args),
     read: (args) => ipcRenderer.invoke('conversations:read', args),
+    agentGrounding: (args) => ipcRenderer.invoke('conversations:agentGrounding', args),
     sendTurn: (args) => ipcRenderer.invoke('conversations:sendTurn', args),
     onTurnEvent: (callback) => {
       const listener = (

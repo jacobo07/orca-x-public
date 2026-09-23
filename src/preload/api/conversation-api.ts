@@ -1,3 +1,4 @@
+import type { AgentGrounding } from '../../shared/agent-grounding'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { ConversationSummary } from '../../shared/conversation-summary'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
@@ -39,6 +40,9 @@ export type ConversationApi = {
       title?: string | null
     }) => Promise<ConversationForAgentResult>
     read: (args: { id: string }) => Promise<ConversationLoadResult>
+    /** Where this agent's next turn would run and what would run it, from the turn runner's own
+     *  resolver and credential check. */
+    agentGrounding: (args: { agentId: string }) => Promise<AgentGrounding>
     sendTurn: (args: {
       id: string
       text: string

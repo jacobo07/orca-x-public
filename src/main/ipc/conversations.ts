@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { BrowserWindow, ipcMain } from 'electron'
 
+import type { AgentGrounding } from '../../shared/agent-grounding'
 import { isAgentId } from '../../shared/agent-identity'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { isConversationId } from '../../shared/conversation-identity'
@@ -15,6 +16,7 @@ import type {
 } from '../../shared/conversation-types'
 import { readStoredCodexCredentialState } from '../codex-accounts/managed-codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
+import { readAgentGrounding } from '../conversation/agent-grounding'
 import {
   resolveAgentProjectLocation,
   type ProjectLocationReader
@@ -60,6 +62,7 @@ export type ConversationIpcHandlers = {
     title?: string | null
   }) => Promise<ConversationForAgentResult>
   'conversations:read': (args: { id: string }) => Promise<ConversationLoadResult>
+  'conversations:agentGrounding': (args: { agentId: string }) => Promise<AgentGrounding>
   'conversations:sendTurn': (args: {
     id: string
     text: string
@@ -118,6 +121,8 @@ export async function checkCodexAuth(): Promise<{ ready: true } | { ready: false
 export type ConversationIpcDeps = {
   service: ConversationService
   turnDeps: Omit<ConversationTurnDeps, 'service'>
+  /** Absent means grounding cannot be answered, which is reported as such — never as "missing". */
+  roster?: ConversationAgentRoster
 }
 
 export function createConversationIpcHandlers(deps: ConversationIpcDeps): ConversationIpcHandlers {
@@ -140,6 +145,20 @@ export function createConversationIpcHandlers(deps: ConversationIpcDeps): Conver
         title: typeof args?.title === 'string' ? args.title : null
       }),
     'conversations:read': async (args) => service.read(requireConversationId(args?.id)),
+    'conversations:agentGrounding': async (args) => {
+      const agentId = requireAgentId(args?.agentId)
+      if (!deps.roster) {
+        return { outcome: 'roster-unreadable', reason: 'no agent roster is wired' }
+      }
+      return readAgentGrounding(
+        {
+          roster: deps.roster,
+          resolveProjectLocation: deps.turnDeps.resolveProjectLocation,
+          checkAuth: deps.turnDeps.checkAuth
+        },
+        agentId
+      )
+    },
     'conversations:sendTurn': async (args) =>
       runConversationTurn(
         { ...deps.turnDeps, service },
@@ -186,6 +205,7 @@ export function registerConversationHandlers(
 ): void {
   const handlers = createConversationIpcHandlers({
     service: getConversationService(agentRoster),
+    roster: agentRoster,
     turnDeps: {
       driver: createCodexConversationDriver(),
       checkAuth: checkCodexAuth,

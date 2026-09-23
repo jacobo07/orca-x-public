@@ -28,6 +28,7 @@ function build(overrides: Partial<Omit<ConversationTurnDeps, 'service'>> = {}): 
   emitted = []
   handlers = createConversationIpcHandlers({
     service: new ConversationService(directory, { readAgents: () => roster }),
+    roster: { readAgents: () => roster },
     turnDeps: {
       driver: {
         runTurn: async (request) => {
@@ -72,12 +73,72 @@ describe('conversation IPC handlers', () => {
     // Named explicitly rather than counted: a `toHaveLength(4)` would stay green if `read` were
     // swapped for `writeFile`, which is the exact mistake this boundary exists to prevent.
     expect(Object.keys(handlers).sort()).toEqual([
+      'conversations:agentGrounding',
       'conversations:create',
       'conversations:createForAgent',
       'conversations:list',
       'conversations:read',
       'conversations:sendTurn'
     ])
+  })
+
+  describe('agent grounding', () => {
+    const agent = (): Agent => ({
+      id: mintAgentId(),
+      name: 'Hermes',
+      role: 'Engineering',
+      projectId: 'repo:p1',
+      createdAt: 1,
+      updatedAt: 1
+    })
+
+    it('reports the location the turn runner would refuse with, not a friendlier one', async () => {
+      const hermes = agent()
+      roster = [hermes]
+      build({
+        resolveProjectLocation: () => ({
+          outcome: 'remote-host',
+          projectId: 'repo:p1',
+          hostId: 'ssh:gex' as never
+        })
+      })
+      const grounding = await handlers['conversations:agentGrounding']({ agentId: hermes.id })
+      expect(grounding).toMatchObject({
+        outcome: 'found',
+        location: { outcome: 'remote-host', hostId: 'ssh:gex' },
+        provider: { driver: 'codex-app-server', credential: { state: 'ready' } }
+      })
+      const created = await handlers['conversations:createForAgent']({ agentId: hermes.id })
+      if (created.outcome !== 'created') throw new Error('precondition: agent chat not created')
+      const outcome = await handlers['conversations:sendTurn']({ id: created.record.id, text: 'hi' })
+      expect(outcome).toMatchObject({ outcome: 'project-unavailable', reason: 'remote-host' })
+    })
+
+    it('carries the credential check the turn uses, including its detail', async () => {
+      const hermes = agent()
+      roster = [hermes]
+      authReady = false
+      build()
+      expect(await handlers['conversations:agentGrounding']({ agentId: hermes.id })).toMatchObject({
+        provider: { credential: { state: 'not-ready', detail: 'codex credential is missing' } }
+      })
+    })
+
+    it('says an agent is missing only when the roster was read and lacks it', async () => {
+      roster = []
+      build()
+      const id = mintAgentId()
+      expect(await handlers['conversations:agentGrounding']({ agentId: id })).toEqual({
+        outcome: 'agent-missing',
+        agentId: id
+      })
+    })
+
+    it('rejects a value that is not an agent id', async () => {
+      await expect(
+        handlers['conversations:agentGrounding']({ agentId: 'conv_nope' })
+      ).rejects.toThrow(/not an agent id/)
+    })
   })
 
   it('creates a conversation that a separate reader can load from disk', async () => {
