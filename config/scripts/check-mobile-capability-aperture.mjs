@@ -49,8 +49,11 @@ export function collectMethodSources(dir) {
   const out = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...collectMethodSources(full))
-    else if (entry.name.endsWith('.ts') && !entry.name.includes('.test.')) out.push(full)
+    if (entry.isDirectory()) {
+      out.push(...collectMethodSources(full))
+    } else if (entry.name.endsWith('.ts') && !entry.name.includes('.test.')) {
+      out.push(full)
+    }
   }
   return out
 }
@@ -58,7 +61,9 @@ export function collectMethodSources(dir) {
 export function parsePopulation(sources) {
   const methods = new Set()
   for (const file of sources) {
-    for (const m of fs.readFileSync(file, 'utf8').matchAll(METHOD_NAME_PATTERN)) methods.add(m[1])
+    for (const m of fs.readFileSync(file, 'utf8').matchAll(METHOD_NAME_PATTERN)) {
+      methods.add(m[1])
+    }
   }
   return methods
 }
@@ -66,12 +71,18 @@ export function parsePopulation(sources) {
 export function parseAllowlist(rpcSource) {
   const lines = rpcSource.split(/\r?\n/)
   const start = lines.findIndex((l) => l.includes('const MOBILE_RPC_METHOD_ALLOWLIST'))
-  if (start === -1) throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')
+  if (start === -1) {
+    throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')
+  }
   const allowlist = new Set()
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^\s*\]\)/.test(lines[i])) return allowlist
+    if (/^\s*\]\)/.test(lines[i])) {
+      return allowlist
+    }
     const m = lines[i].match(/^\s*'([^']+)'/)
-    if (m) allowlist.add(m[1])
+    if (m) {
+      allowlist.add(m[1])
+    }
   }
   throw new Error('MOBILE_RPC_METHOD_ALLOWLIST block was never closed')
 }
@@ -149,8 +160,9 @@ export function evaluateAperture({
       kind: 'stale-baseline',
       message:
         `${staleBaseline.length} baseline entr(ies) are no longer host-only and must be removed ` +
-        `(${reachableNow.length} now reachable from mobile, ${goneNow.length} no longer exist):\n    ` +
-        staleBaseline.join('\n    ')
+        `(${reachableNow.length} now reachable from mobile, ${goneNow.length} no longer exist):\n    ${staleBaseline.join(
+          '\n    '
+        )}`
     })
   }
 
@@ -167,30 +179,28 @@ export function evaluateAperture({
 }
 
 export function baselineFileBody(hostOnly, populationSize, reachableCount, today) {
-  return (
-    [
-      '# Host RPC methods that are unreachable from mobile, frozen at the first aperture audit.',
-      '#',
-      '# Why a baseline and not a clean-bill gate: these were already host-only when this gate',
-      '# landed, and a gate that is red on arrival gets disabled within a week. Existing debt stays',
-      '# visible here while a NEW host-only method fails the build, so the next one is a decision',
-      '# somebody makes in a diff rather than an omission nobody sees.',
-      '#',
-      '# This list may only SHRINK, in both directions. An entry that becomes reachable from mobile,',
-      '# or that no longer exists, fails as a stale exception — so the list cannot outlive its',
-      '# subjects and cannot be padded with methods that are not really host-only.',
-      '#',
-      '# Being listed here is NOT a disposition. It records that a method is unreachable from',
-      '# mobile, not that it should be. config/variant-parity.jsonc is where a capability gets an',
-      '# argued disposition; config/mobile-capability-aperture-audit.md classifies this whole set.',
-      '#',
-      `# Frozen ${today}: ${hostOnly.length} host-only of ${populationSize} host RPC methods ` +
-        `(${reachableCount} reachable from mobile).`,
-      ''
-    ]
-      .concat(hostOnly)
-      .join('\n') + '\n'
-  )
+  return `${[
+    '# Host RPC methods that are unreachable from mobile, frozen at the first aperture audit.',
+    '#',
+    '# Why a baseline and not a clean-bill gate: these were already host-only when this gate',
+    '# landed, and a gate that is red on arrival gets disabled within a week. Existing debt stays',
+    '# visible here while a NEW host-only method fails the build, so the next one is a decision',
+    '# somebody makes in a diff rather than an omission nobody sees.',
+    '#',
+    '# This list may only SHRINK, in both directions. An entry that becomes reachable from mobile,',
+    '# or that no longer exists, fails as a stale exception — so the list cannot outlive its',
+    '# subjects and cannot be padded with methods that are not really host-only.',
+    '#',
+    '# Being listed here is NOT a disposition. It records that a method is unreachable from',
+    '# mobile, not that it should be. config/variant-parity.jsonc is where a capability gets an',
+    '# argued disposition; config/mobile-capability-aperture-audit.md classifies this whole set.',
+    '#',
+    `# Frozen ${today}: ${hostOnly.length} host-only of ${populationSize} host RPC methods ` +
+      `(${reachableCount} reachable from mobile).`,
+    ''
+  ]
+    .concat(hostOnly)
+    .join('\n')}\n`
 }
 
 function flagValue(name, fallback) {
@@ -243,8 +253,14 @@ function main() {
         `${allowlist.size} allowlisted methods unreferenced.`,
       ''
     ]
-    fs.writeFileSync(surfaceBaselinePath, `${header.concat(surface.unreferenced).join('\n')}\n`, 'utf8')
-    console.log(`wrote ${surface.unreferenced.length} entries to ${path.relative(REPO_ROOT, surfaceBaselinePath)}`)
+    fs.writeFileSync(
+      surfaceBaselinePath,
+      `${header.concat(surface.unreferenced).join('\n')}\n`,
+      'utf8'
+    )
+    console.log(
+      `wrote ${surface.unreferenced.length} entries to ${path.relative(REPO_ROOT, surfaceBaselinePath)}`
+    )
     return
   }
   result.failures.push(...surface.failures)
@@ -275,7 +291,9 @@ function main() {
       ),
       'utf8'
     )
-    console.log(`wrote ${result.hostOnly.length} entries to ${path.relative(REPO_ROOT, baselinePath)}`)
+    console.log(
+      `wrote ${result.hostOnly.length} entries to ${path.relative(REPO_ROOT, baselinePath)}`
+    )
     return
   }
 
@@ -292,11 +310,15 @@ function main() {
       `named by mobile source, ${surface.unreferenced.length} reach-without-surface`
   )
 
-  if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2))
+  if (process.argv.includes('--json')) {
+    console.log(JSON.stringify(result, null, 2))
+  }
 
   if (result.failures.length > 0) {
     console.error('\nFAIL: mobile capability aperture\n')
-    for (const f of result.failures) console.error(`  - [${f.kind}] ${f.message}\n`)
+    for (const f of result.failures) {
+      console.error(`  - [${f.kind}] ${f.message}\n`)
+    }
     process.exit(1)
   }
 
@@ -311,7 +333,9 @@ function main() {
  * which is indistinguishable from a pass.
  */
 export function isEntryPoint(argvPath, moduleFilename) {
-  if (!argvPath) return false
+  if (!argvPath) {
+    return false
+  }
   const real = (p) => {
     try {
       return fs.realpathSync(path.resolve(p))

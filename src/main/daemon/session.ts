@@ -153,10 +153,7 @@ export class Session {
   }
 
   resize(cols: number, rows: number): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    if (!isValidPtySize(cols, rows)) {
+    if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {
       return
     }
     this.output.resize(cols, rows)

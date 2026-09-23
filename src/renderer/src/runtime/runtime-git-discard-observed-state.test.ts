@@ -59,9 +59,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-async function discard(
-  precondition?: { expectedContent?: string | null }
-): Promise<void> {
+async function discard(precondition?: { expectedContent?: string | null }): Promise<void> {
   const { discardRuntimeGitPath } = await import('./runtime-git-client')
   await discardRuntimeGitPath(context as never, 'note.txt', precondition)
 }

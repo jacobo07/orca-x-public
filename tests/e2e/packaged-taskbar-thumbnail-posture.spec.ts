@@ -65,11 +65,8 @@ async function expectPosture(
     .toBe(expected)
 }
 
-test('a packaged window hands its thumbnail back to DWM whenever it is not minimized @headful', async (
-  // oxlint-disable-next-line no-empty-pattern -- this spec owns its own launch and opts out of the app fixture.
-  {},
-  testInfo
-) => {
+test('a packaged window hands its thumbnail back to DWM whenever it is not minimized @headful', async (// oxlint-disable-next-line no-empty-pattern -- this spec owns its own launch and opts out of the app fixture.
+{}, testInfo) => {
   test.skip(process.platform !== 'win32', 'the taskbar thumbnail is a Windows surface')
   const executablePath = resolvePackagedOrcaExecutable()
   test.skip(
@@ -94,11 +91,17 @@ test('a packaged window hands its thumbnail back to DWM whenever it is not minim
         })
       )
     )
-    expect(hwnd, 'the packaged window surrendered no native handle — setup failure').toBeGreaterThan(0)
+    expect(
+      hwnd,
+      'the packaged window surrendered no native handle — setup failure'
+    ).toBeGreaterThan(0)
 
     // The instrument has to be able to return the other answer before its answers mean anything.
     const baseline = readDwmThumbnailSource(hwnd)
-    test.skip(baseline === null, 'the thumbnail-source probe could not run — setup failure, not a verdict')
+    test.skip(
+      baseline === null,
+      'the thumbnail-source probe could not run — setup failure, not a verdict'
+    )
 
     await expectPosture(hwnd, 'window-surface', 'while the window is visible')
 

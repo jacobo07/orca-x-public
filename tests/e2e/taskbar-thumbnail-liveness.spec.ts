@@ -41,10 +41,10 @@ const MARKER = 'ORCA-THUMB-DEV'
 const SAMPLE_FRAMES = 6
 const SAMPLE_INTERVAL_MS = 3_000
 
-test('a minimized window keeps its taskbar thumbnail whole and current @headful', async (
-  { orcaPage, electronApp },
-  testInfo: TestInfo
-) => {
+test('a minimized window keeps its taskbar thumbnail whole and current @headful', async ({
+  orcaPage,
+  electronApp
+}, testInfo: TestInfo) => {
   test.skip(process.platform !== 'win32', 'the taskbar thumbnail is a Windows surface')
   test.setTimeout(SAMPLE_FRAMES * SAMPLE_INTERVAL_MS + 300_000)
 

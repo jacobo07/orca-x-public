@@ -286,7 +286,11 @@ describe('daemon replacement: a destructive authorization must still hold at the
     const destruction = startDestruction(generation)
     const admission = await admitSession(writer, 'mid').then(
       (session) => ({ ok: true as const, session, settledBeforeKill: !destruction.hasSettled() }),
-      (error: unknown) => ({ ok: false as const, error, settledBeforeKill: !destruction.hasSettled() })
+      (error: unknown) => ({
+        ok: false as const,
+        error,
+        settledBeforeKill: !destruction.hasSettled()
+      })
     )
     const run = await destruction.promise
     assertDestructionPathWasConclusive(run)

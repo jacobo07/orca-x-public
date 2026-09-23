@@ -153,12 +153,14 @@ test.describe('@terminal-hover-preview-reality', () => {
     expect(await readActiveLeafId(orcaPage, tabId), 'hover changed which pane is active').toBe(
       activeLeafBefore
     )
-    expect(await readAppliedSize(orcaPage, other.ptyId), 'the preview resized the PTY it was watching').toEqual(
-      sizesBefore.other
-    )
-    expect(await readAppliedSize(orcaPage, active.ptyId), 'the preview resized the active PTY').toEqual(
-      sizesBefore.active
-    )
+    expect(
+      await readAppliedSize(orcaPage, other.ptyId),
+      'the preview resized the PTY it was watching'
+    ).toEqual(sizesBefore.other)
+    expect(
+      await readAppliedSize(orcaPage, active.ptyId),
+      'the preview resized the active PTY'
+    ).toEqual(sizesBefore.active)
 
     await orcaPage.screenshot({ path: 'pr-evidence/terminal-hover-preview.png' })
     staged.cleanup()

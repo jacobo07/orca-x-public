@@ -13,10 +13,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import {
-  classifyThumbnailPosture,
-  type DwmThumbnailSourceReading
-} from './dwm-thumbnail-source'
+import { classifyThumbnailPosture, type DwmThumbnailSourceReading } from './dwm-thumbnail-source'
 
 /** Orca, packaged from HEAD, window visible. DWM composites the window's own surface. */
 const packagedVisible: DwmThumbnailSourceReading = {

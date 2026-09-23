@@ -6653,7 +6653,10 @@ export class OrcaRuntimeService {
     windowId: number,
     graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
   ): RuntimeSyncWindowGraphResult {
-    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID && this.graphOwners.has(HEADLESS_RUNTIME_WINDOW_ID)) {
+    if (
+      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.graphOwners.has(HEADLESS_RUNTIME_WINDOW_ID)
+    ) {
       if (!this.headlessGraphFallbackAvailable) {
         throw new Error('Runtime graph publisher does not match the authoritative window')
       }
@@ -24161,9 +24164,7 @@ export class OrcaRuntimeService {
     let didStartInProcessSetupHook = false
     if (shouldRunSetup && hooks?.scripts.setup) {
       const shouldUseSetupRunner =
-        this.graphOwners.size > 0 ||
-        Boolean(effectiveStartup) ||
-        Boolean(this.ptyController?.spawn)
+        this.graphOwners.size > 0 || Boolean(effectiveStartup) || Boolean(this.ptyController?.spawn)
       if (shouldUseSetupRunner) {
         try {
           // Why: setup+startup must share the terminal runner path even without
@@ -30058,7 +30059,11 @@ export class OrcaRuntimeService {
 
   markRendererReloadCancelled(windowId: number, fence: RuntimeRendererReloadFence): boolean {
     const owner = this.graphOwners.get(windowId)
-    if (!owner || owner.status !== 'reloading' || !owner.reload.settle(fence.revision, 'cancelled')) {
+    if (
+      !owner ||
+      owner.status !== 'reloading' ||
+      !owner.reload.settle(fence.revision, 'cancelled')
+    ) {
       return false
     }
     if (fence.recovery === 'headless' && this.shouldRestoreHeadlessGraph(windowId)) {

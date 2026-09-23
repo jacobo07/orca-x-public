@@ -18,10 +18,7 @@
 import { describeUnavailableSubject, selectThumbnailLines } from './taskbar-preview-content'
 import type { TaskbarPreviewNativeAddon } from './taskbar-preview-native'
 import type { TaskbarPreviewSubject } from './taskbar-preview-subject'
-import {
-  decodeIconicThumbnailSize,
-  resolveLivePreviewSize
-} from './taskbar-preview-bitmap-size'
+import { decodeIconicThumbnailSize, resolveLivePreviewSize } from './taskbar-preview-bitmap-size'
 import { createTaskbarPreviewRefreshTicker } from './taskbar-preview-refresh-ticker'
 import {
   TaskbarPreviewSupplyLedger,

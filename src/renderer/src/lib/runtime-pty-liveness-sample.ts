@@ -1,9 +1,6 @@
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import {
-  resetRuntimeHostQueueForTests,
-  runOnRuntimeHost
-} from '@/runtime/runtime-host-query-queue'
+import { resetRuntimeHostQueueForTests, runOnRuntimeHost } from '@/runtime/runtime-host-query-queue'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   RuntimeTerminalListResult,

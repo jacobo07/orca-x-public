@@ -321,7 +321,7 @@ function TerminalPane(
     isVisible = true,
     isWorktreeActive = isVisible,
     isolatedPaneKey = null,
-      onPtyExit,
+    onPtyExit,
     onCloseTab
   }: TerminalPaneProps,
   ref: React.ForwardedRef<TerminalPaneHandle>

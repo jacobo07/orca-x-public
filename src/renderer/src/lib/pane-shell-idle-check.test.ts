@@ -60,21 +60,43 @@ describe('checkPaneShellIdle', () => {
   })
 
   it('refuses a prompt that may still hold a line the user typed and never submitted', async () => {
-    await expect(check({}, () => 'pty-1', () => true)).resolves.toBe('unsent-input')
+    await expect(
+      check(
+        {},
+        () => 'pty-1',
+        () => true
+      )
+    ).resolves.toBe('unsent-input')
   })
 
   it('resumes a prompt the user left empty', async () => {
-    await expect(check({}, () => 'pty-1', () => false)).resolves.toBe('idle')
+    await expect(
+      check(
+        {},
+        () => 'pty-1',
+        () => false
+      )
+    ).resolves.toBe('idle')
   })
 
   it('names the running command first, since that is what the user must deal with', async () => {
-    await expect(check({ promptState: 'running' }, () => 'pty-1', () => true)).resolves.toBe('busy')
+    await expect(
+      check(
+        { promptState: 'running' },
+        () => 'pty-1',
+        () => true
+      )
+    ).resolves.toBe('busy')
   })
 
   it('leaves a shell it could not confirm unconfirmed, never unsent-input', async () => {
-    await expect(check({ promptState: 'unknown' }, () => 'pty-1', () => true)).resolves.toBe(
-      'unconfirmed'
-    )
+    await expect(
+      check(
+        { promptState: 'unknown' },
+        () => 'pty-1',
+        () => true
+      )
+    ).resolves.toBe('unconfirmed')
   })
 
   // Why these four: the renderer's own flag dies with the renderer, but the shell it protects
@@ -83,13 +105,21 @@ describe('checkPaneShellIdle', () => {
   it('refuses a line the host saw typed, even when this renderer never saw it', async () => {
     // The reload case: the store is empty after a reload, the shell still holds the text.
     await expect(
-      check({ inputSincePrompt: 'typed' }, () => 'pty-1', () => false)
+      check(
+        { inputSincePrompt: 'typed' },
+        () => 'pty-1',
+        () => false
+      )
     ).resolves.toBe('unsent-input')
   })
 
   it('refuses a line this renderer saw typed, even when the host believes it clean', async () => {
     await expect(
-      check({ inputSincePrompt: 'clean' }, () => 'pty-1', () => true)
+      check(
+        { inputSincePrompt: 'clean' },
+        () => 'pty-1',
+        () => true
+      )
     ).resolves.toBe('unsent-input')
   })
 
@@ -97,13 +127,21 @@ describe('checkPaneShellIdle', () => {
     // A host old enough to track prompts but not input cannot say the line is empty, and
     // "nobody told me" is not evidence of an empty line.
     await expect(
-      check({ inputSincePrompt: undefined }, () => 'pty-1', () => false)
+      check(
+        { inputSincePrompt: undefined },
+        () => 'pty-1',
+        () => false
+      )
     ).resolves.toBe('host-outdated')
   })
 
   it('resumes only when the host itself vouches the line is clean', async () => {
     await expect(
-      check({ inputSincePrompt: 'clean' }, () => 'pty-1', () => false)
+      check(
+        { inputSincePrompt: 'clean' },
+        () => 'pty-1',
+        () => false
+      )
     ).resolves.toBe('idle')
   })
 

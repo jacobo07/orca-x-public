@@ -12,7 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { assertPackagedArtifactIsNotStale } from './packaged-orca-app'
+import { assertPackagedArtifactIsNotStale } from './packaged-artifact-integrity'
 
 const SECOND = 1000
 

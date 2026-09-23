@@ -144,9 +144,7 @@ test.describe('Source Control discard confirmation', () => {
     await deleteUntrackedFileFromRow(row)
     await confirmPendingDelete(orcaPage)
 
-    await expect(
-      discardDialog(orcaPage)
-    ).toHaveCount(0)
+    await expect(discardDialog(orcaPage)).toHaveCount(0)
     await expect(row).toHaveCount(0, { timeout: 10_000 })
 
     await refreshGitStatus(orcaPage)
@@ -182,9 +180,7 @@ test.describe('Source Control discard confirmation', () => {
     await expect(row).toBeVisible()
 
     await deleteUntrackedFileFromRow(row)
-    await expect(
-      discardDialog(orcaPage)
-    ).toBeVisible()
+    await expect(discardDialog(orcaPage)).toBeVisible()
 
     const bytesWrittenOutside = 'work that arrived while the dialog was open\n'
     await writeFile(seededFile.absolutePath, bytesWrittenOutside, 'utf8')

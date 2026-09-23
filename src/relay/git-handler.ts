@@ -894,7 +894,9 @@ export class GitHandler {
       WORKTREE_CONTENT_IDENTITY_CONCURRENCY,
       async (filePath) => {
         try {
-          if ((await readWorktreeContentIdentity(worktreePath, filePath)) !== observed.get(filePath)) {
+          if (
+            (await readWorktreeContentIdentity(worktreePath, filePath)) !== observed.get(filePath)
+          ) {
             moved.push(filePath)
           }
         } catch {

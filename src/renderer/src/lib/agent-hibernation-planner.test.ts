@@ -670,7 +670,10 @@ describe('agent sleep planner', () => {
   })
 })
 
-function reasonFor(input: AgentHibernationPlannerSnapshot, paneKey = `tab-1:${LEAF}`): string | null {
+function reasonFor(
+  input: AgentHibernationPlannerSnapshot,
+  paneKey = `tab-1:${LEAF}`
+): string | null {
   const found = classifyAgentHibernationPanes(input).find((pane) => pane.paneKey === paneKey)
   return found ? found.reason : 'pane-absent'
 }
@@ -707,10 +710,14 @@ describe('agent sleep exclusion reasons', () => {
 
   it('separates a busy agent from an interrupted one', () => {
     expect(
-      reasonFor(snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ state: 'working' }) } }))
+      reasonFor(
+        snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ state: 'working' }) } })
+      )
     ).toBe('agent-busy')
     expect(
-      reasonFor(snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ interrupted: true }) } }))
+      reasonFor(
+        snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ interrupted: true }) } })
+      )
     ).toBe('agent-interrupted')
   })
 
@@ -741,7 +748,9 @@ describe('agent sleep exclusion reasons', () => {
 
   it('names a pane that has not been idle long enough', () => {
     expect(
-      reasonFor(snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ updatedAt: NOW }) } }))
+      reasonFor(
+        snapshot({ agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry({ updatedAt: NOW }) } })
+      )
     ).toBe('not-idle-long-enough')
   })
 

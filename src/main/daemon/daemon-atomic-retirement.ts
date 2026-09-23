@@ -66,7 +66,9 @@ export async function requestAtomicRetirement(
     // request and failed mid-flight, which is a transport fault, not an old daemon.
     return {
       retiring: false,
-      reason: String(error instanceof Error ? error.message : error).includes('Unknown request type')
+      reason: String(error instanceof Error ? error.message : error).includes(
+        'Unknown request type'
+      )
         ? 'unsupported'
         : 'unreachable'
     }

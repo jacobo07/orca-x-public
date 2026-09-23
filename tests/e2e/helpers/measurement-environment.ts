@@ -114,7 +114,8 @@ export function evaluateMeasurementEnvironment({
 
 export function describeMeasurementEnvironment(result: MeasurementEnvironment): string {
   const floor = `floor=${asMb(result.floorBytes)}MB`
-  const low = result.minFreeBytes === null ? 'minFree=n/a' : `minFree=${asMb(result.minFreeBytes)}MB`
+  const low =
+    result.minFreeBytes === null ? 'minFree=n/a' : `minFree=${asMb(result.minFreeBytes)}MB`
   return `[measurement-environment] ${result.verdict} ${floor} ${low} samples=${result.sampleCount} — ${result.reason}`
 }
 

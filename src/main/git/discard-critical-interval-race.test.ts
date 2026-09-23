@@ -48,9 +48,8 @@ beforeAll(async () => {
     process.env[pathKey] = `${gitBinDirectory}${path.delimiter}${process.env[pathKey] ?? ''}`
   }
   // The unmocked module, so the destruction the barrier lets through is the real one.
-  realExec = (
-    (await vi.importActual('./runner')) as { gitExecFileAsync: typeof gitExecFileAsync }
-  ).gitExecFileAsync
+  realExec = ((await vi.importActual('./runner')) as { gitExecFileAsync: typeof gitExecFileAsync })
+    .gitExecFileAsync
 })
 
 afterEach(async () => {
@@ -108,9 +107,7 @@ async function observe(repo: string, relativePaths: string[]): Promise<Map<strin
  * The writer runs BEFORE the call-through, so its bytes are on disk by the time the destructive process
  * starts -- the strongest form of the claim: not "a write raced", but "a write had already completed".
  */
-function passThroughWithBarrier(
-  onSubcommand?: (subcommand: string) => Promise<void>
-): void {
+function passThroughWithBarrier(onSubcommand?: (subcommand: string) => Promise<void>): void {
   execMock.mockImplementation(async (args: string[], options) => {
     const subcommand = args[0] ?? ''
     if (onSubcommand) {
@@ -227,12 +224,7 @@ describe('a second writer between two members of one bulk discard', () => {
       events.push('writer:wrote')
     })
 
-    const result = await bulkDiscardChanges(
-      repo,
-      ['tracked.txt', 'untracked.txt'],
-      {},
-      observed
-    )
+    const result = await bulkDiscardChanges(repo, ['tracked.txt', 'untracked.txt'], {}, observed)
 
     // No false serialization. The barrier fires only on the destructive subcommand, which runs only
     // after both members were authorized, so the write is necessarily post-authorization; and it

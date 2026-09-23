@@ -68,7 +68,10 @@ describe('the shutdown checkpoint speaks only for the closing window’s own wor
   it('scopes the staged session to the sending window once a second window exists', () => {
     const store = makeStore()
     const first = registerWorkspaceWindow({ browserWindowId: 1, rendererWebContentsId: RENDERER_A })
-    const second = registerWorkspaceWindow({ browserWindowId: 2, rendererWebContentsId: RENDERER_B })
+    const second = registerWorkspaceWindow({
+      browserWindowId: 2,
+      rendererWebContentsId: RENDERER_B
+    })
     claimWorkspaceForWindow(first.windowId, { repoId: REPO, worktreeId: WORKTREE_A })
     claimWorkspaceForWindow(second.windowId, { repoId: REPO, worktreeId: WORKTREE_B })
     registerRendererShutdownCheckpointHandler(store as never)

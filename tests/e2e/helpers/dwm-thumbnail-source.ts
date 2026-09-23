@@ -69,7 +69,16 @@ export function readDwmThumbnailSource(hwnd: number): DwmThumbnailSourceReading 
   try {
     const stdout = execFileSync(
       'powershell',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Hwnd', String(hwnd)],
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        script,
+        '-Hwnd',
+        String(hwnd)
+      ],
       { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 }
     )
     // findLast, not find: PowerShell can emit its own notices before the payload, and this script

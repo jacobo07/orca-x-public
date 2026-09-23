@@ -3404,7 +3404,8 @@ void app.whenReady().then(async () => {
     : readWindowTopologyRestorePlan({ store, worktreeExists: () => true })
   const [win, runtimeRpcStartResult] = await Promise.all([
     Promise.resolve(
-      desktopWindow ?? openMainWindow(savedWindowTopology ? { restore: savedWindowTopology[0] } : {})
+      desktopWindow ??
+        openMainWindow(savedWindowTopology ? { restore: savedWindowTopology[0] } : {})
     ),
     shellPathReady
       .then(() => desktopRuntimeRpc.start())
