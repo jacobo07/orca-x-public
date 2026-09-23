@@ -81,6 +81,20 @@ describe('resolveAgentProjectLocation', () => {
     })
   })
 
+  it('CHARACTERIZATION: with two remote setups, the first one listed decides the host', () => {
+    // Today's behaviour, pinned so its inversion is visible: array order picks the host, and here it
+    // picks the setup that is NOT ready over the one that is. Harmless only while remote refuses.
+    const setups = [
+      setup({ id: 's-pending', hostId: 'ssh:pending-box', setupState: 'setting-up' }),
+      setup({ id: 's-ready', hostId: 'ssh:ready-box', path: '/home/dev/ledger' })
+    ]
+    expect(resolveAgentProjectLocation(agent('github:acme/ledger'), reader(setups))).toEqual({
+      outcome: 'remote-host',
+      projectId: 'github:acme/ledger',
+      hostId: 'ssh:pending-box'
+    })
+  })
+
   it('prefers the ready local setup over a remote one for the same project', () => {
     const setups = [
       setup({ id: 's-r', hostId: 'runtime:cloud', path: '/srv/ledger' }),
