@@ -18,6 +18,12 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   HEAD:refs/federation/head`; assert REV before trusting). `gex44` is an ssh URL, not a remote name.
 - Coherence anchor: `git log --format=%s -1 a97d3bcc0` = "merge(federation): join the agent roster...".
 - This branch's `RESUMPTION_FILE.md` is the cogws program's (inherited, tracked) — never edit it here.
+- **P1 SEALED** `b29103907` (characterization). **P2a SEALED** `77f3df5e5`: v30 task columns
+  `assignee_agent_id`/`requester_agent_id`/`subject`; `delegation-bounds.ts` judges every agent
+  delegation in `createTask` (depth>6, fan-out>=12, A->B->A, requester must hold the parent, no
+  agent-started root). GEX44 @77f3df5e5: migration gate ok, tsc 0, orchestration+conversation
+  suite green, 6/6 mutations CAUGHT (registry drop caught by the GATE, not by tests — by design).
+  The static migration gate cannot see columns added in a loop: write one explicit ladder step each.
 
 ## 3. Active decisions
 - Delegation = orchestration task with assignee Agent + requester Agent + subject (project,
