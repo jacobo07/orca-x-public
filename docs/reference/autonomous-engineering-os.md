@@ -173,6 +173,59 @@ independent, which is why neither should absorb the other.
 Observed, not fixed: the aperture audit's prose still says 565 / 305 while the gate measures 567 /
 307. The gate is right and the prose drifted — a count written beside an inventory goes stale.
 
+## W4, measured: the admission point existed, under another name
+
+The previous pane found `budgetEnvelope` in zero files and declined to invent an admission point.
+Correct restraint, and the conclusion was one step too pessimistic: the point exists as
+`db.createDispatchContext`, which already holds the dispatch lock and flips a task to `dispatched`.
+It is a **reservation**, i.e. exactly the authority a budget must sit in front of.
+
+Swept over the whole of `src/` at `6b5f8aea3`, it has **two** production callers —
+`coordinator-task-dispatch.ts:98` and the `orchestration.dispatch` RPC — and ~147 test, fixture and
+comment mentions. Both callers now reach it only through `admitDispatch`.
+
+| Assumed | Measured |
+|---|---|
+| No admission point exists | `createDispatchContext` is the reservation, with two production callers |
+| A budget needs a new carrier | `coordinator-stale-base-flag.ts` already parses a dispatch-time infra fact out of the task spec and strips it from the preamble |
+| The runtime must learn the executor | `getOrchestrationDispatchAuthority(handle)` already returns `hostScope`, and both callers already call it |
+| A reading needs a new provenance vocabulary | `collectHostMemory()` already returns `availableMemorySource` |
+
+**The asymmetry is the whole wave.** `allow-stale-base` is a *permission* whose absence is safe. A
+budget is a *requirement* whose absence must not be permission. Same carrier, inverted defaults — a
+line inside a fenced block declares nothing (the incumbent's own comment admits its regex "fails
+open" there), and a declaration that cannot be read is `malformed`, never absent, so a typo is not
+the thing that grants admission.
+
+**The one state that admits without evidence** is an undeclared requirement: nothing was asked for,
+so there is nothing to establish. Every other unknown refuses — malformed, unobservable executor,
+unreadable host, stale reading, insufficient memory. Without that carve-out the gate would be red on
+arrival for every existing task, and this estate's own doctrine says such a gate is switched off
+within a week.
+
+**Two executors are refused rather than answered for**, and the WSL one is the sharp case: its
+`hostScope` says `hostId: 'local'`, but a WSL2 distro has its own memory budget, so this host's
+reading *overstates* what the worker can have. Answering there would be fail-open while looking
+local. SSH is refused for the plainer reason.
+
+**Schema.** One column, `dispatch_contexts.admission_envelope`, at v29, registered in
+`VERSIONED_POST_V6_COLUMNS` as the spec's W4 row requires. `check:orchestration-migration` is green
+and a real-SQLite case drops the column from a database claiming v29 and proves the repair recreates
+it with the dispatch row intact.
+
+**Evidence.** 10/10 mutations caught with restores SHA-256 verified; the first run left **one
+survivor** — deleting the no-probe guard still refuses, because calling an undefined probe throws
+into the catch, so only the *reason* degrades. Not equivalent, and closed. Product Reality runs the
+real RPC method against a real file-backed database with a real `collectHostMemory` reading, proving
+both refusal (no row, no prompt, task still `ready`) and admission. `pnpm check:dispatch-admission`
+enumerates the reservation's callers structurally, with a population floor, a stale-entry clause and
+a positive control against a rename; a planted unguarded caller fails it, and the estate is green
+again once removed.
+
+**Owed.** No Electron run, and no `orca serve`: the workstation has 1.0–2.5 GB free of 32 GB, and
+on GEX44 serve would repeat W1's public `0.0.0.0` binding and its writes to the host's real agent
+homes. Recorded as BLOCKED rather than downgraded.
+
 ## Authority
 
 Ceiling is **L2**: isolated worktree, local code, tests, commits. No push, no PR, no merge, no
