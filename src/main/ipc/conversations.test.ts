@@ -109,8 +109,13 @@ describe('conversation IPC handlers', () => {
         provider: { driver: 'codex-app-server', credential: { state: 'ready' } }
       })
       const created = await handlers['conversations:createForAgent']({ agentId: hermes.id })
-      if (created.outcome !== 'created') throw new Error('precondition: agent chat not created')
-      const outcome = await handlers['conversations:sendTurn']({ id: created.record.id, text: 'hi' })
+      if (created.outcome !== 'created') {
+        throw new Error('precondition: agent chat not created')
+      }
+      const outcome = await handlers['conversations:sendTurn']({
+        id: created.record.id,
+        text: 'hi'
+      })
       expect(outcome).toMatchObject({ outcome: 'project-unavailable', reason: 'remote-host' })
     })
 
@@ -175,7 +180,9 @@ describe('conversation IPC handlers', () => {
     await expect(handlers['conversations:read']({ id: '../../etc/passwd' })).rejects.toThrow(
       /not a conversation id/
     )
-    await expect(handlers['conversations:read']({ id: '' })).rejects.toThrow(/not a conversation id/)
+    await expect(handlers['conversations:read']({ id: '' })).rejects.toThrow(
+      /not a conversation id/
+    )
   })
 
   it('does not invent a project binding when the renderer sends none', async () => {
@@ -191,7 +198,14 @@ describe('conversation IPC — creating a conversation with an agent', () => {
 
   it('binds the agent, and a separate reader sees the binding on disk', async () => {
     const agentId = mintAgentId()
-    roster.push({ id: agentId, name: 'Ada', role: 'r', projectId: null, createdAt: 1, updatedAt: 1 })
+    roster.push({
+      id: agentId,
+      name: 'Ada',
+      role: 'r',
+      projectId: null,
+      createdAt: 1,
+      updatedAt: 1
+    })
 
     const created = await handlers['conversations:createForAgent']({ agentId, title: 'hello' })
     if (created.outcome !== 'created') throw new Error(`precondition: ${created.outcome}`)
@@ -217,7 +231,14 @@ describe('conversation IPC — creating a conversation with an agent', () => {
   // The agent path has no project parameter. A renderer that sends one anyway cannot plant it.
   it('ignores a project a renderer tries to smuggle onto an agent-bound create', async () => {
     const agentId = mintAgentId()
-    roster.push({ id: agentId, name: 'Ada', role: 'r', projectId: 'repo:a', createdAt: 1, updatedAt: 1 })
+    roster.push({
+      id: agentId,
+      name: 'Ada',
+      role: 'r',
+      projectId: 'repo:a',
+      createdAt: 1,
+      updatedAt: 1
+    })
 
     const created = await handlers['conversations:createForAgent']({
       agentId,

@@ -1,24 +1,50 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Folder, PanelRight, Server } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import type { WorkspaceProjectRef } from '../../../../shared/cognitive-workspace-projection'
 
-import type { ScopedAgentLookup } from './use-scoped-agent'
+import { describeTurnLocation, type GroundingTone } from './agent-grounding-presentation'
+import type { AgentGroundingLookup } from './use-agent-grounding'
+import type { ScopedAgentLookup } from './use-workspace-agents'
+import { AgentMonogram, projectRefLabel } from './workspace-roster-rows'
+
+const TONE_DOT: Record<GroundingTone, string> = {
+  ready: 'bg-[var(--status-success)]',
+  caution: 'bg-muted-foreground',
+  refused: 'bg-destructive',
+  neutral: 'bg-muted-foreground/60'
+}
 
 /**
- * Says who this chat is with. Only what the agent record owns: its name and role — no provider,
- * status or activity, none of which has a producer.
+ * Who this chat is with, which project owns it and where its next turn would run. Name and role
+ * come from the agent record; project from the agent's project relation; the location chip from
+ * the turn runner's own resolver (conversations:agentGrounding). There is no "online" state: an
+ * agent is a durable record, not a process, and nothing produces one.
  */
 export function AgentChatHeader({
   lookup,
-  onBack
+  project,
+  grounding,
+  onBack,
+  railOpen,
+  onToggleRail
 }: {
   lookup: ScopedAgentLookup
+  project: WorkspaceProjectRef | null
+  grounding: AgentGroundingLookup | null
   onBack: () => void
+  railOpen: boolean
+  onToggleRail: () => void
 }): React.JSX.Element {
+  const location =
+    grounding?.status === 'loaded' && grounding.grounding.outcome === 'found'
+      ? describeTurnLocation(grounding.grounding.location)
+      : null
   return (
     <header
-      className="flex items-start gap-3 border-b border-border px-4 py-3"
+      className="flex items-center gap-3 border-b border-border px-4 py-3"
       data-testid="agent-chat-header"
       data-agent-id={lookup.status === 'found' ? lookup.agent.id : undefined}
       data-lookup-status={lookup.status}
@@ -33,8 +59,11 @@ export function AgentChatHeader({
       >
         <ArrowLeft className="size-4" />
       </Button>
-      <div className="min-w-0">
-        <h1 className="truncate text-sm font-medium" data-testid="agent-chat-name">
+      {lookup.status === 'found' ? (
+        <AgentMonogram name={lookup.agent.name} className="size-9" />
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-base font-semibold" data-testid="agent-chat-name">
           {lookup.status === 'found'
             ? lookup.agent.name
             : lookup.status === 'loading'
@@ -50,6 +79,42 @@ export function AgentChatHeader({
           </p>
         ) : null}
       </div>
+      {project !== null ? (
+        <span
+          className="hidden max-w-48 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs md:flex"
+          data-testid="agent-chat-project-chip"
+          data-project-kind={project.kind}
+        >
+          <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="truncate">{projectRefLabel(project)}</span>
+        </span>
+      ) : null}
+      {location !== null ? (
+        <span
+          className="hidden max-w-56 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs md:flex"
+          title={location.detail ?? undefined}
+          data-testid="agent-chat-location-chip"
+          data-tone={location.tone}
+        >
+          <Server className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <span
+            className={cn('size-1.5 shrink-0 rounded-full', TONE_DOT[location.tone])}
+            aria-hidden
+          />
+          <span className="truncate">{location.label}</span>
+        </span>
+      ) : null}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={onToggleRail}
+        aria-pressed={railOpen}
+        aria-label={translate('workspace.context.toggle', 'Context')}
+        data-testid="workspace-context-toggle"
+      >
+        <PanelRight className="size-4" />
+      </Button>
     </header>
   )
 }

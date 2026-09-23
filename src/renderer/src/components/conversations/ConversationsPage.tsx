@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import {
+  projectWorkspaceAgents,
+  projectWorkspaceThreads,
+  type WorkspaceThreadRow
+} from '../../../../shared/cognitive-workspace-projection'
 import type { ConversationSummary } from '../../../../shared/conversation-summary'
 import type { ConversationRecord } from '../../../../shared/conversation-types'
+import { resolveDefaultProjectId } from '../agents/default-agent-project'
+import { NewAgentDialog } from '../agents/NewAgentDialog'
 import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 
 import { AgentChatHeader } from './AgentChatHeader'
+import { AgentContextRail } from './AgentContextRail'
 import { conversationsInScope, latestConversationForAgent } from './agent-chat-scope'
-import { ConversationList } from './ConversationList'
+import { CognitiveWorkspaceRoster, type WorkspaceRosterTab } from './CognitiveWorkspaceRoster'
+import { ConversationComposer } from './ConversationComposer'
 import { ConversationNotice } from './ConversationNotice'
 import {
   applyConversationLiveEvent,
@@ -21,33 +27,27 @@ import {
   type ConversationLiveState
 } from './conversation-live-state'
 import { conversationToNativeChatSession } from './conversation-native-chat-session'
-import { useScopedAgent } from './use-scoped-agent'
+import { useAgentGrounding } from './use-agent-grounding'
+import { useWorkspaceAgents } from './use-workspace-agents'
 
 /**
- * Brainstorming AND Direct Agent Chat: a durable Orca conversation with no terminal anywhere.
+ * The Cognitive Workspace: roster | chat | context, over ONE conversation stack.
  *
- * One surface, two scopes. `conversationAgentScope` null is Brainstorming; an agent id is a chat
- * with that agent — same list, same stream, same composer, same main-process owner. The only
- * differences are which conversations are listed, which create is called on first send, and a
- * header saying who you are talking to. An agent-shaped copy of this page would be a second chat
- * stack that drifts from the first.
+ * `conversationAgentScope` null is Brainstorming; an agent id is a chat with that agent — same
+ * list, stream, composer and main-process owner. Rows come from the shared projection, grounding
+ * from the turn runner's own resolver, and the chat stays the dominant column.
  *
- * "New chat" makes a DRAFT, not a record. The record is minted and the user's message is made
- * durable on the first send, before the provider is asked anything — which keeps empty
- * conversations from piling up every time someone clicks the button or browses an agent, and keeps
- * a typed sentence from being the one thing with no record of having existed.
- *
- * There is no Stop control. `turn/interrupt` exists on the wire and Orca has no call site for it,
- * so the button would do nothing; the gap is named rather than mimed.
- *
- * The composer's hint is rendered as visible text bound by aria-describedby rather than as an
- * input attribute, because that kind of hint disappears exactly when someone starts typing and is
- * skipped by several screen readers.
+ * "New thread" makes a DRAFT, not a record: the record is minted, and the user's message made
+ * durable, on the first send — so browsing never piles up empty conversations.
  */
 export default function ConversationsPage(): React.JSX.Element {
   const agentScope = useAppStore((s) => s.conversationAgentScope)
   const openAgentsPage = useAppStore((s) => s.openAgentsPage)
-  const scopedAgent = useScopedAgent(agentScope)
+  const openAgentChat = useAppStore((s) => s.openAgentChat)
+  const openConversationsPage = useAppStore((s) => s.openConversationsPage)
+  const projects = useAppStore((s) => s.projects)
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const roster = useWorkspaceAgents(agentScope)
   const [summaries, setSummaries] = useState<readonly ConversationSummary[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -57,14 +57,20 @@ export default function ConversationsPage(): React.JSX.Element {
   const [recordLoading, setRecordLoading] = useState(false)
   const [live, setLive] = useState<ConversationLiveState>(EMPTY_CONVERSATION_LIVE_STATE)
   const [draft, setDraft] = useState('')
+  const [tab, setTab] = useState<WorkspaceRosterTab>(agentScope === null ? 'threads' : 'agents')
+  const [railOpen, setRailOpen] = useState(true)
+  const [groundingRevision, setGroundingRevision] = useState(0)
+  const [newAgentOpen, setNewAgentOpen] = useState(false)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const activeIdRef = useRef<string | null>(null)
   const openLatestPendingRef = useRef(false)
+  // A thread picked from another scope: opened once that scope's list arrives, instead of latest.
+  const pendingThreadRef = useRef<string | null>(null)
   activeIdRef.current = activeId
+  const grounding = useAgentGrounding(agentScope, groundingRevision)
 
   const refreshList = useCallback(async () => {
-    const rows = await window.api.conversations.list()
-    setSummaries(rows)
+    setSummaries(await window.api.conversations.list())
     setListLoading(false)
   }, [])
 
@@ -78,8 +84,7 @@ export default function ConversationsPage(): React.JSX.Element {
       return
     }
     setRecord(null)
-    // Each non-loaded outcome keeps its own words: "corrupt" and "not here" are different things
-    // to tell someone, and neither may render as an empty conversation.
+    // "Corrupt" and "not here" are different things to say; neither renders as an empty chat.
     setReadError(
       result.outcome === 'unreadable'
         ? result.reason
@@ -89,15 +94,13 @@ export default function ConversationsPage(): React.JSX.Element {
     )
   }, [])
 
-  // Entering a scope starts from a clean draft and a fresh list, then opens the agent's latest
-  // conversation once that list has arrived — never from the previous scope's rows.
   useEffect(() => {
     setDraftActive(true)
     setActiveId(null)
     setLive(EMPTY_CONVERSATION_LIVE_STATE)
     setDraft('')
     setListLoading(true)
-    openLatestPendingRef.current = agentScope !== null
+    openLatestPendingRef.current = agentScope !== null || pendingThreadRef.current !== null
     void refreshList()
   }, [agentScope, refreshList])
 
@@ -111,8 +114,7 @@ export default function ConversationsPage(): React.JSX.Element {
   }, [activeId, loadRecord])
 
   useEffect(() => {
-    // One subscription for the surface, not one per conversation: the payload names which
-    // conversation it belongs to, and a per-row listener would scale with history.
+    // One subscription for the surface; the payload names its conversation.
     return window.api.conversations.onTurnEvent((payload) => {
       if (payload.conversationId !== activeIdRef.current) {
         return
@@ -128,15 +130,44 @@ export default function ConversationsPage(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (!openLatestPendingRef.current || agentScope === null || listLoading) {
+    if (!openLatestPendingRef.current || listLoading) {
       return
     }
     openLatestPendingRef.current = false
-    const latest = latestConversationForAgent(summaries, agentScope)
-    if (latest !== null) {
-      openConversation(latest)
+    const pending = pendingThreadRef.current
+    pendingThreadRef.current = null
+    const target =
+      pending ?? (agentScope === null ? null : latestConversationForAgent(summaries, agentScope))
+    if (target !== null) {
+      openConversation(target)
     }
   }, [agentScope, listLoading, summaries, openConversation])
+
+  const openThread = useCallback(
+    (row: WorkspaceThreadRow) => {
+      // A thread opens in its owner's scope. Unreadable rows and missing-agent threads have no
+      // scope to move to, so they open where the user is (a send there is refused, not rerouted).
+      const owner =
+        row.outcome !== 'ok'
+          ? agentScope
+          : row.agent === null
+            ? null
+            : row.agent.kind === 'agent'
+              ? row.agent.agentId
+              : agentScope
+      if (owner === agentScope) {
+        openConversation(row.id)
+        return
+      }
+      pendingThreadRef.current = row.id
+      if (owner === null) {
+        openConversationsPage()
+      } else {
+        openAgentChat(owner)
+      }
+    },
+    [agentScope, openAgentChat, openConversation, openConversationsPage]
+  )
 
   const startDraft = useCallback(() => {
     setDraftActive(true)
@@ -153,7 +184,6 @@ export default function ConversationsPage(): React.JSX.Element {
     if (text.length === 0 || live.turnState === 'working') {
       return
     }
-
     let conversationId = activeId
     if (conversationId === null) {
       // The draft becomes real here, and only here.
@@ -163,7 +193,7 @@ export default function ConversationsPage(): React.JSX.Element {
           title: text.slice(0, 60)
         })
         if (created.outcome !== 'created') {
-          // Nothing was minted; the draft is left in the composer rather than thrown away.
+          // Nothing was minted; the draft stays in the composer.
           setLive((current) => ({ ...current, notice: noticeForAgentCreateRefusal(created) }))
           return
         }
@@ -174,50 +204,71 @@ export default function ConversationsPage(): React.JSX.Element {
       setActiveId(conversationId)
       setDraftActive(false)
     }
-
     setDraft('')
     setLive((current) => beginConversationTurn(current))
     const outcome = await window.api.conversations.sendTurn({ id: conversationId, text, cwd: '' })
     setLive((current) => applyConversationTurnOutcome(current, outcome))
-    // Re-read rather than patching in place: the record on disk is the truth, and a locally
-    // assembled history would drift from it the first time a write was refused.
+    // Re-read: the record on disk is the truth, not a locally assembled history.
     await loadRecord(conversationId)
     await refreshList()
+    setGroundingRevision((value) => value + 1)
     composerRef.current?.focus()
   }, [activeId, agentScope, draft, live.turnState, loadRecord, refreshList])
 
-  const visibleSummaries = useMemo(
-    () => conversationsInScope(summaries, agentScope),
-    [summaries, agentScope]
+  const agentRows = useMemo(
+    () => projectWorkspaceAgents(roster.agents, projects, summaries),
+    [roster.agents, projects, summaries]
   )
-
+  const allThreads = useMemo(
+    () => projectWorkspaceThreads(summaries, roster.agents, projects),
+    [summaries, roster.agents, projects]
+  )
+  const recentThreads = useMemo(
+    () =>
+      projectWorkspaceThreads(conversationsInScope(summaries, agentScope), roster.agents, projects),
+    [summaries, agentScope, roster.agents, projects]
+  )
   const session = useMemo(
     () => conversationToNativeChatSession({ record, live, loading: recordLoading, readError }),
     [record, live, recordLoading, readError]
   )
-
+  const scopedRow = agentRows.find((row) => row.agent.id === agentScope) ?? null
   const working = live.turnState === 'working'
 
   return (
     <div
-      className="flex h-full min-h-0 w-full"
+      className="flex h-full min-h-0 w-full bg-background"
       data-testid="conversations-page"
       data-conversation-scope={agentScope === null ? 'brainstorming' : 'agent'}
     >
-      <ConversationList
-        summaries={visibleSummaries}
-        activeId={activeId}
+      <CognitiveWorkspaceRoster
+        tab={tab}
+        onTabChange={setTab}
+        agentsLoad={roster.load}
+        agents={agentRows}
+        recentThreads={recentThreads}
+        allThreads={allThreads}
+        threadsLoading={listLoading}
+        activeAgentId={agentScope}
+        activeThreadId={activeId}
         draftActive={draftActive}
-        loading={listLoading}
-        onSelect={openConversation}
-        onNewChat={startDraft}
+        onOpenAgent={openAgentChat}
+        onOpenThread={openThread}
+        onNewThread={startDraft}
+        onNewAgent={() => setNewAgentOpen(true)}
       />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {scopedAgent !== null ? (
-          <AgentChatHeader lookup={scopedAgent} onBack={openAgentsPage} />
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {roster.scoped !== null ? (
+          <AgentChatHeader
+            lookup={roster.scoped}
+            project={scopedRow?.project ?? null}
+            grounding={grounding}
+            onBack={openAgentsPage}
+            railOpen={railOpen}
+            onToggleRail={() => setRailOpen((open) => !open)}
+          />
         ) : null}
-
         <div className="min-h-0 flex-1">
           <NativeChatMessageList
             session={session}
@@ -226,7 +277,6 @@ export default function ConversationsPage(): React.JSX.Element {
             fontScale={1}
           />
         </div>
-
         {live.status !== null ? (
           <p
             role="status"
@@ -237,50 +287,36 @@ export default function ConversationsPage(): React.JSX.Element {
             {live.status}
           </p>
         ) : null}
-
         {live.notice !== null ? <ConversationNotice notice={live.notice} /> : null}
+        <ConversationComposer
+          composerRef={composerRef}
+          value={draft}
+          onChange={setDraft}
+          onSend={() => void send()}
+          working={working}
+          recipient={roster.scoped?.status === 'found' ? roster.scoped.agent.name : null}
+        />
+      </main>
 
-        <form
-          className="border-t border-border p-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void send()
-          }}
-        >
-          <label className="sr-only" htmlFor="conversation-composer">
-            {translate('conversations.composerLabel', 'Message')}
-          </label>
-          <p id="conversation-composer-hint" className="mb-1 text-xs text-muted-foreground">
-            {translate('conversations.composerHint', 'Enter sends. Shift+Enter starts a new line.')}
-          </p>
-          <Textarea
-            id="conversation-composer"
-            ref={composerRef}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            aria-describedby="conversation-composer-hint"
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void send()
-              }
-            }}
-            rows={3}
-            data-testid="conversation-composer"
-          />
-          <div className="mt-2 flex justify-end">
-            <Button
-              type="submit"
-              disabled={working || draft.trim().length === 0}
-              data-testid="conversation-send"
-            >
-              {working
-                ? translate('conversations.sending', 'Working…')
-                : translate('conversations.send', 'Send')}
-            </Button>
-          </div>
-        </form>
-      </div>
+      {agentScope !== null && railOpen ? (
+        <AgentContextRail
+          row={scopedRow}
+          grounding={grounding}
+          turns={record?.turns ?? []}
+          liveTurnState={working ? 'working' : 'idle'}
+        />
+      ) : null}
+
+      <NewAgentDialog
+        open={newAgentOpen}
+        projects={projects}
+        defaultProjectId={resolveDefaultProjectId(activeRepoId, projects)}
+        onOpenChange={setNewAgentOpen}
+        onCreated={(agent) => {
+          void roster.refresh()
+          openAgentChat(agent.id)
+        }}
+      />
     </div>
   )
 }
