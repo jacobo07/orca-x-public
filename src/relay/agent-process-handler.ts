@@ -4,6 +4,11 @@ import path from 'node:path'
 import { defaultAgentProcessHostDeps, type AgentProcessHostDeps } from './agent-process-host-deps'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { buildRelayCommandEnv } from './relay-command-env'
+import {
+  AGENT_PROCESS_METHODS,
+  AGENT_PROCESS_STREAMING_STDIO_VERSION,
+  type AgentProcessRunOutcome
+} from '../shared/agent-process-wire'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 
 // A long-lived provider process (codex app-server) on the ssh host, spoken to over streaming stdio.
@@ -20,8 +25,6 @@ import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-cr
 // ssh user and trusts its client (context.ts), and `pty.spawn` reaches any command. They exist so this
 // method cannot quietly become a second arbitrary-exec path.
 
-export const AGENT_PROCESS_STREAMING_STDIO_VERSION = 1
-
 const ALLOWED_INVOCATIONS = new Set(['codex app-server', 'codex login status'])
 const ALLOWED_ENV_KEYS = new Set(['CODEX_HOME'])
 
@@ -31,26 +34,6 @@ const KILL_GRACE_MS = 1_500
 const STDERR_TAIL_BYTES = 8 * 1024
 /** Raw bytes per frame. Bulk frame capacity is per client; base64 of this stays well under it. */
 const FRAME_SLICE_BYTES = 8 * 1024
-
-export type AgentProcessRefusal =
-  | 'command-not-allowed'
-  | 'env-not-allowed'
-  | 'platform-unsupported'
-  | 'command-not-found'
-  | 'cwd-missing'
-
-export type AgentProcessRunOutcome =
-  | { outcome: 'refused'; reason: AgentProcessRefusal }
-  | {
-      outcome: 'exited'
-      exitCode: number | null
-      signal: string | null
-      /** Last seq sent on each stream: a consistency check the client verifies before 'close'. */
-      finalStdoutSeq: number
-      finalStderrSeq: number
-      stderrTail: string
-      reason: 'closed' | 'deadline' | 'cancelled' | 'spawn-error'
-    }
 
 type RunParams = {
   streamId?: unknown
@@ -78,16 +61,16 @@ export class AgentProcessHandler {
     deps: Partial<AgentProcessHandlerDeps> = {}
   ) {
     this.deps = { ...defaultAgentProcessHostDeps, ...deps }
-    dispatcher.onRequest('agentProcess.getCapabilities', async () => ({
+    dispatcher.onRequest(AGENT_PROCESS_METHODS.getCapabilities, async () => ({
       streamingStdioVersion: AGENT_PROCESS_STREAMING_STDIO_VERSION
     }))
-    dispatcher.onRequest('agentProcess.run', (params, context) =>
+    dispatcher.onRequest(AGENT_PROCESS_METHODS.run, (params, context) =>
       this.run(params as RunParams, context)
     )
-    dispatcher.onRequest('agentProcess.write', async (params, context) =>
+    dispatcher.onRequest(AGENT_PROCESS_METHODS.write, async (params, context) =>
       this.write(params as { streamId?: unknown; data?: unknown }, context)
     )
-    dispatcher.onRequest('agentProcess.closeStdin', async (params, context) =>
+    dispatcher.onRequest(AGENT_PROCESS_METHODS.closeStdin, async (params, context) =>
       this.closeStdin(params as { streamId?: unknown }, context)
     )
   }
@@ -244,7 +227,7 @@ export class AgentProcessHandler {
 
       // First frame on the same serialized chain as the output: the command lookup happens BEFORE
       // the spawn, so a client writing stdin on sending `run` would otherwise race a missing child.
-      pending = publish('agentProcess.started', {}).catch(() => stop('cancelled'))
+      pending = publish(AGENT_PROCESS_METHODS.started, {}).catch(() => stop('cancelled'))
       const deadline = setTimeout(() => stop('deadline'), deadlineMs)
       const onAbort = (): void => stop('cancelled')
       context.signal?.addEventListener('abort', onAbort, { once: true })
@@ -276,8 +259,8 @@ export class AgentProcessHandler {
             .finally(() => stream.resume())
         })
       }
-      pump(child.stdout, 'agentProcess.stdout', () => ++stdoutSeq)
-      pump(child.stderr, 'agentProcess.stderr', () => ++stderrSeq)
+      pump(child.stdout, AGENT_PROCESS_METHODS.stdout, () => ++stdoutSeq)
+      pump(child.stderr, AGENT_PROCESS_METHODS.stderr, () => ++stderrSeq)
       child.stderr?.on('data', (chunk: Buffer) => {
         stderrTail = (stderrTail + chunk.toString('utf8')).slice(-STDERR_TAIL_BYTES)
       })

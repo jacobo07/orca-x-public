@@ -21,6 +21,9 @@ export type CodexAppServerInvocation = {
   envToDelete?: readonly string[]
   /** Whole-session deadline. The codex child is SIGKILLed when it lapses. */
   timeoutMs: number
+  /** How long a clean stdin EOF gets before the reap kills the child. A remote child's shutdown
+   *  crosses a network round trip, so it needs longer than a local one. Default 1500 ms. */
+  exitGraceMs?: number
 }
 
 /** Codex-side absence of the requested app-server RPC surface (old CLI without
@@ -332,7 +335,7 @@ export async function runCodexAppServerSession<T>(
     if (!exited) {
       // Why: the server exits promptly on stdin EOF; the grace period only
       // bounds a wedged child before the guaranteed SIGKILL reap.
-      await waitForProcessExitUntil(exitPromise, 1500)
+      await waitForProcessExitUntil(exitPromise, invocation.exitGraceMs ?? 1500)
       if (!exited) {
         killCodexAppServerProcessTree(child)
         await waitForProcessExitUntil(exitPromise, 1000)
