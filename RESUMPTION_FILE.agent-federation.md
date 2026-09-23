@@ -1,0 +1,43 @@
+# RESUMPTION — Orca X Agent Federation (worktree `C:\Users\User\Apps\orca-federation-wt`)
+
+## 1. Identity
+Branch `orca-x/agent-federation`, created 2026-09-24 from `orca-x/cogws-product-surface` @ `591ab8986`
+plus a merge of `orca-x/aeos` @ `f9a721fda`. Thesis: Orca already has a mission graph
+(`src/main/runtime/orchestration/`, upstream, on main) and a durable agent roster (cogws). They
+never meet — orchestration addresses terminal handles. This program joins them; it builds no
+second mission system, no second approval system, no second audit log.
+Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGORA/Hermes/Kados/KEOS
+(none are runtimes — memory `orca-x-agent-federation-reality-scan`); GEX44 local runtime IN scope (P8).
+
+## 2. State
+- **P0 SEALED** `a97d3bcc0` (merge). 4 conflicts resolved; 4 lint-only gates wired into pr.yml.
+  GEX44 at exact rev: 10 gates rc=0 (ci-gate-coverage 33/33 invoked, 0 debt), tsc node 0 errors,
+  scoped suite `src/main/runtime/orchestration src/main/conversation` + 2 daemon files =
+  **584 passed / 9 skipped, 66 files**. That is the attribution baseline for P1+.
+- GEX44 evidence worktree: `/home/kobii/fed-wt` (detached, fed by `git push gex44:orca-x
+  HEAD:refs/federation/head`; assert REV before trusting). `gex44` is an ssh URL, not a remote name.
+- Coherence anchor: `git log --format=%s -1 a97d3bcc0` = "merge(federation): join the agent roster...".
+- This branch's `RESUMPTION_FILE.md` is the cogws program's (inherited, tracked) — never edit it here.
+
+## 3. Active decisions
+- Delegation = orchestration task with assignee Agent + requester Agent + subject (project,
+  worktree, revision captured from git by Orca). Result = existing `worker_done` message.
+- Depth/fan-out bound enforced in `createTask`, not prompts.
+- Providers behind existing `ConversationTurnDriver`; availability states fail closed on unknown.
+- Review record in orchestration db; independence DERIVED; stale when revision moves.
+- Decision gates gain subject binding; AEOS W7 projection consumes it.
+- Schema v30 collision risk with AEOS W5 — whoever lands second rebases.
+- Heavy verification on GEX44 (bundle + revision fence, memory `gex44-is-the-linux-evidence-node`).
+
+## 4. Next 3 actions
+1. P1: characterization tests pinning today's behaviour (a task cannot name a durable agent;
+   createTask has no depth bound; a decision gate resolves with no subject and survives a revision move).
+2. P2: assignee/requester/subject columns (v30) + depth bound + agent-turn bridge + callback,
+   inverting P1's characterizations in place.
+3. P3: provider driver registry + availability states + Claude driver + deterministic routing.
+Then P4 review record, P5 subject-bound approval, P6 surface, P7 gate + UKDL, P8 GEX44 local runtime.
+
+## 5. Start
+`Set-Location C:\Users\User\Apps\orca-federation-wt`; prove `git worktree list`; read this file and
+the plan in the session transcript; tests via `node node_modules/vitest/vitest.mjs run --config
+config/vitest.config.ts <paths>` — never the full suite locally.
