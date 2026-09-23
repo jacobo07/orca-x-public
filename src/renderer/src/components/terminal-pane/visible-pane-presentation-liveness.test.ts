@@ -23,7 +23,9 @@ function makeRenderableTerminal() {
       }
     },
     render: () => {
-      for (const listener of [...listeners]) listener()
+      for (const listener of listeners) {
+        listener()
+      }
     },
     listenerCount: () => listeners.size
   }
