@@ -40,7 +40,10 @@ export type WorkspaceThreadRow =
       title: string | null
       updatedAt: number
       /** null is Brainstorming. `missing` is a thread whose agent is no longer in the roster. */
-      agent: { kind: 'agent'; agentId: string; name: string } | { kind: 'missing'; agentId: string } | null
+      agent:
+        | { kind: 'agent'; agentId: string; name: string }
+        | { kind: 'missing'; agentId: string }
+        | null
       project: WorkspaceProjectRef
       lastTurnState: ConversationTurnState | null
     }
