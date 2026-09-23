@@ -108,10 +108,15 @@ describe('orchestration.dispatch admission, against a real database and a real h
   it('names the refusal so a caller learns what to fix', async () => {
     const { call } = await dispatch(`work\nmin-available-memory: ${MORE_THAN_ANY_HOST}`)
 
-    const error = await call().catch((err: unknown) => err)
+    let error: unknown
+    try {
+      await call()
+    } catch (err) {
+      error = err
+    }
     expect(error).toBeInstanceOf(OrchestrationError)
     expect((error as OrchestrationError).code).toBe('resource_admission_refused')
-    expect((error as OrchestrationError).data).toMatchObject({
+    expect((error as OrchestrationError).data as Record<string, unknown>).toMatchObject({
       reason: 'insufficient-available-memory'
     })
   })
