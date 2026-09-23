@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   REQUIRED_DIMENSIONS,
+  decideCompleteness,
+  formatOpenRows,
+  judgeGateRuns,
   parseGateCommand,
   parseRoadmapPhases,
   verifyMatrix
@@ -333,5 +336,105 @@ describe('parseGateCommand', () => {
     })
     expect(parseGateCommand('node config/scripts/x.mjs && curl evil')).toBeNull()
     expect(parseGateCommand('pnpm run something')).toBeNull()
+  })
+})
+
+describe('judgeGateRuns — the done-gate executes what complete rows claim', () => {
+  const scripts = {
+    'check:passes': 'node config/scripts/passes.mjs',
+    'check:fails': 'node config/scripts/fails.mjs --strict',
+    'check:unspawnable': 'node config/scripts/unspawnable.mjs'
+  }
+  const scripted = {
+    'config/scripts/passes.mjs': { ran: true, exitCode: 0 },
+    'config/scripts/fails.mjs': { ran: true, exitCode: 1 },
+    'config/scripts/unspawnable.mjs': { ran: false, reason: 'timed out' }
+  }
+  const row = (id, state, script) => ({
+    id,
+    state,
+    evidence: [
+      { kind: 'gate', script },
+      { kind: 'doc', file: 'x', contains: 'y' }
+    ]
+  })
+
+  it('passes a complete row whose gate exits 0', async () => {
+    const calls = []
+    const runGate = async (gate) => (calls.push(gate), scripted[gate.file])
+    const judged = await judgeGateRuns([row('A', 'complete', 'check:passes')], scripts, runGate)
+    expect(judged.failures).toEqual([])
+    expect(judged.cannotJudge).toEqual([])
+    expect(calls).toEqual([{ file: 'config/scripts/passes.mjs', args: [] }])
+  })
+
+  it('fails a complete row whose gate exits non-zero, naming the row and script', async () => {
+    const judged = await judgeGateRuns(
+      [row('B', 'complete', 'check:fails')],
+      scripts,
+      async (gate) => scripted[gate.file]
+    )
+    expect(judged.failures).toEqual(['row B: gate check:fails exited 1'])
+  })
+
+  it('reports a gate that could not run as could-not-judge, never as a gate failure', async () => {
+    const judged = await judgeGateRuns(
+      [row('C', 'complete', 'check:unspawnable')],
+      scripts,
+      async (gate) => scripted[gate.file]
+    )
+    expect(judged.failures).toEqual([])
+    expect(judged.cannotJudge).toEqual(['row C: gate check:unspawnable did not run (timed out)'])
+  })
+
+  it('executes only the gates of complete rows', async () => {
+    const calls = []
+    await judgeGateRuns(
+      [row('D', 'open', 'check:fails'), row('T', 'blocked', 'check:fails')],
+      scripts,
+      async (gate) => (calls.push(gate), scripted[gate.file])
+    )
+    expect(calls).toEqual([])
+  })
+})
+
+describe('decideCompleteness — the program done-gate', () => {
+  const clean = { integrityFailures: [], roadmapRan: true, gateFailures: [], cannotJudge: [] }
+  const openRow = {
+    id: 'E',
+    dimension: 'provider-execution-location',
+    phase: '4',
+    closes: 'it relocates'
+  }
+
+  it('passes when nothing is open and every executed gate passed', () => {
+    expect(decideCompleteness({ ...clean, openRows: [] }).exitCode).toBe(0)
+  })
+
+  it('fails while any row is open, listing it by id, dimension and phase', () => {
+    const verdict = decideCompleteness({ ...clean, openRows: [openRow] })
+    expect(verdict.exitCode).toBe(1)
+    expect(formatOpenRows([openRow])).toEqual([
+      'E (provider-execution-location) — phase 4: it relocates'
+    ])
+  })
+
+  it('cannot judge without the roadmap cross-check, even when nothing is open', () => {
+    expect(decideCompleteness({ ...clean, roadmapRan: false, openRows: [] }).exitCode).toBe(2)
+  })
+
+  it('lets a verifier failure outrank a subject failure', () => {
+    const verdict = decideCompleteness({
+      ...clean,
+      gateFailures: ['row A: gate x exited 1'],
+      cannotJudge: ['row B: gate y did not run (spawn failed)'],
+      openRows: [openRow]
+    })
+    expect(verdict.exitCode).toBe(2)
+  })
+
+  it('fails when integrity failed, before anything else is weighed', () => {
+    const verdict = decideCompleteness({ ...clean, integrityFailures: ['bad'], openRows: [] })
+    expect(verdict.exitCode).toBe(1)
   })
 })

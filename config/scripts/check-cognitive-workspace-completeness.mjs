@@ -358,15 +358,85 @@ async function readOptional(file) {
   }
 }
 
+/** Runs only the gates of COMPLETE rows: an open row's evidence is progress, not a claim. */
+export async function judgeGateRuns(rows, packageScripts, runGate) {
+  const failures = []
+  const cannotJudge = []
+  const executed = []
+  for (const row of rows) {
+    if (row?.state !== 'complete') {
+      continue
+    }
+    for (const entry of row.evidence ?? []) {
+      const gate = entry?.kind === 'gate' ? parseGateCommand(packageScripts[entry.script]) : null
+      if (!gate) {
+        continue
+      }
+      const outcome = await runGate(gate)
+      if (!outcome?.ran) {
+        cannotJudge.push(
+          `row ${row.id}: gate ${entry.script} did not run (${outcome?.reason ?? 'unknown'})`
+        )
+        continue
+      }
+      executed.push(`${entry.script} → exit ${outcome.exitCode}`)
+      if (outcome.exitCode !== 0) {
+        failures.push(`row ${row.id}: gate ${entry.script} exited ${outcome.exitCode}`)
+      }
+    }
+  }
+  return { failures, cannotJudge, executed }
+}
+
+export function formatOpenRows(openRows) {
+  return openRows.map((row) => `${row.id} (${row.dimension}) — phase ${row.phase}: ${row.closes}`)
+}
+
+/** A verifier that could not judge outranks a subject that failed: its run proves nothing. */
+export function decideCompleteness({
+  integrityFailures,
+  roadmapRan,
+  gateFailures,
+  cannotJudge,
+  openRows
+}) {
+  if (cannotJudge.length > 0 || !roadmapRan) {
+    return { exitCode: 2 }
+  }
+  if (integrityFailures.length > 0 || gateFailures.length > 0 || openRows.length > 0) {
+    return { exitCode: 1 }
+  }
+  return { exitCode: 0 }
+}
+
+function runGateIn(root) {
+  return async (gate) => {
+    try {
+      await run(process.execPath, [gate.file, ...gate.args], { cwd: root, timeout: 120_000 })
+      return { ran: true, exitCode: 0 }
+    } catch (error) {
+      if (typeof error?.code === 'number') {
+        return { ran: true, exitCode: error.code }
+      }
+      return {
+        ran: false,
+        reason: error?.killed ? 'timed out' : (error?.code ?? error?.message ?? 'spawn failed')
+      }
+    }
+  }
+}
+
 export async function main(root = process.cwd(), log = console, argv = process.argv.slice(2)) {
   const fail = (message) => {
     log.error(`❌  check-cognitive-workspace-completeness: ${message}`)
     return 2
   }
+  // A typo must never silently change which gate ran.
   const unknown = argv.filter((arg) => arg !== '--integrity')
-  if (unknown.length > 0 || argv.length === 0) {
-    return fail(`usage: --integrity (got ${argv.join(' ') || 'no argument'})`)
+  if (unknown.length > 0 || argv.length > 1) {
+    return fail(`usage: [--integrity] (got ${argv.join(' ')})`)
   }
+  const integrityOnly = argv.includes('--integrity')
   if (!selfControlsAnswerCorrectly()) {
     return fail('the instrument cannot tell a complete matrix from one missing a dimension')
   }
@@ -417,15 +487,52 @@ export async function main(root = process.cwd(), log = console, argv = process.a
     selfCommandFile: SELF_PATH
   })
   const aperture = describeAperture(result.aperture)
-  if (result.failures.length > 0) {
-    log.error(`❌  check-cognitive-workspace-completeness --integrity (${aperture}):`)
-    for (const failure of result.failures) {
-      log.error(`    - ${failure}`)
+  const list = (lines) => {
+    for (const line of lines) {
+      log.error(`    - ${line}`)
     }
-    return 1
   }
-  log.log(`✅  check-cognitive-workspace-completeness --integrity: ${aperture}.`)
-  return 0
+  if (integrityOnly) {
+    if (result.failures.length > 0) {
+      log.error(`❌  check-cognitive-workspace-completeness --integrity (${aperture}):`)
+      list(result.failures)
+      return 1
+    }
+    log.log(`✅  check-cognitive-workspace-completeness --integrity: ${aperture}.`)
+    return 0
+  }
+
+  const gates = await judgeGateRuns(result.rows, packageScripts, runGateIn(root))
+  const verdict = decideCompleteness({
+    integrityFailures: result.failures,
+    roadmapRan: result.aperture.roadmapCrossCheck === 'ran',
+    gateFailures: gates.failures,
+    cannotJudge: gates.cannotJudge,
+    openRows: result.open
+  })
+  const executed = `gates executed: ${gates.executed.join(', ') || 'none'}`
+  if (verdict.exitCode === 0) {
+    log.log(
+      `✅  check-cognitive-workspace-completeness: the program is complete — ${aperture}; ${executed}.`
+    )
+    return 0
+  }
+  const heading =
+    verdict.exitCode === 2 ? 'could not judge completeness' : 'the program is not complete'
+  log.error(`❌  check-cognitive-workspace-completeness: ${heading} (${aperture}; ${executed}):`)
+  if (result.aperture.roadmapCrossCheck !== 'ran') {
+    list([
+      `the roadmap cross-check did not run (${ROADMAP_PATH} is absent), so completion cannot be judged`
+    ])
+  }
+  list(gates.cannotJudge)
+  list(result.failures)
+  list(gates.failures)
+  if (result.open.length > 0) {
+    log.error(`    open rows (${result.open.length}):`)
+    list(formatOpenRows(result.open))
+  }
+  return verdict.exitCode
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

@@ -248,7 +248,14 @@
       "state": "blocked",
       "phase": "9",
       "claim": "The program's gates are executed by CI, not only defined in it.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "doc",
+          "file": ".github/workflows/pr.yml",
+          "contains": "check:cognitive-workspace-matrix",
+          "note": "registered, not executed: no runner has run it"
+        }
+      ],
       "blocker": {
         "class": "runner-capacity",
         "precondition": "A GitHub-hosted runner is assigned (job runner_id > 0) to a pull_request run of this branch; runs 35873274476 and 35869416763 recorded runner_id=0 and zero steps."
