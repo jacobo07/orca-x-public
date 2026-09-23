@@ -52,8 +52,19 @@ export const terminalTabSchema = z.object({
   launchProfileId: z.string().min(1).optional().catch(undefined),
   // Why `.catch`: a bad marker degrades to pre-dormancy behaviour (the tab mounts), never to a lost
   // session. `dormantOpenRequested` is deliberately absent: an open request must not outlive a restart.
+  // `resumeContinuity` is named here for the reason above: z.object strips what it does not name, so
+  // leaving it out would persist the classifier's verdict and silently discard it on the next cold
+  // load — the same drop this field exists to close, one layer down. Its own `.catch(undefined)`
+  // degrades an unreadable verdict to "nobody judged", which withholds the promise rather than
+  // inventing one.
   dormancy: z
-    .object({ reason: z.enum(['working-set-restore', 'workspace-sleep']) })
+    .object({
+      reason: z.enum(['working-set-restore', 'workspace-sleep']),
+      resumeContinuity: z
+        .enum(['exact', 'unconfirmed', 'claimed-elsewhere', 'none'])
+        .optional()
+        .catch(undefined)
+    })
     .optional()
     .catch(undefined)
 })

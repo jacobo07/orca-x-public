@@ -1,0 +1,169 @@
+// One meaning, one owner, one token.
+//
+// Orca renders state on two independent visual channels that look alike and are not:
+//
+//   INTERACTION — what the user is doing to a row (hover, selected, focused, bound)
+//   SYSTEM      — what the row is doing on its own (healthy, pressured, failed, unknown)
+//
+// A row can be selected and failing at the same time, so the two channels must never share a
+// colour. Green-for-selected and blue-for-healthy are the same defect in opposite directions,
+// and both read as a working UI until someone has to act on one.
+//
+// This manifest is the list of meanings. `pnpm check:status-semantics` resolves each token out
+// of main.css and measures it, so the entries below are claims the build can falsify rather
+// than documentation that drifts. See docs/STYLEGUIDE.md "Status semantics".
+//
+// `contrast` says how much the gate can prove about a token:
+//   measured — the token resolves to a literal hex in main.css, so contrast is computed
+//   indirect — the token forwards to a Tailwind palette variable defined outside main.css
+//
+// A mismatch in either direction fails. `measured` going indirect blinds the contrast check
+// while every assertion stays green; `indirect` going literal means the entry is stale and the
+// token can now be held to the floor.
+//
+// `contrastRole` picks WHICH floor, because one number cannot judge three kinds of colour.
+// Asking a focus ring to clear the body-text floor is the wrong instrument, and it produces
+// confident failures about a control that is not text:
+//   text    — WCAG 1.4.3 AA, 4.5:1 against every surface it can sit on
+//   nonText — WCAG 1.4.11, 3:1; focus rings, dots, borders, icon glyphs
+//   surface — a fill, judged against the foreground token that is painted ON it, at 4.5:1
+{
+  "schemaVersion": 1,
+  "policy": {
+    "tokenSource": "src/renderer/src/assets/main.css",
+    // Read out of main.css, never copied here: a contrast figure must be re-measured when the
+    // surface it was measured against moves.
+    "surfaceTokens": ["background", "card", "muted", "sidebar"],
+    "themes": ["light", "dark"],
+    "contrastFloors": {
+      "text": 4.5,
+      "nonText": 3.0,
+      "surface": 4.5
+    },
+    // UNKNOWN is the one state whose failure is invisible: rendered in the neutral the chrome
+    // already uses for disabled and idle, "we do not know" becomes "nothing here". So it owes a
+    // separation from --muted-foreground as well as a contrast against the surface. zinc-500
+    // (#71717a) fails this at rgbDistance 8 — it is the same colour to a reader.
+    "separationFrom": "muted-foreground",
+    "minimumSeparationContrast": 1.3,
+    "minimumSeparationRgbDistance": 30,
+    // Today's measured offenders are frozen in this file, one reason each. New ones fail; a
+    // frozen one that stops offending fails too, so the list cannot outlive its debts.
+    "debtBaseline": "config/status-contrast-debt-baseline.txt",
+    // Set on the element at runtime, so main.css legitimately reads them without declaring
+    // them. This is not the same claim as "it has a fallback" — each was traced to its writer.
+    "externallyDeclaredVariables": [
+      // src/renderer/src/App.tsx:74,76
+      "window-controls-width",
+      "window-controls-height"
+    ],
+    // Radix UI writes its own measurement variables onto the content element it portals.
+    "externallyDeclaredPrefixes": ["radix-"],
+    // Files that claim to be token-true. Every var(--x) in them must resolve in main.css: a
+    // typo'd token name renders as nothing at all, so a reference sheet can quietly stop
+    // showing the system it documents while still looking like a reference sheet.
+    "tokenConsumers": [
+      "docs/visual/sheets/status-semantics-sheet.html",
+      "docs/visual/producers/shell.global.desktop.at-rest.html"
+    ],
+    // A floor is what tells a sweep that found nothing from an estate that has nothing.
+    "minimumStates": 8
+  },
+  "channels": {
+    // Never a system verdict. A row the user picked is not a row that is well.
+    "interaction": ["ring", "sidebar-primary", "accent"],
+    // Never an interaction affordance. Health is not a way to point at something.
+    "system": [
+      "status-success",
+      "status-warning",
+      "status-error",
+      "status-unknown",
+      "agent-question",
+      "muted-foreground"
+    ]
+  },
+  "states": [
+    {
+      "state": "HEALTHY",
+      "meaning": "Observed to be working. A positive reading, not the absence of a bad one.",
+      "token": "status-success",
+      "channel": "system",
+      "contrast": "measured",
+      "contrastRole": "text",
+      "structuralCue": "filled dot",
+      "notFor": ["a selected row", "a default with nothing behind it"]
+    },
+    {
+      "state": "PRESSURED",
+      "meaning": "Working, and closer to a limit than it should be. Degraded, throttled, low headroom, stale-but-serving. Needs attention, has not failed.",
+      "token": "status-warning",
+      "channel": "system",
+      "contrast": "measured",
+      "contrastRole": "text",
+      "structuralCue": "filled dot",
+      "notFor": ["a failure", "decoration", "a highlight"]
+    },
+    {
+      "state": "CRITICAL",
+      "meaning": "The run or resource ended badly, or is failing now.",
+      "token": "status-error",
+      "channel": "system",
+      "contrast": "indirect",
+      "contrastRole": "text",
+      "structuralCue": "filled dot + label",
+      "notFor": ["a button the user is about to press — that is --destructive"]
+    },
+    {
+      "state": "UNKNOWN",
+      "meaning": "Not measured, not reachable, or the evidence was inconclusive. An epistemic state, never a system verdict.",
+      "token": "status-unknown",
+      "channel": "system",
+      "contrast": "measured",
+      "contrastRole": "text",
+      "structuralCue": "hollow dot + label",
+      "separated": true,
+      "notFor": ["healthy", "offline", "disabled", "idle", "zero", "not applicable"]
+    },
+    {
+      "state": "NEEDS_APPROVAL",
+      "meaning": "An agent is waiting on a human answer. A request, not a fault.",
+      "token": "agent-question",
+      "channel": "system",
+      "contrast": "indirect",
+      "contrastRole": "text",
+      "structuralCue": "filled dot + label",
+      "notFor": ["a warning", "a failure"]
+    },
+    {
+      "state": "IDLE",
+      "meaning": "Nothing is happening and nothing is wrong. The resting state.",
+      "token": "muted-foreground",
+      "channel": "system",
+      "contrast": "measured",
+      "contrastRole": "text",
+      "structuralCue": "hollow dot, no label",
+      "notFor": ["unknown", "offline", "failed"]
+    },
+    {
+      "state": "SELECTED",
+      "meaning": "The row the user is acting on, and the focus indicator. Interaction, never health.",
+      "token": "ring",
+      "channel": "interaction",
+      "contrast": "measured",
+      "contrastRole": "nonText",
+      "structuralCue": "ring / accent surface",
+      "notFor": ["healthy", "current", "durable", "any system verdict"]
+    },
+    {
+      "state": "ACTIVE_PROJECT",
+      "meaning": "The worktree this window is bound to. Interaction context, never health.",
+      "token": "sidebar-primary",
+      "channel": "interaction",
+      "contrast": "measured",
+      "contrastRole": "surface",
+      "pairedForeground": "sidebar-primary-foreground",
+      "structuralCue": "accent surface + data-current",
+      "notFor": ["healthy", "running", "any system verdict"]
+    }
+  ]
+}

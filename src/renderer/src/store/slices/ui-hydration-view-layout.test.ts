@@ -453,13 +453,43 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().repos).toEqual([remote, local])
   })
 
-  it('falls back to all hosts for invalid persisted workspace host scopes', () => {
+  // Superseded characterization: until 2026-09-20 an unreadable persisted scope
+  // hydrated to the all-hosts view, so a profile that had been narrowed to one host
+  // silently widened on upgrade. This computer is always resolvable, so it is the
+  // fail-closed answer; an ABSENT scope still defaults to all hosts (see below).
+  it('narrows to this computer for an unreadable persisted workspace host scope', () => {
     const store = createUIStore()
 
     store
       .getState()
       .hydratePersistedUI(
         makePersistedUI({ workspaceHostScope: 'bogus' as PersistedUIState['workspaceHostScope'] })
+      )
+
+    expect(store.getState().workspaceHostScope).toBe('local')
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local'])
+  })
+
+  it('narrows to this computer when every persisted visible host id is unreadable', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        visibleWorkspaceHostIds: ['bogus', 'ssh:'] as PersistedUIState['visibleWorkspaceHostIds']
+      })
+    )
+
+    // The list was narrowing the view; an unreadable list must not become "no filter".
+    expect(store.getState().visibleWorkspaceHostIds).toEqual(['local'])
+  })
+
+  it('keeps the all-hosts view when no workspace host scope was persisted', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ workspaceHostScope: undefined as PersistedUIState['workspaceHostScope'] })
       )
 
     expect(store.getState().workspaceHostScope).toBe('all')

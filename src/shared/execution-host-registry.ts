@@ -62,8 +62,17 @@ function normalizeHostPart(value: string | null | undefined): string | null {
   return trimmed ? trimmed : null
 }
 
-function runtimeCompatibility(
-  status: RuntimeStatus | null | undefined
+export function runtimeCompatibility(
+  status:
+    | Pick<
+        RuntimeStatus,
+        | 'runtimeProtocolVersion'
+        | 'protocolVersion'
+        | 'minCompatibleRuntimeClientVersion'
+        | 'minCompatibleMobileVersion'
+      >
+    | null
+    | undefined
 ): RuntimeCompatVerdict | null {
   if (!status) {
     return null

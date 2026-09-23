@@ -293,6 +293,22 @@ describe('SleepReclaimAuthorizationSection explicit sleep', () => {
     expect(summary?.textContent).not.toMatch(/\d+(\.\d+)? (KB|MB|GB)/)
   })
 
+  it('says a draft was protected rather than that the pane changed', async () => {
+    const results: AgentSleepResult[] = [
+      { candidateId: 'wt-1|tab-1:a', outcome: 'not-eligible', cause: 'host-unsent-input' },
+      { candidateId: 'wt-1|tab-1:b', outcome: 'changed' }
+    ]
+    render(plan(), vi.fn().mockResolvedValue(results))
+
+    await click()
+
+    const summary = container.querySelector('[data-testid="sleep-reclaim-result"]')
+    expect(summary?.getAttribute('data-kept-unsent-input-count')).toBe('1')
+    expect(summary?.getAttribute('data-kept-count')).toBe('1')
+    expect(summary?.textContent).toContain('1 kept awake to protect a line typed but never sent')
+    expect(summary?.textContent).toContain('1 kept awake because they changed since shown')
+  })
+
   it('keeps the result on screen after the sleep empties the plan', async () => {
     const empty = plan({
       reclaimable: [],

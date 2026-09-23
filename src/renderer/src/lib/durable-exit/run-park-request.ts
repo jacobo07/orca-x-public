@@ -11,18 +11,18 @@ import { mergePendingTerminalInputActivity } from '../terminal-input-activity-co
 import { buildWorkspaceSessionPayload, shouldPersistWorkspaceSession } from '../workspace-session'
 import { buildWorkspaceSessionHostSnapshots } from '../workspace-session-host-persistence'
 import {
-  childProcessAnswerFor,
   collectParkSubjectPtyIds,
+  parkPtyAnswerFor,
   planParkWorkspaces,
   tabLivePtyIds,
-  type ChildProcessAnswer,
+  type ParkPtyAnswer,
   type ParkPlanSnapshot,
   type ParkWorkspacePlan
 } from './park-workspace-plan'
 
 export type ParkPhaseDeps = {
   getState: () => AppState
-  inspectChildren: (ptyId: string) => Promise<ChildProcessAnswer>
+  inspectPty: (ptyId: string) => Promise<ParkPtyAnswer>
   sleepWorkspace: (worktreeId: string) => Promise<void>
   saveSession: () => Promise<void>
 }
@@ -40,7 +40,8 @@ function parkSnapshot(state: AppState): ParkPlanSnapshot {
     // Why: input stamps are coalesced; a keystroke not yet flushed is still a draft.
     lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
       state.lastTerminalInputAtByPaneKey
-    )
+    ),
+    terminalInputPendingByPaneKey: state.terminalInputPendingByPaneKey
   }
 }
 
@@ -54,12 +55,19 @@ async function planNow(
     .filter(([id]) => worktreeId === undefined || id === worktreeId)
     .flatMap(([, tabs]) => tabs.flatMap((tab) => tabLivePtyIds(snapshot, tab)))
   const answers = await Promise.all(
-    ptyIds.map(async (ptyId) => [ptyId, await deps.inspectChildren(ptyId)] as const)
+    ptyIds.map(async (ptyId) => [ptyId, await deps.inspectPty(ptyId)] as const)
   )
   // Why: the probes awaited; judge the state as it is now, with those answers.
-  const plans = planParkWorkspaces(parkSnapshot(deps.getState()), Object.fromEntries(answers), {
-    includePinned: request.includePinned
-  })
+  const plans = planParkWorkspaces(
+    parkSnapshot(deps.getState()),
+    Object.fromEntries(answers.map(([ptyId, answer]) => [ptyId, answer.children])),
+    {
+      includePinned: request.includePinned,
+      hostHoldsLinePtyIds: new Set(
+        answers.filter(([, answer]) => answer.hostHoldsLine).map(([ptyId]) => ptyId)
+      )
+    }
+  )
   return worktreeId === undefined ? plans : plans.filter((plan) => plan.worktreeId === worktreeId)
 }
 
@@ -193,11 +201,11 @@ async function saveWorkspaceSessionNow(): Promise<void> {
   await window.api.session.flush()
 }
 
-async function inspectChildren(ptyId: string): Promise<ChildProcessAnswer> {
+async function inspectPty(ptyId: string): Promise<ParkPtyAnswer> {
   try {
-    return childProcessAnswerFor(await window.api.pty.inspectProcess(ptyId))
+    return parkPtyAnswerFor(await window.api.pty.inspectProcess(ptyId))
   } catch {
-    return 'unknown'
+    return { children: 'unknown', hostHoldsLine: false }
   }
 }
 
@@ -206,7 +214,7 @@ export function createParkPhaseDeps(
 ): ParkPhaseDeps {
   return {
     getState: () => useAppStore.getState(),
-    inspectChildren,
+    inspectPty,
     sleepWorkspace,
     saveSession: saveWorkspaceSessionNow
   }

@@ -1,0 +1,13 @@
+# Gate scripts (check:* / verify:* in package.json) that no file under .github/workflows or
+# .github/actions invokes, so they refuse nothing in CI and run only when someone types them by
+# hand. A gate chained into a script a workflow DOES run (e.g. build:release) counts, because the
+# step fails when it refuses. A gate chained into `lint` does not: no workflow runs `pnpm lint`.
+#
+# Format: script-name  # why it is not wired yet
+# A reason is mandatory. An exemption nobody can evaluate later is a permanent excuse, not debt.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — wire the gate
+# into a workflow instead. An entry whose gate is now wired, or whose script no longer exists, is
+# stale and fails the check.
+# Prune after wiring: node config/scripts/check-ci-gate-coverage.mjs --prune
+

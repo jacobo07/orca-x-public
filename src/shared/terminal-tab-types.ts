@@ -71,8 +71,19 @@ export type TerminalTab = {
 
 export type TerminalTabDormancyReason = 'working-set-restore' | 'workspace-sleep'
 
+/**
+ * What this row may honestly say about resuming — the continuity authority's verdict, carried.
+ *
+ * `exact` alone permits an affirmative promise: today's world confirmed the conversation.
+ * `unconfirmed` means a conversation is recorded and will be ATTEMPTED, which is what the restore
+ * plan does for an `unknown` verdict on purpose. Absent means nobody judged, which is also unknown.
+ */
+export type DormantResumeContinuity = 'exact' | 'unconfirmed' | 'claimed-elsewhere' | 'none'
+
 export type TerminalTabDormancy = {
   reason: TerminalTabDormancyReason
+  /** Absent for a row no classifier judged — an explicit sleep, or one persisted before this field. */
+  resumeContinuity?: DormantResumeContinuity
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'

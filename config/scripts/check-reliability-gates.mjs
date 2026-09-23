@@ -21,6 +21,31 @@ const PROTECTION_LEVELS = new Set(['none', 'partial', 'active'])
 const EVIDENCE_RUN_RESULTS = new Set(['passed', 'failed', 'skipped'])
 const EVIDENCE_RUNNERS = new Set(['local', 'ci', 'soak', 'manual'])
 
+const ACTIONS_RUN_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/
+
+/**
+ * `runner: "ci"` claims recorded before provenance was required.
+ *
+ * This file's header already says evidenceRuns is declared, not verified. For local, soak and
+ * manual runs that is unavoidable: nothing outside this repository witnessed them. A CI run is
+ * different -- GitHub holds the record, so a run URL turns "a developer says they ran it" into
+ * something a reader can open, and it is the only runner value where the claim is checkable at all.
+ *
+ * Why it matters here specifically: measured 2026-09-21, this repository has not been assigned a
+ * GitHub-hosted runner since 2026-09-13 01:51 UTC. Every run created since then finished in
+ * seconds with no runner and no steps. In that world a `ci` claim is not merely unverified, it is
+ * the one claim that has become impossible to honestly make, and nothing in the schema noticed.
+ *
+ * These three predate the requirement and are real -- all were recorded well before the runner
+ * stopped. The list may only SHRINK: add a runUrl and delete the entry. A new ci claim must carry
+ * provenance, and an entry whose run has since gained one is stale and fails the check.
+ */
+export const CI_EVIDENCE_WITHOUT_PROVENANCE = new Set([
+  'browser-stream.bounded-reconnect::2026-08-07',
+  'terminal-session.daemon-generation-reconnect-safety::2026-07-27',
+  'terminal-session.windows-main-crash-survival::2026-07-18'
+])
+
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -197,6 +222,16 @@ function validateEvidenceRun(gate, run, index, failures) {
   }
   if (!EVIDENCE_RUNNERS.has(run.runner)) {
     failures.push(`${owner}.runner must be one of local, ci, soak, or manual`)
+  }
+  if (
+    run.runner === 'ci' &&
+    !CI_EVIDENCE_WITHOUT_PROVENANCE.has(`${gate.id}::${run.date}`) &&
+    !ACTIONS_RUN_URL.test(run.runUrl ?? '')
+  ) {
+    failures.push(
+      `${owner}.runUrl must be a GitHub Actions run URL (https://github.com/<owner>/<repo>/actions/runs/<id>): ` +
+        'a ci claim with no run id cannot be told apart from a local run somebody labelled ci'
+    )
   }
   if (!isNonEmptyString(run.platform)) {
     failures.push(`${owner}.platform must be a non-empty string`)
@@ -484,7 +519,49 @@ export async function validateManifest(manifest, root) {
       internalFailures.push(`${gateId}: the checker threw while validating this gate (${message})`)
     }
   }
+  for (const stale of findStaleProvenanceExemptions(manifest)) {
+    failures.push(
+      `${stale}: exempted from ci evidence provenance, but no ci run without a runUrl matches it ` +
+        'any more; remove the stale entry from CI_EVIDENCE_WITHOUT_PROVENANCE'
+    )
+  }
   return { failures, internalFailures }
+}
+
+/**
+ * An exemption may not outlive its debt.
+ *
+ * Without this the frozen list becomes a permanent excuse: a run could gain provenance, or be
+ * deleted outright, and the entry would sit there describing nothing while still granting a pass
+ * to whatever later occupied that (gate, date) pair.
+ */
+export function findStaleProvenanceExemptions(manifest) {
+  const gateIds = new Set()
+  const unproven = new Set()
+  for (const gate of Array.isArray(manifest?.gates) ? manifest.gates : []) {
+    try {
+      if (!isRecord(gate) || !isNonEmptyString(gate.id)) {
+        continue
+      }
+      gateIds.add(gate.id)
+      for (const run of Array.isArray(gate.evidenceRuns) ? gate.evidenceRuns : []) {
+        if (isRecord(run) && run.runner === 'ci' && !ACTIONS_RUN_URL.test(run.runUrl ?? '')) {
+          unproven.add(`${gate.id}::${run.date}`)
+        }
+      }
+    } catch {
+      // A gate whose fields cannot be read is already reported by validateGate as a checker
+      // failure against that gate. Letting it escape here would turn one unreadable gate into a
+      // verdict about the whole manifest, which is the isolation this file exists to keep.
+    }
+  }
+  // Only judge an exemption against a manifest that actually contains its gate. The frozen list
+  // describes THIS repository's manifest; a synthetic one in a test contains none of those gates,
+  // and reading their absence as "the debt is settled" would fail every fixture that has nothing
+  // to do with provenance. The real manifest is pinned by a test instead.
+  return [...CI_EVIDENCE_WITHOUT_PROVENANCE]
+    .filter((key) => gateIds.has(key.slice(0, key.lastIndexOf('::'))) && !unproven.has(key))
+    .sort()
 }
 
 /**

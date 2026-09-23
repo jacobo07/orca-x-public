@@ -1,0 +1,64 @@
+# Allowlisted mobile RPC methods that no mobile production source names.
+#
+# Reach is not surface: MOBILE_RPC_METHOD_ALLOWLIST says mobile MAY call a method, and a method
+# no mobile code names has no screen by construction. Frozen so a NEW one is a decision in a
+# diff. Shrink-only in both directions: a method that gains a mobile reference, or leaves the
+# allowlist, fails as a stale entry. See config/scripts/mobile-rpc-surface.mjs.
+#
+# Frozen 2026-09-18: 55 of 260 allowlisted methods unreferenced.
+
+accounts.unsubscribe
+agentTeams.prepareLaunch
+agentTeams.tmuxCompat
+aiVault.resolveSessionTitles
+browser.viewport
+diagnostics.memory
+files.browseServerDir
+files.readChunk
+git.cancelGeneratePullRequestFields
+git.commitDiff
+git.discoverCommitMessageModels
+git.forkSync
+git.generatePullRequestFields
+gitlab.resolveMRDiscussion
+host.gitBash.isAvailable
+host.platform
+host.pwsh.isAvailable
+host.wsl.isAvailable
+host.wsl.listDistros
+hostedReview.createStacked
+linear.agentSearchIssues
+linear.createProject
+linear.getCustomView
+linear.getProject
+linear.issueContext
+linear.listCustomViewIssues
+linear.listCustomViewProjects
+linear.listCustomViews
+linear.listProjectIssues
+linear.listProjects
+linear.mcpListIssues
+linear.resolveCurrentIssue
+linear.teamLabels
+linear.teamMembers
+repo.gitAvailable
+session.tabs.closeLifecycle
+session.tabs.listAll
+session.tabs.move
+session.tabs.subscribeAll
+session.tabs.unsubscribeAll
+ssh.listRemovedTargetLabels
+ssh.listTargetSummaries
+ssh.listTargets
+terminal.adoptOrphans
+terminal.agentStatus
+terminal.closeTab
+terminal.create
+terminal.createAgentSession
+terminal.isRunningAgent
+terminal.multiplex
+terminal.read
+terminal.wait
+ui.recordFeatureInteraction
+worktree.forceDeleteBranch
+worktree.prefetchCreateBase

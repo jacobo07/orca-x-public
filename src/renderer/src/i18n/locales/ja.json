@@ -3585,6 +3585,7 @@
               "sleepMany": "エージェント{{value0}}件を今すぐスリープ",
               "resultSlept": "{{value0}}件をスリープしました",
               "resultKept": "{{value0}}件は表示後に変化したためスリープしませんでした",
+              "resultKeptUnsentInput": "{{value0}}件は未送信の入力を保護するためスリープしませんでした",
               "resultFailed": "{{value0}}件をスリープできませんでした",
               "observed": {
                 "pending": "終了したプロセスを確認しています…",

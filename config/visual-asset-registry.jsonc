@@ -1,0 +1,100 @@
+// Every canonical visual reference for Orca X is indexed here.
+//
+// A reference asset is a claim about how a surface looks. Two claims need policing that a
+// folder of PNGs cannot give: an APPROVED asset must never change under the people
+// implementing from it, and a picture of a surface Orca does not have yet must never be
+// mistaken for a picture of one it does.
+//
+// So `sha256` pins the bytes and `truth` separates the two worlds:
+//   current — observed pixels, captured from the running app
+//   target  — designed intent for a surface on the roadmap; carries a visible TARGET label
+//
+// Status lives here and nowhere else. The filename carries the revision (`.rNN.`), so
+// regenerating an APPROVED asset produces r(NN+1) as a candidate and marks its predecessor
+// superseded. There is no `final-v2`.
+//
+// `pnpm check:visual-assets` enforces all of it, from `lint`. The lifecycle is written up in
+// docs/visual/README.md and the visual rules themselves live in docs/STYLEGUIDE.md; there is no
+// separate constitution file, and an earlier revision of this comment pointed at one that was
+// never written.
+{
+  "schemaVersion": 1,
+  "policy": {
+    "referenceRoot": "docs/visual/references",
+    "generatedRoot": "docs/visual/generated",
+    "statuses": ["draft", "candidate", "approved", "superseded", "rejected"],
+    "immutableStatuses": ["approved"],
+    "truths": ["current", "target"],
+    // capture   — a screenshot of the running app
+    // html      — a token-true page rendered in the same engine
+    // generated — an image model's mockup, kept as design lineage. It lives under
+    //             generatedRoot, it must declare truth "target" because it observed nothing,
+    //             and it must carry provenance: which tool, which thread, the file it came
+    //             from, and the size it ACTUALLY came out at.
+    "producers": ["capture", "html", "generated"],
+    "devices": ["desktop", "laptop", "tablet", "mobile"],
+    // surface.subsurface.device.state.rNN.png — the record must agree with every segment,
+    // so a file cannot be filed under a slot its own name contradicts.
+    "fileNamePattern": "^([a-z0-9-]+)\\.([a-z0-9-]+)\\.([a-z]+)\\.([a-z0-9-]+)\\.r([0-9]{2})\\.png$",
+    // Raised as waves land. A floor is what tells a sweep that found nothing apart from an
+    // estate that has nothing.
+    "minimumAssets": 2
+  },
+  "assets": [
+    {
+      "assetId": "shell.global.desktop.at-rest.r01",
+      "surface": "shell",
+      "subsurface": "global",
+      "device": "desktop",
+      "state": "at-rest",
+      "revision": 1,
+      "class": "north-star",
+      "truth": "target",
+      "targetLabel": true,
+      "producer": "generated",
+      "status": "superseded",
+      "file": "shell/shell.global.desktop.at-rest.r01.png",
+      "sha256": "f7090cf2e634025d500f083220a8fce6ac920c107a1c3ebd4e45b36e6514a5fc",
+      "date": "2026-09-21",
+      "provenance": {
+        "tool": "codex-cli 0.153.4 imagegen (gpt-6-astra, ChatGPT subscription)",
+        "thread": "01a0c18a-264b-7070-a643-d58633305ab3",
+        "sourcePath": "<CODEX_HOME>/generated_images/01a0c18a-264b-7070-a643-d58633305ab3/exec-a6ac8d18-9f90-4220-9031-86284ab36397.png",
+        "requestedSize": "16:10 landscape, desktop proportions",
+        "actualSize": "1586x992"
+      },
+      // Candidate, not approved, and the critique is the reason. It honours most of the
+      // constitution -- rows over cards, 40px rail, near-black canvas, barely-visible
+      // borders, Spanish labels, and it even drew UNKNOWN as a hollow ring where the other
+      // rows are filled. Two deltas block approval:
+      //   1. the selected row is a saturated full-bleed blue fill, which is not Orca's
+      //      convention (bg-accent + data-current) and makes selection the loudest thing on
+      //      screen, competing with the status dots it sits beside.
+      //   2. the sidebar header reads "Espacios de wrabajo" -- a generated-text artifact, so
+      //      this asset is not usable as a copy reference at all.
+      // Both are deltas the renderer settles, which is why the next revision should be a
+      // token-true render rather than another generation.
+      "notes": "W1 pipeline proof. Selection fill and a label typo block approval; see critique in docs/visual/codex-image-generation-contract.md. Superseded by r02, which fixes both in the renderer rather than by re-rolling."
+    },
+    {
+      "assetId": "shell.global.desktop.at-rest.r02",
+      "surface": "shell",
+      "subsurface": "global",
+      "device": "desktop",
+      "state": "at-rest",
+      "revision": 2,
+      "class": "north-star",
+      // Rendered, not photographed: this is designed intent for a composition the app does
+      // not ship yet, so it carries the TARGET label even though every pixel in it comes from
+      // the live tokens.
+      "truth": "target",
+      "targetLabel": true,
+      "producer": "html",
+      "status": "candidate",
+      "file": "shell/shell.global.desktop.at-rest.r02.png",
+      "sha256": "99160c1c211bc339f82e2b5e03595a46ff17d97430d165b19a55a947f6beec73",
+      "date": "2026-09-21",
+      "notes": "Rendered from docs/visual/producers/shell.global.desktop.at-rest.html at 1440x900 CSS, 2x (2880x1800). Corrects r01's two blocking deltas: the selected row is an accent surface plus data-current rather than a saturated fill, and the Spanish is right. All five status marks are the W1 tokens, UNKNOWN hollow among filled."
+    }
+  ]
+}

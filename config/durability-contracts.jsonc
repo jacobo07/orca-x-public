@@ -14,7 +14,10 @@
 // tiers:
 //   crash-durable   The state is the only copy of something the user would notice losing, and the
 //                   pointer naming it is itself fsynced. Writes must route through
-//                   src/main/durable-file-write.ts and carry a syscall-order proof.
+//                   src/main/durable-file-write.ts — or, where the state is a credential or an
+//                   identity that also needs the 0600/ACL publish, through the durable variants of
+//                   src/shared/secure-file.ts, which fsync the staged handle before the rename —
+//                   and carry a syscall-order proof.
 //   atomic-only     Readers must never observe a torn file, but losing the newest write to power
 //                   loss is acceptable because a higher tier can reconstruct it.
 //   regenerable     Recomputable from a source of truth. No barrier owed.
@@ -33,6 +36,19 @@
     "unclassifiedWriterPolicy": "ratchet"
   },
   "contracts": [
+    {
+      "id": "runtime.e2ee-host-identity",
+      "state": "<userData>/orca-e2ee-keypair.json — the curve25519 keypair whose public half IS this host's fleet identity, via sha256(publicKey) in src/main/runtime/host-key-fingerprint.ts",
+      "writer": "src/main/runtime/e2ee-keypair.ts",
+      "tier": "crash-durable",
+      "lostIf": "Every paired device at once. The key was published by a rename with no fsync, so a power loss could leave a zero-length file; the loader then caught the parse failure and minted a fresh keypair, which changes the fingerprint. Each paired device holds a shared secret derived from the old public key and a device registry keyed to a host that no longer exists, so pairing fails with nothing to explain it. The loader now refuses a file it cannot use instead of replacing it, and discarding the identity is an explicit act (forgetHostIdentity).",
+      "provenBy": ["src/main/runtime/e2ee-keypair.test.ts"],
+      "knownGaps": [
+        "The directory fsync after the rename is a no-op on Windows (see the comment in shared/secure-file.ts), so on Windows the barrier proves the file's contents reached disk before the rename, not that the rename itself survives a power loss.",
+        "<userData>/orca-devices.json, the paired-device registry keyed to this identity, is still published by the non-durable writeSecureJsonFile and carries no contract of its own. It is downstream of this key rather than the root, and is not fixed here.",
+        "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind."
+      ]
+    },
     {
       "id": "speech.openai-api-key",
       "state": "~/.orca/openai-speech-token.enc — the safeStorage-encrypted OpenAI speech key",

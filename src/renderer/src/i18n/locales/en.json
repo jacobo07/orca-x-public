@@ -15,6 +15,8 @@
       "sleptTitle": "Asleep, not running",
       "sleptFreshBody": "Opening it starts this terminal again in its folder.",
       "resumeBody": "Opening it resumes the {{agent}} session.",
+      "unconfirmedResumeBody": "Opening it will try to resume the {{agent}} session. Its conversation could not be confirmed, so it may start fresh instead.",
+      "claimedElsewhereBody": "That session is open somewhere else, so this row will not take it. Opening it starts a new terminal in its folder.",
       "freshBody": "Opening it starts a new terminal in its folder.",
       "open": "Open"
     },
@@ -3843,6 +3845,7 @@
               "sleepMany": "Sleep {{value0}} agents now",
               "resultSlept": "{{value0}} put to sleep",
               "resultKept": "{{value0}} kept awake because they changed since shown",
+              "resultKeptUnsentInput": "{{value0}} kept awake to protect a line typed but never sent",
               "resultFailed": "{{value0}} could not be put to sleep",
               "observed": {
                 "pending": "Checking which of their processes exited…",

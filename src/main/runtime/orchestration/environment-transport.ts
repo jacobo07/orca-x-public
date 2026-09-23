@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { fingerprintHostKeyBytes } from '../host-key-fingerprint'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -21,6 +21,8 @@ export type OrchestrationEnvironmentTransport = {
   ): Promise<RuntimeRpcResponse<unknown>>
 }
 
+// Why: lenient on purpose so recorded peer fingerprints keep matching; fleet identity
+// uses the validating fingerprintHostPublicKey over the same hash.
 export function fingerprintOrchestrationPeer(publicKeyB64: string): string {
-  return createHash('sha256').update(Buffer.from(publicKeyB64, 'base64')).digest('base64url')
+  return fingerprintHostKeyBytes(Buffer.from(publicKeyB64, 'base64'))
 }

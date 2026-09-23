@@ -24,6 +24,10 @@ export type MobileSessionTab =
       /** Agent Orca X launched in this terminal, if any. This makes chat eligible
        *  before the first live agent-status update reaches the mobile client. */
       launchAgent?: TuiAgent
+      /** Launch profile RECORDED at launch, when the host is new enough to send it.
+       *  Absent means this client must infer or answer unknown -- never substitute the
+       *  local default, which would present a guess as the user's own choice. */
+      launchProfileId?: string
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
       launchDraftCreatedAt?: number

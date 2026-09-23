@@ -104,6 +104,12 @@
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-background: var(--status-warning-background);
+  --color-status-warning-border: var(--status-warning-border);
+  --color-status-unknown: var(--status-unknown);
+  --color-status-unknown-background: var(--status-unknown-background);
+  --color-status-unknown-border: var(--status-unknown-border);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -189,6 +195,27 @@
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Working, and closer to a limit than it should be — degraded, throttled, low
+     headroom, stale-but-serving. Amber-700, chosen because it lands at 5.02:1 on
+     --background, the same weight --status-success already carries: a warning
+     should read as loud as a success, not louder. Amber-600 is 3.19:1 and fails
+     AA outright. Distinct from --agent-question, which is orange because a
+     question is a request, not a fault. */
+  --status-warning: #b45309;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Not measured, not reachable, or inconclusive. UNKNOWN is an epistemic state
+     and its whole failure mode is being rendered in the neutral the chrome
+     already spends on disabled and idle — at which point "we do not know" reads
+     as "nothing here". zinc-600 sits 52 rgb units and 1.63:1 off
+     --muted-foreground, so it is separable; zinc-500 (#71717a) is 8 units away
+     and was rejected on that measurement. It is deliberately MORE contrasty than
+     muted: unknown is information, not absence. Colour is never the only carrier
+     — the canonical mark is a HOLLOW dot against every other state's filled one,
+     which survives at 8px and in greyscale. */
+  --status-unknown: #52525b;
+  --status-unknown-background: color-mix(in srgb, var(--status-unknown) 10%, transparent);
+  --status-unknown-border: color-mix(in srgb, var(--status-unknown) 35%, transparent);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
      identity when the theme flips. */
   --workspace-status-done: #c7a594;
@@ -302,6 +329,16 @@
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Amber-300: 13.73:1 on --background, matching --status-success's 14.10 so the
+     two stay the same weight in dark as they are in light. */
+  --status-warning: #fcd34d;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Zinc-300: 91 rgb units off --muted-foreground, the same separation argument
+     as the light theme. */
+  --status-unknown: #d4d4d8;
+  --status-unknown-background: color-mix(in srgb, var(--status-unknown) 10%, transparent);
+  --status-unknown-border: color-mix(in srgb, var(--status-unknown) 35%, transparent);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -2179,9 +2216,12 @@ html.native-shell .app-layout {
 }
 
 .monaco-editor .monaco-search-result-highlight {
-  background: color-mix(in srgb, var(--warning, #f59e0b) 34%, transparent);
+  /* --warning was never declared anywhere, so the literal fallback always won and dark mode
+     rendered the light theme's amber. --annotation-highlight is #f59e0b in light — the same
+     pixels this rule already produced — and gains a dark-adapted value it never had. */
+  background: color-mix(in srgb, var(--annotation-highlight) 34%, transparent);
   border-radius: 3px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning, #f59e0b) 52%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--annotation-highlight) 52%, transparent);
 }
 
 .monaco-editor .monaco-markdown-doc-link {

@@ -152,5 +152,15 @@ if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefin
         workingSetId: string
       }) => (await import('@/lib/project-working-set-restore')).restoreWorkingSet(request)
     }
+    // Why the real app needs this: `terminal-rail-derivation-fanout.test.tsx` counts the identity
+    // ladder by wrapping `lib/tab-agent` with `vi.mock`, which a packaged renderer cannot do. These
+    // are the projection's own counters, so a run here measures the mechanism rather than a stub.
+    testWindow.__tabAgentProjectionE2E = {
+      read: async () =>
+        (await import('@/lib/tab-agent-projection')).readTabAgentProjectionCounters(),
+      reset: async () => {
+        ;(await import('@/lib/tab-agent-projection')).resetTabAgentProjectionCounters()
+      }
+    }
   }
 }

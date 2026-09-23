@@ -1,15 +1,26 @@
 import { cn } from '@/lib/utils'
 
-export type IntegrationStatusTone = 'connected' | 'attention' | 'neutral'
+export type IntegrationStatusTone = 'connected' | 'attention' | 'unknown' | 'neutral'
 
+// One recipe per tone, all of it through the status tokens: see docs/STYLEGUIDE.md
+// "Status semantics". These were raw Tailwind scale literals, which is why the same "be
+// careful" meaning had drifted into amber here, orange in the experimental settings and an
+// inline yellow in the cache timer.
 const TONE_CLASSES: Record<IntegrationStatusTone, { pill: string; dot: string }> = {
   connected: {
-    pill: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    dot: 'bg-emerald-500'
+    pill: 'border-status-success-border bg-status-success-background text-status-success',
+    dot: 'bg-status-success'
   },
   attention: {
-    pill: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    dot: 'bg-amber-500'
+    pill: 'border-status-warning-border bg-status-warning-background text-status-warning',
+    dot: 'bg-status-warning'
+  },
+  // Hollow where every other tone is filled. Unknown has to stay readable at this size, in
+  // greyscale, and for someone who cannot separate the hues — so the shape carries it and the
+  // colour only reinforces it.
+  unknown: {
+    pill: 'border-status-unknown-border bg-status-unknown-background text-status-unknown',
+    dot: 'border border-status-unknown bg-transparent'
   },
   neutral: {
     pill: 'border-border bg-background text-muted-foreground',

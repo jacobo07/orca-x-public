@@ -4,7 +4,7 @@ This is the **UI/visual design** doc for Orca — color tokens, typography, comp
 
 ## Overview
 
-Orca is an Electron desktop app for orchestrating coding agents across git worktrees. The visual identity is **monochrome and quiet** — neutral grays carry the chrome, color is reserved for state (selection ring, destructive, git decorations). The product spends most of its time hosting other people's tools (Monaco, xterm, Markdown previews), so Orca's own UI should recede and frame.
+Orca is an Electron desktop app for orchestrating coding agents across git worktrees. The visual identity is **monochrome and quiet** — neutral grays carry the chrome, and color is spent only where it carries meaning: what the user is pointing at (selection, focus), what the system is doing (the status tokens), and the git decorations. Those are three separate vocabularies and they must not borrow from each other; see _Status semantics_. The product spends most of its time hosting other people's tools (Monaco, xterm, Markdown previews), so Orca's own UI should recede and frame.
 
 When in doubt:
 
@@ -20,6 +20,14 @@ When in doubt:
 | Tailwind theme bindings                       | Same file, `@theme inline { … }` block                |
 | Component primitives                          | `src/renderer/src/components/ui/` (shadcn-style)      |
 | App typography / scrollbars / titlebar chrome | Same `main.css`                                       |
+| Status meanings and their channels            | `config/status-semantics.jsonc` (enforced by `pnpm check:status-semantics`) |
+| Reference images and their lifecycle          | [`visual/README.md`](./visual/README.md) + `config/visual-asset-registry.jsonc` |
+
+A reference image is not this guide and does not override it. `docs/visual/` holds *pictures* of
+surfaces, each declaring whether it is `current` (observed pixels from the running app) or
+`target` (designed intent for a surface on the roadmap). A `target` image is not evidence that a
+capability exists, and an image-model mockup is never an implementation spec — the tokens and
+rules here are what an implementer follows when the two disagree.
 
 Never hardcode a hex value in component code if a variable already covers it. If a new token is needed, add it to `main.css` (both `:root` and `.dark`), expose it in the `@theme inline` block, then use it.
 
@@ -44,6 +52,79 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 | `editor-surface`                         | Background of Monaco / markdown editor panes                | App chrome                                          |
 
 The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
+
+## Status semantics
+
+Orca renders state on **two independent channels that look alike and are not**:
+
+- **Interaction** — what the user is doing to a row: hover, selected, focused, bound.
+- **System** — what the row is doing on its own: healthy, pressured, failed, unknown.
+
+A row can be selected *and* failing at the same time, so the two channels must never share a
+color. **Green-for-selected and blue-for-healthy are the same defect in opposite directions**, and
+both read as a working UI right up until someone has to act on one.
+
+`config/status-semantics.jsonc` is the list of meanings and `pnpm check:status-semantics`
+measures it against `main.css`, so the table below is enforced rather than described.
+
+| State | Means | Token | Mark |
+| --- | --- | --- | --- |
+| `HEALTHY` | Observed to be working — a positive reading, not the absence of a bad one | `--status-success` | filled dot |
+| `PRESSURED` | Working, and closer to a limit than it should be | `--status-warning` | filled dot |
+| `CRITICAL` | Ended badly, or failing now | `--status-error` | filled dot + label |
+| `UNKNOWN` | Not measured, not reachable, or inconclusive | `--status-unknown` | **hollow** dot + label |
+| `NEEDS_APPROVAL` | An agent is waiting on a human answer | `--agent-question` | filled dot + label |
+| `IDLE` | Nothing is happening and nothing is wrong | `--muted-foreground` | hollow dot, no label |
+| `SELECTED` | The row the user is acting on | `--ring` | ring / accent surface |
+| `ACTIVE_PROJECT` | The worktree this window is bound to | `--sidebar-primary` | accent surface + `data-current` |
+
+Six states, not twenty. A longer vocabulary collapses into them, and the distinction that
+survives the collapse is carried by the **label**, not by a new hue:
+
+- `current`, `durable`, `synced`, `replicated` → `HEALTHY`
+- `degraded`, `throttled`, `constrained`, `low headroom`, `stale-but-serving` → `PRESSURED`
+- `failed`, `conflict`, `revoked`, `crashed` → `CRITICAL`
+- `unmeasured`, `unreachable`, `inconclusive`, `not yet probed` → `UNKNOWN`
+- `dormant`, `asleep`, `parked`, `offline by choice`, `not running` → `IDLE`
+
+Do not mint a token to preserve one of those distinctions. A rainbow is not a semantic system;
+two states that need telling apart and share a color need different **words**.
+
+### The pairs that get confused
+
+| Looks alike | Tell them apart by |
+| --- | --- |
+| Selected vs Healthy | Different channels. Selection says *you pointed at this*; health says *it is well*. |
+| Dormant vs Offline | Both `IDLE`. Dormant is a release we chose; offline is a peer that is not answering **and we know that**. If we do not know, it is `UNKNOWN`. |
+| Offline vs Failed | Not reachable is only `CRITICAL` when not-reachable is itself the fault. A machine the user shut down is `IDLE`. |
+| Pressured vs Critical | Still serving or not. `PRESSURED` is a warning about the future; `CRITICAL` is a report about the present. |
+| Stale vs Unknown | Stale means we hold a reading and it is old — show the age. Unknown means we hold no reading at all. |
+| Blocked vs Needs approval | Blocked is a system condition (`CRITICAL`/`PRESSURED`). Needs approval is a request addressed to the user. |
+| Durable vs Synced | Both `HEALTHY`. The difference is the label, never the color. |
+
+### UNKNOWN is not a shade of nothing
+
+`UNKNOWN` is the state whose failure is invisible. Rendered in the neutral the chrome already
+spends on disabled and idle, "we did not measure this" becomes "there is nothing here" — and the
+two render identically while meaning opposite things. So:
+
+- `--status-unknown` is **deliberately more contrasty than `--muted-foreground`**, because unknown
+  is information, not absence. The gate measures that separation; zinc-500 was rejected for sitting
+  8 rgb units away from muted.
+- **Color is never its only carrier.** The canonical mark is a **hollow** dot where every other
+  state is filled — it survives at 8px, in greyscale, and for a reader who cannot separate the
+  hues. Anywhere the state is materially important (`UNKNOWN`, `CRITICAL`, `NEEDS_APPROVAL`), the
+  label and the shape must carry the meaning with the color removed.
+- `UNKNOWN` is **not** `healthy`, `offline`, `disabled`, `idle`, `zero`, or `not applicable`. An
+  unmeasured number is not a zero, and rendering it as one is a claim the code cannot support —
+  see _UX rules_ on copy that overclaims.
+
+### Adding a status color
+
+Don't. Check the six states first; almost everything is one of them wearing a different word. If a
+genuinely new meaning exists: add it to `config/status-semantics.jsonc` with its channel, add the
+token to both themes and the `@theme inline` block, and let the gate measure it. A raw
+`text-amber-500` at a call site is the thing this section exists to replace.
 
 ### Git decoration colors
 

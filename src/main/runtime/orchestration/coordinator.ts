@@ -286,7 +286,9 @@ export class Coordinator {
           onLog: this.opts.onLog,
           onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
         })
-        if (result === 'stale-base-refused') {
+        // Why not `=== 'stale-base-refused'`: every refusal must return the slot and the terminal,
+        // so a refusal added later cannot silently consume capacity by not being named here.
+        if (result !== 'dispatched') {
           terminals.unshift(targetHandle)
           slotsAvailable++
         } else {

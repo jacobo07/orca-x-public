@@ -191,10 +191,15 @@ describe('terminal rail presentation residency', () => {
       points.map((point) => listenerBase + point.rows * listenersPerRow)
     )
 
-    // Ratchet, measured 2026-09-18. 13 of the 24 subscribers are useTabAgent's; each re-runs its
-    // selector on every store write anywhere in the app. Growth is a decision to make in a diff; a
-    // shrink must lower these numbers so the next growth cannot hide inside the slack.
-    expect({ domPerRow, listenersPerRow }).toEqual({ domPerRow: 9, listenersPerRow: 24 })
+    // Ratchet. Was 24 until `lib/tab-agent-projection.ts` collapsed useTabAgent's thirteen
+    // subscriptions to two — one snapshot-keyed projection and one stable action reference. Growth
+    // is a decision to make in a diff; a shrink must LOWER these numbers, so the next growth cannot
+    // hide inside the slack a shrink would otherwise leave behind.
+    //
+    // A count is not a cost: what each subscriber does on a store write is measured separately, in
+    // `terminal-rail-derivation-fanout.test.tsx`. Lowering this number while moving the same work
+    // into a more expensive selector would pass here and fail there.
+    expect({ domPerRow, listenersPerRow }).toEqual({ domPerRow: 9, listenersPerRow: 13 })
 
     const report = { domPerRow, listenersPerRow, points }
     if (process.env.RAIL_RESIDENCY_REPORT) {

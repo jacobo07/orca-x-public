@@ -1,6 +1,7 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { resolveDormantResumeContinuity } from '../../../shared/dormant-resume-continuity'
 import type {
   RestorePlanBlocker,
   RestorePlanEntry,
@@ -188,7 +189,16 @@ function buildPayload(
     ...(entry.launch.shellOverride ? { shellOverride: entry.launch.shellOverride } : {}),
     ...(entry.startupCwd ? { startupCwd: entry.startupCwd } : {}),
     // Why: only automatic entries may start with their workspace; the rest wait to be opened.
-    ...(entry.wake === 'automatic' ? {} : { dormancy: { reason: 'working-set-restore' } })
+    // The continuity verdict rides with the marker because the resume handle cannot carry it, and
+    // without it the surface promises an exact resume for a conversation nobody could confirm.
+    ...(entry.wake === 'automatic'
+      ? {}
+      : {
+          dormancy: {
+            reason: 'working-set-restore' as const,
+            resumeContinuity: resolveDormantResumeContinuity(entry.panes)
+          }
+        })
   }))
   const groups: TabGroup[] = plan.railGroups.map((tabOrder) => {
     const activeTabId =

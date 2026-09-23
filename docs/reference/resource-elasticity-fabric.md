@@ -378,3 +378,66 @@ baseline (3 → 1).
     already negotiates capabilities.
   - The 6 s Windows real-app detection has not been investigated.
   - No real-app run at 10 or 50 panes; those counts are covered by the unit curve only.
+
+## Fourth shrink — a dormant row's identity is derived once per snapshot, not on every store write
+
+A different axis from the three above. Those counted **timers**; this one counts what a subscriber
+**does when it fires**, which no timer inventory and no subscriber census can see.
+
+- **What multiplied.** Zustand notifies by iterating its listener Set on every `setState`
+  (`store/store-listener-census.ts:11-12`), so each of a presented row's subscriptions re-runs its
+  selector on a write about anything at all. `useTabAgent` held **13 of the rail row's 24**, and two
+  of them allocated per evaluation: one built a `Set` and spread it, another minted a string through
+  `makePaneKey`. A third allocation sat inside `worktreeUsesRemoteConnection`, which flattens
+  `worktreesByRepo` on every call.
+- **What did not multiply.** The rail and the tab strip never coexist, so a remembered terminal is
+  presented once, not twice. The rail mounts only when the active tab is a terminal
+  (`tab-group/TabGroupPanel.tsx:404`) and the rail is not collapsed (`terminal-rail/TerminalRail.tsx:243`);
+  the strip renders terminal tabs unless both of those hold (`TabGroupPanel.tsx:103`). The strip's
+  guard is the exact negation of the rail's conjunction, so this is provable rather than observed,
+  and the two surfaces' per-row costs must never be summed.
+- **Owner.** `src/renderer/src/lib/tab-agent-projection.ts`, one module cache per renderer, keyed on
+  the ten store references it reads. Same strategy as
+  `components/tab-bar/terminal-tab-activity-status.ts`, which has keyed the sibling derivation this
+  way since it was written — this extends a proven owner rather than inventing a layer.
+  - A write touching none of those references is a reference comparison and nothing else.
+  - Entries are computed **lazily per tab**, so a hundred remembered tabs with ten mounted cost ten.
+  - A recomputed entry **reuses the previous object** when none of its fields moved, so invalidation
+    stays exactly as narrow as the thirteen primitive selectors it replaced: a change to one tab
+    re-renders one row. Without that, this would have been a single giant object subscription — every
+    row re-rendering whenever any row changed, which is worse than what it replaced.
+- **Measured** by `components/terminal-rail/terminal-rail-derivation-fanout.test.tsx` at 1/10/50/100
+  dormant rows, and by both presentation-residency files.
+
+  | | before | after |
+  | --- | --- | --- |
+  | rail subscribers per row | 24 | 13 |
+  | strip subscribers per tab | 21 | 10 |
+  | resolver calls per row, unrelated write | 6 | 0 |
+  | pane-key strings per row, unrelated write | 4 | 0 |
+  | resolver calls per row, write that moves the inputs | 6 | 6 |
+  | pane-key strings per row, write that moves the inputs | 4 | 4 |
+
+  Before, one write about the side panel cost 600 resolver calls and 400 strings at 100 rows, exactly
+  linear with a zero intercept. The last two rows are the control and the point: **necessary**
+  derivation is untouched, and only **repeated** derivation was removed.
+- **Why the control is load-bearing.** A zero is produced equally by a working projection, a mock that
+  failed to bind, and a projection that stopped deriving anything at all. Only a non-zero measurement
+  on a write that genuinely moves the inputs, at the same scales and in the same run, tells the three
+  apart. The zero is also asserted **at every point**, not as a slope, so a constant per-write cost
+  cannot hide in the intercept.
+- **Ratchets.** The rail's exact pin dropped 24 → 13. The strip's is **new**: that file asserted only
+  that its per-tab cost was an integer and linear, which any number satisfies, so it passed through a
+  21 → 10 change without noticing either figure. Linearity says the shape is right; only a pinned
+  value says the size is.
+- **Still open.**
+  - **Nothing here has run in the real app.** Every figure is happy-dom.
+  - Retained JS heap was not re-measured. The W1 envelope is ~55 KB per dormant row, measured
+    GC-forced in the real app; this host sits near 11% free RAM, where drift would exceed the effect.
+    Removing allocations while lowering subscriber counts makes a regression implausible, which is not
+    the same as measured.
+  - `useTabAgent` is not stateless: it still owns `hasObservedAgentSignal` and two effects, per row.
+    Only the reads moved.
+  - Windowing remains unjustified. Memory was never the argument, and the CPU argument is now much
+    weaker; the residency ratchets' predictive linearity check is what would fail first if it ever
+    becomes justified, and it is inverted in place rather than replaced.

@@ -3108,6 +3108,9 @@ export function connectPanePty(
     // just-created worktree) can be kept visible rather than tearing down the
     // worktree. Reattach/coldRestore skip onPtySpawn (pty-transport.ts).
     spawnedFreshPtyId = ptyId
+    // Why: an unsent line lives in one shell; a fresh one cannot hold the dead one's draft, and
+    // a no-marker shell (cmd.exe, Git Bash, embedded startup command) would never clear it.
+    useAppStore.getState().resetTerminalInputForFreshShell(cacheKey)
     // Why: Command Code has no prompt-start hook. Seed the visible working row
     // once the PTY exists, then let real hook events refine or complete it.
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })

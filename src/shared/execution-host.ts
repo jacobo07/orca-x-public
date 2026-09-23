@@ -107,18 +107,51 @@ export function normalizeExecutionHostId(value: string | null | undefined): Exec
   return parseExecutionHostId(value)?.id ?? null
 }
 
-export function normalizeExecutionHostScope(value: string | null | undefined): ExecutionHostScope {
+// Why: an absent scope and an unresolvable one are different answers, and collapsing
+// them is what let a stale or malformed host id widen a single-host request into a
+// fan-out. Absence lets each caller apply its own default; a value that is not a host
+// is corrupt input, and the one scope it must never become is all-hosts.
+export type ExecutionHostScopeResolution =
+  | { kind: 'scope'; scope: ExecutionHostScope }
+  | { kind: 'absent' }
+  | { kind: 'unresolvable'; value: string }
+
+export function resolveExecutionHostScope(
+  value: string | null | undefined
+): ExecutionHostScopeResolution {
   const normalized = normalizeHostPart(value)
-  if (!normalized || normalized === ALL_EXECUTION_HOSTS_SCOPE) {
+  if (!normalized) {
+    return { kind: 'absent' }
+  }
+  if (normalized === ALL_EXECUTION_HOSTS_SCOPE) {
+    return { kind: 'scope', scope: ALL_EXECUTION_HOSTS_SCOPE }
+  }
+  const id = normalizeExecutionHostId(normalized)
+  return id ? { kind: 'scope', scope: id } : { kind: 'unresolvable', value: normalized }
+}
+
+// An omitted scope on a listing surface means "no host filter", which is every host.
+// null is the refusal: the value was present and is not a host.
+export function normalizeExecutionHostScope(
+  value: string | null | undefined
+): ExecutionHostScope | null {
+  const resolved = resolveExecutionHostScope(value)
+  if (resolved.kind === 'absent') {
     return ALL_EXECUTION_HOSTS_SCOPE
   }
-  return normalizeExecutionHostId(normalized) ?? ALL_EXECUTION_HOSTS_SCOPE
+  return resolved.kind === 'scope' ? resolved.scope : null
 }
 
 // An omitted scope on a request means this host, not a fan-out. Callers and the
 // renderer share this so both agree on which requests answer with a merge.
-export function requestedExecutionHostScope(value: string | null | undefined): ExecutionHostScope {
-  return normalizeExecutionHostScope(value ?? LOCAL_EXECUTION_HOST_ID)
+export function requestedExecutionHostScope(
+  value: string | null | undefined
+): ExecutionHostScope | null {
+  const resolved = resolveExecutionHostScope(value)
+  if (resolved.kind === 'absent') {
+    return LOCAL_EXECUTION_HOST_ID
+  }
+  return resolved.kind === 'scope' ? resolved.scope : null
 }
 
 export function normalizeVisibleExecutionHostIds(
@@ -138,6 +171,28 @@ export function normalizeVisibleExecutionHostIds(
     ids.push(id)
   }
   return ids.length > 0 ? ids : null
+}
+
+// Why: for a visible-host list, null means "no filter", which is every host. A list
+// the user narrowed to and that can no longer be read must not collapse into the same
+// answer as no list at all — that is the scope widening one container out. Dropping
+// unreadable members from a list that still has survivors is a narrowing and stays.
+export type VisibleExecutionHostIdsResolution =
+  | { kind: 'ids'; ids: ExecutionHostId[] }
+  | { kind: 'absent' }
+  | { kind: 'unresolvable' }
+
+export function resolveVisibleExecutionHostIds(
+  value: readonly string[] | null | undefined
+): VisibleExecutionHostIdsResolution {
+  if (!Array.isArray(value)) {
+    return { kind: 'absent' }
+  }
+  const ids = normalizeVisibleExecutionHostIds(value)
+  if (ids) {
+    return { kind: 'ids', ids }
+  }
+  return value.length > 0 ? { kind: 'unresolvable' } : { kind: 'absent' }
 }
 
 export function normalizeExecutionHostOrder(

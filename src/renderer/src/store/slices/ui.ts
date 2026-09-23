@@ -97,9 +97,11 @@ import {
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
+  resolveVisibleExecutionHostIds,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import {
@@ -307,12 +309,24 @@ const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
+// Why: a persisted scope that no longer parses must not widen the view it was
+// narrowing — an old profile whose host id we can't read is not a request to see
+// every host. This computer is always resolvable, so it is the fail-closed answer.
+function hydratedWorkspaceHostScope(value: string | null | undefined): WorkspaceHostScope {
+  return normalizeExecutionHostScope(value) ?? LOCAL_EXECUTION_HOST_ID
+}
+
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
-  const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
-  if (visibleHostIds) {
-    return visibleHostIds
+  const visible = resolveVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
+  if (visible.kind === 'ids') {
+    return visible.ids
   }
-  const legacyScope = normalizeExecutionHostScope(ui.workspaceHostScope)
+  if (visible.kind === 'unresolvable') {
+    // The user had narrowed the view and none of it can be read; null here would mean
+    // "no filter", so fall back to this computer rather than widening to every host.
+    return [LOCAL_EXECUTION_HOST_ID]
+  }
+  const legacyScope = hydratedWorkspaceHostScope(ui.workspaceHostScope)
   return legacyScope === 'all' ? null : [legacyScope]
 }
 
@@ -2089,6 +2103,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   // Why: host scope is presentation/filtering only — must never trigger resource teardown (terminals, browser pages).
   setWorkspaceHostScope: (scope) => {
     const normalized = normalizeExecutionHostScope(scope)
+    if (normalized === null) {
+      // A scope that names no host is not a request to see every host; keep the current one.
+      return
+    }
     const visibleWorkspaceHostIds = normalized === 'all' ? null : [normalized]
     set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
     window.api.ui
@@ -2579,7 +2597,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         showActiveOnly: false,
         // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
         showSleepingWorkspaces: !(ui.hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
-        workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
+        workspaceHostScope: hydratedWorkspaceHostScope(ui.workspaceHostScope),
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
         manualRepoOrder,

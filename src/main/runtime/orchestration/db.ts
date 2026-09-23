@@ -311,7 +311,9 @@ type RunListCursor = {
 }
 
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity.
-const SCHEMA_VERSION = 28
+// Exported so a test can assert "this database is at the current schema" without restating the
+// number: four files hardcoded 28 and all of them broke on the v29 bump.
+export const SCHEMA_VERSION = 29
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -644,7 +646,8 @@ export class OrchestrationDb {
         dispatched_at       TEXT,
         completed_at        TEXT,
         created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-        last_heartbeat_at   TEXT
+        last_heartbeat_at   TEXT,
+        admission_envelope  TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);
@@ -1078,6 +1081,9 @@ export class OrchestrationDb {
             caller_fingerprint  TEXT NOT NULL UNIQUE
           );
         `)
+      }
+      if (current < 29 && !this.hasColumn('dispatch_contexts', 'admission_envelope')) {
+        this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN admission_envelope TEXT')
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -7107,7 +7113,10 @@ export class OrchestrationDb {
     // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
     assigneePaneKey?: string,
     launchTokenHash?: string,
-    processIncarnation?: string
+    processIncarnation?: string,
+    // Why: the admission decision is taken BEFORE this call (a refusal must not create a row), so
+    // the envelope arrives as evidence of a judgement already made, not as something to re-judge.
+    admissionEnvelope?: string
   ): DispatchContextRow {
     const task = this.getTask(taskId)
     if (!task) {
@@ -7138,8 +7147,8 @@ export class OrchestrationDb {
         `INSERT INTO dispatch_contexts (
            id, run_id, task_id, contract_version, launch_token_hash,
            assignee_handle, assignee_pane_key, process_incarnation,
-           status, failure_count, dispatched_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
+           status, failure_count, dispatched_at, admission_envelope
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now'), ?)`
       )
       .run(
         id,
@@ -7150,7 +7159,8 @@ export class OrchestrationDb {
         assigneeHandle,
         assigneePaneKey ?? null,
         processIncarnation ?? null,
-        priorFailures
+        priorFailures,
+        admissionEnvelope ?? null
       )
     this.hasAnyDispatchContextsCache = true
 

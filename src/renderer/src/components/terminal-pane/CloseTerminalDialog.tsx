@@ -114,7 +114,7 @@ export default function CloseTerminalDialog({
         }
       }}
     >
-      <DialogContent className="max-w-sm" showCloseButton={false}>
+      <DialogContent className="max-w-sm" showCloseButton={false} data-copy-kind={copyKind}>
         <DialogHeader>
           <DialogTitle className="text-sm">{copy.title}</DialogTitle>
           <DialogDescription className="text-xs">{copy.description}</DialogDescription>

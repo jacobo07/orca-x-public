@@ -1,86 +1,127 @@
 import { readFileSync } from 'node:fs'
-import { parse } from 'yaml'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import {
+  findMissingLintSteps,
+  readWorkflows,
+  runsOnPullRequest
+} from './pr-workflow-lint-parity.mjs'
 
-// Why: pr.yml re-lists the `lint` chain as individual steps so a single failure
-// does not mask the rest and oxlint keeps its `--format github` annotations.
-// Hand-maintained mirrors drift (#10601: three verifiers never ran on PRs), so
-// this gate fails the moment a `lint` step has no counterpart in pr.yml.
-
-// Flags that only change reporting, so they must not split two otherwise identical commands.
-const REPORTING_FLAGS_WITH_VALUE = new Set(['--format', '--reporter'])
-const REPORTING_FLAGS = new Set(['--quiet'])
-const PACKAGE_RUNNER_TOKENS = new Set(['pnpm', 'npm', 'yarn', 'npx', 'run', 'exec', 'node'])
-
-function splitCommandChain(command) {
-  return command
-    .split(/\n|&&|;/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-}
-
-function canonicalize(command) {
-  const tokens = command.split(/\s+/)
-  const canonical = []
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (canonical.length === 0 && PACKAGE_RUNNER_TOKENS.has(token)) {
-      continue
-    }
-    if (REPORTING_FLAGS.has(token)) {
-      continue
-    }
-    if (REPORTING_FLAGS_WITH_VALUE.has(token)) {
-      index += 1
-      continue
-    }
-    canonical.push(token)
-  }
-
-  return canonical.join(' ')
-}
-
-/** Expands `pnpm run x` indirection until every entry is a real binary invocation. */
-function resolveLeafCommands(command, scripts, seen = new Set()) {
-  const leaves = []
-
-  for (const part of splitCommandChain(command)) {
-    const scriptName = part.match(/^(?:pnpm|npm|yarn)(?:\s+run)?\s+([\w:-]+)$/)?.[1]
-    if (scriptName && scripts[scriptName] && !seen.has(scriptName)) {
-      leaves.push(
-        ...resolveLeafCommands(scripts[scriptName], scripts, new Set([...seen, scriptName]))
-      )
-      continue
-    }
-    leaves.push(canonicalize(part))
-  }
-
-  return leaves
-}
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 describe('PR workflow lint parity', () => {
   it('runs every `pnpm lint` step on pull requests', () => {
-    const { scripts } = JSON.parse(readFileSync('package.json', 'utf8'))
-    const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
-
-    // Scan every job: which one hosts the lint steps is an organizational
-    // detail that has already been renamed once (verify -> static_analysis).
-    const workflowCommands = new Set(
-      Object.values(workflow.jobs)
-        .flatMap((job) => job.steps ?? [])
-        .filter((step) => typeof step.run === 'string')
-        .flatMap((step) => resolveLeafCommands(step.run, scripts))
-    )
-
-    const missing = resolveLeafCommands(scripts.lint, scripts).filter(
-      (leaf) => !workflowCommands.has(leaf)
-    )
+    const { scripts } = JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'))
+    const missing = findMissingLintSteps({ scripts, workflows: readWorkflows(REPO_ROOT) })
 
     expect(
       missing,
-      `.github/workflows/pr.yml is missing lint steps: ${missing.join(', ')}. ` +
+      `no pull-request workflow runs these \`pnpm lint\` steps: ${missing.join(', ')}. ` +
         'Add a step for each one so PR CI matches `pnpm lint`.'
+    ).toEqual([])
+  })
+
+  // Positive control: without this, a sweep that silently stopped reading .github/workflows would
+  // report the estate clean and every synthetic case below would still pass.
+  it("actually reads this repository's pull-request workflows", () => {
+    const workflows = readWorkflows(REPO_ROOT)
+    expect(workflows.length).toBeGreaterThan(20)
+    expect(workflows.filter((document) => runsOnPullRequest(document)).length).toBeGreaterThan(1)
+  })
+})
+
+describe('what may credit a lint step', () => {
+  const scripts = { lint: 'oxlint && pnpm run check:x', 'check:x': 'node config/scripts/x.mjs' }
+
+  function workflow({ on, steps, cwd }) {
+    return {
+      on,
+      jobs: {
+        j: { ...(cwd ? { defaults: { run: { 'working-directory': cwd } } } : {}), steps }
+      }
+    }
+  }
+
+  it('credits a pull-request workflow that is not pr.yml', () => {
+    const workflows = [
+      workflow({ on: { pull_request: null }, steps: [{ run: 'pnpm exec oxlint' }] }),
+      workflow({ on: { pull_request: null, push: null }, steps: [{ run: 'pnpm run check:x' }] })
+    ]
+    expect(findMissingLintSteps({ scripts, workflows })).toEqual([])
+  })
+
+  // The discriminating case for widening the sweep. mobile.yml really does run `pnpm lint`.
+  it('does not credit a step running in another package', () => {
+    const workflows = [
+      workflow({ on: { pull_request: null }, steps: [{ run: 'pnpm exec oxlint' }] }),
+      workflow({ on: { pull_request: null }, cwd: 'mobile', steps: [{ run: 'pnpm lint' }] })
+    ]
+    expect(findMissingLintSteps({ scripts, workflows })).toEqual(['config/scripts/x.mjs'])
+  })
+
+  it('does not credit a workflow that never runs on a pull request', () => {
+    const workflows = [
+      workflow({ on: { pull_request: null }, steps: [{ run: 'pnpm exec oxlint' }] }),
+      workflow({ on: { schedule: [{ cron: '0 * * * *' }] }, steps: [{ run: 'pnpm run check:x' }] })
+    ]
+    expect(findMissingLintSteps({ scripts, workflows })).toEqual(['config/scripts/x.mjs'])
+  })
+
+  it('reads `on` however the parser rendered it', () => {
+    expect(runsOnPullRequest({ on: { pull_request: null } })).toBe(true)
+    expect(runsOnPullRequest({ on: ['push', 'pull_request'] })).toBe(true)
+    expect(runsOnPullRequest({ on: 'pull_request' })).toBe(true)
+    // YAML 1.1 folds the bare key `on` to boolean true.
+    expect(runsOnPullRequest({ [true]: { pull_request: null } })).toBe(true)
+    expect(runsOnPullRequest({ on: { push: null } })).toBe(false)
+    expect(runsOnPullRequest({})).toBe(false)
+  })
+
+  it('still credits a step that overrides the job default back to the root', () => {
+    const workflows = [
+      workflow({
+        on: { pull_request: null },
+        cwd: 'mobile',
+        steps: [
+          { run: 'pnpm exec oxlint', 'working-directory': '.' },
+          { run: 'pnpm run check:x', 'working-directory': '.' }
+        ]
+      })
+    ]
+    expect(findMissingLintSteps({ scripts, workflows })).toEqual([])
+  })
+})
+
+// The integration contract for a gate arriving from another branch. orca-x/cognitive-workspace
+// wires check:workspace-trust-authority -- the gate over the workspace execution trust boundary --
+// into `lint`, and no workflow runs `pnpm lint`. This pins that both owners refuse it on merge,
+// so the security gate cannot land without an executor.
+describe('a gate arriving from another branch needs an executor here', () => {
+  it('refuses a lint-chained gate that no pull-request workflow runs', () => {
+    const { scripts } = JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'))
+    const merged = {
+      ...scripts,
+      'check:workspace-trust-authority': 'node config/scripts/check-workspace-trust-authority.mjs',
+      lint: `${scripts.lint} && pnpm run check:workspace-trust-authority`
+    }
+
+    expect(findMissingLintSteps({ scripts: merged, workflows: readWorkflows(REPO_ROOT) })).toEqual([
+      'config/scripts/check-workspace-trust-authority.mjs'
+    ])
+    // Paired control: with a pr.yml-style step the same gate is accepted, so the case above is
+    // about the missing executor rather than about the gate's name.
+    expect(
+      findMissingLintSteps({
+        scripts: merged,
+        workflows: [
+          ...readWorkflows(REPO_ROOT),
+          {
+            on: { pull_request: null },
+            jobs: { j: { steps: [{ run: 'pnpm run check:workspace-trust-authority' }] } }
+          }
+        ]
+      })
     ).toEqual([])
   })
 })

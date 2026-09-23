@@ -44,6 +44,28 @@ export function isNativeChatTabWideFallbackSafe(
   return !layout.activeLeafId || layout.activeLeafId === layout.root.leafId
 }
 
+/**
+ * Whether this leaf is the pane the tab was actually launched into.
+ *
+ * Why it is shared rather than restated: launchAgent and launchProfileId are the same
+ * class of fact -- both describe how the tab STARTED -- so they have to answer this the
+ * same way, and a second copy of the predicate would be correct on the day it was
+ * written and silently divergent afterwards.
+ */
+export function leafOwnsTabLaunchProvenance(args: {
+  launchAgentLeafId: string | null
+  leafId: string | null
+  leafIds: readonly string[]
+}): boolean {
+  const { launchAgentLeafId, leafId, leafIds } = args
+  if (!launchAgentLeafId || !leafId) {
+    return false
+  }
+  // Why: launch provenance belongs to the tab's original pane. Once a split exists,
+  // it is not evidence about any particular sibling.
+  return leafIds.length === 1 && leafIds[0] === leafId && launchAgentLeafId === leafId
+}
+
 export function nativeChatLaunchAgentForLeaf(args: {
   launchAgent?: TuiAgent | null
   launchAgentLeafId: string | null
@@ -51,14 +73,10 @@ export function nativeChatLaunchAgentForLeaf(args: {
   leafIds: readonly string[]
 }): TuiAgent | null {
   const { launchAgent, launchAgentLeafId, leafId, leafIds } = args
-  if (!launchAgent || !launchAgentLeafId || !leafId) {
+  if (!launchAgent) {
     return null
   }
-  // Why: launchAgent belongs to the tab's original pane. Once a split exists,
-  // it is not evidence that an agent is running in any particular sibling.
-  return leafIds.length === 1 && leafIds[0] === leafId && launchAgentLeafId === leafId
-    ? launchAgent
-    : null
+  return leafOwnsTabLaunchProvenance({ launchAgentLeafId, leafId, leafIds }) ? launchAgent : null
 }
 
 export type NativeChatLeafRoute = {

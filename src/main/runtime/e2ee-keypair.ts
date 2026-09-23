@@ -1,10 +1,10 @@
 // Why: the E2EE keypair enables application-layer encryption between mobile
 // and desktop over plain ws://. The public key is embedded in the QR pairing
 // offer so the mobile client can derive a shared secret via ECDH.
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
+import { hardenExistingSecureFile, writeDurableSecureJsonFile } from '../../shared/secure-file'
 import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 
 const KEYPAIR_FILENAME = E2EE_KEYPAIR_FILENAME
@@ -23,28 +23,78 @@ export type E2EEKeypair = {
   publicKeyB64: string
 }
 
+/**
+ * A key file exists but cannot be used. Minting over it would mint a new host identity —
+ * `host-key-fingerprint.ts` derives this host's fleet identity from `sha256(publicKey)` — which
+ * silently voids every paired device. Recovery is the Owner's deliberate act, not a side effect
+ * of starting up: see `forgetHostIdentity`.
+ */
+export class E2EEKeypairUnusableError extends Error {
+  constructor(readonly keypairPath: string) {
+    super(`E2EE keypair at ${keypairPath} exists but is not usable`)
+    this.name = 'E2EEKeypairUnusableError'
+  }
+}
+
+/** `null` for a file that exists and cannot be used; never throws. */
+function readKeypairFile(filePath: string): E2EEKeypair | null {
+  try {
+    // Why: valid keypair files are tiny, so an oversized one is corrupt rather than slow to parse.
+    if (statSync(filePath).size > MAX_KEYPAIR_FILE_BYTES) {
+      return null
+    }
+    const raw: Partial<KeypairFile> = JSON.parse(readFileSync(filePath, 'utf-8'))
+    if (raw.v !== KEYPAIR_VERSION || typeof raw.publicKeyB64 !== 'string' || !raw.secretKeyB64) {
+      return null
+    }
+    const publicKey = Uint8Array.from(Buffer.from(raw.publicKeyB64, 'base64'))
+    const secretKey = Uint8Array.from(Buffer.from(raw.secretKeyB64, 'base64'))
+    if (publicKey.length !== 32 || secretKey.length !== 32) {
+      return null
+    }
+    return { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * This host's public key without side effects: `undefined` when no key file exists, `null`
+ * when one exists but is not a valid keypair. Observers must use this, never the loader,
+ * because the loader hardens the file's ACL and mints one when none exists.
+ */
+export function readE2EEPublicKey(userDataPath: string): string | null | undefined {
+  const filePath = join(userDataPath, KEYPAIR_FILENAME)
+  if (!existsSync(filePath)) {
+    return undefined
+  }
+  return readKeypairFile(filePath)?.publicKeyB64 ?? null
+}
+
+/**
+ * Discards this host's identity so the next load mints a new one. Every device paired against the
+ * old key must be re-paired, so this is only ever called on an explicit Owner action.
+ */
+export function forgetHostIdentity(userDataPath: string): void {
+  rmSync(join(userDataPath, KEYPAIR_FILENAME), { force: true })
+}
+
 export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
   const filePath = join(userDataPath, KEYPAIR_FILENAME)
 
   if (existsSync(filePath)) {
     try {
       hardenExistingSecureFile(filePath)
-      // Why: this startup path reads synchronously; valid keypair files are
-      // tiny, so oversized/corrupt files should be replaced without loading.
-      if (statSync(filePath).size > MAX_KEYPAIR_FILE_BYTES) {
-        throw new Error('E2EE keypair file is too large')
-      }
-      const raw: KeypairFile = JSON.parse(readFileSync(filePath, 'utf-8'))
-      if (raw.v === KEYPAIR_VERSION && raw.publicKeyB64 && raw.secretKeyB64) {
-        const publicKey = Uint8Array.from(Buffer.from(raw.publicKeyB64, 'base64'))
-        const secretKey = Uint8Array.from(Buffer.from(raw.secretKeyB64, 'base64'))
-        if (publicKey.length === 32 && secretKey.length === 32) {
-          return { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 }
-        }
-      }
     } catch {
-      // Malformed file — regenerate below.
+      // Best effort: a failed ACL tightening must not decide whether the key is readable.
     }
+    const loaded = readKeypairFile(filePath)
+    if (loaded) {
+      return loaded
+    }
+    // Why refuse rather than replace: a truncated file is what a half-written key looks like, and
+    // regenerating turns a recoverable interruption into a permanent identity fork.
+    throw new E2EEKeypairUnusableError(filePath)
   }
 
   const keypair = nacl.box.keyPair()
@@ -52,7 +102,9 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
   const secretKeyB64 = Buffer.from(keypair.secretKey).toString('base64')
 
   const data: KeypairFile = { v: KEYPAIR_VERSION, publicKeyB64, secretKeyB64 }
-  writeSecureJsonFile(filePath, data)
+  // Durable: the fingerprint of this key IS this host's fleet identity, so a rename that outlives
+  // its own contents would fork the fleet on the next boot.
+  writeDurableSecureJsonFile(filePath, data)
 
   return { publicKey: keypair.publicKey, secretKey: keypair.secretKey, publicKeyB64 }
 }

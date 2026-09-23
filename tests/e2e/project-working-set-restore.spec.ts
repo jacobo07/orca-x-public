@@ -344,6 +344,19 @@ test('restores a saved working set from disk after a restart, by identity and in
 
     // Open the sealed agent row through the product surface.
     await selectRow(page2, worktreeId, ids[0])
+
+    // W2: the continuity verdict must survive the trip into the product, on the one row that holds
+    // a real resume handle. `none` is the tell that the derivation is dead code here — this row has
+    // a sealed conversation, so it is either confirmed or unconfirmed, never "nothing to resume".
+    // Which of the two depends on what this host can see today, and that is the point: the surface
+    // reads the classifier rather than assuming. Asserted on the attribute, not the sentence, since
+    // the sentence is translated and this suite runs under whatever locale the host has.
+    const continuity = await page2
+      .locator('[data-dormant-terminal-tab-id]')
+      .first()
+      .getAttribute('data-resume-continuity')
+    expect(['exact', 'unconfirmed']).toContain(continuity)
+
     await page2.getByTestId('dormant-terminal-open').click()
     await expect
       .poll(() => liveRowIds(page2, worktreeId, ids), {
