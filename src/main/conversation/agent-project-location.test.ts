@@ -66,32 +66,70 @@ describe('resolveAgentProjectLocation', () => {
     for (const setupState of states) {
       expect(
         resolveAgentProjectLocation(agent('github:acme/ledger'), reader([setup({ setupState })]))
-      ).toEqual({ outcome: 'not-ready', projectId: 'github:acme/ledger', setupState })
+      ).toEqual({
+        outcome: 'not-ready',
+        projectId: 'github:acme/ledger',
+        hostId: 'local',
+        setupState
+      })
     }
   })
 
-  it('refuses a project that only exists on a remote host rather than using its path locally', () => {
-    // `/home/dev/ledger` is a real path on the ssh host and means nothing here. Handing it to a
-    // local child process is how a provider ends up rooted at a directory that is something else.
-    const remote = setup({ hostId: 'ssh:box', path: '/home/dev/ledger' })
+  it('locates a project that only exists on an ssh host as a REMOTE subject, never a local path', () => {
+    // `/home/dev/ledger` is a real path on the ssh host and means nothing here. It is carried as a
+    // remote subject with its host and setup, so nothing can hand it to a local child process.
+    const remote = setup({ id: 's-box', hostId: 'ssh:box', path: '/home/dev/ledger' })
     expect(resolveAgentProjectLocation(agent('github:acme/ledger'), reader([remote]))).toEqual({
-      outcome: 'remote-host',
+      outcome: 'resolved-remote',
       projectId: 'github:acme/ledger',
-      hostId: 'ssh:box'
+      hostId: 'ssh:box',
+      setupId: 's-box',
+      path: '/home/dev/ledger',
+      displayName: 'ledger'
     })
   })
 
-  it('CHARACTERIZATION: with two remote setups, the first one listed decides the host', () => {
-    // Today's behaviour, pinned so its inversion is visible: array order picks the host, and here it
-    // picks the setup that is NOT ready over the one that is. Harmless only while remote refuses.
+  it('chooses the READY remote setup by rule, even when a pending one is listed first', () => {
+    // Inverted from the characterization in b63595026, where array order picked the pending host.
     const setups = [
       setup({ id: 's-pending', hostId: 'ssh:pending-box', setupState: 'setting-up' }),
       setup({ id: 's-ready', hostId: 'ssh:ready-box', path: '/home/dev/ledger' })
     ]
+    expect(resolveAgentProjectLocation(agent('github:acme/ledger'), reader(setups))).toMatchObject({
+      outcome: 'resolved-remote',
+      hostId: 'ssh:ready-box',
+      setupId: 's-ready'
+    })
+  })
+
+  it('refuses to choose between two ready remote hosts, naming both', () => {
+    const setups = [
+      setup({ id: 's-a', hostId: 'ssh:box-a' }),
+      setup({ id: 's-b', hostId: 'ssh:box-b' })
+    ]
     expect(resolveAgentProjectLocation(agent('github:acme/ledger'), reader(setups))).toEqual({
+      outcome: 'ambiguous-host',
+      projectId: 'github:acme/ledger',
+      hostIds: ['ssh:box-a', 'ssh:box-b']
+    })
+  })
+
+  it('keeps a runtime-only project as remote-host, a host kind a turn cannot run on yet', () => {
+    const runtime = setup({ hostId: 'runtime:cloud', path: '/srv/ledger' })
+    expect(resolveAgentProjectLocation(agent('github:acme/ledger'), reader([runtime]))).toEqual({
       outcome: 'remote-host',
       projectId: 'github:acme/ledger',
-      hostId: 'ssh:pending-box'
+      hostId: 'runtime:cloud'
+    })
+  })
+
+  it('reports which host a not-ready setup is on, so its sentence can say where', () => {
+    const pending = setup({ hostId: 'ssh:box', setupState: 'setting-up' })
+    expect(resolveAgentProjectLocation(agent('github:acme/ledger'), reader([pending]))).toEqual({
+      outcome: 'not-ready',
+      projectId: 'github:acme/ledger',
+      hostId: 'ssh:box',
+      setupState: 'setting-up'
     })
   })
 
