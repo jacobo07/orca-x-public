@@ -69,6 +69,12 @@ jobs:
       - name: Check agent instruction layer
         run: pnpm run check:agent-instruction-layer
 
+      # Same family, one rung further out: the instruction layer governs WHAT an agent says to the
+      # provider, this governs WHERE its turn runs. An absent location used to become
+      # `process.cwd()`, i.e. Orca's own install directory on a packaged build.
+      - name: Check agent turn location authority
+        run: pnpm run check:agent-turn-location-authority
+
       - name: Check VM runtime rollback compatibility
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
