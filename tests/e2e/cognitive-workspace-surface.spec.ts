@@ -89,10 +89,6 @@ test('the workspace grounds each agent in its own project and in the turn runner
     await expect(page.getByTestId('agent-context-location')).toContainText(testRepoPath)
     const credential = await page.getByTestId('agent-context-credential').getAttribute('data-state')
     expect(['ready', 'not-ready']).toContain(credential)
-    await testInfo.attach('desktop-ledger-agent', {
-      body: await page.screenshot(),
-      contentType: 'image/png'
-    })
 
     // The claim meets the runner: a resolved location reaches the credential gate.
     await page.getByTestId('conversation-composer').fill('What is in this repository?')
@@ -125,15 +121,22 @@ test('the workspace grounds each agent in its own project and in the turn runner
     await expect(page.getByTestId('agent-chat-header')).toHaveAttribute('data-agent-id', ledger)
     await expect(page.getByText('What is in this repository?').first()).toBeVisible()
 
-    for (const [label, width] of [
-      ['desktop-1536', 1536],
-      ['desktop-1024', 1024]
-    ] as const) {
-      await app.evaluate(({ BrowserWindow }, size) => {
-        BrowserWindow.getAllWindows()[0]?.setSize(size, 960)
-      }, width)
-      await page.waitForTimeout(400)
-      await testInfo.attach(label, { body: await page.screenshot(), contentType: 'image/png' })
+    // Visual evidence, dark first because the references are dark; the mode is asserted, never
+    // assumed (e2e launches resolve to light).
+    for (const theme of ['dark', 'light'] as const) {
+      await page.evaluate(async (value) => {
+        await window.__store!.getState().updateSettingsOrThrow({ theme: value })
+      }, theme)
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+        .toBe(theme === 'dark')
+      for (const width of [1536, 1024]) {
+        await app.evaluate(({ BrowserWindow }, size) => {
+          BrowserWindow.getAllWindows()[0]?.setSize(size, 960)
+        }, width)
+        await page.waitForTimeout(400)
+        await page.screenshot({ path: testInfo.outputPath(`workspace-${theme}-${width}.png`) })
+      }
     }
 
     await session.close(app)
