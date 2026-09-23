@@ -6,91 +6,96 @@ Continuing **W-C of the Cognitive Workspace program**. Spec of record:
 `docs/orca-cognitive-workspace-spec.md` (tracked, APPROVED) — do not write a second spec.
 
 **Worktree: `C:\Users\User\Apps\orca-cogws-wt`. Branch: `orca-x/cognitive-workspace`.**
-A `/clear` has now FOUR times reopened this pane in the main checkout on a different branch.
-Re-prove `git worktree list` before mutating anything.
+A `/clear` has now **FIVE** times reopened this pane in the main checkout on a different branch —
+the W-C5 session opened on `orca-x/w0-durability-repros` in the Desktop checkout and had to
+relocate before touching anything. Re-prove `git worktree list` before mutating.
 
 **Thesis:** W-B made a conversation durable and reachable. W-C gives it someone to be *with* — a
 durable product Agent that outlives every provider session, pane and repo-identity change.
 
 ## 2. Exact state
 
-W-C3 sealed at `ae467a83e` (11 commits inclusive of `d72f3ffdd`; the two-dot range
-`d72f3ffdd..ae467a83e` excludes its own base and yields 10 — both describe different ranges).
+W-C3 sealed at `ae467a83e`. **W-C4 — Direct Agent Chat — sealed** `ae467a83e..1316c62ad`
+(+ `3bf6e3724` resumption).
 
-**W-C4 — Direct Agent Chat — is complete and sealed**, six commits `ae467a83e..1316c62ad`:
+**W-C5 — the agent's turn runs in its project — is complete and sealed**, nine commits
+`3bf6e3724..94973071d`:
 
 | commit | what |
 |---|---|
-| `d3998c9de` | `createForAgent` — the one producer of `agentId`; the agent owns the project |
-| `a5da725bf` | the role reaches the provider as `developerInstructions`, never `baseInstructions` |
-| `a9e046612` | the row opens a chat, on the same surface Brainstorming uses |
-| `82f49d847` | product reality: talk to an agent, restart, find the same conversation |
-| `61b9eff8f` | `check:agent-instruction-layer` + the agent-bound real-provider case |
-| `1316c62ad` | typecheck fix only the node project could see |
+| `5e657c31c` | characterize: an agent's turn runs in Orca's own directory |
+| `e5e9e21f8` | `resolveAgentProjectLocation` — agent's project → a local ready path |
+| `32cef1fe2` | the fix, inverting the characterization in place; `process.cwd()` unreachable |
+| `fa9c62f7a` | a bounded envelope naming the project, claiming nothing it did not resolve |
+| `b5ee8bbe7` | a Project A agent cannot be handed Project B |
+| `69557d3bd` | `check:agent-turn-location-authority` (its message's CI claim is wrong — see below) |
+| `e5636a60d` | product reality in real Electron, no credential needed |
+| `937d9ef44` | the inherited `conversations-reachability` cleanup debt, closed |
+| `94973071d` | gate placed in `pr.yml`; corrects `69557d3bd` |
 
-**Coherence anchors — all four must pass before mutating anything:**
+**Coherence anchors — all five must pass before mutating anything:**
 
 ```
-node config/scripts/check-durable-actor-catalogs.mjs      # 1/1 durable actor catalogs
-node config/scripts/check-agent-identity-authority.mjs    # agent-operations.ts is the only minter
-node config/scripts/check-recurring-work-inventory.mjs    # debt=0
-node config/scripts/check-agent-instruction-layer.mjs     # no production use of baseInstructions
+node config/scripts/check-durable-actor-catalogs.mjs          # 1/1 durable actor catalogs
+node config/scripts/check-agent-identity-authority.mjs        # one AgentId minter
+node config/scripts/check-recurring-work-inventory.mjs        # debt=0
+node config/scripts/check-agent-instruction-layer.mjs         # no baseInstructions
+node config/scripts/check-agent-turn-location-authority.mjs   # no invented location
 ```
 
 ### Verified this wave
 
-- **Product reality, real Electron, two launches, passed twice on final code** (`1 passed`, ~1.3m):
-  create an agent, open its row, send, restart, and the agent's row reopens the SAME conversation
-  by id with the message still there. Browsing an agent mints nothing.
-- **Driven red at the product boundary**: a build whose agent scope called the unbound `create` —
-  the agent's name in the header, Brainstorming underneath — failed at the agent-scoped row count.
-  The first attempt died in `session.launch()` and was recorded HARNESS_FAILED, not caught.
-- **14 unit mutations, 14 caught**, every restore SHA-256 verified.
-- **W-C3's `agents-reachability` proof re-passed** on the new row markup.
-- Typechecks node/cli/web exit 0; 157 unit tests passed, 5 skipped.
+- **Product reality, real Electron, 1 passed (54.5s)** — and it needs **no Codex credential**,
+  because the project gate sits before the auth gate: reaching `auth-required` is positive
+  evidence the project resolved. Control: forget the project, get `project-not-set-up`,
+  nothing committed.
+- **8 unit mutations + 1 product mutation, all caught**, every restore SHA-256 verified. The
+  product mutant (refusal removed) reddened exactly `expect(refused).toBe('project-not-set-up')`.
+- Typechecks node/cli/web exit 0, bracketed on a stable dirty-path set. 125 passed / 5 skipped
+  across `src/main/conversation` + `src/main/ipc/conversations.test.ts`.
 
 ## 3. Active decisions (do not relitigate)
 
-- **`createForAgent` takes no project.** The agent owns it; `agentFor()` derives it per read through
-  the roster, so Project id succession needs no remap here. Mismatch is unrepresentable, not
-  validated. `ConversationRecord.projectId` stays for Brainstorming and still has **no production
-  producer** — named debt, not a bug to "fix" by inventing one.
-- **One chat stack.** `ConversationsPage` serves Brainstorming and Agent Chat; the scope decides
-  which rows list, which create runs, and the header. Never build an agent-shaped copy.
-- **The scope is never persisted.** `activeView` is restored at startup; a restored scope would
-  re-enter an agent chat nobody asked for.
+- **The agent's project decides where its turn runs.** Resolved in `runConversationTurn` beside
+  `agentFor`, before admission. A window focused elsewhere cannot retarget it.
+- **Agents FOLLOW succession; automations PIN.** Opposite laws, both correct, reasons written in
+  `agent-project-location.ts` and `automations/run-target-resolution.ts`. Do not "harmonise" them.
+- **An absent cwd stays absent.** `process.cwd()` is gated off the turn path. What nothing locates
+  falls back to the user's home — declared, not incidental.
+- **Four location outcomes stay four.** `no-project` is a legal state, not a refusal; `unresolved`,
+  `not-ready` and `remote-host` each get their own sentence because each sends a person elsewhere.
+- **`createForAgent` takes no project.** The agent owns it. `ConversationRecord.projectId` stays
+  for Brainstorming with no production producer — deliberate, documented, not a bug to "fix".
 - **`developerInstructions` only.** `baseInstructions` replaces the provider's own and is gated.
-- An agent-bound turn whose agent cannot be resolved refuses (`agent-unavailable`) before the user's
-  message is committed. It never degrades to Brainstorming.
+- **The envelope claims only what was resolved.** No branch, commit, freshness or file contents.
 
 ## 4. Open, named, not hidden
 
-- **The real-provider leg has NEVER RUN.** `conversation-reality.test.ts` holds an agent-bound case
-  (`ORCA_CODEX_REALITY=1`) with a Brainstorming control proving role influence is attributable. It
-  stops at its precondition: `codex login status` says **Not logged in**, and no `auth.json` exists
-  in `~/.codex` or `%APPDATA%\orca\codex-runtime-home\home`. The Owner must `codex login` first.
-  Codex's acceptance of `developerInstructions` is known **from its own generated schema only**.
-- **What the agent receives**: name, role, thread history, the user's message, `cwd`. **No project
-  files, no repo context, no memory.** Do not describe Agent Chat as project-aware.
-- **CI altitude is CI-WIRED, not runner-observed** — the new gate is in `pr.yml` beside the other
-  two, and this fork's PR runs still show `runner_id=0` with no step started.
-- **Debt**: `tests/e2e/conversations-reachability.spec.ts` still has a bare
-  `finally { await session.dispose() }` — the EPERM-replaces-verdict shape `caf007c4b` fixed next
-  door. One line, not fixed here to keep the wave's diff honest.
-- Multi-window is still not live-synced; `worktreeMeta.projectId` remains UNVERIFIED.
+- **The real-provider leg has still NEVER RUN.** Measured again this session: no `auth.json` in
+  `~/.codex` or `%APPDATA%\orca\codex-runtime-home\home`. The Owner must `codex login` first.
+  Codex's acceptance of `developerInstructions` remains schema-only.
+- **No provider has ever been observed USING the project directory.** W-C5 proves the turn is
+  *located* and *told* — structurally, and in real Electron. Whether the model then reads
+  `AGENTS.md` and answers better is unproven and needs the real-provider leg.
+- **`69557d3bd`'s message is wrong** where it says `check:agent-instruction-layer` "ran nowhere":
+  it has had its own `pr.yml` step since W-C4. Corrected in `70f2a1c86`, not rewritten.
+- **CI is DEFINED, not EXECUTED.** The new gate has a `pr.yml` step; this fork's PR runs are still
+  assigned `runner_id=0`. Definition and execution are different claims.
+- **Remote-host projects refuse.** An agent whose project lives only on an ssh/runtime host cannot
+  chat. That is honest, not finished — it is the natural W-C6 candidate.
+- The memory index sits at **169 lines / ~22 KB** against a 200-line read limit. Not over, but
+  a real compaction pass is owed.
 
 ## 5. Next three actions
 
-1. **Run the real-provider gate** once the Owner has signed Codex in:
-   `ORCA_CODEX_REALITY=1 vitest run --config config/vitest.config.ts
-   src/main/conversation/conversation-reality.test.ts -t 'agent-bound'`. It spends three real turns.
-2. **W-C5 candidate — Project Context Router.** The measured slot is
-   `turn/start.additionalContext` (keyed fragments). This is the largest honesty gap in the product:
-   an agent belongs to a project and knows nothing about it.
-3. Fix the `conversations-reachability` cleanup line while touching that file next.
+1. **Run the real-provider gate** once the Owner has signed Codex in, then extend it to ask a
+   question answerable only from a file in the bound project, with a no-project control.
+2. **W-C6 candidate — a remote project's agent.** The refusal is the seam: an agent bound to an
+   ssh/runtime project currently cannot chat at all.
+3. Compact the memory index below 140 lines without dropping pointers.
 
 ## 6. Start instruction
 
-Read §2, run the four coherence anchors, confirm `git worktree list` puts you in
+Read §2, run the five coherence anchors, confirm `git worktree list` puts you in
 `C:\Users\User\Apps\orca-cogws-wt` on `orca-x/cognitive-workspace`, then begin at §5.
 Do not rebuild anything in §2 — it is sealed and proven in a real Electron run.
