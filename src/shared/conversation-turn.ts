@@ -23,12 +23,18 @@ export type ConversationTurnOutcome =
   | { outcome: 'busy'; activeTurnId: string }
   | { outcome: 'conversation-absent' }
   | { outcome: 'agent-unavailable'; agentId: string; reason: 'missing' | 'unverifiable' }
-  /** `reason` carries the resolver's own four answers rather than one flattened failure: they need
-   *  four different sentences and have four different fixes. */
+  /** `reason` carries the resolver's own answers rather than one flattened failure: each needs its
+   *  own sentence and has its own fix. `remote-execution-unavailable` is a project located on a
+   *  remote host with no way to run there — refused, never run locally instead. */
   | {
       outcome: 'project-unavailable'
       projectId: string
-      reason: 'unresolved' | 'not-ready' | 'remote-host'
+      reason:
+        | 'unresolved'
+        | 'not-ready'
+        | 'remote-host'
+        | 'ambiguous-host'
+        | 'remote-execution-unavailable'
       detail: string
     }
   | { outcome: 'auth-required'; detail: string }

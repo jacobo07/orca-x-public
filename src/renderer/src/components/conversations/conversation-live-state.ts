@@ -23,11 +23,13 @@ export type ConversationNoticeKind =
   | 'agent-missing'
   | 'agent-unverifiable'
   | 'approval-declined'
-  /** Three ways an agent's project cannot be opened here, kept apart because they are three
-   *  different actions: set it up, wait for the setup to finish, or open it where it lives. */
+  /** Ways an agent's project cannot be reached, kept apart because each is a different action: set
+   *  it up, wait for its setup, open it where it lives, choose one host, or run where it lives. */
   | 'project-not-set-up'
   | 'project-setup-incomplete'
   | 'project-remote-only'
+  | 'project-host-ambiguous'
+  | 'project-remote-execution-unavailable'
 
 export type ConversationNotice = {
   kind: ConversationNoticeKind
@@ -143,7 +145,7 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
  *  setup to finish, or open it where it lives. The setup state is quoted as evidence; a project id
  *  and a path are machinery and stay out of the notice. */
 function projectNotice(
-  reason: 'unresolved' | 'not-ready' | 'remote-host',
+  reason: Extract<ConversationTurnOutcome, { outcome: 'project-unavailable' }>['reason'],
   detail: string
 ): ConversationNotice {
   switch (reason) {
@@ -153,6 +155,10 @@ function projectNotice(
       return { kind: 'project-setup-incomplete', detail, userMessageKept: false }
     case 'remote-host':
       return { kind: 'project-remote-only', detail: null, userMessageKept: false }
+    case 'ambiguous-host':
+      return { kind: 'project-host-ambiguous', detail: null, userMessageKept: false }
+    case 'remote-execution-unavailable':
+      return { kind: 'project-remote-execution-unavailable', detail: null, userMessageKept: false }
   }
 }
 

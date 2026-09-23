@@ -8,6 +8,7 @@ import type { Agent } from '../../shared/agent-types'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 import type { AgentProjectLocation } from './agent-project-location'
 import { compileAgentTurnInstructions } from './agent-turn-instructions'
@@ -49,6 +50,15 @@ export type ConversationTurnDriver = {
   runTurn: (request: ProviderTurnRequest) => Promise<ProviderTurnResult>
 }
 
+/** Where a remote project's turn must run: a host, the setup on it, and a path that exists ONLY
+ *  there. Carried apart from `cwd` so a remote path has no route to a local child process. */
+export type RemoteExecutionTarget = {
+  projectId: string
+  hostId: `ssh:${string}`
+  setupId: string
+  path: string
+}
+
 export type { ConversationTurnOutcome }
 
 export type ConversationTurnDeps = {
@@ -64,6 +74,9 @@ export type ConversationTurnDeps = {
   /** Where a turn runs when no project owns the answer. Never `process.cwd()`: on a packaged build
    *  that is Orca's own install directory, and an agent rooted there answers about Orca. */
   fallbackCwd: () => string
+  /** The provider driver that runs ON a remote project's host, or null when this Orca cannot run a
+   *  turn there. Absent means no remote execution exists at all — a refusal, never a local run. */
+  remoteDriverFor?: (target: RemoteExecutionTarget) => ConversationTurnDriver | null
   mintTurnId: () => string
   mintItemId: () => string
   /** Live-only sink: deltas and status reach the surface here and never reach disk. */
@@ -71,30 +84,41 @@ export type ConversationTurnDeps = {
   now?: () => number
 }
 
-/** Three refusals, three sentences, three different fixes. A caller that only had "project
- *  unavailable" would send someone to look at the wrong thing in two cases out of three. */
-function describeUnavailableProject(
-  location: Extract<AgentProjectLocation, { outcome: 'unresolved' | 'not-ready' | 'remote-host' }>
-): { projectId: string; reason: 'unresolved' | 'not-ready' | 'remote-host'; detail: string } {
+type RefusingLocation = Extract<
+  AgentProjectLocation,
+  { outcome: 'unresolved' | 'not-ready' | 'remote-host' | 'ambiguous-host' }
+>
+type ProjectUnavailable = Extract<ConversationTurnOutcome, { outcome: 'project-unavailable' }>
+
+/** One refusal per fix. A caller that only had "project unavailable" would send someone to look at
+ *  the wrong thing in most cases. */
+function describeUnavailableProject(location: RefusingLocation): ProjectUnavailable {
+  const refuse = (reason: ProjectUnavailable['reason'], detail: string): ProjectUnavailable => ({
+    outcome: 'project-unavailable',
+    projectId: location.projectId,
+    reason,
+    detail
+  })
   switch (location.outcome) {
     case 'unresolved':
-      return {
-        projectId: location.projectId,
-        reason: 'unresolved',
-        detail: 'This agent’s project is not set up on this computer.'
-      }
+      return refuse('unresolved', 'This agent’s project is not set up on this computer.')
     case 'not-ready':
-      return {
-        projectId: location.projectId,
-        reason: 'not-ready',
-        detail: `This agent’s project is ${location.setupState} on this computer.`
-      }
+      return refuse(
+        'not-ready',
+        location.hostId === LOCAL_EXECUTION_HOST_ID
+          ? `This agent’s project is ${location.setupState} on this computer.`
+          : `This agent’s project is ${location.setupState} on a remote host.`
+      )
+    case 'ambiguous-host':
+      return refuse(
+        'ambiguous-host',
+        `This agent’s project is set up on ${location.hostIds.length} remote hosts, and Orca will not pick one for it.`
+      )
     case 'remote-host':
-      return {
-        projectId: location.projectId,
-        reason: 'remote-host',
-        detail: 'This agent’s project lives on a remote host, and its chat runs on this computer.'
-      }
+      return refuse(
+        'remote-host',
+        'This agent’s project lives on a kind of host a chat cannot run on yet.'
+      )
   }
 }
 
@@ -128,13 +152,38 @@ export async function runConversationTurn(
   // never quietly run somewhere else. This is also the only place the answer is decided, so the
   // window's current focus has no way to reach it.
   const location =
-    binding.kind === 'agent' ? deps.resolveProjectLocation(binding.agent) : { outcome: 'none' as const }
+    binding.kind === 'agent'
+      ? deps.resolveProjectLocation(binding.agent)
+      : { outcome: 'none' as const }
   if (
     location.outcome === 'unresolved' ||
     location.outcome === 'not-ready' ||
-    location.outcome === 'remote-host'
+    location.outcome === 'remote-host' ||
+    location.outcome === 'ambiguous-host'
   ) {
-    return { outcome: 'project-unavailable', ...describeUnavailableProject(location) }
+    return describeUnavailableProject(location)
+  }
+
+  // A remote project's turn runs ON its host or not at all. With no driver for that host this is a
+  // refusal before admission — never the local driver, and never a local directory of any name.
+  let driver = deps.driver
+  if (location.outcome === 'resolved-remote') {
+    const remote =
+      deps.remoteDriverFor?.({
+        projectId: location.projectId,
+        hostId: location.hostId,
+        setupId: location.setupId,
+        path: location.path
+      }) ?? null
+    if (remote === null) {
+      return {
+        outcome: 'project-unavailable',
+        projectId: location.projectId,
+        reason: 'remote-execution-unavailable',
+        detail: 'This agent’s project lives on a remote host, and Orca cannot run its chat there.'
+      }
+    }
+    driver = remote
   }
 
   const developerInstructions =
@@ -142,9 +191,13 @@ export async function runConversationTurn(
       ? compileAgentTurnInstructions(binding.agent, location)
       : null
 
-  // An agent's project is the authority and overrides the caller outright. Everything else falls
-  // back to a DECLARED location rather than to whatever directory this process happens to be in.
-  const cwd = location.outcome === 'resolved' ? location.path : (request.cwd ?? deps.fallbackCwd())
+  // An agent's project is the authority and overrides the caller outright; a remote path goes only
+  // to the remote driver chosen above. Everything else falls back to a DECLARED location rather
+  // than to whatever directory this process happens to be in.
+  const cwd =
+    location.outcome === 'resolved' || location.outcome === 'resolved-remote'
+      ? location.path
+      : (request.cwd ?? deps.fallbackCwd())
 
   const turnId = deps.mintTurnId()
 
@@ -185,7 +238,7 @@ export async function runConversationTurn(
     let durableChain: Promise<void> = Promise.resolve()
     let durableFailure: string | null = null
 
-    const result = await deps.driver.runTurn({
+    const result = await driver.runTurn({
       resumeSessionId,
       cwd,
       text: request.text,
@@ -261,9 +314,7 @@ function isDurableEvent(event: AgentTurnEvent): boolean {
     return event.role !== 'user'
   }
   return (
-    event.kind === 'turn-started' ||
-    event.kind === 'turn-completed' ||
-    event.kind === 'turn-ended'
+    event.kind === 'turn-started' || event.kind === 'turn-completed' || event.kind === 'turn-ended'
   )
 }
 

@@ -43,10 +43,7 @@ function messageFor(notice: Notice): string {
         'The answer arrived but could not be saved, so it is not in your history. Send again rather than relying on it.'
       )
     case 'failed':
-      return translate(
-        'conversations.noticeFailed',
-        'The turn failed. Your message was kept.'
-      )
+      return translate('conversations.noticeFailed', 'The turn failed. Your message was kept.')
     case 'interrupted':
       return translate(
         'conversations.noticeInterrupted',
@@ -85,7 +82,17 @@ function messageFor(notice: Notice): string {
     case 'project-remote-only':
       return translate(
         'conversations.noticeProjectRemoteOnly',
-        "This agent's project only exists on a remote host, and this chat runs on this computer, so nothing was sent."
+        "This agent's project lives on a kind of host a chat cannot run on yet, so nothing was sent."
+      )
+    case 'project-host-ambiguous':
+      return translate(
+        'conversations.noticeProjectHostAmbiguous',
+        "This agent's project is set up on more than one remote host, and Orca will not pick one for it, so nothing was sent. Remove the setups you no longer use."
+      )
+    case 'project-remote-execution-unavailable':
+      return translate(
+        'conversations.noticeProjectRemoteExecutionUnavailable',
+        "This agent's project lives on a remote host, and Orca cannot run its chat there yet, so nothing was sent. It was not run on this computer instead."
       )
   }
 }

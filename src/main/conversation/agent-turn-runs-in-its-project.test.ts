@@ -101,7 +101,9 @@ function projectAt(projectId: string, path: string): void {
 
 async function chatWith(target: Agent): Promise<string> {
   const created = await service.createForAgent({ agentId: target.id, title: target.name })
-  if (created.outcome !== 'created') throw new Error(`precondition: ${created.outcome}`)
+  if (created.outcome !== 'created') {
+    throw new Error(`precondition: ${created.outcome}`)
+  }
   return created.record.id
 }
 
@@ -167,32 +169,108 @@ describe('a project-scoped agent runs in its own project', () => {
       projectId: 'github:acme/gone'
     })
 
-    setups.push({
-      id: 'remote',
-      projectId: 'github:acme/remote',
-      hostId: 'ssh:box',
-      repoId: 'repo-r',
-      path: '/home/dev/remote',
-      displayName: 'remote',
-      setupState: 'ready',
-      setupMethod: 'imported-existing-folder',
-      createdAt: 1,
-      updatedAt: 1
-    })
-    const remote = agentOwnedBy('github:acme/remote')
-    const remoteOutcome = await runConversationTurn(
+    const runtime = agentOwnedBy('github:acme/cloud')
+    remoteSetup('github:acme/cloud', 'runtime:cloud', '/srv/cloud')
+    const runtimeOutcome = await runConversationTurn(
       { ...turnDeps(), service },
-      { conversationId: await chatWith(remote), text: 'hi', cwd: null }
+      { conversationId: await chatWith(runtime), text: 'hi', cwd: null }
     )
-    expect(remoteOutcome).toMatchObject({
-      outcome: 'project-unavailable',
-      reason: 'remote-host'
-    })
+    expect(runtimeOutcome).toMatchObject({ outcome: 'project-unavailable', reason: 'remote-host' })
 
     // The provider was never asked anything, either time.
     expect(driverCalls).toHaveLength(0)
   })
+})
 
+function remoteSetup(projectId: string, hostId: ProjectHostSetup['hostId'], path: string): void {
+  setups.push({
+    id: `remote-${setups.length}`,
+    projectId,
+    hostId,
+    repoId: `repo-r${setups.length}`,
+    path,
+    displayName: projectId.split('/').pop() ?? projectId,
+    setupState: 'ready',
+    setupMethod: 'imported-existing-folder',
+    createdAt: 1,
+    updatedAt: 1
+  })
+}
+
+describe("a remote project's agent runs on its host or not at all", () => {
+  it('refuses with no remote driver, committing nothing and never falling back locally', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const id = await chatWith(ada)
+    let fallbackAsked = 0
+
+    const outcome = await runConversationTurn(
+      { ...turnDeps(), fallbackCwd: () => (fallbackAsked++, homedir()), service },
+      { conversationId: id, text: 'what is in this repo?', cwd: root }
+    )
+
+    expect(outcome).toMatchObject({
+      outcome: 'project-unavailable',
+      reason: 'remote-execution-unavailable',
+      projectId: 'github:acme/remote'
+    })
+    expect(driverCalls).toHaveLength(0)
+    expect(fallbackAsked).toBe(0)
+    const read = await service.read(id)
+    expect(read.outcome).toBe('loaded')
+    expect(read.outcome === 'loaded' ? read.record.messages : null).toEqual([])
+  })
+
+  it('runs through the REMOTE driver with the path on that host, never the local one', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const remoteCalls: ProviderTurnRequest[] = []
+    const targets: unknown[] = []
+    const remoteDriver = {
+      runTurn: async (request: ProviderTurnRequest) => {
+        remoteCalls.push(request)
+        request.onEvent({ kind: 'turn-started', turnId: request.turnId })
+        request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+        return { providerSessionId: 'remote-thread' }
+      }
+    }
+
+    const outcome = await runConversationTurn(
+      {
+        ...turnDeps(),
+        remoteDriverFor: (target) => (targets.push(target), remoteDriver),
+        service
+      },
+      { conversationId: await chatWith(ada), text: 'hi', cwd: root }
+    )
+
+    expect(outcome.outcome).toBe('completed')
+    expect(driverCalls).toHaveLength(0)
+    expect(targets).toEqual([
+      {
+        projectId: 'github:acme/remote',
+        hostId: 'ssh:box',
+        setupId: expect.stringMatching(/^remote-/),
+        path: '/home/dev/remote'
+      }
+    ])
+    expect(remoteCalls[0].cwd).toBe('/home/dev/remote')
+    expect(remoteCalls[0].developerInstructions).toContain('on the remote host "box"')
+  })
+
+  it('refuses to choose between two ready hosts', async () => {
+    remoteSetup('github:acme/twin', 'ssh:box-a', '/a/twin')
+    remoteSetup('github:acme/twin', 'ssh:box-b', '/b/twin')
+    const outcome = await runConversationTurn(
+      { ...turnDeps(), remoteDriverFor: () => driver, service },
+      { conversationId: await chatWith(agentOwnedBy('github:acme/twin')), text: 'hi', cwd: null }
+    )
+    expect(outcome).toMatchObject({ outcome: 'project-unavailable', reason: 'ambiguous-host' })
+    expect(driverCalls).toHaveLength(0)
+  })
+})
+
+describe('brainstorming keeps the caller location', () => {
   it('leaves Brainstorming free to run where the caller says', async () => {
     // The caller's cwd is not deprecated — it is now scoped to the cases where nothing else owns
     // the answer. A Brainstorming chat has no agent and therefore no project.
