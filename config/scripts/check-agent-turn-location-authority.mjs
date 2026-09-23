@@ -38,6 +38,14 @@ const TURN_RUNNER = 'src/main/conversation/conversation-turn-runner.ts'
  *  version of this control stayed green while the call was replaced by a literal `no-project`, so
  *  it cleared a runner that had stopped consulting the agent's project entirely. */
 const RESOLVER_CALL = /\bresolveProjectLocation\s*\(/
+/** A remote-located turn must be ASKED for its remote driver; without the call, the only driver
+ *  left is the local one, and a remote project's path would reach a local child process. */
+const REMOTE_DRIVER_CALL = /\bremoteDriverFor\s*(?:\?\.)?\s*\(/
+
+/** Pure: does the runner source still ask for a remote driver? Comments do not count. */
+export function consultsRemoteDriver(runnerSource) {
+  return REMOTE_DRIVER_CALL.test(stripComments(runnerSource))
+}
 
 export function isTestPath(filePath) {
   return /\.(test|spec)\.[cm]?tsx?$/.test(filePath)
@@ -62,7 +70,12 @@ export function findInventedLocationSites(files) {
 async function gitLines(root, args) {
   try {
     const { stdout } = await run('git', args, { cwd: root, maxBuffer: 64 * 1024 * 1024 })
-    return { lines: stdout.split('\n').map((line) => line.trim()).filter(Boolean) }
+    return {
+      lines: stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    }
   } catch (error) {
     // `git grep` exits 1 with no output when nothing matched — an answer, not a failure.
     if (error?.code === 1 && typeof error.stdout === 'string' && error.stdout.trim() === '') {
@@ -77,7 +90,9 @@ export async function main(root = process.cwd(), log = console) {
 
   const tracked = await gitLines(root, ['ls-files', '--', ...TURN_PATH_PATHSPECS])
   if (tracked.lines === null) {
-    log.error(`❌  check-agent-turn-location-authority: could not list the turn path: ${tracked.error}`)
+    log.error(
+      `❌  check-agent-turn-location-authority: could not list the turn path: ${tracked.error}`
+    )
     return 1
   }
   if (tracked.lines.length < TURN_PATH_FLOOR) {
@@ -106,6 +121,12 @@ export async function main(root = process.cwd(), log = console) {
     )
   }
 
+  if (runner && !consultsRemoteDriver(runner.source)) {
+    failures.push(
+      `${TURN_RUNNER} no longer asks for a remote driver — a remote project's turn would have only the local driver left, and its remote path would reach a local child process`
+    )
+  }
+
   for (const site of findInventedLocationSites(files)) {
     failures.push(
       `${site} calls process.cwd() on the conversation turn path; on a packaged build that is Orca's own install directory. A turn is located by the agent's project or it refuses`
@@ -115,7 +136,9 @@ export async function main(root = process.cwd(), log = console) {
   const aperture = `${tracked.lines.length} tracked files on the conversation turn path`
   if (failures.length > 0) {
     log.error(`❌  check-agent-turn-location-authority (${aperture}):`)
-    for (const failure of failures) log.error(`    - ${failure}`)
+    for (const failure of failures) {
+      log.error(`    - ${failure}`)
+    }
     return 1
   }
   log.log(

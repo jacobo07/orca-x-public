@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  consultsRemoteDriver,
   findInventedLocationSites,
   isTestPath,
   stripComments
 } from './check-agent-turn-location-authority.mjs'
+
+describe('consultsRemoteDriver', () => {
+  it('accepts a runner that CALLS the remote driver selection, either spelling', () => {
+    expect(consultsRemoteDriver('const remote = deps.remoteDriverFor?.({ hostId })')).toBe(true)
+    expect(consultsRemoteDriver('const remote = deps.remoteDriverFor({ hostId })')).toBe(true)
+  })
+
+  it('refuses a runner that only DECLARES it or mentions it in a comment', () => {
+    // The W-C5 lesson: a positive control matching a bare identifier stayed green after the call
+    // was replaced by a literal. The type declaration and the prose must not satisfy it.
+    const declaredOnly = `
+      type Deps = { remoteDriverFor?: (target: Target) => Driver | null }
+      // remoteDriverFor(target) used to be asked here
+      const remote = null
+    `
+    expect(consultsRemoteDriver(declaredOnly)).toBe(false)
+  })
+})
 
 // The subjects here are SYNTHETIC. A drill pinned to a real offender has an interest in that
 // offender surviving, and stops asserting anything the day it is fixed — which, for this gate, is
