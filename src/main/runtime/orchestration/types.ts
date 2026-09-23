@@ -258,6 +258,20 @@ export type TaskRow = {
   result: string | null
   created_at: string
   completed_at: string | null
+  /** Durable Agent (not a terminal incarnation) this task is delegated to; null on pre-v30 and terminal tasks. */
+  assignee_agent_id: string | null
+  /** Agent that delegated it; null when a human or terminal created the task. */
+  requester_agent_id: string | null
+  /** JSON `DelegationSubject`; the exact project/revision the work is about. */
+  subject: string | null
+}
+
+/** What a delegated task is ABOUT. Orca captures it from git; an agent's own text never sets it. */
+export type DelegationSubject = {
+  projectId: string
+  worktreePath: string | null
+  /** Full commit sha, or null when the subject is not a git revision (folder workspace). */
+  revision: string | null
 }
 
 export type DispatchContextRow = {

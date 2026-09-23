@@ -3,6 +3,7 @@
 // Each case is inverted IN PLACE by the change that closes it, so the diff is the evidence.
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
+import { DelegationRefusedError, MAX_DELEGATION_DEPTH } from './delegation-bounds'
 
 describe('delegation authority, as found', () => {
   const databases: OrchestrationDb[] = []
@@ -20,23 +21,52 @@ describe('delegation authority, as found', () => {
     return database
   }
 
-  it('records who created a task only as a terminal incarnation, never as a durable agent', () => {
+  it('records the durable agent a task is delegated to and by, beside the terminal incarnation', () => {
     const db = createDb()
+    const mission = db.createTask({ spec: 'fix migration', assigneeAgentId: 'agent_coord' })
 
-    const task = db.createTask({ spec: 'investigate', createdByTerminalHandle: 'term_abc' })
+    const task = db.createTask({
+      spec: 'investigate',
+      parentId: mission.id,
+      createdByTerminalHandle: 'term_abc',
+      assigneeAgentId: 'agent_builder',
+      requesterAgentId: 'agent_coord'
+    })
 
     expect(task.created_by_terminal_handle).toBe('term_abc')
-    expect(Object.keys(task).filter((key) => key.includes('agent'))).toEqual([])
+    expect(task).toMatchObject({
+      assignee_agent_id: 'agent_builder',
+      requester_agent_id: 'agent_coord'
+    })
   })
 
-  it('accepts a parent chain of any depth', () => {
+  it('bounds an agent delegation chain, while a terminal-created chain keeps its historical shape', () => {
     const db = createDb()
-    let parentId: string | undefined
+    let terminalParent: string | undefined
     for (let depth = 0; depth < 24; depth += 1) {
-      parentId = db.createTask({ spec: `level ${depth}`, parentId }).id
+      terminalParent = db.createTask({ spec: `level ${depth}`, parentId: terminalParent }).id
     }
+    expect(db.getTask(terminalParent!)?.parent_id).not.toBeNull()
 
-    expect(db.getTask(parentId!)?.parent_id).not.toBeNull()
+    let parentId = db.createTask({ spec: 'root', assigneeAgentId: 'agent_0' }).id
+    for (let depth = 1; depth <= MAX_DELEGATION_DEPTH; depth += 1) {
+      parentId = db.createTask({
+        spec: `level ${depth}`,
+        parentId,
+        assigneeAgentId: `agent_${depth}`,
+        requesterAgentId: `agent_${depth - 1}`
+      }).id
+    }
+    const beyond = (): unknown =>
+      db.createTask({
+        spec: 'one too deep',
+        parentId,
+        assigneeAgentId: 'agent_x',
+        requesterAgentId: `agent_${MAX_DELEGATION_DEPTH}`
+      })
+
+    expect(beyond).toThrow(DelegationRefusedError)
+    expect(beyond).toThrow(/delegation-depth-exceeded/)
   })
 
   it('resolves a decision gate with free text bound to no revision', () => {

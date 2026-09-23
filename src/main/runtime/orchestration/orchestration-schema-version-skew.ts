@@ -33,7 +33,10 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 24, table: 'tasks', column: 'created_by_process_incarnation' },
   { version: 24, table: 'tasks', column: 'created_by_run_generation' },
   { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' },
-  { version: 29, table: 'dispatch_contexts', column: 'admission_envelope' }
+  { version: 29, table: 'dispatch_contexts', column: 'admission_envelope' },
+  { version: 30, table: 'tasks', column: 'assignee_agent_id' },
+  { version: 30, table: 'tasks', column: 'requester_agent_id' },
+  { version: 30, table: 'tasks', column: 'subject' }
 ] as const
 
 const POST_V6_INDEXES = [

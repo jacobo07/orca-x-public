@@ -35,8 +35,15 @@ import type {
   FederatedDispatchRow,
   RemoteDispatchAttachmentRow,
   FederationRelayDirection,
-  FederationRelayItemRow
+  FederationRelayItemRow,
+  DelegationSubject
 } from './types'
+import {
+  DelegationRefusedError,
+  MAX_DELEGATION_DEPTH,
+  judgeDelegation,
+  type DelegationAncestor
+} from './delegation-bounds'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -310,10 +317,10 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity.
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject.
 // Exported so a test can assert "this database is at the current schema" without restating the
 // number: four files hardcoded 28 and all of them broke on the v29 bump.
-export const SCHEMA_VERSION = 29
+export const SCHEMA_VERSION = 30
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -622,7 +629,10 @@ export class OrchestrationDb {
         deps          TEXT NOT NULL DEFAULT '[]',
         result        TEXT,
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-        completed_at  TEXT
+        completed_at  TEXT,
+        assignee_agent_id  TEXT,
+        requester_agent_id TEXT,
+        subject            TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -1084,6 +1094,15 @@ export class OrchestrationDb {
       }
       if (current < 29 && !this.hasColumn('dispatch_contexts', 'admission_envelope')) {
         this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN admission_envelope TEXT')
+      }
+      if (current < 30 && !this.hasColumn('tasks', 'assignee_agent_id')) {
+        this.db.exec('ALTER TABLE tasks ADD COLUMN assignee_agent_id TEXT')
+      }
+      if (current < 30 && !this.hasColumn('tasks', 'requester_agent_id')) {
+        this.db.exec('ALTER TABLE tasks ADD COLUMN requester_agent_id TEXT')
+      }
+      if (current < 30 && !this.hasColumn('tasks', 'subject')) {
+        this.db.exec('ALTER TABLE tasks ADD COLUMN subject TEXT')
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -4433,6 +4452,9 @@ export class OrchestrationDb {
     createdByProcessIncarnation?: string
     createdByRunGeneration?: number
     runId?: string
+    assigneeAgentId?: string
+    requesterAgentId?: string
+    subject?: DelegationSubject
   }): TaskRow {
     const runId = task.runId ?? LEGACY_RUN_ID
     this.requireRun(runId)
@@ -4441,6 +4463,21 @@ export class OrchestrationDb {
       if (!parent || parent.run_id !== runId) {
         throw new Error(`Parent task ${task.parentId} must belong to run ${runId}`)
       }
+    }
+    const refusal = judgeDelegation({
+      assigneeAgentId: task.assigneeAgentId ?? null,
+      requesterAgentId: task.requesterAgentId ?? null,
+      ancestors: this.delegationAncestors(task.parentId),
+      parentChildCount: task.parentId
+        ? (
+            this.db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?').get(task.parentId) as {
+              n: number
+            }
+          ).n
+        : 0
+    })
+    if (refusal) {
+      throw new DelegationRefusedError(refusal)
     }
     for (const depId of task.deps ?? []) {
       const dependency = this.getTask(depId)
@@ -4460,9 +4497,10 @@ export class OrchestrationDb {
         `INSERT INTO tasks (
            id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
            created_by_process_incarnation, created_by_run_generation,
-           task_title, display_name, spec, status, deps
+           task_title, display_name, spec, assignee_agent_id, requester_agent_id, subject,
+           status, deps
          ) VALUES (
-           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
            CASE WHEN EXISTS (
              SELECT 1
              FROM json_each(?) requested
@@ -4485,11 +4523,31 @@ export class OrchestrationDb {
         display.taskTitle || null,
         display.displayName || null,
         task.spec,
+        task.assigneeAgentId ?? null,
+        task.requesterAgentId ?? null,
+        task.subject ? JSON.stringify(task.subject) : null,
         depsJson,
         runId,
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
+  }
+
+  // Nearest first. Bounded one past the depth cap: past it the verdict is already decided.
+  private delegationAncestors(parentId: string | undefined): DelegationAncestor[] {
+    const ancestors: DelegationAncestor[] = []
+    let cursor = parentId
+    while (cursor && ancestors.length <= MAX_DELEGATION_DEPTH + 1) {
+      const row = this.db
+        .prepare('SELECT parent_id, assignee_agent_id FROM tasks WHERE id = ?')
+        .get(cursor) as { parent_id: string | null; assignee_agent_id: string | null } | undefined
+      if (!row) {
+        break
+      }
+      ancestors.push({ assigneeAgentId: row.assignee_agent_id })
+      cursor = row.parent_id ?? undefined
+    }
+    return ancestors
   }
 
   // Why: return the active creator Dispatch proof with the Task read; runtime still owns pane/process currency.

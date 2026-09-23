@@ -265,6 +265,33 @@ describe('OrchestrationDb version-skew migration', () => {
     reopened.close()
   })
 
+  it('repairs a database that claims the current schema but lost a v30 delegation column', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v30-skew-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const task = db.createTask({ spec: 'keep me', assigneeAgentId: 'agent_keep' })
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    raw.exec('ALTER TABLE tasks DROP COLUMN subject')
+    expect(claimed).toBeGreaterThanOrEqual(30)
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(6)
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    expect(db.getTask(task.id)).toMatchObject({ assignee_agent_id: 'agent_keep', subject: null })
+    db.close()
+    db = undefined
+
+    const reopened = new Database(dbPath)
+    const columns = (reopened.pragma('table_info(tasks)') as { name: string }[]).map((c) => c.name)
+    expect(columns).toEqual(expect.arrayContaining(['assignee_agent_id', 'requester_agent_id', 'subject']))
+    expect(reopened.pragma('user_version', { simple: true })).toBe(claimed)
+    reopened.close()
+  })
+
   it('leaves a healthy current database at its stored version', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v24-healthy-'))
     const dbPath = join(tempDir, 'orchestration.db')
