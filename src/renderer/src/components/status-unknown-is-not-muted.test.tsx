@@ -13,7 +13,9 @@ import { SleepReclaimObservedReclaim } from './status-bar/SleepReclaimObservedRe
 describe('an unmeasured value does not render as a measured one', () => {
   it('SleepReclaimObservedReclaim: unmeasured and pending no longer share a treatment', () => {
     const { unmount } = render(
-      <SleepReclaimObservedReclaim reclaim={{ status: 'unmeasured', reason: 'sweep-failed' }} />
+      <SleepReclaimObservedReclaim
+        reclaim={{ status: 'unmeasured', reason: 'sweep-failed', sleptPaneCount: 2 }}
+      />
     )
     const unmeasured = screen.getByTestId('sleep-reclaim-observed')
     expect(unmeasured.getAttribute('data-status')).toBe('unmeasured')
@@ -36,7 +38,9 @@ describe('an unmeasured value does not render as a measured one', () => {
     // Absence of an effect is not an unknown. Keeping this pinned so the new treatment does
     // not turn "there was nothing to observe" into a visible uncertainty badge.
     const { container } = render(
-      <SleepReclaimObservedReclaim reclaim={{ status: 'unmeasured', reason: 'nothing-slept' }} />
+      <SleepReclaimObservedReclaim
+        reclaim={{ status: 'unmeasured', reason: 'nothing-slept', sleptPaneCount: 0 }}
+      />
     )
     expect(container.firstChild).toBeNull()
   })
