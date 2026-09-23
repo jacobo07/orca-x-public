@@ -198,4 +198,54 @@ describe('terminal delivery watchdog', () => {
     expect(reattachMock).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  // Why: the field freeze had a live preview beside a frozen pane while other
+  // PTYs kept flowing — exactly when the push probe stays silent.
+  async function driveVisiblePane(paneReceivesOutput: boolean): Promise<ReturnType<typeof vi.fn>> {
+    const { recordPtyDataReceived } = await startWatchdog()
+    const liveness = await import('./visible-pane-output-liveness')
+    const pipelineHealth = await import('@/lib/pane-manager/terminal-write-pipeline-health')
+    const terminal = {}
+    const requestRecovery = vi.fn()
+    liveness.registerVisiblePaneLiveness({
+      terminal,
+      getPtyId: () => 'pty-visible',
+      isOnScreen: () => true,
+      requestRecovery
+    })
+    let modelSequence = 1
+    reportMock.mockImplementation(async () => ({
+      ...HEALTHY,
+      modelOutputSequenceByPty: { 'pty-visible': modelSequence },
+      hiddenGatedPtyIds: ['pty-visible']
+    }))
+    for (let tick = 0; tick < 3; tick++) {
+      recordPtyDataReceived('pty-other', 64)
+      if (paneReceivesOutput) {
+        recordPtyDataReceived('pty-visible', 64)
+        pipelineHealth.recordTerminalParseProgress(terminal)
+      }
+      modelSequence += 10
+      await vi.advanceTimersByTimeAsync(INTERVAL_MS)
+    }
+    return requestRecovery
+  }
+
+  it('asks main about on-screen panes even while other PTYs flow, and recovers a frozen one', async () => {
+    const requestRecovery = await driveVisiblePane(false)
+
+    expect(reportMock).toHaveBeenCalledWith(
+      expect.objectContaining({ onScreenPtyIds: ['pty-visible'] })
+    )
+    expect(requestRecovery).toHaveBeenCalledTimes(1)
+    expect(requestRecovery).toHaveBeenCalledWith('output-not-received')
+    expect(reattachMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves an on-screen pane alone while it keeps up with its model', async () => {
+    const requestRecovery = await driveVisiblePane(true)
+
+    expect(reportMock).toHaveBeenCalledTimes(3)
+    expect(requestRecovery).not.toHaveBeenCalled()
+  })
 })
