@@ -48,7 +48,10 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { applyManualRepoOrder, getManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
@@ -113,6 +116,14 @@ import {
 } from './folder-workspace-update-coordinator'
 
 const ERROR_TOAST_DURATION = 60_000
+
+function isStrictSubfolderOf(rootPath: string, candidatePath: string): boolean {
+  return (
+    isPathInsideOrEqual(rootPath, candidatePath) &&
+    normalizeRuntimePathForComparison(rootPath) !==
+      normalizeRuntimePathForComparison(candidatePath)
+  )
+}
 const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?: Promise<void> }>()
 const runtimeRepoFetchGenerationByEnvironment = new Map<string, number>()
@@ -3230,6 +3241,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       repo = repoWithFetchedOwner(repo, target)
       const repoIdentity = getRepoHostIdentity(repo)
       const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
+      if (alreadyAdded && kind === 'git' && isStrictSubfolderOf(repo.path, path)) {
+        // Why: a subfolder of a tracked repo resolves to that repo's root, so "already added" would
+        // make a sub-project unaddable; offer it as its own folder project instead.
+        get().openModal('confirm-non-git-folder', {
+          folderPath: path,
+          nestedInRepoName: repo.displayName,
+          ...(target.kind === 'environment' ? { runtimeEnvironmentId: target.environmentId } : {})
+        })
+        return null
+      }
       if (alreadyAdded) {
         get().clearOrcaHookTrustForRepo(repo.id)
       }

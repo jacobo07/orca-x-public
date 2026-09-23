@@ -4312,6 +4312,7 @@
           "e52454b7f6": "Abrir como carpeta",
           "05b33a17a9": "Cancelar",
           "8fba4b8cbb": "Esta carpeta no es un repositorio Git. Tendrás editor, terminal y búsqueda, pero las funciones basadas en Git no estarán disponibles.",
+          "nestedInRepo": "Esta carpeta está dentro de {{repoName}}, que ya está agregado. Ábrela como proyecto propio con editor, terminal y búsqueda; las funciones de Git siguen en {{repoName}}.",
           "c49fb13492": "No se pudo agregar la carpeta en este host",
           "9a766f33ac": "Esta ruta se verificó en el host SSH.",
           "79fd02cf5f": "Esta ruta se verificó en {{hostName}}.",

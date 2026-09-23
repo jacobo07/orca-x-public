@@ -5006,6 +5006,7 @@
           "e52454b7f6": "Open as Folder",
           "05b33a17a9": "Cancel",
           "8fba4b8cbb": "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available.",
+          "nestedInRepo": "This folder is inside {{repoName}}, which is already added. Open it as its own project with the editor, terminal, and search; Git features stay with {{repoName}}.",
           "c49fb13492": "Failed to add folder on this host",
           "9a766f33ac": "This path was checked on the SSH host.",
           "79fd02cf5f": "This path was checked on {{hostName}}.",

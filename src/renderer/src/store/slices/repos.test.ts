@@ -218,6 +218,36 @@ describe('repo slice runtime routing', () => {
     expect(orcaProfileFindProjectProfiles).not.toHaveBeenCalled()
   })
 
+  it('offers a subfolder of an already-added repo as its own folder project', async () => {
+    reposList.mockResolvedValue([localRepo])
+    reposAdd.mockResolvedValue({ repo: localRepo, alreadyExisted: true })
+    const store = createTestStore()
+    await store.getState().fetchRepos()
+
+    await expect(store.getState().addRepoPath(`${localRepo.path}/sub/project`)).resolves.toBeNull()
+
+    expect(store.getState().activeModal).toBe('confirm-non-git-folder')
+    expect(store.getState().modalData).toEqual({
+      folderPath: `${localRepo.path}/sub/project`,
+      nestedInRepoName: localRepo.displayName
+    })
+    expect(toast.info).not.toHaveBeenCalledWith('Project already added', expect.anything())
+  })
+
+  it('still reports "already added" when the picked path is the tracked repo root', async () => {
+    reposList.mockResolvedValue([localRepo])
+    reposAdd.mockResolvedValue({ repo: localRepo, alreadyExisted: true })
+    const store = createTestStore()
+    await store.getState().fetchRepos()
+
+    await expect(store.getState().addRepoPath(localRepo.path)).resolves.toEqual(
+      expect.objectContaining({ id: localRepo.id })
+    )
+
+    expect(store.getState().activeModal).not.toBe('confirm-non-git-folder')
+    expect(toast.info).toHaveBeenCalledWith('Project already added', expect.anything())
+  })
+
   it('warns when a local project is already present in another profile', async () => {
     reposAdd.mockResolvedValue({ repo: localRepo })
     orcaProfileFindProjectProfiles.mockResolvedValue({
