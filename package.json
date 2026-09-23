@@ -33,6 +33,7 @@
     "check:agent-identity-authority": "node config/scripts/check-agent-identity-authority.mjs",
     "check:agent-instruction-layer": "node config/scripts/check-agent-instruction-layer.mjs",
     "check:agent-turn-location-authority": "node config/scripts/check-agent-turn-location-authority.mjs",
+    "check:cognitive-workspace-matrix": "node config/scripts/check-cognitive-workspace-completeness.mjs --integrity",
     "check:recurring-work": "node config/scripts/check-recurring-work-inventory.mjs",
     "check:ipc-message-floor": "node config/scripts/check-ipc-message-floor.mjs",
     "check:e2e-fixture-binding": "node config/scripts/check-e2e-fixture-binding.mjs",

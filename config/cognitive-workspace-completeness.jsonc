@@ -1,0 +1,56 @@
+// Cognitive Workspace completion matrix: what "the program is done" means, row by row.
+//
+// Read by config/scripts/check-cognitive-workspace-completeness.mjs. `--integrity` (PR-safe) checks the
+// matrix is well-formed and every pointer resolves; the default mode is the program done-gate and is
+// red while any row is open. A row may be `complete` only on evidence that resolves — never on an
+// artifact merely existing. It COMPOSES config/reliability-gates.jsonc (a row may cite a gate id)
+// rather than duplicating it. Blocked is narrow: only an Owner authorization or runner capacity.
+{
+  "schemaVersion": 1,
+  "program": "cognitive-workspace",
+  "phases": [
+    { "number": "1", "title": "Canonical completeness verifier and a truthful roadmap" },
+    { "number": "2", "title": "Remote location model and project-host selection" },
+    { "number": "3", "title": "A remote project's agent over ssh (W-C6)" },
+    { "number": "4", "title": "Provider-resume and thread relocation semantics" },
+    { "number": "5", "title": "Remote product-reality" },
+    { "number": "6", "title": "Restart and durability under remote location" },
+    { "number": "7", "title": "Observability, failure recovery and remote authority security" },
+    { "number": "8", "title": "Baseline ascension and inheritance enforcement" },
+    { "number": "9", "title": "Program closure and roaming impact" }
+  ],
+  "rows": [
+    {
+      "id": "A",
+      "dimension": "agent-identity",
+      "owner": "src/main/persistence/tracking-agents/agent-operations.ts",
+      "state": "complete",
+      "phase": "1",
+      "claim": "An AgentId has exactly one production minter, and agent identity is never reconstructed from UI focus.",
+      "evidence": [{ "kind": "gate", "script": "check:agent-identity-authority" }]
+    },
+    {
+      "id": "C",
+      "dimension": "located-effect",
+      "owner": "src/main/conversation/agent-project-location.ts",
+      "state": "open",
+      "phase": "3",
+      "claim": "An agent's turn acts on its own project, wherever that project lives, and never on a substitute.",
+      "evidence": [{ "kind": "gate", "script": "check:agent-turn-location-authority" }],
+      "closes": "The turn runs ON the ssh project-host in the setup's worktree (Phase 3), once Phase 2 names a located remote subject."
+    },
+    {
+      "id": "T",
+      "dimension": "ci",
+      "owner": ".github/workflows/pr.yml",
+      "state": "blocked",
+      "phase": "9",
+      "claim": "The program's gates are executed by CI, not only defined in it.",
+      "evidence": [],
+      "blocker": {
+        "class": "runner-capacity",
+        "precondition": "A GitHub-hosted runner is assigned (job runner_id > 0) to a pull_request run of this branch; runs 35873274476 and 35869416763 recorded runner_id=0 and zero steps."
+      }
+    }
+  ]
+}
