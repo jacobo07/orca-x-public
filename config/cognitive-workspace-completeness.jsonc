@@ -5,6 +5,7 @@
 // red while any row is open. A row may be `complete` only on evidence that resolves — never on an
 // artifact merely existing. It COMPOSES config/reliability-gates.jsonc (a row may cite a gate id)
 // rather than duplicating it. Blocked is narrow: only an Owner authorization or runner capacity.
+// Residual trust: a complete row pointing at an unrelated passing gate is a review question.
 {
   "schemaVersion": 1,
   "program": "cognitive-workspace",
@@ -30,14 +31,215 @@
       "evidence": [{ "kind": "gate", "script": "check:agent-identity-authority" }]
     },
     {
+      "id": "B",
+      "dimension": "project-ownership",
+      "owner": "config/durable-actor-catalogs.jsonc",
+      "state": "complete",
+      "phase": "1",
+      "claim": "LOCAL scope: an agent owns its project through one durable roster, and a conversation reaches the project only through its agent.",
+      "evidence": [{ "kind": "gate", "script": "check:durable-actor-catalogs" }]
+    },
+    {
       "id": "C",
       "dimension": "located-effect",
       "owner": "src/main/conversation/agent-project-location.ts",
       "state": "open",
       "phase": "3",
       "claim": "An agent's turn acts on its own project, wherever that project lives, and never on a substitute.",
-      "evidence": [{ "kind": "gate", "script": "check:agent-turn-location-authority" }],
+      "evidence": [
+        { "kind": "gate", "script": "check:agent-turn-location-authority" },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-project-location.spec.ts",
+          "title": "an agent bound to a project reaches the provider, and refuses once that project is gone",
+          "rung": "real-electron",
+          "note": "local project only (W-C5)"
+        }
+      ],
       "closes": "The turn runs ON the ssh project-host in the setup's worktree (Phase 3), once Phase 2 names a located remote subject."
+    },
+    {
+      "id": "D",
+      "dimension": "provider-instruction-layer",
+      "owner": "src/main/codex/codex-conversation-driver.ts",
+      "state": "complete",
+      "phase": "1",
+      "claim": "An agent's role reaches the provider only as developerInstructions, never replacing the provider's own base instructions.",
+      "evidence": [{ "kind": "gate", "script": "check:agent-instruction-layer" }]
+    },
+    {
+      "id": "E",
+      "dimension": "provider-execution-location",
+      "owner": "src/main/codex/codex-conversation-driver.ts",
+      "state": "open",
+      "phase": "4",
+      "claim": "A resumed provider thread runs where the agent's project is now, not where it was born.",
+      "evidence": [],
+      "closes": "Where a resumed thread runs is expressed as measured provider capability, and a stale thread reused after relocation is refused."
+    },
+    {
+      "id": "F",
+      "dimension": "conversation-durability",
+      "owner": "src/main/conversation/conversation-store.ts",
+      "state": "open",
+      "phase": "6",
+      "claim": "A conversation keeps its identity, provider provenance and project relation across restarts.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-store-syscall-proof.test.ts",
+          "title": "fsyncs the conversation before publishing its name"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-store.test.ts",
+          "title": "reloads through a fresh store instance"
+        },
+        {
+          "kind": "doc",
+          "file": "config/durability-contracts.jsonc",
+          "contains": "conversation.orca-owned-record"
+        }
+      ],
+      "closes": "A real-app restart of a conversation bound to a remote project keeps identity, thread provenance and project relation."
+    },
+    {
+      "id": "G",
+      "dimension": "remote-execution",
+      "owner": "Phase 3 creates the streaming relay method that runs a provider turn on an ssh host",
+      "state": "open",
+      "phase": "3",
+      "claim": "A provider turn for a remote project executes on that project's host, through an authority that already governs remote execution.",
+      "evidence": [
+        {
+          "kind": "reliability-gate",
+          "id": "agent-session.remote-host-authority",
+          "note": "prior authority for terminal agent sessions; the conversation turn does not use it yet (EXTEND before NEW)"
+        }
+      ],
+      "closes": "A provider turn runs on the ssh host through a capability-negotiated relay method, or refuses; no local fallback."
+    },
+    {
+      "id": "H",
+      "dimension": "multi-project-safety",
+      "owner": "Phase 7 audits cross-project contamination on the remote path",
+      "state": "open",
+      "phase": "7",
+      "claim": "An agent bound to one project can never be handed another, locally or remotely.",
+      "evidence": [],
+      "closes": "Cross-project contamination is refused and a wrong-project control refuses with its own reason."
+    },
+    {
+      "id": "I",
+      "dimension": "worktree-dirty-state",
+      "owner": "Phase 3 roots the remote provider in the setup's live worktree",
+      "state": "open",
+      "phase": "3",
+      "claim": "What the provider sees is the project's live worktree, uncommitted files included.",
+      "evidence": [],
+      "closes": "The remote cwd is the worktree the setup names, and a mutation substituting a local directory is caught."
+    },
+    {
+      "id": "J",
+      "dimension": "user-facing-states",
+      "owner": "src/main/conversation/agent-project-location.ts",
+      "state": "open",
+      "phase": "7",
+      "claim": "Every way a turn cannot run has its own sentence, and none is presented as success.",
+      "evidence": [],
+      "closes": "Every Phase 7 failure outcome has a distinct represented state and sentence."
+    },
+    {
+      "id": "K",
+      "dimension": "cli-ipc-frontend-coherence",
+      "owner": "src/main/ipc/conversations.ts",
+      "state": "open",
+      "phase": "9",
+      "claim": "Every surface that can start a conversation turn reaches the same located authority.",
+      "evidence": [],
+      "closes": "Every caller of the turn path is inventoried and reaches the same authority.",
+      "note": "No roadmap criterion names this dimension; re-home it when a phase takes it."
+    },
+    {
+      "id": "L",
+      "dimension": "security",
+      "owner": "Phase 7 audits remote trust and path containment",
+      "state": "open",
+      "phase": "7",
+      "claim": "A remote project never becomes an implicit shell, and a path cannot be substituted to escape it.",
+      "evidence": [],
+      "closes": "Remote trust, pairing scope, traversal and symlink substitution are audited, and read never implies execute."
+    },
+    {
+      "id": "M",
+      "dimension": "observability",
+      "owner": "Phase 7 makes the location chain observable",
+      "state": "open",
+      "phase": "7",
+      "claim": "Why a turn ran where it ran is answerable after the fact.",
+      "evidence": [],
+      "closes": "The location chain is observable without leaking source content or secrets."
+    },
+    {
+      "id": "N",
+      "dimension": "token-economics",
+      "owner": "Phase 9 bounds the per-turn location envelope",
+      "state": "open",
+      "phase": "9",
+      "claim": "Locating a turn never scales with repository size.",
+      "evidence": [],
+      "closes": "The per-turn location envelope is bounded and no repository content is dumped into a prompt.",
+      "note": "No roadmap criterion names this dimension; the mission forbids repository dumps in prompts."
+    },
+    {
+      "id": "O",
+      "dimension": "failure-recovery",
+      "owner": "Phase 7 represents host loss mid-turn",
+      "state": "open",
+      "phase": "7",
+      "claim": "A host that disappears mid-turn produces a represented failure.",
+      "evidence": [],
+      "closes": "Host loss mid-turn resolves to a represented failure, never a silent success or a local retry."
+    },
+    {
+      "id": "P",
+      "dimension": "device-independent-projection",
+      "owner": "Phase 9 records the roaming impact",
+      "state": "open",
+      "phase": "9",
+      "claim": "Durable agent and conversation identity survive a change of device without changing the project acted upon.",
+      "evidence": [],
+      "closes": "Durable identity is shown to survive a change of device (roaming)."
+    },
+    {
+      "id": "Q",
+      "dimension": "product-reality",
+      "owner": "Phase 5 runs the remote product-reality gate",
+      "state": "open",
+      "phase": "5",
+      "claim": "A real remote host answers a project fact that could not have come from anywhere else.",
+      "evidence": [],
+      "closes": "A remote host returns an unguessable project fact, with wrong-project and unreachable controls."
+    },
+    {
+      "id": "R",
+      "dimension": "baseline-inheritance",
+      "owner": "Phase 8 ascends the located-effect baseline",
+      "state": "open",
+      "phase": "8",
+      "claim": "The next project-scoped cognitive feature cannot regress below the proven standard.",
+      "evidence": [],
+      "closes": "A violating future-like implementation is caught by the ascended baseline."
+    },
+    {
+      "id": "S",
+      "dimension": "knowledge-ukdl",
+      "owner": "Phase 8 distills the program's traps",
+      "state": "open",
+      "phase": "8",
+      "claim": "What this program learned is written where the next program will read it.",
+      "evidence": [],
+      "closes": "Reusable traps are distilled into the vault and UKDL without duplicating a stronger law."
     },
     {
       "id": "T",

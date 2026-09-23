@@ -17,6 +17,8 @@ const run = promisify(execFile)
 // row is open. `--integrity` checks the matrix without demanding completion, so it is safe on PRs.
 
 const MATRIX_PATH = 'config/cognitive-workspace-completeness.jsonc'
+const RELIABILITY_PATH = 'config/reliability-gates.jsonc'
+const ROADMAP_PATH = '.planning/ROADMAP.md'
 const SELF_PATH = 'config/scripts/check-cognitive-workspace-completeness.mjs'
 
 /** The verifier owns the list, so deleting a row from the matrix cannot delete the obligation. */
@@ -49,7 +51,9 @@ export const ROW_FLOOR = REQUIRED_DIMENSIONS.length
 
 const STATES = new Set(['complete', 'open', 'blocked'])
 const BLOCKER_CLASSES = new Set(['owner-auth', 'runner-capacity'])
+const RUNGS = new Set(['unit', 'integration', 'real-electron', 'real-remote-host', 'real-provider'])
 const GATE_COMMAND = /^node\s+(config\/scripts\/[\w.-]+\.mjs)((?:\s+[\w.:=-]+)*)\s*$/
+const ROADMAP_ENTRY = /^- \[[ xX]\] \*\*Phase (\d+(?:\.\d+)*): (.+?)\*\*/
 
 /** Only a plain node gate may be named, so completeness can never execute an arbitrary command. */
 export function parseGateCommand(command) {
@@ -60,7 +64,20 @@ export function parseGateCommand(command) {
   return { file: match[1], args: match[2].trim() ? match[2].trim().split(/\s+/) : [] }
 }
 
+/** Only the checklist counts; `### Phase N` detail headings describe, they do not declare. */
+export function parseRoadmapPhases(text) {
+  const phases = new Map()
+  for (const line of String(text).split(/\r?\n/)) {
+    const match = ROADMAP_ENTRY.exec(line.trim())
+    if (match) {
+      phases.set(match[1], match[2].trim())
+    }
+  }
+  return phases
+}
+
 const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0
+const isPathShaped = (value) => nonEmpty(value) && /[\\/]/.test(value) && !/\s/.test(value)
 
 function resolveGate(entry, context) {
   const command = context.packageScripts[entry.script]
@@ -80,7 +97,106 @@ function resolveGate(entry, context) {
   return null
 }
 
-const RESOLVERS = { gate: resolveGate }
+function resolveContains(file, needle, what, context) {
+  if (!nonEmpty(file) || !nonEmpty(needle)) {
+    return `${what} evidence needs a file and the text it must contain`
+  }
+  if (!context.trackedFiles.has(file)) {
+    return `${what} evidence names ${file}, which is not tracked`
+  }
+  const source = context.readTracked(file)
+  if (source === null || !source.includes(needle)) {
+    return `${file} does not contain the ${what === 'doc' ? 'text' : 'title'} "${needle}"`
+  }
+  return null
+}
+
+const RESOLVERS = {
+  gate: resolveGate,
+  test: (entry, context) => resolveContains(entry.file, entry.title, 'test', context),
+  doc: (entry, context) => resolveContains(entry.file, entry.contains, 'doc', context),
+  'product-reality': (entry, context) =>
+    RUNGS.has(entry.rung)
+      ? resolveContains(entry.spec, entry.title, 'product-reality', context)
+      : `product-reality rung "${entry.rung}" is not one of ${[...RUNGS].join(', ')}`,
+  'reliability-gate': (entry, context) =>
+    context.reliabilityGateIds.has(entry.id)
+      ? null
+      : `reliability gate "${entry.id}" is not in ${RELIABILITY_PATH}`
+}
+
+function checkRow(row, context, phaseNumbers, failures) {
+  const label = `row ${row?.id ?? '?'}`
+  const required = REQUIRED_DIMENSIONS.find((dimension) => dimension.id === row?.id)
+  if (!required) {
+    failures.push(`${label} is not a required dimension (A..T); a stale or misspelled row`)
+  } else if (row.dimension !== required.key) {
+    failures.push(`${label} has dimension "${row.dimension}", expected "${required.key}"`)
+  }
+  for (const field of ['owner', 'claim']) {
+    if (!nonEmpty(row?.[field])) {
+      failures.push(`${label} has no ${field}`)
+    }
+  }
+  if (isPathShaped(row?.owner) && !context.trackedFiles.has(row.owner)) {
+    failures.push(`${label} names owner ${row.owner}, which is not tracked`)
+  }
+  if (!STATES.has(row?.state)) {
+    failures.push(`${label} has state "${row?.state}", expected complete, open or blocked`)
+  }
+  if (!phaseNumbers.has(String(row?.phase))) {
+    failures.push(`${label} names phase "${row?.phase}", which is not in the phases table`)
+  }
+  const evidence = Array.isArray(row?.evidence) ? row.evidence : null
+  if (evidence === null) {
+    failures.push(`${label} has no evidence array`)
+  }
+
+  if (row?.state === 'blocked') {
+    if (!BLOCKER_CLASSES.has(row.blocker?.class)) {
+      failures.push(
+        `${label} is blocked by "${row.blocker?.class}", but only owner-auth and runner-capacity may block — anything else is open engineering`
+      )
+    }
+    if (!nonEmpty(row.blocker?.precondition)) {
+      failures.push(`${label} is blocked without a precondition sentence`)
+    }
+  } else if (row?.blocker !== undefined) {
+    failures.push(`${label} carries a blocker but is ${row?.state}`)
+  }
+  if (row?.state === 'open' && !nonEmpty(row.closes)) {
+    failures.push(`${label} is open without saying what closes it`)
+  }
+  if (row?.state === 'complete' && evidence !== null) {
+    if (evidence.length === 0) {
+      failures.push(`${label} is complete with no evidence`)
+    } else if (evidence.every((entry) => entry?.kind === 'doc')) {
+      failures.push(
+        `${label} is complete on doc evidence alone; a complete row needs evidence that is not a document`
+      )
+    }
+  }
+}
+
+function crossCheckRoadmap(matrix, roadmapPhases, failures) {
+  const declared = new Map(
+    (matrix?.phases ?? []).map((phase) => [String(phase.number), phase.title])
+  )
+  for (const [number, title] of declared) {
+    if (!roadmapPhases.has(number)) {
+      failures.push(`phase ${number} ("${title}") is in the matrix but not in the roadmap`)
+    } else if (roadmapPhases.get(number) !== title) {
+      failures.push(
+        `phase ${number} is titled "${title}" in the matrix but "${roadmapPhases.get(number)}" in the roadmap`
+      )
+    }
+  }
+  for (const [number, title] of roadmapPhases) {
+    if (!declared.has(number)) {
+      failures.push(`phase ${number} ("${title}") is in the roadmap but not in the matrix`)
+    }
+  }
+}
 
 /** Pure: judges a parsed matrix against a repository snapshot supplied in `context`. */
 export function verifyMatrix(matrix, context) {
@@ -89,6 +205,7 @@ export function verifyMatrix(matrix, context) {
   const phaseNumbers = new Set((matrix?.phases ?? []).map((phase) => String(phase.number)))
   const counts = { complete: 0, open: 0, blocked: 0 }
   const kinds = {}
+  const rungs = {}
   let resolved = 0
   let total = 0
 
@@ -101,60 +218,39 @@ export function verifyMatrix(matrix, context) {
       failures.push(`missing required dimension ${id} (${key})`)
     }
   }
+  for (const [id, seen] of byId) {
+    if (seen > 1) {
+      failures.push(`row ${id} appears ${seen} times`)
+    }
+  }
   if (rows.length < ROW_FLOOR) {
     failures.push(`found ${rows.length} rows, expected at least ${ROW_FLOOR}`)
   }
 
   for (const row of rows) {
-    const label = `row ${row?.id ?? '?'}`
-    const required = REQUIRED_DIMENSIONS.find((dimension) => dimension.id === row?.id)
-    if (required && row.dimension !== required.key) {
-      failures.push(`${label} has dimension "${row.dimension}", expected "${required.key}"`)
-    }
-    for (const field of ['owner', 'claim']) {
-      if (!nonEmpty(row?.[field])) {
-        failures.push(`${label} has no ${field}`)
-      }
-    }
-    if (!STATES.has(row?.state)) {
-      failures.push(`${label} has state "${row?.state}", expected complete, open or blocked`)
-    } else {
+    checkRow(row, context, phaseNumbers, failures)
+    if (STATES.has(row?.state)) {
       counts[row.state] += 1
     }
-    if (!phaseNumbers.has(String(row?.phase))) {
-      failures.push(`${label} names phase "${row?.phase}", which is not in the phases table`)
-    }
-    if (!Array.isArray(row?.evidence)) {
-      failures.push(`${label} has no evidence array`)
-    }
-
-    if (row?.state === 'blocked') {
-      if (!BLOCKER_CLASSES.has(row.blocker?.class)) {
-        failures.push(
-          `${label} is blocked by "${row.blocker?.class}", but only owner-auth and runner-capacity may block — anything else is open engineering`
-        )
-      }
-      if (!nonEmpty(row.blocker?.precondition)) {
-        failures.push(`${label} is blocked without a precondition sentence`)
-      }
-    } else if (row?.blocker !== undefined) {
-      failures.push(`${label} carries a blocker but is ${row?.state}`)
-    }
-    if (row?.state === 'open' && !nonEmpty(row.closes)) {
-      failures.push(`${label} is open without saying what closes it`)
-    }
-
+    // Every pointer must resolve whatever the state: a rotted pointer on an open row is still rotted.
     for (const entry of Array.isArray(row?.evidence) ? row.evidence : []) {
       total += 1
       kinds[entry?.kind] = (kinds[entry?.kind] ?? 0) + 1
       const resolve = RESOLVERS[entry?.kind]
       const problem = resolve ? resolve(entry, context) : `unknown evidence kind "${entry?.kind}"`
       if (problem) {
-        failures.push(`${label}: ${problem}`)
+        failures.push(`row ${row?.id ?? '?'}: ${problem}`)
       } else {
         resolved += 1
+        if (entry.kind === 'product-reality') {
+          rungs[entry.rung] = (rungs[entry.rung] ?? 0) + 1
+        }
       }
     }
+  }
+
+  if (context.roadmapPhases) {
+    crossCheckRoadmap(matrix, context.roadmapPhases, failures)
   }
 
   return {
@@ -168,18 +264,56 @@ export function verifyMatrix(matrix, context) {
       resolved,
       total,
       kinds,
-      counts
+      rungs,
+      counts,
+      roadmapCrossCheck: context.roadmapPhases ? 'ran' : 'not-run',
+      roadmapPhaseCount: context.roadmapPhases?.size ?? 0
     }
   }
 }
 
+/** The gate's own red and green subjects, so it stays falsifiable the day the last real row closes. */
+export function selfControlsAnswerCorrectly() {
+  const script = 'config/scripts/self-control-gate.mjs'
+  const complete = {
+    phases: [{ number: '1', title: 'self' }],
+    rows: REQUIRED_DIMENSIONS.map(({ id, key }) => ({
+      id,
+      dimension: key,
+      owner: 'self-control owner',
+      state: 'complete',
+      phase: '1',
+      claim: 'self-control claim',
+      evidence: [{ kind: 'gate', script: 'check:self-control' }]
+    }))
+  }
+  const context = {
+    packageScripts: { 'check:self-control': `node ${script}` },
+    trackedFiles: new Set([script]),
+    readTracked: () => null,
+    reliabilityGateIds: new Set(),
+    roadmapPhases: null,
+    selfCommandFile: SELF_PATH
+  }
+  const missingOne = { ...complete, rows: complete.rows.slice(1) }
+  const green = verifyMatrix(complete, context).failures.length === 0
+  const red = verifyMatrix(missingOne, context).failures.includes(
+    `missing required dimension ${REQUIRED_DIMENSIONS[0].id} (${REQUIRED_DIMENSIONS[0].key})`
+  )
+  return green && red
+}
+
 function describeAperture(aperture) {
-  const kinds =
-    Object.entries(aperture.kinds)
-      .map(([kind, count]) => `${kind} ${count}`)
+  const list = (record) =>
+    Object.entries(record)
+      .map(([name, count]) => `${name} ${count}`)
       .join(', ') || 'none'
   const { complete, open, blocked } = aperture.counts
-  return `${aperture.rows} rows, ${aperture.required} required, evidence resolved ${aperture.resolved}/${aperture.total} (${kinds}), ${complete} complete / ${open} open / ${blocked} blocked`
+  const roadmap =
+    aperture.roadmapCrossCheck === 'ran'
+      ? `roadmap cross-check: ran (${aperture.roadmapPhaseCount} phases)`
+      : `roadmap cross-check: NOT RUN (${ROADMAP_PATH} not in this checkout)`
+  return `${aperture.rows} rows, ${aperture.required} required, evidence resolved ${aperture.resolved}/${aperture.total} (${list(aperture.kinds)}), product-reality rungs (${list(aperture.rungs)}), ${complete} complete / ${open} open / ${blocked} blocked, ${roadmap}`
 }
 
 async function gitLines(root, args) {
@@ -199,38 +333,49 @@ async function gitLines(root, args) {
 function evidencePaths(matrix, scripts) {
   const paths = new Set()
   for (const row of matrix?.rows ?? []) {
-    if (nonEmpty(row?.owner) && /[\\/]/.test(row.owner) && !/\s/.test(row.owner)) {
+    if (isPathShaped(row?.owner)) {
       paths.add(row.owner)
     }
     for (const entry of row?.evidence ?? []) {
-      if (entry?.kind === 'gate') {
-        const parsed = parseGateCommand(scripts[entry.script])
-        if (parsed) {
-          paths.add(parsed.file)
-        }
+      const parsed = entry?.kind === 'gate' ? parseGateCommand(scripts[entry.script]) : null
+      const file = parsed?.file ?? entry?.file ?? entry?.spec
+      if (nonEmpty(file)) {
+        paths.add(file)
       }
     }
   }
   return [...paths]
 }
 
+async function readOptional(file) {
+  try {
+    return await readFile(file, 'utf8')
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
+}
+
 export async function main(root = process.cwd(), log = console, argv = process.argv.slice(2)) {
+  const fail = (message) => {
+    log.error(`❌  check-cognitive-workspace-completeness: ${message}`)
+    return 2
+  }
   const unknown = argv.filter((arg) => arg !== '--integrity')
   if (unknown.length > 0 || argv.length === 0) {
-    log.error(
-      `❌  check-cognitive-workspace-completeness: usage: --integrity (got ${argv.join(' ') || 'no argument'})`
-    )
-    return 2
+    return fail(`usage: --integrity (got ${argv.join(' ') || 'no argument'})`)
+  }
+  if (!selfControlsAnswerCorrectly()) {
+    return fail('the instrument cannot tell a complete matrix from one missing a dimension')
   }
 
   let matrixText
   try {
     matrixText = await readFile(path.join(root, MATRIX_PATH), 'utf8')
   } catch (error) {
-    log.error(
-      `❌  check-cognitive-workspace-completeness: cannot read ${MATRIX_PATH}: ${error.message}`
-    )
-    return 2
+    return fail(`cannot read ${MATRIX_PATH}: ${error.message}`)
   }
   const errors = []
   const matrix = parse(matrixText, errors, { allowTrailingComma: true })
@@ -242,20 +387,33 @@ export async function main(root = process.cwd(), log = console, argv = process.a
   }
   const packageScripts =
     JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')).scripts ?? {}
+  const reliability = parse(await readFile(path.join(root, RELIABILITY_PATH), 'utf8'), [], {
+    allowTrailingComma: true
+  })
+  const reliabilityGateIds = new Set((reliability?.gates ?? []).map((gate) => gate?.id))
+  if (reliabilityGateIds.size === 0) {
+    return fail(`read no gate ids from ${RELIABILITY_PATH}`)
+  }
+  const roadmapText = await readOptional(path.join(root, ROADMAP_PATH))
 
   const paths = evidencePaths(matrix, packageScripts)
   const tracked =
     paths.length > 0 ? await gitLines(root, ['ls-files', '-z', '--', ...paths]) : { lines: [] }
   if (tracked.lines === null) {
-    log.error(
-      `❌  check-cognitive-workspace-completeness: could not list tracked files: ${tracked.error}`
-    )
-    return 2
+    return fail(`could not list tracked files: ${tracked.error}`)
+  }
+  const trackedFiles = new Set(tracked.lines)
+  const sources = new Map()
+  for (const file of trackedFiles) {
+    sources.set(file, await readOptional(path.join(root, file)))
   }
 
   const result = verifyMatrix(matrix, {
     packageScripts,
-    trackedFiles: new Set(tracked.lines),
+    trackedFiles,
+    readTracked: (file) => sources.get(file) ?? null,
+    reliabilityGateIds,
+    roadmapPhases: roadmapText === null ? null : parseRoadmapPhases(roadmapText),
     selfCommandFile: SELF_PATH
   })
   const aperture = describeAperture(result.aperture)
