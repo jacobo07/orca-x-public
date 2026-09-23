@@ -138,6 +138,20 @@ async function startOrResumeThread(
 
   if (request.resumeSessionId !== null) {
     try {
+      // NOTE — a resume carries no `cwd`, and that is a MEASURED LIMIT rather than a decision.
+      //
+      // A Codex thread takes its working directory at `thread/start`, so a resumed thread keeps the
+      // one it was born with. That is right while an agent stays in its project, and wrong the
+      // moment its project binding changes: Orca resolves the new directory, the turn request
+      // carries it, and this call silently drops it — so the provider keeps reading the old project
+      // while Orca believes it moved.
+      //
+      // Not fixed here because the fix cannot be chosen without evidence. Whether `thread/resume`
+      // even accepts `cwd` is unrecorded in the spec's measured surface, and this app-server's
+      // schemas are strict, so sending an unknown field would be REJECTED rather than ignored. The
+      // alternative — starting a fresh thread when the location moves — trades the bug for losing
+      // the conversation's provider-side history, which is a product decision, not a repair.
+      // Pinned by `codex-conversation-driver.test.ts` so this cannot drift unnoticed.
       const resumed = threadIdOf(
         await rpc.request('thread/resume', { threadId: request.resumeSessionId, ...agentLayer })
       )

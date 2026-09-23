@@ -81,6 +81,14 @@ node config/scripts/check-agent-turn-location-authority.mjs   # no invented loca
   it has had its own `pr.yml` step since W-C4. Corrected in `70f2a1c86`, not rewritten.
 - **CI is DEFINED, not EXECUTED.** The new gate has a `pr.yml` step; this fork's PR runs are still
   assigned `runner_id=0`. Definition and execution are different claims.
+- **A resumed provider thread keeps its ORIGINAL directory.** Measured: `thread/resume` sends no
+  `cwd` (`codex-conversation-driver.ts`), because a Codex thread takes its directory at
+  `thread/start`. So an agent whose project binding changes keeps reading the old project on its
+  existing thread while Orca has resolved the new one. Orca's own layers are correct — the runner
+  and the turn request both carry the new path — and the last hop drops it. Not fixed blind: the
+  spec's measured surface does not record whether `thread/resume` accepts `cwd`, and these schemas
+  are strict, so an unknown field is rejected rather than ignored. Pinned by the exact `toEqual` in
+  `codex-conversation-driver.test.ts`.
 - **Remote-host projects refuse.** An agent whose project lives only on an ssh/runtime host cannot
   chat. That is honest, not finished — it is the natural W-C6 candidate.
 - The memory index sits at **169 lines / ~22 KB** against a 200-line read limit. Not over, but

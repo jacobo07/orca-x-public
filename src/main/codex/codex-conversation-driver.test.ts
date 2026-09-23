@@ -289,6 +289,12 @@ describe('codex conversation driver — an agent’s instructions', () => {
     })
 
     const resume = captured.calls.find((call) => call.method === 'thread/resume')
+    // Exact, not partial, and that makes it the pin for a known limit as well as the role: a resume
+    // sends NO `cwd`. A Codex thread takes its directory at `thread/start` and keeps it, so an agent
+    // whose project binding changes keeps reading the old project on its existing thread while Orca
+    // has resolved a new one. Adding `cwd` here would fail this assertion first, which is the point
+    // — the change needs evidence that `thread/resume` accepts it (these schemas are strict, so an
+    // unknown field is rejected, not ignored). See the note at the resume call site.
     expect(resume?.params).toEqual({ threadId: 'thread-old', developerInstructions: ROLE })
   })
 
