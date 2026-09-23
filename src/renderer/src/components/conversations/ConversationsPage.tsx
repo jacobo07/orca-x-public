@@ -15,6 +15,7 @@ import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 import { AgentChatHeader } from './AgentChatHeader'
 import { AgentContextRail } from './AgentContextRail'
 import { conversationsInScope, latestConversationForAgent } from './agent-chat-scope'
+import { CognitiveWorkspaceLayout } from './CognitiveWorkspaceLayout'
 import { CognitiveWorkspaceRoster, type WorkspaceRosterTab } from './CognitiveWorkspaceRoster'
 import { ConversationComposer } from './ConversationComposer'
 import { ConversationNotice } from './ConversationNotice'
@@ -58,7 +59,9 @@ export default function ConversationsPage(): React.JSX.Element {
   const [live, setLive] = useState<ConversationLiveState>(EMPTY_CONVERSATION_LIVE_STATE)
   const [draft, setDraft] = useState('')
   const [tab, setTab] = useState<WorkspaceRosterTab>(agentScope === null ? 'threads' : 'agents')
-  const [railOpen, setRailOpen] = useState(true)
+  // null follows the layout's default (inline when wide); a click records a person's choice.
+  const [railPreference, setRailPreference] = useState<boolean | null>(null)
+  const [narrowPane, setNarrowPane] = useState<'roster' | 'chat'>('chat')
   const [groundingRevision, setGroundingRevision] = useState(0)
   const [newAgentOpen, setNewAgentOpen] = useState(false)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
@@ -236,77 +239,95 @@ export default function ConversationsPage(): React.JSX.Element {
   const working = live.turnState === 'working'
 
   return (
-    <div
-      className="flex h-full min-h-0 w-full bg-background"
-      data-testid="conversations-page"
-      data-conversation-scope={agentScope === null ? 'brainstorming' : 'agent'}
-    >
-      <CognitiveWorkspaceRoster
-        tab={tab}
-        onTabChange={setTab}
-        agentsLoad={roster.load}
-        agents={agentRows}
-        recentThreads={recentThreads}
-        allThreads={allThreads}
-        threadsLoading={listLoading}
-        activeAgentId={agentScope}
-        activeThreadId={activeId}
-        draftActive={draftActive}
-        onOpenAgent={openAgentChat}
-        onOpenThread={openThread}
-        onNewThread={startDraft}
-        onNewAgent={() => setNewAgentOpen(true)}
-      />
-
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {roster.scoped !== null ? (
-          <AgentChatHeader
-            lookup={roster.scoped}
-            project={scopedRow?.project ?? null}
+    <CognitiveWorkspaceLayout
+      testAttributes={{
+        'data-testid': 'conversations-page',
+        'data-conversation-scope': agentScope === null ? 'brainstorming' : 'agent'
+      }}
+      railOpen={railPreference}
+      narrowPane={narrowPane}
+      onShowRoster={() => setNarrowPane('roster')}
+      roster={(mode) => (
+        <CognitiveWorkspaceRoster
+          fullWidth={mode === 'narrow'}
+          tab={tab}
+          onTabChange={setTab}
+          agentsLoad={roster.load}
+          agents={agentRows}
+          recentThreads={recentThreads}
+          allThreads={allThreads}
+          threadsLoading={listLoading}
+          activeAgentId={agentScope}
+          activeThreadId={activeId}
+          draftActive={draftActive}
+          onOpenAgent={(agentId) => {
+            setNarrowPane('chat')
+            openAgentChat(agentId)
+          }}
+          onOpenThread={(row) => {
+            setNarrowPane('chat')
+            openThread(row)
+          }}
+          onNewThread={() => {
+            setNarrowPane('chat')
+            startDraft()
+          }}
+          onNewAgent={() => setNewAgentOpen(true)}
+        />
+      )}
+      rail={
+        agentScope === null ? null : (
+          <AgentContextRail
+            row={scopedRow}
             grounding={grounding}
-            onBack={openAgentsPage}
-            railOpen={railOpen}
-            onToggleRail={() => setRailOpen((open) => !open)}
+            turns={record?.turns ?? []}
+            liveTurnState={working ? 'working' : 'idle'}
           />
-        ) : null}
-        <div className="min-h-0 flex-1">
-          <NativeChatMessageList
-            session={session}
-            isWorking={working}
-            expandSignal={false}
-            fontScale={1}
+        )
+      }
+      chat={(mode) => (
+        <>
+          {roster.scoped !== null ? (
+            <AgentChatHeader
+              lookup={roster.scoped}
+              project={scopedRow?.project ?? null}
+              grounding={grounding}
+              onBack={openAgentsPage}
+              compact={mode !== 'wide'}
+              railOpen={railPreference ?? mode === 'wide'}
+              onToggleRail={() => setRailPreference(!(railPreference ?? mode === 'wide'))}
+            />
+          ) : null}
+          <div className="min-h-0 flex-1">
+            <NativeChatMessageList
+              session={session}
+              isWorking={working}
+              expandSignal={false}
+              fontScale={1}
+            />
+          </div>
+          {live.status !== null ? (
+            <p
+              role="status"
+              aria-live="polite"
+              data-testid="conversation-provider-status"
+              className="px-4 pb-1 text-xs text-muted-foreground"
+            >
+              {live.status}
+            </p>
+          ) : null}
+          {live.notice !== null ? <ConversationNotice notice={live.notice} /> : null}
+          <ConversationComposer
+            composerRef={composerRef}
+            value={draft}
+            onChange={setDraft}
+            onSend={() => void send()}
+            working={working}
+            recipient={roster.scoped?.status === 'found' ? roster.scoped.agent.name : null}
           />
-        </div>
-        {live.status !== null ? (
-          <p
-            role="status"
-            aria-live="polite"
-            data-testid="conversation-provider-status"
-            className="px-4 pb-1 text-xs text-muted-foreground"
-          >
-            {live.status}
-          </p>
-        ) : null}
-        {live.notice !== null ? <ConversationNotice notice={live.notice} /> : null}
-        <ConversationComposer
-          composerRef={composerRef}
-          value={draft}
-          onChange={setDraft}
-          onSend={() => void send()}
-          working={working}
-          recipient={roster.scoped?.status === 'found' ? roster.scoped.agent.name : null}
-        />
-      </main>
-
-      {agentScope !== null && railOpen ? (
-        <AgentContextRail
-          row={scopedRow}
-          grounding={grounding}
-          turns={record?.turns ?? []}
-          liveTurnState={working ? 'working' : 'idle'}
-        />
-      ) : null}
-
+        </>
+      )}
+    >
       <NewAgentDialog
         open={newAgentOpen}
         projects={projects}
@@ -317,6 +338,6 @@ export default function ConversationsPage(): React.JSX.Element {
           openAgentChat(agent.id)
         }}
       />
-    </div>
+    </CognitiveWorkspaceLayout>
   )
 }

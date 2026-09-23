@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import type {
   WorkspaceAgentRow,
   WorkspaceThreadRow
@@ -29,6 +30,7 @@ export type WorkspaceAgentsLoad =
  * agent is open, so the list beside a chat is always that chat's own history.
  */
 export function CognitiveWorkspaceRoster({
+  fullWidth,
   tab,
   onTabChange,
   agentsLoad,
@@ -44,6 +46,7 @@ export function CognitiveWorkspaceRoster({
   onNewThread,
   onNewAgent
 }: {
+  fullWidth: boolean
   tab: WorkspaceRosterTab
   onTabChange: (tab: WorkspaceRosterTab) => void
   agentsLoad: WorkspaceAgentsLoad
@@ -61,7 +64,10 @@ export function CognitiveWorkspaceRoster({
 }): React.JSX.Element {
   return (
     <aside
-      className="flex h-full w-72 shrink-0 flex-col border-r border-border bg-background"
+      className={cn(
+        'flex h-full shrink-0 flex-col bg-background',
+        fullWidth ? 'w-full' : 'w-64 border-r border-border'
+      )}
       aria-label={translate('workspace.roster.label', 'Cognitive Workspace')}
       data-testid="workspace-roster"
     >

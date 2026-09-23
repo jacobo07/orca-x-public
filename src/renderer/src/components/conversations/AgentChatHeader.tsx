@@ -28,6 +28,7 @@ export function AgentChatHeader({
   project,
   grounding,
   onBack,
+  compact,
   railOpen,
   onToggleRail
 }: {
@@ -35,6 +36,8 @@ export function AgentChatHeader({
   project: WorkspaceProjectRef | null
   grounding: AgentGroundingLookup | null
   onBack: () => void
+  /** The location chip keeps its icon and dot; its words move to the tooltip and screen readers. */
+  compact: boolean
   railOpen: boolean
   onToggleRail: () => void
 }): React.JSX.Element {
@@ -62,7 +65,8 @@ export function AgentChatHeader({
       {lookup.status === 'found' ? (
         <AgentMonogram name={lookup.agent.name} className="size-9" />
       ) : null}
-      <div className="min-w-0 flex-1">
+      {/* min-w-24: the chips beside it shrink first, so the name is never the column that gives way. */}
+      <div className="min-w-24 flex-1">
         <h1 className="truncate text-base font-semibold" data-testid="agent-chat-name">
           {lookup.status === 'found'
             ? lookup.agent.name
@@ -79,36 +83,38 @@ export function AgentChatHeader({
           </p>
         ) : null}
       </div>
-      {project !== null ? (
-        <span
-          className="hidden max-w-48 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs md:flex"
-          data-testid="agent-chat-project-chip"
-          data-project-kind={project.kind}
-        >
-          <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="truncate">{projectRefLabel(project)}</span>
-        </span>
-      ) : null}
-      {location !== null ? (
-        <span
-          className="hidden max-w-56 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs md:flex"
-          title={location.detail ?? undefined}
-          data-testid="agent-chat-location-chip"
-          data-tone={location.tone}
-          data-outcome={
-            grounding?.status === 'loaded' && grounding.grounding.outcome === 'found'
-              ? grounding.grounding.location.outcome
-              : undefined
-          }
-        >
-          <Server className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="flex min-w-0 shrink items-center gap-2">
+        {project !== null ? (
           <span
-            className={cn('size-1.5 shrink-0 rounded-full', TONE_DOT[location.tone])}
-            aria-hidden
-          />
-          <span className="truncate">{location.label}</span>
-        </span>
-      ) : null}
+            className="flex min-w-0 max-w-48 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
+            data-testid="agent-chat-project-chip"
+            data-project-kind={project.kind}
+          >
+            <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="truncate">{projectRefLabel(project)}</span>
+          </span>
+        ) : null}
+        {location !== null ? (
+          <span
+            className="flex min-w-0 max-w-56 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs"
+            title={[location.label, location.detail].filter(Boolean).join(' — ')}
+            data-testid="agent-chat-location-chip"
+            data-tone={location.tone}
+            data-outcome={
+              grounding?.status === 'loaded' && grounding.grounding.outcome === 'found'
+                ? grounding.grounding.location.outcome
+                : undefined
+            }
+          >
+            <Server className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span
+              className={cn('size-1.5 shrink-0 rounded-full', TONE_DOT[location.tone])}
+              aria-hidden
+            />
+            <span className={compact ? 'sr-only' : 'truncate'}>{location.label}</span>
+          </span>
+        ) : null}
+      </div>
       <Button
         type="button"
         variant="ghost"

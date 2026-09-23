@@ -218,13 +218,15 @@ export function AgentContextRail({
 
       <ContextCard
         icon={<Activity className={iconClass} aria-hidden />}
-        title={translate('workspace.context.activity', 'Turns in this thread')}
+        // Provider turns, not messages: a send refused before the provider (sign-in, a missing
+        // project) keeps the user's message but starts no turn, so "nothing asked" would be false.
+        title={translate('workspace.context.activity', 'Provider turns in this thread')}
         testId="agent-context-activity"
       >
         {recentTurns.length === 0 ? (
           <ContextRow term="—">
             <span className="text-muted-foreground">
-              {translate('workspace.context.noTurns', 'Nothing asked yet')}
+              {translate('workspace.context.noTurns', 'None has reached the provider yet')}
             </span>
           </ContextRow>
         ) : (

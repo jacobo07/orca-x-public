@@ -69,8 +69,16 @@ test('the workspace grounds each agent in its own project and in the turn runner
     })
     expect(activeProject.length).toBeGreaterThan(0)
 
+    // Wide enough for all three columns beside Orca's own side panel.
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setSize(1700, 960)
+    })
     await page.locator('[data-workspace-activity="conversations"]').first().click()
     await expect(page.getByTestId('workspace-roster')).toBeVisible()
+    await expect(page.getByTestId('conversations-page')).toHaveAttribute(
+      'data-workspace-layout',
+      'wide'
+    )
 
     const ledger = await createAgent(page, 'Ledger', 'first')
     await expect(page.getByTestId('agent-chat-project-chip')).toHaveAttribute(
@@ -135,6 +143,9 @@ test('the workspace grounds each agent in its own project and in the turn runner
           BrowserWindow.getAllWindows()[0]?.setSize(size, 960)
         }, width)
         await page.waitForTimeout(400)
+        // Regression: at a 1024px window the chat column once reached zero width.
+        const composerWidth = (await page.getByTestId('conversation-composer').boundingBox())?.width
+        expect(composerWidth ?? 0).toBeGreaterThan(320)
         await page.screenshot({ path: testInfo.outputPath(`workspace-${theme}-${width}.png`) })
       }
     }
