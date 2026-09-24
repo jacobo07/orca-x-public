@@ -12,7 +12,9 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const AGENTS = 200
 const THREADS = 1000
-const BUDGET = { rosterMs: 5000, domNodes: 25_000, heapMb: 400 }
+// scaleDeltaMs: what 199 more agents and 1,000 threads may add to the one-agent open. The fixed open cost
+// is measured and printed but not budgeted here: it does not move with scale.
+const BUDGET = { scaleDeltaMs: 1000, domNodes: 25_000, heapMb: 400 }
 
 async function createAgents(page: Page, from: number, to: number): Promise<string[]> {
   return page.evaluate(
@@ -35,15 +37,18 @@ async function createAgents(page: Page, from: number, to: number): Promise<strin
   )
 }
 
-/** Opens Workspace → Agents from the Terminals view; returns ms until the first agent row is visible. */
-async function openRoster(page: Page): Promise<number> {
+/** Opens Workspace → Agents from the Terminals view; ms to the entry's tab bar, then to the first row. */
+async function openRoster(page: Page): Promise<{ total: number; entry: number; rows: number }> {
   await page.locator('[data-workspace-activity="workspace"]').first().click()
   await expect(page.getByTestId('workspace-agent-row')).toHaveCount(0)
   const started = Date.now()
   await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+  await expect(page.getByTestId('workspace-tab-agents')).toBeVisible({ timeout: 60_000 })
+  const entered = Date.now()
   await page.getByTestId('workspace-tab-agents').click()
   await expect(page.getByTestId('workspace-agent-row').first()).toBeVisible({ timeout: 60_000 })
-  return Date.now() - started
+  const done = Date.now()
+  return { total: done - started, entry: entered - started, rows: done - entered }
 }
 
 test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
@@ -58,8 +63,8 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
   )
 
   const ids = await createAgents(orcaPage, 0, 1)
-  const coldOneMs = await openRoster(orcaPage)
-  const warmOneMs = await openRoster(orcaPage)
+  const coldOne = await openRoster(orcaPage)
+  const warmOne = await openRoster(orcaPage)
 
   ids.push(...(await createAgents(orcaPage, 1, AGENTS)))
   const conversations = await orcaPage.evaluate(
@@ -94,7 +99,7 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
     }
   })
 
-  const rosterMs = await openRoster(orcaPage)
+  const roster = await openRoster(orcaPage)
   const agentRows = await orcaPage.getByTestId('workspace-agent-row').count()
   await orcaPage.getByTestId('workspace-tab-threads').click()
   await expect(orcaPage.getByTestId('conversations-list-row').first()).toBeVisible({
@@ -107,11 +112,12 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
     return memory ? Math.round(memory.usedJSHeapSize / 1_048_576) : -1
   })
 
+  const scaleDeltaMs = roster.total - warmOne.total
   console.log(
-    `[workspace-scale] agents=${AGENTS} threads=${THREADS} coldOneMs=${coldOneMs} warmOneMs=${warmOneMs} rosterMs=${rosterMs} agentRows=${agentRows} threadRows=${threadRows} listMs=${reads.listMs} agentsMs=${reads.agentsMs} domNodes=${domNodes} heapMb=${heapMb}`
+    `[workspace-scale] agents=${AGENTS} threads=${THREADS} coldOne=${coldOne.entry}+${coldOne.rows} warmOne=${warmOne.entry}+${warmOne.rows} roster=${roster.entry}+${roster.rows} scaleDeltaMs=${scaleDeltaMs} agentRows=${agentRows} threadRows=${threadRows} listMs=${reads.listMs} agentsMs=${reads.agentsMs} domNodes=${domNodes} heapMb=${heapMb}`
   )
   expect(reads).toMatchObject({ threads: THREADS, agents: AGENTS })
-  expect(rosterMs).toBeLessThan(BUDGET.rosterMs)
+  expect(scaleDeltaMs).toBeLessThan(BUDGET.scaleDeltaMs)
   expect(domNodes).toBeLessThan(BUDGET.domNodes)
   expect(heapMb).toBeGreaterThan(0)
   expect(heapMb).toBeLessThan(BUDGET.heapMb)
