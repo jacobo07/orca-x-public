@@ -172,6 +172,23 @@ describe('a provider binding knows which host its thread lives on', () => {
     expect(withCwd('/repos/a')).toBe('loaded')
   })
 
+  it('finds a thread by the host address when another device named the host differently', () => {
+    const conversation = record({
+      provenance: [
+        entry({
+          providerSessionId: 'remote-thread',
+          executionHostId: 'ssh:target-on-a',
+          hostAddress: 'dev@gex44:22'
+        })
+      ] as never
+    })
+    expect(
+      latestProviderProvenance(conversation, 'ssh:target-on-b', 'dev@gex44:22')?.providerSessionId
+    ).toBe('remote-thread')
+    expect(latestProviderProvenance(conversation, 'ssh:target-on-b', 'dev@other:22')).toBeNull()
+    expect(latestProviderProvenance(conversation, 'ssh:target-on-b')).toBeNull()
+  })
+
   it('records the same thread relocated to another directory as new lineage', () => {
     const conversation = record({ provenance: [entry({ cwd: '/repos/a' })] as never })
     const moved = appendProviderProvenance(conversation, { ...entry(), cwd: '/repos/b' } as never)

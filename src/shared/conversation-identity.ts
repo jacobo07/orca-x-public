@@ -79,14 +79,17 @@ export function provenanceHostId(
  *  Null is "no continuation evidence", NOT "the conversation is empty" and NOT "it failed". */
 export function latestProviderProvenance(
   record: ConversationRecord,
-  hostId?: string
+  hostId?: string,
+  /** The host's device-independent address: finds a thread recorded under another device's id. */
+  hostAddress?: string | null
 ): ConversationProviderProvenance | null {
   for (let index = record.provenance.length - 1; index >= 0; index -= 1) {
     const entry = record.provenance[index]
-    if (
-      entry.providerSessionId !== null &&
-      (hostId === undefined || provenanceHostId(entry) === hostId)
-    ) {
+    const onThisHost =
+      hostId === undefined ||
+      provenanceHostId(entry) === hostId ||
+      (Boolean(hostAddress) && entry.hostAddress === hostAddress)
+    if (entry.providerSessionId !== null && onThisHost) {
       return entry
     }
   }

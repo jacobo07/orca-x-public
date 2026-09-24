@@ -32,7 +32,7 @@ import {
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaConversationsDirectory } from '../orca-profiles/profile-storage-paths'
 
-import { getActiveMultiplexer } from './ssh'
+import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
 
 /**
  * Why the renderer gets product operations and not a file API: a conversation is a product entity,
@@ -198,7 +198,12 @@ export function registerConversationHandlers(
       checkAuth: checkCodexAuth,
       resolveProjectLocation: (agent) => resolveAgentProjectLocation(agent, projects),
       // A remote project's turn runs on its ssh host through that host's live relay connection.
-      remoteDriverFor: (target) => resolveSshCodexDriver(target, getActiveMultiplexer),
+      remoteDriverFor: (target) =>
+        resolveSshCodexDriver(target, getActiveMultiplexer, (targetId) => {
+          // The same machine on every device; the target id is minted per device.
+          const ssh = getSshConnectionStore()?.getTarget(targetId)
+          return ssh?.host ? `${ssh.username}@${ssh.host}:${ssh.port}` : null
+        }),
       // The user's home, never `process.cwd()`. Both are "not a project"; only one of them is a
       // place the person chose to have, and the other is wherever Orca was launched from.
       fallbackCwd: () => homedir(),

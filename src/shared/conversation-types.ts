@@ -70,6 +70,10 @@ export type ConversationProviderProvenance = {
   /** The directory the thread was bound to on that host. Absent (older records) is UNKNOWN, so the
    *  next resume asks the provider to confirm the location rather than assuming it did not move. */
   cwd?: string
+  /** The same host named the same way on EVERY device (`user@host:port`). `executionHostId` carries a
+   *  target id each device mints for itself, so a record that roams to another device finds its
+   *  thread by this. Absent for local threads and older records. */
+  hostAddress?: string
 }
 
 export type ConversationTurn = {

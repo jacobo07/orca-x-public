@@ -9,7 +9,7 @@
 // Wrong context is not absent context. It looks like an answer, which is why the fallback had to
 // become unreachable rather than merely improved.
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -541,6 +541,75 @@ describe('a remote turn while its world changes (Phase 6)', () => {
       resumeCwd: '/home/dev/ledger',
       cwd: '/home/dev/ledger'
     })
+  })
+})
+
+describe('one identity across devices (Phase 9, roaming)', () => {
+  // The record is COPIED to the second device: Orca has no sync plane yet, and this proves the
+  // identity model is device-independent, not a transport. A target id is minted per device.
+  it('resumes the same machine’s thread from another device, and never another machine’s', async () => {
+    remoteSetup('github:acme/ledger', 'ssh:target-on-a', '/home/dev/ledger')
+    const ada = agentOwnedBy('github:acme/ledger')
+    const id = await chatWith(ada)
+    const seen: ProviderTurnRequest[] = []
+    const onHost = (hostAddress: string) => ({
+      ...turnDeps(),
+      remoteDriverFor: async () => ({
+        driver: {
+          runTurn: async (request: ProviderTurnRequest) => {
+            seen.push(request)
+            request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+            return { providerSessionId: request.resumeSessionId ?? 'thread-on-gex44' }
+          }
+        },
+        checkAuth: async () => ({ ready: true as const }),
+        hostAddress
+      })
+    })
+    await runConversationTurn(
+      { ...onHost('dev@gex44:22'), service },
+      {
+        conversationId: id,
+        text: 'on device A',
+        cwd: null
+      }
+    )
+
+    // Device B: its own store, its own target id for the SAME machine.
+    const rootB = mkdtempSync(join(tmpdir(), 'orca-device-b-'))
+    try {
+      cpSync(join(root, 'conversations'), join(rootB, 'conversations'), { recursive: true })
+      const serviceB = new ConversationService(() => join(rootB, 'conversations'), {
+        readAgents: () => roster
+      })
+      setups = []
+      remoteSetup('github:acme/ledger', 'ssh:target-on-b', '/home/dev/ledger')
+      await runConversationTurn(
+        { ...onHost('dev@gex44:22'), service: serviceB },
+        {
+          conversationId: id,
+          text: 'on device B',
+          cwd: null
+        }
+      )
+      await runConversationTurn(
+        { ...onHost('dev@another-box:22'), service: serviceB },
+        {
+          conversationId: id,
+          text: 'a different machine',
+          cwd: null
+        }
+      )
+
+      // Same machine from another device: the same thread continues.
+      expect(seen[1].resumeSessionId).toBe('thread-on-gex44')
+      // A different machine is never handed that history.
+      expect(seen[2].resumeSessionId).toBeNull()
+      const onB = await serviceB.read(id)
+      expect(onB.outcome === 'loaded' && onB.record.agentId).toBe(ada.id)
+    } finally {
+      rmSync(rootB, { recursive: true, force: true })
+    }
   })
 })
 

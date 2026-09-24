@@ -53,7 +53,7 @@ export function consultsRemoteDriver(runnerSource) {
 // today's turn path: the next cognitive feature to resume a thread is the one this is for.
 const RESUME_LOOKUP = 'latestProviderProvenance'
 const HOST_BLIND_RESUME = /\blatestProviderProvenance\s*\(\s*[^,()]*\)/
-const HOST_SCOPED_RESUME = /\blatestProviderProvenance\s*\(\s*[^,()]+,\s*[^,()]+\)/
+const HOST_SCOPED_RESUME = /\blatestProviderProvenance\s*\(\s*[^,()]+,\s*[^()]+\)/
 
 /** Pure: production files that look a thread up without naming its host. */
 export function findHostBlindResumeSites(files) {

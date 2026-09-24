@@ -38,7 +38,10 @@ function isMethodNotFound(error: unknown): boolean {
 
 export async function resolveSshCodexDriver(
   target: RemoteExecutionTarget,
-  getMux: (targetId: string) => ConnectedMux | undefined
+  getMux: (targetId: string) => ConnectedMux | undefined,
+  /** The target's device-independent address (`user@host:port`), so a thread recorded under
+   *  another device's target id is still found for the same machine. */
+  addressOf: (targetId: string) => string | null = () => null
 ): Promise<RemoteDriverResolution> {
   const host = parseExecutionHostId(target.hostId)
   const mux = host?.kind === 'ssh' ? getMux(host.targetId) : undefined
@@ -94,7 +97,8 @@ export async function resolveSshCodexDriver(
   })
   return {
     driver,
-    checkAuth: () => checkRemoteCodexAuth(mux, target.path, hostName)
+    checkAuth: () => checkRemoteCodexAuth(mux, target.path, hostName),
+    hostAddress: host?.kind === 'ssh' ? addressOf(host.targetId) : null
   }
 }
 

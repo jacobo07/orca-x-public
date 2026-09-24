@@ -83,7 +83,7 @@ export type AuthCheck = () => Promise<{ ready: true } | { ready: false; detail: 
 
 /** A remote host either offers a driver and its own auth check, or says why it cannot. */
 export type RemoteDriverResolution =
-  | { driver: ConversationTurnDriver; checkAuth: AuthCheck }
+  | { driver: ConversationTurnDriver; checkAuth: AuthCheck; hostAddress?: string | null }
   | { refusal: RemoteDriverRefusal }
 
 export type { ConversationTurnOutcome, RemoteDriverRefusal }
@@ -174,6 +174,7 @@ async function runTracedTurn(
   // refusal before admission — never the local driver, and never a local directory of any name.
   let driver = deps.driver
   let checkAuth = deps.checkAuth
+  let hostAddress: string | null = null
   if (location.outcome === 'resolved-remote') {
     const target = {
       projectId: location.projectId,
@@ -225,6 +226,7 @@ async function runTracedTurn(
     }
     driver = resolution.driver
     checkAuth = resolution.checkAuth
+    hostAddress = resolution.hostAddress ?? null
   }
 
   const developerInstructions =
@@ -281,7 +283,7 @@ async function runTracedTurn(
     }
 
     // Only a thread recorded on THIS host can be resumed: its history exists nowhere else.
-    const resumeFrom = latestProviderProvenance(existing.record, executionHostId)
+    const resumeFrom = latestProviderProvenance(existing.record, executionHostId, hostAddress)
     trace.providerSessionId = resumeFrom?.providerSessionId ?? null
     let sawTerminal = false
     let endedWithoutAnswer: string | null = null
@@ -338,6 +340,7 @@ async function runTracedTurn(
           observedAt: now(),
           // Omitted for local, so a local turn writes exactly the record shape it always has.
           ...(executionHostId === LOCAL_EXECUTION_HOST_ID ? {} : { executionHostId }),
+          ...(hostAddress ? { hostAddress } : {}),
           // The driver runs a turn only in a thread confirmed to be in `cwd`, so this is observed.
           cwd
         })
