@@ -19,6 +19,7 @@ const mockAppState = vi.hoisted(() => ({
   setRightSidebarTab: vi.fn(),
   showRightSidebarFiles: vi.fn(),
   activityBarPosition: 'top' as 'top' | 'side',
+  sidePanelDock: undefined as 'left' | 'right' | undefined,
   activeWorktreeId: 'worktree-1',
   activeRepo: { id: 'repo-1', kind: 'git', connectionId: null } as {
     id: string
@@ -78,6 +79,7 @@ vi.mock('@/store', async () => {
       activeWorktreeId: mockAppState.activeWorktreeId,
       getKnownWorktreeById: getMockKnownWorktree,
       activityBarPosition: mockAppState.activityBarPosition,
+      sidePanelDock: mockAppState.sidePanelDock,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
       keybindings: {}
@@ -132,10 +134,22 @@ vi.mock('@/components/ui/context-menu', () => ({
     return <span data-context-menu-trigger>{children}</span>
   },
   ContextMenuContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  // The leading strip carries the application rail, whose entries have a hide menu.
+  ContextMenuItem: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuSeparator: () => null,
   ContextMenuLabel: ({ children }: { children: ReactNode }) => <>{children}</>,
   ContextMenuRadioGroup: ({ children }: { children: ReactNode }) => <>{children}</>,
   ContextMenuRadioItem: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
+
+// The leading strip's own siblings, stubbed to a marker: this file tests the strip's layout, and the
+// section and the Projects switch have their own tests. The Workspace entry itself stays real.
+vi.mock('@/components/activity-rail/WorkspaceActivityRailSection', () => ({
+  WorkspaceActivityRailSection: ({ omitAgentWorkspace }: { omitAgentWorkspace?: boolean }) => (
+    <div data-rail-section="" data-omits-workspace={String(Boolean(omitAgentWorkspace))} />
+  )
+}))
+vi.mock('./left-nav-projects-switch', () => ({ LeftNavProjectsSwitch: () => null }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -226,6 +240,7 @@ describe('rendered right sidebar titlebar drag regions', () => {
       notifyAppStore()
     })
     mockAppState.activityBarPosition = 'top'
+    mockAppState.sidePanelDock = undefined
     mockAppState.activeWorktreeId = 'worktree-1'
     mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
     mockAppState.rightSidebarRouteRequestId = 0
@@ -309,15 +324,27 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
+    // Docked right the strip is a panel gutter: no application surface, Workspace included.
+    expect(markup).not.toContain('data-workspace-activity=')
+    expect(markup).not.toContain('data-rail-section')
+  })
 
-    // Workspace sits directly below Explorer (Owner, 2026-09-24): after Explorer, before the next
-    // panel tab, exactly once — the section above does not draw a second copy.
+  it('draws Workspace directly below Explorer on the leading strip, exactly once', () => {
+    mockAppState.activityBarPosition = 'side'
+    mockAppState.sidePanelDock = 'left'
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
     const explorerAt = markup.indexOf('aria-label="Explorer')
     const workspaceAt = markup.indexOf('data-workspace-activity="agent-workspace"')
     const sessionsAt = markup.indexOf('aria-label="Sessions')
+
+    // Station control: the leading strip rendered its application section at all.
+    expect(markup).toContain('data-rail-section=""')
     expect(explorerAt).toBeGreaterThan(-1)
     expect(workspaceAt).toBeGreaterThan(explorerAt)
     expect(sessionsAt).toBeGreaterThan(workspaceAt)
+    // The section above the panel tabs is told not to draw a second copy.
+    expect(markup).toContain('data-omits-workspace="true"')
     expect(markup.split('data-workspace-activity="agent-workspace"')).toHaveLength(2)
     expectNoDrag(
       markup.match(/<button[^>]+data-workspace-activity="agent-workspace"[^>]*>/)?.[0] ?? ''
