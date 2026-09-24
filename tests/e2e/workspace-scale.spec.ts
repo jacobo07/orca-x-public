@@ -45,7 +45,13 @@ async function openRoster(
   mode: 'pointer' | 'dom' = 'pointer'
 ): Promise<{ total: number; entry: number; rows: number }> {
   const press = (locator: ReturnType<Page['locator']>): Promise<void> =>
-    mode === 'dom' ? locator.evaluate((el) => (el as HTMLElement).click()) : locator.click()
+    mode === 'dom'
+      ? // Radix tab triggers activate on mousedown, not click.
+        locator.evaluate((el) => {
+          el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
+          ;(el as HTMLElement).click()
+        })
+      : locator.click()
   await page.locator('[data-workspace-activity="workspace"]').first().click()
   await expect(page.getByTestId('workspace-agent-row')).toHaveCount(0)
   const started = Date.now()
