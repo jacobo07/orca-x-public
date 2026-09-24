@@ -15,6 +15,7 @@ import type {
   RemoteExecutionTarget
 } from '../conversation/conversation-turn-runner'
 import { ProviderUnavailableError } from '../conversation/provider-unavailable'
+import { TurnInterruptedError } from '../conversation/turn-interruption'
 
 import {
   isCodexAppServerUnsupportedError,
@@ -77,6 +78,12 @@ export async function resolveSshCodexDriver(
         }) as never,
         handlers
       ).catch((error: unknown) => {
+        if ((error as { code?: unknown } | null)?.code === 'REMOTE_HOST_DISCONNECTED') {
+          throw new TurnInterruptedError(
+            'host-lost',
+            `the connection to ${hostName} closed mid-turn`
+          )
+        }
         throw isCodexAppServerUnsupportedError(error)
           ? new ProviderUnavailableError(
               'protocol-unsupported',

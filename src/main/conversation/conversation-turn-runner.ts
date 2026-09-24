@@ -30,6 +30,7 @@ import {
   type ConversationTurnTraceDraft
 } from './conversation-turn-trace'
 import { ProviderUnavailableError } from './provider-unavailable'
+import { TurnInterruptedError } from './turn-interruption'
 
 export type ConversationTurnRequest = {
   conversationId: ConversationId
@@ -366,7 +367,9 @@ async function runTracedTurn(
     if (error instanceof ProviderUnavailableError) {
       return { outcome: 'provider-unavailable', reason: error.reason, detail: error.message }
     }
-    return { outcome: 'failed', turnId, reason }
+    return error instanceof TurnInterruptedError
+      ? { outcome: 'failed', turnId, reason, cause: error.cause }
+      : { outcome: 'failed', turnId, reason }
   } finally {
     admission.release()
   }

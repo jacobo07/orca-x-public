@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { ProviderUnavailableError } from '../conversation/provider-unavailable'
+import { TurnInterruptedError } from '../conversation/turn-interruption'
 
 import { runCodexAppServerSession } from './codex-app-server-session'
 import { createCodexConversationDriver } from './codex-conversation-driver'
@@ -167,6 +168,42 @@ describe('a remote turn through the real relay handler and a real child', () => 
       )
     expect(outcome).toBeInstanceOf(ProviderUnavailableError)
     expect(outcome).toMatchObject({ reason: 'protocol-unsupported' })
+  }, 60_000)
+
+  it('ends a turn whose host goes away mid-turn at once, as host-lost, not at the deadline', async () => {
+    // Found while writing Phase 7: mid-turn nothing is pending, so a dead child failed no request and
+    // the session waited out its deadline, then reported the lost host as a timeout.
+    writeFileSync(join(project, 'hang.flag'), '1')
+    const resolution = await resolveSshCodexDriver(
+      { projectId: 'github:acme/ledger', hostId: 'ssh:box', setupId: 'setup-1', path: project },
+      () => harness.mux
+    )
+    if (!('driver' in resolution)) {
+      throw new Error(`expected a driver, got ${resolution.refusal}`)
+    }
+    const started = Date.now()
+    const outcome = resolution.driver
+      .runTurn({
+        resumeSessionId: null,
+        cwd: project,
+        text: 'hang',
+        developerInstructions: null,
+        turnId: 'turn-local-4',
+        onEvent: (event) => {
+          if (event.kind === 'turn-started') {
+            harness.mux.dispose()
+          }
+        }
+      })
+      .then(
+        () => 'returned',
+        (error: unknown) => error
+      )
+
+    await expect(outcome).resolves.toBeInstanceOf(TurnInterruptedError)
+    await expect(outcome).resolves.toMatchObject({ cause: 'host-lost' })
+    // The driver's own deadline is 300 s; this must not be waiting it out.
+    expect(Date.now() - started).toBeLessThan(15_000)
   }, 60_000)
 
   it('kills the remote child when the session deadline lapses mid-turn', async () => {

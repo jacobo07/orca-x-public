@@ -6,8 +6,13 @@ import { describe, expect, it } from 'vitest'
 
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 
+import { TurnInterruptedError } from '../conversation/turn-interruption'
+
 import { createCodexConversationDriver } from './codex-conversation-driver'
-import type { runCodexAppServerSession } from './codex-app-server-session'
+import {
+  CodexAppServerTimeoutError,
+  type runCodexAppServerSession
+} from './codex-app-server-session'
 
 type Call = { method: string; params: Record<string, unknown> }
 type ResumeAnswer = (params: Record<string, unknown>) => unknown
@@ -146,6 +151,32 @@ describe('codex resume — the thread runs where the provider says it is', () =>
     const { calls } = await run(windows, { resumeCwd: 'C:\\Repos\\A\\', cwd: 'c:/repos/a' })
     expect(calls[0].params).toEqual({ threadId: 'thread-old' })
     expect(methods(calls)).toEqual(['thread/resume', 'turn/start'])
+  })
+})
+
+describe('codex turn — a lapsed deadline is its own state', () => {
+  it('names a session timeout as a timed-out turn, not a provider failure', async () => {
+    const runSession = (async () => {
+      throw new CodexAppServerTimeoutError('codex app-server session exceeded 300000ms (codex)')
+    }) as unknown as typeof runCodexAppServerSession
+    const outcome = await createCodexConversationDriver({ runSession, timeoutMs: 300_000 })
+      .runTurn({
+        resumeSessionId: null,
+        cwd: '/repos/a',
+        text: 'hi',
+        developerInstructions: null,
+        turnId: 'turn-1',
+        onEvent: () => {}
+      })
+      .then(
+        () => 'returned',
+        (error: unknown) => error
+      )
+    expect(outcome).toBeInstanceOf(TurnInterruptedError)
+    expect(outcome).toMatchObject({
+      cause: 'timed-out',
+      message: 'the provider did not finish the turn within 300 s'
+    })
   })
 })
 

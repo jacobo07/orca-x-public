@@ -36,6 +36,8 @@ export type ConversationNoticeKind =
   | 'project-location-changed'
   | 'provider-not-installed'
   | 'provider-protocol-unsupported'
+  | 'failed-timed-out'
+  | 'failed-host-lost'
 
 export type ConversationNotice = {
   kind: ConversationNoticeKind
@@ -140,7 +142,16 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
     case 'not-durable':
       return { kind: 'not-durable', detail: outcome.reason, userMessageKept: true }
     case 'failed':
-      return { kind: 'failed', detail: outcome.reason, userMessageKept: true }
+      return {
+        kind:
+          outcome.cause === 'timed-out'
+            ? 'failed-timed-out'
+            : outcome.cause === 'host-lost'
+              ? 'failed-host-lost'
+              : 'failed',
+        detail: outcome.reason,
+        userMessageKept: true
+      }
     case 'conversation-absent':
       return { kind: 'absent', detail: null, userMessageKept: false }
     case 'agent-unavailable':

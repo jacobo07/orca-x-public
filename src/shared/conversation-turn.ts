@@ -49,7 +49,8 @@ export type ConversationTurnOutcome =
       detail: string
     }
   | { outcome: 'not-durable'; reason: string }
-  | { outcome: 'failed'; turnId: string; reason: string }
+  /** `cause` names a turn cut off from outside the provider: its deadline, or its host going away. */
+  | { outcome: 'failed'; turnId: string; reason: string; cause?: 'timed-out' | 'host-lost' }
 
 /** True when the user's message is in the record even though no answer is. The surface should keep
  *  showing what they typed and explain why it was not answered, rather than clearing the composer

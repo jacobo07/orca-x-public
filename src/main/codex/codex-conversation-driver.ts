@@ -14,7 +14,13 @@ import type {
   ProviderTurnResult
 } from '../conversation/conversation-turn-runner'
 
-import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
+import { TurnInterruptedError } from '../conversation/turn-interruption'
+
+import {
+  CodexAppServerTimeoutError,
+  runCodexAppServerSession,
+  type CodexAppServerInvocation
+} from './codex-app-server-session'
 import { createCodexServerRequestBridge } from './codex-server-request-bridge'
 import { codexThreadRelocation } from './codex-thread-relocation-capability'
 import { mapCodexNotification } from './codex-turn-event-mapping'
@@ -124,7 +130,15 @@ export function createCodexConversationDriver(
           },
           onServerRequest: bridge.handle
         }
-      )
+      ).catch((error: unknown) => {
+        // A lapsed deadline is its own state, not a provider failure: named for the runner.
+        throw error instanceof CodexAppServerTimeoutError
+          ? new TurnInterruptedError(
+              'timed-out',
+              `the provider did not finish the turn within ${Math.round(invocation.timeoutMs / 1000)} s`
+            )
+          : error
+      })
 
       if (!settled) {
         // The session ended without the provider settling the turn — a killed child or a closed

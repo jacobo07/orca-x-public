@@ -54,6 +54,16 @@ function messageFor(notice: Notice): string {
       )
     case 'failed':
       return translate('conversations.noticeFailed', 'The turn failed. Your message was kept.')
+    case 'failed-timed-out':
+      return translate(
+        'conversations.noticeFailedTimedOut',
+        'The agent took too long and the turn was stopped. Your message was kept; send it again.'
+      )
+    case 'failed-host-lost':
+      return translate(
+        'conversations.noticeFailedHostLost',
+        "The connection to this agent's remote host closed during the turn, so it did not finish. Your message was kept; reconnect and send again."
+      )
     case 'interrupted':
       return translate(
         'conversations.noticeInterrupted',

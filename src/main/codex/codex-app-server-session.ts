@@ -304,6 +304,14 @@ export async function runCodexAppServerSession<T>(
     )
   }
 
+  // Why: a child that dies while the body awaits a NOTIFICATION (a running turn) has no pending
+  // request to fail. Without this the session waited out its whole deadline, then reported a lost
+  // host or a crashed provider as a timeout. It rejects with the child's own error, code intact.
+  const childGone = new Promise<never>((_, reject) => {
+    child.on('close', () => reject(spawnError ?? buildEarlyExitError()))
+  })
+  childGone.catch(() => {})
+
   try {
     const session = async (): Promise<T> => {
       const initializeResult = await requestRpc('initialize', {
@@ -314,7 +322,7 @@ export async function runCodexAppServerSession<T>(
     }
     // Why: the timeout owns the whole callback, including time between RPCs;
     // killing the child alone cannot settle a callback awaiting unrelated work.
-    return await Promise.race([session(), deadlinePromise])
+    return await Promise.race([session(), deadlinePromise, childGone])
   } catch (error) {
     if (
       error instanceof Error &&

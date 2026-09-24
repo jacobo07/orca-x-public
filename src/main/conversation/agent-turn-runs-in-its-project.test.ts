@@ -21,6 +21,7 @@ import type { ProjectHostSetup } from '../../shared/project-types'
 import { resolveAgentProjectLocation } from './agent-project-location'
 import { ConversationService } from './conversation-service'
 import { ProviderUnavailableError } from './provider-unavailable'
+import { TurnInterruptedError } from './turn-interruption'
 import {
   runConversationTurn,
   type ConversationTurnDeps,
@@ -470,10 +471,8 @@ describe('a remote turn while its world changes (Phase 6)', () => {
           driver: {
             runTurn: async (request: ProviderTurnRequest) => {
               request.onEvent({ kind: 'turn-started', turnId: request.turnId })
-              // The shape the ssh adapter raises when the connection closes mid-turn.
-              throw Object.assign(new Error('the ssh connection to the host closed'), {
-                code: 'REMOTE_HOST_DISCONNECTED'
-              })
+              // What the ssh driver raises when the connection closes mid-turn.
+              throw new TurnInterruptedError('host-lost', 'the ssh connection to the host closed')
             }
           },
           checkAuth: async () => ({ ready: true as const })
@@ -485,7 +484,8 @@ describe('a remote turn while its world changes (Phase 6)', () => {
 
     expect(outcome).toMatchObject({
       outcome: 'failed',
-      reason: 'the ssh connection to the host closed'
+      reason: 'the ssh connection to the host closed',
+      cause: 'host-lost'
     })
     expect(driverCalls).toHaveLength(0)
     const read = await service.read(id)
