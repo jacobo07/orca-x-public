@@ -60,11 +60,17 @@ export function stripComments(source) {
 /** Files are `{ path, source }`. Tests are exempt: they must be able to NAME the invention in order
  *  to assert it is gone. */
 export function findInventedLocationSites(files) {
-  return files
-    .map((file) => ({ ...file, path: file.path.split(path.sep).join('/') }))
-    .filter((file) => !isTestPath(file.path) && INVENTED_LOCATION.test(stripComments(file.source)))
-    .map((file) => file.path)
-    .sort()
+  return (
+    files
+      // Both separators, not `path.sep`: on Linux (where CI runs) `path.sep` is '/', so a Windows path
+      // would pass through unnormalised and the same file could be reported twice.
+      .map((file) => ({ ...file, path: file.path.replace(/\\/g, '/') }))
+      .filter(
+        (file) => !isTestPath(file.path) && INVENTED_LOCATION.test(stripComments(file.source))
+      )
+      .map((file) => file.path)
+      .sort()
+  )
 }
 
 async function gitLines(root, args) {
