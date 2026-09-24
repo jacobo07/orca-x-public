@@ -457,6 +457,91 @@ describe("a remote project's agent runs on its host or not at all", () => {
   })
 })
 
+describe('a remote turn while its world changes (Phase 6)', () => {
+  it('reports a host lost mid-turn as a failed turn, and never retries it locally', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const id = await chatWith(agentOwnedBy('github:acme/remote'))
+    const outcome = await runConversationTurn(
+      {
+        ...turnDeps(),
+        remoteDriverFor: async () => ({
+          driver: {
+            runTurn: async (request: ProviderTurnRequest) => {
+              request.onEvent({ kind: 'turn-started', turnId: request.turnId })
+              // The shape the ssh adapter raises when the connection closes mid-turn.
+              throw Object.assign(new Error('the ssh connection to the host closed'), {
+                code: 'REMOTE_HOST_DISCONNECTED'
+              })
+            }
+          },
+          checkAuth: async () => ({ ready: true as const })
+        }),
+        service
+      },
+      { conversationId: id, text: 'still there?', cwd: null }
+    )
+
+    expect(outcome).toMatchObject({
+      outcome: 'failed',
+      reason: 'the ssh connection to the host closed'
+    })
+    expect(driverCalls).toHaveLength(0)
+    const read = await service.read(id)
+    const turn = read.outcome === 'loaded' ? read.record.turns.at(-1) : null
+    // Durable too: the turn does not reload as one still working.
+    expect(turn?.state).toBe('failed')
+  })
+
+  it('keeps a turn on its admitted location when its project id succeeds mid-turn, and the next turn follows', async () => {
+    remoteSetup('repo:repo-1', 'ssh:box', '/home/dev/ledger')
+    const ada = agentOwnedBy('repo:repo-1')
+    const id = await chatWith(ada)
+    const seen: ProviderTurnRequest[] = []
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const deps = {
+      ...turnDeps(),
+      remoteDriverFor: async () => ({
+        driver: {
+          runTurn: async (request: ProviderTurnRequest) => {
+            seen.push(request)
+            if (seen.length === 1) {
+              await held
+            }
+            request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+            return { providerSessionId: 'remote-thread' }
+          }
+        },
+        checkAuth: async () => ({ ready: true as const })
+      }),
+      service
+    }
+
+    const first = runConversationTurn(deps, { conversationId: id, text: 'one', cwd: null })
+    while (seen.length === 0) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    // Succession lands while the turn is running: repo: -> github:, same host, same directory.
+    roster = roster.map((agent) =>
+      agent.id === ada.id ? { ...agent, projectId: 'github:acme/ledger' } : agent
+    )
+    setups = setups.map((setup) => ({ ...setup, projectId: 'github:acme/ledger' }))
+    release()
+
+    await expect(first).resolves.toMatchObject({ outcome: 'completed' })
+    expect(seen[0].cwd).toBe('/home/dev/ledger')
+    // The next turn resolves through the promoted id and continues the SAME thread on that host.
+    await expect(
+      runConversationTurn(deps, { conversationId: id, text: 'two', cwd: null })
+    ).resolves.toMatchObject({ outcome: 'completed' })
+    expect(seen[1]).toMatchObject({
+      resumeSessionId: 'remote-thread',
+      resumeCwd: '/home/dev/ledger',
+      cwd: '/home/dev/ledger'
+    })
+  })
+})
+
 describe('brainstorming keeps the caller location', () => {
   it('leaves Brainstorming free to run where the caller says', async () => {
     // The caller's cwd is not deprecated — it is now scoped to the cases where nothing else owns
