@@ -6,6 +6,7 @@ import {
   projectWorkspaceThreads,
   type WorkspaceThreadRow
 } from '../../../../shared/cognitive-workspace-projection'
+import type { ConnectedApplicationView } from '../../../../shared/connected-application'
 import type { ConversationSummary } from '../../../../shared/conversation-summary'
 import type { ConversationRecord } from '../../../../shared/conversation-types'
 import { resolveDefaultProjectId } from '../agents/default-agent-project'
@@ -16,6 +17,8 @@ import { AgentChatHeader } from './AgentChatHeader'
 import { AgentContextRail } from './AgentContextRail'
 import { conversationsInScope, latestConversationForAgent } from './agent-chat-scope'
 import { CognitiveWorkspaceLayout } from './CognitiveWorkspaceLayout'
+import { ConnectedApplicationsCard } from './ConnectedApplicationsCard'
+import { ConnectedApplicationSurface } from './ConnectedApplicationSurface'
 import { CognitiveWorkspaceRoster, type WorkspaceRosterTab } from './CognitiveWorkspaceRoster'
 import { ConversationComposer } from './ConversationComposer'
 import { ConversationNotice } from './ConversationNotice'
@@ -64,6 +67,7 @@ export default function ConversationsPage(): React.JSX.Element {
   const [narrowPane, setNarrowPane] = useState<'roster' | 'chat'>('chat')
   const [groundingRevision, setGroundingRevision] = useState(0)
   const [newAgentOpen, setNewAgentOpen] = useState(false)
+  const [openApp, setOpenApp] = useState<ConnectedApplicationView | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const activeIdRef = useRef<string | null>(null)
   const openLatestPendingRef = useRef(false)
@@ -102,6 +106,7 @@ export default function ConversationsPage(): React.JSX.Element {
     setActiveId(null)
     setLive(EMPTY_CONVERSATION_LIVE_STATE)
     setDraft('')
+    setOpenApp(null)
     setListLoading(true)
     openLatestPendingRef.current = agentScope !== null || pendingThreadRef.current !== null
     void refreshList()
@@ -282,7 +287,14 @@ export default function ConversationsPage(): React.JSX.Element {
             grounding={grounding}
             turns={record?.turns ?? []}
             liveTurnState={working ? 'working' : 'idle'}
-          />
+          >
+            {scopedRow?.project.kind === 'project' ? (
+              <ConnectedApplicationsCard
+                projectId={scopedRow.project.projectId}
+                onOpen={setOpenApp}
+              />
+            ) : null}
+          </AgentContextRail>
         )
       }
       chat={(mode) => (
@@ -298,33 +310,39 @@ export default function ConversationsPage(): React.JSX.Element {
               onToggleRail={() => setRailPreference(!(railPreference ?? mode === 'wide'))}
             />
           ) : null}
-          <div className="min-h-0 flex-1">
-            <NativeChatMessageList
-              session={session}
-              isWorking={working}
-              expandSignal={false}
-              fontScale={1}
+          {openApp !== null ? (
+            <ConnectedApplicationSurface application={openApp} onBack={() => setOpenApp(null)} />
+          ) : null}
+          {/* Hidden, not unmounted, while an app is open: the thread, scroll and draft come back as left. */}
+          <div className={openApp !== null ? 'hidden' : 'contents'}>
+            <div className="min-h-0 flex-1">
+              <NativeChatMessageList
+                session={session}
+                isWorking={working}
+                expandSignal={false}
+                fontScale={1}
+              />
+            </div>
+            {live.status !== null ? (
+              <p
+                role="status"
+                aria-live="polite"
+                data-testid="conversation-provider-status"
+                className="px-4 pb-1 text-xs text-muted-foreground"
+              >
+                {live.status}
+              </p>
+            ) : null}
+            {live.notice !== null ? <ConversationNotice notice={live.notice} /> : null}
+            <ConversationComposer
+              composerRef={composerRef}
+              value={draft}
+              onChange={setDraft}
+              onSend={() => void send()}
+              working={working}
+              recipient={roster.scoped?.status === 'found' ? roster.scoped.agent.name : null}
             />
           </div>
-          {live.status !== null ? (
-            <p
-              role="status"
-              aria-live="polite"
-              data-testid="conversation-provider-status"
-              className="px-4 pb-1 text-xs text-muted-foreground"
-            >
-              {live.status}
-            </p>
-          ) : null}
-          {live.notice !== null ? <ConversationNotice notice={live.notice} /> : null}
-          <ConversationComposer
-            composerRef={composerRef}
-            value={draft}
-            onChange={setDraft}
-            onSend={() => void send()}
-            working={working}
-            recipient={roster.scoped?.status === 'found' ? roster.scoped.agent.name : null}
-          />
         </>
       )}
     >

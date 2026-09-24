@@ -1,7 +1,6 @@
 import { Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -76,7 +75,7 @@ export function CognitiveWorkspaceRoster({
           <h1 className="truncate text-base font-semibold">
             {translate('workspace.title', 'Cognitive Workspace')}
           </h1>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {translate('workspace.subtitle', 'Agents, conversations and execution.')}
           </p>
         </div>
@@ -106,7 +105,9 @@ export function CognitiveWorkspaceRoster({
         </TabsList>
       </Tabs>
 
-      <ScrollArea className="min-h-0 flex-1">
+      {/* A plain scroller, not ScrollArea: its viewport sizes content to max-content, which let
+          long thread titles push rows past the column edge instead of truncating. */}
+      <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col gap-4 p-2">
           {tab === 'agents' ? (
             <>
@@ -147,7 +148,7 @@ export function CognitiveWorkspaceRoster({
             />
           ) : null}
         </div>
-      </ScrollArea>
+      </div>
     </aside>
   )
 }

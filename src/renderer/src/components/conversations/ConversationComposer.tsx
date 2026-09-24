@@ -26,7 +26,8 @@ export function ConversationComposer({
 }): React.JSX.Element {
   return (
     <form
-      className="px-4 pb-4 pt-2"
+      // pr-16 clears the floating terminal toggle's default bottom-right spot, which otherwise sat on Send.
+      className="pb-4 pl-4 pr-16 pt-2"
       onSubmit={(event) => {
         event.preventDefault()
         onSend()

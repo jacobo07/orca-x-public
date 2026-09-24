@@ -55,7 +55,11 @@ describe('conversation -> native chat session', () => {
   it('shows the sentence being typed, without it being in the record', () => {
     const session = conversationToNativeChatSession({
       record: record({ messages: [userMessage] }),
-      live: { ...EMPTY_CONVERSATION_LIVE_STATE, turnState: 'working', streamingByItemId: { i9: 'thin' } },
+      live: {
+        ...EMPTY_CONVERSATION_LIVE_STATE,
+        turnState: 'working',
+        streamingByItemId: { i9: 'thin' }
+      },
       loading: false,
       readError: null
     })

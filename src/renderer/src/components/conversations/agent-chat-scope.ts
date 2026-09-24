@@ -25,8 +25,6 @@ export function latestConversationForAgent(
   summaries: readonly ConversationSummary[],
   agentId: string
 ): string | null {
-  const match = summaries.find(
-    (summary) => summary.outcome === 'ok' && summary.agentId === agentId
-  )
+  const match = summaries.find((summary) => summary.outcome === 'ok' && summary.agentId === agentId)
   return match ? match.id : null
 }
