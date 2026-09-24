@@ -95,10 +95,22 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   production routing on the real provider (Claude — Codex signed out here), settled with a
   structured result. Localization catalog/coverage gates are red on pre-existing cogws keys, not ours.
 
+- **P4a SEALED** `4aa2cf116` (schema **v31**): `review-records.ts` — `reviews` table, derived
+  independence (same agent / same provider degraded, missing provider `unknown`), `judgeReviewCurrency`
+  (revision-moved / patch-changed / subject-unreadable), `ReviewStore.settle` re-derives independence
+  from the provider that ACTUALLY reviewed. GEX44: tsc 0, migration gate ok, 1342 passed, mutation CAUGHT.
+
 ## 4. Next 3 actions
-1. P4: review record bound to subject revision (commit + diff hash, captured by Orca from git),
-   reviewer/producer + providers, independence DERIVED (same provider or agent = degraded),
-   stale when the revision moves; request-review RPC/CLI. Use routing `exclude` for independence.
+1. P4b: the review FLOW. (a) `captureRevisionSubject(worktreePath, rev?)` = `git rev-parse <rev>^{commit}`
+   + sha256 of `git show --format= --no-color <sha>` (Git 2.25-safe; local worktrees only — remote is
+   `subject-unreadable`, stated). (b) `requestReview` creates a task assigned to the reviewer with that
+   subject + a `reviews` row carrying `review_task_id`. (c) coordinator: before running a task, look up a
+   review by task id and route with `exclude: [producer_provider]` (routing already supports it; the
+   requirement must travel AgentTaskRequest -> runAgentTask -> routing.runTurn). (d) on settle, the
+   reviewer's provider is read from the conversation's LAST provenance entry (evidence, not hope) and
+   `ReviewStore.settle` records findings. (e) RPC `orchestration.reviewRequest/reviewShow` + CLI, where
+   reviewShow recomputes currency from git. Independence with Codex signed out here will be `unknown`/
+   degraded unless producer ran on Codex — say so, never label it independent.
 2. P5: subject-bound approval (inverts P1's gate case).
 3. Claude MCP bridge so `orca_delegate` works when Claude is the provider (agent→agent is live only
    via Codex today, and Codex is signed out/quota-blocked here).
