@@ -14,7 +14,7 @@ import {
 
 // A DRILL, not a gate: it edits committed source to prove each remote-turn protection is caught by
 // the test that exists for it. Run deliberately; registered in no script, lint chain or workflow.
-// The process-group kill is observable only on Linux and is drilled on GEX44, not here.
+// The process-group kill is observable only on Linux: run the whole drill there (GEX44).
 
 detachFromOutputConsumer()
 
@@ -23,6 +23,8 @@ const at = (file) => path.join(REPO, file)
 const HANDLER = at('src/relay/agent-process-handler.ts')
 const ADAPTER = at('src/main/codex/codex-ssh-agent-process.ts')
 const RUNNER = at('src/main/conversation/conversation-turn-runner.ts')
+const HOST_DEPS = at('src/relay/agent-process-host-deps.ts')
+const HOST_DEPS_TEST = 'src/relay/agent-process-host-deps.test.ts'
 const HANDLER_TEST = 'src/relay/agent-process-handler.test.ts'
 const ADAPTER_TEST = 'src/main/codex/codex-ssh-agent-process.test.ts'
 const RUNNER_TEST = 'src/main/conversation/agent-turn-runs-in-its-project.test.ts'
@@ -100,6 +102,14 @@ const drills = [
     verify: testGoesRedOn(ADAPTER_TEST, 'never this desktop environment')
   },
   {
+    // Linux only: the test is skipped on Windows, where this reads SURVIVED by construction.
+    id: 'provider-killed-without-its-group',
+    file: HOST_DEPS,
+    find: 'process.kill(-child.pid, signal)',
+    replace: 'process.kill(child.pid, signal)',
+    verify: testGoesRedOn(HOST_DEPS_TEST, 'kills the subprocesses a provider started')
+  },
+  {
     id: 'remote-refusal-ignored',
     file: RUNNER,
     find: "if ('refusal' in resolution) {",
@@ -114,7 +124,7 @@ if (live.live) {
   console.error(`REFUSING: a previous transaction is live — ${live.reason}`)
   process.exit(2)
 }
-const subjects = [HANDLER, ADAPTER, RUNNER]
+const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS]
 const before = subjects.map(hashOf)
 
 const tally = { caught: 0, survived: 0, unusable: 0 }
