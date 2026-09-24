@@ -15,7 +15,8 @@
 {
   "surfaces": [
     "src/renderer/src/components/conversations",
-    "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx"
+    "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx",
+    "mobile/src/workspace"
   ],
   "presenters": [
     {
