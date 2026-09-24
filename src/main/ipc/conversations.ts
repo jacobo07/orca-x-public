@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
 
 import { BrowserWindow, ipcMain } from 'electron'
 
@@ -14,7 +13,7 @@ import type {
   ConversationLoadResult,
   ConversationRecord
 } from '../../shared/conversation-types'
-import { readStoredCodexCredentialState } from '../codex-accounts/managed-codex-auth-readiness'
+import { checkCodexAuth } from '../codex/codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import { readAgentGrounding } from '../conversation/agent-grounding'
 import {
@@ -33,11 +32,8 @@ import {
 } from '../conversation/conversation-turn-runner'
 import type { Agent } from '../../shared/agent-types'
 import { runAgentTask } from '../conversation/agent-task-execution'
-import type { ConversationProviderEntry } from '../conversation/conversation-provider-routing'
 import { ProviderQuotaObservations } from '../conversation/provider-quota-observations'
-import { runRoutedConversationTurn } from '../conversation/routed-conversation-turn'
-import { checkClaudeAuth } from '../claude/claude-auth-readiness'
-import { createClaudeConversationDriver } from '../claude/claude-conversation-driver'
+import { composeProviderRouting } from '../conversation/provider-routing-composition'
 import { registerAgentTaskRunner } from '../runtime/orchestration/agent-task-runner-registry'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaConversationsDirectory } from '../orca-profiles/profile-storage-paths'
@@ -110,25 +106,8 @@ function requireText(value: unknown): string {
   return value
 }
 
-/**
- * Resolves the home the CHILD will read, not one we would like it to read. The driver applies no
- * CODEX_HOME overlay, so the child inherits this process's environment — checking `~/.codex` while
- * the child reads an inherited CODEX_HOME would report "signed in" about a different account.
- */
-export function codexAuthPath(env: NodeJS.ProcessEnv = process.env): string {
-  return join(env.CODEX_HOME ?? join(homedir(), '.codex'), 'auth.json')
-}
-
-export async function checkCodexAuth(): Promise<{ ready: true } | { ready: false; detail: string }> {
-  const state = readStoredCodexCredentialState(codexAuthPath())
-  if (state === 'present') {
-    return { ready: true }
-  }
-  // The state is carried through rather than flattened to "not signed in": `unreadable` is a
-  // rotation in flight and worth retrying, `no-credential` is a settled logout, and telling a user
-  // to sign in again during a token refresh turns a transient race into a support ticket.
-  return { ready: false, detail: `codex credential is ${state}` }
-}
+// Moved to an Electron-free module so provider routing can be composed outside this file.
+export { checkCodexAuth, codexAuthPath } from '../codex/codex-auth-readiness'
 
 export type ConversationIpcDeps = {
   service: ConversationService
@@ -231,25 +210,12 @@ export function registerConversationHandlers(
     mintItemId: () => `usr_${randomUUID()}`,
     emit: broadcastTurnEvent
   }
-  // Registry order is the default preference; routing explains every provider it passes over.
-  // Codex can serve Orca's tools (dynamic tools, measured); Claude cannot yet (no MCP bridge).
-  const providers: ConversationProviderEntry[] = [
-    { provider: 'codex', driver: codex, checkAuth: checkCodexAuth, tools: 'supported' },
-    {
-      provider: 'claude',
-      driver: createClaudeConversationDriver({
-        observeQuota: (quota) => providerQuota.record('claude', quota, Date.now())
-      }),
-      checkAuth: () => checkClaudeAuth(),
-      tools: 'unsupported'
-    }
-  ]
-  const routedDeps = { ...turnDeps, service, providers, quota: providerQuota }
+  const routing = composeProviderRouting({ base: { ...turnDeps, service }, quota: providerQuota })
   const handlers = createConversationIpcHandlers({
     service,
     roster: agentRoster,
     turnDeps,
-    runTurn: async (request) => (await runRoutedConversationTurn(routedDeps, request)).turn
+    runTurn: async (request) => (await routing.runTurn(request)).turn
   })
   // A delegated task runs through these same deps and the same router, so it cannot find a second
   // location rule, a second auth check or a second driver. It prefers a provider that can serve its
@@ -260,7 +226,7 @@ export function registerConversationHandlers(
         ...turnDeps,
         service,
         readAgents: () => agentRoster.readAgents(),
-        runTurn: async (turn) => (await runRoutedConversationTurn(routedDeps, turn, { prefersTools: true })).turn
+        runTurn: async (turn) => (await routing.runTurn(turn, { prefersTools: true })).turn
       },
       request
     )
