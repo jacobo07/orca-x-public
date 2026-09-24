@@ -1,3 +1,4 @@
+import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -5,24 +6,20 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 // threads through the product's own APIs, then opens Workspace and MEASURES: time until the roster is
 // drawn, DOM size, rows actually mounted, and renderer heap. The numbers are printed for the record
 // and held to a stated budget; the budget is a ceiling for regressions, not a target.
+//
+// Attribution: the same open path is timed with ONE agent first (cold, then warm), and the page's two
+// data reads are timed alone, so the scale figure splits into fixed cost, data and per-row cost.
 
 const AGENTS = 200
 const THREADS = 1000
 const BUDGET = { rosterMs: 5000, domNodes: 25_000, heapMb: 400 }
 
-test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
-  orcaPage,
-  electronApp
-}) => {
-  test.setTimeout(600_000)
-  await waitForSessionReady(orcaPage)
-  await waitForActiveWorktree(orcaPage)
-
-  const seeded = await orcaPage.evaluate(
-    async ({ agents, threads }) => {
+async function createAgents(page: Page, from: number, to: number): Promise<string[]> {
+  return page.evaluate(
+    async ({ from, to }) => {
       const project = (await window.api.projects.list())[0]
       const ids: string[] = []
-      for (let i = 0; i < agents; i++) {
+      for (let i = from; i < to; i++) {
         const created = (await window.api.agents.create({
           name: `Scale ${i}`,
           role: 'load',
@@ -32,26 +29,57 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
           ids.push(created.agent.id)
         }
       }
-      let conversations = 0
-      for (let i = 0; i < threads; i++) {
-        const made = (await window.api.conversations.createForAgent({
-          agentId: ids[i % ids.length]!,
-          title: `Thread ${i}`
-        })) as { outcome: string }
-        if (made.outcome === 'created') {
-          conversations++
-        }
-      }
-      return { agents: ids.length, conversations }
+      return ids
     },
-    { agents: AGENTS, threads: THREADS }
+    { from, to }
   )
-  expect(seeded).toEqual({ agents: AGENTS, conversations: THREADS })
+}
 
+/** Opens Workspace → Agents from the Terminals view; returns ms until the first agent row is visible. */
+async function openRoster(page: Page): Promise<number> {
+  await page.locator('[data-workspace-activity="workspace"]').first().click()
+  await expect(page.getByTestId('workspace-agent-row')).toHaveCount(0)
+  const started = Date.now()
+  await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+  await page.getByTestId('workspace-tab-agents').click()
+  await expect(page.getByTestId('workspace-agent-row').first()).toBeVisible({ timeout: 60_000 })
+  return Date.now() - started
+}
+
+test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
+  orcaPage,
+  electronApp
+}) => {
+  test.setTimeout(600_000)
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
   await electronApp.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setSize(1700, 960)
   )
-  // Attribution: the two reads the page makes on open, timed alone, so rosterMs splits into data vs render.
+
+  const ids = await createAgents(orcaPage, 0, 1)
+  const coldOneMs = await openRoster(orcaPage)
+  const warmOneMs = await openRoster(orcaPage)
+
+  ids.push(...(await createAgents(orcaPage, 1, AGENTS)))
+  const conversations = await orcaPage.evaluate(
+    async ({ agentIds, threads }) => {
+      let made = 0
+      for (let i = 0; i < threads; i++) {
+        const result = (await window.api.conversations.createForAgent({
+          agentId: agentIds[i % agentIds.length]!,
+          title: `Thread ${i}`
+        })) as { outcome: string }
+        if (result.outcome === 'created') {
+          made++
+        }
+      }
+      return made
+    },
+    { agentIds: ids, threads: THREADS }
+  )
+  expect({ agents: ids.length, conversations }).toEqual({ agents: AGENTS, conversations: THREADS })
+
   const reads = await orcaPage.evaluate(async () => {
     const t0 = performance.now()
     const threads = await window.api.conversations.list()
@@ -66,12 +94,7 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
     }
   })
 
-  const started = Date.now()
-  await orcaPage.locator('[data-workspace-activity="agent-workspace"]').first().click()
-  await orcaPage.getByTestId('workspace-tab-agents').click()
-  await expect(orcaPage.getByTestId('workspace-agent-row').first()).toBeVisible({ timeout: 60_000 })
-  const rosterMs = Date.now() - started
-
+  const rosterMs = await openRoster(orcaPage)
   const agentRows = await orcaPage.getByTestId('workspace-agent-row').count()
   await orcaPage.getByTestId('workspace-tab-threads').click()
   await expect(orcaPage.getByTestId('conversations-list-row').first()).toBeVisible({
@@ -85,7 +108,7 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
   })
 
   console.log(
-    `[workspace-scale] agents=${AGENTS} threads=${THREADS} rosterMs=${rosterMs} agentRows=${agentRows} threadRows=${threadRows} listMs=${reads.listMs} agentsMs=${reads.agentsMs} domNodes=${domNodes} heapMb=${heapMb}`
+    `[workspace-scale] agents=${AGENTS} threads=${THREADS} coldOneMs=${coldOneMs} warmOneMs=${warmOneMs} rosterMs=${rosterMs} agentRows=${agentRows} threadRows=${threadRows} listMs=${reads.listMs} agentsMs=${reads.agentsMs} domNodes=${domNodes} heapMb=${heapMb}`
   )
   expect(reads).toMatchObject({ threads: THREADS, agents: AGENTS })
   expect(rosterMs).toBeLessThan(BUDGET.rosterMs)
