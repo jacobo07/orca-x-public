@@ -299,6 +299,7 @@ export async function runConversationTurn(
     // Only a thread recorded on THIS host can be resumed: its history exists nowhere else.
     const resumeFrom = latestProviderProvenance(existing.record, executionHostId)
     let sawTerminal = false
+    let endedWithoutAnswer: string | null = null
     // Durable writes are CHAINED and awaited before this function reports success. A turn that
     // returned `completed` while its writes were still in flight would be telling the user their
     // history is saved at the one moment it provably is not.
@@ -316,6 +317,9 @@ export async function runConversationTurn(
         deps.emit(conversationId, event)
         if (event.kind === 'turn-completed' || event.kind === 'turn-ended') {
           sawTerminal = true
+        }
+        if (event.kind === 'turn-ended') {
+          endedWithoutAnswer ??= event.reason
         }
         if (isDurableEvent(event)) {
           // Not awaited HERE — blocking the provider's event callback would stall the stream — but
@@ -361,6 +365,10 @@ export async function runConversationTurn(
         interruptUnsettledTurns(current, now(), 'interrupted')
       )
       return { outcome: 'failed', turnId, reason: 'provider ended without completing the turn' }
+    }
+    // A turn the provider ended in failure (a usage limit, an error) settled, and did not answer.
+    if (endedWithoutAnswer !== null) {
+      return { outcome: 'failed', turnId, reason: endedWithoutAnswer }
     }
 
     return { outcome: 'completed', turnId, providerSessionId: result.providerSessionId }
