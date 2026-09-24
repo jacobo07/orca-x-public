@@ -53,10 +53,20 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   call this RPC; a requester field is an identity spoof). GEX44: tsc node+cli 0, 135/135, mutation
   `requester-passthrough` CAUGHT. Subject is not on the RPC yet — it arrives with P4, captured by Orca.
 
+- **P2d SEALED** `54d8e0289`: every agent task's turn is offered `orca_delegate(agent, task)`
+  (`agent-delegate-tool.ts`). Codex declares it as a `dynamicTools` entry on `thread/start` and calls
+  back with `item/tool/call`; `codex-server-request-bridge.ts` answers only a DECLARED tool name.
+  Parent/requester/subject/run are bound in the closure from the task being worked — argument
+  claims are ignored (pinned). GEX44: tsc 0, 4 gates rc=0, 1727 passed/176 files, 6/6 mutations CAUGHT.
+  MEASURED: `thread/resume` has no `dynamicTools` (codex 0.153.4) — tools may not survive a resume.
+  UNMEASURED: a live provider calling the tool (no signed-in Codex; GEX44 quota until 2026-09-27).
+
 ## 4. Next 3 actions
-1. P2d: agent-ORIGINATED delegation — a tool the agent's own turn can call, whose requester Orca
-   derives from the conversation the call came from (never from the tool's arguments). Measure first
-   what Codex app-server offers for tools (dynamic tools / MCP) before choosing the channel.
+1. P2e: the parent learns. When a task's agent-delegated children all settle, the holding agent gets
+   a follow-up turn in the SAME task conversation carrying the children's structured results (today
+   the parent completes when its first turn ends and nobody reads the children). Decide with evidence:
+   parent status while children run (a new 'awaiting-children' vs reuse 'blocked'), and where the
+   task's conversationId is kept so the follow-up resumes it.
 2. P3: provider driver registry + availability states (AUTH_REQUIRED/QUOTA_EXHAUSTED/UNSUPPORTED/
    UNKNOWN) + Claude driver behind ConversationTurnDriver + deterministic routing with a reason.
 3. P4: review record bound to subject revision, independence derived, stale on revision move.
