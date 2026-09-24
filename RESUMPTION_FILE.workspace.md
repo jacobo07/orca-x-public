@@ -12,6 +12,9 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
 - Phase 2 SEALED `8168895f0..d4dadc8cd`: Workspace below Explorer, launcher "Terminals", Vault tab
   "Sessions", Chats+Agents entries and AgentsPage removed, `activeView:'agents'` → conversations.
   GEX44: tsc 0/0/0; 10/10 E2E headless + pixels headful; 6/6 mutations caught.
+- Phase 3 SEALED `8e9d5d7b5..22b478d53`: `pnpm check:workspace-surface-claims` (lint + pr.yml, AGENTS.md)
+  over `config/workspace-surface-claims.jsonc`: claim rows classified to producers, status colours only
+  via presenter tone maps, no model/host literals. 10/10 drills caught (G5 needed a per-floor test).
 - Pre-existing red (not ours): git-status-refresh* (11), window-shortcut-policy (1).
 - Long run: v2 marker for session 2aad6d8e armed 10:20 (before the Ralph-mission default landed);
   NO_CROSSINGS so far. Do not arm a Ralph mission on top — two writers.
@@ -26,9 +29,10 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
 - Never name a PowerShell function with a one-letter alias (`R` = Invoke-History wiped 3 files).
 
 ## 4. Next 3 actions
-1. Phase 3 (PLAN): design a Workspace surface-producer gate (claim kinds → registered producer,
-   unknown arm required), synthetic red drill + population floor.
-2. Phase 4 (ULTRA-PLAN): capability-gated host RPC for conversations over the pairing transport.
+1. Phase 4 (ULTRA-PLAN, internal + oneshot-architect-auditor): capability-gated host RPC for
+   conversations over the pairing transport; read docs/reference/remote-wire-compatibility.md and the
+   mobile-aperture gate first; both version directions fail closed.
+2. Phase 5: mobile screens from src/shared/cognitive-workspace-projection.ts; add them to the gate's surfaces.
 3. Keep federation's P6 surface slot agreement in mind (they own missions/review rows).
 
 ## 5. Start
