@@ -147,6 +147,20 @@ describe('conversation live state — every refusal names what to do', () => {
       kind: 'auth-required',
       kept: true
     },
+    {
+      outcome: { outcome: 'provider-unavailable', reason: 'not-installed', detail: 'on box' },
+      kind: 'provider-not-installed',
+      kept: true
+    },
+    {
+      outcome: {
+        outcome: 'provider-unavailable',
+        reason: 'protocol-unsupported',
+        detail: 'on box'
+      },
+      kind: 'provider-protocol-unsupported',
+      kept: true
+    },
     { outcome: { outcome: 'not-durable', reason: 'superseded' }, kind: 'not-durable', kept: true },
     { outcome: { outcome: 'failed', turnId: 't1', reason: 'died' }, kind: 'failed', kept: true },
     { outcome: { outcome: 'conversation-absent' }, kind: 'absent', kept: false }

@@ -237,7 +237,10 @@ function startSshAgentProcess(
         end({
           exitCode: null,
           signal: null,
-          error: processError('REMOTE_PROCESS_REFUSED', `remote host refused: ${outcome.reason}`)
+          error: Object.assign(
+            processError('REMOTE_PROCESS_REFUSED', `remote host refused: ${outcome.reason}`),
+            { refusal: outcome.reason }
+          )
         })
         return
       }

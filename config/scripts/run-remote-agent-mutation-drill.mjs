@@ -29,6 +29,8 @@ const HANDLER_TEST = 'src/relay/agent-process-handler.test.ts'
 const ADAPTER_TEST = 'src/main/codex/codex-ssh-agent-process.test.ts'
 const RUNNER_TEST = 'src/main/conversation/agent-turn-runs-in-its-project.test.ts'
 const INTEGRATION_TEST = 'src/main/codex/codex-ssh-agent-process.integration.test.ts'
+const SSH_DRIVER = at('src/main/codex/codex-ssh-conversation-driver.ts')
+const SSH_DRIVER_TEST = 'src/main/codex/codex-ssh-conversation-driver.test.ts'
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -120,6 +122,27 @@ const drills = [
     verify: testGoesRedOn(INTEGRATION_TEST, 'runs in the located directory, reports it')
   },
   {
+    id: 'missing-provider-reported-as-a-failed-turn',
+    file: RUNNER,
+    find: 'if (error instanceof ProviderUnavailableError) {',
+    replace: 'if (false) {',
+    verify: testGoesRedOn(RUNNER_TEST, 'names a provider the host cannot run as its own state')
+  },
+  {
+    id: 'missing-codex-not-named-by-the-driver',
+    file: SSH_DRIVER,
+    find: "if (failure?.refusal === 'command-not-found') {",
+    replace: 'if (false) {',
+    verify: testGoesRedOn(SSH_DRIVER_TEST, 'names codex missing on the host as its own state')
+  },
+  {
+    id: 'old-codex-not-named-by-the-driver',
+    file: SSH_DRIVER,
+    find: 'throw isCodexAppServerUnsupportedError(error)',
+    replace: 'throw false',
+    verify: testGoesRedOn(INTEGRATION_TEST, 'names a codex too old for app-server as its own state')
+  },
+  {
     id: 'remote-refusal-ignored',
     file: RUNNER,
     find: "if ('refusal' in resolution) {",
@@ -134,7 +157,7 @@ if (live.live) {
   console.error(`REFUSING: a previous transaction is live — ${live.reason}`)
   process.exit(2)
 }
-const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS]
+const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS, SSH_DRIVER]
 const before = subjects.map(hashOf)
 
 const tally = { caught: 0, survived: 0, unusable: 0 }

@@ -20,6 +20,7 @@ import type { ProjectHostSetup } from '../../shared/project-types'
 
 import { resolveAgentProjectLocation } from './agent-project-location'
 import { ConversationService } from './conversation-service'
+import { ProviderUnavailableError } from './provider-unavailable'
 import {
   runConversationTurn,
   type ConversationTurnDeps,
@@ -344,6 +345,39 @@ describe("a remote project's agent runs on its host or not at all", () => {
     )
     expect(outcome.outcome).toBe('failed')
     expect(driverCalls).toHaveLength(0)
+  })
+
+  it('names a provider the host cannot run as its own state, never as a failed turn', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const send = (checkAuth: () => Promise<never>, runTurn: () => Promise<never>) =>
+      chatWith(ada).then((conversationId) =>
+        runConversationTurn(
+          {
+            ...turnDeps(),
+            remoteDriverFor: async () => ({ driver: { runTurn }, checkAuth }),
+            service
+          },
+          { conversationId, text: 'hi', cwd: null }
+        )
+      )
+    const unavailable = (reason: 'not-installed' | 'protocol-unsupported') => async () => {
+      throw new ProviderUnavailableError(reason, `codex ${reason} on box`)
+    }
+    const never = async (): Promise<never> => {
+      throw new Error('the turn must not start')
+    }
+
+    await expect(send(unavailable('not-installed'), never)).resolves.toEqual({
+      outcome: 'provider-unavailable',
+      reason: 'not-installed',
+      detail: 'codex not-installed on box'
+    })
+    const ready = async () => ({ ready: true }) as never
+    await expect(send(ready, unavailable('protocol-unsupported'))).resolves.toMatchObject({
+      outcome: 'provider-unavailable',
+      reason: 'protocol-unsupported'
+    })
   })
 
   it('records the host a thread lives on, and never resumes it from another host', async () => {

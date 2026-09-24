@@ -32,6 +32,16 @@ function messageFor(notice: Notice): string {
         'conversations.noticeAuthRequired',
         'Codex is not signed in. Sign in, then send again — your message was kept.'
       )
+    case 'provider-not-installed':
+      return translate(
+        'conversations.noticeProviderNotInstalled',
+        'Codex is not installed where this agent’s project lives. Install it there, then send again — your message was kept.'
+      )
+    case 'provider-protocol-unsupported':
+      return translate(
+        'conversations.noticeProviderProtocolUnsupported',
+        'Codex where this agent’s project lives is too old to hold a chat. Update it there, then send again — your message was kept.'
+      )
     case 'busy':
       return translate(
         'conversations.noticeBusy',

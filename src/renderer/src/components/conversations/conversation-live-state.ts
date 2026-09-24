@@ -33,6 +33,8 @@ export type ConversationNoticeKind =
   | 'project-remote-host-unreachable'
   | 'project-remote-relay-unsupported'
   | 'project-location-changed'
+  | 'provider-not-installed'
+  | 'provider-protocol-unsupported'
 
 export type ConversationNotice = {
   kind: ConversationNoticeKind
@@ -125,6 +127,15 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
     case 'auth-required':
       // Never rendered as an assistant message: a 401 is not a conversation.
       return { kind: 'auth-required', detail: outcome.detail, userMessageKept: true }
+    case 'provider-unavailable':
+      return {
+        kind:
+          outcome.reason === 'not-installed'
+            ? 'provider-not-installed'
+            : 'provider-protocol-unsupported',
+        detail: outcome.detail,
+        userMessageKept: true
+      }
     case 'not-durable':
       return { kind: 'not-durable', detail: outcome.reason, userMessageKept: true }
     case 'failed':

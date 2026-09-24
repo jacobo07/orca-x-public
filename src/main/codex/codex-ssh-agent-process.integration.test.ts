@@ -22,11 +22,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { RelayDispatcher } from '../../relay/dispatcher'
 import { AgentProcessHandler } from '../../relay/agent-process-handler'
+import { ProviderUnavailableError } from '../conversation/provider-unavailable'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 
 import { runCodexAppServerSession } from './codex-app-server-session'
 import { createCodexConversationDriver } from './codex-conversation-driver'
 import { createSshAgentProcessSpawn } from './codex-ssh-agent-process'
+import { resolveSshCodexDriver } from './codex-ssh-conversation-driver'
 
 const SCRIPTED_APP_SERVER = String.raw`
 const fs = require('fs')
@@ -205,6 +207,35 @@ describe('a remote turn through the real relay handler and a real child', () => 
     expect(await waitUntil(() => !isAlive(pid), 10_000)).toBe(true)
   }, 90_000)
 
+  it('names a codex too old for app-server as its own state, through the ssh driver', async () => {
+    writeFileSync(
+      join(project, 'app-server'),
+      `process.stderr.write("error: unrecognized subcommand 'app-server'\\n"); process.exit(2)\n`
+    )
+    const resolution = await resolveSshCodexDriver(
+      { projectId: 'github:acme/ledger', hostId: 'ssh:box', setupId: 'setup-1', path: project },
+      () => harness.mux
+    )
+    if (!('driver' in resolution)) {
+      throw new Error(`expected a driver, got ${resolution.refusal}`)
+    }
+    const outcome = await resolution.driver
+      .runTurn({
+        resumeSessionId: null,
+        cwd: project,
+        text: 'hello',
+        developerInstructions: null,
+        turnId: 'turn-local-3',
+        onEvent: () => {}
+      })
+      .then(
+        () => 'returned',
+        (error: unknown) => error
+      )
+    expect(outcome).toBeInstanceOf(ProviderUnavailableError)
+    expect(outcome).toMatchObject({ reason: 'protocol-unsupported' })
+  }, 60_000)
+
   it('kills the remote child when the session deadline lapses mid-turn', async () => {
     writeFileSync(join(project, 'hang.flag'), '1')
 
@@ -235,9 +266,7 @@ function processesIn(dir: string): string[] {
     .filter((name) => /^\d+$/.test(name))
     .flatMap((name) => {
       try {
-        return readlinkSync(`/proc/${name}/cwd`) === real
-          ? [readlinkSync(`/proc/${name}/exe`)]
-          : []
+        return readlinkSync(`/proc/${name}/cwd`) === real ? [readlinkSync(`/proc/${name}/exe`)] : []
       } catch {
         // Exited between the listing and the read, or not ours to inspect.
         return []

@@ -18,6 +18,7 @@ import type { AgentProjectLocation } from './agent-project-location'
 import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
+import { ProviderUnavailableError } from './provider-unavailable'
 
 export type ConversationTurnRequest = {
   conversationId: ConversationId
@@ -361,6 +362,9 @@ export async function runConversationTurn(
     await service.applyEvent(conversationId, (current) =>
       interruptUnsettledTurns(current, now(), 'failed')
     )
+    if (error instanceof ProviderUnavailableError) {
+      return { outcome: 'provider-unavailable', reason: error.reason, detail: error.message }
+    }
     return { outcome: 'failed', turnId, reason }
   } finally {
     admission.release()

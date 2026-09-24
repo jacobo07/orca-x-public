@@ -14,8 +14,12 @@ import type {
   RemoteDriverResolution,
   RemoteExecutionTarget
 } from '../conversation/conversation-turn-runner'
+import { ProviderUnavailableError } from '../conversation/provider-unavailable'
 
-import { runCodexAppServerSession } from './codex-app-server-session'
+import {
+  isCodexAppServerUnsupportedError,
+  runCodexAppServerSession
+} from './codex-app-server-session'
 import { createCodexConversationDriver } from './codex-conversation-driver'
 import { createSshAgentProcessSpawn, type AgentProcessMux } from './codex-ssh-agent-process'
 
@@ -69,7 +73,14 @@ export async function resolveSshCodexDriver(
           ...(invocation.env ? { envOverlay: invocation.env } : {})
         }) as never,
         handlers
-      )
+      ).catch((error: unknown) => {
+        throw isCodexAppServerUnsupportedError(error)
+          ? new ProviderUnavailableError(
+              'protocol-unsupported',
+              `codex on ${hostName} is too old to hold a conversation (no app-server)`
+            )
+          : error
+      })
   })
   return {
     driver,
@@ -89,7 +100,7 @@ export function checkRemoteCodexAuth(
       'codex',
       ['login', 'status']
     )
-    let failure: Error | null = null
+    let failure: (Error & { refusal?: unknown }) | null = null
     child.on('error', (error: Error) => {
       failure = error
     })
@@ -97,7 +108,12 @@ export function checkRemoteCodexAuth(
     child.stderr.resume()
     child.stdin.end()
     child.on('close', (exitCode: number | null) => {
-      if (failure) {
+      // The relay looked for codex on this login's PATH and found none: an answer, not a failure.
+      if (failure?.refusal === 'command-not-found') {
+        reject(
+          new ProviderUnavailableError('not-installed', `codex is not installed on ${hostName}`)
+        )
+      } else if (failure) {
         reject(failure)
       } else if (exitCode === 0) {
         resolve({ ready: true })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { AGENT_PROCESS_METHODS } from '../../shared/agent-process-wire'
+import { ProviderUnavailableError } from '../conversation/provider-unavailable'
 
 import {
   checkRemoteCodexAuth,
@@ -98,14 +99,27 @@ describe('checkRemoteCodexAuth', () => {
     })
   })
 
+  it('names codex missing on the host as its own state, never as a sign-in problem', async () => {
+    const answer = checkRemoteCodexAuth(
+      answering({ outcome: 'refused', reason: 'command-not-found' }),
+      '/srv',
+      'box'
+    )
+    await expect(answer).rejects.toBeInstanceOf(ProviderUnavailableError)
+    await expect(answer).rejects.toMatchObject({
+      reason: 'not-installed',
+      message: 'codex is not installed on box'
+    })
+  })
+
   it('throws — never answers "not signed in" — when it could not actually ask', async () => {
-    await expect(
-      checkRemoteCodexAuth(
-        answering({ outcome: 'refused', reason: 'command-not-found' }),
-        '/srv',
-        'box'
-      )
-    ).rejects.toThrow('remote host refused: command-not-found')
+    const answer = checkRemoteCodexAuth(
+      answering({ outcome: 'refused', reason: 'cwd-missing' }),
+      '/srv',
+      'box'
+    )
+    await expect(answer).rejects.toThrow('remote host refused: cwd-missing')
+    await expect(answer).rejects.not.toBeInstanceOf(ProviderUnavailableError)
     await expect(checkRemoteCodexAuth(answering(exited(2)), '/srv', 'box')).rejects.toThrow(
       'exited 2'
     )

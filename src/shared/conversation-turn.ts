@@ -41,6 +41,12 @@ export type ConversationTurnOutcome =
       detail: string
     }
   | { outcome: 'auth-required'; detail: string }
+  /** The provider cannot run on the host at all: install it, or update it. Not a failed turn. */
+  | {
+      outcome: 'provider-unavailable'
+      reason: 'not-installed' | 'protocol-unsupported'
+      detail: string
+    }
   | { outcome: 'not-durable'; reason: string }
   | { outcome: 'failed'; turnId: string; reason: string }
 
@@ -50,6 +56,7 @@ export type ConversationTurnOutcome =
 export function conversationTurnKeptUserMessage(outcome: ConversationTurnOutcome): boolean {
   return (
     outcome.outcome === 'auth-required' ||
+    outcome.outcome === 'provider-unavailable' ||
     outcome.outcome === 'failed' ||
     outcome.outcome === 'not-durable'
   )
