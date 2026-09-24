@@ -309,6 +309,19 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
+
+    // Workspace sits directly below Explorer (Owner, 2026-09-24): after Explorer, before the next
+    // panel tab, exactly once — the section above does not draw a second copy.
+    const explorerAt = markup.indexOf('aria-label="Explorer')
+    const workspaceAt = markup.indexOf('data-workspace-activity="agent-workspace"')
+    const sessionsAt = markup.indexOf('aria-label="Sessions')
+    expect(explorerAt).toBeGreaterThan(-1)
+    expect(workspaceAt).toBeGreaterThan(explorerAt)
+    expect(sessionsAt).toBeGreaterThan(workspaceAt)
+    expect(markup.split('data-workspace-activity="agent-workspace"')).toHaveLength(2)
+    expectNoDrag(
+      markup.match(/<button[^>]+data-workspace-activity="agent-workspace"[^>]*>/)?.[0] ?? ''
+    )
   })
 
   it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {
@@ -318,7 +331,8 @@ describe('rendered right sidebar titlebar drag regions', () => {
     const markup = renderToStaticMarkup(<RightSidebar />)
 
     expect(markup).toContain('aria-label="Explorer')
-    expect(markup).toContain('aria-label="Agents')
+    // The AI Vault tab: CLI session history, renamed from "Agents" on 2026-09-24.
+    expect(markup).toContain('aria-label="Sessions')
     expect(markup).not.toContain('aria-label="Search')
     expect(markup).toContain('aria-label="Attached worktrees')
     expect(markup).toContain('aria-label="PR Checks')
