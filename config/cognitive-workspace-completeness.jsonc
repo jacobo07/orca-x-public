@@ -43,7 +43,7 @@
       "id": "C",
       "dimension": "located-effect",
       "owner": "src/main/conversation/agent-project-location.ts",
-      "state": "open",
+      "state": "complete",
       "phase": "3",
       "claim": "An agent's turn acts on its own project, wherever that project lives, and never on a substitute.",
       "evidence": [
@@ -60,7 +60,14 @@
           "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
           "title": "runs in the located directory, reports it, and leaves no process behind",
           "rung": "real-remote-host",
-          "note": "opt-in ORCA_REAL_CODEX_RUNG=1; the installed codex app-server on GEX44 through the real relay handler, /proc cwd == project (1d49bc083). Desktop side in-process, not across a real ssh channel — Phase 5 owns that leg"
+          "note": "opt-in ORCA_REAL_CODEX_RUNG=1; the installed codex app-server on GEX44 through the real relay handler, /proc cwd == project (1d49bc083). Desktop side in-process"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "real Electron + real ssh + deployed relay + real Codex on GEX44 (1f077a949, signed-in leg): the provider's own rollout on the host records the setup's project directory as the thread cwd; product mutant 'remote auth check replaced by the local one' went red at this rung"
         }
       ],
       "closes": "The turn runs ON the ssh project-host in the setup's worktree (Phase 3), once Phase 2 names a located remote subject."
@@ -132,14 +139,21 @@
       "id": "G",
       "dimension": "remote-execution",
       "owner": "Phase 3 creates the streaming relay method that runs a provider turn on an ssh host",
-      "state": "open",
+      "state": "complete",
       "phase": "3",
       "claim": "A provider turn for a remote project executes on that project's host, through an authority that already governs remote execution.",
       "evidence": [
         {
           "kind": "reliability-gate",
           "id": "agent-session.remote-host-authority",
-          "note": "prior authority for terminal agent sessions; the conversation turn does not use it yet (EXTEND before NEW)"
+          "note": "the authority terminal agent sessions use; the conversation turn rides the same ssh relay session (getActiveMultiplexer) through a capability-probed agentProcess.* method, never a parallel connection"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "real Electron + real ssh + relay deployed over SFTP on GEX44 (1f077a949): the turn's auth check and provider thread ran on the host; unreachable host and missing project refuse by their own reasons; product mutants (local auth check; missing-project refusal removed) went red at this rung"
         },
         {
           "kind": "product-reality",
@@ -170,7 +184,7 @@
       "id": "I",
       "dimension": "worktree-dirty-state",
       "owner": "Phase 3 roots the remote provider in the setup's live worktree",
-      "state": "open",
+      "state": "complete",
       "phase": "3",
       "claim": "What the provider sees is the project's live worktree, uncommitted files included.",
       "evidence": [
@@ -179,7 +193,14 @@
           "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
           "title": "runs in the located directory, reports it, and leaves no process behind",
           "rung": "real-remote-host",
-          "note": "drill mutant real-provider-spawned-outside-the-project (cwd -> /tmp) caught on GEX44 at 1d49bc083. Open: no provider has yet READ an uncommitted file there (model turn quota-blocked to 2026-09-27 19:54)"
+          "note": "the kernel's /proc cwd of the installed codex == the setup directory itself (not a copy); drill mutant real-provider-spawned-outside-the-project (cwd -> /tmp) caught on GEX44"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "over real ssh the provider's rollout records the setup's directory as its cwd. A model READING an uncommitted file there is owed to the quota reset and carried by row Q"
         }
       ],
       "closes": "The remote cwd is the worktree the setup names, and a mutation substituting a local directory is caught."
@@ -260,11 +281,22 @@
       "id": "Q",
       "dimension": "product-reality",
       "owner": "Phase 5 runs the remote product-reality gate",
-      "state": "open",
+      "state": "blocked",
       "phase": "5",
       "claim": "A real remote host answers a project fact that could not have come from anywhere else.",
-      "evidence": [],
-      "closes": "A remote host returns an unguessable project fact, with wrong-project and unreachable controls."
+      "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "real Electron + real ssh + real Codex 0.155.1 on GEX44 (1f077a949): the signed-in leg asserts the marker 4471 when the provider answers; today it answered usageLimitExceeded, reported as failed in the provider's words. Unavailable-project and unreachable controls refuse by their own reasons."
+        }
+      ],
+      "blocker": {
+        "class": "owner-auth",
+        "precondition": "GEX44's Codex account answers a model turn (usageLimitExceeded until 2026-09-27 19:54). Then gex44-e2e.ps1 -Phase test -SignedIn must pass with the answer containing 4471."
+      }
     },
     {
       "id": "R",
