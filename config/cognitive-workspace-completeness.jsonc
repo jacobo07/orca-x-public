@@ -265,12 +265,22 @@
       "id": "K",
       "dimension": "cli-ipc-frontend-coherence",
       "owner": "src/main/ipc/conversations.ts",
-      "state": "open",
+      "state": "complete",
       "phase": "9",
       "claim": "Every surface that can start a conversation turn reaches the same located authority.",
-      "evidence": [],
-      "closes": "Every caller of the turn path is inventoried and reaches the same authority.",
-      "note": "No roadmap criterion names this dimension; re-home it when a phase takes it."
+      "evidence": [
+        {
+          "kind": "gate",
+          "script": "check:agent-turn-location-authority",
+          "note": "TURN_ENTRANCES inventories every file in src/ and mobile/ that can start a turn (desktop IPC handler, preload bridge, conversation page); an unclassified entrance or a stale entry fails"
+        },
+        {
+          "kind": "test",
+          "file": "config/scripts/check-agent-turn-location-authority.test.mjs",
+          "title": "flags a new surface that can start a turn and was never classified"
+        }
+      ],
+      "closes": "Every caller of the turn path is inventoried and reaches the same authority."
     },
     {
       "id": "L",
@@ -334,12 +344,22 @@
       "id": "N",
       "dimension": "token-economics",
       "owner": "Phase 9 bounds the per-turn location envelope",
-      "state": "open",
+      "state": "complete",
       "phase": "9",
       "claim": "Locating a turn never scales with repository size.",
-      "evidence": [],
-      "closes": "The per-turn location envelope is bounded and no repository content is dumped into a prompt.",
-      "note": "No roadmap criterion names this dimension; the mission forbids repository dumps in prompts."
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-instructions.test.ts",
+          "title": "stays constant-size regardless of how large the project is"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-instructions.test.ts",
+          "title": "imports no filesystem module"
+        }
+      ],
+      "closes": "The per-turn location envelope is bounded and no repository content is dumped into a prompt."
     },
     {
       "id": "O",
@@ -368,10 +388,21 @@
       "id": "P",
       "dimension": "device-independent-projection",
       "owner": "Phase 9 records the roaming impact",
-      "state": "open",
+      "state": "complete",
       "phase": "9",
       "claim": "Durable agent and conversation identity survive a change of device without changing the project acted upon.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "resumes the same machine"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-agent-association.test.ts",
+          "title": "finds a thread by the host address when another device named the host differently"
+        }
+      ],
       "closes": "Durable identity is shown to survive a change of device (roaming)."
     },
     {
