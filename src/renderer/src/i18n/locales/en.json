@@ -189,7 +189,8 @@
     "paste": "Paste",
     "copy": "Copy",
     "selectAll": "Select All",
-    "showWorkspaceButton": "Show Workspace Button",
+    "showWorkspaceButton": "Show Terminals Button",
+    "showAgentWorkspaceButton": "Show Workspace Button",
     "terminal": "Terminal",
     "newTerminal": "New Terminal",
     "chooseTerminalProfile": "New Terminal With Profile...",
@@ -12343,7 +12344,7 @@
             "6306b48afd": "source-control",
             "ef182dcb12": "search",
             "fc3095d2ed": "explorer",
-            "aiVaultSessionHistory": "Agents",
+            "aiVaultSessionHistory": "Sessions",
             "folderWorkspaces": "Attached worktrees",
             "parentPrChecks": "PR Checks"
           },
@@ -16643,6 +16644,9 @@
         "noPlan": "This session can't be resumed here."
       }
     }
+  },
+  "activityRail": {
+    "terminals": "Terminals"
   },
   "conversations": {
     "railLabel": "Chats",

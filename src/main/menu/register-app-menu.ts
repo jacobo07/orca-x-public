@@ -18,6 +18,7 @@ export type AppearanceMenuState = {
   showAutomationsButton: boolean
   showMobileButton: boolean
   showWorkspaceButton: boolean
+  showAgentWorkspaceButton: boolean
   showTitlebarAppName: boolean
   statusBarVisible: boolean
 }

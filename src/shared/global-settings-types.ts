@@ -246,8 +246,11 @@ export type GlobalSettings = {
    *  governs the rail entry, not the roster. Distinct from `experimentalActivity`, which gates the
    *  runtime Activity feed; the two surfaces were one noun until W-C3 and are not one setting. */
   showAgentsButton?: boolean
-  /** Only toggles the sidebar shortcut; the workspace launcher stays reachable from Settings. */
+  /** Only toggles the sidebar shortcut; the workspace launcher (labelled "Terminals") stays
+   *  reachable from Settings. The key keeps its old name so persisted profiles keep their choice. */
   showWorkspaceButton?: boolean
+  /** Default-on: the agent Workspace is the canonical entry. Governs the rail entry only. */
+  showAgentWorkspaceButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */

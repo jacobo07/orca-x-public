@@ -3200,6 +3200,7 @@ void app.whenReady().then(async () => {
         showAutomationsButton: settings?.showAutomationsButton !== false,
         showMobileButton: settings?.showMobileButton !== false,
         showWorkspaceButton: settings?.showWorkspaceButton !== false,
+        showAgentWorkspaceButton: settings?.showAgentWorkspaceButton !== false,
         showTitlebarAppName: settings?.showTitlebarAppName !== false,
         statusBarVisible: ui?.statusBarVisible !== false
       }

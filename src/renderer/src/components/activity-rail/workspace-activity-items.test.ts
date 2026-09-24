@@ -10,12 +10,23 @@ import type { WorkspaceActivitySettings } from './workspace-activity-items'
 const DEFAULTS: WorkspaceActivitySettings = {}
 
 describe('getVisibleWorkspaceActivities', () => {
-  it('shows the four default-on activities and hides the opt-in ones', () => {
+  it('shows the default-on activities, agent Workspace first, and hides the opt-in ones', () => {
     // Arrange / Act
     const visible = getVisibleWorkspaceActivities(DEFAULTS)
 
-    // Assert — matches what SidebarNav gated on before the rail existed.
-    expect(visible).toEqual(['workspace', 'tasks', 'automations', 'mobile'])
+    // Assert — the four SidebarNav gated on before the rail existed, led by the agent Workspace.
+    expect(visible).toEqual(['agent-workspace', 'workspace', 'tasks', 'automations', 'mobile'])
+  })
+
+  it('shows the agent Workspace to a profile that persisted the old Chats default', () => {
+    // `showConversationsButton` defaulted to false; a profile holding that value never chose to hide
+    // anything, so the canonical entry must not inherit it.
+    expect(getVisibleWorkspaceActivities({ showConversationsButton: false })).toContain(
+      'agent-workspace'
+    )
+    expect(getVisibleWorkspaceActivities({ showAgentWorkspaceButton: false })).not.toContain(
+      'agent-workspace'
+    )
   })
 
   it('treats a null or undefined settings object as defaults rather than hiding everything', () => {
@@ -63,13 +74,14 @@ describe('getVisibleWorkspaceActivities', () => {
     // The rail's order is a product decision, not an accident of the settings object's key order.
     expect(all).toEqual([...WORKSPACE_ACTIVITY_ORDER])
     // Entry point first, companion surface last.
-    expect(all[0]).toBe('workspace')
+    expect(all[0]).toBe('agent-workspace')
     expect(all.at(-1)).toBe('mobile')
   })
 
   it('hides everything when every activity is switched off, without throwing', () => {
     expect(
       getVisibleWorkspaceActivities({
+        showAgentWorkspaceButton: false,
         showWorkspaceButton: false,
         showTasksButton: false,
         showAutomationsButton: false,

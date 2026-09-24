@@ -62,7 +62,10 @@ describe('the Agents product noun', () => {
     // The one ordering claim W-C3 makes: a chat is with nobody in particular, an agent is somebody
     // you keep, and the durable half belongs beside the transient one. Everything else is pinned
     // to where it already was, so a future IA wave can move the rest deliberately.
+    // The agent Workspace leads (Owner IA decision 2026-09-24): the deliberate IA wave this comment
+    // anticipated. Chats and Agents stay for one commit beside it, then leave.
     expect([...WORKSPACE_ACTIVITY_ORDER]).toEqual([
+      'agent-workspace',
       'workspace',
       'conversations',
       'agents',

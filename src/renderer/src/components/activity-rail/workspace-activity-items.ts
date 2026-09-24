@@ -14,6 +14,7 @@ import type { TopLevelView } from '../../../../shared/ui-chrome-types'
  */
 
 export type WorkspaceActivityId =
+  | 'agent-workspace'
   | 'workspace'
   | 'conversations'
   | 'agents'
@@ -42,6 +43,9 @@ export type WorkspaceActivityId =
  * arriving is not a licence to take it.
  */
 export const WORKSPACE_ACTIVITY_ORDER: readonly WorkspaceActivityId[] = [
+  // The agent Workspace leads (Owner, 2026-09-24). Where the side panel is open it is drawn directly
+  // below Explorer instead, so this slot only applies where the panel's icons are not on screen.
+  'agent-workspace',
   'workspace',
   'conversations',
   'agents',
@@ -53,22 +57,28 @@ export const WORKSPACE_ACTIVITY_ORDER: readonly WorkspaceActivityId[] = [
   'mobile'
 ]
 
-export type WorkspaceActivitySettings = Partial<
-  Pick<
-    GlobalSettings,
-    | 'showWorkspaceButton'
-    | 'showTasksButton'
-    | 'showAutomationsButton'
-    | 'showMobileButton'
-    | 'showArtifactsButton'
-    | 'showSkillsButton'
-    | 'showConversationsButton'
-    | 'showAgentsButton'
-    | 'experimentalActivity'
-  >
-> | null | undefined
+export type WorkspaceActivitySettings =
+  | Partial<
+      Pick<
+        GlobalSettings,
+        | 'showAgentWorkspaceButton'
+        | 'showWorkspaceButton'
+        | 'showTasksButton'
+        | 'showAutomationsButton'
+        | 'showMobileButton'
+        | 'showArtifactsButton'
+        | 'showSkillsButton'
+        | 'showConversationsButton'
+        | 'showAgentsButton'
+        | 'experimentalActivity'
+      >
+    >
+  | null
+  | undefined
 
 const ACTIVE_VIEW_BY_ACTIVITY: Record<WorkspaceActivityId, TopLevelView> = {
+  // The page the Chats entry opened: the entry was renamed and moved, the route id was not.
+  'agent-workspace': 'conversations',
   conversations: 'conversations',
   agents: 'agents',
   workspace: 'workspace',
@@ -91,6 +101,10 @@ export function activeViewForWorkspaceActivity(activity: WorkspaceActivityId): T
 function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySettings): boolean {
   switch (activity) {
     // Default-on: only an explicit false hides them, so a profile that never set the key keeps them.
+    // A NEW key, not `showConversationsButton`: that one defaulted to false and may be persisted as
+    // false by profiles that never chose it, which would hide the canonical entry from them.
+    case 'agent-workspace':
+      return settings?.showAgentWorkspaceButton !== false
     case 'workspace':
       return settings?.showWorkspaceButton !== false
     case 'tasks':
