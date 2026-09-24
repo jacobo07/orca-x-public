@@ -20,6 +20,14 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
 - Phase 5 SEALED `226af0f09..a2b559900`: phone Workspace (roster + agent chat, host toolbar entry),
   proven by the phone module over real E2EE + an old-host stand-in; mobile vitest 9/9. OWED: an
   emulator/device render (no Android SDK on GEX44) and live streaming in the phone chat.
+- Phase 6 SEALED `a3d358e32..b07e22188`: 200 agents / 1,000 threads on GEX44 — scale adds 59 ms, product
+  open 208 ms, 12.9k DOM nodes, 61 MB heap. The ~4 s first reading was Playwright's pointer wait (a
+  one-agent control proved it). No virtualization, by measurement; the budget gates the scale delta.
+- Phase 7 DEPENDS_ON_FEDERATION: federation is at P4b; its surface is P6. No merge, no rows.
+- Phase 8: full suite at b07e22188 vs base e677d00d8 on GEX44 — identical 392 failing tests (0 ours),
+  typecheck 0/0/0, 7 gates green, mobile-aperture red on app.park (pre-existing). See 08-VERIFICATION.md.
+- TERMINAL STATUS: BLOCKED_BY_OWNER_AUTHORIZATION — Studio OIDC sign-in; provider quota (to ~09-27);
+  federation merge (or wait for its P6); a phone/AVD for pixels; a CI runner.
 - Pre-existing red (not ours): git-status-refresh* (11), window-shortcut-policy (1), check:mobile-aperture on `app.park` (acd975a06).
 - Long run: v2 marker for session 2aad6d8e armed 10:20 (before the Ralph-mission default landed);
   NO_CROSSINGS so far. Do not arm a Ralph mission on top — two writers.
@@ -34,13 +42,12 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
 - Never name a PowerShell function with a one-letter alias (`R` = Invoke-History wiped 3 files).
 
 ## 4. Next 3 actions
-1. Phase 6 (EXEC): seed 200 agents / 1,000 threads through window.api on GEX44 (headless e2e),
-   measure Workspace render: DOM node count, renderer heap, time to roster; roster/threads rows
-   virtualized? Fix any cliff; state a budget.
-2. Phase 7: federation projection only once orca-x/agent-federation seals its surface phase —
-   otherwise record DEPENDS_ON_FEDERATION rows.
-3. Phase 8: full suite on GEX44 classified vs baseline 1c7d2478f; UKDL/vault; final report.
-
+1. When federation seals P6 (or the Owner orders it): merge `orca-x/agent-federation`, add each row's
+   producer to `config/workspace-surface-claims.jsonc`, e2e: a delegated task created via the product
+   API appears in Workspace (07-VERIFICATION.md).
+2. After the quotas reset (~2026-09-27): one real provider turn through desktop Workspace and the phone
+   module; then wire `conversations.subscribe` into the phone chat.
+3. With the Owner: Studio sign-in (CONNECTED state) and a device render of the phone screens.
 ## 5. Start
 Open Claude Code IN this worktree. Prove `git worktree list` and HEAD. Read `.planning/STATE.md`.
 Tests: `node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts <paths>` on GEX44.
