@@ -28,6 +28,7 @@ const HOST_DEPS_TEST = 'src/relay/agent-process-host-deps.test.ts'
 const HANDLER_TEST = 'src/relay/agent-process-handler.test.ts'
 const ADAPTER_TEST = 'src/main/codex/codex-ssh-agent-process.test.ts'
 const RUNNER_TEST = 'src/main/conversation/agent-turn-runs-in-its-project.test.ts'
+const INTEGRATION_TEST = 'src/main/codex/codex-ssh-agent-process.integration.test.ts'
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -58,7 +59,8 @@ function testGoesRedOn(file, title) {
     if (code === 0) {
       return { passed: true }
     }
-    if (output.includes(title)) {
+    // On a FAIL line: vitest also lists slow PASSING tests by title.
+    if (output.split('\n').some((line) => line.includes('FAIL') && line.includes(title))) {
       return { passed: false, detail: `red on "${title}"` }
     }
     throw new Error('red for the wrong reason')
@@ -108,6 +110,14 @@ const drills = [
     find: 'process.kill(-child.pid, signal)',
     replace: 'process.kill(child.pid, signal)',
     verify: testGoesRedOn(HOST_DEPS_TEST, 'kills the subprocesses a provider started')
+  },
+  {
+    // Rung 3, real Codex: meaningful only with ORCA_REAL_CODEX_RUNG=1 on Linux.
+    id: 'real-provider-spawned-outside-the-project',
+    file: HANDLER,
+    find: '          cwd,',
+    replace: "          cwd: '/tmp',",
+    verify: testGoesRedOn(INTEGRATION_TEST, 'runs in the located directory, reports it')
   },
   {
     id: 'remote-refusal-ignored',

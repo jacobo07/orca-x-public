@@ -228,19 +228,21 @@ describe('a remote turn through the real relay handler and a real child', () => 
   }, 60_000)
 })
 
-/** Every process whose working directory is `dir`, read from the kernel rather than the child. */
-function processesIn(dir: string): number[] {
+/** The executable of every process whose working directory is `dir`, read from the kernel. */
+function processesIn(dir: string): string[] {
   const real = realpathSync(dir)
   return readdirSync('/proc')
     .filter((name) => /^\d+$/.test(name))
-    .filter((name) => {
+    .flatMap((name) => {
       try {
         return readlinkSync(`/proc/${name}/cwd`) === real
+          ? [readlinkSync(`/proc/${name}/exe`)]
+          : []
       } catch {
-        return false
+        // Exited between the listing and the read, or not ours to inspect.
+        return []
       }
     })
-    .map(Number)
 }
 
 // Rung 3, opt-in: the installed Codex CLI on a Linux host, with the host deps unreplaced — real
@@ -267,7 +269,8 @@ describe.skipIf(process.platform !== 'linux' || process.env.ORCA_REAL_CODEX_RUNG
           }) as never
         )
         expect(realpathSync(observed.threadCwd ?? '')).toBe(realpathSync(project))
-        expect(observed.running.length).toBeGreaterThan(0)
+        // The kernel's answer, not the echoed request: the installed binary runs in the project.
+        expect(observed.running.some((exe) => /codex/.test(exe))).toBe(true)
         expect(await waitUntil(() => processesIn(project).length === 0, 10_000)).toBe(true)
       } finally {
         await real.handler.dispose()
