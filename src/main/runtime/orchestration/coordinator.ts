@@ -16,6 +16,7 @@ import {
 import {
   createAgentTaskDispatchState,
   dispatchAgentTasks,
+  runningAgentTurns,
   settleInterruptedAgentTasks,
   type AgentTaskDispatchState
 } from './coordinator-agent-tasks'
@@ -236,18 +237,21 @@ export class Coordinator {
   private async dispatchReadyTasks(): Promise<void> {
     this.state.phase = 'dispatching'
     const readyTasks = this.db.listTasks({ ready: true })
-    if (readyTasks.length === 0) {
-      return
-    }
 
-    const dispatched = this.db.listTasks({ status: 'dispatched' })
-    let slotsAvailable = this.opts.maxConcurrent - dispatched.length
+    // Why not every dispatched row: an agent task waiting for its delegated children is
+    // `dispatched` yet runs nothing; counting it would let waiting parents starve their children.
+    const terminalDispatched = this.db
+      .listTasks({ status: 'dispatched' })
+      .filter((task) => task.assignee_agent_id === null).length
+    let slotsAvailable =
+      this.opts.maxConcurrent - terminalDispatched - runningAgentTurns(this.agentTasks)
     if (slotsAvailable <= 0) {
       return
     }
 
     // Why: an agent-assigned task belongs to that agent; handing it to a free terminal would run it
-    // under whoever happens to be idle, which is exactly the identity the assignment names.
+    // under whoever happens to be idle, which is exactly the identity the assignment names. Runs even
+    // with nothing ready, because a parent whose children settled is owed its follow-up turn.
     const agentTasks = readyTasks.filter((task) => task.assignee_agent_id !== null)
     slotsAvailable -= dispatchAgentTasks({
       db: this.db,

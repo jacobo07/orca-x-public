@@ -11,6 +11,8 @@ export type AgentTaskRequest = {
   subject: DelegationSubject | null
   /** Built by orchestration with this task's authority bound in; the turn only offers them. */
   tools?: readonly ProviderTurnTool[]
+  /** A follow-up turn continues the task's own conversation instead of opening a new one. */
+  continueConversationId?: string
 }
 
 export type AgentTaskOutcome =
@@ -22,12 +24,32 @@ export type AgentTaskOutcome =
 
 export type AgentTaskRunner = (request: AgentTaskRequest) => Promise<AgentTaskOutcome>
 
-/** Stored in `tasks.result` so a parent reads a structure, not prose. */
-export type AgentTaskResult = { schema: 'orca.agent-task-result/1' } & AgentTaskOutcome
+/** Stored in `tasks.result` so a parent reads a structure, not prose. `round` counts the holding
+ *  agent's turns on this task; `awaitingChildren` marks a turn that delegated and now waits. */
+export type AgentTaskResult = {
+  schema: 'orca.agent-task-result/1'
+  round?: number
+  awaitingChildren?: boolean
+} & AgentTaskOutcome
 
-export function serializeAgentTaskResult(outcome: AgentTaskOutcome): string {
-  const result: AgentTaskResult = { schema: 'orca.agent-task-result/1', ...outcome }
+export function serializeAgentTaskResult(
+  outcome: AgentTaskOutcome,
+  progress: { round?: number; awaitingChildren?: boolean } = {}
+): string {
+  const result: AgentTaskResult = { schema: 'orca.agent-task-result/1', ...progress, ...outcome }
   return JSON.stringify(result)
+}
+
+export function parseAgentTaskResult(raw: string | null): AgentTaskResult | null {
+  if (!raw) {
+    return null
+  }
+  try {
+    const value = JSON.parse(raw) as Partial<AgentTaskResult>
+    return value?.schema === 'orca.agent-task-result/1' ? (value as AgentTaskResult) : null
+  } catch {
+    return null
+  }
 }
 
 /** `unreadable` is never folded into `none`: a task whose subject was damaged must not run as if it

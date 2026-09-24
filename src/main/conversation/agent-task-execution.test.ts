@@ -113,6 +113,53 @@ describe('runAgentTask', () => {
     expect(driverCalls).toEqual([])
   })
 
+  it('continues the task’s own conversation on a follow-up turn', async () => {
+    const first = await runAgentTask(deps(), {
+      taskId: 'task_6',
+      agentId: 'agent_free',
+      spec: 'start',
+      subject: null
+    })
+    if (first.outcome !== 'completed') {
+      throw new Error(`expected completed, got ${first.outcome}`)
+    }
+
+    const followUp = await runAgentTask(deps(), {
+      taskId: 'task_6',
+      agentId: 'agent_free',
+      spec: 'The tasks you delegated have settled.',
+      subject: null,
+      continueConversationId: first.conversationId
+    })
+
+    expect(followUp).toMatchObject({ outcome: 'completed', conversationId: first.conversationId })
+    expect(await service.list()).toHaveLength(1)
+    expect(driverCalls).toHaveLength(2)
+  })
+
+  it('refuses to continue a conversation that belongs to another agent', async () => {
+    const other = await runAgentTask(deps(), {
+      taskId: 'task_7',
+      agentId: 'agent_free',
+      spec: 'start',
+      subject: null
+    })
+    if (other.outcome !== 'completed') {
+      throw new Error(`expected completed, got ${other.outcome}`)
+    }
+
+    const outcome = await runAgentTask(deps(), {
+      taskId: 'task_8',
+      agentId: 'agent_api',
+      spec: 'continue',
+      subject: null,
+      continueConversationId: other.conversationId
+    })
+
+    expect(outcome).toMatchObject({ outcome: 'refused', reason: 'task-conversation-unavailable' })
+    expect(driverCalls).toHaveLength(1)
+  })
+
   it('reports an unauthenticated provider as a refusal, not as work done', async () => {
     const outcome = await runAgentTask(
       deps({ checkAuth: async () => ({ ready: false, detail: 'codex: no stored credential' }) }),

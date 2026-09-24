@@ -66,6 +66,7 @@ describe('agent-assigned task dispatch', () => {
     expect(settled.status).toBe('completed')
     expect(JSON.parse(settled.result!)).toEqual({
       schema: 'orca.agent-task-result/1',
+      round: 1,
       outcome: 'completed',
       conversationId: 'conv_1',
       turnId: 'turn_1',

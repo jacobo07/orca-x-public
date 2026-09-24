@@ -35,6 +35,35 @@ function replyText(record: ConversationRecord, turnId: string): string {
     .join('\n')
 }
 
+/** A first turn opens the task's conversation; a follow-up continues it, and only as the agent it
+ *  belongs to — a conversation id from a stored result is evidence, never authority. */
+async function openTaskConversation(
+  deps: AgentTaskExecutionDeps,
+  request: AgentTaskRequest,
+  agent: Agent
+): Promise<{ conversationId: string } | { refused: AgentTaskOutcome }> {
+  if (request.continueConversationId) {
+    const loaded = await deps.service.read(request.continueConversationId)
+    if (loaded.outcome !== 'loaded' || loaded.record.agentId !== agent.id) {
+      return {
+        refused: {
+          outcome: 'refused',
+          reason: 'task-conversation-unavailable',
+          detail: `The conversation for task ${request.taskId} is not ${agent.name}'s, or cannot be read.`
+        }
+      }
+    }
+    return { conversationId: loaded.record.id }
+  }
+  const created = await deps.service.createForAgent({ agentId: agent.id, title: `Task ${request.taskId}` })
+  if (created.outcome !== 'created') {
+    return {
+      refused: { outcome: 'refused', reason: created.outcome, detail: 'The agent could not be verified.' }
+    }
+  }
+  return { conversationId: created.record.id }
+}
+
 export async function runAgentTask(
   deps: AgentTaskExecutionDeps,
   request: AgentTaskRequest
@@ -52,14 +81,11 @@ export async function runAgentTask(
     }
   }
 
-  const created = await deps.service.createForAgent({
-    agentId: agent.id,
-    title: `Task ${request.taskId}`
-  })
-  if (created.outcome !== 'created') {
-    return { outcome: 'refused', reason: created.outcome, detail: 'The agent could not be verified.' }
+  const conversation = await openTaskConversation(deps, request, agent)
+  if ('refused' in conversation) {
+    return conversation.refused
   }
-  const conversationId = created.record.id
+  const { conversationId } = conversation
 
   const turn = await runConversationTurn(deps, {
     conversationId,
