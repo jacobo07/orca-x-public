@@ -6,7 +6,15 @@
 // "codex" resolves to this node, and `app-server` is a script file of that name in the project
 // directory, so `node app-server` is what runs — in the directory the turn was located in.
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -75,7 +83,7 @@ type Harness = {
   handler: AgentProcessHandler
 }
 
-function createHarness(): Harness {
+function createHarness(realHost = false): Harness {
   let relayFeed: ((data: Buffer) => void) | undefined
   const clientDataCallbacks: ((data: Buffer) => void)[] = []
   const transport: MultiplexerTransport = {
@@ -105,10 +113,10 @@ function createHarness(): Harness {
   relayFeed = (data) => dispatcher.feed(data)
   // The handler refuses Windows hosts; this test host may be Windows, and the refusal is not what
   // it is proving. Everything else — spawn, streams, kill — is the real code.
-  const handler = new AgentProcessHandler(dispatcher, {
-    resolveCommand: async () => process.execPath,
-    platform: 'linux'
-  })
+  const handler = new AgentProcessHandler(
+    dispatcher,
+    realHost ? {} : { resolveCommand: async () => process.execPath, platform: 'linux' }
+  )
   return { dispatcher, mux: new SshChannelMultiplexer(transport), handler }
 }
 
@@ -219,3 +227,53 @@ describe('a remote turn through the real relay handler and a real child', () => 
     expect(await waitUntil(() => !isAlive(pid), 10_000)).toBe(true)
   }, 60_000)
 })
+
+/** Every process whose working directory is `dir`, read from the kernel rather than the child. */
+function processesIn(dir: string): number[] {
+  const real = realpathSync(dir)
+  return readdirSync('/proc')
+    .filter((name) => /^\d+$/.test(name))
+    .filter((name) => {
+      try {
+        return readlinkSync(`/proc/${name}/cwd`) === real
+      } catch {
+        return false
+      }
+    })
+    .map(Number)
+}
+
+// Rung 3, opt-in: the installed Codex CLI on a Linux host, with the host deps unreplaced — real
+// command resolution, spawn and group kill. Needs no login: `thread/start` answers without a model.
+describe.skipIf(process.platform !== 'linux' || process.env.ORCA_REAL_CODEX_RUNG !== '1')(
+  'a real codex app-server through the relay handler',
+  () => {
+    it('runs in the located directory, reports it, and leaves no process behind', async () => {
+      const real = createHarness(true)
+      const home = mkdtempSync(join(tmpdir(), 'orca-isolated-codex-home-'))
+      try {
+        const observed = await runCodexAppServerSession(
+          { command: 'codex', args: ['app-server'], timeoutMs: 60_000, exitGraceMs: 5_000 },
+          async (rpc) => {
+            const started = (await rpc.request('thread/start', { cwd: project })) as {
+              thread?: { cwd?: string }
+            }
+            return { threadCwd: started.thread?.cwd, running: processesIn(project) }
+          },
+          createSshAgentProcessSpawn(real.mux, {
+            cwd: project,
+            deadlineMs: 60_000,
+            envOverlay: { CODEX_HOME: home }
+          }) as never
+        )
+        expect(realpathSync(observed.threadCwd ?? '')).toBe(realpathSync(project))
+        expect(observed.running.length).toBeGreaterThan(0)
+        expect(await waitUntil(() => processesIn(project).length === 0, 10_000)).toBe(true)
+      } finally {
+        await real.handler.dispose()
+        real.mux.dispose()
+        rmSync(home, { recursive: true, force: true })
+      }
+    }, 90_000)
+  }
+)
