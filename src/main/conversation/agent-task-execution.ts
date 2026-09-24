@@ -6,10 +6,18 @@ import type {
   AgentTaskOutcome,
   AgentTaskRequest
 } from '../runtime/orchestration/agent-task-contract'
-import { runConversationTurn, type ConversationTurnDeps } from './conversation-turn-runner'
+import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
+import {
+  runConversationTurn,
+  type ConversationTurnDeps,
+  type ConversationTurnRequest
+} from './conversation-turn-runner'
 
 export type AgentTaskExecutionDeps = ConversationTurnDeps & {
   readAgents: () => readonly Agent[]
+  /** The desktop hands in a ROUTED turn here, so a delegated task picks its provider the same way
+   *  a person's message does. Absent, the deps' own driver runs it. */
+  runTurn?: (request: ConversationTurnRequest) => Promise<ConversationTurnOutcome>
 }
 
 /** The task text the agent receives. The subject is stated, never inferred by the agent. */
@@ -87,12 +95,13 @@ export async function runAgentTask(
   }
   const { conversationId } = conversation
 
-  const turn = await runConversationTurn(deps, {
+  const turnRequest = {
     conversationId,
     text: composeDelegatedTaskText(request),
     cwd: null,
     ...(request.tools ? { tools: request.tools } : {})
-  })
+  }
+  const turn = deps.runTurn ? await deps.runTurn(turnRequest) : await runConversationTurn(deps, turnRequest)
   switch (turn.outcome) {
     case 'completed': {
       // The runner awaits its durable writes before answering `completed`, so the reply is on disk.
@@ -113,6 +122,8 @@ export async function runAgentTask(
       return { outcome: 'failed', reason: `not-durable: ${turn.reason}`, conversationId, turnId: null }
     case 'auth-required':
       return { outcome: 'refused', reason: 'auth-required', detail: turn.detail }
+    case 'no-provider':
+      return { outcome: 'refused', reason: 'no-provider', detail: turn.detail }
     case 'project-unavailable':
       return { outcome: 'refused', reason: `project-${turn.reason}`, detail: turn.detail }
     case 'agent-unavailable':

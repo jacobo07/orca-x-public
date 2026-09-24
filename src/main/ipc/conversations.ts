@@ -28,13 +28,22 @@ import {
 import {
   runConversationTurn,
   type ConversationTurnDeps,
-  type ConversationTurnOutcome
+  type ConversationTurnOutcome,
+  type ConversationTurnRequest
 } from '../conversation/conversation-turn-runner'
 import type { Agent } from '../../shared/agent-types'
 import { runAgentTask } from '../conversation/agent-task-execution'
+import type { ConversationProviderEntry } from '../conversation/conversation-provider-routing'
+import { ProviderQuotaObservations } from '../conversation/provider-quota-observations'
+import { runRoutedConversationTurn } from '../conversation/routed-conversation-turn'
+import { checkClaudeAuth } from '../claude/claude-auth-readiness'
+import { createClaudeConversationDriver } from '../claude/claude-conversation-driver'
 import { registerAgentTaskRunner } from '../runtime/orchestration/agent-task-runner-registry'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaConversationsDirectory } from '../orca-profiles/profile-storage-paths'
+
+/** What each provider last said about its own quota. Process-wide: every window's turns share it. */
+const providerQuota = new ProviderQuotaObservations()
 
 /**
  * Why the renderer gets product operations and not a file API: a conversation is a product entity,
@@ -126,6 +135,8 @@ export type ConversationIpcDeps = {
   turnDeps: Omit<ConversationTurnDeps, 'service'>
   /** Absent means grounding cannot be answered, which is reported as such — never as "missing". */
   roster?: ConversationAgentRoster
+  /** The desktop's routed turn. Absent, `turnDeps.driver` runs every turn (the pre-routing path). */
+  runTurn?: (request: ConversationTurnRequest) => Promise<ConversationTurnOutcome>
 }
 
 export function createConversationIpcHandlers(deps: ConversationIpcDeps): ConversationIpcHandlers {
@@ -162,19 +173,20 @@ export function createConversationIpcHandlers(deps: ConversationIpcDeps): Conver
         agentId
       )
     },
-    'conversations:sendTurn': async (args) =>
-      runConversationTurn(
-        { ...deps.turnDeps, service },
-        {
-          conversationId: requireConversationId(args?.id),
-          text: requireText(args?.text),
-          // An absent cwd stays ABSENT. It used to become `process.cwd()`, which on a packaged
-          // build is Orca's own install directory — so an agent asked about "this repository"
-          // answered about Orca's packaged files. The runner decides from the agent's project, and
-          // falls back to a declared location when nothing owns the answer.
-          cwd: typeof args?.cwd === 'string' && args.cwd ? args.cwd : null
-        }
-      )
+    'conversations:sendTurn': async (args) => {
+      const request: ConversationTurnRequest = {
+        conversationId: requireConversationId(args?.id),
+        text: requireText(args?.text),
+        // An absent cwd stays ABSENT. It used to become `process.cwd()`, which on a packaged
+        // build is Orca's own install directory — so an agent asked about "this repository"
+        // answered about Orca's packaged files. The runner decides from the agent's project, and
+        // falls back to a declared location when nothing owns the answer.
+        cwd: typeof args?.cwd === 'string' && args.cwd ? args.cwd : null
+      }
+      return deps.runTurn
+        ? deps.runTurn(request)
+        : runConversationTurn({ ...deps.turnDeps, service }, request)
+    }
   }
 }
 
@@ -207,8 +219,9 @@ export function registerConversationHandlers(
   projects: ProjectLocationReader
 ): void {
   const service = getConversationService(agentRoster)
+  const codex = createCodexConversationDriver()
   const turnDeps = {
-    driver: createCodexConversationDriver(),
+    driver: codex,
     checkAuth: checkCodexAuth,
     resolveProjectLocation: (agent: Agent) => resolveAgentProjectLocation(agent, projects),
     // The user's home, never `process.cwd()`. Both are "not a project"; only one of them is a
@@ -218,11 +231,39 @@ export function registerConversationHandlers(
     mintItemId: () => `usr_${randomUUID()}`,
     emit: broadcastTurnEvent
   }
-  const handlers = createConversationIpcHandlers({ service, roster: agentRoster, turnDeps })
-  // A delegated task runs through these same deps, so it cannot find a second location rule, a
-  // second auth check or a second driver. Headless serve never reaches this and registers nothing.
+  // Registry order is the default preference; routing explains every provider it passes over.
+  // Codex can serve Orca's tools (dynamic tools, measured); Claude cannot yet (no MCP bridge).
+  const providers: ConversationProviderEntry[] = [
+    { provider: 'codex', driver: codex, checkAuth: checkCodexAuth, tools: 'supported' },
+    {
+      provider: 'claude',
+      driver: createClaudeConversationDriver({
+        observeQuota: (quota) => providerQuota.record('claude', quota, Date.now())
+      }),
+      checkAuth: () => checkClaudeAuth(),
+      tools: 'unsupported'
+    }
+  ]
+  const routedDeps = { ...turnDeps, service, providers, quota: providerQuota }
+  const handlers = createConversationIpcHandlers({
+    service,
+    roster: agentRoster,
+    turnDeps,
+    runTurn: async (request) => (await runRoutedConversationTurn(routedDeps, request)).turn
+  })
+  // A delegated task runs through these same deps and the same router, so it cannot find a second
+  // location rule, a second auth check or a second driver. It prefers a provider that can serve its
+  // delegate tool. Headless serve never reaches this and registers nothing.
   registerAgentTaskRunner((request) =>
-    runAgentTask({ ...turnDeps, service, readAgents: () => agentRoster.readAgents() }, request)
+    runAgentTask(
+      {
+        ...turnDeps,
+        service,
+        readAgents: () => agentRoster.readAgents(),
+        runTurn: async (turn) => (await runRoutedConversationTurn(routedDeps, turn, { prefersTools: true })).turn
+      },
+      request
+    )
   )
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.removeHandler(channel)

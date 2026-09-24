@@ -32,6 +32,9 @@ export type ConversationTurnOutcome =
       detail: string
     }
   | { outcome: 'auth-required'; detail: string }
+  /** No provider could run the turn (signed out, quota exhausted, lacking a required capability).
+   *  Refused before anything was committed or sent; `detail` names every provider's reason. */
+  | { outcome: 'no-provider'; detail: string }
   | { outcome: 'not-durable'; reason: string }
   | { outcome: 'failed'; turnId: string; reason: string }
 

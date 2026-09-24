@@ -30,7 +30,12 @@ function messageFor(notice: Notice): string {
     case 'auth-required':
       return translate(
         'conversations.noticeAuthRequired',
-        'Codex is not signed in. Sign in, then send again — your message was kept.'
+        'The AI provider for this turn is not signed in. Sign in, then send again — your message was kept.'
+      )
+    case 'no-provider':
+      return translate(
+        'conversations.noticeNoProvider',
+        'No AI provider can run this turn right now, so nothing was sent. The reasons are below.'
       )
     case 'busy':
       return translate(

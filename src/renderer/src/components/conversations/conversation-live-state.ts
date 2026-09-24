@@ -15,6 +15,8 @@ import type { ConversationForAgentResult } from '../../../../shared/conversation
 
 export type ConversationNoticeKind =
   | 'auth-required'
+  /** Routing found no provider able to run the turn; the detail names each provider's reason. */
+  | 'no-provider'
   | 'busy'
   | 'failed'
   | 'interrupted'
@@ -120,6 +122,9 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
     case 'auth-required':
       // Never rendered as an assistant message: a 401 is not a conversation.
       return { kind: 'auth-required', detail: outcome.detail, userMessageKept: true }
+    case 'no-provider':
+      // Routing refused before anything was committed, so the message stays in the composer.
+      return { kind: 'no-provider', detail: outcome.detail, userMessageKept: false }
     case 'not-durable':
       return { kind: 'not-durable', detail: outcome.reason, userMessageKept: true }
     case 'failed':
