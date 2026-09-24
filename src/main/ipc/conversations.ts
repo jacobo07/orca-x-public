@@ -14,6 +14,7 @@ import type {
   ConversationLoadResult,
   ConversationRecord
 } from '../../shared/conversation-types'
+import type { Project } from '../../shared/project-types'
 import { readStoredCodexCredentialState } from '../codex-accounts/managed-codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import { readAgentGrounding } from '../conversation/agent-grounding'
@@ -21,6 +22,11 @@ import {
   resolveAgentProjectLocation,
   type ProjectLocationReader
 } from '../conversation/agent-project-location'
+import {
+  createConversationHost,
+  type ConversationHost,
+  type ConversationTurnEventListener
+} from '../conversation/conversation-host'
 import {
   ConversationService,
   type ConversationAgentRoster
@@ -79,7 +85,9 @@ export type ConversationIpcHandlers = {
  */
 function requireConversationId(value: unknown): string {
   if (!isConversationId(value)) {
-    throw new Error(`conversations: refusing a value that is not a conversation id: ${String(value)}`)
+    throw new Error(
+      `conversations: refusing a value that is not a conversation id: ${String(value)}`
+    )
   }
   return value
 }
@@ -107,7 +115,9 @@ export function codexAuthPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(env.CODEX_HOME ?? join(homedir(), '.codex'), 'auth.json')
 }
 
-export async function checkCodexAuth(): Promise<{ ready: true } | { ready: false; detail: string }> {
+export async function checkCodexAuth(): Promise<
+  { ready: true } | { ready: false; detail: string }
+> {
   const state = readStoredCodexCredentialState(codexAuthPath())
   if (state === 'present') {
     return { ready: true }
@@ -185,6 +195,18 @@ export function getConversationService(agentRoster: ConversationAgentRoster): Co
   return cachedService
 }
 
+const turnEventListeners = new Set<ConversationTurnEventListener>()
+
+/** Paired clients (runtime RPC) hear the same turn stream the windows do. */
+export function subscribeConversationTurnEvents(
+  listener: ConversationTurnEventListener
+): () => void {
+  turnEventListeners.add(listener)
+  return () => {
+    turnEventListeners.delete(listener)
+  }
+}
+
 /** Broadcast rather than reply-to-sender: a conversation is not owned by the window that happened
  *  to send the turn, and a second window showing the same conversation must see the same stream. */
 function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void {
@@ -194,16 +216,29 @@ function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void
       window.webContents.send(CONVERSATION_TURN_EVENT_CHANNEL, payload)
     }
   }
+  for (const listener of turnEventListeners) {
+    try {
+      listener(payload)
+    } catch (error) {
+      // One paired client's failure must not stop the turn or the other listeners.
+      console.warn('[conversations] turn event listener failed', error)
+    }
+  }
 }
 
-/** `agentRoster` reads the same PersistedState roster `agents:list` does, so there is one answer
- *  to "does this agent exist" and it follows Project id promotion. `projects` is read the same way
- *  and for the same reason: a setup that became ready must be visible without a restart. */
-export function registerConversationHandlers(
+let cachedHandlers: ConversationIpcHandlers | null = null
+
+/**
+ * One handler set per process, shared by the IPC channels and the runtime RPC, so desktop and a
+ * paired phone go through the same service and the same turn admission. `agentRoster` reads the
+ * same PersistedState roster `agents:list` does; `projects` is read per call so a setup that became
+ * ready is visible without a restart.
+ */
+export function getConversationHandlers(
   agentRoster: ConversationAgentRoster,
   projects: ProjectLocationReader
-): void {
-  const handlers = createConversationIpcHandlers({
+): ConversationIpcHandlers {
+  cachedHandlers ??= createConversationIpcHandlers({
     service: getConversationService(agentRoster),
     roster: agentRoster,
     turnDeps: {
@@ -218,6 +253,33 @@ export function registerConversationHandlers(
       emit: broadcastTurnEvent
     }
   })
+  return cachedHandlers
+}
+
+/** The paired-client face of the same handlers (see conversation-host.ts for what it withholds). */
+export function getConversationHost(
+  agentRoster: ConversationAgentRoster,
+  projects: ProjectLocationReader,
+  readProjects: () => readonly Project[]
+): ConversationHost {
+  const handlers = getConversationHandlers(agentRoster, projects)
+  return createConversationHost({
+    list: handlers['conversations:list'],
+    read: handlers['conversations:read'],
+    agentGrounding: handlers['conversations:agentGrounding'],
+    createForAgent: handlers['conversations:createForAgent'],
+    sendTurn: handlers['conversations:sendTurn'],
+    readAgents: () => agentRoster.readAgents(),
+    readProjects,
+    subscribe: subscribeConversationTurnEvents
+  })
+}
+
+export function registerConversationHandlers(
+  agentRoster: ConversationAgentRoster,
+  projects: ProjectLocationReader
+): void {
+  const handlers = getConversationHandlers(agentRoster, projects)
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, (_event, args) =>

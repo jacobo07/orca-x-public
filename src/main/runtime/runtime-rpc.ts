@@ -410,6 +410,15 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',
+  // Workspace on the phone: durable-agent conversations. sendTurn carries no cwd — the agent's
+  // project decides where it runs — and goes through the desktop's own turn admission.
+  'conversations.workspace',
+  'conversations.read',
+  'conversations.agentGrounding',
+  'conversations.createForAgent',
+  'conversations.sendTurn',
+  'conversations.subscribe',
+  'conversations.unsubscribe',
   'settings.get',
   'settings.getTerminalQuickCommands',
   'settings.update',
