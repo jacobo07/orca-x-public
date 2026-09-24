@@ -68,9 +68,7 @@ export async function runAgentTask(
   })
   switch (turn.outcome) {
     case 'completed': {
-      // Why: the runner's event writes are fire-and-forget; queue behind them, or the reply the
-      // parent reads can be one the record has not received yet.
-      await deps.service.applyEvent(conversationId, (record) => record)
+      // The runner awaits its durable writes before answering `completed`, so the reply is on disk.
       const loaded = await deps.service.read(conversationId)
       if (loaded.outcome !== 'loaded') {
         return { outcome: 'failed', reason: 'reply-unreadable', conversationId, turnId: turn.turnId }

@@ -66,4 +66,29 @@ describe('Coordinator with an agent-assigned task', () => {
       conversationId: 'conv_b'
     })
   })
+
+  // Headless serve: no runner. The only protection left is the terminal-pool filter itself; the
+  // dispatch lock cannot help because the task is still `ready`.
+  it('keeps it waiting, off the idle terminal, when this host cannot run agent turns', async () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'investigate the migration', assigneeAgentId: 'agent_b' })
+    const runtime = idleTerminalRuntime()
+    const logs: string[] = []
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'fix migration',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 10,
+      onLog: (line) => logs.push(line)
+    })
+
+    const running = coordinator.run()
+    await expect.poll(() => logs.some((line) => line.includes('cannot run agent turns'))).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    coordinator.stop()
+    await running
+
+    expect(runtime.prompts).toEqual([])
+    expect(runtime.created).toBe(0)
+    expect(db.getTask(task.id)?.status).toBe('ready')
+  })
 })
