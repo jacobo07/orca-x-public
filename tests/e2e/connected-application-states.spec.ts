@@ -96,6 +96,9 @@ test('a connected app reports degraded and unreachable from real servers', async
     const { app, page } = await session.launch()
     await attachRepoAndOpenTerminal(page, testRepoPath)
     await enableAgentSurfaces(page)
+    // The workspace lays out by its own width; at the default window size the context rail that
+    // holds the apps card is collapsed, which is the layout working, not the precondition.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
 
     const degraded = await connectApplicationToNewAgent(page, {
       label: 'Sick App',
