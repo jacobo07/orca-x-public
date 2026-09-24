@@ -44,20 +44,18 @@ function streamingMessages(
   live: ConversationLiveState,
   durableIds: ReadonlySet<string>
 ): NativeChatMessage[] {
-  return (
-    Object.entries(live.streamingByItemId)
-      // Defensive: the live state drops a stream when its message settles, so this should already be
-      // empty. If both ever existed, the durable one wins and the half-written one is not shown
-      // beside it.
-      .filter(([itemId]) => !durableIds.has(itemId))
-      .map(([itemId, text]) => ({
-        id: itemId,
-        role: 'assistant' as const,
-        blocks: [{ type: 'text' as const, text }],
-        timestamp: null,
-        source: 'transcript' as const
-      }))
-  )
+  return Object.entries(live.streamingByItemId)
+    // Defensive: the live state drops a stream when its message settles, so this should already be
+    // empty. If both ever existed, the durable one wins and the half-written one is not shown
+    // beside it.
+    .filter(([itemId]) => !durableIds.has(itemId))
+    .map(([itemId, text]) => ({
+      id: itemId,
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text }],
+      timestamp: null,
+      source: 'transcript' as const
+    }))
 }
 
 function statusFor(input: ConversationSessionInput, messageCount: number): NativeChatSessionStatus {
@@ -80,7 +78,9 @@ export function conversationToNativeChatSession(
   const durableIds = new Set(durable.map((message) => message.id))
   const messages = [...durable, ...streamingMessages(input.live, durableIds)]
 
-  const latestBinding = input.record?.provenance.filter((entry) => entry.providerSessionId !== null)
+  const latestBinding = input.record?.provenance.filter(
+    (entry) => entry.providerSessionId !== null
+  )
   const sessionId = latestBinding?.at(-1)?.providerSessionId ?? null
 
   return {

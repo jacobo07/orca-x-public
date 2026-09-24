@@ -43,7 +43,10 @@ function messageFor(notice: Notice): string {
         'The answer arrived but could not be saved, so it is not in your history. Send again rather than relying on it.'
       )
     case 'failed':
-      return translate('conversations.noticeFailed', 'The turn failed. Your message was kept.')
+      return translate(
+        'conversations.noticeFailed',
+        'The turn failed. Your message was kept.'
+      )
     case 'interrupted':
       return translate(
         'conversations.noticeInterrupted',
