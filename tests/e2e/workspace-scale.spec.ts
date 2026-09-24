@@ -38,14 +38,21 @@ async function createAgents(page: Page, from: number, to: number): Promise<strin
 }
 
 /** Opens Workspace → Agents from the Terminals view; ms to the entry's tab bar, then to the first row. */
-async function openRoster(page: Page): Promise<{ total: number; entry: number; rows: number }> {
+// `dom` dispatches the click in the page, skipping Playwright's actionability wait, so a gap between the
+// two modes is the harness's pointer wait rather than the product's.
+async function openRoster(
+  page: Page,
+  mode: 'pointer' | 'dom' = 'pointer'
+): Promise<{ total: number; entry: number; rows: number }> {
+  const press = (locator: ReturnType<Page['locator']>): Promise<void> =>
+    mode === 'dom' ? locator.evaluate((el) => (el as HTMLElement).click()) : locator.click()
   await page.locator('[data-workspace-activity="workspace"]').first().click()
   await expect(page.getByTestId('workspace-agent-row')).toHaveCount(0)
   const started = Date.now()
-  await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+  await press(page.locator('[data-workspace-activity="agent-workspace"]').first())
   await expect(page.getByTestId('workspace-tab-agents')).toBeVisible({ timeout: 60_000 })
   const entered = Date.now()
-  await page.getByTestId('workspace-tab-agents').click()
+  await press(page.getByTestId('workspace-tab-agents'))
   await expect(page.getByTestId('workspace-agent-row').first()).toBeVisible({ timeout: 60_000 })
   const done = Date.now()
   return { total: done - started, entry: entered - started, rows: done - entered }
@@ -100,6 +107,7 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
   })
 
   const roster = await openRoster(orcaPage)
+  const rosterDom = await openRoster(orcaPage, 'dom')
   const agentRows = await orcaPage.getByTestId('workspace-agent-row').count()
   await orcaPage.getByTestId('workspace-tab-threads').click()
   await expect(orcaPage.getByTestId('conversations-list-row').first()).toBeVisible({
@@ -114,7 +122,7 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
 
   const scaleDeltaMs = roster.total - warmOne.total
   console.log(
-    `[workspace-scale] agents=${AGENTS} threads=${THREADS} coldOne=${coldOne.entry}+${coldOne.rows} warmOne=${warmOne.entry}+${warmOne.rows} roster=${roster.entry}+${roster.rows} scaleDeltaMs=${scaleDeltaMs} agentRows=${agentRows} threadRows=${threadRows} listMs=${reads.listMs} agentsMs=${reads.agentsMs} domNodes=${domNodes} heapMb=${heapMb}`
+    `[workspace-scale] agents=${AGENTS} threads=${THREADS} coldOne=${coldOne.entry}+${coldOne.rows} warmOne=${warmOne.entry}+${warmOne.rows} roster=${roster.entry}+${roster.rows} rosterDom=${rosterDom.entry}+${rosterDom.rows} scaleDeltaMs=${scaleDeltaMs} agentRows=${agentRows} threadRows=${threadRows} listMs=${reads.listMs} agentsMs=${reads.agentsMs} domNodes=${domNodes} heapMb=${heapMb}`
   )
   expect(reads).toMatchObject({ threads: THREADS, agents: AGENTS })
   expect(scaleDeltaMs).toBeLessThan(BUDGET.scaleDeltaMs)
