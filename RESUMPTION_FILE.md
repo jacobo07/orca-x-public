@@ -4,50 +4,30 @@
 
 Worktree **`C:\Users\User\Apps\orca-cogws-wt`**, branch **`orca-x/cognitive-workspace`** (unpushed).
 A `/clear`'d pane has SIX times opened the Desktop checkout instead — prove `git worktree list` first.
-Long run: session `a83285fc`, `/gsd-autonomous`, 12 cycles / 24 h, roadmap `.planning/ROADMAP.md`
-(git-excluded), state `.planning/STATE.md` (authoritative position — read it first).
-Spec of record: `docs/orca-cognitive-workspace-spec.md`. Done-gate:
-`node config/scripts/check-cognitive-workspace-completeness.mjs` (exit 1 today = open rows; expected).
+Roadmap `.planning/ROADMAP.md` + `.planning/STATE.md` (git-excluded). Spec
+`docs/orca-cognitive-workspace-spec.md`; authority/outcomes reference
+`docs/reference/remote-agent-turn-authority.md`.
 
-## 2. Exact state (2026-09-24)
+## 2. Exact state (2026-09-24) — PROGRAM COMPLETE
 
-- Phase 1 COMPLETE — completeness verifier + matrix `config/cognitive-workspace-completeness.jsonc`,
-  integrity step in pr.yml, drill 2/2 (`778e8f800`..`723b14b99`).
-- Phase 2 COMPLETE — `resolved-remote` / `ambiguous-host` location model, selection by rule
-  (`b63595026`..`59f636afe`, drill 5/5).
-- Phase 3 COMPLETE (`364e85cfe`..`0e8e0fb64`) — relay `agentProcess.*`, ssh spawn adapter, runner
-  remote seam, `provider-unavailable` states. GEX44: drill 11/11, control 83/83, tsc 0; opt-in rung 3
-  (`ORCA_REAL_CODEX_RUNG=1`) runs the installed codex through the real relay handler. Matrix C/G/I
-  stay open: the real ssh channel is Phase 5, and the model turn is quota-blocked.
-- Phase 4 COMPLETE (`66d26bde3`..`36c723e1d`) — a resumed thread relocates to the project's new
-  directory only on a Codex whose `initialize` version (≥ 0.153.4) is measured to do it, and only if
-  it confirms the directory; otherwise a new thread in the right place. Drill 19/19. Matrix E done.
-- Phase 5 COMPLETE bar the answer leg (`ea1c2e817`..`be1b5f83e`) — real Electron + real ssh + real
-  Codex on GEX44; matrix C/G/I complete, Q BLOCKED_BY_OWNER_AUTH (quota). Fixed: a usage-limited turn
-  was reported `completed`. Drill 22/22. Matrix: 7 complete / 11 open / 2 blocked.
-- Coherence anchors (all must pass): check-durable-actor-catalogs, check-agent-identity-authority,
-  check-recurring-work-inventory, check-agent-instruction-layer, check-agent-turn-location-authority,
-  check-cognitive-workspace-completeness --integrity.
+`node config/scripts/check-cognitive-workspace-completeness.mjs` → **exit 0**: 18 complete / 0 open /
+2 blocked (Q owner-auth, T runner-capacity), 50/50 evidence pointers, every complete row's gate run.
+Phases 1–9 sealed; per-phase `NN-VERIFICATION.md` under `.planning/phases/`. Last drill: 30/30 on
+GEX44 at `6afec4fd0`.
 
 ## 3. Active decisions
 
-- Conversation stays on the desktop; only the provider EFFECT runs on the ssh host (headless serve has
-  no ConversationService). Runtime hosts refuse (`remote-host`).
-- Relay output rides the bulk lane, sequenced; a gap is an error, never a hole. Remote child `pid`
-  undefined; desktop env never shipped (overlay: CODEX_HOME only).
-- Codex `thread/resume` DOES accept `cwd` (schema 0.153.4 + 0.155.1; protocol-observed on GEX44) —
-  Phase 4 sends it version-gated; cross-host move = new thread, same ConversationId.
-- Real provider behaviour legs: GEX44 Codex quota-blocked until 2026-09-27 19:54; local homes signed out.
+- Conversation on the desktop; provider effect on the ssh host via relay `agentProcess.*`.
+- A location is a path AND a host; provenance carries `executionHostId`, `cwd`, `hostAddress`.
+- Resume relocates only on Codex ≥ 0.153.4 whose own answer confirms the directory.
 
-## 4. Next three actions
+## 4. Next three actions (all owner-gated)
 
-1. Phase 6 (restart under remote location, matrix F) — then Phases 7–9 per `.planning/ROADMAP.md`.
-2. GEX44 runners are in `.planning/tools/` (verify / drill / e2e + private sshd). The e2e runner's
-   private sshd forces a throwaway HOME+CODEX_HOME; never point Orca at kobii's real home.
-3. After 2026-09-27 19:54: `gex44-e2e.ps1 -Phase build`, then `-Phase test -SignedIn` must show the
-   marker 4471 (matrix Q, owner-auth) — plus the Phase 4 behaviour rung and audit gaps 11/14.
+1. After 2026-09-27 19:54 (Codex quota): `.planning/tools/gex44-e2e.ps1 -Sha <HEAD> -Phase build`, then
+   `-Phase test -SignedIn`; the answer must contain 4471 → flip matrix Q to complete.
+2. When a GitHub runner is assigned (runner_id > 0) → flip matrix T.
+3. Push the branch / open the PR only on the Owner's word.
 
 ## 5. Start
 
-Read `.planning/STATE.md` §Position, prove the worktree, run the anchors, continue at §4.
-Heavy suites → GEX44 via `scratchpad/gex44-verify.ps1` (session scratchpad; recreate from STATE if gone).
+Read `.planning/STATE.md`, prove the worktree, run the done-gate above.
