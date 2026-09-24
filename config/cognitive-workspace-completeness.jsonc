@@ -78,10 +78,28 @@
       "id": "E",
       "dimension": "provider-execution-location",
       "owner": "src/main/codex/codex-conversation-driver.ts",
-      "state": "open",
+      "state": "complete",
       "phase": "4",
       "claim": "A resumed provider thread runs where the agent's project is now, not where it was born.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-thread-relocation-capability.test.ts",
+          "title": "is supported from the measured floor, and UNKNOWN below it"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-conversation-driver-relocation.test.ts",
+          "title": "starts a new thread in the new directory when the provider keeps the old one"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "resumes a thread from one directory into another only as the provider confirms it",
+          "rung": "real-remote-host",
+          "note": "opt-in ORCA_REAL_CODEX_RUNG=1: installed codex-cli 0.155.1 on GEX44 through the driver's own resume path kept the same thread in the new directory (e2a5ea51e); mutants resume-drops-the-new-directory (unit + this rung), unconfirmed-location-accepted, unknown-codex-asked-to-relocate caught. Owed, quota-blocked: a model turn's file read landing in the new directory (row I)"
+        }
+      ],
       "closes": "Where a resumed thread runs is expressed as measured provider capability, and a stale thread reused after relocation is refused."
     },
     {
