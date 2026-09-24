@@ -18,7 +18,8 @@ import {
   Check,
   UserCircle,
   PanelLeftClose,
-  SquareTerminal
+  SquareTerminal,
+  AppWindow
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts, updateLastConnected } from '../../../src/transport/host-store'
@@ -974,6 +975,23 @@ export function HostScreen({
                 />
               </Pressable>
 
+              <Pressable
+                style={[
+                  styles.embeddedToolbarIconButton,
+                  connState !== 'connected' && styles.toolbarIconDisabled
+                ]}
+                onPress={() => navigateFromHostList(`/h/${hostId}/workspace`)}
+                disabled={connState !== 'connected'}
+                accessibilityRole="button"
+                accessibilityLabel="Workspace"
+                testID="host-open-workspace"
+              >
+                <AppWindow
+                  size={16}
+                  color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+                />
+              </Pressable>
+
               {floatingWorkspaceEnabled ? (
                 <Pressable
                   style={[
@@ -1081,6 +1099,20 @@ export function HostScreen({
               disabled={connState !== 'connected'}
             >
               <List
+                size={16}
+                color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+              />
+            </Pressable>
+
+            <Pressable
+              style={styles.searchToggle}
+              onPress={() => navigateFromHostList(`/h/${hostId}/workspace`)}
+              disabled={connState !== 'connected'}
+              accessibilityRole="button"
+              accessibilityLabel="Workspace"
+              testID="host-open-workspace"
+            >
+              <AppWindow
                 size={16}
                 color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
               />
