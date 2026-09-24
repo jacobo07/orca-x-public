@@ -40,6 +40,7 @@ const CAPABILITY_TEST = 'src/main/codex/codex-thread-relocation-capability.test.
 const MAPPING = at('src/main/codex/codex-turn-event-mapping.ts')
 const MAPPING_TEST = 'src/main/codex/codex-turn-event-mapping.test.ts'
 const RUNNER_TURN_TEST = 'src/main/conversation/conversation-turn-runner.test.ts'
+const SESSION = at('src/main/codex/codex-app-server-session.ts')
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -178,6 +179,28 @@ const drills = [
       'reports a turn the provider ended in failure as failed'
     )
   },
+  // Phase 7: a turn cut off mid-way ends then, and says why.
+  {
+    id: 'dead-child-waits-out-the-deadline',
+    file: SESSION,
+    find: 'return await Promise.race([session(), deadlinePromise, childGone])',
+    replace: 'return await Promise.race([session(), deadlinePromise])',
+    verify: testGoesRedOn(INTEGRATION_TEST, 'ends a turn whose host goes away mid-turn at once')
+  },
+  {
+    id: 'host-loss-not-named',
+    file: SSH_DRIVER,
+    find: "if ((error as { code?: unknown } | null)?.code === 'REMOTE_HOST_DISCONNECTED') {",
+    replace: 'if (false) {',
+    verify: testGoesRedOn(INTEGRATION_TEST, 'ends a turn whose host goes away mid-turn at once')
+  },
+  {
+    id: 'timeout-not-named',
+    file: DRIVER,
+    find: 'throw error instanceof CodexAppServerTimeoutError',
+    replace: 'throw false',
+    verify: testGoesRedOn(RELOCATION_TEST, 'names a session timeout as a timed-out turn')
+  },
   {
     id: 'remote-refusal-ignored',
     file: RUNNER,
@@ -269,7 +292,8 @@ const subjects = [
   DRIVER,
   IDENTITY,
   CAPABILITY,
-  MAPPING
+  MAPPING,
+  SESSION
 ]
 const before = subjects.map(hashOf)
 
