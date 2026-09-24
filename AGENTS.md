@@ -90,6 +90,10 @@ A timer, poll, watcher, worker or retry loop must say what multiplies it. `pnpm 
 
 Cost should follow the live or visible set, not everything the user has ever opened. A producer that multiplies with panes, rows, worktrees, hosts or subscriptions and never stops on its own needs a stated `bound`, or it is `debt` — and the debt list in `config/recurring-work-debt-baseline.txt` only shrinks. Prefer one shared producer over one per consumer, and an existing event over a poll; but a safety check at the moment of a destructive action keeps its own fresh read. Renaming a producer re-keys it, so it must be classified again. Local worktree and git-metadata polls register with `src/main/ipc/worktree-observation-clock.ts` instead of owning a timer, and fewer timers alone is not a shrink: measure the repeated work at several counts, and keep an external-change test that does not go through Orca's own write path. See [`docs/reference/resource-elasticity-fabric.md`](./docs/reference/resource-elasticity-fabric.md) (R4).
 
+## Workspace Surface Claims
+
+A value the Workspace shows about an agent, a turn or a connected app — where it runs, its provider, its credential, a count, a status — must come from an owner. `pnpm check:workspace-surface-claims` enforces three rules over the surfaces listed in [`config/workspace-surface-claims.jsonc`](./config/workspace-surface-claims.jsonc): every `ContextRow` has a literal `testId` classified to a producer (`path#export`, exported and imported by the surface) and to the unknown state the consumer renders; a status colour appears only in a tone map keyed by a presenter's tone type; and no model or host name is written into a surface file. A row with nothing to say states it (the model row reads "not recorded") rather than guessing. Visual concept art never authorizes a value — no Online dot, memory, uptime or task count without a producer.
+
 ## Provider Naming
 
 The provider brand — claude, codex, gemini, cursor — is `ProviderType`. Name new code after it. "Agent" is reserved for the durable Orca persona, so a record whose provider field reads `AgentType` is a bug in the vocabulary, not a style preference.

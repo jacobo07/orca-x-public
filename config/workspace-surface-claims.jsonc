@@ -1,0 +1,92 @@
+// Every value the Workspace surface CLAIMS about an agent, a turn or a connected app, and who
+// produces it. Checked by config/scripts/check-workspace-surface-claims.mjs (pnpm
+// check:workspace-surface-claims).
+//
+// A claim site is a `ContextRow` (the surface's own claim primitive), identified by its testId.
+// Each is classified here with:
+//   producer  "path#export" of the module that decides the value — or null for a DECLARED
+//             unknown, a row that states Orca has no producer instead of guessing one;
+//   absent    the translate key the consumer renders when the producer has no answer yet (it must
+//             appear in the consumer file), or "omitted" when the row is not drawn at all;
+//   why       one sentence someone can disagree with.
+//
+// Visual polish never authorizes a value: a new row with no entry here fails the gate, and so
+// does a status colour that is not reached through a presenter's tone map.
+{
+  "surfaces": [
+    "src/renderer/src/components/conversations",
+    "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx"
+  ],
+  "presenters": [
+    {
+      "module": "src/renderer/src/components/conversations/agent-grounding-presentation.ts",
+      "toneType": "GroundingTone"
+    },
+    {
+      "module": "src/renderer/src/components/conversations/connected-application-presentation.ts",
+      "toneType": "AppTone"
+    }
+  ],
+  "claims": {
+    "agent-context-project-name": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "workspace.context.reading",
+      "why": "The agent's project comes from the roster record, never from the window's active repo."
+    },
+    "agent-context-project-path": {
+      "producer": "src/renderer/src/components/conversations/use-agent-grounding.ts#useAgentGrounding",
+      "absent": "omitted",
+      "why": "A path is shown only when the turn runner's own resolver located the project here."
+    },
+    "agent-context-location": {
+      "producer": "src/renderer/src/components/conversations/agent-grounding-presentation.ts#describeTurnLocation",
+      "absent": "workspace.context.reading",
+      "why": "Where the next turn runs is the turn runner's answer, including its refusals."
+    },
+    "agent-context-provider": {
+      "producer": "src/renderer/src/components/conversations/agent-grounding-presentation.ts#describeProvider",
+      "absent": "workspace.context.reading",
+      "why": "The driver the turn path will use, as main reports it."
+    },
+    "agent-context-credential": {
+      "producer": "src/renderer/src/components/conversations/agent-grounding-presentation.ts#describeProvider",
+      "absent": "workspace.context.reading",
+      "why": "The same credential check the turn makes, not a separate guess."
+    },
+    "agent-context-model": {
+      "producer": null,
+      "absent": "workspace.context.modelUnrecorded",
+      "why": "Nothing records which model the provider chose, so the row says so rather than naming one."
+    },
+    "agent-context-role": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "omitted",
+      "why": "The role the person gave the agent; an empty role renders a dash, not invented text."
+    },
+    "agent-context-threads": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "workspace.context.reading",
+      "why": "Counted from durable conversation summaries bound to this agent."
+    },
+    "agent-context-last-activity": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "workspace.context.never",
+      "why": "The latest update of a conversation bound to this agent; none is 'None yet', not a date."
+    },
+    "agent-context-now": {
+      "producer": "src/renderer/src/components/conversations/conversation-live-state.ts#applyConversationLiveEvent",
+      "absent": "workspace.context.idle",
+      "why": "Working only while a turn event stream says so; this is not an online/liveness claim."
+    },
+    "agent-context-no-turns": {
+      "producer": "src/shared/conversation-types.ts#ConversationTurn",
+      "absent": "workspace.context.noTurns",
+      "why": "Read from the durable record's turns; a send refused before the provider starts none."
+    },
+    "agent-context-turn": {
+      "producer": "src/shared/conversation-types.ts#ConversationTurn",
+      "absent": "omitted",
+      "why": "One row per provider turn recorded on the conversation, newest five."
+    }
+  }
+}

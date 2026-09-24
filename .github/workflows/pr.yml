@@ -75,6 +75,12 @@ jobs:
       - name: Check agent turn location authority
         run: pnpm run check:agent-turn-location-authority
 
+      # What the Workspace SHOWS about an agent must come from an owner: every claim row is
+      # classified to a producer, status colours only via presenter tone maps, no model or host
+      # written into the surface. Visual polish never authorizes a value.
+      - name: Check Workspace surface claims
+        run: pnpm run check:workspace-surface-claims
+
       - name: Check VM runtime rollback compatibility
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
