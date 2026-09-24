@@ -44,6 +44,7 @@ import {
   judgeDelegation,
   type DelegationAncestor
 } from './delegation-bounds'
+import { REVIEWS_TABLE_SQL, ReviewStore } from './review-records'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -317,10 +318,10 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject.
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject, v31 revision-bound reviews.
 // Exported so a test can assert "this database is at the current schema" without restating the
 // number: four files hardcoded 28 and all of them broke on the v29 bump.
-export const SCHEMA_VERSION = 30
+export const SCHEMA_VERSION = 31
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -696,7 +697,13 @@ export class OrchestrationDb {
         scheduler_lost_at   TEXT
       );
     `)
+    this.db.exec(REVIEWS_TABLE_SQL)
     this.createMailboxDeliveryIndexesIfPossible()
+  }
+
+  /** Reviews bound to an exact revision; the logic lives in review-records.ts. */
+  reviews(): ReviewStore {
+    return new ReviewStore(this.db, () => generateId('review'))
   }
 
   // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
@@ -1103,6 +1110,9 @@ export class OrchestrationDb {
       }
       if (current < 30 && !this.hasColumn('tasks', 'subject')) {
         this.db.exec('ALTER TABLE tasks ADD COLUMN subject TEXT')
+      }
+      if (current < 31) {
+        this.db.exec(REVIEWS_TABLE_SQL)
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
