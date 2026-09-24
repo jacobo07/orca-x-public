@@ -86,7 +86,9 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
     await expect(row).toHaveCount(1)
     await expect(row).not.toHaveAttribute('data-state', 'checking', { timeout: 30_000 })
     // The row carries the probe's own detail; print it so a wrong state is diagnosable from the log.
-    console.log(`[studio-status] ${await row.getAttribute('data-state')} :: ${await row.innerText()}`)
+    console.log(
+      `[studio-status] ${await row.getAttribute('data-state')} :: ${await row.innerText()}`
+    )
     await expect(row).toHaveAttribute('data-state', 'auth-required')
     await expect(row).toContainText('700d0538')
     const appId = (await row.getAttribute('data-app-id')) as string
@@ -128,7 +130,19 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
       require: 'undefined',
       electron: 'undefined'
     })
-    await page.screenshot({ path: testInfo.outputPath('studio-surface.png') })
+    // page.screenshot captures only the embedder document; the window capture composites the guest.
+    const windowPng = await app.evaluate(async ({ BrowserWindow }) =>
+      (await BrowserWindow.getAllWindows()[0]!.capturePage()).toPNG().toString('base64')
+    )
+    await testInfo.attach('studio-surface-window', {
+      body: Buffer.from(windowPng, 'base64'),
+      contentType: 'image/png'
+    })
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(
+      testInfo.outputPath('studio-surface-window.png'),
+      Buffer.from(windowPng, 'base64')
+    )
 
     // An undeclared origin never loads in the view; it is handed to the system browser instead.
     await app.evaluate(async ({ webContents }, id) => {
