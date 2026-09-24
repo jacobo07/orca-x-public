@@ -209,7 +209,7 @@ export function subscribeConversationTurnEvents(
 
 /** Broadcast rather than reply-to-sender: a conversation is not owned by the window that happened
  *  to send the turn, and a second window showing the same conversation must see the same stream. */
-function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void {
+export function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void {
   const payload: ConversationTurnEventPayload = { conversationId, event }
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
