@@ -113,10 +113,27 @@
       "id": "F",
       "dimension": "conversation-durability",
       "owner": "src/main/conversation/conversation-store.ts",
-      "state": "open",
+      "state": "complete",
       "phase": "6",
       "claim": "A conversation keeps its identity, provider provenance and project relation across restarts.",
       "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "keeps the conversation, its thread on the host and its project across a real restart",
+          "rung": "real-remote-host",
+          "note": "real Electron relaunched on the same profile, real ssh + real Codex on GEX44 (4cd15d5ea): id, agent, agent project and provenance head (thread, ssh host, directory) identical; the next turn continued the SAME provider thread (rollout ids unchanged). Product mutant 'resume dropped' went red at this rung"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "keeps a turn on its admitted location when its project id succeeds mid-turn"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "reports a host lost mid-turn as a failed turn, and never retries it locally"
+        },
         {
           "kind": "test",
           "file": "src/main/conversation/conversation-store-syscall-proof.test.ts",
