@@ -19,6 +19,9 @@ Spec of record: `docs/orca-cognitive-workspace-spec.md`. Done-gate:
   remote seam, `provider-unavailable` states. GEX44: drill 11/11, control 83/83, tsc 0; opt-in rung 3
   (`ORCA_REAL_CODEX_RUNG=1`) runs the installed codex through the real relay handler. Matrix C/G/I
   stay open: the real ssh channel is Phase 5, and the model turn is quota-blocked.
+- Phase 4 COMPLETE (`66d26bde3`..`36c723e1d`) — a resumed thread relocates to the project's new
+  directory only on a Codex whose `initialize` version (≥ 0.153.4) is measured to do it, and only if
+  it confirms the directory; otherwise a new thread in the right place. Drill 19/19. Matrix E done.
 - Coherence anchors (all must pass): check-durable-actor-catalogs, check-agent-identity-authority,
   check-recurring-work-inventory, check-agent-instruction-layer, check-agent-turn-location-authority,
   check-cognitive-workspace-completeness --integrity.
@@ -35,10 +38,9 @@ Spec of record: `docs/orca-cognitive-workspace-spec.md`. Done-gate:
 
 ## 4. Next three actions
 
-1. Phase 4 per `.planning/phases/04-provider-resume-relocation/04-CONTEXT.md` (send `cwd` on
-   resume/turn, version-gated; cross-host move = new thread, same conversation).
-2. Phase 5: the real-ssh product rung (desktop mux over a real ssh channel to GEX44's relay).
-3. After 2026-09-27 19:54: the model-turn legs (matrix I, audit gaps 11/14).
+1. Phase 5: the real-ssh product rung (desktop mux over a real ssh channel to GEX44's relay).
+2. Phases 6–9 per `.planning/ROADMAP.md`.
+3. After 2026-09-27 19:54: the model-turn legs (matrix I, Phase 4 behaviour rung, audit gaps 11/14).
 
 ## 5. Start
 
