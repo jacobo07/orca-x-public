@@ -11,6 +11,7 @@ import { join } from 'node:path'
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { createRestartSession } from './helpers/orca-restart'
 import { waitForSessionReady } from './helpers/store'
 
 // REAL-SSH RUNG — an agent whose project lives on an ssh host (Cognitive Workspace, Phase 5).
@@ -48,9 +49,9 @@ function writeEvidence(evidence: unknown): void {
   }
 }
 
-/** The `cwd` each provider rollout under `sessions` recorded in its session_meta line. */
-function rolloutCwds(sessions: string): string[] {
-  const cwds: string[] = []
+/** Each provider rollout under `sessions`, by the thread id and cwd its session_meta line records. */
+function rollouts(sessions: string): { id: string; cwd: string }[] {
+  const found: { id: string; cwd: string }[] = []
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name)
@@ -59,14 +60,15 @@ function rolloutCwds(sessions: string): string[] {
       } else if (entry.name.endsWith('.jsonl')) {
         const meta = JSON.parse(readFileSync(full, 'utf8').split('\n')[0] ?? '{}')
         if (typeof meta?.payload?.cwd === 'string') {
-          cwds.push(realpathSync(meta.payload.cwd))
+          found.push({ id: String(meta.payload.id), cwd: realpathSync(meta.payload.cwd) })
         }
       }
     }
   }
   walk(sessions)
-  return cwds
+  return found
 }
+const rolloutCwds = (sessions: string): string[] => rollouts(sessions).map((entry) => entry.cwd)
 const RUN =
   process.env.ORCA_E2E_SSH_LOCALHOST === '1' &&
   process.platform !== 'win32' &&
@@ -230,4 +232,94 @@ test.describe('an agent whose project lives on an ssh host', () => {
       reason: 'remote-host-unreachable'
     })
   })
+
+  // Phase 6: a restart must not cost the conversation its agent, its host-scoped thread or its
+  // project. A recorded thread needs a provider turn, so this needs the signed-in leg.
+  test('keeps the conversation, its thread on the host and its project across a real restart', async ({
+    testRepoPath: _seeded
+  }, testInfo) => {
+    test.skip(
+      !authSource || !remoteHome,
+      'needs ORCA_E2E_REMOTE_CODEX_AUTH_SOURCE (a recorded thread)'
+    )
+    const session = createRestartSession(testInfo, {
+      ORCA_RELAY_PATH: join(process.cwd(), 'out', 'relay')
+    })
+    const authCopy = join(remoteHome, '.codex-isolated', 'auth.json')
+    const sessions = join(remoteHome, '.codex-isolated', 'sessions')
+    const withLogin = async <T>(run: () => Promise<T>): Promise<T> => {
+      copyFileSync(authSource, authCopy)
+      try {
+        return await run()
+      } finally {
+        unlinkSync(authCopy)
+      }
+    }
+    try {
+      const first = await session.launch()
+      const connected = await connectRemoteProject(first.page)
+      const ran = await withLogin(() =>
+        sendAsAgentOf(first.page, connected.repoId, 'Remember this conversation.')
+      )
+      const before = await readRecord(first.page, ran.conversationId)
+      expect(before.provenanceHead).toMatchObject({
+        executionHostId: `ssh:${encodeURIComponent(connected.targetId)}`,
+        cwd: remotePath
+      })
+      await session.close(first.app)
+
+      const second = await session.launch()
+      const after = await readRecord(second.page, ran.conversationId)
+      // Identity, thread provenance (host + directory) and the agent's project, exactly as left.
+      expect(after).toEqual(before)
+
+      await second.page.evaluate(
+        (targetId) => window.api.ssh.connect({ targetId }),
+        connected.targetId
+      )
+      const threadsBefore = rollouts(sessions).map((entry) => entry.id)
+      const again = await withLogin(() =>
+        sendTo(second.page, ran.conversationId, 'Are you the same thread?')
+      )
+      writeEvidence({ restart: { before, after, again, threads: rollouts(sessions) } })
+      expect(again.outcome).not.toBe('project-unavailable')
+      // The provider continued the thread it already had on that host rather than starting another.
+      expect(rollouts(sessions).map((entry) => entry.id)).toEqual(threadsBefore)
+      await session.close(second.app)
+    } finally {
+      await session.dispose()
+    }
+  })
 })
+
+/** What must survive a restart: the agent, the host-scoped thread, and the agent's project. */
+async function readRecord(page: Page, conversationId: string) {
+  return page.evaluate(async (id) => {
+    const loaded = await window.api.conversations.read({ id })
+    if (loaded.outcome !== 'loaded') {
+      throw new Error(`conversation not loaded: ${loaded.outcome}`)
+    }
+    const agentId = loaded.record.agentId ?? null
+    const agent = (await window.api.agents.list()).find((candidate) => candidate.id === agentId)
+    const head = loaded.record.provenance.at(-1)
+    return {
+      id: loaded.record.id,
+      agentId,
+      agentProjectId: agent?.projectId ?? null,
+      provenanceHead: head
+        ? {
+            providerSessionId: head.providerSessionId,
+            executionHostId: head.executionHostId ?? null,
+            cwd: head.cwd ?? null
+          }
+        : null
+    }
+  }, conversationId)
+}
+
+async function sendTo(page: Page, conversationId: string, text: string) {
+  return page.evaluate(({ id, text }) => window.api.conversations.sendTurn({ id, text, cwd: '' }), {
+    id: conversationId,
+    text
+  })
+}
