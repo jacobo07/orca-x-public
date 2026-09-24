@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { ipcMain, session } from 'electron'
+import { ipcMain, net, session } from 'electron'
 
 import {
   connectedApplicationPartition,
@@ -158,19 +158,66 @@ export function createConnectedApplicationIpcHandlers(
 
 const PROBE_TIMEOUT_MS = 8000
 
-/** Fetch inside the app's own partition, so the probe sees the session a person signed in to. */
+const PROBE_BODY_LIMIT_BYTES = 64 * 1024
+
+/**
+ * One request inside the app's own partition, so the probe sees the session a person signed in to.
+ *
+ * net.request, not session.fetch: with `redirect: 'manual'` Electron's fetch does not return the
+ * 3xx — it kills the request with "Redirect was cancelled" (measured against studio.kobicraft.net,
+ * where it turned a sign-in redirect into "unreachable"). The ClientRequest 'redirect' event hands
+ * over the status and target without following them.
+ */
 function partitionFetch(partition: string): ConnectedApplicationProbeFetch {
-  return async (url) => {
-    const response = await session.fromPartition(partition).fetch(url, {
-      redirect: 'manual',
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+  return (url) =>
+    new Promise((resolve, reject) => {
+      const request = net.request({
+        url,
+        session: session.fromPartition(partition),
+        redirect: 'manual',
+        useSessionCookies: true
+      })
+      const timer = setTimeout(() => {
+        request.abort()
+        reject(new Error(`no response within ${PROBE_TIMEOUT_MS} ms`))
+      }, PROBE_TIMEOUT_MS)
+      const settle = (value: Awaited<ReturnType<ConnectedApplicationProbeFetch>>): void => {
+        clearTimeout(timer)
+        resolve(value)
+      }
+      request.on('redirect', (statusCode, _method, redirectUrl) => {
+        request.abort()
+        settle({
+          status: statusCode,
+          location: redirectUrl,
+          json: async () => {
+            throw new Error('a redirect has no body')
+          }
+        })
+      })
+      request.on('response', (response) => {
+        const chunks: Buffer[] = []
+        let size = 0
+        response.on('data', (chunk) => {
+          size += chunk.length
+          if (size <= PROBE_BODY_LIMIT_BYTES) {
+            chunks.push(chunk)
+          }
+        })
+        response.on('end', () =>
+          settle({
+            status: response.statusCode,
+            location: null,
+            json: async () => JSON.parse(Buffer.concat(chunks).toString('utf8'))
+          })
+        )
+      })
+      request.on('error', (error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+      request.end()
     })
-    return {
-      status: response.status,
-      location: response.headers.get('location'),
-      json: () => response.json()
-    }
-  }
 }
 
 export function registerConnectedApplicationHandlers(store: {
