@@ -2,12 +2,15 @@
 // an agent's turn). Orchestration never imports the conversation service; a host that can run agent
 // turns registers a runner, and a host that cannot (headless `orca serve`) leaves tasks waiting.
 import type { DelegationSubject } from './types'
+import type { ProviderTurnTool } from '../../conversation/provider-turn-tool'
 
 export type AgentTaskRequest = {
   taskId: string
   agentId: string
   spec: string
   subject: DelegationSubject | null
+  /** Built by orchestration with this task's authority bound in; the turn only offers them. */
+  tools?: readonly ProviderTurnTool[]
 }
 
 export type AgentTaskOutcome =

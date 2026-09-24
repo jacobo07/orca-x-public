@@ -58,7 +58,10 @@ describe('agent-assigned task dispatch', () => {
     expect(db.getTask(task.id)?.status).toBe('dispatched')
     await settle(state)
 
-    expect(calls).toEqual([{ taskId: task.id, agentId: 'agent_b', spec: 'investigate', subject: null }])
+    expect(calls).toEqual([
+      expect.objectContaining({ taskId: task.id, agentId: 'agent_b', spec: 'investigate', subject: null })
+    ])
+    expect(calls[0].tools?.map((tool) => tool.name)).toEqual(['orca_delegate'])
     const settled = db.getTask(task.id)!
     expect(settled.status).toBe('completed')
     expect(JSON.parse(settled.result!)).toEqual({

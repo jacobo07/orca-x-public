@@ -7,6 +7,7 @@ import {
   type AgentTaskRunner
 } from './agent-task-contract'
 import { getRegisteredAgentTaskRunner } from './agent-task-runner-registry'
+import { createDelegateTool } from './agent-delegate-tool'
 
 export type AgentTaskDispatchState = {
   /** Tasks whose turn is running now; guards against a second tick starting a second turn. */
@@ -92,7 +93,8 @@ export function dispatchAgentTasks(params: {
       taskId: task.id,
       agentId,
       spec: task.spec,
-      subject: subject.kind === 'subject' ? subject.subject : null
+      subject: subject.kind === 'subject' ? subject.subject : null,
+      tools: [createDelegateTool(db, task)]
     })
       .then((outcome) => {
         db.updateTaskStatus(

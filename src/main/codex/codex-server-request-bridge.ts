@@ -11,6 +11,10 @@ import type {
 import type { CodexServerRequestOutcome } from './codex-app-server-inbound-router'
 import { classifyCodexServerRequest } from './codex-server-request-classification'
 import { renderCodexApprovalOutcome } from './codex-approval-response-shape'
+import type {
+  ProviderTurnTool,
+  ProviderTurnToolResult
+} from '../conversation/provider-turn-tool'
 
 const JSON_RPC_METHOD_NOT_FOUND = -32601
 
@@ -18,6 +22,7 @@ export type CodexServerRequestObservation =
   | { event: 'approval-requested'; request: AgentApprovalRequest }
   | { event: 'approval-resolved'; approvalId: string; approved: boolean; reason: string }
   | { event: 'refused'; method: string; reason: string }
+  | { event: 'tool-called'; tool: string; success: boolean }
 
 export type CodexServerRequestBridge = {
   handle: (request: {
@@ -33,6 +38,8 @@ export function createCodexServerRequestBridge(options: {
   mintApprovalId: () => string
   /** Product-visible record of what was asked and what was decided. */
   observe?: (observation: CodexServerRequestObservation) => void
+  /** The tools this turn declared. `item/tool/call` for any other name is refused. */
+  tools?: readonly ProviderTurnTool[]
 }): CodexServerRequestBridge {
   const observe = (observation: CodexServerRequestObservation): void => {
     try {
@@ -44,6 +51,25 @@ export function createCodexServerRequestBridge(options: {
 
   return {
     async handle({ id, method, params }) {
+      if (method === 'item/tool/call') {
+        const call = params as { tool?: unknown; arguments?: unknown } | null
+        const tool = options.tools?.find((candidate) => candidate.name === call?.tool)
+        if (tool) {
+          let result: ProviderTurnToolResult
+          try {
+            result = await tool.invoke(call?.arguments)
+          } catch (error) {
+            result = { success: false, text: error instanceof Error ? error.message : String(error) }
+          }
+          observe({ event: 'tool-called', tool: tool.name, success: result.success })
+          return {
+            outcome: 'result',
+            result: { contentItems: [{ type: 'inputText', text: result.text }], success: result.success }
+          }
+        }
+        // An undeclared tool falls through to the refusal below: declaring is the authorization.
+      }
+
       const classified = classifyCodexServerRequest(method)
 
       if (classified.handling !== 'approval') {

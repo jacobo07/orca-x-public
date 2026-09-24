@@ -73,7 +73,8 @@ export function createCodexConversationDriver(
       const bridge = createCodexServerRequestBridge({
         authority: createAgentApprovalAuthority(),
         mintApprovalId: () => `appr_${Math.random().toString(36).slice(2, 10)}`,
-        observe: () => {}
+        observe: () => {},
+        ...(request.tools ? { tools: request.tools } : {})
       })
 
       const providerSessionId = await runSession(
@@ -172,6 +173,21 @@ async function startOrResumeThread(
     }
   }
 
+  // Declared only here: `thread/resume` has no `dynamicTools` in this app-server's schema, and
+  // whether a tool declared at start survives a resume is UNMEASURED (no live provider on this host).
+  // Delegated-task conversations are fresh, so they always start.
+  const toolLayer =
+    request.tools && request.tools.length > 0
+      ? {
+          dynamicTools: request.tools.map((tool) => ({
+            type: 'function',
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema
+          }))
+        }
+      : {}
+
   return threadIdOf(
     await rpc.request('thread/start', {
       cwd: request.cwd,
@@ -179,7 +195,8 @@ async function startOrResumeThread(
       // with an approval surface attached, and that surface does not exist yet.
       sandbox: 'read-only',
       approvalPolicy: 'untrusted',
-      ...agentLayer
+      ...agentLayer,
+      ...toolLayer
     })
   )
 }

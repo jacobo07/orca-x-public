@@ -13,6 +13,7 @@ import type { AgentProjectLocation } from './agent-project-location'
 import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
+import type { ProviderTurnTool } from './provider-turn-tool'
 
 export type ConversationTurnRequest = {
   conversationId: ConversationId
@@ -26,6 +27,8 @@ export type ConversationTurnRequest = {
    * a window focused on another project cannot retarget the turn by supplying a cwd.
    */
   cwd: string | null
+  /** Tools offered for this turn only; built by whoever holds the authority they carry. */
+  tools?: readonly ProviderTurnTool[]
 }
 
 export type ProviderTurnRequest = {
@@ -38,6 +41,8 @@ export type ProviderTurnRequest = {
   developerInstructions: string | null
   turnId: string
   onEvent: (event: AgentTurnEvent) => void
+  /** Absent for every person-driven turn, so those requests stay byte-identical. */
+  tools?: readonly ProviderTurnTool[]
 }
 
 export type ProviderTurnResult = {
@@ -191,6 +196,7 @@ export async function runConversationTurn(
       text: request.text,
       developerInstructions,
       turnId,
+      ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
       onEvent: (event) => {
         deps.emit(conversationId, event)
         if (event.kind === 'turn-completed' || event.kind === 'turn-ended') {

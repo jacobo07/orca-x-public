@@ -64,7 +64,8 @@ export async function runAgentTask(
   const turn = await runConversationTurn(deps, {
     conversationId,
     text: composeDelegatedTaskText(request),
-    cwd: null
+    cwd: null,
+    ...(request.tools ? { tools: request.tools } : {})
   })
   switch (turn.outcome) {
     case 'completed': {
