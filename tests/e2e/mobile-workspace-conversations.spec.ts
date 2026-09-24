@@ -2,6 +2,11 @@ import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { decodePairingOffer, type PairingOffer } from '../../src/shared/pairing'
 import { sendRemoteRuntimeRequest } from '../../src/shared/remote-runtime-client'
+import {
+  latestThreadForAgent,
+  loadMobileWorkspace,
+  sendMobileAgentMessage
+} from '../../mobile/src/workspace/mobile-workspace-client'
 
 // PRODUCT REALITY — the phone's Workspace has an upstream service, and it is the desktop's.
 //
@@ -125,4 +130,43 @@ test('a paired phone reads and talks to the same durable agent the desktop has',
   expect(desktopRead.outcome).toBe('loaded')
   const desktopList = await orcaPage.evaluate(() => window.api.conversations.list())
   expect(desktopList.some((summary) => summary.id === record.id)).toBe(true)
+
+  // THE MOBILE MODULE ITSELF over the same socket: the code the phone's screens run.
+  const phone = {
+    sendRequest: (method: string, params?: unknown) => call(method, params) as Promise<never>
+  }
+  const loaded = await loadMobileWorkspace(phone)
+  expect(loaded.kind).toBe('ready')
+  const phoneRow =
+    loaded.kind === 'ready'
+      ? loaded.agents.find((candidate) => candidate.agent.id === agent.id)
+      : null
+  // The phone names the same project the desktop's projection does.
+  expect(phoneRow?.project).toMatchObject({ kind: 'project', projectId: project!.id })
+  const sent = await sendMobileAgentMessage(phone, {
+    agentId: agent.id,
+    conversationId: latestThreadForAgent(loaded.kind === 'ready' ? loaded.threads : [], agent.id),
+    text: 'From the phone module'
+  })
+  expect(sent).toMatchObject({ kind: 'sent', conversationId: record.id, outcome: 'auth-required' })
+
+  // An OLD host, stood in by withholding the capability: the phone fails closed and asks nothing more.
+  const asked: string[] = []
+  const oldHost = {
+    sendRequest: async (method: string, params?: unknown) => {
+      asked.push(method)
+      const response = (await call(method, params)) as {
+        ok: boolean
+        result?: { capabilities?: string[] }
+      }
+      if (method === 'status.get' && response.ok && response.result) {
+        response.result.capabilities = (response.result.capabilities ?? []).filter(
+          (capability) => capability !== 'conversations.v1'
+        )
+      }
+      return response as never
+    }
+  }
+  expect(await loadMobileWorkspace(oldHost)).toEqual({ kind: 'unsupported' })
+  expect(asked).toEqual(['status.get'])
 })
