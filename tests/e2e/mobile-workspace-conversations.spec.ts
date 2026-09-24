@@ -34,7 +34,7 @@ test('a paired phone reads and talks to the same durable agent the desktop has',
   // A durable agent bound to the attached project, created through the product's own API.
   const project = await orcaPage.evaluate(async () => (await window.api.projects.list())[0] ?? null)
   expect(project, 'precondition: the seeded repo is a project').not.toBeNull()
-  const agent = (await orcaPage.evaluate(
+  const creation = (await orcaPage.evaluate(
     (projectId) =>
       window.api.agents.create({
         name: 'Phone Reviewer',
@@ -42,7 +42,9 @@ test('a paired phone reads and talks to the same durable agent the desktop has',
         projectId
       }),
     project!.id
-  )) as { id: string }
+  )) as { outcome: string; agent?: { id: string } }
+  expect(creation.outcome, 'precondition: the agent was created').toBe('created')
+  const agent = creation.agent!
   expect(agent.id).toMatch(/^agent_/)
 
   const offer = await orcaPage.evaluate(() =>
