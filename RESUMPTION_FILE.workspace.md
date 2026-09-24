@@ -15,7 +15,9 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
 - Phase 3 SEALED `8e9d5d7b5..22b478d53`: `pnpm check:workspace-surface-claims` (lint + pr.yml, AGENTS.md)
   over `config/workspace-surface-claims.jsonc`: claim rows classified to producers, status colours only
   via presenter tone maps, no model/host literals. 10/10 drills caught (G5 needed a per-floor test).
-- Pre-existing red (not ours): git-status-refresh* (11), window-shortcut-policy (1).
+- Phase 4 SEALED `04690f984..db465645c`: conversations.* runtime RPC (mobile-allowlisted, capability`conversations.v1`, no remote cwd), host wired for desktop + headless serve; real mobile-scope E2EE e2e
+  passes; 7/7 drills. Placement proven in the real strip (`ea6ebf2d8`, fresh build).
+- Pre-existing red (not ours): git-status-refresh* (11), window-shortcut-policy (1), check:mobile-aperture on `app.park` (acd975a06).
 - Long run: v2 marker for session 2aad6d8e armed 10:20 (before the Ralph-mission default landed);
   NO_CROSSINGS so far. Do not arm a Ralph mission on top — two writers.
 - Concurrent owners: `orca-x/agent-federation` (missions/providers/review/approval/GEX44 model) and
@@ -29,10 +31,10 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
 - Never name a PowerShell function with a one-letter alias (`R` = Invoke-History wiped 3 files).
 
 ## 4. Next 3 actions
-1. Phase 4 (ULTRA-PLAN, internal + oneshot-architect-auditor): capability-gated host RPC for
-   conversations over the pairing transport; read docs/reference/remote-wire-compatibility.md and the
-   mobile-aperture gate first; both version directions fail closed.
-2. Phase 5: mobile screens from src/shared/cognitive-workspace-projection.ts; add them to the gate's surfaces.
+1. Phase 5 (PLAN): mobile Workspace screens (roster → agent chat → context) over conversations.*;
+   gate on 'conversations.v1' (local copy like agent-history-capability.ts), treat forbidden/
+   method_not_found as unsupported; mobile imports ../../../src/shared types; add screens to the gate.
+2. Phase 6: scale 200 agents / 1,000 threads on GEX44.
 3. Keep federation's P6 surface slot agreement in mind (they own missions/review rows).
 
 ## 5. Start
