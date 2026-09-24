@@ -24,10 +24,23 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   agent-started root). GEX44 @77f3df5e5: migration gate ok, tsc 0, orchestration+conversation
   suite green, 6/6 mutations CAUGHT (registry drop caught by the GATE, not by tests — by design).
   The static migration gate cannot see columns added in a loop: write one explicit ladder step each.
+- **P2b SEALED** `2e0546d8d`+`aef4c0066`: agent-assigned tasks leave the terminal pool and run as the
+  agent's turn (`coordinator-agent-tasks.ts` -> registry runner -> `agent-task-execution.ts` ->
+  `runConversationTurn`, SAME deps object as the conversations IPC). Result = `tasks.result`
+  `orca.agent-task-result/1`; completion promotes dependents. Subject in another project refused
+  before any conversation; unreadable subject refused; no runner (headless) = waits, logged once;
+  orphaned `dispatched` agent task settled `interrupted` at coordinator start (in-flight map is
+  process-wide). GEX44 @2e0546d8d: tsc 0, 6 gates rc=0, 610 passed/71 files. Mutations 6 CAUGHT +
+  1 EQUIVALENT removed (runner already awaits durable writes; a test comment saying otherwise is stale).
+  Lesson: with a runner registered, the dispatch LOCK masked a missing terminal-pool filter — only the
+  no-runner world could see it.
+- Coherence anchor for P2: `git log --format=%s -1 aef4c0066` = "test(federation): pin the terminal-pool filter...".
 
 ## 3. Active decisions
 - Delegation = orchestration task with assignee Agent + requester Agent + subject (project,
-  worktree, revision captured from git by Orca). Result = existing `worker_done` message.
+  worktree, revision captured from git by Orca). Result = structured `tasks.result`, NOT a
+  terminal `worker_done` message (agents have no handle). Requester-agent notification in its own
+  conversation is NOT built yet — the parent reads the child row.
 - Depth/fan-out bound enforced in `createTask`, not prompts.
 - Providers behind existing `ConversationTurnDriver`; availability states fail closed on unknown.
 - Review record in orchestration db; independence DERIVED; stale when revision moves.
@@ -36,12 +49,14 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
 - Heavy verification on GEX44 (bundle + revision fence, memory `gex44-is-the-linux-evidence-node`).
 
 ## 4. Next 3 actions
-1. P1: characterization tests pinning today's behaviour (a task cannot name a durable agent;
-   createTask has no depth bound; a decision gate resolves with no subject and survives a revision move).
-2. P2: assignee/requester/subject columns (v30) + depth bound + agent-turn bridge + callback,
-   inverting P1's characterizations in place.
-3. P3: provider driver registry + availability states + Claude driver + deterministic routing.
-Then P4 review record, P5 subject-bound approval, P6 surface, P7 gate + UKDL, P8 GEX44 local runtime.
+1. P2c: expose delegation on the existing surfaces — `orchestration.taskCreate` RPC + CLI accept
+   `--assignee-agent`/`--requester-agent`/subject, with the SUBJECT REVISION captured by Orca from git
+   (never from the caller's text); DelegationRefusedError maps to a named RPC error code.
+2. P3: provider driver registry + availability states (AUTH_REQUIRED/QUOTA_EXHAUSTED/UNSUPPORTED/
+   UNKNOWN) + Claude driver behind ConversationTurnDriver + deterministic routing with a reason.
+3. P4: review record bound to subject revision, independence derived, stale on revision move.
+Then P5 subject-bound approval (inverts P1's gate case), P6 surface, P7 gate + UKDL, P8 GEX44 local
+runtime (Owner approved install; RTX 4000 Ada 20 GB, nothing installed).
 
 ## 5. Start
 `Set-Location C:\Users\User\Apps\orca-federation-wt`; prove `git worktree list`; read this file and
