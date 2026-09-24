@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  classifyTurnEntrances,
   consultsRemoteDriver,
   findHostBlindResumeSites,
+  findTurnEntrances,
   findInventedLocationSites,
   isTestPath,
   resumesByHost,
@@ -143,6 +145,41 @@ describe('resumesByHost', () => {
   it('holds for a runner that looks its thread up by host, and not for one that dropped it', () => {
     expect(resumesByHost('latestProviderProvenance(existing.record, executionHostId)')).toBe(true)
     expect(resumesByHost('latestProviderProvenance(existing.record)')).toBe(false)
+  })
+})
+
+describe('turn entrances (Phase 9)', () => {
+  const RUNTIME_ENTRANCE = {
+    path: 'src/main/runtime/rpc/conversation-methods.ts',
+    source: 'export const sendTurn = (deps, request) => runConversationTurn(deps, request)'
+  }
+  const DEFINITION = {
+    path: 'src/main/conversation/conversation-turn-runner.ts',
+    source: 'export async function runConversationTurn(deps, request) {}'
+  }
+
+  it('flags a new surface that can start a turn and was never classified', () => {
+    const found = findTurnEntrances([RUNTIME_ENTRANCE, DEFINITION])
+    // The definition is not an entrance; a caller is.
+    expect(found).toEqual([RUNTIME_ENTRANCE.path])
+    expect(classifyTurnEntrances(found, {}).unclassified).toEqual([RUNTIME_ENTRANCE.path])
+  })
+
+  it('passes a classified entrance, and flags an inventory entry that no longer exists', () => {
+    const inventory = { [RUNTIME_ENTRANCE.path]: 'reason', 'src/gone.ts': 'reason' }
+    expect(classifyTurnEntrances([RUNTIME_ENTRANCE.path], inventory)).toEqual({
+      unclassified: [],
+      stale: ['src/gone.ts']
+    })
+  })
+
+  it('recognises the channel and the preload call, not only the runner', () => {
+    expect(
+      findTurnEntrances([
+        { path: 'src/preload/x.ts', source: "ipcRenderer.invoke('conversations:sendTurn', a)" },
+        { path: 'mobile/src/y.ts', source: 'await api.conversations.sendTurn({ id })' }
+      ])
+    ).toEqual(['mobile/src/y.ts', 'src/preload/x.ts'])
   })
 })
 

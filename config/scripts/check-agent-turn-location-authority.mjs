@@ -69,6 +69,37 @@ export function resumesByHost(runnerSource) {
   return HOST_SCOPED_RESUME.test(stripComments(runnerSource))
 }
 
+// Every surface that can start a conversation turn (Phase 9). A new entrance must be classified
+// here, with a reason, and the runner must keep exactly one production caller — the located
+// authority. Swept from src/ AND mobile/, so a client that grows a turn path cannot skip it.
+export const TURN_ENTRANCES = {
+  'src/main/ipc/conversations.ts':
+    'the one production caller of runConversationTurn: the desktop IPC handler, located authority included',
+  'src/preload/index.ts': 'bridges conversations:sendTurn to that handler; decides nothing',
+  'src/renderer/src/components/conversations/ConversationsPage.tsx':
+    'the conversation surface; sends through the preload bridge with no location of its own'
+}
+const TURN_ENTRANCE =
+  /(?<!function\s)\brunConversationTurn\s*\(|['"]conversations:sendTurn['"]|\.conversations\.sendTurn\s*\(/
+const TURN_ENTRANCE_GREP = 'runConversationTurn\\(|conversations:sendTurn|conversations\\.sendTurn'
+
+/** Pure: production files that can start a conversation turn. */
+export function findTurnEntrances(files) {
+  return files
+    .map((file) => ({ ...file, path: file.path.replace(/\\/g, '/') }))
+    .filter((file) => !isTestPath(file.path) && TURN_ENTRANCE.test(stripComments(file.source)))
+    .map((file) => file.path)
+    .sort()
+}
+
+/** Pure: entrances nobody classified, and classified entrances that no longer exist. */
+export function classifyTurnEntrances(found, inventory = TURN_ENTRANCES) {
+  return {
+    unclassified: found.filter((file) => !(file in inventory)),
+    stale: Object.keys(inventory).filter((file) => !found.includes(file))
+  }
+}
+
 export function isTestPath(filePath) {
   return /\.(test|spec)\.[cm]?tsx?$/.test(filePath)
 }
@@ -188,6 +219,42 @@ export async function main(root = process.cwd(), log = console) {
   for (const site of findHostBlindResumeSites(resumerFiles)) {
     failures.push(
       `${site} looks a provider thread up without its host; a location is a path AND a host, and another host's thread has no history here`
+    )
+  }
+
+  const entrances = await gitLines(root, [
+    'grep',
+    '-l',
+    '-I',
+    '-E',
+    TURN_ENTRANCE_GREP,
+    '--',
+    'src/*.ts',
+    'src/*.tsx',
+    'mobile/*.ts',
+    'mobile/*.tsx'
+  ])
+  if (entrances.lines === null) {
+    log.error(
+      `❌  check-agent-turn-location-authority: could not sweep entrances: ${entrances.error}`
+    )
+    return 1
+  }
+  const entranceFiles = await Promise.all(
+    entrances.lines.map(async (file) => ({
+      path: file,
+      source: await readFile(path.join(root, file), 'utf8')
+    }))
+  )
+  const { unclassified, stale } = classifyTurnEntrances(findTurnEntrances(entranceFiles))
+  for (const file of unclassified) {
+    failures.push(
+      `${file} can start a conversation turn and is not in TURN_ENTRANCES; classify it and prove it reaches the located authority`
+    )
+  }
+  for (const file of stale) {
+    failures.push(
+      `TURN_ENTRANCES lists ${file}, which no longer starts a turn; remove it so the inventory describes what exists`
     )
   }
 
