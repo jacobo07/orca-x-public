@@ -222,10 +222,25 @@ export function Rail`
     expect(result.failures.join('\n')).toMatch(/must state its unknown/)
   })
 
-  it('refuses when the sweep sees too little to be believed (floor)', () => {
-    const tiny = `import type { RowTone } from './tone-presentation'\nexport function Rail() { return ${row('claim-0')} }\n`
-    const result = judge(tiny, config())
-    expect(result.failures.join('\n')).toMatch(/expected at least/)
+  // One test per floor, each asserting its own number: a single "expected at least" assertion let a
+  // mutant that disabled the claim-site floor pass on the tone-map floor's message (drill G5).
+  it('refuses when the sweep sees too few claim sites (claim-site floor)', () => {
+    const fewRows = surfaceSource().replace(/<ContextRow[^\n]*claim-[1-9][^\n]*\n/g, '')
+    const only = config()
+    for (let i = 1; i < MIN_CLAIM_SITES; i++) {
+      delete only.claims[`claim-${i}`]
+    }
+    const result = judge(fewRows, only)
+    expect(result.failures).toEqual([
+      `found 1 claim sites, expected at least ${MIN_CLAIM_SITES}; the sweep may have stopped seeing the surface`
+    ])
+  })
+
+  it('refuses when the sweep sees too few presenter tone maps (tone-map floor)', () => {
+    const result = judge(surfaceSource({ toneMap: false }))
+    expect(result.failures).toEqual([
+      `found 0 presenter tone maps, expected at least ${MIN_TONE_MAPS}; the sweep may have stopped seeing them`
+    ])
   })
 })
 
