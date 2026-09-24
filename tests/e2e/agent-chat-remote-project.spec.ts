@@ -1,4 +1,13 @@
-import { renameSync } from 'node:fs'
+import {
+  copyFileSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
+import { join } from 'node:path'
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -28,6 +37,36 @@ const target = {
   identityFile: process.env.ORCA_E2E_SSH_IDENTITY_FILE ?? ''
 }
 const remotePath = process.env.ORCA_E2E_REMOTE_PROJECT_PATH ?? ''
+/** The throwaway HOME the private sshd forces, and an approved login to copy into it (optional). */
+const remoteHome = process.env.ORCA_E2E_REMOTE_HOME ?? ''
+const authSource = process.env.ORCA_E2E_REMOTE_CODEX_AUTH_SOURCE ?? ''
+const evidenceFile = process.env.ORCA_E2E_EVIDENCE_FILE ?? ''
+
+function writeEvidence(evidence: unknown): void {
+  if (evidenceFile) {
+    writeFileSync(evidenceFile, `${JSON.stringify(evidence)}\n`)
+  }
+}
+
+/** The `cwd` each provider rollout under `sessions` recorded in its session_meta line. */
+function rolloutCwds(sessions: string): string[] {
+  const cwds: string[] = []
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+      } else if (entry.name.endsWith('.jsonl')) {
+        const meta = JSON.parse(readFileSync(full, 'utf8').split('\n')[0] ?? '{}')
+        if (typeof meta?.payload?.cwd === 'string') {
+          cwds.push(realpathSync(meta.payload.cwd))
+        }
+      }
+    }
+  }
+  walk(sessions)
+  return cwds
+}
 const RUN =
   process.env.ORCA_E2E_SSH_LOCALHOST === '1' &&
   process.platform !== 'win32' &&
@@ -118,6 +157,25 @@ test.describe('an agent whose project lives on an ssh host', () => {
       outcome: 'auth-required',
       detail: `codex on ${connected.targetId} is not signed in`
     })
+
+    // Signed-in leg, opt-in: a copy of an approved login goes into the throwaway CODEX_HOME for this
+    // leg only. The provider thread then starts ON the host, and its own rollout records where it
+    // ran. That holds whatever the model answers; a quota-blocked account still starts the thread.
+    if (authSource && remoteHome) {
+      const authCopy = join(remoteHome, '.codex-isolated', 'auth.json')
+      copyFileSync(authSource, authCopy)
+      try {
+        const ran = await sendAsAgentOf(orcaPage, connected.repoId, 'What does MARKER.txt say?')
+        writeEvidence({ signedInOutcome: ran.outcome })
+        expect(ran.outcome.outcome).not.toBe('auth-required')
+        expect(['completed', 'failed']).toContain(ran.outcome.outcome)
+        const cwds = rolloutCwds(join(remoteHome, '.codex-isolated', 'sessions'))
+        writeEvidence({ signedInOutcome: ran.outcome, rolloutCwds: cwds })
+        expect(cwds).toContain(realpathSync(remotePath))
+      } finally {
+        unlinkSync(authCopy)
+      }
+    }
 
     // Unavailable-project control: the directory leaves the host (same machine: a local rename).
     renameSync(remotePath, `${remotePath}-moved-away`)
