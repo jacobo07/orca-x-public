@@ -54,6 +54,13 @@
           "title": "an agent bound to a project reaches the provider, and refuses once that project is gone",
           "rung": "real-electron",
           "note": "local project only (W-C5)"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "runs in the located directory, reports it, and leaves no process behind",
+          "rung": "real-remote-host",
+          "note": "opt-in ORCA_REAL_CODEX_RUNG=1; the installed codex app-server on GEX44 through the real relay handler, /proc cwd == project (1d49bc083). Desktop side in-process, not across a real ssh channel — Phase 5 owns that leg"
         }
       ],
       "closes": "The turn runs ON the ssh project-host in the setup's worktree (Phase 3), once Phase 2 names a located remote subject."
@@ -115,6 +122,18 @@
           "kind": "reliability-gate",
           "id": "agent-session.remote-host-authority",
           "note": "prior authority for terminal agent sessions; the conversation turn does not use it yet (EXTEND before NEW)"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "completes a turn in the located directory, answers the approval, survives a burst, and reaps the child",
+          "rung": "integration",
+          "note": "real relay dispatcher + agentProcess handler + multiplexer + ssh adapter, scripted app-server"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "names an unreachable host and a too-old relay apart"
         }
       ],
       "closes": "A provider turn runs on the ssh host through a capability-negotiated relay method, or refuses; no local fallback."
@@ -136,7 +155,15 @@
       "state": "open",
       "phase": "3",
       "claim": "What the provider sees is the project's live worktree, uncommitted files included.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "runs in the located directory, reports it, and leaves no process behind",
+          "rung": "real-remote-host",
+          "note": "drill mutant real-provider-spawned-outside-the-project (cwd -> /tmp) caught on GEX44 at 1d49bc083. Open: no provider has yet READ an uncommitted file there (model turn quota-blocked to 2026-09-27 19:54)"
+        }
+      ],
       "closes": "The remote cwd is the worktree the setup names, and a mutation substituting a local directory is caught."
     },
     {
