@@ -201,7 +201,7 @@ const drills = [
   {
     id: 'runner-resumes-without-its-host',
     file: RUNNER,
-    find: 'latestProviderProvenance(existing.record, executionHostId)',
+    find: 'latestProviderProvenance(existing.record, executionHostId, hostAddress)',
     replace: 'latestProviderProvenance(existing.record)',
     verify: gateGoesRedOn(LOCATION_GATE, 'no longer looks its provider thread up by host')
   },
