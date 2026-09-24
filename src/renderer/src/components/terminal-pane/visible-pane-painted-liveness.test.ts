@@ -94,7 +94,8 @@ function makePane(ptyId = 'pty-1'): Harness {
     requestRecovery: vi.fn()
   }
   registerVisiblePaneLiveness(entry)
-  return { entry, terminal: fake.terminal, ...fake, state }
+  // `fake` already carries `terminal`; naming it again here would be overwritten by the spread.
+  return { entry, ...fake, state }
 }
 
 function tick(pane: Harness) {
