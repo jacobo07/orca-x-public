@@ -7,7 +7,9 @@ import {
   nativeTheme,
   Notification,
   powerMonitor,
-  screen
+  screen,
+  session,
+  shell
 } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
@@ -15,6 +17,12 @@ import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import {
+  attachConnectedApplicationGuestPolicy,
+  hardenConnectedApplicationSession
+} from '../connected-apps/connected-application-guest-policy'
+import { connectedApplicationRegistry } from '../connected-apps/connected-application-registry'
+import { decideConnectedApplicationNavigation } from '../../shared/connected-application'
 import { translateMain } from '../i18n/main-i18n'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../../shared/app-menu-strip'
 import { bindWindowChromeIpc } from './window-chrome-ipc-router'
@@ -335,7 +343,7 @@ export function createMainWindow(
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? cascadeBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? cascadeBounds?.height ?? defaultBounds.height,
-    ...(savedBounds ?? cascadeBounds
+    ...((savedBounds ?? cascadeBounds)
       ? { x: (savedBounds ?? cascadeBounds)!.x, y: (savedBounds ?? cascadeBounds)!.y }
       : {}),
     minWidth: MIN_WIDTH,
@@ -568,9 +576,16 @@ export function createMainWindow(
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
+    const connectedApplication = connectedApplicationRegistry.applicationForPartition(partition)
 
     // Why: fail closed — deny any src or partition not in the registry allowlist so a renderer bug can't smuggle preload/Node into an unprivileged guest.
-    if (!normalizedSrc || !browserSessionRegistry.isAllowedPartition(partition)) {
+    if (
+      !normalizedSrc ||
+      (!connectedApplication && !browserSessionRegistry.isAllowedPartition(partition)) ||
+      // A connected app's guest may only START on its own origin, not on any URL a renderer names.
+      (connectedApplication &&
+        decideConnectedApplicationNavigation(normalizedSrc, connectedApplication) !== 'allow')
+    ) {
       event.preventDefault()
       return
     }
@@ -595,6 +610,22 @@ export function createMainWindow(
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    // A connected app's guest gets its own, narrower policy — never the browser tab's, which can
+    // open Orca tabs and native popups.
+    const connectedApplication = connectedApplicationRegistry
+      .partitions()
+      .map((partition) => ({
+        partition,
+        application: connectedApplicationRegistry.applicationForPartition(partition)
+      }))
+      .find(({ partition }) => session.fromPartition(partition) === guest.session)?.application
+    if (connectedApplication) {
+      hardenConnectedApplicationSession(guest.session)
+      attachConnectedApplicationGuestPolicy(guest, connectedApplication, {
+        openExternal: (url) => void shell.openExternal(url)
+      })
+      return
+    }
     // Why: attach guest popup/nav policy at creation; waiting for renderer registration races target=_blank/early redirects past it.
     browserManager.attachGuestPolicies(guest)
   })

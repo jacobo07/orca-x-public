@@ -8,6 +8,7 @@ import type {
 } from './api/agent-account-api'
 import type { AgentHooksApi, HooksApi } from './api/agent-hook-api'
 import type { AgentDirectoryApi } from './api/agent-directory-api'
+import type { ConnectedApplicationApi } from './api/connected-application-api'
 import type { ConversationApi } from './api/conversation-api'
 import type { SkillsApi } from './api/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
@@ -131,6 +132,7 @@ export type PreloadApi = {
   durableExit: DurableExitApi['durableExit']
   conversations: ConversationApi['conversations']
   agents: AgentDirectoryApi['agents']
+  connectedApps: ConnectedApplicationApi['connectedApps']
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   stats: StatsApi
