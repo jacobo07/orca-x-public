@@ -191,10 +191,22 @@
       "id": "H",
       "dimension": "multi-project-safety",
       "owner": "Phase 7 audits cross-project contamination on the remote path",
-      "state": "open",
+      "state": "complete",
       "phase": "7",
       "claim": "An agent bound to one project can never be handed another, locally or remotely.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "runs each agent in its own project on a shared host, and refuses one whose project is not set up there"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-project-isolation.test.ts",
+          "title": "gives two agents in two projects two directories, interleaved"
+        },
+        { "kind": "gate", "script": "check:agent-turn-location-authority" }
+      ],
       "closes": "Cross-project contamination is refused and a wrong-project control refuses with its own reason."
     },
     {
@@ -226,10 +238,27 @@
       "id": "J",
       "dimension": "user-facing-states",
       "owner": "src/main/conversation/agent-project-location.ts",
-      "state": "open",
+      "state": "complete",
       "phase": "7",
       "claim": "Every way a turn cannot run has its own sentence, and none is presented as success.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/renderer/src/components/conversations/conversation-live-state.test.ts",
+          "title": "gives every outcome a DIFFERENT kind, so one cannot stand in for another"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-turn-runner.test.ts",
+          "title": "reports a turn the provider ended in failure as failed"
+        },
+        {
+          "kind": "doc",
+          "file": "docs/reference/remote-agent-turn-authority.md",
+          "contains": "Distinct represented outcomes",
+          "note": "the Phase 7 failure list mapped to its states; a usage-limited turn was reported completed until 32c8fe92e"
+        }
+      ],
       "closes": "Every Phase 7 failure outcome has a distinct represented state and sentence."
     },
     {
@@ -247,20 +276,58 @@
       "id": "L",
       "dimension": "security",
       "owner": "Phase 7 audits remote trust and path containment",
-      "state": "open",
+      "state": "complete",
       "phase": "7",
       "claim": "A remote project never becomes an implicit shell, and a path cannot be substituted to escape it.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/relay/agent-process-handler.test.ts",
+          "title": "refuses anything but a provider invocation, spawning nothing"
+        },
+        {
+          "kind": "test",
+          "file": "src/relay/agent-process-handler.test.ts",
+          "title": "refuses an env overlay beyond CODEX_HOME"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-conversation-driver.test.ts",
+          "title": "starts a read-only thread when the conversation has no provider binding"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-server-request-bridge.test.ts",
+          "title": "refuses every approval when no authority can decide"
+        },
+        {
+          "kind": "doc",
+          "file": "docs/reference/remote-agent-turn-authority.md",
+          "contains": "Symlink substitution",
+          "note": "pairing scope, remote trust, traversal and symlink substitution audited; substitution needs the same ssh user's write access, recorded as no privilege boundary"
+        }
+      ],
       "closes": "Remote trust, pairing scope, traversal and symlink substitution are audited, and read never implies execute."
     },
     {
       "id": "M",
       "dimension": "observability",
       "owner": "Phase 7 makes the location chain observable",
-      "state": "open",
+      "state": "complete",
       "phase": "7",
       "claim": "Why a turn ran where it ran is answerable after the fact.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "names every link of where a remote turn ran, and carries none of what was said"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "says where a refused turn tried, and why"
+        }
+      ],
       "closes": "The location chain is observable without leaking source content or secrets."
     },
     {
@@ -278,10 +345,23 @@
       "id": "O",
       "dimension": "failure-recovery",
       "owner": "Phase 7 represents host loss mid-turn",
-      "state": "open",
+      "state": "complete",
       "phase": "7",
       "claim": "A host that disappears mid-turn produces a represented failure.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "ends a turn whose host goes away mid-turn at once, as host-lost, not at the deadline",
+          "rung": "integration",
+          "note": "real relay + multiplexer disposed mid-turn; before 19844a8cd the session waited out its 300 s deadline and called it a timeout"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "reports a host lost mid-turn as a failed turn, and never retries it locally"
+        }
+      ],
       "closes": "Host loss mid-turn resolves to a represented failure, never a silent success or a local retry."
     },
     {
