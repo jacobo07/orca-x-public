@@ -30,6 +30,9 @@ import {
   type ConversationTurnDeps,
   type ConversationTurnOutcome
 } from '../conversation/conversation-turn-runner'
+import type { Agent } from '../../shared/agent-types'
+import { runAgentTask } from '../conversation/agent-task-execution'
+import { registerAgentTaskRunner } from '../runtime/orchestration/agent-task-runner-registry'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaConversationsDirectory } from '../orca-profiles/profile-storage-paths'
 
@@ -203,21 +206,24 @@ export function registerConversationHandlers(
   agentRoster: ConversationAgentRoster,
   projects: ProjectLocationReader
 ): void {
-  const handlers = createConversationIpcHandlers({
-    service: getConversationService(agentRoster),
-    roster: agentRoster,
-    turnDeps: {
-      driver: createCodexConversationDriver(),
-      checkAuth: checkCodexAuth,
-      resolveProjectLocation: (agent) => resolveAgentProjectLocation(agent, projects),
-      // The user's home, never `process.cwd()`. Both are "not a project"; only one of them is a
-      // place the person chose to have, and the other is wherever Orca was launched from.
-      fallbackCwd: () => homedir(),
-      mintTurnId: () => `turn_${randomUUID()}`,
-      mintItemId: () => `usr_${randomUUID()}`,
-      emit: broadcastTurnEvent
-    }
-  })
+  const service = getConversationService(agentRoster)
+  const turnDeps = {
+    driver: createCodexConversationDriver(),
+    checkAuth: checkCodexAuth,
+    resolveProjectLocation: (agent: Agent) => resolveAgentProjectLocation(agent, projects),
+    // The user's home, never `process.cwd()`. Both are "not a project"; only one of them is a
+    // place the person chose to have, and the other is wherever Orca was launched from.
+    fallbackCwd: () => homedir(),
+    mintTurnId: () => `turn_${randomUUID()}`,
+    mintItemId: () => `usr_${randomUUID()}`,
+    emit: broadcastTurnEvent
+  }
+  const handlers = createConversationIpcHandlers({ service, roster: agentRoster, turnDeps })
+  // A delegated task runs through these same deps, so it cannot find a second location rule, a
+  // second auth check or a second driver. Headless serve never reaches this and registers nothing.
+  registerAgentTaskRunner((request) =>
+    runAgentTask({ ...turnDeps, service, readAgents: () => agentRoster.readAgents() }, request)
+  )
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, (_event, args) =>
