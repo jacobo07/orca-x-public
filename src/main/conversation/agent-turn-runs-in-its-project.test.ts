@@ -544,6 +544,44 @@ describe('a remote turn while its world changes (Phase 6)', () => {
   })
 })
 
+describe('two projects on one host never borrow each other (Phase 7)', () => {
+  it('runs each agent in its own project on a shared host, and refuses one whose project is not set up there', async () => {
+    remoteSetup('github:acme/ledger', 'ssh:box', '/home/dev/ledger')
+    remoteSetup('github:acme/billing', 'ssh:box', '/home/dev/billing')
+    const seen: ProviderTurnRequest[] = []
+    const deps = {
+      ...turnDeps(),
+      remoteDriverFor: async () => ({
+        driver: {
+          runTurn: async (request: ProviderTurnRequest) => {
+            seen.push(request)
+            request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+            return { providerSessionId: `thread-${seen.length}` }
+          }
+        },
+        checkAuth: async () => ({ ready: true as const })
+      }),
+      service
+    }
+    const send = async (projectId: string) =>
+      runConversationTurn(deps, {
+        conversationId: await chatWith(agentOwnedBy(projectId)),
+        text: 'hi',
+        cwd: null
+      })
+
+    await send('github:acme/ledger')
+    await send('github:acme/billing')
+    expect(seen.map((request) => request.cwd)).toEqual(['/home/dev/ledger', '/home/dev/billing'])
+    // Wrong-project control: the host holds OTHER projects, never this one's; it is not borrowed.
+    await expect(send('github:acme/payroll')).resolves.toMatchObject({
+      outcome: 'project-unavailable',
+      reason: 'unresolved'
+    })
+    expect(seen).toHaveLength(2)
+  })
+})
+
 describe('the turn trace (Phase 7)', () => {
   const remoteDeps = (traces: ConversationTurnTrace[], resolution: RemoteDriverResolution) => ({
     ...turnDeps(),
