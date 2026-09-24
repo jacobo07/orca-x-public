@@ -307,8 +307,10 @@ export async function runCodexAppServerSession<T>(
   // Why: a child that dies while the body awaits a NOTIFICATION (a running turn) has no pending
   // request to fail. Without this the session waited out its whole deadline, then reported a lost
   // host or a crashed provider as a timeout. It rejects with the child's own error, code intact.
+  // One tick later, so a failure the session is already reporting (an oversized response kills the
+  // child and then fails the request) wins over the generic early exit.
   const childGone = new Promise<never>((_, reject) => {
-    child.on('close', () => reject(spawnError ?? buildEarlyExitError()))
+    child.on('close', () => setImmediate(() => reject(spawnError ?? buildEarlyExitError())))
   })
   childGone.catch(() => {})
 
