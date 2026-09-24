@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   WORKSPACE_ACTIVITY_ORDER,
   activeViewForWorkspaceActivity,
@@ -18,12 +19,15 @@ describe('getVisibleWorkspaceActivities', () => {
     expect(visible).toEqual(['agent-workspace', 'workspace', 'tasks', 'automations', 'mobile'])
   })
 
-  it('shows the agent Workspace to a profile that persisted the old Chats default', () => {
-    // `showConversationsButton` defaulted to false; a profile holding that value never chose to hide
-    // anything, so the canonical entry must not inherit it.
-    expect(getVisibleWorkspaceActivities({ showConversationsButton: false })).toContain(
-      'agent-workspace'
-    )
+  it('shows the agent Workspace to a profile still holding the retired Chats and Agents keys', () => {
+    // Both retired keys defaulted to false, so a stored false is not a choice to hide anything.
+    // Typed as what a real old profile hands the rail: the full settings object.
+    const legacy: Partial<GlobalSettings> = {
+      showConversationsButton: false,
+      showAgentsButton: false
+    }
+    expect(getVisibleWorkspaceActivities(legacy)).toContain('agent-workspace')
+    // The key that does govern it.
     expect(getVisibleWorkspaceActivities({ showAgentWorkspaceButton: false })).not.toContain(
       'agent-workspace'
     )
@@ -49,25 +53,17 @@ describe('getVisibleWorkspaceActivities', () => {
     expect(getVisibleWorkspaceActivities({ showArtifactsButton: true })).toContain('artifacts')
     expect(getVisibleWorkspaceActivities({ showSkillsButton: true })).toContain('skills')
     expect(getVisibleWorkspaceActivities({ experimentalActivity: true })).toContain('activity')
-    expect(getVisibleWorkspaceActivities({ showConversationsButton: true })).toContain(
-      'conversations'
-    )
 
     // A truthy-looking absence must not switch them on.
     expect(getVisibleWorkspaceActivities({ showArtifactsButton: false })).not.toContain('artifacts')
     expect(getVisibleWorkspaceActivities({ showSkillsButton: false })).not.toContain('skills')
     expect(getVisibleWorkspaceActivities({ experimentalActivity: false })).not.toContain('activity')
-    // The one that matters most for a brand-new surface: an unset key is not consent.
-    expect(getVisibleWorkspaceActivities({})).not.toContain('conversations')
-    expect(getVisibleWorkspaceActivities(null)).not.toContain('conversations')
   })
 
   it('keeps one canonical order regardless of which activities are enabled', () => {
     const all = getVisibleWorkspaceActivities({
       showArtifactsButton: true,
       showSkillsButton: true,
-      showConversationsButton: true,
-      showAgentsButton: true,
       experimentalActivity: true
     })
 
@@ -76,6 +72,14 @@ describe('getVisibleWorkspaceActivities', () => {
     // Entry point first, companion surface last.
     expect(all[0]).toBe('agent-workspace')
     expect(all.at(-1)).toBe('mobile')
+  })
+
+  it('no longer offers the Chats and Agents entries Workspace absorbed', () => {
+    // Station control: the same list does contain the entry that replaced them.
+    expect(WORKSPACE_ACTIVITY_ORDER).toContain('agent-workspace')
+    const ids: readonly string[] = WORKSPACE_ACTIVITY_ORDER
+    expect(ids).not.toContain('conversations')
+    expect(ids).not.toContain('agents')
   })
 
   it('hides everything when every activity is switched off, without throwing', () => {
@@ -93,8 +97,8 @@ describe('getVisibleWorkspaceActivities', () => {
 
 describe('activeViewForWorkspaceActivity', () => {
   it('maps every ordered activity to a top-level view', () => {
-    // W-C3B removed the one entry whose view id differed from its activity id: the feed the rail
-    // called `agents` was always TopLevelView 'activity', and now the rail says so too.
+    // The agent Workspace is the page the Chats entry opened; its route id never moved.
+    expect(activeViewForWorkspaceActivity('agent-workspace')).toBe('conversations')
     expect(activeViewForWorkspaceActivity('activity')).toBe('activity')
     for (const activity of WORKSPACE_ACTIVITY_ORDER) {
       expect(activeViewForWorkspaceActivity(activity)).toBeTruthy()

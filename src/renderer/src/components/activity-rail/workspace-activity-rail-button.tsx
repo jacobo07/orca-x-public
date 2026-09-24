@@ -4,11 +4,9 @@ import {
   Bell,
   BookOpen,
   CalendarClock,
-  Contact,
   EyeOff,
   Files,
   List,
-  MessageSquare,
   Smartphone,
   SquareTerminal
 } from 'lucide-react'
@@ -41,8 +39,6 @@ const ACTIVITY_ICONS: Record<
   // The launcher opens projects into terminals; it gave its window icon and its name to the agent
   // Workspace (Owner, 2026-09-24).
   workspace: SquareTerminal,
-  conversations: MessageSquare,
-  agents: Contact,
   tasks: List,
   automations: CalendarClock,
   activity: Bell,
@@ -53,13 +49,6 @@ const ACTIVITY_ICONS: Record<
 
 function activityLabel(activity: WorkspaceActivityId): string {
   switch (activity) {
-    case 'conversations':
-      return translate('conversations.railLabel', 'Chats')
-    // The noun's original key, moved here from the runtime feed. Its catalogue entries ARE the
-    // noun, already translated in all five locales, and they were always describing the durable
-    // actor rather than the inbox of panes that happened to be holding the name.
-    case 'agents':
-      return translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')
     // The "Workspace" key and its translations now name the agent surface; the launcher it named
     // opens projects into terminals and is called that.
     case 'agent-workspace':
@@ -72,7 +61,7 @@ function activityLabel(activity: WorkspaceActivityId): string {
       return translate('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')
     // A new key, not the old `...9c95e1ce91`. That key's catalogue entries are the NOUN — "Agentes",
     // "에이전트", "智能体" — and the noun belongs to the durable actor, not to a feed of running panes.
-    // It travels to the persistent Agents entry in W-C3C; this surface gets a name of its own.
+    // Durable agents now live in Workspace's roster; this surface keeps a name of its own.
     case 'activity':
       return translate('activity.railLabel', 'Activity')
     case 'artifacts':
@@ -175,10 +164,6 @@ export function WorkspaceActivityRailButton({
 export const HIDE_SETTING_BY_ACTIVITY: Record<WorkspaceActivityId, keyof GlobalSettings | null> = {
   'agent-workspace': 'showAgentWorkspaceButton',
   workspace: 'showWorkspaceButton',
-  // Hideable like the other opt-in surfaces: something you turned on, you can turn off from the
-  // rail itself rather than having to find the setting again.
-  conversations: 'showConversationsButton',
-  agents: 'showAgentsButton',
   tasks: 'showTasksButton',
   automations: 'showAutomationsButton',
   mobile: 'showMobileButton',

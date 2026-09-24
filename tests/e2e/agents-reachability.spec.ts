@@ -55,6 +55,7 @@ test('a person can create an agent in Workspace and find the same one after a re
     ).toBeGreaterThan(0)
     // The retired entries are not on screen (the station above proves the rail is).
     await expect(first.page.locator('[data-workspace-activity="agents"]')).toHaveCount(0)
+    await expect(first.page.locator('[data-workspace-activity="conversations"]')).toHaveCount(0)
 
     await openWorkspaceAgents(first.page, first.app)
 

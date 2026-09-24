@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
   openConversationsPage: vi.fn(),
-  openAgentsPage: vi.fn(),
   openArtifactsPage: vi.fn(),
   openSkillsPage: vi.fn(),
   openWorkspacePage: vi.fn(),
@@ -92,7 +91,6 @@ function renderRail(settings: Record<string, unknown> = {}): void {
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
     openConversationsPage: mocks.openConversationsPage,
-    openAgentsPage: mocks.openAgentsPage,
     openArtifactsPage: mocks.openArtifactsPage,
     openSkillsPage: mocks.openSkillsPage,
     openWorkspacePage: mocks.openWorkspacePage
@@ -159,8 +157,6 @@ describe('WorkspaceActivityRailSection', () => {
    */
   it('leaves no visible activity that dispatches nothing', () => {
     renderRail({
-      showConversationsButton: true,
-      showAgentsButton: true,
       showArtifactsButton: true,
       showSkillsButton: true,
       experimentalActivity: true
@@ -173,8 +169,6 @@ describe('WorkspaceActivityRailSection', () => {
     const dispatched: Record<WorkspaceActivityId, ReturnType<typeof vi.fn>> = {
       'agent-workspace': mocks.openConversationsPage,
       workspace: mocks.openWorkspacePage,
-      conversations: mocks.openConversationsPage,
-      agents: mocks.openAgentsPage,
       tasks: mocks.openTaskPage,
       automations: mocks.openAutomationsPage,
       activity: mocks.openActivityPage,
@@ -192,7 +186,7 @@ describe('WorkspaceActivityRailSection', () => {
       const button = activity(id)
       // A missing button would make the click a no-op and the assertion below vacuous.
       expect(button, `${id} is not rendered`).not.toBeNull()
-      // Two ids can share a page (the renamed entry and the one it replaces), so count per click.
+      // Counted per click, so a shared page could never let one entry pass on another's call.
       open.mockClear()
       act(() => button?.click())
       expect(open, `clicking ${id} dispatched nothing`).toHaveBeenCalledTimes(1)

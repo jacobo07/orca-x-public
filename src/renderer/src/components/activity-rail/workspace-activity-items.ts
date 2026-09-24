@@ -16,8 +16,6 @@ import type { TopLevelView } from '../../../../shared/ui-chrome-types'
 export type WorkspaceActivityId =
   | 'agent-workspace'
   | 'workspace'
-  | 'conversations'
-  | 'agents'
   | 'tasks'
   | 'automations'
   | 'activity'
@@ -26,29 +24,17 @@ export type WorkspaceActivityId =
   | 'mobile'
 
 /**
- * Ordered by how a session actually starts and proceeds: open a project, work the queue that
- * feeds it, then the scheduled work behind it. The opt-in surfaces follow, and the companion
- * device — reached once during setup, rarely after — is last. Deliberately not the historical
- * sidebar order, which grew by append.
+ * Workspace — agents, their threads and projects — leads (Owner, 2026-09-24): it absorbed the
+ * opt-in Chats and Agents entries, which are gone. Where the side panel is open it is drawn
+ * directly below Explorer instead, so its slot here applies only where the panel's icons are not
+ * on screen.
  *
- * Conversations sit SECOND, next to the workspace they think about, and not first: "entry point
- * first" is a product decision this file's own test pins, and the reference information
- * architecture that leads with a chat entry is a navigation decision for that wave to make
- * deliberately, not something a new surface should take by arriving.
- *
- * Agents sit THIRD, immediately after the chats. They are the two halves of one idea — a chat is
- * with nobody in particular, an agent is somebody you keep — and putting the durable half beside
- * the transient one is the only ordering claim W-C3 makes. Nothing else moved: the rest of the
- * rail is exactly where it was, because reordering the whole IA is a decision of its own and
- * arriving is not a licence to take it.
+ * Then as before: open a project into terminals, work the queue that feeds it, the scheduled work
+ * behind it, the opt-in surfaces, and the companion device — reached once during setup — last.
  */
 export const WORKSPACE_ACTIVITY_ORDER: readonly WorkspaceActivityId[] = [
-  // The agent Workspace leads (Owner, 2026-09-24). Where the side panel is open it is drawn directly
-  // below Explorer instead, so this slot only applies where the panel's icons are not on screen.
   'agent-workspace',
   'workspace',
-  'conversations',
-  'agents',
   'tasks',
   'automations',
   'activity',
@@ -68,8 +54,6 @@ export type WorkspaceActivitySettings =
         | 'showMobileButton'
         | 'showArtifactsButton'
         | 'showSkillsButton'
-        | 'showConversationsButton'
-        | 'showAgentsButton'
         | 'experimentalActivity'
       >
     >
@@ -79,8 +63,6 @@ export type WorkspaceActivitySettings =
 const ACTIVE_VIEW_BY_ACTIVITY: Record<WorkspaceActivityId, TopLevelView> = {
   // The page the Chats entry opened: the entry was renamed and moved, the route id was not.
   'agent-workspace': 'conversations',
-  conversations: 'conversations',
-  agents: 'agents',
   workspace: 'workspace',
   tasks: 'tasks',
   automations: 'automations',
@@ -118,13 +100,6 @@ function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySet
       return settings?.showArtifactsButton === true
     case 'skills':
       return settings?.showSkillsButton === true
-    case 'conversations':
-      return settings?.showConversationsButton === true
-    // Its own key, not `experimentalActivity`. The two surfaces shared a noun until W-C3 and never
-    // shared a meaning: one is a roster of durable actors, the other an inbox of running panes.
-    // Reusing the flag would have made turning the feed off silently take the roster with it.
-    case 'agents':
-      return settings?.showAgentsButton === true
     case 'activity':
       return settings?.experimentalActivity === true
   }

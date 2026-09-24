@@ -237,14 +237,12 @@ export type GlobalSettings = {
   showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
-  /** Opt-in, like Artifacts and Skills: a new surface must never appear for someone who did not
-   *  ask for it. Conversations are durable whether or not this is on — the flag governs the rail
-   *  entry, not the data. */
+  /** @deprecated LEGACY, read by nothing. Governed the opt-in "Chats" rail entry that merged into
+   *  Workspace (2026-09-24). Declared only because profiles written before then still hold it; it
+   *  must never gate Workspace — it defaulted to false, so a stored false is not a choice. */
   showConversationsButton?: boolean
-  /** Opt-in, like Conversations: the persistent Agents directory must not appear for someone who
-   *  did not ask for it. The agents themselves are durable whether or not this is on — the flag
-   *  governs the rail entry, not the roster. Distinct from `experimentalActivity`, which gates the
-   *  runtime Activity feed; the two surfaces were one noun until W-C3 and are not one setting. */
+  /** @deprecated LEGACY, read by nothing. Governed the opt-in "Agents" rail entry that merged into
+   *  Workspace (2026-09-24); kept for the same reason as `showConversationsButton`. */
   showAgentsButton?: boolean
   /** Only toggles the sidebar shortcut; the workspace launcher (labelled "Terminals") stays
    *  reachable from Settings. The key keeps its old name so persisted profiles keep their choice. */

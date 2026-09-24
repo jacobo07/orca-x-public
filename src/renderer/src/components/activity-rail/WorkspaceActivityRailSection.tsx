@@ -139,7 +139,6 @@ export function WorkspaceActivityRailSection({
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
-  const openAgentsPage = useAppStore((s) => s.openAgentsPage)
 
   const visible = React.useMemo(
     () =>
@@ -173,10 +172,6 @@ export function WorkspaceActivityRailSection({
           return openConversationsPage()
         case 'workspace':
           return openWorkspacePage()
-        case 'conversations':
-          return openConversationsPage()
-        case 'agents':
-          return openAgentsPage()
         case 'tasks':
           return openTaskPage()
         case 'automations':
@@ -204,7 +199,6 @@ export function WorkspaceActivityRailSection({
     [
       mobileOnboardingBadge,
       openActivityPage,
-      openAgentsPage,
       openArtifactsPage,
       openAutomationsPage,
       openConversationsPage,

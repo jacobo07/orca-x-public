@@ -751,7 +751,6 @@ export type UISlice = {
    *  and never persisted: a restart returns to Brainstorming, and Agents is the way back. */
   conversationAgentScope: string | null
   openAgentChat: (agentId: string) => void
-  openAgentsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1547,9 +1546,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   conversationAgentScope: null,
   // The same surface as Brainstorming, scoped: one chat stack, not an agent-shaped second one.
   openAgentChat: (agentId) => set({ activeView: 'conversations', conversationAgentScope: agentId }),
-  // The Agents directory is the Workspace roster now (2026-09-24); kept only until the old rail
-  // entry that calls it is removed.
-  openAgentsPage: () => set({ activeView: 'conversations', conversationAgentScope: null }),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',

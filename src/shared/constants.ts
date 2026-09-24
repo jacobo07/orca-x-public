@@ -283,7 +283,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     agentSkillSharingEnabled: false,
     showArtifactsButton: false,
     showSkillsButton: false,
-    showConversationsButton: false,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
