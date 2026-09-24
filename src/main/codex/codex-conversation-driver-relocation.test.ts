@@ -12,9 +12,13 @@ import type { runCodexAppServerSession } from './codex-app-server-session'
 type Call = { method: string; params: Record<string, unknown> }
 type ResumeAnswer = (params: Record<string, unknown>) => unknown
 
+/** The `initialize` answer of a measured peer; `null` is one whose version cannot be read. */
+const MEASURED = { userAgent: 'orca_desktop/0.155.1 (Ubuntu 24.4.0; x86_64) unknown' }
+
 function run(
   resumeAnswer: ResumeAnswer,
-  request: { resumeCwd: string | null; cwd: string }
+  request: { resumeCwd: string | null; cwd: string },
+  initializeResult: unknown = MEASURED
 ): Promise<{ calls: Call[]; events: AgentTurnEvent[]; providerSessionId: string | null }> {
   const calls: Call[] = []
   const events: AgentTurnEvent[] = []
@@ -22,11 +26,13 @@ function run(
     _invocation: unknown,
     body: (rpc: {
       request: (method: string, params: Record<string, unknown>) => Promise<unknown>
+      initializeResult: unknown
     }) => Promise<unknown>,
     _spawn: unknown,
     handlers?: { onNotification?: (notification: { method: string; params: unknown }) => void }
   ) =>
     body({
+      initializeResult,
       request: async (method, params) => {
         calls.push({ method, params })
         if (method === 'thread/resume') {
@@ -138,6 +144,39 @@ describe('codex resume — the thread runs where the provider says it is', () =>
   it('does not call a different spelling of the same directory a move', async () => {
     const windows: ResumeAnswer = () => ({ thread: { id: 'thread-old', cwd: 'C:\\Repos\\A' } })
     const { calls } = await run(windows, { resumeCwd: 'C:\\Repos\\A\\', cwd: 'c:/repos/a' })
+    expect(calls[0].params).toEqual({ threadId: 'thread-old' })
+    expect(methods(calls)).toEqual(['thread/resume', 'turn/start'])
+  })
+})
+
+describe('codex resume — a peer not measured to relocate is never asked to', () => {
+  const OLDER = { userAgent: 'orca_desktop/0.153.3 (Ubuntu 24.4.0; x86_64) unknown' }
+
+  for (const [label, initializeResult] of [
+    ['an older version', OLDER],
+    ['an unreadable version', { userAgent: 'something else' }],
+    ['no initialize answer', undefined]
+  ] as const) {
+    it(`starts a new thread for a moved project on ${label}, sending no cwd to resume`, async () => {
+      const { calls, events, providerSessionId } = await run(
+        echoing,
+        { resumeCwd: '/repos/a', cwd: '/repos/b' },
+        initializeResult ?? null
+      )
+      expect(methods(calls)).toEqual(['thread/start', 'turn/start'])
+      expect(calls[0].params.cwd).toBe('/repos/b')
+      expect(providerSessionId).toBe('thread-new')
+      expect(
+        events.some(
+          (event) =>
+            event.kind === 'provider-status' && event.status === 'thread-relocation-unsupported'
+        )
+      ).toBe(true)
+    })
+  }
+
+  it('still resumes an unmoved thread on such a peer, exactly as before', async () => {
+    const { calls } = await run(echoing, { resumeCwd: '/repos/a', cwd: '/repos/a' }, OLDER)
     expect(calls[0].params).toEqual({ threadId: 'thread-old' })
     expect(methods(calls)).toEqual(['thread/resume', 'turn/start'])
   })

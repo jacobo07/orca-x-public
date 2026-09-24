@@ -35,6 +35,8 @@ const DRIVER = at('src/main/codex/codex-conversation-driver.ts')
 const RELOCATION_TEST = 'src/main/codex/codex-conversation-driver-relocation.test.ts'
 const IDENTITY = at('src/shared/conversation-identity.ts')
 const ASSOCIATION_TEST = 'src/main/conversation/conversation-agent-association.test.ts'
+const CAPABILITY = at('src/main/codex/codex-thread-relocation-capability.ts')
+const CAPABILITY_TEST = 'src/main/codex/codex-thread-relocation-capability.test.ts'
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -194,6 +196,23 @@ const drills = [
     verify: testGoesRedOn(RUNNER_TEST, 'hands the driver the directory a thread was recorded in')
   },
   {
+    id: 'unknown-codex-asked-to-relocate',
+    file: DRIVER,
+    find: "if (relocating && codexThreadRelocation(rpc.initializeResult) !== 'supported') {",
+    replace: 'if (false) {',
+    verify: testGoesRedOn(RELOCATION_TEST, 'starts a new thread for a moved project on an older')
+  },
+  {
+    id: 'unmeasured-version-read-as-capable',
+    file: CAPABILITY,
+    find: "? 'supported' : 'unknown'",
+    replace: "? 'supported' : 'supported'",
+    verify: testGoesRedOn(
+      CAPABILITY_TEST,
+      'is supported from the measured floor, and UNKNOWN below'
+    )
+  },
+  {
     id: 'relocation-deduplicated-away',
     file: IDENTITY,
     find: 'head.cwd === provenance.cwd',
@@ -211,7 +230,7 @@ if (live.live) {
   console.error(`REFUSING: a previous transaction is live — ${live.reason}`)
   process.exit(2)
 }
-const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS, SSH_DRIVER, DRIVER, IDENTITY]
+const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS, SSH_DRIVER, DRIVER, IDENTITY, CAPABILITY]
 const before = subjects.map(hashOf)
 
 const tally = { caught: 0, survived: 0, unusable: 0 }

@@ -56,6 +56,8 @@ type JsonRpcResponse = {
 export type CodexAppServerRpc = {
   request: (method: string, params?: Record<string, unknown>) => Promise<unknown>
   notify: (method: string, params?: Record<string, unknown>) => void
+  /** The peer's own `initialize` answer — its version, stated before any request depends on it. */
+  initializeResult?: unknown
 }
 
 export type {
@@ -304,11 +306,11 @@ export async function runCodexAppServerSession<T>(
 
   try {
     const session = async (): Promise<T> => {
-      await requestRpc('initialize', {
+      const initializeResult = await requestRpc('initialize', {
         clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
       })
       notify('initialized')
-      return body({ request: requestRpc, notify })
+      return body({ request: requestRpc, notify, initializeResult })
     }
     // Why: the timeout owns the whole callback, including time between RPCs;
     // killing the child alone cannot settle a callback awaiting unrelated work.

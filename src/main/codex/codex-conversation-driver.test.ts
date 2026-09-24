@@ -16,6 +16,7 @@ function fakeSession(script: Script, captured: Captured): typeof runCodexAppServ
     invocation: { command: string },
     body: (rpc: {
       request: (method: string, params: unknown) => Promise<unknown>
+      initializeResult: unknown
     }) => Promise<unknown>,
     _spawn: unknown,
     handlers?: { onNotification?: (notification: { method: string; params: unknown }) => void }
@@ -23,6 +24,8 @@ function fakeSession(script: Script, captured: Captured): typeof runCodexAppServ
     captured.command = invocation.command
     const notify: Notify = (method, params) => handlers?.onNotification?.({ method, params })
     return body({
+      // A peer measured to relocate a thread (codex-thread-relocation-capability.ts).
+      initializeResult: { userAgent: 'orca_desktop/0.155.1 (Ubuntu 24.4.0; x86_64) unknown' },
       request: async (method, params) => {
         captured.calls.push({ method, params })
         return script(method, params, notify)

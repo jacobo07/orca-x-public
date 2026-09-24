@@ -16,6 +16,7 @@ import type {
 
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
 import { createCodexServerRequestBridge } from './codex-server-request-bridge'
+import { codexThreadRelocation } from './codex-thread-relocation-capability'
 import { mapCodexNotification } from './codex-turn-event-mapping'
 
 /** Generous, because a real turn on a loaded host measured ~39 s end to end and this deadline
@@ -32,7 +33,10 @@ export type CodexConversationDriverOptions = {
 
 /** Mirrors the peer's own signature: `params` is an OBJECT, never a bare unknown. A no-argument
  *  call with `params` omitted is rejected with -32600, so every call here sends a record. */
-type RpcLike = { request: (method: string, params?: Record<string, unknown>) => Promise<unknown> }
+type RpcLike = {
+  request: (method: string, params?: Record<string, unknown>) => Promise<unknown>
+  initializeResult?: unknown
+}
 
 function threadIdOf(response: unknown): string | null {
   const thread = (response as { thread?: { id?: unknown } } | null)?.thread
@@ -153,19 +157,27 @@ async function startOrResumeThread(
       ? {}
       : { developerInstructions: request.developerInstructions }
 
-  if (request.resumeSessionId !== null) {
+  // A resume RELOCATES the thread when the project moved. Measured on codex-cli 0.153.4 and 0.155.1:
+  // `thread/resume {threadId, cwd: B}` reports the thread in B, and without `cwd` it keeps the
+  // directory it was born in. (This note once said resume could not take `cwd`; that was
+  // unmeasured, and measurement overturned it.)
+  //
+  // The thread may be elsewhere when it moved or where it was is not recorded. Then the peer's
+  // version decides, before anything is sent: a peer not measured to relocate is never sent the
+  // field, and a new thread starts in the right place instead. An unmoved resume stays
+  // byte-identical for every peer. Either way the provider's own answer has the last word: a thread
+  // it does not report in `cwd` is not run in.
+  const relocating =
+    request.resumeSessionId !== null &&
+    (!request.resumeCwd || !sameDirectory(request.resumeCwd, request.cwd))
+  if (relocating && codexThreadRelocation(rpc.initializeResult) !== 'supported') {
+    emit({
+      kind: 'provider-status',
+      status: 'thread-relocation-unsupported',
+      detail: `this Codex is not known to move a thread; starting a new one in ${request.cwd}`
+    })
+  } else if (request.resumeSessionId !== null) {
     try {
-      // A resume RELOCATES the thread when the project moved. Measured on codex-cli 0.153.4 and
-      // 0.155.1: `thread/resume {threadId, cwd: B}` reports the thread in B, and without `cwd` it
-      // keeps the directory it was born in. (This note once said resume could not take `cwd`; that
-      // was unmeasured, and measurement overturned it.)
-      //
-      // `cwd` is sent only when the thread may be somewhere else — it moved, or where it was is not
-      // recorded — so an unmoved resume stays byte-identical for providers that predate the field.
-      // Either way the provider's OWN answer decides: a thread it does not report in `cwd` is not run
-      // in, whatever version it is. A strict older peer rejects the field (caught below) and one that
-      // ignores it reports the old directory; both start a new thread instead.
-      const relocating = !request.resumeCwd || !sameDirectory(request.resumeCwd, request.cwd)
       const response = await rpc.request('thread/resume', {
         threadId: request.resumeSessionId,
         ...(relocating ? { cwd: request.cwd } : {}),
