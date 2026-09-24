@@ -61,17 +61,26 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   MEASURED: `thread/resume` has no `dynamicTools` (codex 0.153.4) — tools may not survive a resume.
   UNMEASURED: a live provider calling the tool (no signed-in Codex; GEX44 quota until 2026-09-27).
 
+- **P2e SEALED** `47d240c17`: a delegating agent's task waits (`dispatched` + result
+  `awaitingChildren`, no new status — the status CHECK constraint is not alterable in SQLite), and
+  once every child it delegated settles it gets a follow-up turn in the SAME conversation with the
+  children's results (excerpts ≤4000 chars). Rounds ≤ 4 (`agent-rounds-exceeded`). Slots count only
+  running work — counting all dispatched rows let waiting parents starve their children (pinned at
+  maxConcurrent 1). Follow-up may continue only the agent's own conversation. GEX44: tsc 0,
+  1714 passed/176 files, 5/5 mutations CAUGHT on a GREEN baseline (a first run was on a red one — a
+  test pinning the exact result object; re-measured, not waved through).
+- **P2 (agent delegation) is complete at the unit/integration rung.** Not yet product-real: no live
+  provider has run a delegation, and no UI shows it.
+
 ## 4. Next 3 actions
-1. P2e: the parent learns. When a task's agent-delegated children all settle, the holding agent gets
-   a follow-up turn in the SAME task conversation carrying the children's structured results (today
-   the parent completes when its first turn ends and nobody reads the children). Decide with evidence:
-   parent status while children run (a new 'awaiting-children' vs reuse 'blocked'), and where the
-   task's conversationId is kept so the follow-up resumes it.
-2. P3: provider driver registry + availability states (AUTH_REQUIRED/QUOTA_EXHAUSTED/UNSUPPORTED/
+1. P3: provider driver registry + availability states (AUTH_REQUIRED/QUOTA_EXHAUSTED/UNSUPPORTED/
    UNKNOWN) + Claude driver behind ConversationTurnDriver + deterministic routing with a reason.
-3. P4: review record bound to subject revision, independence derived, stale on revision move.
-Then P5 subject-bound approval (inverts P1's gate case), P6 surface, P7 gate + UKDL, P8 GEX44 local
-runtime (Owner approved install; RTX 4000 Ada 20 GB, nothing installed).
+   Measure the installed `claude` CLI's non-interactive protocol FIRST (stream-json, resume, cwd,
+   tools/MCP) the way codex's schema was measured.
+2. P4: review record bound to subject revision, independence derived, stale on revision move.
+3. P5: subject-bound approval (inverts P1's gate case).
+Then P6 surface, P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada
+20 GB, nothing installed).
 
 ## 5. Start
 `Set-Location C:\Users\User\Apps\orca-federation-wt`; prove `git worktree list`; read this file and
