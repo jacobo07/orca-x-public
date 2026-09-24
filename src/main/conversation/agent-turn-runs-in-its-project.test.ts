@@ -298,6 +298,10 @@ describe("a remote project's agent runs on its host or not at all", () => {
     await expect(
       send(async () => ({ refusal: 'remote-relay-unsupported' }))
     ).resolves.toMatchObject({ reason: 'remote-relay-unsupported' })
+    await expect(send(async () => ({ refusal: 'remote-project-missing' }))).resolves.toMatchObject({
+      reason: 'remote-project-missing',
+      detail: 'This agent’s project directory is not on its remote host.'
+    })
     await expect(
       send(async () => {
         throw new Error('socket hang up')

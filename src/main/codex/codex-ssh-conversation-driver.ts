@@ -59,6 +59,9 @@ export async function resolveSshCodexDriver(
       ? { refusal: 'remote-relay-unsupported' }
       : { refusal: 'remote-host-unreachable' }
   }
+  if (await projectDirectoryIsGone(mux, target.path)) {
+    return { refusal: 'remote-project-missing' }
+  }
 
   const hostName = host?.kind === 'ssh' ? host.targetId : target.hostId
   const driver = createCodexConversationDriver({
@@ -85,6 +88,22 @@ export async function resolveSshCodexDriver(
   return {
     driver,
     checkAuth: () => checkRemoteCodexAuth(mux, target.path, hostName)
+  }
+}
+
+/** True only on the host's positive answer that the directory is not there: a non-directory, or
+ *  ENOENT/ENOTDIR from the relay's `fs.stat`. Any other failure is not an answer about the project,
+ *  and the relay's own directory check still refuses before anything runs. */
+async function projectDirectoryIsGone(mux: AgentProcessMux, path: string): Promise<boolean> {
+  try {
+    const stats = (await mux.request(
+      'fs.stat',
+      { filePath: path },
+      { timeoutMs: PROBE_TIMEOUT_MS }
+    )) as { type?: unknown } | null
+    return typeof stats?.type === 'string' && stats.type !== 'directory'
+  } catch (error) {
+    return /^(ENOENT|ENOTDIR):/.test(error instanceof Error ? error.message : '')
   }
 }
 

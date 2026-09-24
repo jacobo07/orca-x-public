@@ -69,11 +69,22 @@ export type RemoteExecutionTarget = {
 
 export type AuthCheck = () => Promise<{ ready: true } | { ready: false; detail: string }>
 
-/** A remote host either offers a driver and its own auth check, or says why it cannot. The two
- *  refusals need different fixes: reconnect the host, or update Orca on it. */
+/** A remote host either offers a driver and its own auth check, or says why it cannot. Each
+ *  refusal has its own fix: reconnect the host, update Orca on it, or set the project up again. */
+export type RemoteDriverRefusal =
+  | 'remote-host-unreachable'
+  | 'remote-relay-unsupported'
+  | 'remote-project-missing'
 export type RemoteDriverResolution =
   | { driver: ConversationTurnDriver; checkAuth: AuthCheck }
-  | { refusal: 'remote-host-unreachable' | 'remote-relay-unsupported' }
+  | { refusal: RemoteDriverRefusal }
+
+/** Keyed by every refusal, so a new one cannot fall into another's sentence. */
+const REMOTE_REFUSAL_DETAIL: Record<RemoteDriverRefusal, string> = {
+  'remote-host-unreachable': 'This agent’s remote host is not connected.',
+  'remote-relay-unsupported': 'Orca on this agent’s remote host is too old to run a chat there.',
+  'remote-project-missing': 'This agent’s project directory is not on its remote host.'
+}
 
 export type { ConversationTurnOutcome }
 
@@ -193,10 +204,7 @@ export async function runConversationTurn(
       path: location.path
     }
     const refuse = (
-      reason:
-        | 'remote-execution-unavailable'
-        | 'remote-host-unreachable'
-        | 'remote-relay-unsupported',
+      reason: 'remote-execution-unavailable' | RemoteDriverRefusal,
       detail: string
     ): ConversationTurnOutcome => ({
       outcome: 'project-unavailable',
@@ -218,12 +226,7 @@ export async function runConversationTurn(
       resolution = { refusal: 'remote-host-unreachable' }
     }
     if ('refusal' in resolution) {
-      return resolution.refusal === 'remote-relay-unsupported'
-        ? refuse(
-            'remote-relay-unsupported',
-            'Orca on this agent’s remote host is too old to run a chat there.'
-          )
-        : refuse('remote-host-unreachable', 'This agent’s remote host is not connected.')
+      return refuse(resolution.refusal, REMOTE_REFUSAL_DETAIL[resolution.refusal])
     }
     // The probe awaited; a project that moved meanwhile must not run at the location read before.
     const again = binding.kind === 'agent' ? deps.resolveProjectLocation(binding.agent) : null

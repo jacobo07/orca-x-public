@@ -161,6 +161,16 @@ describe('conversation live state — every refusal names what to do', () => {
       kind: 'provider-protocol-unsupported',
       kept: true
     },
+    {
+      outcome: {
+        outcome: 'project-unavailable',
+        projectId: 'p1',
+        reason: 'remote-project-missing',
+        detail: 'gone'
+      },
+      kind: 'project-remote-missing',
+      kept: false
+    },
     { outcome: { outcome: 'not-durable', reason: 'superseded' }, kind: 'not-durable', kept: true },
     { outcome: { outcome: 'failed', turnId: 't1', reason: 'died' }, kind: 'failed', kept: true },
     { outcome: { outcome: 'conversation-absent' }, kind: 'absent', kept: false }

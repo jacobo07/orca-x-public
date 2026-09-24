@@ -37,6 +37,7 @@ export type ConversationTurnOutcome =
         | 'remote-execution-unavailable'
         | 'remote-host-unreachable'
         | 'remote-relay-unsupported'
+        | 'remote-project-missing'
         | 'location-changed'
       detail: string
     }

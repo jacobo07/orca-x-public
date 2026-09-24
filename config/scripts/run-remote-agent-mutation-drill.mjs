@@ -149,6 +149,16 @@ const drills = [
     verify: testGoesRedOn(INTEGRATION_TEST, 'names a codex too old for app-server as its own state')
   },
   {
+    id: 'missing-remote-project-not-refused',
+    file: SSH_DRIVER,
+    find: 'if (await projectDirectoryIsGone(mux, target.path)) {',
+    replace: 'if (false) {',
+    verify: testGoesRedOn(
+      SSH_DRIVER_TEST,
+      'refuses a project whose directory the host says is gone'
+    )
+  },
+  {
     id: 'remote-refusal-ignored',
     file: RUNNER,
     find: "if ('refusal' in resolution) {",

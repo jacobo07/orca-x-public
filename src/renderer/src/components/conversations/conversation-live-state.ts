@@ -32,6 +32,7 @@ export type ConversationNoticeKind =
   | 'project-remote-execution-unavailable'
   | 'project-remote-host-unreachable'
   | 'project-remote-relay-unsupported'
+  | 'project-remote-missing'
   | 'project-location-changed'
   | 'provider-not-installed'
   | 'provider-protocol-unsupported'
@@ -177,6 +178,8 @@ function projectNotice(
       return { kind: 'project-remote-host-unreachable', detail: null, userMessageKept: false }
     case 'remote-relay-unsupported':
       return { kind: 'project-remote-relay-unsupported', detail: null, userMessageKept: false }
+    case 'remote-project-missing':
+      return { kind: 'project-remote-missing', detail: null, userMessageKept: false }
     case 'location-changed':
       return { kind: 'project-location-changed', detail: null, userMessageKept: false }
   }

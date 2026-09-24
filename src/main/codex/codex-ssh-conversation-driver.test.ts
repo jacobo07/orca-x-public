@@ -68,6 +68,35 @@ describe('resolveSshCodexDriver', () => {
     ).resolves.toEqual({ refusal: 'remote-relay-unsupported' })
   })
 
+  it('refuses a project whose directory the host says is gone, and only on that answer', async () => {
+    const answering = (stat: () => Promise<unknown>) => () =>
+      mux((method) =>
+        method === AGENT_PROCESS_METHODS.getCapabilities
+          ? Promise.resolve({ streamingStdioVersion: 1 })
+          : stat()
+      )
+    const enoent = new Error("ENOENT: no such file or directory, lstat '/srv/ledger'")
+    const eacces = new Error("EACCES: permission denied, lstat '/srv/ledger'")
+    await expect(resolveSshCodexDriver(TARGET, answering(reject(enoent)))).resolves.toEqual({
+      refusal: 'remote-project-missing'
+    })
+    await expect(
+      resolveSshCodexDriver(
+        TARGET,
+        answering(async () => ({ type: 'file' }))
+      )
+    ).resolves.toEqual({ refusal: 'remote-project-missing' })
+    // Not an answer about the project: the relay's own directory check still decides later.
+    for (const notAnAnswer of [
+      reject(eacces),
+      async () => ({ type: 'directory' }),
+      async () => null
+    ]) {
+      const resolution = await resolveSshCodexDriver(TARGET, answering(notAnAnswer))
+      expect('driver' in resolution).toBe(true)
+    }
+  })
+
   it('offers a driver and the host auth check when the relay can run the process', async () => {
     const resolution = await resolveSshCodexDriver(TARGET, () =>
       mux(async () => ({ streamingStdioVersion: 1 }))

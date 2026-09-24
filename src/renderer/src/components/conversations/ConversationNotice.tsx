@@ -109,6 +109,11 @@ function messageFor(notice: Notice): string {
         'conversations.noticeProjectRemoteRelayUnsupported',
         "Orca on this agent's remote host is too old to run a chat there, so nothing was sent. Reconnect the host so Orca can update it."
       )
+    case 'project-remote-missing':
+      return translate(
+        'conversations.noticeProjectRemoteMissing',
+        "This agent's project directory is not on its remote host, so nothing was sent. Set the project up there again, or remove that setup."
+      )
     case 'project-location-changed':
       return translate(
         'conversations.noticeProjectLocationChanged',
