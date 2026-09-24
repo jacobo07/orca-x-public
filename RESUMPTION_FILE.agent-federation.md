@@ -72,11 +72,18 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
 - **P2 (agent delegation) is complete at the unit/integration rung.** Not yet product-real: no live
   provider has run a delegation, and no UI shows it.
 
+- **P3 measured, not built (2026-09-24).** One live `claude -p --output-format stream-json` probe
+  (Claude Code 2.1.281; memory `claude-cli-stream-json-protocol-and-quota`): events system/init →
+  assistant → rate_limit_event → result. `rate_limit_event` carries real quota state. Scope with
+  `--setting-sources project` (NOT `--bare`, which drops OAuth). That one-word turn cost **$0.93**.
+  The Owner's **7-day Claude quota was at 99%** (reset ~2026-09-27 18:00 UTC) — the same quota Claude
+  Code runs on — so NO further live Claude calls without the Owner's say-so. Codex also blocked to 09-27.
+
 ## 4. Next 3 actions
-1. P3: provider driver registry + availability states (AUTH_REQUIRED/QUOTA_EXHAUSTED/UNSUPPORTED/
-   UNKNOWN) + Claude driver behind ConversationTurnDriver + deterministic routing with a reason.
-   Measure the installed `claude` CLI's non-interactive protocol FIRST (stream-json, resume, cwd,
-   tools/MCP) the way codex's schema was measured.
+1. P3: provider driver registry + availability states read from REAL signals (Claude's
+   `rate_limit_event`, Codex auth check) + a Claude driver behind ConversationTurnDriver, built and
+   tested OFFLINE against the captured stream (no live spend) + deterministic routing that records
+   model and cost. `--resume <session-id>` behaviour is still UNMEASURED (probe skipped for quota).
 2. P4: review record bound to subject revision, independence derived, stale on revision move.
 3. P5: subject-bound approval (inverts P1's gate case).
 Then P6 surface, P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada
