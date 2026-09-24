@@ -133,9 +133,9 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
       require: 'undefined',
       electron: 'undefined'
     })
-    // No window capture here: a headless E2E window is never shown, so Chromium stops compositing
-    // it and capturePage returns the last frame it drew (the chat, before Open). The pixel claim
-    // lives in connected-application-studio-pixels.spec.ts, which runs @headful.
+    // No window capture here: captured as soon as the guest loads, it returns the chat frame from
+    // before Open. The pixel claim, bound to a painted guest frame, lives in
+    // connected-application-studio-pixels.spec.ts.
 
     // An undeclared origin never loads in the view; it is handed to the system browser instead.
     await app.evaluate(async ({ webContents }, id) => {

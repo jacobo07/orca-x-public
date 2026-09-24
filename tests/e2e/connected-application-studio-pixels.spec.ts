@@ -7,10 +7,11 @@ import {
 } from './helpers/connected-application-setup'
 
 // VISUAL REALITY — the pixels in the Studio surface are Studio's, and they are a frame drawn AFTER
-// Open. The earlier capture of this surface ran headless: an E2E window that is never shown stops
-// compositing, and capturePage handed back the chat frame from before Open while every DOM check
-// said the surface was ready. So this runs @headful (window shown on the display) and binds the
-// claim to three things a stale frame cannot satisfy:
+// Open. The earlier capture was taken the moment the guest finished loading and handed back the
+// chat frame from before Open while every DOM check said the surface was ready. Measured on GEX44
+// (3/3 runs): without waiting for the guest to paint, the region is the old white chat (diff 0.009,
+// one colour); with the wait, it is Studio (diff 1.0). So the claim is bound to three things a
+// stale frame cannot satisfy, and runs @headful so the window is shown as a person would see it:
 //   - the guest itself reports two animation frames after its load (it painted);
 //   - the region the guest occupies differs from the same region captured before Open;
 //   - that region is not a uniform fill (a blank guest would also "differ" from the chat).
