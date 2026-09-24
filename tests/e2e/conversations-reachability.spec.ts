@@ -31,21 +31,13 @@ const PROMPT = 'What should we build first?'
 // Two full Electron launches plus a real turn attempt do not fit the default per-test budget.
 test.setTimeout(300_000)
 
-/** Turns the surface on through the REAL settings API, the same call the Settings UI makes. The
- *  rail entry is opt-in, so a profile that never asked for it must not show it. */
-async function enableConversations(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    // The action the Settings UI itself calls, so this is the production path and not a test hook.
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store is not available')
-    }
-    await store.getState().updateSettingsOrThrow({ showConversationsButton: true })
-  })
-}
+// Since 2026-09-24 conversations live in Workspace, the default-on rail entry directly below
+// Explorer; the opt-in "Chats" entry is gone. The data attribute is the handle (labels are
+// translated on this host).
+const workspaceEntry = '[data-workspace-activity="agent-workspace"]'
 
 async function openConversations(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Chats' }).first().click()
+  await page.locator(workspaceEntry).first().click()
   await expect(page.getByTestId('conversations-page')).toBeVisible()
 }
 
@@ -73,16 +65,8 @@ test('a person can create a conversation, send, and find it again after a restar
     await attachRepoAndOpenTerminal(first.page, testRepoPath)
     await expectRailStation(first.page)
 
-    // The surface is genuinely opt-in. Absence is only evidence because the SAME selectors find
-    // the entry a few lines later, after the setting is turned on. Two of them: the accessible
-    // name a person reads, and the locale-free attribute — so a translation change cannot turn
-    // this into a silent pass.
-    await expect(first.page.getByRole('button', { name: 'Chats' })).toHaveCount(0)
-    await expect(first.page.locator('[data-workspace-activity="conversations"]')).toHaveCount(0)
-
-    await enableConversations(first.page)
-    await expect(first.page.getByRole('button', { name: 'Chats' })).toHaveCount(1)
-    await expect(first.page.locator('[data-workspace-activity="conversations"]')).toHaveCount(1)
+    // Default-on: a profile that never touched a setting has the entry, exactly once.
+    await expect(first.page.locator(workspaceEntry)).toHaveCount(1)
 
     await openConversations(first.page)
 
@@ -114,9 +98,7 @@ test('a person can create a conversation, send, and find it again after a restar
     await attachRepoAndOpenTerminal(second.page, testRepoPath)
     await expectRailStation(second.page)
 
-    // The setting is durable, so the entry comes back on its own. Re-enabling it here — which this
-    // spec used to do — would turn a setting that failed to persist into a silent pass.
-    await expect(second.page.getByRole('button', { name: 'Chats' })).toHaveCount(1)
+    await expect(second.page.locator(workspaceEntry)).toHaveCount(1)
     await openConversations(second.page)
 
     const rowsAfter = second.page.getByTestId('conversations-list-row')

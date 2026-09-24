@@ -46,7 +46,6 @@ import { useWorkspaceAgents } from './use-workspace-agents'
  */
 export default function ConversationsPage(): React.JSX.Element {
   const agentScope = useAppStore((s) => s.conversationAgentScope)
-  const openAgentsPage = useAppStore((s) => s.openAgentsPage)
   const openAgentChat = useAppStore((s) => s.openAgentChat)
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
   const projects = useAppStore((s) => s.projects)
@@ -304,7 +303,12 @@ export default function ConversationsPage(): React.JSX.Element {
               lookup={roster.scoped}
               project={scopedRow?.project ?? null}
               grounding={grounding}
-              onBack={openAgentsPage}
+              onBack={() => {
+                // Back leaves the agent for the roster's Agents list — the directory it came from.
+                setTab('agents')
+                setNarrowPane('roster')
+                openConversationsPage()
+              }}
               compact={mode !== 'wide'}
               railOpen={railPreference ?? mode === 'wide'}
               onToggleRail={() => setRailPreference(!(railPreference ?? mode === 'wide'))}

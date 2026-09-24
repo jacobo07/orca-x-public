@@ -21,14 +21,6 @@ test.setTimeout(300_000)
 const STUDIO = 'https://studio.kobicraft.net'
 const SIGN_IN = 'https://auth.kobicraft.net'
 
-async function enableSurfaces(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await window
-      .__store!.getState()
-      .updateSettingsOrThrow({ showAgentsButton: true, showConversationsButton: true })
-  })
-}
-
 /** Creates a <webview> in the renderer and reports whether main let its guest attach. */
 async function tryAttach(page: Page, partition: string, src: string): Promise<boolean> {
   return page.evaluate(
@@ -58,7 +50,6 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
   try {
     const { app, page } = await session.launch()
     await attachRepoAndOpenTerminal(page, testRepoPath)
-    await enableSurfaces(page)
     await app.evaluate(({ BrowserWindow, shell }) => {
       BrowserWindow.getAllWindows()[0]?.setSize(1700, 960)
       const opened: string[] = []
@@ -68,7 +59,7 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
       }
     })
 
-    await page.locator('[data-workspace-activity="conversations"]').first().click()
+    await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
     await page.getByTestId('workspace-new-agent').click()
     await page.getByTestId('new-agent-name').fill('Studio Hand')
     await page.getByTestId('new-agent-role').fill('creative')

@@ -18,18 +18,6 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 
 test.setTimeout(300_000)
 
-async function enableSurfaces(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store is not available')
-    }
-    await store
-      .getState()
-      .updateSettingsOrThrow({ showAgentsButton: true, showConversationsButton: true })
-  })
-}
-
 async function createAgent(
   page: Page,
   name: string,
@@ -62,7 +50,6 @@ test('the workspace grounds each agent in its own project and in the turn runner
   try {
     const { app, page } = await session.launch()
     await attachRepoAndOpenTerminal(page, testRepoPath)
-    await enableSurfaces(page)
     const activeProject = await page.evaluate(() => {
       const state = window.__store!.getState()
       return state.projects.map((project) => ({ id: project.id, name: project.displayName }))
@@ -73,7 +60,7 @@ test('the workspace grounds each agent in its own project and in the turn runner
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0]?.setSize(1700, 960)
     })
-    await page.locator('[data-workspace-activity="conversations"]').first().click()
+    await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
     await expect(page.getByTestId('workspace-roster')).toBeVisible()
     await expect(page.getByTestId('conversations-page')).toHaveAttribute(
       'data-workspace-layout',

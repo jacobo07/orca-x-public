@@ -1,10 +1,6 @@
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import {
-  connectApplicationToNewAgent,
-  enableAgentSurfaces,
-  surfaceGuestId
-} from './helpers/connected-application-setup'
+import { connectApplicationToNewAgent, surfaceGuestId } from './helpers/connected-application-setup'
 
 // VISUAL REALITY — the pixels in the Studio surface are Studio's, and they are a frame drawn AFTER
 // Open. The earlier capture was taken the moment the guest finished loading and handed back the
@@ -39,7 +35,6 @@ test('@headful the Studio surface shows the guest it loaded, not the chat it rep
   try {
     const { app, page } = await session.launch()
     await attachRepoAndOpenTerminal(page, testRepoPath)
-    await enableAgentSurfaces(page)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
 
     const { row } = await connectApplicationToNewAgent(page, {

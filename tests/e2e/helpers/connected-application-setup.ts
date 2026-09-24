@@ -1,20 +1,13 @@
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 
-export async function enableAgentSurfaces(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await window
-      .__store!.getState()
-      .updateSettingsOrThrow({ showAgentsButton: true, showConversationsButton: true })
-  })
-}
-
-/** Creates an agent on the first project and connects one application to that project. */
+/** Creates an agent on the first project, from the default-on Workspace entry, and connects one
+ *  application to that project. */
 export async function connectApplicationToNewAgent(
   page: Page,
   application: { label: string; origin: string; signIn?: string }
 ): Promise<{ row: Locator; appId: string; partition: string }> {
-  await page.locator('[data-workspace-activity="conversations"]').first().click()
+  await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
   await page.getByTestId('workspace-new-agent').click()
   await page.getByTestId('new-agent-name').fill('App Hand')
   await page.getByTestId('new-agent-role').fill('creative')

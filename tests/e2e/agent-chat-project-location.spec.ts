@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
@@ -24,25 +24,22 @@ const AGENT_NAME = 'Ledger Reviewer'
 const AGENT_ROLE = 'knows this project'
 const PROMPT = 'What is in this repository?'
 
-const agentsEntry = '[data-workspace-activity="agents"]'
+// Since 2026-09-24 the agent directory is the Workspace roster, reached from the rail entry
+// directly below Explorer.
+const workspaceEntry = '[data-workspace-activity="agent-workspace"]'
 
 test.setTimeout(300_000)
 
-async function enableSurfaces(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store is not available')
-    }
-    await store
-      .getState()
-      .updateSettingsOrThrow({ showAgentsButton: true, showConversationsButton: true })
-  })
+async function openWorkspaceAgents(page: Page, app: ElectronApplication): Promise<void> {
+  // Wide enough that the roster column is laid out beside the chat.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
+  await page.locator(workspaceEntry).first().click()
+  await expect(page.getByTestId('conversations-page')).toBeVisible()
+  await page.getByTestId('workspace-tab-agents').click()
 }
 
-async function openAgents(page: Page): Promise<void> {
-  await page.locator(agentsEntry).first().click()
-  await expect(page.getByTestId('agents-page')).toBeVisible()
+function agentRow(page: Page, agentId: string) {
+  return page.locator(`[data-testid="workspace-agent-row"][data-agent-id="${agentId}"]`)
 }
 
 /** The repos the product currently knows about, read through its own API. */
@@ -70,15 +67,14 @@ test('an agent bound to a project reaches the provider, and refuses once that pr
     const first = await session.launch()
     await attachRepoAndOpenTerminal(first.page, testRepoPath)
     await expect(first.page.locator('[data-workspace-activity="workspace"]')).toBeVisible()
-    await enableSurfaces(first.page)
 
     // Precondition, asserted rather than assumed: the attached repo is a project the product can
     // locate. Without this the refusal half below would pass for the wrong reason.
     const repos = await readRepos(first.page)
     expect(repos.length).toBeGreaterThan(0)
 
-    await openAgents(first.page)
-    await first.page.getByTestId('agents-new').click()
+    await openWorkspaceAgents(first.page, first.app)
+    await first.page.getByTestId('workspace-new-agent').click()
     await first.page.getByTestId('new-agent-name').fill(AGENT_NAME)
     await first.page.getByTestId('new-agent-role').fill(AGENT_ROLE)
 
@@ -95,15 +91,13 @@ test('an agent bound to a project reaches the provider, and refuses once that pr
     await first.page.getByTestId('new-agent-submit').click()
     await expect(first.page.getByTestId('new-agent-dialog')).toHaveCount(0)
 
-    const row = first.page.getByTestId('agents-list-row')
+    const row = first.page.getByTestId('workspace-agent-row')
     await expect(row).toHaveCount(1)
     const agentId = await row.first().getAttribute('data-agent-id')
     expect(agentId).toMatch(/^agent_/)
 
     // ── The success half: the project resolves, so the turn reaches the provider check ──────────
-    await first.page
-      .locator(`[data-agent-id="${agentId}"] [data-testid="agents-list-row-open"]`)
-      .click()
+    await agentRow(first.page, agentId!).click()
     await expect(first.page.getByTestId('conversations-page')).toHaveAttribute(
       'data-conversation-scope',
       'agent'
@@ -122,10 +116,8 @@ test('an agent bound to a project reaches the provider, and refuses once that pr
       await window.api.repos.remove({ repoId })
     }, repos[0].id)
 
-    await openAgents(first.page)
-    await first.page
-      .locator(`[data-agent-id="${agentId}"] [data-testid="agents-list-row-open"]`)
-      .click()
+    await openWorkspaceAgents(first.page, first.app)
+    await agentRow(first.page, agentId!).click()
 
     const refused = await sendPrompt(first.page, 'And now?')
     // Its own words, not a generic fault: this one sends a person to set the project up here.
@@ -138,7 +130,9 @@ test('an agent bound to a project reaches the provider, and refuses once that pr
     // Cleanup must not decide the verdict: a Windows EPERM on the temp profile would otherwise
     // replace a real assertion failure (see agents-reachability.spec.ts).
     await session.dispose().catch((error: unknown) => {
-      console.error(`[agent-project-location-e2e] cleanup failed (not a test result): ${String(error)}`)
+      console.error(
+        `[agent-project-location-e2e] cleanup failed (not a test result): ${String(error)}`
+      )
     })
   }
 })

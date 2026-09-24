@@ -6,10 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import {
-  connectApplicationToNewAgent,
-  enableAgentSurfaces
-} from './helpers/connected-application-setup'
+import { connectApplicationToNewAgent } from './helpers/connected-application-setup'
 
 // PRODUCT REALITY — the two failure states a connected app can be in, driven by real servers
 // through the app's own isolated session, not by a stubbed probe:
@@ -95,7 +92,6 @@ test('a connected app reports degraded and unreachable from real servers', async
   try {
     const { app, page } = await session.launch()
     await attachRepoAndOpenTerminal(page, testRepoPath)
-    await enableAgentSurfaces(page)
     // The workspace lays out by its own width; at the default window size the context rail that
     // holds the apps card is collapsed, which is the layout working, not the precondition.
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
