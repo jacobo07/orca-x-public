@@ -418,6 +418,39 @@ describe("a remote project's agent runs on its host or not at all", () => {
     expect(localHead).toMatchObject({ providerSessionId: 'thread-1' })
     expect(localHead && 'executionHostId' in localHead).toBe(false)
   })
+
+  it('hands the driver the directory a thread was recorded in, so a moved project is relocated', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const id = await chatWith(agentOwnedBy('github:acme/remote'))
+    const seen: ProviderTurnRequest[] = []
+    const remoteDeps = {
+      ...turnDeps(),
+      remoteDriverFor: async () => ({
+        driver: {
+          runTurn: async (request: ProviderTurnRequest) => {
+            seen.push(request)
+            request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+            return { providerSessionId: 'remote-thread' }
+          }
+        },
+        checkAuth: async () => ({ ready: true as const })
+      }),
+      service
+    }
+    await runConversationTurn(remoteDeps, { conversationId: id, text: 'one', cwd: null })
+    setups = setups.map((setup) => ({ ...setup, path: '/home/dev/moved' }))
+    await runConversationTurn(remoteDeps, { conversationId: id, text: 'two', cwd: null })
+
+    expect(seen[0].resumeCwd).toBeNull()
+    expect(seen[1]).toMatchObject({
+      resumeSessionId: 'remote-thread',
+      resumeCwd: '/home/dev/remote',
+      cwd: '/home/dev/moved'
+    })
+    const read = await service.read(id)
+    const head = read.outcome === 'loaded' ? read.record.provenance.at(-1) : null
+    expect(head).toMatchObject({ providerSessionId: 'remote-thread', cwd: '/home/dev/moved' })
+  })
 })
 
 describe('brainstorming keeps the caller location', () => {

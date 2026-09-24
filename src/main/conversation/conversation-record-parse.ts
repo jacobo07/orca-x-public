@@ -74,7 +74,8 @@ function provenanceValid(value: unknown): boolean {
       isFiniteNumber(entry.observedAt) &&
       // Absent is local (older records); present must be a host id, never an empty stand-in.
       (entry.executionHostId === undefined ||
-        (typeof entry.executionHostId === 'string' && entry.executionHostId.length > 0))
+        (typeof entry.executionHostId === 'string' && entry.executionHostId.length > 0)) &&
+      (entry.cwd === undefined || (typeof entry.cwd === 'string' && entry.cwd.length > 0))
   )
 }
 

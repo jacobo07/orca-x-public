@@ -37,6 +37,9 @@ export type ConversationTurnRequest = {
 export type ProviderTurnRequest = {
   /** The provider thread to continue, or null to begin one. Continuation material, never identity. */
   resumeSessionId: string | null
+  /** The directory that thread was recorded in. Null or absent is UNKNOWN: the driver must then
+   *  have the provider confirm the thread is in `cwd` before running the turn in it. */
+  resumeCwd?: string | null
   cwd: string
   text: string
   /** What the conversation's agent contributes (agent-turn-instructions.ts), or null for
@@ -291,8 +294,7 @@ export async function runConversationTurn(
     }
 
     // Only a thread recorded on THIS host can be resumed: its history exists nowhere else.
-    const resumeSessionId =
-      latestProviderProvenance(existing.record, executionHostId)?.providerSessionId ?? null
+    const resumeFrom = latestProviderProvenance(existing.record, executionHostId)
     let sawTerminal = false
     // Durable writes are CHAINED and awaited before this function reports success. A turn that
     // returned `completed` while its writes were still in flight would be telling the user their
@@ -301,7 +303,8 @@ export async function runConversationTurn(
     let durableFailure: string | null = null
 
     const result = await driver.runTurn({
-      resumeSessionId,
+      resumeSessionId: resumeFrom?.providerSessionId ?? null,
+      resumeCwd: resumeFrom?.cwd ?? null,
       cwd,
       text: request.text,
       developerInstructions,
@@ -341,7 +344,9 @@ export async function runConversationTurn(
           transcriptPath: null,
           observedAt: now(),
           // Omitted for local, so a local turn writes exactly the record shape it always has.
-          ...(executionHostId === LOCAL_EXECUTION_HOST_ID ? {} : { executionHostId })
+          ...(executionHostId === LOCAL_EXECUTION_HOST_ID ? {} : { executionHostId }),
+          // The driver runs a turn only in a thread confirmed to be in `cwd`, so this is observed.
+          cwd
         })
       )
     }

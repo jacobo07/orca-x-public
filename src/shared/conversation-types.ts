@@ -67,6 +67,9 @@ export type ConversationProviderProvenance = {
    * which is what every record written before remote turns existed actually was.
    */
   executionHostId?: string
+  /** The directory the thread was bound to on that host. Absent (older records) is UNKNOWN, so the
+   *  next resume asks the provider to confirm the location rather than assuming it did not move. */
+  cwd?: string
 }
 
 export type ConversationTurn = {

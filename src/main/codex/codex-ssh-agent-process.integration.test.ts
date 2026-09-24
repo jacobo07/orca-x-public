@@ -6,27 +6,24 @@
 // "codex" resolves to this node, and `app-server` is a script file of that name in the project
 // directory, so `node app-server` is what runs — in the directory the turn was located in.
 
-import {
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  readlinkSync,
-  realpathSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
-import { RelayDispatcher } from '../../relay/dispatcher'
-import { AgentProcessHandler } from '../../relay/agent-process-handler'
 import { ProviderUnavailableError } from '../conversation/provider-unavailable'
-import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 
 import { runCodexAppServerSession } from './codex-app-server-session'
 import { createCodexConversationDriver } from './codex-conversation-driver'
+import {
+  createRelayHarness,
+  disposeRelayHarness,
+  isAlive,
+  processesIn,
+  waitUntil,
+  type RelayHarness
+} from './codex-relay-test-harness'
 import { createSshAgentProcessSpawn } from './codex-ssh-agent-process'
 import { resolveSshCodexDriver } from './codex-ssh-conversation-driver'
 
@@ -79,81 +76,17 @@ async function runTurn() {
 }
 `
 
-type Harness = {
-  dispatcher: RelayDispatcher
-  mux: SshChannelMultiplexer
-  handler: AgentProcessHandler
-}
-
-function createHarness(realHost = false): Harness {
-  let relayFeed: ((data: Buffer) => void) | undefined
-  const clientDataCallbacks: ((data: Buffer) => void)[] = []
-  const transport: MultiplexerTransport = {
-    write: (data, onSettled) => {
-      setImmediate(() => {
-        relayFeed?.(data)
-        onSettled?.({ ok: true })
-      })
-    },
-    supportsWriteSettlement: true,
-    onData: (cb) => {
-      clientDataCallbacks.push(cb)
-    },
-    onClose: () => {}
-  }
-  const dispatcher = new RelayDispatcher(
-    (data: Buffer, onSettled) => {
-      setImmediate(() => {
-        for (const cb of clientDataCallbacks) {
-          cb(data)
-        }
-        onSettled({ ok: true })
-      })
-    },
-    { supportsWriteCallback: true }
-  )
-  relayFeed = (data) => dispatcher.feed(data)
-  // The handler refuses Windows hosts; this test host may be Windows, and the refusal is not what
-  // it is proving. Everything else — spawn, streams, kill — is the real code.
-  const handler = new AgentProcessHandler(
-    dispatcher,
-    realHost ? {} : { resolveCommand: async () => process.execPath, platform: 'linux' }
-  )
-  return { dispatcher, mux: new SshChannelMultiplexer(transport), handler }
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
-  const started = Date.now()
-  while (Date.now() - started < timeoutMs) {
-    if (predicate()) {
-      return true
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-  return predicate()
-}
-
 let project = ''
-let harness: Harness
+let harness: RelayHarness
 
 beforeEach(() => {
   project = mkdtempSync(join(tmpdir(), 'orca-remote-project-'))
   writeFileSync(join(project, 'app-server'), SCRIPTED_APP_SERVER)
-  harness = createHarness()
+  harness = createRelayHarness()
 })
 
 afterEach(async () => {
-  await harness.handler.dispose()
-  harness.mux.dispose()
+  await disposeRelayHarness(harness)
   rmSync(project, { recursive: true, force: true })
 })
 
@@ -259,28 +192,13 @@ describe('a remote turn through the real relay handler and a real child', () => 
   }, 60_000)
 })
 
-/** The executable of every process whose working directory is `dir`, read from the kernel. */
-function processesIn(dir: string): string[] {
-  const real = realpathSync(dir)
-  return readdirSync('/proc')
-    .filter((name) => /^\d+$/.test(name))
-    .flatMap((name) => {
-      try {
-        return readlinkSync(`/proc/${name}/cwd`) === real ? [readlinkSync(`/proc/${name}/exe`)] : []
-      } catch {
-        // Exited between the listing and the read, or not ours to inspect.
-        return []
-      }
-    })
-}
-
 // Rung 3, opt-in: the installed Codex CLI on a Linux host, with the host deps unreplaced — real
 // command resolution, spawn and group kill. Needs no login: `thread/start` answers without a model.
 describe.skipIf(process.platform !== 'linux' || process.env.ORCA_REAL_CODEX_RUNG !== '1')(
   'a real codex app-server through the relay handler',
   () => {
     it('runs in the located directory, reports it, and leaves no process behind', async () => {
-      const real = createHarness(true)
+      const real = createRelayHarness(true)
       const home = mkdtempSync(join(tmpdir(), 'orca-isolated-codex-home-'))
       try {
         const observed = await runCodexAppServerSession(
@@ -302,10 +220,73 @@ describe.skipIf(process.platform !== 'linux' || process.env.ORCA_REAL_CODEX_RUNG
         expect(observed.running.some((exe) => /codex/.test(exe))).toBe(true)
         expect(await waitUntil(() => processesIn(project).length === 0, 10_000)).toBe(true)
       } finally {
-        await real.handler.dispose()
-        real.mux.dispose()
+        await disposeRelayHarness(real)
         rmSync(home, { recursive: true, force: true })
       }
     }, 90_000)
+
+    // Phase 4's protocol rung: the DRIVER's resume path, not a probe. The model turn itself cannot
+    // answer (no login, and the account is quota-blocked), so the evidence is which thread the
+    // driver kept and whether it had to fall back — both decided before any model runs.
+    it('resumes a thread from one directory into another only as the provider confirms it', async () => {
+      const real = createRelayHarness(true)
+      const home = mkdtempSync(join(tmpdir(), 'orca-isolated-codex-home-'))
+      const moved = mkdtempSync(join(tmpdir(), 'orca-remote-moved-'))
+      const turnIn = (dir: string, resumeSessionId: string | null, resumeCwd: string | null) => {
+        const events: AgentTurnEvent[] = []
+        const driver = createCodexConversationDriver({
+          command: 'codex',
+          timeoutMs: 30_000,
+          runSession: (invocation, body, _spawn, handlers) =>
+            runCodexAppServerSession(
+              { ...invocation, exitGraceMs: 5_000 },
+              body,
+              createSshAgentProcessSpawn(real.mux, {
+                cwd: dir,
+                deadlineMs: 30_000,
+                envOverlay: { CODEX_HOME: home }
+              }) as never,
+              handlers
+            )
+        })
+        return driver
+          .runTurn({
+            resumeSessionId,
+            resumeCwd,
+            cwd: dir,
+            text: 'hi',
+            developerInstructions: null,
+            turnId: 'turn-real',
+            onEvent: (event) => events.push(event)
+          })
+          .then(
+            (result) => ({ id: result.providerSessionId, error: null, events }),
+            (error: Error) => ({ id: null, error: error.message, events })
+          )
+      }
+      const statuses = (events: AgentTurnEvent[]) =>
+        events.flatMap((event) => (event.kind === 'provider-status' ? [event.status] : []))
+      try {
+        // Whole objects asserted, so a red run prints what the provider actually did.
+        const first = await turnIn(project, null, null)
+        expect({ ...first, events: statuses(first.events) }).toMatchObject({
+          id: expect.any(String)
+        })
+
+        const relocated = await turnIn(moved, first.id, project)
+        expect({ ...relocated, events: statuses(relocated.events) }).toMatchObject({
+          id: first.id,
+          events: []
+        })
+
+        // Control: the fallback channel is live, so the empty list above is an observation.
+        const gone = await turnIn(moved, '00000000-0000-0000-0000-000000000000', moved)
+        expect(statuses(gone.events)).toContain('thread-resume-failed')
+      } finally {
+        await disposeRelayHarness(real)
+        rmSync(home, { recursive: true, force: true })
+        rmSync(moved, { recursive: true, force: true })
+      }
+    }, 180_000)
   }
 )

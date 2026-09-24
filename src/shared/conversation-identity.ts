@@ -49,7 +49,9 @@ export function appendProviderProvenance(
     head.agent === provenance.agent &&
     head.providerSessionId === provenance.providerSessionId &&
     head.transcriptPath === provenance.transcriptPath &&
-    provenanceHostId(head) === provenanceHostId(provenance)
+    provenanceHostId(head) === provenanceHostId(provenance) &&
+    // A thread relocated to a new directory is new evidence, even under the same thread id.
+    head.cwd === provenance.cwd
   ) {
     return record
   }

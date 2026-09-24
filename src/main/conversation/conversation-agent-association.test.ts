@@ -161,4 +161,21 @@ describe('a provider binding knows which host its thread lives on', () => {
       appendProviderProvenance(appended, { ...entry(), executionHostId: 'ssh:box' } as never)
     ).toBe(appended)
   })
+
+  it('refuses a directory that is present but empty, and loads one that is not', () => {
+    const withCwd = (cwd: string) =>
+      parseConversationRecord(
+        JSON.stringify(record({ id: 'conv_x', provenance: [entry({ cwd })] as never })),
+        'conv_x'
+      ).outcome
+    expect(withCwd('')).toBe('unreadable')
+    expect(withCwd('/repos/a')).toBe('loaded')
+  })
+
+  it('records the same thread relocated to another directory as new lineage', () => {
+    const conversation = record({ provenance: [entry({ cwd: '/repos/a' })] as never })
+    const moved = appendProviderProvenance(conversation, { ...entry(), cwd: '/repos/b' } as never)
+    expect(moved.provenance).toHaveLength(2)
+    expect(appendProviderProvenance(moved, { ...entry(), cwd: '/repos/b' } as never)).toBe(moved)
+  })
 })
