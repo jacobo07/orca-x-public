@@ -209,11 +209,16 @@ describe('agentProcess.run streaming', () => {
     h.child.stdout.write('second\n')
     await flush()
     expect(stdoutFrames()).toHaveLength(1)
+    // The frame count alone holds without the pause (the send chain serializes); the unread bytes
+    // left in the pipe are what bound the relay's memory against a fast child.
+    expect(h.child.stdout.isPaused()).toBe(true)
+    expect(h.child.stdout.readableLength).toBe('second\n'.length)
 
     release()
     await flush()
     await flush()
     expect(stdoutFrames()).toHaveLength(2)
+    expect(h.child.stdout.readableLength).toBe(0)
   })
 
   it('writes and closes stdin only for the client that owns the stream', async () => {
