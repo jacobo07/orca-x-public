@@ -399,20 +399,44 @@
       "id": "R",
       "dimension": "baseline-inheritance",
       "owner": "Phase 8 ascends the located-effect baseline",
-      "state": "open",
+      "state": "complete",
       "phase": "8",
       "claim": "The next project-scoped cognitive feature cannot regress below the proven standard.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "gate",
+          "script": "check:agent-turn-location-authority",
+          "note": "ascended to host-located: any host-blind provider-thread lookup anywhere in src/ fails, plus a positive control that the runner looks its own thread up by host"
+        },
+        {
+          "kind": "test",
+          "file": "config/scripts/check-agent-turn-location-authority.test.mjs",
+          "title": "catches a future feature that resumes a thread without naming its host"
+        }
+      ],
       "closes": "A violating future-like implementation is caught by the ascended baseline."
     },
     {
       "id": "S",
       "dimension": "knowledge-ukdl",
       "owner": "Phase 8 distills the program's traps",
-      "state": "open",
+      "state": "complete",
       "phase": "8",
       "claim": "What this program learned is written where the next program will read it.",
-      "evidence": [],
+      "evidence": [
+        {
+          "kind": "doc",
+          "file": "docs/reference/remote-agent-turn-authority.md",
+          "contains": "a-turn-can-end-without-answering",
+          "note": "UKDL: declared-ownership-needs-a-located-effect (ascended to host), a-turn-can-end-without-answering, a-real-channel-you-can-throw-away; each mapped to what enforces it"
+        },
+        { "kind": "gate", "script": "check:agent-turn-location-authority" },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-turn-event-mapping.test.ts",
+          "title": "reads a completed turn with a failed status as ended, never as answered"
+        }
+      ],
       "closes": "Reusable traps are distilled into the vault and UKDL without duplicating a stronger law."
     },
     {
