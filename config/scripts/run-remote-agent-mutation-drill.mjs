@@ -43,6 +43,8 @@ const RUNNER_TURN_TEST = 'src/main/conversation/conversation-turn-runner.test.ts
 const SESSION = at('src/main/codex/codex-app-server-session.ts')
 const REFUSALS = at('src/main/conversation/conversation-turn-refusals.ts')
 const LOCATION_GATE = 'config/scripts/check-agent-turn-location-authority.mjs'
+const LOCATION_GATE_FILE = at(LOCATION_GATE)
+const LOCATION_GATE_TEST = 'config/scripts/check-agent-turn-location-authority.test.mjs'
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -212,6 +214,28 @@ const drills = [
       'export const nightlyDigest = (record: never) => latestProviderProvenance(record)\nexport type RemoteDriverRefusal =',
     verify: gateGoesRedOn(LOCATION_GATE, 'conversation-turn-refusals.ts looks a provider thread up')
   },
+  // Phase 9: one identity across devices, and every turn entrance inventoried.
+  {
+    id: 'roamed-thread-not-found-by-address',
+    file: IDENTITY,
+    find: '(Boolean(hostAddress) && entry.hostAddress === hostAddress)',
+    replace: 'false',
+    verify: testGoesRedOn(ASSOCIATION_TEST, 'finds a thread by the host address')
+  },
+  {
+    id: 'host-address-not-recorded',
+    file: RUNNER,
+    find: '...(hostAddress ? { hostAddress } : {}),',
+    replace: '',
+    verify: testGoesRedOn(RUNNER_TEST, 'resumes the same machine')
+  },
+  {
+    id: 'unclassified-entrance-accepted',
+    file: LOCATION_GATE_FILE,
+    find: 'unclassified: found.filter((file) => !(file in inventory)),',
+    replace: 'unclassified: [],',
+    verify: testGoesRedOn(LOCATION_GATE_TEST, 'flags a new surface that can start a turn')
+  },
   // Phase 7: a turn cut off mid-way ends then, and says why.
   {
     id: 'dead-child-waits-out-the-deadline',
@@ -327,7 +351,8 @@ const subjects = [
   CAPABILITY,
   MAPPING,
   SESSION,
-  REFUSALS
+  REFUSALS,
+  LOCATION_GATE_FILE
 ]
 const before = subjects.map(hashOf)
 
