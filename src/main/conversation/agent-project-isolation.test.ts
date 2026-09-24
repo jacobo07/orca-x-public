@@ -37,6 +37,7 @@ function deps(): ConversationTurnDeps {
   return {
     service,
     driver: {
+      provider: 'codex',
       runTurn: async (request) => {
         driverCalls.push(request)
         request.onEvent({ kind: 'turn-started', turnId: request.turnId })

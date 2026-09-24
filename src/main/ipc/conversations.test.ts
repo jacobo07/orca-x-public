@@ -31,6 +31,7 @@ function build(overrides: Partial<Omit<ConversationTurnDeps, 'service'>> = {}): 
     roster: { readAgents: () => roster },
     turnDeps: {
       driver: {
+        provider: 'codex',
         runTurn: async (request) => {
           request.onEvent({ kind: 'turn-started', turnId: request.turnId })
           request.onEvent({

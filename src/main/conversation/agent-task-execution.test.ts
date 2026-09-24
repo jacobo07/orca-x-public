@@ -37,6 +37,7 @@ function deps(overrides: Partial<AgentTaskExecutionDeps> = {}): AgentTaskExecuti
     resolveProjectLocation: () => ({ outcome: 'no-project' }),
     fallbackCwd: () => root,
     driver: {
+      provider: 'codex',
       runTurn: async (request) => {
         driverCalls.push(request)
         request.onEvent({ kind: 'turn-started', turnId: request.turnId })

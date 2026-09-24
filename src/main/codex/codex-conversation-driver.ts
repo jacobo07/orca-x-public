@@ -45,6 +45,7 @@ export function createCodexConversationDriver(
   const runSession = options.runSession ?? runCodexAppServerSession
 
   return {
+    provider: 'codex',
     async runTurn(request: ProviderTurnRequest): Promise<ProviderTurnResult> {
       const invocation: CodexAppServerInvocation = {
         command: options.command ?? resolveCodexCommand(),

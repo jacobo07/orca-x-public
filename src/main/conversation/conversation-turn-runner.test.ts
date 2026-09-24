@@ -53,6 +53,7 @@ function deps(overrides: Partial<ConversationTurnDeps> = {}): ConversationTurnDe
     resolveProjectLocation: () => ({ outcome: 'no-project' }),
     fallbackCwd: () => root,
     driver: {
+      provider: 'codex',
       runTurn: async (request) => {
         driverCalls.push(request)
         request.onEvent({ kind: 'turn-started', turnId: request.turnId })
@@ -127,6 +128,7 @@ describe('runConversationTurn — the happy path', () => {
     await runConversationTurn(
       deps({
         driver: {
+          provider: 'codex',
           runTurn: async (request) => {
             request.onEvent({ kind: 'turn-started', turnId: request.turnId })
             // What the real `codex app-server` does: it reports the prompt back as a completed
@@ -205,6 +207,7 @@ describe('runConversationTurn — refusals, in the order that protects the user'
 
     const slow = deps({
       driver: {
+        provider: 'codex',
         runTurn: async (request) => {
           await blocked
           request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
@@ -261,6 +264,7 @@ describe('runConversationTurn — refusals, in the order that protects the user'
     const outcome = await runConversationTurn(
       deps({
         driver: {
+          provider: 'codex',
           runTurn: async (request) => {
             request.onEvent({ kind: 'turn-started', turnId: request.turnId })
             throw new Error('provider died')
@@ -282,6 +286,7 @@ describe('runConversationTurn — refusals, in the order that protects the user'
     const outcome = await runConversationTurn(
       deps({
         driver: {
+          provider: 'codex',
           runTurn: async (request) => {
             request.onEvent({ kind: 'turn-started', turnId: request.turnId })
             // Returns without turn-completed or turn-ended: the shape a killed child produces.
@@ -302,6 +307,7 @@ describe('runConversationTurn — refusals, in the order that protects the user'
     await runConversationTurn(
       deps({
         driver: {
+          provider: 'codex',
           runTurn: async () => {
             throw new Error('boom')
           }

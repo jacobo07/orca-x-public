@@ -35,6 +35,7 @@ let driverCalls: ProviderTurnRequest[] = []
 let counter = 0
 
 const driver = {
+  provider: 'codex',
   runTurn: async (request: ProviderTurnRequest) => {
     driverCalls.push(request)
     request.onEvent({ kind: 'turn-started', turnId: request.turnId })

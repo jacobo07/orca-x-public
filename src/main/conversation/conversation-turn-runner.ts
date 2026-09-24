@@ -5,6 +5,7 @@
 // without spending a real account's tokens on each of the six ways a turn can end.
 
 import type { Agent } from '../../shared/agent-types'
+import type { ProviderType } from '../../shared/agent-status-types'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
@@ -51,6 +52,9 @@ export type ProviderTurnResult = {
 }
 
 export type ConversationTurnDriver = {
+  /** Required, never defaulted: provenance and resume are keyed by it, and a driver that forgot to
+   *  say who it is would silently resume another provider's session. */
+  readonly provider: ProviderType
   runTurn: (request: ProviderTurnRequest) => Promise<ProviderTurnResult>
 }
 
@@ -182,7 +186,7 @@ export async function runConversationTurn(
       return { outcome: 'auth-required', detail: auth.detail }
     }
 
-    const resumeSessionId = latestSessionId(existing.record)
+    const resumeSessionId = latestSessionId(existing.record, deps.driver.provider)
     let sawTerminal = false
     // Durable writes are CHAINED and awaited before this function reports success. A turn that
     // returned `completed` while its writes were still in flight would be telling the user their
@@ -226,7 +230,7 @@ export async function runConversationTurn(
 
     if (result.providerSessionId !== null) {
       await service.applyEvent(conversationId, (current) =>
-        appendProvenanceOnce(current, result.providerSessionId as string, now())
+        appendProvenanceOnce(current, deps.driver.provider, result.providerSessionId as string, now())
       )
     }
 
@@ -273,10 +277,12 @@ function isDurableEvent(event: AgentTurnEvent): boolean {
   )
 }
 
-function latestSessionId(record: ConversationRecord): string | null {
+/** A session id belongs to the provider that issued it: resuming another provider's id would
+ *  either fail or, worse, attach this turn to an unrelated session of the same shape. */
+function latestSessionId(record: ConversationRecord, provider: ProviderType): string | null {
   for (let index = record.provenance.length - 1; index >= 0; index -= 1) {
     const entry = record.provenance[index]
-    if (entry.providerSessionId !== null) {
+    if (entry.agent === provider && entry.providerSessionId !== null) {
       return entry.providerSessionId
     }
   }
@@ -287,18 +293,19 @@ function latestSessionId(record: ConversationRecord): string | null {
  *  record with identical lineage entries. */
 function appendProvenanceOnce(
   record: ConversationRecord,
+  provider: ProviderType,
   providerSessionId: string,
   at: number
 ): ConversationRecord {
   const head = record.provenance.at(-1)
-  if (head && head.agent === 'codex' && head.providerSessionId === providerSessionId) {
+  if (head && head.agent === provider && head.providerSessionId === providerSessionId) {
     return record
   }
   return {
     ...record,
     provenance: [
       ...record.provenance,
-      { agent: 'codex', providerSessionId, transcriptPath: null, observedAt: at }
+      { agent: provider, providerSessionId, transcriptPath: null, observedAt: at }
     ],
     updatedAt: at
   }
