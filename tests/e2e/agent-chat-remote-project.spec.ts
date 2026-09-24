@@ -134,10 +134,29 @@ async function sendAsAgentOf(page: Page, repoId: string, text: string) {
         text,
         cwd: ''
       })
-      return { setup: { hostId: setup.hostId, path: setup.path }, outcome }
+      return {
+        setup: { hostId: setup.hostId, path: setup.path },
+        outcome,
+        conversationId: conversation.record.id
+      }
     },
     { repoId, text }
   )
+}
+
+/** Every assistant text block the conversation durably recorded. */
+async function assistantText(page: Page, conversationId: string): Promise<string> {
+  return page.evaluate(async (id) => {
+    const loaded = await window.api.conversations.read({ id })
+    if (loaded.outcome !== 'loaded') {
+      return ''
+    }
+    return loaded.record.messages
+      .filter((message) => message.role === 'assistant')
+      .flatMap((message) => message.blocks)
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('\n')
+  }, conversationId)
 }
 
 test.describe('an agent whose project lives on an ssh host', () => {
@@ -165,13 +184,24 @@ test.describe('an agent whose project lives on an ssh host', () => {
       const authCopy = join(remoteHome, '.codex-isolated', 'auth.json')
       copyFileSync(authSource, authCopy)
       try {
-        const ran = await sendAsAgentOf(orcaPage, connected.repoId, 'What does MARKER.txt say?')
-        writeEvidence({ signedInOutcome: ran.outcome })
-        expect(ran.outcome.outcome).not.toBe('auth-required')
-        expect(['completed', 'failed']).toContain(ran.outcome.outcome)
+        const ran = await sendAsAgentOf(
+          orcaPage,
+          connected.repoId,
+          'Read MARKER.txt in this project and reply with the number it contains.'
+        )
+        const answer = await assistantText(orcaPage, ran.conversationId)
         const cwds = rolloutCwds(join(remoteHome, '.codex-isolated', 'sessions'))
-        writeEvidence({ signedInOutcome: ran.outcome, rolloutCwds: cwds })
+        writeEvidence({ signedInOutcome: ran.outcome, answer, rolloutCwds: cwds })
+        // Where the provider thread ran, by the provider's own record on the host.
         expect(cwds).toContain(realpathSync(remotePath))
+        if (ran.outcome.outcome === 'completed') {
+          // The fact exists only in that directory on that host: it cannot be answered from anywhere else.
+          expect(answer).toContain('4471')
+        } else {
+          // Not answered (e.g. a quota): reported as failed, in the provider's words — never completed.
+          expect(ran.outcome.outcome).toBe('failed')
+          expect(ran.outcome).not.toMatchObject({ reason: 'codex reported an error' })
+        }
       } finally {
         unlinkSync(authCopy)
       }
