@@ -264,8 +264,17 @@ describe.skipIf(process.platform !== 'linux' || process.env.ORCA_REAL_CODEX_RUNG
             (error: Error) => ({ id: null, error: error.message, events })
           )
       }
+      // Only the driver's own fallbacks: Codex's thread-status notifications (`idle`, `active`) also
+      // arrive as provider-status, and are not a lost thread.
+      const FALLBACKS = [
+        'thread-resume-failed',
+        'thread-resume-empty',
+        'thread-relocation-unconfirmed'
+      ]
       const statuses = (events: AgentTurnEvent[]) =>
-        events.flatMap((event) => (event.kind === 'provider-status' ? [event.status] : []))
+        events.flatMap((event) =>
+          event.kind === 'provider-status' && FALLBACKS.includes(event.status) ? [event.status] : []
+        )
       try {
         // Whole objects asserted, so a red run prints what the provider actually did.
         const first = await turnIn(project, null, null)

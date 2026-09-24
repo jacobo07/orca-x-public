@@ -31,6 +31,10 @@ const RUNNER_TEST = 'src/main/conversation/agent-turn-runs-in-its-project.test.t
 const INTEGRATION_TEST = 'src/main/codex/codex-ssh-agent-process.integration.test.ts'
 const SSH_DRIVER = at('src/main/codex/codex-ssh-conversation-driver.ts')
 const SSH_DRIVER_TEST = 'src/main/codex/codex-ssh-conversation-driver.test.ts'
+const DRIVER = at('src/main/codex/codex-conversation-driver.ts')
+const RELOCATION_TEST = 'src/main/codex/codex-conversation-driver-relocation.test.ts'
+const IDENTITY = at('src/shared/conversation-identity.ts')
+const ASSOCIATION_TEST = 'src/main/conversation/conversation-agent-association.test.ts'
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -148,6 +152,56 @@ const drills = [
     find: "if ('refusal' in resolution) {",
     replace: 'if (false) {',
     verify: testGoesRedOn(RUNNER_TEST, 'names an unreachable host and a too-old relay apart')
+  },
+  // Phase 4: a resumed thread runs only where the provider says it is.
+  {
+    id: 'resume-drops-the-new-directory',
+    file: DRIVER,
+    find: '...(relocating ? { cwd: request.cwd } : {}),',
+    replace: '...({}),',
+    verify: testGoesRedOn(RELOCATION_TEST, 'relocates a moved thread when the provider confirms')
+  },
+  {
+    // Rung 3, real Codex: meaningful only with ORCA_REAL_CODEX_RUNG=1 on Linux.
+    id: 'real-provider-resume-drops-the-new-directory',
+    file: DRIVER,
+    find: '...(relocating ? { cwd: request.cwd } : {}),',
+    replace: '...({}),',
+    verify: testGoesRedOn(INTEGRATION_TEST, 'resumes a thread from one directory into another')
+  },
+  {
+    id: 'unconfirmed-location-accepted',
+    file: DRIVER,
+    find: 'if (resumed !== null && confirmed) {',
+    replace: 'if (resumed !== null) {',
+    verify: testGoesRedOn(
+      RELOCATION_TEST,
+      'starts a new thread in the new directory when the provider'
+    )
+  },
+  {
+    id: 'unrecorded-directory-read-as-unmoved',
+    file: DRIVER,
+    find: '!request.resumeCwd || !sameDirectory',
+    replace: '!!request.resumeCwd && !sameDirectory',
+    verify: testGoesRedOn(RELOCATION_TEST, 'treats an unrecorded directory as unknown')
+  },
+  {
+    id: 'thread-directory-not-recorded',
+    file: RUNNER,
+    find: 'so this is observed.\n          cwd',
+    replace: 'so this is observed.',
+    verify: testGoesRedOn(RUNNER_TEST, 'hands the driver the directory a thread was recorded in')
+  },
+  {
+    id: 'relocation-deduplicated-away',
+    file: IDENTITY,
+    find: 'head.cwd === provenance.cwd',
+    replace: 'true',
+    verify: testGoesRedOn(
+      ASSOCIATION_TEST,
+      'records the same thread relocated to another directory'
+    )
   }
 ]
 
@@ -157,7 +211,7 @@ if (live.live) {
   console.error(`REFUSING: a previous transaction is live — ${live.reason}`)
   process.exit(2)
 }
-const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS, SSH_DRIVER]
+const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS, SSH_DRIVER, DRIVER, IDENTITY]
 const before = subjects.map(hashOf)
 
 const tally = { caught: 0, survived: 0, unusable: 0 }
