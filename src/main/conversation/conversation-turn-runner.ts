@@ -188,6 +188,9 @@ export async function runConversationTurn(
 
     const resumeSessionId = latestSessionId(existing.record, deps.driver.provider)
     let sawTerminal = false
+    // Why kept apart from sawTerminal: a provider that ENDED the turn as failed has settled it, and
+    // reporting that as `completed` would hand callers an empty answer instead of the refusal.
+    let endedAs: { state: 'interrupted' | 'failed'; reason: string } | null = null
     // Durable writes are CHAINED and awaited before this function reports success. A turn that
     // returned `completed` while its writes were still in flight would be telling the user their
     // history is saved at the one moment it provably is not.
@@ -205,6 +208,9 @@ export async function runConversationTurn(
         deps.emit(conversationId, event)
         if (event.kind === 'turn-completed' || event.kind === 'turn-ended') {
           sawTerminal = true
+        }
+        if (event.kind === 'turn-ended') {
+          endedAs = { state: event.state, reason: event.reason }
         }
         if (isDurableEvent(event)) {
           // Not awaited HERE — blocking the provider's event callback would stall the stream — but
@@ -241,6 +247,10 @@ export async function runConversationTurn(
         interruptUnsettledTurns(current, now(), 'interrupted')
       )
       return { outcome: 'failed', turnId, reason: 'provider ended without completing the turn' }
+    }
+    const ending = endedAs as { state: 'interrupted' | 'failed'; reason: string } | null
+    if (ending !== null) {
+      return { outcome: 'failed', turnId, reason: ending.reason }
     }
 
     return { outcome: 'completed', turnId, providerSessionId: result.providerSessionId }
