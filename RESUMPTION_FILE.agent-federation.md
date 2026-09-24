@@ -77,15 +77,31 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   assistant → rate_limit_event → result. `rate_limit_event` carries real quota state. Scope with
   `--setting-sources project` (NOT `--bare`, which drops OAuth). That one-word turn cost **$0.93**.
   The Owner's **7-day Claude quota was at 99%** (reset ~2026-09-27 18:00 UTC) — the same quota Claude
-  Code runs on — so NO further live Claude calls without the Owner's say-so. Codex also blocked to 09-27.
+  Code runs on — the Owner then said "continue, it's good now" (2026-09-24) and live runs resumed.
+- **P3 SEALED** `ee091362b`..`dbf35a3ca`. Two pre-existing bugs found and fixed, each RED-first +
+  mutation-caught: (1) provenance hardcoded `codex` and resume ignored provider — a second driver
+  would have resumed another provider's session (driver now declares a REQUIRED `provider`);
+  (2) the runner returned `completed` for a provider-FAILED turn (`turn-ended`) — now `failed` with
+  the provider's reason. Built: `claude-conversation-driver.ts` (+ `claude-stream-mapping.ts`,
+  fixture = the real capture), `claude-auth-readiness.ts`, `provider-quota-observations.ts`,
+  `conversation-provider-routing.ts` (deterministic, every skip has a reason; preferred >
+  continuity > tools > registry order; exclude), `routed-conversation-turn.ts`, new outcome
+  `no-provider` (refused before commit; renderer notice + en.json key), and
+  `provider-routing-composition.ts` = the ONE composition both IPC and delegated tasks use.
+  GEX44 @dbf35a3ca: tsc node 0 / cli 0 / tc.web 2 (inherited from AEOS `f9a721fda`, untouched),
+  ~2000 passed. Mutations: 4 routing + 2 fixes, all CAUGHT.
+  **LIVE-OBSERVED (opt-in `ORCA_CLAUDE_REALITY=1`):** Claude driver resume across 2 real turns
+  (random word recalled); a person-assigned agent task run by the REAL coordinator through
+  production routing on the real provider (Claude — Codex signed out here), settled with a
+  structured result. Localization catalog/coverage gates are red on pre-existing cogws keys, not ours.
 
 ## 4. Next 3 actions
-1. P3: provider driver registry + availability states read from REAL signals (Claude's
-   `rate_limit_event`, Codex auth check) + a Claude driver behind ConversationTurnDriver, built and
-   tested OFFLINE against the captured stream (no live spend) + deterministic routing that records
-   model and cost. `--resume <session-id>` behaviour is still UNMEASURED (probe skipped for quota).
-2. P4: review record bound to subject revision, independence derived, stale on revision move.
-3. P5: subject-bound approval (inverts P1's gate case).
+1. P4: review record bound to subject revision (commit + diff hash, captured by Orca from git),
+   reviewer/producer + providers, independence DERIVED (same provider or agent = degraded),
+   stale when the revision moves; request-review RPC/CLI. Use routing `exclude` for independence.
+2. P5: subject-bound approval (inverts P1's gate case).
+3. Claude MCP bridge so `orca_delegate` works when Claude is the provider (agent→agent is live only
+   via Codex today, and Codex is signed out/quota-blocked here).
 Then P6 surface, P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada
 20 GB, nothing installed).
 
