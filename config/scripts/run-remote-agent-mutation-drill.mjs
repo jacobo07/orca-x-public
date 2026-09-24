@@ -37,6 +37,9 @@ const IDENTITY = at('src/shared/conversation-identity.ts')
 const ASSOCIATION_TEST = 'src/main/conversation/conversation-agent-association.test.ts'
 const CAPABILITY = at('src/main/codex/codex-thread-relocation-capability.ts')
 const CAPABILITY_TEST = 'src/main/codex/codex-thread-relocation-capability.test.ts'
+const MAPPING = at('src/main/codex/codex-turn-event-mapping.ts')
+const MAPPING_TEST = 'src/main/codex/codex-turn-event-mapping.test.ts'
+const RUNNER_TURN_TEST = 'src/main/conversation/conversation-turn-runner.test.ts'
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -159,6 +162,23 @@ const drills = [
     )
   },
   {
+    id: 'failed-turn-status-read-as-completed',
+    file: MAPPING,
+    find: "if (status === null || status === 'completed') {",
+    replace: 'if (true) {',
+    verify: testGoesRedOn(MAPPING_TEST, 'reads a completed turn with a failed status as ended')
+  },
+  {
+    id: 'unanswered-turn-reported-completed',
+    file: RUNNER,
+    find: 'if (endedWithoutAnswer !== null) {',
+    replace: 'if (false) {',
+    verify: testGoesRedOn(
+      RUNNER_TURN_TEST,
+      'reports a turn the provider ended in failure as failed'
+    )
+  },
+  {
     id: 'remote-refusal-ignored',
     file: RUNNER,
     find: "if ('refusal' in resolution) {",
@@ -240,7 +260,17 @@ if (live.live) {
   console.error(`REFUSING: a previous transaction is live — ${live.reason}`)
   process.exit(2)
 }
-const subjects = [HANDLER, ADAPTER, RUNNER, HOST_DEPS, SSH_DRIVER, DRIVER, IDENTITY, CAPABILITY]
+const subjects = [
+  HANDLER,
+  ADAPTER,
+  RUNNER,
+  HOST_DEPS,
+  SSH_DRIVER,
+  DRIVER,
+  IDENTITY,
+  CAPABILITY,
+  MAPPING
+]
 const before = subjects.map(hashOf)
 
 const tally = { caught: 0, survived: 0, unusable: 0 }
