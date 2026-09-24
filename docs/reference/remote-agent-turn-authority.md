@@ -37,3 +37,14 @@ driver path.
 
 `conversation-live-state.test.ts` › "gives every outcome a DIFFERENT kind, so one cannot stand in for
 another" holds every kind above apart.
+
+## Distilled — what this program learned, and what enforces it
+
+Written to the knowledge vault (UKDL) for the next program, each with the mechanism that keeps it
+true here. A lesson that is only prose decays.
+
+| Law (UKDL entry) | Enforced by |
+|---|---|
+| `declared-ownership-needs-a-located-effect`, **ascended**: a location is a path AND a host. A thread's history is looked up by host, a remote path never reaches a local process, and a move is followed only as far as the provider can confirm it | `pnpm check:agent-turn-location-authority` fails any host-blind thread lookup in `src/`. Its test catches a future-like violator. Relocation tests drive the version gate and the confirmation rule |
+| `a-turn-can-end-without-answering`: settled is not answered; a wait on a notification needs the peer's death signal; the provider's refusal words survive | `codex-turn-event-mapping.test.ts` (verbatim 0.155.1 payloads); runner `reports a turn the provider ended in failure as failed`; integration `ends a turn whose host goes away mid-turn at once` |
+| `a-real-channel-you-can-throw-away`: prove a remote effect over a real channel you own, with the real account unreachable by construction | `tests/e2e/agent-chat-remote-project.spec.ts`, run via `.planning/tools/gex44-e2e.ps1` against a private sshd that forces a throwaway HOME |
