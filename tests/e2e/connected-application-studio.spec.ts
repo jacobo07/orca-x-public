@@ -108,11 +108,14 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
       timeout: 60_000
     })
 
-    const guest = await app.evaluate(async ({ webContents }) => {
-      const view = webContents
-        .getAllWebContents()
-        .find((contents) => contents.getType() === 'webview')
-      if (!view) {
+    // The surface's OWN guest: the attach probes above left guests on this same origin, so "the
+    // first webview in main" can be one of them rather than the one on screen.
+    const guestId = await page
+      .getByTestId('connected-app-webview')
+      .evaluate((el) => (el as unknown as { getWebContentsId: () => number }).getWebContentsId())
+    const guest = await app.evaluate(async ({ webContents }, id) => {
+      const view = webContents.fromId(id)
+      if (!view || view.getType() !== 'webview') {
         return null
       }
       return {
@@ -122,7 +125,7 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
           'JSON.stringify({ api: typeof window.api, require: typeof require, electron: typeof window.electron })'
         )
       }
-    })
+    }, guestId)
     expect(guest).not.toBeNull()
     expect(guest!.url.startsWith(`${STUDIO}/sign-in`)).toBe(true)
     expect(JSON.parse(guest!.bridge)).toEqual({
@@ -130,19 +133,9 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
       require: 'undefined',
       electron: 'undefined'
     })
-    // page.screenshot captures only the embedder document; the window capture composites the guest.
-    const windowPng = await app.evaluate(async ({ BrowserWindow }) =>
-      (await BrowserWindow.getAllWindows()[0]!.capturePage()).toPNG().toString('base64')
-    )
-    await testInfo.attach('studio-surface-window', {
-      body: Buffer.from(windowPng, 'base64'),
-      contentType: 'image/png'
-    })
-    const { writeFileSync } = await import('node:fs')
-    writeFileSync(
-      testInfo.outputPath('studio-surface-window.png'),
-      Buffer.from(windowPng, 'base64')
-    )
+    // No window capture here: a headless E2E window is never shown, so Chromium stops compositing
+    // it and capturePage returns the last frame it drew (the chat, before Open). The pixel claim
+    // lives in connected-application-studio-pixels.spec.ts, which runs @headful.
 
     // An undeclared origin never loads in the view; it is handed to the system browser instead.
     await app.evaluate(async ({ webContents }, id) => {
