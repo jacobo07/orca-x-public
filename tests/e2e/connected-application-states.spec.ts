@@ -99,19 +99,21 @@ test('a connected app reports degraded and unreachable from real servers', async
     // The workspace lays out by its own width; at the default window size the context rail that
     // holds the apps card is collapsed, which is the layout working, not the precondition.
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
+    // Trust is installed as each app session is CREATED, i.e. before its first TLS request: set
+    // after the first probe, it did not take (the row stayed unreachable after Check again).
+    await app.evaluate(({ app: electronApp }) => {
+      electronApp.on('session-created', (created) => {
+        created.setCertificateVerifyProc((request, callback) =>
+          callback(request.hostname === '127.0.0.1' ? 0 : -3)
+        )
+      })
+    })
 
     const degraded = await connectApplicationToNewAgent(page, {
       label: 'Sick App',
       origin: `https://127.0.0.1:${degradedPort}`
     })
-    await app.evaluate(({ session }, partition) => {
-      session
-        .fromPartition(partition)
-        .setCertificateVerifyProc((request, callback) =>
-          callback(request.hostname === '127.0.0.1' ? 0 : -3)
-        )
-    }, degraded.partition)
-    await degraded.row.getByTestId('connected-app-check').click()
+    console.log(`[app-states] degraded :: ${await degraded.row.innerText()}`)
     await expect(degraded.row).toHaveAttribute('data-state', 'degraded', { timeout: 30_000 })
     await expect(degraded.row).toContainText('503')
     // The server was actually asked: a state produced without a request would be invention.
