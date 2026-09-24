@@ -48,10 +48,15 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
 - Schema v30 collision risk with AEOS W5 — whoever lands second rebases.
 - Heavy verification on GEX44 (bundle + revision fence, memory `gex44-is-the-linux-evidence-node`).
 
+- **P2c SEALED** `fcbcb1033`: `orchestration.taskCreate` + `orca orchestration task-create
+  --assignee-agent <id>`. The requester is DELIBERATELY not a parameter (any worker terminal can
+  call this RPC; a requester field is an identity spoof). GEX44: tsc node+cli 0, 135/135, mutation
+  `requester-passthrough` CAUGHT. Subject is not on the RPC yet — it arrives with P4, captured by Orca.
+
 ## 4. Next 3 actions
-1. P2c: expose delegation on the existing surfaces — `orchestration.taskCreate` RPC + CLI accept
-   `--assignee-agent`/`--requester-agent`/subject, with the SUBJECT REVISION captured by Orca from git
-   (never from the caller's text); DelegationRefusedError maps to a named RPC error code.
+1. P2d: agent-ORIGINATED delegation — a tool the agent's own turn can call, whose requester Orca
+   derives from the conversation the call came from (never from the tool's arguments). Measure first
+   what Codex app-server offers for tools (dynamic tools / MCP) before choosing the channel.
 2. P3: provider driver registry + availability states (AUTH_REQUIRED/QUOTA_EXHAUSTED/UNSUPPORTED/
    UNKNOWN) + Claude driver behind ConversationTurnDriver + deterministic routing with a reason.
 3. P4: review record bound to subject revision, independence derived, stale on revision move.
