@@ -51,6 +51,21 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
   await electronApp.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setSize(1700, 960)
   )
+  // Attribution: the two reads the page makes on open, timed alone, so rosterMs splits into data vs render.
+  const reads = await orcaPage.evaluate(async () => {
+    const t0 = performance.now()
+    const threads = await window.api.conversations.list()
+    const t1 = performance.now()
+    const agents = await window.api.agents.list()
+    const t2 = performance.now()
+    return {
+      listMs: Math.round(t1 - t0),
+      agentsMs: Math.round(t2 - t1),
+      threads: threads.length,
+      agents: agents.length
+    }
+  })
+
   const started = Date.now()
   await orcaPage.locator('[data-workspace-activity="agent-workspace"]').first().click()
   await orcaPage.getByTestId('workspace-tab-agents').click()
@@ -70,8 +85,9 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
   })
 
   console.log(
-    `[workspace-scale] agents=${AGENTS} threads=${THREADS} rosterMs=${rosterMs} agentRows=${agentRows} threadRows=${threadRows} domNodes=${domNodes} heapMb=${heapMb}`
+    `[workspace-scale] agents=${AGENTS} threads=${THREADS} rosterMs=${rosterMs} agentRows=${agentRows} threadRows=${threadRows} listMs=${reads.listMs} agentsMs=${reads.agentsMs} domNodes=${domNodes} heapMb=${heapMb}`
   )
+  expect(reads).toMatchObject({ threads: THREADS, agents: AGENTS })
   expect(rosterMs).toBeLessThan(BUDGET.rosterMs)
   expect(domNodes).toBeLessThan(BUDGET.domNodes)
   expect(heapMb).toBeGreaterThan(0)
