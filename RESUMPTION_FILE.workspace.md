@@ -1,41 +1,36 @@
 # RESUMPTION — Orca X Workspace program (worktree `C:\Users\User\Apps\orca-cogws-ui-wt`)
 
 ## 1. Identity
-Branch `orca-x/cogws-product-surface`, CW-UI-1 = `cfd621873..4df61c6ca` (16 commits, unpushed).
-Thesis: the Cognitive Workspace surface becomes Orca's canonical **Workspace** rail entry; Studio is
-a connected project app; the phone gets a real upstream conversation service. Plan of record:
-`.planning/ROADMAP.md` (8 GSD phases, git-excluded, worktree-local). This branch's
-`RESUMPTION_FILE.md` belongs to the cogws program — never edit it.
+Branch `orca-x/cogws-product-surface`, unpushed. Thesis: the agent surface is Orca's canonical
+**Workspace** (rail entry directly below Explorer); Studio is a connected project app; the phone
+gets a real upstream conversation service. Plan: `.planning/ROADMAP.md` (8 GSD phases, git-excluded).
+State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws program's — never edit.
 
-## 2. State (measured 2026-09-24)
-- CW-UI-1 proven: 6/6 real-Electron specs on GEX44 at `d6d839339`; 7/7 mutations caught.
-- Open defect: Studio window capture showed the chat frame, not Studio (Phase 1).
-- Concurrent owners — do NOT duplicate:
-  - `Apps\orca-federation-wt` / `orca-x/agent-federation` (live, dirty): delegation to durable
-    agents via orchestration.db, providers, routing, review, approval, GEX44 local model. It forked
-    from this branch at `591ab8986` and lacks the 11 later commits (all the Studio work).
-  - `Apps\orca-cogws-wt` / `orca-x/cognitive-workspace` (live long run): remote turns; owns
-    `check:cognitive-workspace-completeness`, which Phase 3 extends.
-- Owner decisions 2026-09-24: new surface takes rail label/slot "Workspace"; current terminal view
-  relabelled (route ids `workspace`/`conversations`/`agents` unchanged, persisted activeView must
-  still resolve); Chats + Agents merge in, then leave. No ÁGORA/Hermes/Kados/KEOS registration.
-- Coherence anchor: `git log --format=%s -1 4df61c6ca` = "docs(workspace): what the surface shows,
-  what it refuses to show, and why".
+## 2. State (2026-09-24)
+- Phase 1 SEALED `9290c26c9..1c7d2478f`: Studio pixels proven headful (region = Studio sign-in);
+  degraded/unreachable from real https servers. Cause of the old stale capture = timing (drills A/B).
+- Phase 2 SEALED `8168895f0..d4dadc8cd`: Workspace below Explorer, launcher "Terminals", Vault tab
+  "Sessions", Chats+Agents entries and AgentsPage removed, `activeView:'agents'` → conversations.
+  GEX44: tsc 0/0/0; 10/10 E2E headless + pixels headful; 6/6 mutations caught.
+- Pre-existing red (not ours): git-status-refresh* (11), window-shortcut-policy (1).
+- Long run: v2 marker for session 2aad6d8e armed 10:20 (before the Ralph-mission default landed);
+  NO_CROSSINGS so far. Do not arm a Ralph mission on top — two writers.
+- Concurrent owners: `orca-x/agent-federation` (missions/providers/review/approval/GEX44 model) and
+  `orca-x/cognitive-workspace` (remote turns; its completeness gate is a PROGRAM matrix, not a
+  surface-producer check — Phase 3 needs its own owner, not that file).
 
 ## 3. Active decisions
-- Rail order owner: `src/renderer/src/components/activity-rail/workspace-activity-items.ts`
-  (its test pins order). Labels: `WorkspaceActivityRailSection.tsx`.
-- Heavy verification only on GEX44 (bundle → fetch → pin sha → xvfb); local host ~2.7 GB free.
-- Format only explicit files with oxfmt; never a directory.
-- Mutation drills report PLANT/CAUGHT/SURVIVED/HARNESS_FAILED + RESTORE_VERIFIED.
+- Heavy verification on GEX44 only: scratchpad `gex-verify.ps1 -Base d6d839339 -Commands ...`,
+  `gex-e2e2.ps1 -Headless ... -Headful ...`, `gex-status.sh`, `p2-drills.sh` (drill template).
+- Format only explicit files (oxfmt); never disable max-lines — split by responsibility.
+- Never name a PowerShell function with a one-letter alias (`R` = Invoke-History wiped 3 files).
 
 ## 4. Next 3 actions
-1. Phase 1: bind the Studio capture to a proven-painted guest frame; drive degraded/unreachable.
-2. Phase 2: inventory Chats/Agents/terminal-Workspace entry actions, then relabel + merge.
-3. Phase 3: extend the completeness gate with a synthetic red drill.
+1. Phase 3 (PLAN): design a Workspace surface-producer gate (claim kinds → registered producer,
+   unknown arm required), synthetic red drill + population floor.
+2. Phase 4 (ULTRA-PLAN): capability-gated host RPC for conversations over the pairing transport.
+3. Keep federation's P6 surface slot agreement in mind (they own missions/review rows).
 
 ## 5. Start
-Open Claude Code IN `C:\Users\User\Apps\orca-cogws-ui-wt` in its own Cursor window. Prove
-`git worktree list` and HEAD. Arm `/cpp-gsd-long` (preflight must print `(True, 'ok')`; mission
-terms are in `.planning/STATE.md`). Tests: `node node_modules/vitest/vitest.mjs run --config
-config/vitest.config.ts <paths>` — never the full suite locally.
+Open Claude Code IN this worktree. Prove `git worktree list` and HEAD. Read `.planning/STATE.md`.
+Tests: `node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts <paths>` on GEX44.
