@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
 
 vi.mock('@/lib/e2e-config', () => ({ e2eConfig: { exposeStore: false } }))
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({ recordRendererCrashBreadcrumb: vi.fn() }))
 
 const INTERVAL_MS = 15_000
 
@@ -240,6 +241,34 @@ describe('terminal delivery watchdog', () => {
     expect(requestRecovery).toHaveBeenCalledTimes(1)
     expect(requestRecovery).toHaveBeenCalledWith('output-not-received')
     expect(reattachMock).not.toHaveBeenCalled()
+  })
+
+  // Why this is asserted and not assumed: the in-renderer ring is DevTools-only, so the remount the
+  // stall triggers destroys the evidence of its own cause. Several field freezes stayed unattributed
+  // for exactly that reason. A mirror nobody drives is a silent producer wearing a green suite.
+  it('mirrors a visible-pane stall out of the renderer, with the cause attached', async () => {
+    await driveVisiblePane(false)
+
+    const { recordRendererCrashBreadcrumb } = await import('@/lib/crash-breadcrumb-recorder')
+    const { TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB } = await import('./terminal-delivery-watchdog')
+
+    expect(recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB,
+      expect.objectContaining({ cause: 'output-not-received' })
+    )
+  })
+
+  // Bracketed rather than asserted as an absolute zero: this mock is not cleared between tests, so
+  // `not.toHaveBeenCalled()` measures the whole file's history and fails against a correct build.
+  // The claim is about THIS window, so the count is what must not move.
+  it('does not mirror anything for a pane that keeps up (negative control)', async () => {
+    const { recordRendererCrashBreadcrumb } = await import('@/lib/crash-breadcrumb-recorder')
+    const mirrored = () => vi.mocked(recordRendererCrashBreadcrumb).mock.calls.length
+    const before = mirrored()
+
+    await driveVisiblePane(true)
+
+    expect(mirrored()).toBe(before)
   })
 
   it('leaves an on-screen pane alone while it keeps up with its model', async () => {
