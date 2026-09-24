@@ -22,6 +22,9 @@ Spec of record: `docs/orca-cognitive-workspace-spec.md`. Done-gate:
 - Phase 4 COMPLETE (`66d26bde3`..`36c723e1d`) — a resumed thread relocates to the project's new
   directory only on a Codex whose `initialize` version (≥ 0.153.4) is measured to do it, and only if
   it confirms the directory; otherwise a new thread in the right place. Drill 19/19. Matrix E done.
+- Phase 5 COMPLETE bar the answer leg (`ea1c2e817`..`be1b5f83e`) — real Electron + real ssh + real
+  Codex on GEX44; matrix C/G/I complete, Q BLOCKED_BY_OWNER_AUTH (quota). Fixed: a usage-limited turn
+  was reported `completed`. Drill 22/22. Matrix: 7 complete / 11 open / 2 blocked.
 - Coherence anchors (all must pass): check-durable-actor-catalogs, check-agent-identity-authority,
   check-recurring-work-inventory, check-agent-instruction-layer, check-agent-turn-location-authority,
   check-cognitive-workspace-completeness --integrity.
@@ -38,9 +41,11 @@ Spec of record: `docs/orca-cognitive-workspace-spec.md`. Done-gate:
 
 ## 4. Next three actions
 
-1. Phase 5: the real-ssh product rung (desktop mux over a real ssh channel to GEX44's relay).
-2. Phases 6–9 per `.planning/ROADMAP.md`.
-3. After 2026-09-27 19:54: the model-turn legs (matrix I, Phase 4 behaviour rung, audit gaps 11/14).
+1. Phase 6 (restart under remote location, matrix F) — then Phases 7–9 per `.planning/ROADMAP.md`.
+2. GEX44 runners are in `.planning/tools/` (verify / drill / e2e + private sshd). The e2e runner's
+   private sshd forces a throwaway HOME+CODEX_HOME; never point Orca at kobii's real home.
+3. After 2026-09-27 19:54: `gex44-e2e.ps1 -Phase build`, then `-Phase test -SignedIn` must show the
+   marker 4471 (matrix Q, owner-auth) — plus the Phase 4 behaviour rung and audit gaps 11/14.
 
 ## 5. Start
 
