@@ -18,6 +18,17 @@ import type { AgentProjectLocation } from './agent-project-location'
 import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
+import {
+  describeUnavailableProject,
+  REMOTE_REFUSAL_DETAIL,
+  type RemoteDriverRefusal
+} from './conversation-turn-refusals'
+import {
+  completeTurnTrace,
+  draftTurnTrace,
+  type ConversationTurnTrace,
+  type ConversationTurnTraceDraft
+} from './conversation-turn-trace'
 import { ProviderUnavailableError } from './provider-unavailable'
 
 export type ConversationTurnRequest = {
@@ -69,24 +80,12 @@ export type RemoteExecutionTarget = {
 
 export type AuthCheck = () => Promise<{ ready: true } | { ready: false; detail: string }>
 
-/** A remote host either offers a driver and its own auth check, or says why it cannot. Each
- *  refusal has its own fix: reconnect the host, update Orca on it, or set the project up again. */
-export type RemoteDriverRefusal =
-  | 'remote-host-unreachable'
-  | 'remote-relay-unsupported'
-  | 'remote-project-missing'
+/** A remote host either offers a driver and its own auth check, or says why it cannot. */
 export type RemoteDriverResolution =
   | { driver: ConversationTurnDriver; checkAuth: AuthCheck }
   | { refusal: RemoteDriverRefusal }
 
-/** Keyed by every refusal, so a new one cannot fall into another's sentence. */
-const REMOTE_REFUSAL_DETAIL: Record<RemoteDriverRefusal, string> = {
-  'remote-host-unreachable': 'This agent’s remote host is not connected.',
-  'remote-relay-unsupported': 'Orca on this agent’s remote host is too old to run a chat there.',
-  'remote-project-missing': 'This agent’s project directory is not on its remote host.'
-}
-
-export type { ConversationTurnOutcome }
+export type { ConversationTurnOutcome, RemoteDriverRefusal }
 
 export type ConversationTurnDeps = {
   service: ConversationService
@@ -109,50 +108,25 @@ export type ConversationTurnDeps = {
   mintItemId: () => string
   /** Live-only sink: deltas and status reach the surface here and never reach disk. */
   emit: (conversationId: ConversationId, event: AgentTurnEvent) => void
+  /** One record per turn of where and why it ran (conversation-turn-trace.ts); no content. */
+  onTrace?: (trace: ConversationTurnTrace) => void
   now?: () => number
-}
-
-type RefusingLocation = Extract<
-  AgentProjectLocation,
-  { outcome: 'unresolved' | 'not-ready' | 'remote-host' | 'ambiguous-host' }
->
-type ProjectUnavailable = Extract<ConversationTurnOutcome, { outcome: 'project-unavailable' }>
-
-/** One refusal per fix. A caller that only had "project unavailable" would send someone to look at
- *  the wrong thing in most cases. */
-function describeUnavailableProject(location: RefusingLocation): ProjectUnavailable {
-  const refuse = (reason: ProjectUnavailable['reason'], detail: string): ProjectUnavailable => ({
-    outcome: 'project-unavailable',
-    projectId: location.projectId,
-    reason,
-    detail
-  })
-  switch (location.outcome) {
-    case 'unresolved':
-      return refuse('unresolved', 'This agent’s project is not set up on this computer.')
-    case 'not-ready':
-      return refuse(
-        'not-ready',
-        location.hostId === LOCAL_EXECUTION_HOST_ID
-          ? `This agent’s project is ${location.setupState} on this computer.`
-          : `This agent’s project is ${location.setupState} on a remote host.`
-      )
-    case 'ambiguous-host':
-      return refuse(
-        'ambiguous-host',
-        `This agent’s project is set up on ${location.hostIds.length} remote hosts, and Orca will not pick one for it.`
-      )
-    case 'remote-host':
-      return refuse(
-        'remote-host',
-        'This agent’s project lives on a kind of host a chat cannot run on yet.'
-      )
-  }
 }
 
 export async function runConversationTurn(
   deps: ConversationTurnDeps,
   request: ConversationTurnRequest
+): Promise<ConversationTurnOutcome> {
+  const trace = draftTurnTrace(request.conversationId)
+  const outcome = await runTracedTurn(deps, request, trace)
+  deps.onTrace?.(completeTurnTrace(trace, outcome))
+  return outcome
+}
+
+async function runTracedTurn(
+  deps: ConversationTurnDeps,
+  request: ConversationTurnRequest,
+  trace: ConversationTurnTraceDraft
 ): Promise<ConversationTurnOutcome> {
   const now = deps.now ?? (() => Date.now())
   const { service } = deps
@@ -169,6 +143,7 @@ export async function runConversationTurn(
   // not run as Brainstorming, and a refused send must not leave the user's message committed.
   const binding = service.agentFor(existing.record)
   if (binding.kind === 'agent-missing' || binding.kind === 'agent-unverifiable') {
+    trace.agentId = binding.agentId
     return {
       outcome: 'agent-unavailable',
       agentId: binding.agentId,
@@ -183,6 +158,8 @@ export async function runConversationTurn(
     binding.kind === 'agent'
       ? deps.resolveProjectLocation(binding.agent)
       : { outcome: 'none' as const }
+  trace.agentId = binding.kind === 'agent' ? binding.agent.id : null
+  trace.projectId = 'projectId' in location ? location.projectId : null
   if (
     location.outcome === 'unresolved' ||
     location.outcome === 'not-ready' ||
@@ -203,6 +180,8 @@ export async function runConversationTurn(
       setupId: location.setupId,
       path: location.path
     }
+    // Known before the host is asked, so a refusal still says where it tried.
+    Object.assign(trace, { hostId: target.hostId, setupId: target.setupId, path: target.path })
     const refuse = (
       reason: 'remote-execution-unavailable' | RemoteDriverRefusal,
       detail: string
@@ -262,6 +241,10 @@ export async function runConversationTurn(
 
   const executionHostId: string =
     location.outcome === 'resolved-remote' ? location.hostId : LOCAL_EXECUTION_HOST_ID
+  trace.hostId = executionHostId
+  trace.path = cwd
+  trace.setupId = 'setupId' in location ? location.setupId : null
+  trace.authority = location.outcome === 'resolved-remote' ? 'ssh-relay' : 'local'
 
   const turnId = deps.mintTurnId()
 
@@ -298,6 +281,7 @@ export async function runConversationTurn(
 
     // Only a thread recorded on THIS host can be resumed: its history exists nowhere else.
     const resumeFrom = latestProviderProvenance(existing.record, executionHostId)
+    trace.providerSessionId = resumeFrom?.providerSessionId ?? null
     let sawTerminal = false
     let endedWithoutAnswer: string | null = null
     // Durable writes are CHAINED and awaited before this function reports success. A turn that
@@ -343,6 +327,7 @@ export async function runConversationTurn(
       return { outcome: 'not-durable', reason: durableFailure }
     }
 
+    trace.providerSessionId = result.providerSessionId ?? trace.providerSessionId
     if (result.providerSessionId !== null) {
       await service.applyEvent(conversationId, (current) =>
         appendProviderProvenance(current, {

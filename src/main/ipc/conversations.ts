@@ -204,7 +204,9 @@ export function registerConversationHandlers(
       fallbackCwd: () => homedir(),
       mintTurnId: () => `turn_${randomUUID()}`,
       mintItemId: () => `usr_${randomUUID()}`,
-      emit: broadcastTurnEvent
+      emit: broadcastTurnEvent,
+      // Where and why each turn ran, to the main log. It carries no message text and no credentials.
+      onTrace: (trace) => console.info(`[conversation-turn] ${JSON.stringify(trace)}`)
     }
   })
   for (const [channel, handler] of Object.entries(handlers)) {

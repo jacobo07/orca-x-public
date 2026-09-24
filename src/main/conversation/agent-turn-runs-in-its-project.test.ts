@@ -24,8 +24,10 @@ import { ProviderUnavailableError } from './provider-unavailable'
 import {
   runConversationTurn,
   type ConversationTurnDeps,
-  type ProviderTurnRequest
+  type ProviderTurnRequest,
+  type RemoteDriverResolution
 } from './conversation-turn-runner'
+import type { ConversationTurnTrace } from './conversation-turn-trace'
 import { createConversationIpcHandlers } from '../ipc/conversations'
 
 let root = ''
@@ -538,6 +540,69 @@ describe('a remote turn while its world changes (Phase 6)', () => {
       resumeSessionId: 'remote-thread',
       resumeCwd: '/home/dev/ledger',
       cwd: '/home/dev/ledger'
+    })
+  })
+})
+
+describe('the turn trace (Phase 7)', () => {
+  const remoteDeps = (traces: ConversationTurnTrace[], resolution: RemoteDriverResolution) => ({
+    ...turnDeps(),
+    onTrace: (trace: ConversationTurnTrace) => traces.push(trace),
+    remoteDriverFor: async () => resolution,
+    service
+  })
+
+  it('names every link of where a remote turn ran, and carries none of what was said', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const id = await chatWith(ada)
+    const traces: ConversationTurnTrace[] = []
+    const SAID = 'the launch code is 0000'
+    await runConversationTurn(
+      remoteDeps(traces, {
+        driver: {
+          runTurn: async (request: ProviderTurnRequest) => {
+            request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+            return { providerSessionId: 'remote-thread' }
+          }
+        },
+        checkAuth: async () => ({ ready: true as const })
+      }),
+      { conversationId: id, text: SAID, cwd: null }
+    )
+
+    expect(traces).toEqual([
+      {
+        conversationId: id,
+        agentId: ada.id,
+        projectId: 'github:acme/remote',
+        hostId: 'ssh:box',
+        setupId: expect.stringMatching(/^remote-/),
+        path: '/home/dev/remote',
+        authority: 'ssh-relay',
+        providerSessionId: 'remote-thread',
+        provider: 'codex',
+        outcome: 'completed',
+        reason: null
+      }
+    ])
+    expect(JSON.stringify(traces)).not.toContain(SAID)
+  })
+
+  it('says where a refused turn tried, and why', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const traces: ConversationTurnTrace[] = []
+    await runConversationTurn(remoteDeps(traces, { refusal: 'remote-host-unreachable' }), {
+      conversationId: await chatWith(agentOwnedBy('github:acme/remote')),
+      text: 'hi',
+      cwd: null
+    })
+    expect(traces[0]).toMatchObject({
+      hostId: 'ssh:box',
+      path: '/home/dev/remote',
+      authority: null,
+      outcome: 'project-unavailable',
+      reason: 'remote-host-unreachable'
     })
   })
 })
