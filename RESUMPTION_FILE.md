@@ -15,9 +15,10 @@ Spec of record: `docs/orca-cognitive-workspace-spec.md`. Done-gate:
   integrity step in pr.yml, drill 2/2 (`778e8f800`..`723b14b99`).
 - Phase 2 COMPLETE — `resolved-remote` / `ambiguous-host` location model, selection by rule
   (`b63595026`..`59f636afe`, drill 5/5).
-- Phase 3 IN PROGRESS — relay `agentProcess.*` (`364e85cfe`), ssh spawn adapter + shared wire + rung-2
-  real-process integration (`8dbe0dada`), runner async remote seam + `resolveSshCodexDriver` +
-  host-scoped provenance (`d2e961591`), gate separator fix (`6e58c4fd8`). GEX44 fenced: green.
+- Phase 3 COMPLETE (`364e85cfe`..`0e8e0fb64`) — relay `agentProcess.*`, ssh spawn adapter, runner
+  remote seam, `provider-unavailable` states. GEX44: drill 11/11, control 83/83, tsc 0; opt-in rung 3
+  (`ORCA_REAL_CODEX_RUNG=1`) runs the installed codex through the real relay handler. Matrix C/G/I
+  stay open: the real ssh channel is Phase 5, and the model turn is quota-blocked.
 - Coherence anchors (all must pass): check-durable-actor-catalogs, check-agent-identity-authority,
   check-recurring-work-inventory, check-agent-instruction-layer, check-agent-turn-location-authority,
   check-cognitive-workspace-completeness --integrity.
@@ -34,10 +35,10 @@ Spec of record: `docs/orca-cognitive-workspace-spec.md`. Done-gate:
 
 ## 4. Next three actions
 
-1. Phase 3 (d): mutation drill (see STATE.md list) with `config/scripts/mutation-transaction.mjs`.
-2. Phase 3 (e): rung 3 on GEX44 — isolated remote user, real `codex app-server` via the relay handler,
-   `/proc/<pid>/cwd` == setup path, zero processes after; then 03-VERIFICATION, flip matrix rows.
-3. Phase 4 per `.planning/phases/04-provider-resume-relocation/04-CONTEXT.md`.
+1. Phase 4 per `.planning/phases/04-provider-resume-relocation/04-CONTEXT.md` (send `cwd` on
+   resume/turn, version-gated; cross-host move = new thread, same conversation).
+2. Phase 5: the real-ssh product rung (desktop mux over a real ssh channel to GEX44's relay).
+3. After 2026-09-27 19:54: the model-turn legs (matrix I, audit gaps 11/14).
 
 ## 5. Start
 
