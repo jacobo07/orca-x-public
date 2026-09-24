@@ -84,7 +84,10 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
 
     const row = page.getByTestId('connected-app-row')
     await expect(row).toHaveCount(1)
-    await expect(row).toHaveAttribute('data-state', 'auth-required', { timeout: 30_000 })
+    await expect(row).not.toHaveAttribute('data-state', 'checking', { timeout: 30_000 })
+    // The row carries the probe's own detail; print it so a wrong state is diagnosable from the log.
+    console.log(`[studio-status] ${await row.getAttribute('data-state')} :: ${await row.innerText()}`)
+    await expect(row).toHaveAttribute('data-state', 'auth-required')
     await expect(row).toContainText('700d0538')
     const appId = (await row.getAttribute('data-app-id')) as string
     const partition = `persist:orca-connected-app-${appId}`
