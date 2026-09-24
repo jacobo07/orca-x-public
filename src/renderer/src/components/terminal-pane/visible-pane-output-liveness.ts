@@ -3,23 +3,30 @@
  * advances. The hover preview reads that model, so the field symptom was a
  * live preview beside a frozen pane: bytes gated as hidden, lost in delivery,
  * discarded by a certified-dead write pipeline whose one-shot recovery never
- * landed, or parsed by an xterm whose canvas had stopped presenting. None of
- * those leaves ACK-starved in-flight bytes, so the push watchdog was blind to
- * all four. This judge compares the two sides per on-screen pane on the
- * watchdog's existing tick and asks for a remount, which rebuilds the xterm,
- * re-syncs the hidden gate and restores from the model.
+ * landed, parsed by an xterm whose canvas had stopped presenting, or presented
+ * by a render loop that painted nothing. None of those leaves ACK-starved
+ * in-flight bytes, so the push watchdog was blind to all five. This judge
+ * compares the two sides per on-screen pane on the watchdog's existing tick and
+ * asks for a remount, which rebuilds the xterm, re-syncs the hidden gate and
+ * restores from the model.
  *
- * Presentation is judged from a SECOND generation, because parse progress is
- * credited from xterm write callbacks — including an empty FIFO probe — and so
- * advances upstream of the renderer. Until that was separated, a pane that
- * parsed but never painted produced `parsed === true` and therefore no cause at
- * all: the freeze was invisible here by construction. See
- * `terminal-render-progress.ts`, including what it still cannot see.
+ * The judge owns FOUR progress signals because each one proved, in turn, to sit
+ * upstream of the failure it was meant to see:
+ *   received   -- bytes reached the renderer
+ *   parse      -- xterm consumed them (credited from write callbacks, including
+ *                 an empty FIFO probe, so it advances upstream of the renderer)
+ *   render     -- xterm's render service reported a frame (`onRender`)
+ *   paint      -- the presented canvas pixels actually changed
+ *
+ * Each was added because the one before it returned "healthy" for a pane the
+ * user could see was frozen. Paint is the last one that is still about this
+ * pane's own pixels; there is nothing below it short of the compositor.
  */
 import {
   captureTerminalParseProgressGeneration,
   isTerminalWritePipelineCertifiedDead
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { captureTerminalPaintSignature } from './terminal-paint-progress'
 import {
   captureTerminalRenderProgressGeneration,
   isTerminalRenderProgressObservable,
@@ -31,6 +38,7 @@ export type VisiblePaneStallCause =
   | 'output-not-received'
   | 'output-not-parsed'
   | 'output-not-presented'
+  | 'output-not-painted'
 
 export type VisiblePaneLivenessEntry = {
   terminal: object
@@ -53,6 +61,8 @@ type Observation = {
   receivedChars: number
   parseGeneration: number
   renderGeneration: number
+  /** null means the pane's pixels are not judgeable right now, never that they are frozen. */
+  paintSignature: string | null
   stallTicks: number
 }
 
@@ -114,16 +124,31 @@ export function judgeVisiblePaneLiveness(args: {
         receivedChars,
         parseGeneration,
         renderGeneration,
+        paintSignature: captureTerminalPaintSignature(entry.terminal),
         stallTicks: 0
       })
       continue
     }
     const parsed = parseGeneration !== previous.parseGeneration
     const presented = renderGeneration !== previous.renderGeneration
+    const modelAdvanced = modelSequence > previous.modelSequence
+    // Why only when the model advanced: a readback stalls the GPU, and asking "did it paint?" when
+    // nothing was produced to paint is both expensive and meaningless. A quiet tick carries the
+    // previous signature forward, so pixels that changed while quiet still read as painted.
+    const paintSignature = modelAdvanced
+      ? captureTerminalPaintSignature(entry.terminal)
+      : previous.paintSignature
+    const paintStalled =
+      modelAdvanced &&
+      paintSignature !== null &&
+      previous.paintSignature !== null &&
+      paintSignature === previous.paintSignature
     // Why dead first: a dead pipeline still receives (and credits) bytes it discards.
     // Why parse outranks receive: parsing bytes received before the last tick is progress.
     // Why presentation is judged only when observable: a terminal with no `onRender` never advances
     // a render generation, so judging it would read every healthy parsed tick as a frozen canvas.
+    // Why paint is last: it is the only signal that survives a render loop reporting frames it
+    // never painted, and it is unjudgeable whenever not painting is the correct behaviour.
     const cause: VisiblePaneStallCause | null = isTerminalWritePipelineCertifiedDead(entry.terminal)
       ? 'pipeline-dead'
       : !parsed
@@ -132,9 +157,10 @@ export function judgeVisiblePaneLiveness(args: {
           : 'output-not-parsed'
         : isTerminalRenderProgressObservable(entry.terminal) && !presented
           ? 'output-not-presented'
-          : null
-    let stallTicks =
-      cause !== null && modelSequence > previous.modelSequence ? previous.stallTicks + 1 : 0
+          : paintStalled
+            ? 'output-not-painted'
+            : null
+    let stallTicks = cause !== null && modelAdvanced ? previous.stallTicks + 1 : 0
     if (stallTicks >= args.stallTicksToRecover && cause !== null) {
       verdicts.push({ entry, ptyId, cause, hiddenGated: gated.has(ptyId) })
       stallTicks = 0
@@ -145,6 +171,7 @@ export function judgeVisiblePaneLiveness(args: {
       receivedChars,
       parseGeneration,
       renderGeneration,
+      paintSignature,
       stallTicks
     })
   }
