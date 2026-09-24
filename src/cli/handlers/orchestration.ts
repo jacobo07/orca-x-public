@@ -770,6 +770,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         deps: getOptionalStringFlag(flags, 'deps'),
         parent: getOptionalStringFlag(flags, 'parent'),
         run: getOptionalStringFlag(flags, 'run'),
+        assigneeAgent: getOptionalStringFlag(flags, 'assignee-agent'),
         callerTerminalHandle
       }
     )

@@ -186,7 +186,10 @@ const TaskCreateParams = z.object({
   deps: OptionalString,
   parent: OptionalString,
   callerTerminalHandle: OptionalString,
-  run: OptionalString
+  run: OptionalString,
+  // Why no requester here: a caller could name any agent. Who delegated is derived by Orca from
+  // where the request came from; over this RPC that is a person or a terminal, so it stays null.
+  assigneeAgent: OptionalString
 })
 
 const TaskListParams = z.object({
@@ -1347,7 +1350,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               createdByRunGeneration: run.consumer_generation
             }
           : {}),
-        runId: run.id
+        runId: run.id,
+        ...(params.assigneeAgent ? { assigneeAgentId: params.assigneeAgent } : {})
       })
       return { task }
     }
