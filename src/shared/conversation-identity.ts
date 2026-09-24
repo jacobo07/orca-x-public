@@ -48,7 +48,8 @@ export function appendProviderProvenance(
     head &&
     head.agent === provenance.agent &&
     head.providerSessionId === provenance.providerSessionId &&
-    head.transcriptPath === provenance.transcriptPath
+    head.transcriptPath === provenance.transcriptPath &&
+    provenanceHostId(head) === provenanceHostId(provenance)
   ) {
     return record
   }
@@ -59,16 +60,31 @@ export function appendProviderProvenance(
   }
 }
 
+/** Where a binding's provider thread lives. Absent is local: every record written before remote
+ *  turns existed was a local one. */
+export function provenanceHostId(
+  entry: Pick<ConversationProviderProvenance, 'executionHostId'>
+): string {
+  return entry.executionHostId ?? 'local'
+}
+
 /** The provider binding to try first when continuing this conversation, or null when the
  *  conversation has never been carried by a provider session that reported one.
  *
+ *  With `hostId`, only a binding on THAT host counts: a thread's history exists only where it ran,
+ *  so resuming another host's thread fails and would abandon this host's still-valid one.
+ *
  *  Null is "no continuation evidence", NOT "the conversation is empty" and NOT "it failed". */
 export function latestProviderProvenance(
-  record: ConversationRecord
+  record: ConversationRecord,
+  hostId?: string
 ): ConversationProviderProvenance | null {
   for (let index = record.provenance.length - 1; index >= 0; index -= 1) {
     const entry = record.provenance[index]
-    if (entry.providerSessionId !== null) {
+    if (
+      entry.providerSessionId !== null &&
+      (hostId === undefined || provenanceHostId(entry) === hostId)
+    ) {
       return entry
     }
   }

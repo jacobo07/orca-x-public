@@ -6,8 +6,12 @@
 
 import type { Agent } from '../../shared/agent-types'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
-import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
+import type { ConversationId } from '../../shared/conversation-types'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
+import {
+  appendProviderProvenance,
+  latestProviderProvenance
+} from '../../shared/conversation-identity'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 import type { AgentProjectLocation } from './agent-project-location'
@@ -59,6 +63,14 @@ export type RemoteExecutionTarget = {
   path: string
 }
 
+export type AuthCheck = () => Promise<{ ready: true } | { ready: false; detail: string }>
+
+/** A remote host either offers a driver and its own auth check, or says why it cannot. The two
+ *  refusals need different fixes: reconnect the host, or update Orca on it. */
+export type RemoteDriverResolution =
+  | { driver: ConversationTurnDriver; checkAuth: AuthCheck }
+  | { refusal: 'remote-host-unreachable' | 'remote-relay-unsupported' }
+
 export type { ConversationTurnOutcome }
 
 export type ConversationTurnDeps = {
@@ -74,9 +86,10 @@ export type ConversationTurnDeps = {
   /** Where a turn runs when no project owns the answer. Never `process.cwd()`: on a packaged build
    *  that is Orca's own install directory, and an agent rooted there answers about Orca. */
   fallbackCwd: () => string
-  /** The provider driver that runs ON a remote project's host, or null when this Orca cannot run a
-   *  turn there. Absent means no remote execution exists at all — a refusal, never a local run. */
-  remoteDriverFor?: (target: RemoteExecutionTarget) => ConversationTurnDriver | null
+  /** The provider driver that runs ON a remote project's host, with that host's own auth check —
+   *  or a named refusal. Absent means no remote execution exists at all: a refusal, never a local
+   *  run. Asked BEFORE admission, so a refusal commits nothing. */
+  remoteDriverFor?: (target: RemoteExecutionTarget) => Promise<RemoteDriverResolution>
   mintTurnId: () => string
   mintItemId: () => string
   /** Live-only sink: deltas and status reach the surface here and never reach disk. */
@@ -167,23 +180,64 @@ export async function runConversationTurn(
   // A remote project's turn runs ON its host or not at all. With no driver for that host this is a
   // refusal before admission — never the local driver, and never a local directory of any name.
   let driver = deps.driver
+  let checkAuth = deps.checkAuth
   if (location.outcome === 'resolved-remote') {
-    const remote =
-      deps.remoteDriverFor?.({
-        projectId: location.projectId,
-        hostId: location.hostId,
-        setupId: location.setupId,
-        path: location.path
-      }) ?? null
-    if (remote === null) {
+    const target = {
+      projectId: location.projectId,
+      hostId: location.hostId,
+      setupId: location.setupId,
+      path: location.path
+    }
+    const refuse = (
+      reason:
+        | 'remote-execution-unavailable'
+        | 'remote-host-unreachable'
+        | 'remote-relay-unsupported',
+      detail: string
+    ): ConversationTurnOutcome => ({
+      outcome: 'project-unavailable',
+      projectId: location.projectId,
+      reason,
+      detail
+    })
+    if (!deps.remoteDriverFor) {
+      return refuse(
+        'remote-execution-unavailable',
+        'This agent’s project lives on a remote host, and Orca cannot run its chat there.'
+      )
+    }
+    let resolution: RemoteDriverResolution
+    try {
+      resolution = await deps.remoteDriverFor(target)
+    } catch {
+      // Nothing escapes before admission: a probe that threw is a host we could not reach.
+      resolution = { refusal: 'remote-host-unreachable' }
+    }
+    if ('refusal' in resolution) {
+      return resolution.refusal === 'remote-relay-unsupported'
+        ? refuse(
+            'remote-relay-unsupported',
+            'Orca on this agent’s remote host is too old to run a chat there.'
+          )
+        : refuse('remote-host-unreachable', 'This agent’s remote host is not connected.')
+    }
+    // The probe awaited; a project that moved meanwhile must not run at the location read before.
+    const again = binding.kind === 'agent' ? deps.resolveProjectLocation(binding.agent) : null
+    if (
+      again?.outcome !== 'resolved-remote' ||
+      again.hostId !== target.hostId ||
+      again.setupId !== target.setupId ||
+      again.path !== target.path
+    ) {
       return {
         outcome: 'project-unavailable',
         projectId: location.projectId,
-        reason: 'remote-execution-unavailable',
-        detail: 'This agent’s project lives on a remote host, and Orca cannot run its chat there.'
+        reason: 'location-changed',
+        detail: 'This agent’s project moved while the message was being sent.'
       }
     }
-    driver = remote
+    driver = resolution.driver
+    checkAuth = resolution.checkAuth
   }
 
   const developerInstructions =
@@ -198,6 +252,9 @@ export async function runConversationTurn(
     location.outcome === 'resolved' || location.outcome === 'resolved-remote'
       ? location.path
       : (request.cwd ?? deps.fallbackCwd())
+
+  const executionHostId: string =
+    location.outcome === 'resolved-remote' ? location.hostId : LOCAL_EXECUTION_HOST_ID
 
   const turnId = deps.mintTurnId()
 
@@ -225,12 +282,16 @@ export async function runConversationTurn(
     // Auth is checked AFTER the message is safe and BEFORE any token is spent. The message stays in
     // the conversation and the surface says the provider needs signing in — which is the truth, and
     // is not an empty assistant reply.
-    const auth = await deps.checkAuth()
+    // The auth check of the host the turn runs on. A remote check that could not ask THROWS, and
+    // lands below as `failed` — never as "sign in", which would send someone to fix the wrong thing.
+    const auth = await checkAuth()
     if (!auth.ready) {
       return { outcome: 'auth-required', detail: auth.detail }
     }
 
-    const resumeSessionId = latestSessionId(existing.record)
+    // Only a thread recorded on THIS host can be resumed: its history exists nowhere else.
+    const resumeSessionId =
+      latestProviderProvenance(existing.record, executionHostId)?.providerSessionId ?? null
     let sawTerminal = false
     // Durable writes are CHAINED and awaited before this function reports success. A turn that
     // returned `completed` while its writes were still in flight would be telling the user their
@@ -273,7 +334,14 @@ export async function runConversationTurn(
 
     if (result.providerSessionId !== null) {
       await service.applyEvent(conversationId, (current) =>
-        appendProvenanceOnce(current, result.providerSessionId as string, now())
+        appendProviderProvenance(current, {
+          agent: 'codex',
+          providerSessionId: result.providerSessionId as string,
+          transcriptPath: null,
+          observedAt: now(),
+          // Omitted for local, so a local turn writes exactly the record shape it always has.
+          ...(executionHostId === LOCAL_EXECUTION_HOST_ID ? {} : { executionHostId })
+        })
       )
     }
 
@@ -316,35 +384,4 @@ function isDurableEvent(event: AgentTurnEvent): boolean {
   return (
     event.kind === 'turn-started' || event.kind === 'turn-completed' || event.kind === 'turn-ended'
   )
-}
-
-function latestSessionId(record: ConversationRecord): string | null {
-  for (let index = record.provenance.length - 1; index >= 0; index -= 1) {
-    const entry = record.provenance[index]
-    if (entry.providerSessionId !== null) {
-      return entry.providerSessionId
-    }
-  }
-  return null
-}
-
-/** Appends the binding only when it is new, so re-running turns on one thread does not grow the
- *  record with identical lineage entries. */
-function appendProvenanceOnce(
-  record: ConversationRecord,
-  providerSessionId: string,
-  at: number
-): ConversationRecord {
-  const head = record.provenance.at(-1)
-  if (head && head.agent === 'codex' && head.providerSessionId === providerSessionId) {
-    return record
-  }
-  return {
-    ...record,
-    provenance: [
-      ...record.provenance,
-      { agent: 'codex', providerSessionId, transcriptPath: null, observedAt: at }
-    ],
-    updatedAt: at
-  }
 }

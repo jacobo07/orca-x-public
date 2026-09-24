@@ -35,6 +35,9 @@ export type ConversationTurnOutcome =
         | 'remote-host'
         | 'ambiguous-host'
         | 'remote-execution-unavailable'
+        | 'remote-host-unreachable'
+        | 'remote-relay-unsupported'
+        | 'location-changed'
       detail: string
     }
   | { outcome: 'auth-required'; detail: string }

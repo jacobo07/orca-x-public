@@ -60,6 +60,13 @@ export type ConversationProviderProvenance = {
   transcriptPath: string | null
   /** When Orca observed this binding, not when the provider created it. */
   observedAt: number
+  /**
+   * The execution host the provider thread lives on. A thread's history exists only on its host,
+   * so a turn resumes only a thread recorded for the host it runs on. Optional at schemaVersion 1
+   * on purpose — a bump would make every existing record unreadable — and ABSENT MEANS LOCAL,
+   * which is what every record written before remote turns existed actually was.
+   */
+  executionHostId?: string
 }
 
 export type ConversationTurn = {

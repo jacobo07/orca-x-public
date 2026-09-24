@@ -15,6 +15,7 @@ import type {
 } from '../../shared/conversation-types'
 import { readStoredCodexCredentialState } from '../codex-accounts/managed-codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
+import { resolveSshCodexDriver } from '../codex/codex-ssh-conversation-driver'
 import {
   resolveAgentProjectLocation,
   type ProjectLocationReader
@@ -30,6 +31,8 @@ import {
 } from '../conversation/conversation-turn-runner'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaConversationsDirectory } from '../orca-profiles/profile-storage-paths'
+
+import { getActiveMultiplexer } from './ssh'
 
 /**
  * Why the renderer gets product operations and not a file API: a conversation is a product entity,
@@ -76,7 +79,9 @@ export type ConversationIpcHandlers = {
  */
 function requireConversationId(value: unknown): string {
   if (!isConversationId(value)) {
-    throw new Error(`conversations: refusing a value that is not a conversation id: ${String(value)}`)
+    throw new Error(
+      `conversations: refusing a value that is not a conversation id: ${String(value)}`
+    )
   }
   return value
 }
@@ -104,7 +109,9 @@ export function codexAuthPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(env.CODEX_HOME ?? join(homedir(), '.codex'), 'auth.json')
 }
 
-export async function checkCodexAuth(): Promise<{ ready: true } | { ready: false; detail: string }> {
+export async function checkCodexAuth(): Promise<
+  { ready: true } | { ready: false; detail: string }
+> {
   const state = readStoredCodexCredentialState(codexAuthPath())
   if (state === 'present') {
     return { ready: true }
@@ -190,6 +197,8 @@ export function registerConversationHandlers(
       driver: createCodexConversationDriver(),
       checkAuth: checkCodexAuth,
       resolveProjectLocation: (agent) => resolveAgentProjectLocation(agent, projects),
+      // A remote project's turn runs on its ssh host through that host's live relay connection.
+      remoteDriverFor: (target) => resolveSshCodexDriver(target, getActiveMultiplexer),
       // The user's home, never `process.cwd()`. Both are "not a project"; only one of them is a
       // place the person chose to have, and the other is wherever Orca was launched from.
       fallbackCwd: () => homedir(),

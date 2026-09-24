@@ -30,6 +30,9 @@ export type ConversationNoticeKind =
   | 'project-remote-only'
   | 'project-host-ambiguous'
   | 'project-remote-execution-unavailable'
+  | 'project-remote-host-unreachable'
+  | 'project-remote-relay-unsupported'
+  | 'project-location-changed'
 
 export type ConversationNotice = {
   kind: ConversationNoticeKind
@@ -159,6 +162,12 @@ function projectNotice(
       return { kind: 'project-host-ambiguous', detail: null, userMessageKept: false }
     case 'remote-execution-unavailable':
       return { kind: 'project-remote-execution-unavailable', detail: null, userMessageKept: false }
+    case 'remote-host-unreachable':
+      return { kind: 'project-remote-host-unreachable', detail: null, userMessageKept: false }
+    case 'remote-relay-unsupported':
+      return { kind: 'project-remote-relay-unsupported', detail: null, userMessageKept: false }
+    case 'location-changed':
+      return { kind: 'project-location-changed', detail: null, userMessageKept: false }
   }
 }
 

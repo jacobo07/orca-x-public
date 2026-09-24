@@ -235,10 +235,15 @@ describe("a remote project's agent runs on its host or not at all", () => {
       }
     }
 
+    let localAuthAsked = 0
     const outcome = await runConversationTurn(
       {
         ...turnDeps(),
-        remoteDriverFor: (target) => (targets.push(target), remoteDriver),
+        checkAuth: async () => (localAuthAsked++, { ready: true }),
+        remoteDriverFor: async (target) => (
+          targets.push(target),
+          { driver: remoteDriver, checkAuth: async () => ({ ready: true }) }
+        ),
         service
       },
       { conversationId: await chatWith(ada), text: 'hi', cwd: root }
@@ -246,6 +251,8 @@ describe("a remote project's agent runs on its host or not at all", () => {
 
     expect(outcome.outcome).toBe('completed')
     expect(driverCalls).toHaveLength(0)
+    // The host the turn runs on answers whether it is signed in — not this computer.
+    expect(localAuthAsked).toBe(0)
     expect(targets).toEqual([
       {
         projectId: 'github:acme/remote',
@@ -262,11 +269,120 @@ describe("a remote project's agent runs on its host or not at all", () => {
     remoteSetup('github:acme/twin', 'ssh:box-a', '/a/twin')
     remoteSetup('github:acme/twin', 'ssh:box-b', '/b/twin')
     const outcome = await runConversationTurn(
-      { ...turnDeps(), remoteDriverFor: () => driver, service },
+      {
+        ...turnDeps(),
+        remoteDriverFor: async () => ({ driver, checkAuth: async () => ({ ready: true }) }),
+        service
+      },
       { conversationId: await chatWith(agentOwnedBy('github:acme/twin')), text: 'hi', cwd: null }
     )
     expect(outcome).toMatchObject({ outcome: 'project-unavailable', reason: 'ambiguous-host' })
     expect(driverCalls).toHaveLength(0)
+  })
+
+  it('names an unreachable host and a too-old relay apart, and a probe that threw as unreachable', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const send = (remoteDriverFor: ConversationTurnDeps['remoteDriverFor']) =>
+      chatWith(ada).then((conversationId) =>
+        runConversationTurn(
+          { ...turnDeps(), remoteDriverFor, service },
+          { conversationId, text: 'hi', cwd: null }
+        )
+      )
+
+    await expect(send(async () => ({ refusal: 'remote-host-unreachable' }))).resolves.toMatchObject(
+      { reason: 'remote-host-unreachable' }
+    )
+    await expect(
+      send(async () => ({ refusal: 'remote-relay-unsupported' }))
+    ).resolves.toMatchObject({ reason: 'remote-relay-unsupported' })
+    await expect(
+      send(async () => {
+        throw new Error('socket hang up')
+      })
+    ).resolves.toMatchObject({ reason: 'remote-host-unreachable' })
+    expect(driverCalls).toHaveLength(0)
+  })
+
+  it('refuses when the project moved while the host was being asked', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const remoteDriver = { runTurn: async () => ({ providerSessionId: null }) }
+
+    const outcome = await runConversationTurn(
+      {
+        ...turnDeps(),
+        remoteDriverFor: async () => {
+          // The setup is re-pointed during the probe, as a user re-adding the project would.
+          setups = setups.map((setup) => ({ ...setup, path: '/home/dev/moved' }))
+          return { driver: remoteDriver, checkAuth: async () => ({ ready: true }) }
+        },
+        service
+      },
+      { conversationId: await chatWith(ada), text: 'hi', cwd: null }
+    )
+
+    expect(outcome).toMatchObject({ outcome: 'project-unavailable', reason: 'location-changed' })
+  })
+
+  it('reports a remote auth check that could not ask as a failed turn, never as sign-in', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const outcome = await runConversationTurn(
+      {
+        ...turnDeps(),
+        remoteDriverFor: async () => ({
+          driver,
+          checkAuth: async () => {
+            throw new Error('the ssh connection to the host closed')
+          }
+        }),
+        service
+      },
+      { conversationId: await chatWith(ada), text: 'hi', cwd: null }
+    )
+    expect(outcome.outcome).toBe('failed')
+    expect(driverCalls).toHaveLength(0)
+  })
+
+  it('records the host a thread lives on, and never resumes it from another host', async () => {
+    remoteSetup('github:acme/remote', 'ssh:box', '/home/dev/remote')
+    const ada = agentOwnedBy('github:acme/remote')
+    const id = await chatWith(ada)
+    const remoteDriver = {
+      runTurn: async (request: ProviderTurnRequest) => {
+        request.onEvent({ kind: 'turn-started', turnId: request.turnId })
+        request.onEvent({ kind: 'turn-completed', turnId: request.turnId })
+        return { providerSessionId: 'remote-thread' }
+      }
+    }
+    const remoteDeps = {
+      ...turnDeps(),
+      remoteDriverFor: async () => ({
+        driver: remoteDriver,
+        checkAuth: async () => ({ ready: true as const })
+      }),
+      service
+    }
+    await runConversationTurn(remoteDeps, { conversationId: id, text: 'one', cwd: null })
+
+    const afterRemote = await service.read(id)
+    const head = afterRemote.outcome === 'loaded' ? afterRemote.record.provenance.at(-1) : null
+    expect(head).toMatchObject({ providerSessionId: 'remote-thread', executionHostId: 'ssh:box' })
+
+    // The same project becomes ready locally: the rule now puts the turn here, and the remote
+    // thread's history does not exist on this machine, so it must not be resumed.
+    projectAt('github:acme/remote', 'C:/work/remote')
+    await runConversationTurn(remoteDeps, { conversationId: id, text: 'two', cwd: null })
+    expect(driverCalls[0].cwd).toBe('C:/work/remote')
+    expect(driverCalls[0].resumeSessionId).toBeNull()
+
+    // A local binding carries no host field at all, so local records keep the shape they had.
+    const afterLocal = await service.read(id)
+    const localHead = afterLocal.outcome === 'loaded' ? afterLocal.record.provenance.at(-1) : null
+    expect(localHead).toMatchObject({ providerSessionId: 'thread-1' })
+    expect(localHead && 'executionHostId' in localHead).toBe(false)
   })
 })
 

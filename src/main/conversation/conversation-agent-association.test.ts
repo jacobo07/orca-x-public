@@ -4,7 +4,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { mintAgentId } from '../../shared/agent-identity'
-import { mintConversationId } from '../../shared/conversation-identity'
+import {
+  appendProviderProvenance,
+  latestProviderProvenance,
+  mintConversationId,
+  provenanceHostId
+} from '../../shared/conversation-identity'
 import {
   CONVERSATION_RECORD_SCHEMA_VERSION,
   type ConversationRecord
@@ -103,5 +108,57 @@ describe('a conversation may be with an agent', () => {
 
   it('does not move the schema version to carry the binding', () => {
     expect(CONVERSATION_RECORD_SCHEMA_VERSION).toBe(1)
+  })
+})
+
+describe('a provider binding knows which host its thread lives on', () => {
+  const entry = (overrides: Record<string, unknown> = {}) => ({
+    agent: 'codex',
+    providerSessionId: 'thr-1',
+    transcriptPath: null,
+    observedAt: 1,
+    ...overrides
+  })
+
+  it('loads a binding written before remote turns existed, and reads it as local', () => {
+    const legacy = JSON.stringify(record({ id: 'conv_x', provenance: [entry()] as never }))
+    const parsed = parseConversationRecord(legacy, 'conv_x')
+    expect(parsed.outcome).toBe('loaded')
+    expect(parsed.outcome === 'loaded' && provenanceHostId(parsed.record.provenance[0])).toBe(
+      'local'
+    )
+  })
+
+  it('refuses a host that is present but empty — a stand-in is not a host', () => {
+    const malformed = JSON.stringify(
+      record({ id: 'conv_x', provenance: [entry({ executionHostId: '' })] as never })
+    )
+    expect(parseConversationRecord(malformed, 'conv_x').outcome).toBe('unreadable')
+  })
+
+  it('resumes only a thread recorded on the host asked about', () => {
+    const conversation = record({
+      provenance: [
+        entry({ providerSessionId: 'local-thread' }),
+        entry({ providerSessionId: 'remote-thread', executionHostId: 'ssh:box' })
+      ] as never
+    })
+    expect(latestProviderProvenance(conversation, 'local')?.providerSessionId).toBe('local-thread')
+    expect(latestProviderProvenance(conversation, 'ssh:box')?.providerSessionId).toBe(
+      'remote-thread'
+    )
+    expect(latestProviderProvenance(conversation, 'ssh:other')).toBeNull()
+  })
+
+  it('records the same thread seen on another host as new lineage, not a duplicate', () => {
+    const conversation = record({ provenance: [entry()] as never })
+    const appended = appendProviderProvenance(conversation, {
+      ...entry(),
+      executionHostId: 'ssh:box'
+    } as never)
+    expect(appended.provenance).toHaveLength(2)
+    expect(
+      appendProviderProvenance(appended, { ...entry(), executionHostId: 'ssh:box' } as never)
+    ).toBe(appended)
   })
 })

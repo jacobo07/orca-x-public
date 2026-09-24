@@ -89,6 +89,21 @@ function messageFor(notice: Notice): string {
         'conversations.noticeProjectHostAmbiguous',
         "This agent's project is set up on more than one remote host, and Orca will not pick one for it, so nothing was sent. Remove the setups you no longer use."
       )
+    case 'project-remote-host-unreachable':
+      return translate(
+        'conversations.noticeProjectRemoteHostUnreachable',
+        "This agent's project lives on a remote host that is not connected, so nothing was sent. Connect to the host and try again."
+      )
+    case 'project-remote-relay-unsupported':
+      return translate(
+        'conversations.noticeProjectRemoteRelayUnsupported',
+        "Orca on this agent's remote host is too old to run a chat there, so nothing was sent. Reconnect the host so Orca can update it."
+      )
+    case 'project-location-changed':
+      return translate(
+        'conversations.noticeProjectLocationChanged',
+        "This agent's project moved while the message was being sent, so nothing was sent. Send it again."
+      )
     case 'project-remote-execution-unavailable':
       return translate(
         'conversations.noticeProjectRemoteExecutionUnavailable',
