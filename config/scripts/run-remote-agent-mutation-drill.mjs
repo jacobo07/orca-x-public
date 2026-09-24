@@ -41,6 +41,8 @@ const MAPPING = at('src/main/codex/codex-turn-event-mapping.ts')
 const MAPPING_TEST = 'src/main/codex/codex-turn-event-mapping.test.ts'
 const RUNNER_TURN_TEST = 'src/main/conversation/conversation-turn-runner.test.ts'
 const SESSION = at('src/main/codex/codex-app-server-session.ts')
+const REFUSALS = at('src/main/conversation/conversation-turn-refusals.ts')
+const LOCATION_GATE = 'config/scripts/check-agent-turn-location-authority.mjs'
 
 const hashOf = (file) => sha256(readFileSync(file, 'utf8'))
 
@@ -53,6 +55,20 @@ function run(args) {
     child.on('error', reject)
     child.on('close', (code) => resolve({ code, output }))
   })
+}
+
+/** Caught only when the GATE exits 1 naming the violation; a gate that exits 0 has passed it. */
+function gateGoesRedOn(gate, expected) {
+  return async () => {
+    const { code, output } = await run([gate])
+    if (code === 0) {
+      return { passed: true }
+    }
+    if (code === 1 && output.includes(expected)) {
+      return { passed: false, detail: `gate red on "${expected}"` }
+    }
+    throw new Error(`gate failed for the wrong reason (exit ${code})`)
+  }
 }
 
 /** Caught only when the named test goes red; any other red is the harness, never a catch. */
@@ -179,6 +195,23 @@ const drills = [
       'reports a turn the provider ended in failure as failed'
     )
   },
+  // Phase 8: the ascended baseline — a location is a path AND a host — judged by the gate itself.
+  {
+    id: 'runner-resumes-without-its-host',
+    file: RUNNER,
+    find: 'latestProviderProvenance(existing.record, executionHostId)',
+    replace: 'latestProviderProvenance(existing.record)',
+    verify: gateGoesRedOn(LOCATION_GATE, 'no longer looks its provider thread up by host')
+  },
+  {
+    // Future-like: the next feature to continue a thread, written the obvious way.
+    id: 'future-feature-resumes-host-blind',
+    file: REFUSALS,
+    find: 'export type RemoteDriverRefusal =',
+    replace:
+      'export const nightlyDigest = (record: never) => latestProviderProvenance(record)\nexport type RemoteDriverRefusal =',
+    verify: gateGoesRedOn(LOCATION_GATE, 'conversation-turn-refusals.ts looks a provider thread up')
+  },
   // Phase 7: a turn cut off mid-way ends then, and says why.
   {
     id: 'dead-child-waits-out-the-deadline',
@@ -293,7 +326,8 @@ const subjects = [
   IDENTITY,
   CAPABILITY,
   MAPPING,
-  SESSION
+  SESSION,
+  REFUSALS
 ]
 const before = subjects.map(hashOf)
 

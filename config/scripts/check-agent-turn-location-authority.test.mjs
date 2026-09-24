@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   consultsRemoteDriver,
+  findHostBlindResumeSites,
   findInventedLocationSites,
   isTestPath,
+  resumesByHost,
   stripComments
 } from './check-agent-turn-location-authority.mjs'
 
@@ -97,6 +99,50 @@ describe('findInventedLocationSites', () => {
       source: 'const here = process.cwd()'
     }
     expect(findInventedLocationSites([windows])).toEqual(['src/main/conversation/win.ts'])
+  })
+})
+
+// ASCENDED baseline: a location is a path AND a host. The violator is FUTURE-LIKE and synthetic —
+// the next cognitive feature to continue a provider thread, written the obvious way.
+const HOST_BLIND = {
+  path: 'src/main/agent-digest/nightly-digest-runner.ts',
+  source: `
+    export async function continueDigest(record, driver) {
+      const binding = latestProviderProvenance(
+        record
+      )
+      return driver.runTurn({ resumeSessionId: binding?.providerSessionId ?? null })
+    }
+  `
+}
+const HOST_SCOPED = {
+  path: 'src/main/agent-digest/nightly-digest-runner.ts',
+  source: 'const binding = latestProviderProvenance(record, location.hostId)'
+}
+
+describe('findHostBlindResumeSites', () => {
+  it('catches a future feature that resumes a thread without naming its host', () => {
+    expect(findHostBlindResumeSites([HOST_BLIND])).toEqual([HOST_BLIND.path])
+  })
+
+  it('passes the same feature once it names the host', () => {
+    expect(findHostBlindResumeSites([HOST_SCOPED])).toEqual([])
+  })
+
+  it('exempts tests and prose', () => {
+    expect(
+      findHostBlindResumeSites([
+        { path: 'src/shared/conversation-identity.test.ts', source: 'latestProviderProvenance(r)' },
+        { path: 'src/main/x.ts', source: '// latestProviderProvenance(record) is host-blind' }
+      ])
+    ).toEqual([])
+  })
+})
+
+describe('resumesByHost', () => {
+  it('holds for a runner that looks its thread up by host, and not for one that dropped it', () => {
+    expect(resumesByHost('latestProviderProvenance(existing.record, executionHostId)')).toBe(true)
+    expect(resumesByHost('latestProviderProvenance(existing.record)')).toBe(false)
   })
 })
 

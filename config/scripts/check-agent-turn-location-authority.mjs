@@ -47,6 +47,28 @@ export function consultsRemoteDriver(runnerSource) {
   return REMOTE_DRIVER_CALL.test(stripComments(runnerSource))
 }
 
+// ASCENDED (Cognitive Workspace, Phase 8): a location is a path AND a host. A provider thread's
+// history exists only on the host it ran on, so a resume looked up without the host picks the newest
+// thread on ANY host and continues a history that is not there. Swept across all of src/, not only
+// today's turn path: the next cognitive feature to resume a thread is the one this is for.
+const RESUME_LOOKUP = 'latestProviderProvenance'
+const HOST_BLIND_RESUME = /\blatestProviderProvenance\s*\(\s*[^,()]*\)/
+const HOST_SCOPED_RESUME = /\blatestProviderProvenance\s*\(\s*[^,()]+,\s*[^,()]+\)/
+
+/** Pure: production files that look a thread up without naming its host. */
+export function findHostBlindResumeSites(files) {
+  return files
+    .map((file) => ({ ...file, path: file.path.replace(/\\/g, '/') }))
+    .filter((file) => !isTestPath(file.path) && HOST_BLIND_RESUME.test(stripComments(file.source)))
+    .map((file) => file.path)
+    .sort()
+}
+
+/** Pure: does the runner still look its thread up BY HOST? The positive control for the sweep. */
+export function resumesByHost(runnerSource) {
+  return HOST_SCOPED_RESUME.test(stripComments(runnerSource))
+}
+
 export function isTestPath(filePath) {
   return /\.(test|spec)\.[cm]?tsx?$/.test(filePath)
 }
@@ -139,6 +161,36 @@ export async function main(root = process.cwd(), log = console) {
     )
   }
 
+  if (runner && !resumesByHost(runner.source)) {
+    failures.push(
+      `${TURN_RUNNER} no longer looks its provider thread up by host — it would resume a thread whose history lives on another machine`
+    )
+  }
+  const resumers = await gitLines(root, [
+    'grep',
+    '-l',
+    '-I',
+    RESUME_LOOKUP,
+    '--',
+    'src/*.ts',
+    'src/*.tsx'
+  ])
+  if (resumers.lines === null) {
+    log.error(`❌  check-agent-turn-location-authority: could not sweep resumes: ${resumers.error}`)
+    return 1
+  }
+  const resumerFiles = await Promise.all(
+    resumers.lines.map(async (file) => ({
+      path: file,
+      source: await readFile(path.join(root, file), 'utf8')
+    }))
+  )
+  for (const site of findHostBlindResumeSites(resumerFiles)) {
+    failures.push(
+      `${site} looks a provider thread up without its host; a location is a path AND a host, and another host's thread has no history here`
+    )
+  }
+
   const aperture = `${tracked.lines.length} tracked files on the conversation turn path`
   if (failures.length > 0) {
     log.error(`❌  check-agent-turn-location-authority (${aperture}):`)
@@ -148,7 +200,7 @@ export async function main(root = process.cwd(), log = console) {
     return 1
   }
   log.log(
-    `✅  check-agent-turn-location-authority: the agent's project locates the turn (${RESOLVER}, consulted by ${TURN_RUNNER}); no invented location; swept ${aperture}.`
+    `✅  check-agent-turn-location-authority: the agent's project locates the turn (${RESOLVER}, consulted by ${TURN_RUNNER}); no invented location; every thread lookup names its host (${resumerFiles.length} files); swept ${aperture}.`
   )
   return 0
 }
