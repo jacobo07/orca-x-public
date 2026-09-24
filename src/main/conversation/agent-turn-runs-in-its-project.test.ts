@@ -592,6 +592,9 @@ describe('one identity across devices (Phase 9, roaming)', () => {
           cwd: null
         }
       )
+      // A different machine is a different target, with its own address.
+      setups = []
+      remoteSetup('github:acme/ledger', 'ssh:target-other', '/home/dev/ledger')
       await runConversationTurn(
         { ...onHost('dev@another-box:22'), service: serviceB },
         {
