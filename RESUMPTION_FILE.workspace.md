@@ -17,6 +17,9 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
   via presenter tone maps, no model/host literals. 10/10 drills caught (G5 needed a per-floor test).
 - Phase 4 SEALED `04690f984..db465645c`: conversations.* runtime RPC (mobile-allowlisted, capability`conversations.v1`, no remote cwd), host wired for desktop + headless serve; real mobile-scope E2EE e2e
   passes; 7/7 drills. Placement proven in the real strip (`ea6ebf2d8`, fresh build).
+- Phase 5 SEALED `226af0f09..a2b559900`: phone Workspace (roster + agent chat, host toolbar entry),
+  proven by the phone module over real E2EE + an old-host stand-in; mobile vitest 9/9. OWED: an
+  emulator/device render (no Android SDK on GEX44) and live streaming in the phone chat.
 - Pre-existing red (not ours): git-status-refresh* (11), window-shortcut-policy (1), check:mobile-aperture on `app.park` (acd975a06).
 - Long run: v2 marker for session 2aad6d8e armed 10:20 (before the Ralph-mission default landed);
   NO_CROSSINGS so far. Do not arm a Ralph mission on top — two writers.
@@ -31,11 +34,12 @@ State: `.planning/STATE.md`. This branch's `RESUMPTION_FILE.md` is the cogws pro
 - Never name a PowerShell function with a one-letter alias (`R` = Invoke-History wiped 3 files).
 
 ## 4. Next 3 actions
-1. Phase 5 (PLAN): mobile Workspace screens (roster → agent chat → context) over conversations.*;
-   gate on 'conversations.v1' (local copy like agent-history-capability.ts), treat forbidden/
-   method_not_found as unsupported; mobile imports ../../../src/shared types; add screens to the gate.
-2. Phase 6: scale 200 agents / 1,000 threads on GEX44.
-3. Keep federation's P6 surface slot agreement in mind (they own missions/review rows).
+1. Phase 6 (EXEC): seed 200 agents / 1,000 threads through window.api on GEX44 (headless e2e),
+   measure Workspace render: DOM node count, renderer heap, time to roster; roster/threads rows
+   virtualized? Fix any cliff; state a budget.
+2. Phase 7: federation projection only once orca-x/agent-federation seals its surface phase —
+   otherwise record DEPENDS_ON_FEDERATION rows.
+3. Phase 8: full suite on GEX44 classified vs baseline 1c7d2478f; UKDL/vault; final report.
 
 ## 5. Start
 Open Claude Code IN this worktree. Prove `git worktree list` and HEAD. Read `.planning/STATE.md`.
