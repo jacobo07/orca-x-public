@@ -323,10 +323,10 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject, v31 revision-bound reviews, v32 review policy + producer task.
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject, v31 revision-bound reviews, v32 review policy + producer task, v33 subject-bound decision gates.
 // Exported so a test can assert "this database is at the current schema" without restating the
 // number: four files hardcoded 28 and all of them broke on the v29 bump.
-export const SCHEMA_VERSION = 32
+export const SCHEMA_VERSION = 33
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -680,7 +680,10 @@ export class OrchestrationDb {
           CHECK(status IN ('pending', 'resolved', 'timeout')),
         resolution    TEXT,
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-        resolved_at   TEXT
+        resolved_at   TEXT,
+        subject       TEXT,
+        review_requirement TEXT,
+        decision      TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_gates_task ON decision_gates(task_id);
@@ -1146,6 +1149,15 @@ export class OrchestrationDb {
       }
       if (current < 32 && !this.hasColumn('reviews', 'producer_task_id')) {
         this.db.exec('ALTER TABLE reviews ADD COLUMN producer_task_id TEXT')
+      }
+      if (current < 33 && !this.hasColumn('decision_gates', 'subject')) {
+        this.db.exec('ALTER TABLE decision_gates ADD COLUMN subject TEXT')
+      }
+      if (current < 33 && !this.hasColumn('decision_gates', 'review_requirement')) {
+        this.db.exec('ALTER TABLE decision_gates ADD COLUMN review_requirement TEXT')
+      }
+      if (current < 33 && !this.hasColumn('decision_gates', 'decision')) {
+        this.db.exec('ALTER TABLE decision_gates ADD COLUMN decision TEXT')
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf

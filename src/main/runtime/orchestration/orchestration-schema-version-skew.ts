@@ -39,7 +39,10 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 30, table: 'tasks', column: 'subject' },
   // Why no v31 `reviews` entry: this registry names columns, and a lost table has no `policy` either.
   { version: 32, table: 'reviews', column: 'policy' },
-  { version: 32, table: 'reviews', column: 'producer_task_id' }
+  { version: 32, table: 'reviews', column: 'producer_task_id' },
+  { version: 33, table: 'decision_gates', column: 'subject' },
+  { version: 33, table: 'decision_gates', column: 'review_requirement' },
+  { version: 33, table: 'decision_gates', column: 'decision' }
 ] as const
 
 const POST_V6_INDEXES = [

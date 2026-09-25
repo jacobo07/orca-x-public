@@ -306,6 +306,10 @@ export type DecisionGateRow = {
   resolution: string | null
   created_at: string
   resolved_at: string | null
+  /** v33: JSON subject the gate approves (subject-bound-gates.ts); null for a free-text gate. */
+  subject: string | null
+  review_requirement: 'none' | 'any' | 'independent' | null
+  decision: 'approved' | 'rejected' | 'stale' | null
 }
 
 export type CoordinatorRun = {
