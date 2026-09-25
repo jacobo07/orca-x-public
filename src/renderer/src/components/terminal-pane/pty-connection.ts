@@ -103,6 +103,7 @@ import {
   registerStaleDocumentVisibilityRecovery
 } from './stale-document-visibility'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
+import { registerVisiblePaneLiveness } from './visible-pane-output-liveness'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
@@ -4118,6 +4119,22 @@ export function connectPanePty(
       })
     }
   )
+  // Why: certification above is one-shot and blind to gated or lost bytes; this re-asks for as long as the pane stays frozen on screen.
+  const unregisterVisiblePaneLiveness = registerVisiblePaneLiveness({
+    terminal: pane.terminal,
+    getPtyId: () => transport.getPtyId(),
+    isOnScreen: () => !disposed && shouldWritePtyOutputForeground(deps.isVisibleRef.current),
+    requestRecovery: () => {
+      // Model progress is the liveness evidence, so no hasPty probe is needed.
+      void requestTerminalPaneRecovery({
+        tabId: deps.tabId,
+        ptyId: transport.getPtyId(),
+        reason: 'visible-output-stalled',
+        terminalRecoveryGeneration,
+        terminalRecoveryInstanceId: terminalRecoveryInstance.id
+      })
+    }
+  })
 
   const forwardPtyInput = (data: string): void => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
@@ -9498,6 +9515,7 @@ export function connectPanePty(
       // Why: park/reconnect/remount doesn't advance the recovery epoch, so invalidate this xterm or its delayed retry could hit the next instance.
       terminalRecoveryInstance.unregister()
       unregisterUndeliverableWriteHandler()
+      unregisterVisiblePaneLiveness()
       unsubscribeRemoteDesktopActivationClaim()
       cancelHiddenOutputSnapshotScrollRestore()
       liveScrollbackRestore?.dispose()

@@ -2696,6 +2696,8 @@ export function registerPtyHandlers(
   const PTY_DELIVERY_RESYNC_TIMEOUT_MS = 5_000
   // Why: a heal write-off destroys delivery accounting; require this much main-side ACK silence (independent of renderer evidence) before declaring the channel dead.
   const PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS = 10_000
+  // Why: bounds per-report work against a buggy/foreign caller; real windows show a handful of panes.
+  const MAX_ON_SCREEN_PTY_PROGRESS_IDS = 256
   // Why: keep the immediate path to keystroke-sized TUI redraws; large/non-interactive output must use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
@@ -3210,6 +3212,31 @@ export function registerPtyHandlers(
       })
     }
     return writtenOff
+  }
+
+  // Why: the push watchdog only sees ACK-starved in-flight bytes; a gated drop or a dead pane pipeline leaves none, so a visible pane can freeze while the model advances. Report the model's progress for on-screen PTYs and let the renderer compare.
+  function readOnScreenPtyModelProgress(
+    onScreenPtyIds: unknown
+  ): Pick<PtyRendererDeliveryHealthReply, 'modelOutputSequenceByPty' | 'hiddenGatedPtyIds'> {
+    if (!runtime || !Array.isArray(onScreenPtyIds) || onScreenPtyIds.length === 0) {
+      return {}
+    }
+    const modelOutputSequenceByPty: Record<string, number> = {}
+    const hiddenGatedPtyIds: string[] = []
+    const settings = getSettings?.()
+    for (const id of onScreenPtyIds.slice(0, MAX_ON_SCREEN_PTY_PROGRESS_IDS)) {
+      if (typeof id !== 'string' || id.length === 0) {
+        continue
+      }
+      const sequence = runtime.getPtyOutputSequence(id)
+      if (sequence > 0) {
+        modelOutputSequenceByPty[id] = sequence
+      }
+      if (shouldDropHiddenRendererPtyData(id, settings)) {
+        hiddenGatedPtyIds.push(id)
+      }
+    }
+    return { modelOutputSequenceByPty, hiddenGatedPtyIds }
   }
 
   function sendPtyDataToRenderer(
@@ -7667,11 +7694,13 @@ export function registerPtyHandlers(
           inFlightPtyCount++
         }
       }
+      const onScreen = readOnScreenPtyModelProgress(args?.onScreenPtyIds)
       return {
         inFlightTotalChars: rendererInFlightTotalChars,
         inFlightPtyCount,
         msSinceLastAck: lastAckReceivedAtMs === null ? null : Date.now() - lastAckReceivedAtMs,
-        ...(writtenOff.length > 0 ? { writtenOff } : {})
+        ...(writtenOff.length > 0 ? { writtenOff } : {}),
+        ...onScreen
       }
     }
   )

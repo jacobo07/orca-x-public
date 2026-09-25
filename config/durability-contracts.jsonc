@@ -28,6 +28,11 @@
     // Why proof is required only at the top tier: an ordering claim is the one property that cannot
     // be read off the implementation, because an fsync moved after the rename still fsyncs a file.
     "proofRequiredForTiers": ["crash-durable"],
+    // Why a second clause at the same tier: the barrier question ("did the bytes reach disk") and
+    // the failure question ("what is the caller told when they did not") are independent, and a
+    // contract can satisfy the first while its caller turns ENOSPC into null, false or a success.
+    // Ratcheted through config/durability-failure-semantics-baseline.txt, which may only shrink.
+    "failureSemanticsRequiredForTiers": ["crash-durable"],
     "durablePrimitive": "src/main/durable-file-write.ts",
     // Ratcheted, not reported: config/durability-unclassified-baseline.txt grandfathers the
     // publishers that predate this gate and may only shrink, so legacy debt stays visible while a
@@ -97,6 +102,7 @@
       "writer": "src/main/daemon/terminal-history-session-writer.ts",
       "tier": "crash-durable",
       "lostIf": "The checkpoint is the sole copy once the log is reset. An unsynced publish can expose a zero-length checkpoint whose increments were already discarded, losing the session's scrollback across a crash the daemon was built to survive.",
+      "onFailure": "HistoryManager.checkpoint returns 'failed' when the durable write throws, distinct from 'unavailable' (no writer, or a disabled session). The adapter's five flag-clearing sites ask checkpointDidNotLand(), so a failed checkpoint keeps the session dirty and answers 'deferred' instead of 'done'. The OS error reaches the onWriteError channel with its code intact. Proven by src/main/daemon/history-checkpoint-storage-failure.test.ts.",
       "provenBy": ["src/main/daemon/terminal-history-checkpoint-durability.test.ts"],
       "knownGaps": [
         "The log reset is ordered after the checkpoint fsync, but the reset itself is not fsynced; a loss there costs the reset, not the checkpoint."
@@ -108,6 +114,7 @@
       "writer": "src/main/terminal-scrollback-snapshots.ts",
       "tier": "crash-durable",
       "lostIf": "The referencing profile file is fsynced and the blob was not, so a durable pointer can outlive its referent. The reader returns an empty string for a zero-length snapshot, so the loss surfaces as empty scrollback rather than as a failure.",
+      "onFailure": "The writers return a closed outcome — stored | nothing-to-store | not-stored{failure, code, stage} — so a full disk (storage-full, ENOSPC) is distinguishable from an empty buffer and from an unreachable snapshot root. Both migration paths keep the buffer inline on any non-stored outcome, so a storage failure costs the blob, never the scrollback. Proven by src/main/terminal-scrollback-snapshot-enospc.test.ts.",
       "provenBy": ["src/main/terminal-scrollback-snapshot-durability.test.ts"],
       "knownGaps": [
         "The reader still cannot distinguish a missing snapshot from a genuinely empty one; see shared/terminal-snapshot-unavailability.ts for the vocabulary the live wire path already uses."
@@ -120,6 +127,7 @@
       "tier": "crash-durable",
       "lostIf": "This is the only copy. The provider transcript is evidence, not a substitute: it belongs to the provider, it rotates, the provider may delete it, and it carries no Orca conversation identity — so a lost record cannot be reconstructed from it, only guessed at. Losing one costs the conversation as a product entity: its id, anything later bound to that id, and the ability to reopen it at all.",
       "provenBy": ["src/main/conversation/conversation-store-syscall-proof.test.ts"],
+      "onFailure": "Never reported as success. conversation-store does not catch writeFileDurable, so ENOSPC/EACCES reject: conversations:create and createForAgent reject to the renderer with the OS error message; during a turn, conversation-turn-runner catches it and returns outcome 'failed' with that message as the reason, after trying to mark unsettled turns failed (if that second write also fails, the IPC call rejects instead). The prior record is kept, because the temp file is renamed over it only after its fsync. Weakness: the user sees the raw OS message, not product copy.",
       "knownGaps": [
         "Reachable since W3: src/main/ipc/conversations.ts calls the service and src/preload/index.ts exposes conversations:create, so a user with the Conversations surface enabled writes real records. This contract now describes state users have, not a capability. The surface is still opt-in (showConversationsButton), so the population is small rather than absent.",
         "No backup ring. Unlike the profile file there is no .bak behind a conversation, so a record that fails to parse is refused rather than recovered; the bytes are preserved on disk for a later repair, but nothing rotates a known-good copy forward.",
@@ -231,6 +239,7 @@
       "writer": "src/main/project-working-set/working-set-store.ts",
       "tier": "crash-durable",
       "lostIf": "It is the only record of a rail the user asked to keep, and later waves may release processes on the strength of it. A save reports success only after the published file is read back through readWorkingSetArtifact and matches what was submitted, so 'saved' names bytes on disk, not an attempted write.",
+      "onFailure": "publishFailure() maps DurablePublishError.stage onto the save outcome and keeps the OS code: write-failed, durability-failed, publish-failed, or identity-collision for EEXIST. A full disk surfaces as write-failed with code ENOSPC rather than as a generic failure, and the scrollback staged for the set is discarded so no manifest points at a half-sealed copy. This is the pattern the rest of the estate is being brought up to.",
       "provenBy": [
         "src/main/durable-file-write-exclusive.test.ts",
         "src/main/project-working-set/working-set-store.test.ts"

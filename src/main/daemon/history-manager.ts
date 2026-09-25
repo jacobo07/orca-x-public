@@ -255,8 +255,12 @@ export class HistoryManager {
       }
       return checkpoint.result
     } catch (err) {
+      // Why not 'unavailable': we attempted the write and it threw — on a full disk, ENOSPC out of
+      // writeFileDurable. handleWriteError also disables the session, so reporting this as "there
+      // is no checkpointing here" let one transient full disk stop history for the session's life
+      // while every later checkpoint still answered 'done'.
       this.handleWriteError(sessionId, err)
-      return 'unavailable'
+      return 'failed'
     }
   }
 

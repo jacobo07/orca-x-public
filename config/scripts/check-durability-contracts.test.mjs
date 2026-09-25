@@ -44,7 +44,8 @@ function makeTempRoot(
   files = {},
   baseline = '',
   directBaseline = '',
-  delegateBaseline = ''
+  delegateBaseline = '',
+  failureSemanticsBaseline = ''
 ) {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-durability-contracts-'))
   tempDirs.push(root)
@@ -68,6 +69,13 @@ function makeTempRoot(
     writeFileSync(
       path.join(root, 'config', 'durability-primitive-delegate-baseline.txt'),
       delegateBaseline,
+      'utf8'
+    )
+  }
+  if (failureSemanticsBaseline !== null) {
+    writeFileSync(
+      path.join(root, 'config', 'durability-failure-semantics-baseline.txt'),
+      failureSemanticsBaseline,
       'utf8'
     )
   }
@@ -123,6 +131,68 @@ describe('durability contract gate', () => {
     vi.spyOn(console, 'error').mockImplementation((line) => errors.push(String(line)))
     vi.spyOn(console, 'log').mockImplementation(() => {})
   }
+
+  // The failure-semantics clause: a barrier says the bytes reached disk, and says nothing about
+  // what the caller reports when they did not. Every subject here is synthetic, so none of these
+  // decays on the day the last real offender in the repo answers its onFailure.
+  const FS_POLICY = { failureSemanticsRequiredForTiers: ['crash-durable'] }
+
+  it('rejects a crash-durable contract that never says what a failed write reports', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest({}, FS_POLICY), COMPLIANT_FILES, '', '', '')
+
+    await expect(main(root)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain('demo.state: tier crash-durable requires onFailure')
+  })
+
+  it('accepts the same contract once it answers', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest(
+        { onFailure: 'Surfaces write-failed with the OS code; the prior file is kept.' },
+        FS_POLICY
+      ),
+      COMPLIANT_FILES,
+      '',
+      '',
+      ''
+    )
+
+    // The green half. Without it, a clause that rejected everything would pass the case above.
+    await expect(main(root)).resolves.toBe(0)
+  })
+
+  it('does not ask a tier the policy has not named', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), COMPLIANT_FILES, '', '', '')
+
+    await expect(main(root)).resolves.toBe(0)
+  })
+
+  it('grandfathers a baselined contract, and reports the entry once it is stale', async () => {
+    captureErrors()
+    const grandfathered = makeTempRoot(
+      validManifest({}, FS_POLICY),
+      COMPLIANT_FILES,
+      '',
+      '',
+      '',
+      'demo.state\n'
+    )
+    await expect(main(grandfathered)).resolves.toBe(0)
+
+    errors.length = 0
+    const stale = makeTempRoot(
+      validManifest({ onFailure: 'Surfaces write-failed with the OS code.' }, FS_POLICY),
+      COMPLIANT_FILES,
+      '',
+      '',
+      '',
+      'demo.state\n'
+    )
+    await expect(main(stale)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain('demo.state: declares onFailure but is still baselined')
+  })
 
   it('passes a compliant contract', async () => {
     captureErrors()
