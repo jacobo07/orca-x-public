@@ -35,6 +35,11 @@ vi.mock('electron', () => ({
 }))
 
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
+import {
+  resetReloadPreparationForTest,
+  settleReloadPreparation
+} from '../window/reload-preparation'
+import { GRACEFUL_RELOAD_PREPARE_TIMEOUT_MS } from '../window/reload-window-gracefully'
 
 const isMac = process.platform === 'darwin'
 
@@ -58,12 +63,25 @@ function createCapturedImage(): {
  *  branch on every case and report a green for a path that never ran. */
 function createFocusedWebContents(
   id: number,
-  overrides: { capturePage?: () => Promise<unknown> } = {}
+  overrides: {
+    capturePage?: () => Promise<unknown>
+    /** How the renderer answers main's reload-preparation request; silent never answers. */
+    prepare?: 'prepared' | 'refused' | 'silent'
+  } = {}
 ) {
   const order: string[] = []
   const webContents = {
     id,
     isDestroyed: () => false,
+    send: vi.fn((_channel: string, payload: { requestId: string }) => {
+      order.push('prepare')
+      const answer = overrides.prepare ?? 'prepared'
+      if (answer !== 'silent') {
+        queueMicrotask(() => settleReloadPreparation(id, { requestId: payload.requestId, outcome: answer }))
+      }
+    }),
+    once: vi.fn(),
+    removeListener: vi.fn(),
     capturePage: vi.fn(() => {
       order.push('capture')
       return overrides.capturePage?.() ?? Promise.resolve(createCapturedImage())
@@ -87,6 +105,7 @@ function buildMenuOptions() {
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
     onBeforeReload: vi.fn(),
+    onReloadNotPerformed: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
@@ -134,6 +153,8 @@ describe('registerAppMenu', () => {
   })
 
   afterEach(() => {
+    resetReloadPreparationForTest()
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -214,8 +235,9 @@ describe('registerAppMenu', () => {
 
     expect(webContents.reloadIgnoringCache).not.toHaveBeenCalled()
     expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: false, webContentsId: 101 })
-    // A frame taken after reload() is a frame of the blank document it produced.
-    expect(order).toEqual(['capture', 'reload'])
+    // Prepared first (hot-exit backup + durable checkpoint), and a frame taken after reload() is a
+    // frame of the blank document it produced.
+    expect(order).toEqual(['prepare', 'capture', 'reload'])
   })
 
   it('captures the freeze frame before force reloading the focused window', async () => {
@@ -250,6 +272,46 @@ describe('registerAppMenu', () => {
     reloadItem?.click?.({} as never, {} as never, {} as never)
 
     await vi.waitFor(() => expect(webContents.reload).toHaveBeenCalledTimes(1))
+  })
+
+  it('leaves a window whose renderer refused to prepare untouched, and says so', async () => {
+    const { webContents } = createFocusedWebContents(104, { prepare: 'refused' })
+    const options = buildMenuOptions()
+    getFocusedWindowMock.mockReturnValue({ webContents })
+    registerAppMenu(options)
+
+    getSubmenu(getTemplate(), 'View')
+      .find((item) => item.label === 'Reload')
+      ?.click?.({} as never, {} as never, {} as never)
+
+    await vi.waitFor(() =>
+      expect(options.onReloadNotPerformed).toHaveBeenCalledWith({
+        outcome: 'refused',
+        webContentsId: 104
+      })
+    )
+    expect(webContents.capturePage).not.toHaveBeenCalled()
+    expect(webContents.reload).not.toHaveBeenCalled()
+    expect(options.onBeforeReload).not.toHaveBeenCalled()
+  })
+
+  it('leaves a window that never answers untouched, and says it did not respond', async () => {
+    vi.useFakeTimers()
+    const { webContents } = createFocusedWebContents(105, { prepare: 'silent' })
+    const options = buildMenuOptions()
+    getFocusedWindowMock.mockReturnValue({ webContents })
+    registerAppMenu(options)
+
+    getSubmenu(getTemplate(), 'View')
+      .find((item) => item.label === 'Reload')
+      ?.click?.({} as never, {} as never, {} as never)
+    await vi.advanceTimersByTimeAsync(GRACEFUL_RELOAD_PREPARE_TIMEOUT_MS)
+
+    expect(options.onReloadNotPerformed).toHaveBeenCalledWith({
+      outcome: 'timeout',
+      webContentsId: 105
+    })
+    expect(webContents.reload).not.toHaveBeenCalled()
   })
 
   describe.each([

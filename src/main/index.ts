@@ -234,6 +234,7 @@ import {
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { createWebContentsTimedFlags } from './window/web-contents-timed-flags'
+import { showReloadNotPerformedNotice } from './window/reload-not-performed-notice'
 import {
   broadcastToAppWindowRenderers,
   getPrimaryAppWindowRenderer
@@ -3123,6 +3124,10 @@ void app.whenReady().then(async () => {
       // Why any window: the menu reloads whichever window invoked it, secondary windows included.
       markExpectedRendererReload(webContentsId)
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
+    },
+    onReloadNotPerformed: (args) => {
+      recordCrashBreadcrumb('manual_reload_not_performed', { outcome: args.outcome })
+      showReloadNotPerformedNotice(args)
     },
     onOpenSettings: openSettingsFromSystemMenu,
     onOpenSetupGuide: (targetWindow) => {

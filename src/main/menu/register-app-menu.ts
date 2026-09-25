@@ -9,7 +9,7 @@ import type { TerminalMenuCommand } from '../../shared/terminal-menu-command'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { requestParkFromMenu } from '../durable-exit/park-menu-command'
-import { reloadWithFreezeFrame } from '../window/reload-with-freeze-frame'
+import { runMenuReload, type MenuReloadHooks } from './menu-reload-command'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { buildAppearanceSubmenu } from './appearance-menu'
 import { buildTerminalMenu } from './terminal-menu'
@@ -37,7 +37,8 @@ type RegisterAppMenuOptions = {
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
-  onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
+  onBeforeReload?: MenuReloadHooks['onBeforeReload']
+  onReloadNotPerformed?: MenuReloadHooks['onReloadNotPerformed']
   // Why each of these takes the invoking window: Electron hands every click the window whose menu
   // ran it, and a handler that drops it has to guess. The guess in main was a module-level reference
   // assigned on window creation, so with two windows open a command invoked from the older one acted
@@ -68,6 +69,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onOpenCrashReport,
     onCheckForUpdates,
     onBeforeReload,
+    onReloadNotPerformed,
     onZoomIn,
     onZoomOut,
     onZoomReset,
@@ -88,30 +90,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       getKeybindings?.()
     )
     return formatKeybindingList(bindings, process.platform)
-  }
-
-  const reloadInvokingWindow = (
-    ignoreCache: boolean,
-    invokingWindow: Electron.BaseWindow | undefined
-  ): void => {
-    // Why the invoking window: with two windows open, focus can belong to the other one. Focus is
-    // only the fallback for a click Electron did not attribute; a destroyed invoker reloads nothing.
-    let webContents: Electron.WebContents | undefined
-    if (invokingWindow && 'webContents' in invokingWindow) {
-      if (invokingWindow.isDestroyed()) {
-        return
-      }
-      webContents = (invokingWindow as BrowserWindow).webContents
-    } else {
-      webContents = BrowserWindow.getFocusedWindow()?.webContents
-    }
-    if (!webContents) {
-      return
-    }
-
-    // Routed through the shared authority so the menu, the accelerator and the renderer's own
-    // `app:reload` all capture the freeze frame; a menu-local reload would flash.
-    void reloadWithFreezeFrame(webContents, { ignoreCache, onBeforeReload })
   }
 
   // Why: modifier-click update checks are hidden power-user affordances.
@@ -265,11 +243,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [
       {
         label: translateMain('menu.reload', 'Reload'),
-        click: (_menuItem, window) => reloadInvokingWindow(false, window)
+        click: (_menuItem, window) =>
+          runMenuReload(false, window, { onBeforeReload, onReloadNotPerformed })
       },
       {
         label: `${translateMain('menu.forceReload', 'Force Reload')}\t${shortcutLabel('app.forceReload')}`,
-        click: (_menuItem, window) => reloadInvokingWindow(true, window)
+        click: (_menuItem, window) =>
+          runMenuReload(true, window, { onBeforeReload, onReloadNotPerformed })
       },
       { role: 'toggleDevTools' },
       { type: 'separator' },
