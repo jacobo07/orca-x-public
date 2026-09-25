@@ -75,6 +75,7 @@ import type { PersistedWindowTopologyEntry } from '../../shared/window-topology-
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
+import { reloadWithFreezeFrame } from './reload-with-freeze-frame'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
@@ -237,6 +238,8 @@ type CreateMainWindowOptions = {
   getIsQuitting?: () => boolean
   /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
   onQuitAborted?: () => void
+  /** The renderer vetoed unload with no close or quit in flight: this window's reload was refused. */
+  onReloadVetoed?: (webContentsId: number) => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
@@ -822,8 +825,10 @@ export function createMainWindow(
         mainWindow.webContents.send('ui:openSettings')
         return
       case 'forceReload':
-        opts?.onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
-        mainWindow.webContents.reloadIgnoringCache()
+        void reloadWithFreezeFrame(mainWindow.webContents, {
+          ignoreCache: true,
+          ...(opts?.onBeforeReload ? { onBeforeReload: opts.onBeforeReload } : {})
+        })
         return
       case 'toggleLeftSidebar':
         mainWindow.webContents.send('ui:toggleLeftSidebar')
@@ -1194,10 +1199,16 @@ export function createMainWindow(
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
-    // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
-    windowClosing = false
-    clearQuitRendererAckTimer()
-    opts?.onQuitAborted?.()
+    // Why the split: beforeunload also runs for a reload. With no close or quit in flight the veto
+    // belongs to this window's reload, and resetting the app-wide quit latch for it was wrong.
+    if (windowClosing || (opts?.getIsQuitting?.() ?? false)) {
+      // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
+      windowClosing = false
+      clearQuitRendererAckTimer()
+      opts?.onQuitAborted?.()
+    } else {
+      opts?.onReloadVetoed?.(mainWindow.webContents.id)
+    }
     mainWindow.webContents.send('window:unload-prevented')
   })
 

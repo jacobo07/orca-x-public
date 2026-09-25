@@ -234,6 +234,8 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { createWebContentsTimedFlags } from './window/web-contents-timed-flags'
+import { showReloadNotPerformedNotice } from './window/reload-not-performed-notice'
 import {
   broadcastToAppWindowRenderers,
   getPrimaryAppWindowRenderer
@@ -438,10 +440,10 @@ function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void
   )
 }
 // Why: a reload intent must not leak to a later load; the recovery reload re-fires did-finish-load, so its flag spares live PTYs from the orphan sweep (#5787).
-const expectedRendererReload = createWebContentsTimedFlag()
-const recoveryReloadInFlight = createWebContentsTimedFlag()
+const expectedRendererReload = createWebContentsTimedFlags()
+const recoveryReloadInFlight = createWebContentsTimedFlags()
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
-const pendingOpenSettings = createWebContentsTimedFlag()
+const pendingOpenSettings = createWebContentsTimedFlags()
 const skillShareDeepLinks = new SkillShareDeepLinkState()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
@@ -798,43 +800,11 @@ function settleServeDesktopActivation(): void {
   })
 }
 
-// Why: webContents-scoped auto-expiring flag so an intent can't leak to a later renderer load; `consume` clears on match for one-shot signals.
-function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
-  mark: (webContentsId: number, durationMs?: number) => void
-  clear: (webContentsId?: number) => void
-  matches: (webContentsId: number, options?: { consume?: boolean }) => boolean
-} {
-  let state: { webContentsId: number; until: number } | null = null
-  return {
-    mark(webContentsId, durationMs = defaultDurationMs) {
-      state = { webContentsId, until: Date.now() + durationMs }
-    },
-    clear(webContentsId) {
-      if (webContentsId === undefined || state?.webContentsId === webContentsId) {
-        state = null
-      }
-    },
-    matches(webContentsId, options) {
-      if (!state || Date.now() > state.until) {
-        state = null
-        return false
-      }
-      if (state.webContentsId !== webContentsId) {
-        return false
-      }
-      if (options?.consume) {
-        state = null
-      }
-      return true
-    }
-  }
-}
-
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
   expectedRendererReload.mark(webContentsId, durationMs)
 }
 
-function clearExpectedRendererReload(webContentsId?: number): void {
+function clearExpectedRendererReload(webContentsId: number): void {
   expectedRendererReload.clear(webContentsId)
 }
 
@@ -1487,7 +1457,11 @@ function openMainWindow(
     getIsQuitting: () => isQuitting,
     onQuitAborted: () => {
       isQuitting = false
-      clearExpectedRendererReload()
+    },
+    onReloadVetoed: (webContentsId) => {
+      // A refused reload is this window's alone; the quit latch and other windows' marks stay.
+      clearExpectedRendererReload(webContentsId)
+      recordCrashBreadcrumb('manual_reload_vetoed')
     },
     onRendererProcessGone: (details, webContentsId) => {
       recordProcessGoneCrash(
@@ -1521,9 +1495,7 @@ function openMainWindow(
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
-      if (mainWindow?.webContents.id === webContentsId) {
-        markExpectedRendererReload(webContentsId)
-      }
+      markExpectedRendererReload(webContentsId)
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     // Why: the recovery reload re-fires did-finish-load; flag it so the local-PTY orphan sweep skips that reload (#5787).
@@ -1642,9 +1614,7 @@ function openMainWindow(
       awaitLocalPtyStartup: () => localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
-        if (window.webContents.id === webContentsId) {
-          markExpectedRendererReload(webContentsId)
-        }
+        markExpectedRendererReload(webContentsId)
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
       },
       // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
@@ -3161,10 +3131,13 @@ void app.whenReady().then(async () => {
       openMainWindow({ revealOnDidFinishLoad: true })
     },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
-      if (mainWindow?.webContents.id === webContentsId) {
-        markExpectedRendererReload(webContentsId)
-      }
+      // Why any window: the menu reloads whichever window invoked it, secondary windows included.
+      markExpectedRendererReload(webContentsId)
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
+    },
+    onReloadNotPerformed: (args) => {
+      recordCrashBreadcrumb('manual_reload_not_performed', { outcome: args.outcome })
+      showReloadNotPerformedNotice(args)
     },
     onOpenSettings: openSettingsFromSystemMenu,
     onOpenSetupGuide: (targetWindow) => {
