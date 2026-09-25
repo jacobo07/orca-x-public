@@ -21,7 +21,9 @@ export const REVIEWS_TABLE_SQL = `
     review_task_id     TEXT,
     findings           TEXT,
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
-    completed_at       TEXT
+    completed_at       TEXT,
+    policy             TEXT NOT NULL DEFAULT 'any',
+    producer_task_id   TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_reviews_subject ON reviews(subject_project_id, subject_revision);
 `
@@ -32,6 +34,10 @@ export type ReviewIndependence =
   | 'degraded-same-agent'
   | 'degraded-same-provider'
   | 'unknown'
+
+/** `independent`: the reviewer must not run on the producer's provider, and a request that cannot
+ *  say who produced the artifact is refused. `any`: independence is recorded, not required. */
+export type ReviewPolicy = 'independent' | 'any'
 
 export type ReviewParty = { agentId: string | null; provider: string | null }
 
@@ -60,9 +66,12 @@ export type ReviewRow = {
   independence: ReviewIndependence
   status: 'requested' | 'completed' | 'failed'
   review_task_id: string | null
+  /** JSON `orca.review-findings/1` once settled (review-findings.ts). */
   findings: string | null
   created_at: string
   completed_at: string | null
+  policy: ReviewPolicy
+  producer_task_id: string | null
 }
 
 /** Whether a review still describes the subject as it is now. Anything but an exact match is stale:
@@ -87,26 +96,30 @@ export function judgeReviewCurrency(
   return { current: true }
 }
 
+export type ReviewCreateInput = {
+  runId: string
+  subject: { projectId: string; worktreePath: string | null; revision: string; patchHash: string }
+  producer: ReviewParty
+  reviewer: { agentId: string; provider: string | null }
+  reviewTaskId: string | null
+  policy?: ReviewPolicy
+  producerTaskId?: string | null
+}
+
 export class ReviewStore {
   constructor(
     private readonly db: Database.Database,
     private readonly mintId: () => string
   ) {}
 
-  create(input: {
-    runId: string
-    subject: { projectId: string; worktreePath: string | null; revision: string; patchHash: string }
-    producer: ReviewParty
-    reviewer: { agentId: string; provider: string | null }
-    reviewTaskId: string | null
-  }): ReviewRow {
+  create(input: ReviewCreateInput): ReviewRow {
     const id = this.mintId()
     this.db
       .prepare(
         `INSERT INTO reviews (id, run_id, subject_project_id, subject_worktree, subject_revision,
            subject_patch_hash, producer_agent_id, producer_provider, reviewer_agent_id,
-           reviewer_provider, independence, review_task_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           reviewer_provider, independence, review_task_id, policy, producer_task_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -120,7 +133,9 @@ export class ReviewStore {
         input.reviewer.agentId,
         input.reviewer.provider,
         deriveIndependence(input.producer, input.reviewer),
-        input.reviewTaskId
+        input.reviewTaskId,
+        input.policy ?? 'any',
+        input.producerTaskId ?? null
       )
     return this.get(id)!
   }
@@ -129,8 +144,16 @@ export class ReviewStore {
     return this.db.prepare('SELECT * FROM reviews WHERE id = ?').get(id) as ReviewRow | undefined
   }
 
+  /** The review a task is running, if it is one. */
+  getByTask(taskId: string): ReviewRow | undefined {
+    return this.db.prepare('SELECT * FROM reviews WHERE review_task_id = ?').get(taskId) as
+      | ReviewRow
+      | undefined
+  }
+
   /** The reviewer's provider is only known once its turn has run, so independence is re-derived
-   *  at settlement from what actually happened, not from what was hoped for at request time. */
+   *  at settlement from what actually happened, not from what was hoped for at request time.
+   *  Settles once: a late second settlement cannot rewrite what the first recorded. */
   settle(id: string, outcome: { status: 'completed' | 'failed'; reviewerProvider: string | null; findings: string }): ReviewRow | undefined {
     const review = this.get(id)
     if (!review) {
@@ -143,7 +166,7 @@ export class ReviewStore {
     this.db
       .prepare(
         `UPDATE reviews SET status = ?, reviewer_provider = ?, independence = ?, findings = ?,
-           completed_at = datetime('now') WHERE id = ?`
+           completed_at = datetime('now') WHERE id = ? AND status = 'requested'`
       )
       .run(outcome.status, outcome.reviewerProvider, independence, outcome.findings, id)
     return this.get(id)

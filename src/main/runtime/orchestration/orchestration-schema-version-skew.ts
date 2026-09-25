@@ -36,7 +36,10 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 29, table: 'dispatch_contexts', column: 'admission_envelope' },
   { version: 30, table: 'tasks', column: 'assignee_agent_id' },
   { version: 30, table: 'tasks', column: 'requester_agent_id' },
-  { version: 30, table: 'tasks', column: 'subject' }
+  { version: 30, table: 'tasks', column: 'subject' },
+  { version: 31, table: 'reviews', column: 'id' },
+  { version: 32, table: 'reviews', column: 'policy' },
+  { version: 32, table: 'reviews', column: 'producer_task_id' }
 ] as const
 
 const POST_V6_INDEXES = [

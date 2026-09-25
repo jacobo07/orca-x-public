@@ -99,4 +99,74 @@ describe('ReviewStore', () => {
     expect(check.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     check.close()
   })
+
+  it('gains its policy and producer task on a v31 database, keeping the reviews it already had', () => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-reviews-v31-'))
+    const path = join(dir, 'orchestration.db')
+    const kept = open(path).reviews().create({
+      runId: 'legacy',
+      subject,
+      producer: { agentId: 'builder', provider: 'codex' },
+      reviewer: { agentId: 'reviewer', provider: null },
+      reviewTaskId: null
+    })
+    opened.pop()?.close()
+    const raw = new Database(path)
+    raw.exec('ALTER TABLE reviews DROP COLUMN producer_task_id')
+    raw.exec('ALTER TABLE reviews DROP COLUMN policy')
+    raw.pragma('user_version = 31')
+    raw.close()
+
+    const upgraded = open(path).reviews()
+
+    expect(upgraded.get(kept.id)).toMatchObject({ policy: 'any', producer_task_id: null, subject_revision: REV_A })
+    expect(
+      upgraded.create({
+        runId: 'legacy',
+        subject,
+        producer: { agentId: 'builder', provider: 'codex' },
+        reviewer: { agentId: 'reviewer', provider: null },
+        reviewTaskId: null,
+        policy: 'independent',
+        producerTaskId: 'task_built'
+      })
+    ).toMatchObject({ policy: 'independent', producer_task_id: 'task_built' })
+  })
+
+  it('repairs a database that claims v32 but lost the reviews table', () => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-reviews-skew-'))
+    const path = join(dir, 'orchestration.db')
+    open(path)
+    opened.pop()?.close()
+    const raw = new Database(path)
+    raw.exec('DROP TABLE reviews')
+    raw.close()
+
+    const repaired = open(path).reviews()
+
+    expect(repaired.create({
+      runId: 'legacy',
+      subject,
+      producer: { agentId: null, provider: null },
+      reviewer: { agentId: 'reviewer', provider: null },
+      reviewTaskId: null
+    }).policy).toBe('any')
+  })
+
+  it('settles once: a late second settlement cannot rewrite the first', () => {
+    const store = open().reviews()
+    const created = store.create({
+      runId: 'legacy',
+      subject,
+      producer: { agentId: 'builder', provider: 'codex' },
+      reviewer: { agentId: 'reviewer', provider: null },
+      reviewTaskId: 'task_review'
+    })
+
+    store.settle(created.id, { status: 'failed', reviewerProvider: null, findings: 'first' })
+    const second = store.settle(created.id, { status: 'completed', reviewerProvider: 'claude', findings: 'second' })
+
+    expect(second).toMatchObject({ status: 'failed', findings: 'first', reviewer_provider: null })
+    expect(store.getByTask('task_review')?.id).toBe(created.id)
+  })
 })
