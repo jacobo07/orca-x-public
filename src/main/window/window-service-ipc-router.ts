@@ -6,6 +6,8 @@ import {
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
+import { takeReloadFreezeFrame } from './reload-freeze-frame'
+import { reloadWithFreezeFrame } from './reload-with-freeze-frame'
 
 /**
  * The main-window service channels that answer one window, routed to the window that called.
@@ -48,14 +50,21 @@ function registerOnce(): void {
   }
   registered = true
 
-  ipcMain.handle('app:reload', (event) => {
+  ipcMain.handle('app:reload', async (event) => {
     const binding = bindingFor(event)
     if (!binding || event.sender.isDestroyed()) {
       return
     }
-    binding.onBeforeRendererReload?.({ webContentsId: event.sender.id, ignoreCache: false })
-    event.sender.reload()
+    await reloadWithFreezeFrame(event.sender, {
+      ignoreCache: false,
+      ...(binding.onBeforeRendererReload ? { onBeforeReload: binding.onBeforeRendererReload } : {})
+    })
   })
+
+  ipcMain.handle('app:takeReloadFreezeFrame', (event) =>
+    // Keyed by the asking document's own webContents id, so one window can never take another's.
+    takeReloadFreezeFrame(event.sender.id)
+  )
 
   ipcMain.handle('macosTccPrompts:consumePending', (event) => {
     const binding = bindingFor(event)

@@ -67,6 +67,7 @@ import type { PersistedWindowTopologyEntry } from '../../shared/window-topology-
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
+import { reloadWithFreezeFrame } from './reload-with-freeze-frame'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
@@ -791,8 +792,10 @@ export function createMainWindow(
         mainWindow.webContents.send('ui:openSettings')
         return
       case 'forceReload':
-        opts?.onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
-        mainWindow.webContents.reloadIgnoringCache()
+        void reloadWithFreezeFrame(mainWindow.webContents, {
+          ignoreCache: true,
+          ...(opts?.onBeforeReload ? { onBeforeReload: opts.onBeforeReload } : {})
+        })
         return
       case 'toggleLeftSidebar':
         mainWindow.webContents.send('ui:toggleLeftSidebar')

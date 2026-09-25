@@ -5,18 +5,21 @@ const {
   setApplicationMenuMock,
   getFocusedWindowMock,
   getFocusedWebContentsMock,
+  fromWebContentsMock,
   sendActionToFirstResponderMock
 } = vi.hoisted(() => ({
   buildFromTemplateMock: vi.fn(),
   setApplicationMenuMock: vi.fn(),
   getFocusedWindowMock: vi.fn(),
   getFocusedWebContentsMock: vi.fn(),
+  fromWebContentsMock: vi.fn(() => null),
   sendActionToFirstResponderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
-    getFocusedWindow: getFocusedWindowMock
+    getFocusedWindow: getFocusedWindowMock,
+    fromWebContents: fromWebContentsMock
   },
   Menu: {
     buildFromTemplate: buildFromTemplateMock,
@@ -34,6 +37,46 @@ vi.mock('electron', () => ({
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
 
 const isMac = process.platform === 'darwin'
+
+/** A NativeImage-shaped capture, so the reload path exercises the real encode rather than a throw. */
+function createCapturedImage(): {
+  isEmpty: () => boolean
+  getSize: () => { width: number; height: number }
+  resize: () => ReturnType<typeof createCapturedImage>
+  toJPEG: () => Buffer
+} {
+  const image = {
+    isEmpty: () => false,
+    getSize: () => ({ width: 800, height: 600 }),
+    resize: () => image,
+    toJPEG: () => Buffer.alloc(32, 1)
+  }
+  return image
+}
+
+/** Faithful to what the reload authority actually calls; a looser double would take the fail-open
+ *  branch on every case and report a green for a path that never ran. */
+function createFocusedWebContents(
+  id: number,
+  overrides: { capturePage?: () => Promise<unknown> } = {}
+) {
+  const order: string[] = []
+  const webContents = {
+    id,
+    isDestroyed: () => false,
+    capturePage: vi.fn(() => {
+      order.push('capture')
+      return overrides.capturePage?.() ?? Promise.resolve(createCapturedImage())
+    }),
+    reload: vi.fn(() => {
+      order.push('reload')
+    }),
+    reloadIgnoringCache: vi.fn(() => {
+      order.push('reloadIgnoringCache')
+    })
+  }
+  return { webContents, order }
+}
 
 function buildMenuOptions() {
   return {
@@ -157,41 +200,29 @@ describe('registerAppMenu', () => {
     ])
   })
 
-  it('reloads the focused window from the view menu', () => {
-    const reloadMock = vi.fn()
-    const reloadIgnoringCacheMock = vi.fn()
+  it('captures the freeze frame before reloading the focused window from the view menu', async () => {
+    const { webContents, order } = createFocusedWebContents(101)
     const options = buildMenuOptions()
     options.onBeforeReload = vi.fn()
-    getFocusedWindowMock.mockReturnValue({
-      webContents: {
-        id: 101,
-        reload: reloadMock,
-        reloadIgnoringCache: reloadIgnoringCacheMock
-      }
-    })
+    getFocusedWindowMock.mockReturnValue({ webContents })
 
     registerAppMenu(options)
 
     const reloadItem = getSubmenu(getTemplate(), 'View').find((item) => item.label === 'Reload')
     reloadItem?.click?.({} as never, {} as never, {} as never)
+    await vi.waitFor(() => expect(webContents.reload).toHaveBeenCalledTimes(1))
 
-    expect(reloadMock).toHaveBeenCalledTimes(1)
-    expect(reloadIgnoringCacheMock).not.toHaveBeenCalled()
+    expect(webContents.reloadIgnoringCache).not.toHaveBeenCalled()
     expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: false, webContentsId: 101 })
+    // A frame taken after reload() is a frame of the blank document it produced.
+    expect(order).toEqual(['capture', 'reload'])
   })
 
-  it('force reloads the focused window from the view menu', () => {
-    const reloadMock = vi.fn()
-    const reloadIgnoringCacheMock = vi.fn()
+  it('captures the freeze frame before force reloading the focused window', async () => {
+    const { webContents, order } = createFocusedWebContents(102)
     const options = buildMenuOptions()
     options.onBeforeReload = vi.fn()
-    getFocusedWindowMock.mockReturnValue({
-      webContents: {
-        id: 102,
-        reload: reloadMock,
-        reloadIgnoringCache: reloadIgnoringCacheMock
-      }
-    })
+    getFocusedWindowMock.mockReturnValue({ webContents })
 
     registerAppMenu(options)
 
@@ -199,10 +230,26 @@ describe('registerAppMenu', () => {
       item.label?.startsWith('Force Reload\t')
     )
     forceReloadItem?.click?.({} as never, {} as never, {} as never)
+    await vi.waitFor(() => expect(webContents.reloadIgnoringCache).toHaveBeenCalledTimes(1))
 
-    expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
-    expect(reloadMock).not.toHaveBeenCalled()
+    expect(webContents.reload).not.toHaveBeenCalled()
     expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
+    expect(order).toEqual(['capture', 'reloadIgnoringCache'])
+  })
+
+  it('still reloads when the freeze-frame capture fails', async () => {
+    const { webContents } = createFocusedWebContents(103, {
+      capturePage: () => Promise.reject(new Error('gpu gone'))
+    })
+    const options = buildMenuOptions()
+    getFocusedWindowMock.mockReturnValue({ webContents })
+
+    registerAppMenu(options)
+
+    const reloadItem = getSubmenu(getTemplate(), 'View').find((item) => item.label === 'Reload')
+    reloadItem?.click?.({} as never, {} as never, {} as never)
+
+    await vi.waitFor(() => expect(webContents.reload).toHaveBeenCalledTimes(1))
   })
 
   it('routes Check for Updates modifier clicks to prerelease and perf checks', () => {
