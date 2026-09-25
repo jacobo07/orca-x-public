@@ -230,6 +230,8 @@ type CreateMainWindowOptions = {
   getIsQuitting?: () => boolean
   /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
   onQuitAborted?: () => void
+  /** The renderer vetoed unload with no close or quit in flight: this window's reload was refused. */
+  onReloadVetoed?: (webContentsId: number) => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
@@ -1166,10 +1168,16 @@ export function createMainWindow(
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
-    // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
-    windowClosing = false
-    clearQuitRendererAckTimer()
-    opts?.onQuitAborted?.()
+    // Why the split: beforeunload also runs for a reload. With no close or quit in flight the veto
+    // belongs to this window's reload, and resetting the app-wide quit latch for it was wrong.
+    if (windowClosing || (opts?.getIsQuitting?.() ?? false)) {
+      // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
+      windowClosing = false
+      clearQuitRendererAckTimer()
+      opts?.onQuitAborted?.()
+    } else {
+      opts?.onReloadVetoed?.(mainWindow.webContents.id)
+    }
     mainWindow.webContents.send('window:unload-prevented')
   })
 
