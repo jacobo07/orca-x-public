@@ -129,10 +129,15 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   DEBT: plan-mode Claude turns write `~/.claude/plans/<slug>.md` in the user's home (2 files from probes).
 - Live Claude spend this session: ~9 turns (P4b 3, bridge 3, delegation 3).
 
+- **Workspace merged** `4176d6b13` (cogws-product-surface@33b8d089a; unions; routing now in the shared
+  handler set, agent-task runner desktop-only). GEX44: tsc 0/0/2-inherited, 5 gates, 4430 passed.
+- **P6** `13a5b9e62`..`ddc6f67d8`: `readAgentFederationView` + IPC `federation:*` (decide/rebind only from
+  Orca's window) + `AgentFederationCards` in the agent rail; claims 18 sites green; recurring-work debt 0;
+  en.json +25 keys (localization back to base, still red on pre-existing workspace.*). E2E spec
+  `agent-federation-approval.spec.ts` (RPC-seeded gate, repo moves, rebind, approve, gateList).
+
 ## 4. Next 3 actions
-1. P6 surface: merge `orca-x/cogws-product-surface@33b8d089a` (conflicts: pr.yml, package.json,
-   src/main/ipc/conversations.ts), then desktop IPC for gate decide/rebind + review/approval rows in
-   Workspace, each with a producer in `workspace-surface-claims.jsonc`; Electron e2e (on GEX44, xvfb).
+1. P6: read the e2e result (GEX44 `/tmp/fed-e2e.log`); fix-forward if red.
 2. P7: architecture gates + UKDL + vault entries (list in section 3 of the session report).
 3. Plan-mode side effect: decide whether tool-less Claude turns also move to the Read/Grep/Glob posture.
 Then P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada 20 GB).
