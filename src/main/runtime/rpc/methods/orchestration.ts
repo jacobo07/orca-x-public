@@ -24,6 +24,7 @@ import {
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
+import { ORCHESTRATION_REVIEW_METHODS } from './orchestration-reviews'
 import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
@@ -1761,6 +1762,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   }),
 
   ...ORCHESTRATION_GATE_METHODS,
+  ...ORCHESTRATION_REVIEW_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',

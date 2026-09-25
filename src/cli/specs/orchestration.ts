@@ -143,6 +143,34 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'review-request'],
+    summary: 'Ask an agent to review one exact commit',
+    usage:
+      'orca orchestration review-request --reviewer-agent <agent_id> --project <project_id> [--worktree <path>] [--revision <rev>] [--producer-task <task_id>] [--independent] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'reviewer-agent',
+      'project',
+      'worktree',
+      'revision',
+      'producer-task',
+      'independent',
+      'run',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'Orca captures the commit and its patch from git; --worktree defaults to the current directory, --revision to HEAD.',
+      '--independent keeps the review off the provider that built --producer-task, and is refused when that is unknown.'
+    ]
+  },
+  {
+    path: ['orchestration', 'review-show'],
+    summary: 'Show a review, its findings, and whether it still describes the subject',
+    usage: 'orca orchestration review-show --id <review_id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id']
+  },
+  {
     path: ['orchestration', 'task-list'],
     summary: 'List orchestration tasks',
     usage:

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: orchestration CLI handlers share flag-parsing helpers and dispatch/preamble logic; splitting by verb would fragment the RuntimeClient call shape without reducing complexity. */
+import { resolve as resolvePath } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import { printResult } from '../format'
@@ -775,6 +776,57 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
+  },
+
+  'orchestration review-request': async ({ flags, client, cwd, json }) => {
+    const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await callMutation<{
+      review: { id: string; subject_revision: string; independence: string; policy: string }
+      task: { id: string }
+    }>(client, flags, 'orchestration.reviewRequest', {
+      reviewerAgent: getRequiredStringFlag(flags, 'reviewer-agent'),
+      project: getRequiredStringFlag(flags, 'project'),
+      worktree: resolvePath(cwd, getOptionalStringFlag(flags, 'worktree') ?? '.'),
+      revision: getOptionalStringFlag(flags, 'revision'),
+      producerTask: getOptionalStringFlag(flags, 'producer-task'),
+      independent: flags.has('independent') ? true : undefined,
+      run: getOptionalStringFlag(flags, 'run'),
+      callerTerminalHandle
+    })
+    printResult(
+      result,
+      json,
+      (r) =>
+        `Requested ${r.review.id} of ${r.review.subject_revision.slice(0, 12)} as task ${r.task.id} ` +
+        `[${r.review.policy}; independence so far: ${r.review.independence}]`
+    )
+  },
+
+  'orchestration review-show': async ({ flags, client, json }) => {
+    const result = await client.call<{
+      review: { id: string; status: string; subject_revision: string; independence: string; reviewer_provider: string | null }
+      findings: { kind: string; verdict?: string; blocking?: boolean; findings?: { severity: string; summary: string; location?: string }[]; reason?: string; problem?: string } | null
+      currency: { current: boolean; reason?: string }
+    }>('orchestration.reviewShow', { id: getRequiredStringFlag(flags, 'id') })
+    printResult(result, json, (r) => {
+      const lines = [
+        `${r.review.id} ${r.review.status} — ${r.review.subject_revision.slice(0, 12)}, independence ${r.review.independence}` +
+          (r.review.reviewer_provider ? ` (reviewed on ${r.review.reviewer_provider})` : ''),
+        r.currency.current ? 'Current: the worktree still holds this commit.' : `Not current: ${r.currency.reason}.`
+      ]
+      const f = r.findings
+      if (f?.kind === 'structured') {
+        lines.push(`Verdict: ${f.verdict}${f.blocking ? ' (blocking)' : ''}`)
+        for (const finding of f.findings ?? []) {
+          lines.push(`  [${finding.severity}] ${finding.summary}${finding.location ? ` (${finding.location})` : ''}`)
+        }
+      } else if (f?.kind === 'unstructured') {
+        lines.push(`No structured verdict: ${f.problem}.`)
+      } else if (f?.kind === 'failed') {
+        lines.push(`The review did not run: ${f.reason}.`)
+      }
+      return lines.join('\n')
+    })
   },
 
   'orchestration task-list': async ({ flags, client, cwd, json }) => {
