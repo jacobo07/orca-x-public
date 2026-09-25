@@ -151,8 +151,15 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
    OpenAI-compatible endpoint (URL configured; loopback on GEX44, ssh tunnel from a desktop), through the
    same ConversationTurnDriver + routing contract; never touch KEOS's server. Live proof runs ON GEX44
    (vitest there, real endpoint), then the first LIVE independent review: claude builds, local reviews.
-   Disk 96% (68 GB free). Ralph cannot run on GEX44 yet: its claude is 2.1.113 (no `--bg`) and the Ralph
-   sweep is a Windows scheduled task.
+   Disk 96% (68 GB free). RALPH ON GEX44 IS READY, NOT ARMED (Owner: hold until the quota reset
+   ~2026-09-27 18:00 UTC). `~/.local/bin/claude` is 2.1.282 (a non-interactive ssh PATH shows a stale
+   `/usr/local/bin` 2.1.113 — that was the earlier false "no --bg"). Isolated HOME `/home/kobii/orca-env`
+   (built like a5-env: a5's Linux settings re-pathed + Power Pack at commit 7aa9417, LF; own login copy;
+   `/home/kobii/fed-wt` pre-trusted); mission tests 122/122 + 18/18 + 12/12; `claude agents` isolated.
+   Cron line `orca-env/mission_sweep.sh` (flock, supervises ONLY orca-env missions; crontab backup
+   `orca-env/crontab.before`). Roadmap: `fed-wt/.planning/` (6 phases, GSD OK, freshness FRESH, git-excluded),
+   branch `orca-x/agent-federation-p8`. ARM: `ssh gex44 /home/kobii/orca-env/arm-p8.sh`. Worker commits stay
+   on GEX44 — fetch them from `gex44:orca-x`. Never touch a5-env, brand001 or the default ~/.claude hooks.
 2. Open decisions: should headless serve (now hosting conversations) run agent tasks? Should tool-less
    Claude turns leave plan mode (it writes `~/.claude/plans/*.md`)?
 3. P7 remainder: more gates (session id provider-scoped, failed turn never completed) as aperture/AST
