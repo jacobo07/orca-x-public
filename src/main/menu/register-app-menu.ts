@@ -90,8 +90,21 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     return formatKeybindingList(bindings, process.platform)
   }
 
-  const reloadFocusedWindow = (ignoreCache: boolean): void => {
-    const webContents = BrowserWindow.getFocusedWindow()?.webContents
+  const reloadInvokingWindow = (
+    ignoreCache: boolean,
+    invokingWindow: Electron.BaseWindow | undefined
+  ): void => {
+    // Why the invoking window: with two windows open, focus can belong to the other one. Focus is
+    // only the fallback for a click Electron did not attribute; a destroyed invoker reloads nothing.
+    let webContents: Electron.WebContents | undefined
+    if (invokingWindow && 'webContents' in invokingWindow) {
+      if (invokingWindow.isDestroyed()) {
+        return
+      }
+      webContents = (invokingWindow as BrowserWindow).webContents
+    } else {
+      webContents = BrowserWindow.getFocusedWindow()?.webContents
+    }
     if (!webContents) {
       return
     }
@@ -252,11 +265,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [
       {
         label: translateMain('menu.reload', 'Reload'),
-        click: () => reloadFocusedWindow(false)
+        click: (_menuItem, window) => reloadInvokingWindow(false, window)
       },
       {
         label: `${translateMain('menu.forceReload', 'Force Reload')}\t${shortcutLabel('app.forceReload')}`,
-        click: () => reloadFocusedWindow(true)
+        click: (_menuItem, window) => reloadInvokingWindow(true, window)
       },
       { role: 'toggleDevTools' },
       { type: 'separator' },

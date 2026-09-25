@@ -252,6 +252,66 @@ describe('registerAppMenu', () => {
     await vi.waitFor(() => expect(webContents.reload).toHaveBeenCalledTimes(1))
   })
 
+  describe.each([
+    { label: 'Reload', method: 'reload' as const },
+    { label: 'Force Reload', method: 'reloadIgnoringCache' as const }
+  ])('$label targets the window whose menu ran it', ({ label, method }) => {
+    function clickItem(invokingWindow: unknown): void {
+      const item = getSubmenu(getTemplate(), 'View').find(
+        (entry) => entry.label === label || entry.label?.startsWith(`${label}\t`)
+      )
+      item?.click?.({} as never, invokingWindow as never, {} as never)
+    }
+
+    it('reloads the invoking window, not the focused one', async () => {
+      const invoking = createFocusedWebContents(201)
+      const focused = createFocusedWebContents(202)
+      getFocusedWindowMock.mockReturnValue({ webContents: focused.webContents })
+      registerAppMenu(buildMenuOptions())
+
+      clickItem({ webContents: invoking.webContents, isDestroyed: () => false })
+
+      await vi.waitFor(() => expect(invoking.webContents[method]).toHaveBeenCalledTimes(1))
+      expect(focused.webContents.capturePage).not.toHaveBeenCalled()
+      expect(focused.webContents[method]).not.toHaveBeenCalled()
+    })
+
+    it('keeps its target when focus moves while the frame is being captured', async () => {
+      let releaseCapture: (() => void) | undefined
+      const invoking = createFocusedWebContents(203, {
+        capturePage: () =>
+          new Promise((resolve) => {
+            releaseCapture = () => resolve(createCapturedImage())
+          })
+      })
+      const later = createFocusedWebContents(204)
+      getFocusedWindowMock.mockReturnValue({ webContents: invoking.webContents })
+      registerAppMenu(buildMenuOptions())
+
+      clickItem({ webContents: invoking.webContents, isDestroyed: () => false })
+      await vi.waitFor(() => expect(releaseCapture).toBeDefined())
+      getFocusedWindowMock.mockReturnValue({ webContents: later.webContents })
+      releaseCapture?.()
+
+      await vi.waitFor(() => expect(invoking.webContents[method]).toHaveBeenCalledTimes(1))
+      expect(later.webContents[method]).not.toHaveBeenCalled()
+    })
+
+    it('does nothing when the invoking window is already destroyed', async () => {
+      const invoking = createFocusedWebContents(205)
+      const focused = createFocusedWebContents(206)
+      getFocusedWindowMock.mockReturnValue({ webContents: focused.webContents })
+      registerAppMenu(buildMenuOptions())
+
+      clickItem({ webContents: invoking.webContents, isDestroyed: () => true })
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(invoking.webContents.capturePage).not.toHaveBeenCalled()
+      expect(focused.webContents.capturePage).not.toHaveBeenCalled()
+    })
+  })
+
   it('routes Check for Updates modifier clicks to prerelease and perf checks', () => {
     const options = buildMenuOptions()
     registerAppMenu(options)
