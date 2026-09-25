@@ -31,7 +31,7 @@ export function composeProviderRouting(params: {
 }): ProviderRouting {
   const quota = params.quota ?? new ProviderQuotaObservations()
   // Registry order is the default preference; routing explains every provider it passes over.
-  // Codex can serve Orca's tools (dynamic tools, measured); Claude cannot yet (no MCP bridge).
+  // Both serve Orca's tools, each measured live: Codex as dynamic tools, Claude over a per-turn MCP server.
   const providers: ConversationProviderEntry[] = [
     {
       provider: 'codex',
@@ -45,7 +45,7 @@ export function composeProviderRouting(params: {
         observeQuota: (observation) => quota.record('claude', observation, Date.now())
       }),
       checkAuth: params.checks?.claude ?? (() => checkClaudeAuth()),
-      tools: 'unsupported'
+      tools: 'supported'
     }
   ]
   const routedDeps = { ...params.base, providers, quota }
