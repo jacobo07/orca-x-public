@@ -3227,6 +3227,12 @@ const api = {
     }
   } satisfies PreloadApi['conversations'],
 
+  agentFederation: {
+    view: (args) => ipcRenderer.invoke('federation:agentView', args),
+    decide: (args) => ipcRenderer.invoke('federation:decideGate', args),
+    rebind: (args) => ipcRenderer.invoke('federation:rebindGate', args)
+  } satisfies PreloadApi['agentFederation'],
+
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
     create: (args) => ipcRenderer.invoke('agents:create', args)

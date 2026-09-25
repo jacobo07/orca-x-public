@@ -172,6 +172,16 @@ export class ReviewStore {
     return this.get(id)
   }
 
+  /** Reviews this agent ran or whose subject it built, newest first. */
+  listForAgent(agentId: string, limit: number): ReviewRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM reviews WHERE reviewer_agent_id = ? OR producer_agent_id = ?
+           ORDER BY created_at DESC, rowid DESC LIMIT ?`
+      )
+      .all(agentId, agentId, limit) as ReviewRow[]
+  }
+
   listForSubject(projectId: string, revision: string): ReviewRow[] {
     return this.db
       .prepare('SELECT * FROM reviews WHERE subject_project_id = ? AND subject_revision = ? ORDER BY created_at')

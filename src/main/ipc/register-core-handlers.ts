@@ -68,6 +68,7 @@ import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerConversationHandlers } from './conversations'
+import { registerAgentFederationHandlers } from './agent-federation'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
 import { registerGrokAccountHandlers } from './grok-accounts'
@@ -165,6 +166,7 @@ export function registerCoreHandlers(
     { readAgents: () => store.getAgents() },
     { readProjectHostSetups: () => store.getProjectHostSetups() }
   )
+  registerAgentFederationHandlers(() => runtime.getOrchestrationDb())
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
