@@ -11,6 +11,7 @@ import {
 } from './agent-task-contract'
 import { getRegisteredAgentTaskRunner } from './agent-task-runner-registry'
 import { createDelegateTool } from './agent-delegate-tool'
+import { settleReviewForTask } from './review-settlement'
 
 /** Turns one agent may take on one task: the first, plus follow-ups after its children settle.
  *  Bounds an agent that keeps re-delegating instead of finishing. */
@@ -84,16 +85,9 @@ export function settleInterruptedAgentTasks(db: OrchestrationDb, onLog: (msg: st
     if (task.assignee_agent_id === null || processInFlight.has(task.id) || isAwaitingChildren(task)) {
       continue
     }
-    db.updateTaskStatus(
-      task.id,
-      'failed',
-      serializeAgentTaskResult({
-        outcome: 'failed',
-        reason: 'interrupted',
-        conversationId: null,
-        turnId: null
-      })
-    )
+    const interrupted: AgentTaskOutcome = { outcome: 'failed', reason: 'interrupted', conversationId: null, turnId: null }
+    settleReviewForTask(db, task.id, interrupted)
+    db.updateTaskStatus(task.id, 'failed', serializeAgentTaskResult(interrupted))
     onLog(`Task ${task.id} was mid-turn for agent ${task.assignee_agent_id} when Orca stopped; settled as interrupted.`)
   }
 }
@@ -111,6 +105,7 @@ function settleAfterTurn(
   round: number,
   onLog: (msg: string) => void
 ): void {
+  settleReviewForTask(db, task.id, outcome)
   if (outcome.outcome !== 'completed') {
     db.updateTaskStatus(task.id, 'failed', serializeAgentTaskResult(outcome, { round }))
     onLog(`Agent ${task.assignee_agent_id} settled task ${task.id}: ${outcome.outcome}`)
@@ -145,19 +140,14 @@ function startTurn(params: {
     .then((outcome) => settleAfterTurn(db, task, outcome, round, onLog))
     .catch((error: unknown) => {
       // Why: a runner that threw still owes the task a settlement, or it stays dispatched forever.
-      db.updateTaskStatus(
-        task.id,
-        'failed',
-        serializeAgentTaskResult(
-          {
-            outcome: 'failed',
-            reason: error instanceof Error ? error.message : String(error),
-            conversationId: null,
-            turnId: null
-          },
-          { round }
-        )
-      )
+      const failed: AgentTaskOutcome = {
+        outcome: 'failed',
+        reason: error instanceof Error ? error.message : String(error),
+        conversationId: null,
+        turnId: null
+      }
+      settleReviewForTask(db, task.id, failed)
+      db.updateTaskStatus(task.id, 'failed', serializeAgentTaskResult(failed, { round }))
     })
     .finally(() => {
       state.inFlight.delete(task.id)
@@ -258,6 +248,7 @@ export function dispatchAgentTasks(params: {
     }
     db.updateTaskStatus(task.id, 'dispatched')
     used += 1
+    const review = db.reviews().getByTask(task.id)
     startTurn({
       db,
       task,
@@ -270,7 +261,11 @@ export function dispatchAgentTasks(params: {
         agentId,
         spec: task.spec,
         subject: subject.kind === 'subject' ? subject.subject : null,
-        tools: [createDelegateTool(db, task)]
+        // Why no tools for a review: a reviewer that delegates would be reviewed by someone else.
+        tools: review ? [] : [createDelegateTool(db, task)],
+        ...(review?.policy === 'independent' && review.producer_provider
+          ? { excludeProviders: [review.producer_provider] }
+          : {})
       }
     })
   }

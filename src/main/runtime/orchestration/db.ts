@@ -44,7 +44,12 @@ import {
   judgeDelegation,
   type DelegationAncestor
 } from './delegation-bounds'
-import { REVIEWS_TABLE_SQL, ReviewStore } from './review-records'
+import {
+  REVIEWS_TABLE_SQL,
+  ReviewStore,
+  type ReviewCreateInput,
+  type ReviewRow
+} from './review-records'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -704,6 +709,24 @@ export class OrchestrationDb {
   /** Reviews bound to an exact revision; the logic lives in review-records.ts. */
   reviews(): ReviewStore {
     return new ReviewStore(this.db, () => generateId('review'))
+  }
+
+  /** A review's task and its review row land together: a task without its row would be dispatched
+   *  as ordinary work, with no provider excluded and nothing to settle. */
+  createReviewTask(
+    task: Parameters<OrchestrationDb['createTask']>[0],
+    review: Omit<ReviewCreateInput, 'runId' | 'reviewTaskId'>
+  ): { task: TaskRow; review: ReviewRow } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const created = this.createTask(task)
+      const row = this.reviews().create({ ...review, runId: created.run_id, reviewTaskId: created.id })
+      this.db.exec('COMMIT')
+      return { task: created, review: row }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
