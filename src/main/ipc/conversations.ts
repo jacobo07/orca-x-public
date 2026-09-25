@@ -226,7 +226,7 @@ export function registerConversationHandlers(
         ...turnDeps,
         service,
         readAgents: () => agentRoster.readAgents(),
-        runTurn: async (turn) => (await routing.runTurn(turn, { prefersTools: true })).turn
+        runRoutedTurn: (turn, requirement) => routing.runTurn(turn, { prefersTools: true, ...requirement })
       },
       request
     )

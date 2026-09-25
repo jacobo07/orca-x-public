@@ -1,6 +1,7 @@
 // Runs a delegated orchestration task as a turn of the assigned agent, through the same runner a
 // person's message uses. One path: no second chat stack, no second location rule, no second auth.
 import type { Agent } from '../../shared/agent-types'
+import type { ProviderType } from '../../shared/agent-status-types'
 import type { ConversationRecord } from '../../shared/conversation-types'
 import type {
   AgentTaskOutcome,
@@ -16,8 +17,11 @@ import {
 export type AgentTaskExecutionDeps = ConversationTurnDeps & {
   readAgents: () => readonly Agent[]
   /** The desktop hands in a ROUTED turn here, so a delegated task picks its provider the same way
-   *  a person's message does. Absent, the deps' own driver runs it. */
-  runTurn?: (request: ConversationTurnRequest) => Promise<ConversationTurnOutcome>
+   *  a person's message does, and reports which one ran it. Absent, the deps' own driver runs it. */
+  runRoutedTurn?: (
+    request: ConversationTurnRequest,
+    requirement: { exclude?: readonly ProviderType[] }
+  ) => Promise<{ turn: ConversationTurnOutcome; provider: ProviderType | null }>
 }
 
 /** The task text the agent receives. The subject is stated, never inferred by the agent. */
@@ -89,6 +93,16 @@ export async function runAgentTask(
     }
   }
 
+  const exclude = (request.excludeProviders ?? []) as readonly ProviderType[]
+  if (!deps.runRoutedTurn && exclude.includes(deps.driver.provider)) {
+    // Why: an unrouted host has one driver; running an excluded provider would void the exclusion.
+    return {
+      outcome: 'refused',
+      reason: 'no-provider',
+      detail: `${deps.driver.provider} is excluded for this task and no other provider is available.`
+    }
+  }
+
   const conversation = await openTaskConversation(deps, request, agent)
   if ('refused' in conversation) {
     return conversation.refused
@@ -101,25 +115,33 @@ export async function runAgentTask(
     cwd: null,
     ...(request.tools ? { tools: request.tools } : {})
   }
-  const turn = deps.runTurn ? await deps.runTurn(turnRequest) : await runConversationTurn(deps, turnRequest)
+  let turn: ConversationTurnOutcome
+  let provider: ProviderType | null
+  if (deps.runRoutedTurn) {
+    ;({ turn, provider } = await deps.runRoutedTurn(turnRequest, { exclude }))
+  } else {
+    turn = await runConversationTurn(deps, turnRequest)
+    provider = deps.driver.provider
+  }
   switch (turn.outcome) {
     case 'completed': {
       // The runner awaits its durable writes before answering `completed`, so the reply is on disk.
       const loaded = await deps.service.read(conversationId)
       if (loaded.outcome !== 'loaded') {
-        return { outcome: 'failed', reason: 'reply-unreadable', conversationId, turnId: turn.turnId }
+        return { outcome: 'failed', reason: 'reply-unreadable', conversationId, turnId: turn.turnId, provider }
       }
       return {
         outcome: 'completed',
         conversationId,
         turnId: turn.turnId,
-        text: replyText(loaded.record, turn.turnId)
+        text: replyText(loaded.record, turn.turnId),
+        provider
       }
     }
     case 'failed':
-      return { outcome: 'failed', reason: turn.reason, conversationId, turnId: turn.turnId }
+      return { outcome: 'failed', reason: turn.reason, conversationId, turnId: turn.turnId, provider }
     case 'not-durable':
-      return { outcome: 'failed', reason: `not-durable: ${turn.reason}`, conversationId, turnId: null }
+      return { outcome: 'failed', reason: `not-durable: ${turn.reason}`, conversationId, turnId: null, provider }
     case 'auth-required':
       return { outcome: 'refused', reason: 'auth-required', detail: turn.detail }
     case 'no-provider':

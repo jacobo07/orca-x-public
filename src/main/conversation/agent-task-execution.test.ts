@@ -102,6 +102,43 @@ describe('runAgentTask', () => {
     expect(await service.list()).toEqual([])
   })
 
+  it('records the provider whose driver ran the turn', async () => {
+    const outcome = await runAgentTask(deps(), { taskId: 'task_p', agentId: 'agent_free', spec: 'x', subject: null })
+
+    expect(outcome).toMatchObject({ outcome: 'completed', provider: 'codex' })
+  })
+
+  it('refuses an excluded provider on a host with one driver, before any conversation exists', async () => {
+    const outcome = await runAgentTask(deps(), {
+      taskId: 'task_x',
+      agentId: 'agent_free',
+      spec: 'review',
+      subject: null,
+      excludeProviders: ['codex']
+    })
+
+    expect(outcome).toMatchObject({ outcome: 'refused', reason: 'no-provider' })
+    expect(driverCalls).toEqual([])
+    expect(await service.list()).toEqual([])
+  })
+
+  it('hands the exclusion to routing and reports the provider routing chose', async () => {
+    const seen: unknown[] = []
+    const outcome = await runAgentTask(
+      deps({
+        runRoutedTurn: async (turn, requirement) => {
+          seen.push(requirement)
+          const { runConversationTurn } = await import('./conversation-turn-runner')
+          return { turn: await runConversationTurn(deps(), turn), provider: 'claude' }
+        }
+      }),
+      { taskId: 'task_r', agentId: 'agent_free', spec: 'review', subject: null, excludeProviders: ['codex'] }
+    )
+
+    expect(seen).toEqual([{ exclude: ['codex'] }])
+    expect(outcome).toMatchObject({ outcome: 'completed', provider: 'claude' })
+  })
+
   it('refuses an agent that is not in the roster', async () => {
     const outcome = await runAgentTask(deps(), {
       taskId: 'task_4',

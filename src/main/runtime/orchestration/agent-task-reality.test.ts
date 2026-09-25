@@ -49,7 +49,7 @@ describe.skipIf(!ENABLED)('a delegated agent task against a real provider', () =
           driver: routing.providers[0].driver,
           checkAuth: routing.providers[0].checkAuth,
           readAgents: () => agents,
-          runTurn: async (turn) => (await routing.runTurn(turn, { prefersTools: true })).turn
+          runRoutedTurn: (turn, requirement) => routing.runTurn(turn, { prefersTools: true, ...requirement })
         },
         request
       )
