@@ -115,15 +115,26 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
 - Schema order now: main v28, AEOS v29 (merged), federation v30-v33. If AEOS lands a v30 first, renumber
   v30-v33 here in ONE dedicated commit before merging.
 
+- **P5 SEALED at the authority** `3f3bcf7ae`(v33)..`761c18faa`. `subject-bound-gates.ts`: decide authorizes
+  what the person was SHOWN (`observed`); approval re-reads git + review requirement (none/any/independent);
+  rejection FAILS the task; `authorizeGatedEffect` immediately before the agent turn and the terminal prompt
+  (`approval-refused`); stale approval kept, gate pending, task blocked; `rebindSubjectGate`; db.resolveGate
+  refuses subject-bound gates (`gate_requires_person`). GEX44 @205048aa5: 9/9 mutations CAUGHT. NOT YET: the
+  desktop IPC + UI a person decides through (P6) — so no human surface exists yet; decision is main-API only.
+- **Claude MCP bridge SEALED** `979a66dfc`..`4ce82fc19`. `turn-tool-mcp-server.ts` (loopback, secret path +
+  bearer, Origin/Host refused, declared tools only, dies with the turn). Driver: `--strict-mcp-config` ALWAYS;
+  tool turns run `default` + `--tools Read,Grep,Glob` + `--allowedTools mcp__orca__*` because PLAN MODE REFUSES
+  the served tool (measured). Routing: claude `tools: 'supported'`. LIVE: Claude called orca_delegate with exact
+  args; a Claude lead delegated to agent_scribe, child ran on claude, lead's round 2 got "cobalt-muh96znh".
+  DEBT: plan-mode Claude turns write `~/.claude/plans/<slug>.md` in the user's home (2 files from probes).
+- Live Claude spend this session: ~9 turns (P4b 3, bridge 3, delegation 3).
+
 ## 4. Next 3 actions
-1. P5 (in progress, uncommitted: db.ts v33 gate columns, types.ts, skew, `subject-bound-gates.ts`):
-   db methods createGate(+subject/reviewRequirement), decideSubjectGate, staleSubjectGate, rebind;
-   effect checks `authorizeGatedEffect` in startTurn (agent) and before createDispatchContext
-   (terminal, new `approval-refused`); RPC gateResolve REFUSES subject-bound gates (a terminal agent
-   can call RPC, so RPC cannot prove a person) — they are decided through desktop IPC (P6 UI).
-   Rejection must not unblock (today resolveGate sets `ready` for ANY text).
-2. Claude MCP bridge so `orca_delegate` works when Claude is the provider.
-3. P6 surface: first merge `orca-x/cogws-product-surface@33b8d089a` (that pane waits on us).
+1. P6 surface: merge `orca-x/cogws-product-surface@33b8d089a` (conflicts: pr.yml, package.json,
+   src/main/ipc/conversations.ts), then desktop IPC for gate decide/rebind + review/approval rows in
+   Workspace, each with a producer in `workspace-surface-claims.jsonc`; Electron e2e (on GEX44, xvfb).
+2. P7: architecture gates + UKDL + vault entries (list in section 3 of the session report).
+3. Plan-mode side effect: decide whether tool-less Claude turns also move to the Read/Grep/Glob posture.
 Then P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada 20 GB).
 Local host is starved (~0.9-4 GB free): run tests on GEX44 (`/home/kobii/fed-wt`, push
 `HEAD:refs/federation/head`, assert REV); local only for the opt-in live Claude tests.
