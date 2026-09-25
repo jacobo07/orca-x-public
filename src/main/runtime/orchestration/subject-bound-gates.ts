@@ -157,6 +157,10 @@ export async function rebindSubjectGate(
   return { outcome: 'decided', gate: rebound! }
 }
 
+export function hasSubjectBoundGate(db: OrchestrationDb, taskId: string): boolean {
+  return db.listGates({ taskId }).some((gate) => parseGateSubject(gate.subject) !== null)
+}
+
 export type GatedEffectAuthority =
   | { authorized: true }
   | { authorized: false; reason: SubjectRefusal | 'rejected' | 'awaiting-approval'; gateId: string }

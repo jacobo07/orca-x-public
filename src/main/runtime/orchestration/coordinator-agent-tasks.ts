@@ -12,7 +12,7 @@ import {
 import { getRegisteredAgentTaskRunner } from './agent-task-runner-registry'
 import { createDelegateTool } from './agent-delegate-tool'
 import { settleReviewForTask } from './review-settlement'
-import { authorizeGatedEffect } from './subject-bound-gates'
+import { authorizeGatedEffect, hasSubjectBoundGate } from './subject-bound-gates'
 import { captureRevisionSubject } from './review-subject-capture'
 
 /** Turns one agent may take on one task: the first, plus follow-ups after its children settle.
@@ -139,17 +139,23 @@ function startTurn(params: {
   const { db, task, round, state, onLog } = params
   // Why the check sits inside the turn's promise: it is the last thing before the effect, after the
   // only await that reads git — an approval is judged against the subject as it is when the turn starts.
-  const settle = authorizeGatedEffect(db, task.id, captureRevisionSubject)
-    .then(async (authority) => {
-      if (!authority.authorized) {
-        if (authority.reason === 'awaiting-approval') {
-          db.updateTaskStatus(task.id, 'blocked')
-        }
-        onLog(`Task ${task.id} not run: gate ${authority.gateId} ${authority.reason}`)
-        return
-      }
-      settleAfterTurn(db, task, await params.runner(params.request), round, onLog)
-    })
+  // A task with no subject-bound gate starts its turn synchronously, exactly as before.
+  const run = async (): Promise<void> => {
+    settleAfterTurn(db, task, await params.runner(params.request), round, onLog)
+  }
+  const settle = (
+    hasSubjectBoundGate(db, task.id)
+      ? authorizeGatedEffect(db, task.id, captureRevisionSubject).then((authority) => {
+          if (authority.authorized) {
+            return run()
+          }
+          if (authority.reason === 'awaiting-approval') {
+            db.updateTaskStatus(task.id, 'blocked')
+          }
+          onLog(`Task ${task.id} not run: gate ${authority.gateId} ${authority.reason}`)
+        })
+      : run()
+  )
     .catch((error: unknown) => {
       // Why: a runner that threw still owes the task a settlement, or it stays dispatched forever.
       const failed: AgentTaskOutcome = {
