@@ -346,6 +346,7 @@ import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import {
+  answerReloadPreparationRequests,
   prepareAndInvokeAppRestart,
   prepareAndInvokeUpdaterInstall,
   registerRendererRestartIpcRelays
@@ -372,6 +373,7 @@ const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
 )
 
 registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
+answerReloadPreparationRequests(ipcRenderer, window, awaitBeforeUnloadCheckpoint)
 
 function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
   if (process.platform !== 'linux') {

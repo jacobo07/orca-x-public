@@ -6,7 +6,9 @@ import {
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
+import { isReloadPreparationAnswer } from '../../shared/reload-preparation-wire'
 import { takeReloadFreezeFrame } from './reload-freeze-frame'
+import { settleReloadPreparation } from './reload-preparation'
 import { reloadWithFreezeFrame } from './reload-with-freeze-frame'
 
 /**
@@ -60,6 +62,13 @@ function registerOnce(): void {
       ...(binding.onBeforeRendererReload ? { onBeforeReload: binding.onBeforeRendererReload } : {})
     })
   })
+
+  // Keyed by the answering document's own id, so one window can never release another's reload.
+  ipcMain.handle('app:reloadPreparationSettled', (event, answer: unknown) =>
+    isReloadPreparationAnswer(answer)
+      ? settleReloadPreparation(event.sender.id, answer)
+      : { proceed: false }
+  )
 
   ipcMain.handle('app:takeReloadFreezeFrame', (event) =>
     // Keyed by the asking document's own webContents id, so one window can never take another's.
