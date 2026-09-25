@@ -1,5 +1,11 @@
 export type ProcessGoneSource = 'renderer' | 'child'
-export type ExpectedTeardownScope = 'none' | 'renderer-reload' | 'app-shutdown'
+/** `renderer-replacement`: Orca terminated this window's renderer itself to reload it in a new
+ *  process, so its exit is ours whatever reason Chromium reports (`crashed` on Electron 43). */
+export type ExpectedTeardownScope =
+  | 'none'
+  | 'renderer-reload'
+  | 'renderer-replacement'
+  | 'app-shutdown'
 
 const WINDOWS_CONTROL_TERMINATION_EXIT_CODES = new Set([0xc000013a, 0x40010004])
 const RECOVERABLE_CHILD_PROCESS_TYPES = new Set(['gpu'])
@@ -68,6 +74,9 @@ export function shouldRecordProcessGoneCrash({
   if (isRecoverableChromiumChildProcess({ source, processType, serviceName, reason })) {
     return false
   }
+  if (source === 'renderer' && expectedTeardown === 'renderer-replacement') {
+    return false
+  }
   // Why: Electron reports intentional reload/update/quit teardown as `killed`.
   // Real renderer OOMs and Chromium crashes should still reach crash reporting.
   if (reason !== 'killed') {
@@ -92,7 +101,9 @@ export function shouldRecoverRendererAfterProcessGone({
   reason: string
   expectedTeardown: ExpectedTeardownScope
 }): boolean {
-  if (expectedTeardown === 'app-shutdown') {
+  // Why a replacement stands recovery down: the replacement owns this window's reload, and a second
+  // one would race it and spend a circuit-breaker attempt on a crash that never happened.
+  if (expectedTeardown === 'app-shutdown' || expectedTeardown === 'renderer-replacement') {
     return false
   }
   // Why: an integrity failure means Chromium cannot trust the renderer, so a

@@ -190,4 +190,16 @@ describe('expected teardown state', () => {
       })
     ).toBe('renderer-reload')
   })
+
+  it('names a deliberate renderer replacement, and still lets app shutdown win', () => {
+    const replacing = {
+      isQuitting: false,
+      isQuittingForUpdate: false,
+      isExpectedRendererReload: true,
+      isRendererReplacement: true,
+      includeSystemSessionEnd: false
+    }
+    expect(resolveExpectedTeardownScope(replacing)).toBe('renderer-replacement')
+    expect(resolveExpectedTeardownScope({ ...replacing, isQuitting: true })).toBe('app-shutdown')
+  })
 })
