@@ -50,6 +50,7 @@
     "check:visual-assets": "node config/scripts/check-visual-assets.mjs",
     "check:status-semantics": "node config/scripts/check-status-semantics.mjs",
     "check:ci-gate-coverage": "node config/scripts/check-ci-gate-coverage.mjs",
+    "check:dws-completeness": "node config/scripts/check-dws-completeness.mjs",
     "report:ci-execution-rungs": "node config/scripts/report-ci-execution-rungs.mjs",
     "discover:generated-images": "node config/scripts/codex-generated-image-discovery.mjs",
     "capture:visual-producer": "node config/scripts/capture-visual-producer.mjs",

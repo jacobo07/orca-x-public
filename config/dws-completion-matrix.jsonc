@@ -1,0 +1,973 @@
+// dws program completion matrix — the source of truth for `pnpm check:dws-completeness`.
+//
+// This file, not .planning/workstreams/dws/MATRIX.md, is what the done-gate reads: .planning/ is
+// git-excluded, so a gate reading it would be unrunnable on any other checkout. MATRIX.md is a
+// human view that points here.
+//
+// Only `state: "PASS"` closes a row, and only when it cites at least one `evidence` entry that
+// resolves (an existing file path, or a package.json gate script name) — a PASS citing nothing, or
+// citing something that does not resolve, is a checker failure, not a pass. Run the gate:
+//   node config/scripts/check-dws-completeness.mjs   (or: pnpm check:dws-completeness)
+
+{
+  "schema": "dws-completion-matrix/1",
+  "rows": [
+    {
+      "id": 1,
+      "row": "Global Workspace",
+      "owner": "Orca Workspace nav",
+      "done": "Workstreams visible from two authorized clients",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — Workstreams visible from two authorized clients not yet evidenced"
+    },
+    {
+      "id": 2,
+      "row": "Account-scoped discovery",
+      "owner": "paired hosts + UWCP home (derived)",
+      "done": "new paired device lists Workstreams, sees no contents",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — new paired device lists Workstreams, sees no contents not yet evidenced"
+    },
+    {
+      "id": 3,
+      "row": "Device enrollment",
+      "owner": "E2EE pairing + device tokens",
+      "done": "existing pairing/revocation tests (cite)",
+      "state": "PASS",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": []
+    },
+    {
+      "id": 4,
+      "row": "Workstream-scoped authorization",
+      "owner": "UWCP authority record",
+      "done": "device without scope refused an Operator Event",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4,
+        12
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)",
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Orca side"
+    },
+    {
+      "id": 5,
+      "row": "Workstream identity",
+      "owner": "UWCP goal log",
+      "done": "Orca shows the same id from two clients",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "UWCP S1"
+    },
+    {
+      "id": 6,
+      "row": "Mission integration",
+      "owner": "orchestration tasks",
+      "done": "task carries Workstream subject",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — task carries Workstream subject not yet evidenced"
+    },
+    {
+      "id": 7,
+      "row": "Execution identity",
+      "owner": "UWCP epoch / orchestration run",
+      "done": "new execution id, same Workstream, lineage visible",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — new execution id, same Workstream, lineage visible not yet evidenced"
+    },
+    {
+      "id": 8,
+      "row": "Session virtualization",
+      "owner": "UWCP brief+capsule, cogws resume",
+      "done": "kill execution, successor continues from frontier",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — kill execution, successor continues from frontier not yet evidenced"
+    },
+    {
+      "id": 9,
+      "row": "Control-surface attach",
+      "owner": "runtime pairing + driver state",
+      "done": "laptop attaches to GEX44 runtime",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — laptop attaches to GEX44 runtime not yet evidenced"
+    },
+    {
+      "id": 10,
+      "row": "Detach without cancellation",
+      "owner": "runtime lifecycle",
+      "done": "client quit, remote work continues",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        2,
+        3
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)",
+        "Phase 2"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — client quit, remote work continues not yet evidenced"
+    },
+    {
+      "id": 11,
+      "row": "Client switch",
+      "owner": "runtime + pairing",
+      "done": "Device B reattaches, no restatement",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — Device B reattaches, no restatement not yet evidenced"
+    },
+    {
+      "id": 12,
+      "row": "Mobile projection",
+      "owner": "mobile runtime client",
+      "done": "mobile reads state + sends one Operator Event",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — mobile reads state + sends one Operator Event not yet evidenced"
+    },
+    {
+      "id": 13,
+      "row": "UWCP continuity",
+      "owner": "UWCP",
+      "done": "cited UWCP gate",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "other pane"
+    },
+    {
+      "id": 14,
+      "row": "Active frontier",
+      "owner": "UWCP brief",
+      "done": "visible in Orca",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — visible in Orca not yet evidenced"
+    },
+    {
+      "id": 15,
+      "row": "Evidence preservation",
+      "owner": "UWCP log",
+      "done": "visible in Orca, survives client switch",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — visible in Orca, survives client switch not yet evidenced"
+    },
+    {
+      "id": 16,
+      "row": "Workspace Capsule",
+      "owner": "UWCP workspace.py",
+      "done": "UWCP S2 gate",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [],
+      "dependsOn": [
+        "UWCP S2 gate (other pane)"
+      ],
+      "evidence": [],
+      "reason": "untested"
+    },
+    {
+      "id": 17,
+      "row": "GEX44 Node Manifest",
+      "owner": "fleet obs + UWCP node adapter",
+      "done": "real measurement, freshness-bound",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        5
+      ],
+      "dependsOn": [
+        "Phase 2"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — real measurement, freshness-bound not yet evidenced"
+    },
+    {
+      "id": 18,
+      "row": "Fleet Resource Graph",
+      "owner": "src/main/fleet",
+      "done": "`orca fleet placement` against real runtime",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        2,
+        5
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)",
+        "Phase 2"
+      ],
+      "evidence": [],
+      "reason": "never run live"
+    },
+    {
+      "id": 19,
+      "row": "Placement Engine integration",
+      "owner": "fleet proposal + UWCP placement.py",
+      "done": "one rule set, apply path",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — one rule set, apply path not yet evidenced"
+    },
+    {
+      "id": 20,
+      "row": "Resource Governor",
+      "owner": "UWCP lease store",
+      "done": "contention golden",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — contention golden not yet evidenced"
+    },
+    {
+      "id": 21,
+      "row": "Resource leases",
+      "owner": "UWCP lease store",
+      "done": "forged/stale lease refused",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — forged/stale lease refused not yet evidenced"
+    },
+    {
+      "id": 22,
+      "row": "RAM-aware scheduling",
+      "owner": "placement",
+      "done": "low-RAM host not selected for heavy work",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — low-RAM host not selected for heavy work not yet evidenced"
+    },
+    {
+      "id": 23,
+      "row": "GPU-aware scheduling",
+      "owner": "placement",
+      "done": "VRAM requirement honoured",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — VRAM requirement honoured not yet evidenced"
+    },
+    {
+      "id": 24,
+      "row": "Workspace locality",
+      "owner": "placement input",
+      "done": "hydrated node preferred, measured",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — hydrated node preferred, measured not yet evidenced"
+    },
+    {
+      "id": 25,
+      "row": "Model availability",
+      "owner": "provider/routing",
+      "done": "availability states fail closed",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — availability states fail closed not yet evidenced"
+    },
+    {
+      "id": 26,
+      "row": "Model residency",
+      "owner": "Resource Elasticity",
+      "done": "AVAILABLE != RESIDENT drill",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — AVAILABLE != RESIDENT drill not yet evidenced"
+    },
+    {
+      "id": 27,
+      "row": "Local inference",
+      "owner": "GEX44 runtime",
+      "done": "re-measured + bake-off",
+      "state": "UNKNOWN",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "conflicting records"
+    },
+    {
+      "id": 28,
+      "row": "Cognitive Routing",
+      "owner": "federation routing",
+      "done": "cite P3 gates",
+      "state": "PASS",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": []
+    },
+    {
+      "id": 29,
+      "row": "Provider availability",
+      "owner": "claude-auth-readiness etc.",
+      "done": "cite",
+      "state": "PASS",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": []
+    },
+    {
+      "id": 30,
+      "row": "Provider quota",
+      "owner": "provider-quota-observations",
+      "done": "quota read on the routing path",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — quota read on the routing path not yet evidenced"
+    },
+    {
+      "id": 31,
+      "row": "Agent identity portability",
+      "owner": "cogws roster",
+      "done": "cite P3 live evidence",
+      "state": "PASS",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": []
+    },
+    {
+      "id": 32,
+      "row": "Model switching",
+      "owner": "routed-conversation-turn",
+      "done": "same agent, provider X then Y, coherent",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — same agent, provider X then Y, coherent not yet evidenced"
+    },
+    {
+      "id": 33,
+      "row": "Host switching",
+      "owner": "UWCP epochs / remote agent",
+      "done": "same Workstream, different host",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — same Workstream, different host not yet evidenced"
+    },
+    {
+      "id": 34,
+      "row": "Automatic distribution",
+      "owner": "orchestration + routing + placement",
+      "done": "golden",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — golden not yet evidenced"
+    },
+    {
+      "id": 35,
+      "row": "Mission decomposition",
+      "owner": "orchestration DAG",
+      "done": "independent tasks placed differently",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — independent tasks placed differently not yet evidenced"
+    },
+    {
+      "id": 36,
+      "row": "Independent review",
+      "owner": "federation reviews",
+      "done": "P4b flow live",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        7
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "P4a"
+    },
+    {
+      "id": 37,
+      "row": "Verification policy",
+      "owner": "federation + UWCP judge",
+      "done": "policy-routed reviewer",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        7
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — policy-routed reviewer not yet evidenced"
+    },
+    {
+      "id": 38,
+      "row": "Operator Events",
+      "owner": "UWCP operator.*",
+      "done": "issued from Orca, consumed remotely",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — issued from Orca, consumed remotely not yet evidenced"
+    },
+    {
+      "id": 39,
+      "row": "Multi-client consistency",
+      "owner": "UWCP log ordering",
+      "done": "stale client write refused",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4,
+        12
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)",
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Orca"
+    },
+    {
+      "id": 40,
+      "row": "Observability",
+      "owner": "correlation ids",
+      "done": "end-to-end explain query",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — end-to-end explain query not yet evidenced"
+    },
+    {
+      "id": 41,
+      "row": "Execution correlation",
+      "owner": "ids across orchestration/UWCP",
+      "done": "one trace joins them",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — one trace joins them not yet evidenced"
+    },
+    {
+      "id": 42,
+      "row": "Routing explainability",
+      "owner": "routing reasons",
+      "done": "cite",
+      "state": "PASS",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": []
+    },
+    {
+      "id": 43,
+      "row": "Economics telemetry",
+      "owner": "outcome dataset",
+      "done": "recorded per execution",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        10
+      ],
+      "dependsOn": [
+        "Phase 7",
+        "Phase 9"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — recorded per execution not yet evidenced"
+    },
+    {
+      "id": 44,
+      "row": "Adaptive-prior dataset",
+      "owner": "UWCP routing_priors + reviews",
+      "done": "verified-only priors",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        10
+      ],
+      "dependsOn": [
+        "Phase 7",
+        "Phase 9"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — verified-only priors not yet evidenced"
+    },
+    {
+      "id": 45,
+      "row": "Local RAM reduction",
+      "owner": "measurement",
+      "done": "before/after MB + process tree",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — before/after MB + process tree not yet evidenced"
+    },
+    {
+      "id": 46,
+      "row": "GEX44 heavy execution",
+      "owner": "orca serve on GEX44",
+      "done": "remote process tree",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — remote process tree not yet evidenced"
+    },
+    {
+      "id": 47,
+      "row": "Failure recovery",
+      "owner": "runtime + UWCP",
+      "done": "node offline / client dies drills",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — node offline / client dies drills not yet evidenced"
+    },
+    {
+      "id": 48,
+      "row": "Protocol versioning",
+      "owner": "remote-wire doctrine",
+      "done": "mixed-version matrix for new verbs",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — mixed-version matrix for new verbs not yet evidenced"
+    },
+    {
+      "id": 49,
+      "row": "Security",
+      "owner": "threat model",
+      "done": "every class controlled or named debt",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 50,
+      "row": "Performance",
+      "owner": "measurement",
+      "done": "latency/hydration/reattach numbers",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        2,
+        12
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)",
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — latency/hydration/reattach numbers not yet evidenced"
+    },
+    {
+      "id": 51,
+      "row": "Product Reality",
+      "owner": "goldens",
+      "done": "each golden PASS",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — each golden PASS not yet evidenced"
+    },
+    {
+      "id": 52,
+      "row": "Knowledge Vault",
+      "owner": "vault",
+      "done": "records written",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 53,
+      "row": "UKDL",
+      "owner": "ukdl",
+      "done": "evidence-backed rules",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 54,
+      "row": "Constitutive Baseline Ratchet",
+      "owner": "CPP baseline compiler",
+      "done": "promoted standards",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 55,
+      "row": "Inheritance verification",
+      "owner": "gates/tests",
+      "done": "planted regression red",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — planted regression red not yet evidenced"
+    }
+  ],
+  "namedDebt": [
+    {
+      "id": "ND-1",
+      "decision": "D1",
+      "debt": "autonomous evidence lanes reach GEX44 by bundle+ssh until UWCP S5's dispatcher path exists",
+      "retireWhen": "the replacement dispatcher path has run once"
+    }
+  ]
+}
