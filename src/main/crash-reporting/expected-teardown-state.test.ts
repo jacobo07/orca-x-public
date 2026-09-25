@@ -2,7 +2,8 @@ import { performance } from 'node:perf_hooks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   shouldRecordProcessGoneCrash,
-  shouldRecoverRendererAfterProcessGone
+  shouldRecoverRendererAfterProcessGone,
+  type ExpectedTeardownScope
 } from './process-gone-classification'
 import {
   markSystemSessionEnding,
@@ -11,7 +12,7 @@ import {
   WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
 } from './expected-teardown-state'
 
-function shouldRecordKilledRenderer(expectedTeardown: 'none' | 'renderer-reload' | 'app-shutdown') {
+function shouldRecordKilledRenderer(expectedTeardown: ExpectedTeardownScope) {
   return shouldRecordProcessGoneCrash({
     source: 'renderer',
     processType: 'renderer',
