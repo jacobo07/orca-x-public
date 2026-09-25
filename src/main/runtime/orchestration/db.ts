@@ -1137,6 +1137,10 @@ export class OrchestrationDb {
       if (current < 31) {
         this.db.exec(REVIEWS_TABLE_SQL)
       }
+      if (current < 32) {
+        // Why: a v31 database that lost its reviews table would otherwise fail the ALTERs below.
+        this.db.exec(REVIEWS_TABLE_SQL)
+      }
       if (current < 32 && !this.hasColumn('reviews', 'policy')) {
         this.db.exec("ALTER TABLE reviews ADD COLUMN policy TEXT NOT NULL DEFAULT 'any'")
       }

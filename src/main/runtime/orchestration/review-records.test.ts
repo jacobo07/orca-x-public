@@ -153,6 +153,28 @@ describe('ReviewStore', () => {
     }).policy).toBe('any')
   })
 
+  it('upgrades a v31 database that lost its reviews table instead of failing the v32 ALTERs', () => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-reviews-v31-lost-'))
+    const path = join(dir, 'orchestration.db')
+    open(path)
+    opened.pop()?.close()
+    const raw = new Database(path)
+    raw.exec('DROP TABLE reviews')
+    raw.pragma('user_version = 31')
+    raw.close()
+
+    const upgraded = open(path).reviews()
+
+    expect(upgraded.create({
+      runId: 'legacy',
+      subject,
+      producer: { agentId: null, provider: null },
+      reviewer: { agentId: 'reviewer', provider: null },
+      reviewTaskId: null,
+      policy: 'independent'
+    }).policy).toBe('independent')
+  })
+
   it('settles once: a late second settlement cannot rewrite the first', () => {
     const store = open().reviews()
     const created = store.create({
