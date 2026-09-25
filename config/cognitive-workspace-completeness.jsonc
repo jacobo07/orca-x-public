@@ -1,0 +1,494 @@
+// Cognitive Workspace completion matrix: what "the program is done" means, row by row.
+//
+// Read by config/scripts/check-cognitive-workspace-completeness.mjs. `--integrity` (PR-safe) checks the
+// matrix is well-formed and every pointer resolves; the default mode is the program done-gate and is
+// red while any row is open. A row may be `complete` only on evidence that resolves — never on an
+// artifact merely existing. It COMPOSES config/reliability-gates.jsonc (a row may cite a gate id)
+// rather than duplicating it. Blocked is narrow: only an Owner authorization or runner capacity.
+// Residual trust: a complete row pointing at an unrelated passing gate is a review question.
+{
+  "schemaVersion": 1,
+  "program": "cognitive-workspace",
+  "phases": [
+    { "number": "1", "title": "Canonical completeness verifier and a truthful roadmap" },
+    { "number": "2", "title": "Remote location model and project-host selection" },
+    { "number": "3", "title": "A remote project's agent over ssh (W-C6)" },
+    { "number": "4", "title": "Provider-resume and thread relocation semantics" },
+    { "number": "5", "title": "Remote product-reality" },
+    { "number": "6", "title": "Restart and durability under remote location" },
+    { "number": "7", "title": "Observability, failure recovery and remote authority security" },
+    { "number": "8", "title": "Baseline ascension and inheritance enforcement" },
+    { "number": "9", "title": "Program closure and roaming impact" }
+  ],
+  "rows": [
+    {
+      "id": "A",
+      "dimension": "agent-identity",
+      "owner": "src/main/persistence/tracking-agents/agent-operations.ts",
+      "state": "complete",
+      "phase": "1",
+      "claim": "An AgentId has exactly one production minter, and agent identity is never reconstructed from UI focus.",
+      "evidence": [{ "kind": "gate", "script": "check:agent-identity-authority" }]
+    },
+    {
+      "id": "B",
+      "dimension": "project-ownership",
+      "owner": "config/durable-actor-catalogs.jsonc",
+      "state": "complete",
+      "phase": "1",
+      "claim": "LOCAL scope: an agent owns its project through one durable roster, and a conversation reaches the project only through its agent.",
+      "evidence": [{ "kind": "gate", "script": "check:durable-actor-catalogs" }]
+    },
+    {
+      "id": "C",
+      "dimension": "located-effect",
+      "owner": "src/main/conversation/agent-project-location.ts",
+      "state": "complete",
+      "phase": "3",
+      "claim": "An agent's turn acts on its own project, wherever that project lives, and never on a substitute.",
+      "evidence": [
+        { "kind": "gate", "script": "check:agent-turn-location-authority" },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-project-location.spec.ts",
+          "title": "an agent bound to a project reaches the provider, and refuses once that project is gone",
+          "rung": "real-electron",
+          "note": "local project only (W-C5)"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "runs in the located directory, reports it, and leaves no process behind",
+          "rung": "real-remote-host",
+          "note": "opt-in ORCA_REAL_CODEX_RUNG=1; the installed codex app-server on GEX44 through the real relay handler, /proc cwd == project (1d49bc083). Desktop side in-process"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "real Electron + real ssh + deployed relay + real Codex on GEX44 (1f077a949, signed-in leg): the provider's own rollout on the host records the setup's project directory as the thread cwd; product mutant 'remote auth check replaced by the local one' went red at this rung"
+        }
+      ],
+      "closes": "The turn runs ON the ssh project-host in the setup's worktree (Phase 3), once Phase 2 names a located remote subject."
+    },
+    {
+      "id": "D",
+      "dimension": "provider-instruction-layer",
+      "owner": "src/main/codex/codex-conversation-driver.ts",
+      "state": "complete",
+      "phase": "1",
+      "claim": "An agent's role reaches the provider only as developerInstructions, never replacing the provider's own base instructions.",
+      "evidence": [{ "kind": "gate", "script": "check:agent-instruction-layer" }]
+    },
+    {
+      "id": "E",
+      "dimension": "provider-execution-location",
+      "owner": "src/main/codex/codex-conversation-driver.ts",
+      "state": "complete",
+      "phase": "4",
+      "claim": "A resumed provider thread runs where the agent's project is now, not where it was born.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-thread-relocation-capability.test.ts",
+          "title": "is supported from the measured floor, and UNKNOWN below it"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-conversation-driver-relocation.test.ts",
+          "title": "starts a new thread in the new directory when the provider keeps the old one"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "resumes a thread from one directory into another only as the provider confirms it",
+          "rung": "real-remote-host",
+          "note": "opt-in ORCA_REAL_CODEX_RUNG=1: installed codex-cli 0.155.1 on GEX44 through the driver's own resume path kept the same thread in the new directory (e2a5ea51e); mutants resume-drops-the-new-directory (unit + this rung), unconfirmed-location-accepted, unknown-codex-asked-to-relocate caught. Owed, quota-blocked: a model turn's file read landing in the new directory (row I)"
+        }
+      ],
+      "closes": "Where a resumed thread runs is expressed as measured provider capability, and a stale thread reused after relocation is refused."
+    },
+    {
+      "id": "F",
+      "dimension": "conversation-durability",
+      "owner": "src/main/conversation/conversation-store.ts",
+      "state": "complete",
+      "phase": "6",
+      "claim": "A conversation keeps its identity, provider provenance and project relation across restarts.",
+      "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "keeps the conversation, its thread on the host and its project across a real restart",
+          "rung": "real-remote-host",
+          "note": "real Electron relaunched on the same profile, real ssh + real Codex on GEX44 (4cd15d5ea): id, agent, agent project and provenance head (thread, ssh host, directory) identical; the next turn continued the SAME provider thread (rollout ids unchanged). Product mutant 'resume dropped' went red at this rung"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "keeps a turn on its admitted location when its project id succeeds mid-turn"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "reports a host lost mid-turn as a failed turn, and never retries it locally"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-store-syscall-proof.test.ts",
+          "title": "fsyncs the conversation before publishing its name"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-store.test.ts",
+          "title": "reloads through a fresh store instance"
+        },
+        {
+          "kind": "doc",
+          "file": "config/durability-contracts.jsonc",
+          "contains": "conversation.orca-owned-record"
+        }
+      ],
+      "closes": "A real-app restart of a conversation bound to a remote project keeps identity, thread provenance and project relation."
+    },
+    {
+      "id": "G",
+      "dimension": "remote-execution",
+      "owner": "Phase 3 creates the streaming relay method that runs a provider turn on an ssh host",
+      "state": "complete",
+      "phase": "3",
+      "claim": "A provider turn for a remote project executes on that project's host, through an authority that already governs remote execution.",
+      "evidence": [
+        {
+          "kind": "reliability-gate",
+          "id": "agent-session.remote-host-authority",
+          "note": "the authority terminal agent sessions use; the conversation turn rides the same ssh relay session (getActiveMultiplexer) through a capability-probed agentProcess.* method, never a parallel connection"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "real Electron + real ssh + relay deployed over SFTP on GEX44 (1f077a949): the turn's auth check and provider thread ran on the host; unreachable host and missing project refuse by their own reasons; product mutants (local auth check; missing-project refusal removed) went red at this rung"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "completes a turn in the located directory, answers the approval, survives a burst, and reaps the child",
+          "rung": "integration",
+          "note": "real relay dispatcher + agentProcess handler + multiplexer + ssh adapter, scripted app-server"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "names an unreachable host and a too-old relay apart"
+        }
+      ],
+      "closes": "A provider turn runs on the ssh host through a capability-negotiated relay method, or refuses; no local fallback."
+    },
+    {
+      "id": "H",
+      "dimension": "multi-project-safety",
+      "owner": "Phase 7 audits cross-project contamination on the remote path",
+      "state": "complete",
+      "phase": "7",
+      "claim": "An agent bound to one project can never be handed another, locally or remotely.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "runs each agent in its own project on a shared host, and refuses one whose project is not set up there"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-project-isolation.test.ts",
+          "title": "gives two agents in two projects two directories, interleaved"
+        },
+        { "kind": "gate", "script": "check:agent-turn-location-authority" }
+      ],
+      "closes": "Cross-project contamination is refused and a wrong-project control refuses with its own reason."
+    },
+    {
+      "id": "I",
+      "dimension": "worktree-dirty-state",
+      "owner": "Phase 3 roots the remote provider in the setup's live worktree",
+      "state": "complete",
+      "phase": "3",
+      "claim": "What the provider sees is the project's live worktree, uncommitted files included.",
+      "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "runs in the located directory, reports it, and leaves no process behind",
+          "rung": "real-remote-host",
+          "note": "the kernel's /proc cwd of the installed codex == the setup directory itself (not a copy); drill mutant real-provider-spawned-outside-the-project (cwd -> /tmp) caught on GEX44"
+        },
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "over real ssh the provider's rollout records the setup's directory as its cwd. A model READING an uncommitted file there is owed to the quota reset and carried by row Q"
+        }
+      ],
+      "closes": "The remote cwd is the worktree the setup names, and a mutation substituting a local directory is caught."
+    },
+    {
+      "id": "J",
+      "dimension": "user-facing-states",
+      "owner": "src/main/conversation/agent-project-location.ts",
+      "state": "complete",
+      "phase": "7",
+      "claim": "Every way a turn cannot run has its own sentence, and none is presented as success.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/renderer/src/components/conversations/conversation-live-state.test.ts",
+          "title": "gives every outcome a DIFFERENT kind, so one cannot stand in for another"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-turn-runner.test.ts",
+          "title": "reports a turn the provider ended in failure as failed"
+        },
+        {
+          "kind": "doc",
+          "file": "docs/reference/remote-agent-turn-authority.md",
+          "contains": "Distinct represented outcomes",
+          "note": "the Phase 7 failure list mapped to its states; a usage-limited turn was reported completed until 32c8fe92e"
+        }
+      ],
+      "closes": "Every Phase 7 failure outcome has a distinct represented state and sentence."
+    },
+    {
+      "id": "K",
+      "dimension": "cli-ipc-frontend-coherence",
+      "owner": "src/main/ipc/conversations.ts",
+      "state": "complete",
+      "phase": "9",
+      "claim": "Every surface that can start a conversation turn reaches the same located authority.",
+      "evidence": [
+        {
+          "kind": "gate",
+          "script": "check:agent-turn-location-authority",
+          "note": "TURN_ENTRANCES inventories every file in src/ and mobile/ that can start a turn (desktop IPC handler, preload bridge, conversation page); an unclassified entrance or a stale entry fails"
+        },
+        {
+          "kind": "test",
+          "file": "config/scripts/check-agent-turn-location-authority.test.mjs",
+          "title": "flags a new surface that can start a turn and was never classified"
+        }
+      ],
+      "closes": "Every caller of the turn path is inventoried and reaches the same authority."
+    },
+    {
+      "id": "L",
+      "dimension": "security",
+      "owner": "Phase 7 audits remote trust and path containment",
+      "state": "complete",
+      "phase": "7",
+      "claim": "A remote project never becomes an implicit shell, and a path cannot be substituted to escape it.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/relay/agent-process-handler.test.ts",
+          "title": "refuses anything but a provider invocation, spawning nothing"
+        },
+        {
+          "kind": "test",
+          "file": "src/relay/agent-process-handler.test.ts",
+          "title": "refuses an env overlay beyond CODEX_HOME"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-conversation-driver.test.ts",
+          "title": "starts a read-only thread when the conversation has no provider binding"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-server-request-bridge.test.ts",
+          "title": "refuses every approval when no authority can decide"
+        },
+        {
+          "kind": "doc",
+          "file": "docs/reference/remote-agent-turn-authority.md",
+          "contains": "Symlink substitution",
+          "note": "pairing scope, remote trust, traversal and symlink substitution audited; substitution needs the same ssh user's write access, recorded as no privilege boundary"
+        }
+      ],
+      "closes": "Remote trust, pairing scope, traversal and symlink substitution are audited, and read never implies execute."
+    },
+    {
+      "id": "M",
+      "dimension": "observability",
+      "owner": "Phase 7 makes the location chain observable",
+      "state": "complete",
+      "phase": "7",
+      "claim": "Why a turn ran where it ran is answerable after the fact.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "names every link of where a remote turn ran, and carries none of what was said"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "says where a refused turn tried, and why"
+        }
+      ],
+      "closes": "The location chain is observable without leaking source content or secrets."
+    },
+    {
+      "id": "N",
+      "dimension": "token-economics",
+      "owner": "Phase 9 bounds the per-turn location envelope",
+      "state": "complete",
+      "phase": "9",
+      "claim": "Locating a turn never scales with repository size.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-instructions.test.ts",
+          "title": "stays constant-size regardless of how large the project is"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-instructions.test.ts",
+          "title": "imports no filesystem module"
+        }
+      ],
+      "closes": "The per-turn location envelope is bounded and no repository content is dumped into a prompt."
+    },
+    {
+      "id": "O",
+      "dimension": "failure-recovery",
+      "owner": "Phase 7 represents host loss mid-turn",
+      "state": "complete",
+      "phase": "7",
+      "claim": "A host that disappears mid-turn produces a represented failure.",
+      "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "src/main/codex/codex-ssh-agent-process.integration.test.ts",
+          "title": "ends a turn whose host goes away mid-turn at once, as host-lost, not at the deadline",
+          "rung": "integration",
+          "note": "real relay + multiplexer disposed mid-turn; before 19844a8cd the session waited out its 300 s deadline and called it a timeout"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "reports a host lost mid-turn as a failed turn, and never retries it locally"
+        }
+      ],
+      "closes": "Host loss mid-turn resolves to a represented failure, never a silent success or a local retry."
+    },
+    {
+      "id": "P",
+      "dimension": "device-independent-projection",
+      "owner": "Phase 9 records the roaming impact",
+      "state": "complete",
+      "phase": "9",
+      "claim": "Durable agent and conversation identity survive a change of device without changing the project acted upon.",
+      "evidence": [
+        {
+          "kind": "test",
+          "file": "src/main/conversation/agent-turn-runs-in-its-project.test.ts",
+          "title": "resumes the same machine"
+        },
+        {
+          "kind": "test",
+          "file": "src/main/conversation/conversation-agent-association.test.ts",
+          "title": "finds a thread by the host address when another device named the host differently"
+        }
+      ],
+      "closes": "Durable identity is shown to survive a change of device (roaming)."
+    },
+    {
+      "id": "Q",
+      "dimension": "product-reality",
+      "owner": "Phase 5 runs the remote product-reality gate",
+      "state": "blocked",
+      "phase": "5",
+      "claim": "A real remote host answers a project fact that could not have come from anywhere else.",
+      "evidence": [
+        {
+          "kind": "product-reality",
+          "spec": "tests/e2e/agent-chat-remote-project.spec.ts",
+          "title": "reaches the host over real ssh, and refuses by name when the project or host is gone",
+          "rung": "real-remote-host",
+          "note": "real Electron + real ssh + real Codex 0.155.1 on GEX44 (1f077a949): the signed-in leg asserts the marker 4471 when the provider answers; today it answered usageLimitExceeded, reported as failed in the provider's words. Unavailable-project and unreachable controls refuse by their own reasons."
+        }
+      ],
+      "blocker": {
+        "class": "owner-auth",
+        "precondition": "GEX44's Codex account answers a model turn (usageLimitExceeded until 2026-09-27 19:54). Then gex44-e2e.ps1 -Phase test -SignedIn must pass with the answer containing 4471."
+      }
+    },
+    {
+      "id": "R",
+      "dimension": "baseline-inheritance",
+      "owner": "Phase 8 ascends the located-effect baseline",
+      "state": "complete",
+      "phase": "8",
+      "claim": "The next project-scoped cognitive feature cannot regress below the proven standard.",
+      "evidence": [
+        {
+          "kind": "gate",
+          "script": "check:agent-turn-location-authority",
+          "note": "ascended to host-located: any host-blind provider-thread lookup anywhere in src/ fails, plus a positive control that the runner looks its own thread up by host"
+        },
+        {
+          "kind": "test",
+          "file": "config/scripts/check-agent-turn-location-authority.test.mjs",
+          "title": "catches a future feature that resumes a thread without naming its host"
+        }
+      ],
+      "closes": "A violating future-like implementation is caught by the ascended baseline."
+    },
+    {
+      "id": "S",
+      "dimension": "knowledge-ukdl",
+      "owner": "Phase 8 distills the program's traps",
+      "state": "complete",
+      "phase": "8",
+      "claim": "What this program learned is written where the next program will read it.",
+      "evidence": [
+        {
+          "kind": "doc",
+          "file": "docs/reference/remote-agent-turn-authority.md",
+          "contains": "a-turn-can-end-without-answering",
+          "note": "UKDL: declared-ownership-needs-a-located-effect (ascended to host), a-turn-can-end-without-answering, a-real-channel-you-can-throw-away; each mapped to what enforces it"
+        },
+        { "kind": "gate", "script": "check:agent-turn-location-authority" },
+        {
+          "kind": "test",
+          "file": "src/main/codex/codex-turn-event-mapping.test.ts",
+          "title": "reads a completed turn with a failed status as ended, never as answered"
+        }
+      ],
+      "closes": "Reusable traps are distilled into the vault and UKDL without duplicating a stronger law."
+    },
+    {
+      "id": "T",
+      "dimension": "ci",
+      "owner": ".github/workflows/pr.yml",
+      "state": "blocked",
+      "phase": "9",
+      "claim": "The program's gates are executed by CI, not only defined in it.",
+      "evidence": [
+        {
+          "kind": "doc",
+          "file": ".github/workflows/pr.yml",
+          "contains": "check:cognitive-workspace-matrix",
+          "note": "registered, not executed: no runner has run it"
+        }
+      ],
+      "blocker": {
+        "class": "runner-capacity",
+        "precondition": "A GitHub-hosted runner is assigned (job runner_id > 0) to a pull_request run of this branch; runs 35873274476 and 35869416763 recorded runner_id=0 and zero steps."
+      }
+    }
+  ]
+}

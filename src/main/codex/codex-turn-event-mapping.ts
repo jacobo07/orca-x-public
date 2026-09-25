@@ -77,8 +77,23 @@ export function mapCodexNotification(notification: {
       return turnId ? { kind: 'turn-started', turnId } : unmapped
     }
     case 'turn/completed': {
-      const turnId = asString(asRecord(params.turn)?.id)
-      return turnId ? { kind: 'turn-completed', turnId } : unmapped
+      // Measured on 0.155.1: a refused turn (usage limit) completes with `status: "failed"` and the
+      // provider's own `error`. Only `completed` is a finished answer.
+      const turn = asRecord(params.turn)
+      const turnId = asString(turn?.id)
+      const status = asString(turn?.status)
+      if (!turnId) {
+        return unmapped
+      }
+      if (status === null || status === 'completed') {
+        return { kind: 'turn-completed', turnId }
+      }
+      return {
+        kind: 'turn-ended',
+        turnId,
+        state: status === 'interrupted' ? 'interrupted' : 'failed',
+        reason: asString(asRecord(turn?.error)?.message) ?? `the provider ended the turn: ${status}`
+      }
     }
     case 'item/agentMessage/delta': {
       const itemId = asString(params.itemId)
@@ -114,8 +129,21 @@ export function mapCodexNotification(notification: {
       return { kind: 'provider-status', status: type, detail }
     }
     case 'error': {
-      const message = asString(params.message) ?? 'codex reported an error'
-      return { kind: 'turn-ended', turnId: asString(params.turnId), state: 'failed', reason: message }
+      // The words live under `error.message` (0.155.1); `message` is the older spelling. An error the
+      // provider is retrying has not ended the turn.
+      const message =
+        asString(asRecord(params.error)?.message) ??
+        asString(params.message) ??
+        'codex reported an error'
+      if (params.willRetry === true) {
+        return { kind: 'provider-status', status: 'retrying', detail: message }
+      }
+      return {
+        kind: 'turn-ended',
+        turnId: asString(params.turnId),
+        state: 'failed',
+        reason: message
+      }
     }
     default:
       return unmapped

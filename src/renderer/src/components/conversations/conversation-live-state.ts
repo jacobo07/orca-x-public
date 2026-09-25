@@ -25,11 +25,21 @@ export type ConversationNoticeKind =
   | 'agent-missing'
   | 'agent-unverifiable'
   | 'approval-declined'
-  /** Three ways an agent's project cannot be opened here, kept apart because they are three
-   *  different actions: set it up, wait for the setup to finish, or open it where it lives. */
+  /** Ways an agent's project cannot be reached, kept apart because each is a different action: set
+   *  it up, wait for its setup, open it where it lives, choose one host, or run where it lives. */
   | 'project-not-set-up'
   | 'project-setup-incomplete'
   | 'project-remote-only'
+  | 'project-host-ambiguous'
+  | 'project-remote-execution-unavailable'
+  | 'project-remote-host-unreachable'
+  | 'project-remote-relay-unsupported'
+  | 'project-remote-missing'
+  | 'project-location-changed'
+  | 'provider-not-installed'
+  | 'provider-protocol-unsupported'
+  | 'failed-timed-out'
+  | 'failed-host-lost'
 
 export type ConversationNotice = {
   kind: ConversationNoticeKind
@@ -125,10 +135,28 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
     case 'no-provider':
       // Routing refused before anything was committed, so the message stays in the composer.
       return { kind: 'no-provider', detail: outcome.detail, userMessageKept: false }
+    case 'provider-unavailable':
+      return {
+        kind:
+          outcome.reason === 'not-installed'
+            ? 'provider-not-installed'
+            : 'provider-protocol-unsupported',
+        detail: outcome.detail,
+        userMessageKept: true
+      }
     case 'not-durable':
       return { kind: 'not-durable', detail: outcome.reason, userMessageKept: true }
     case 'failed':
-      return { kind: 'failed', detail: outcome.reason, userMessageKept: true }
+      return {
+        kind:
+          outcome.cause === 'timed-out'
+            ? 'failed-timed-out'
+            : outcome.cause === 'host-lost'
+              ? 'failed-host-lost'
+              : 'failed',
+        detail: outcome.reason,
+        userMessageKept: true
+      }
     case 'conversation-absent':
       return { kind: 'absent', detail: null, userMessageKept: false }
     case 'agent-unavailable':
@@ -148,7 +176,7 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
  *  setup to finish, or open it where it lives. The setup state is quoted as evidence; a project id
  *  and a path are machinery and stay out of the notice. */
 function projectNotice(
-  reason: 'unresolved' | 'not-ready' | 'remote-host',
+  reason: Extract<ConversationTurnOutcome, { outcome: 'project-unavailable' }>['reason'],
   detail: string
 ): ConversationNotice {
   switch (reason) {
@@ -158,6 +186,18 @@ function projectNotice(
       return { kind: 'project-setup-incomplete', detail, userMessageKept: false }
     case 'remote-host':
       return { kind: 'project-remote-only', detail: null, userMessageKept: false }
+    case 'ambiguous-host':
+      return { kind: 'project-host-ambiguous', detail: null, userMessageKept: false }
+    case 'remote-execution-unavailable':
+      return { kind: 'project-remote-execution-unavailable', detail: null, userMessageKept: false }
+    case 'remote-host-unreachable':
+      return { kind: 'project-remote-host-unreachable', detail: null, userMessageKept: false }
+    case 'remote-relay-unsupported':
+      return { kind: 'project-remote-relay-unsupported', detail: null, userMessageKept: false }
+    case 'remote-project-missing':
+      return { kind: 'project-remote-missing', detail: null, userMessageKept: false }
+    case 'location-changed':
+      return { kind: 'project-location-changed', detail: null, userMessageKept: false }
   }
 }
 

@@ -71,7 +71,13 @@ function provenanceValid(value: unknown): boolean {
       typeof entry.agent === 'string' &&
       (entry.providerSessionId === null || typeof entry.providerSessionId === 'string') &&
       (entry.transcriptPath === null || typeof entry.transcriptPath === 'string') &&
-      isFiniteNumber(entry.observedAt)
+      isFiniteNumber(entry.observedAt) &&
+      // Absent is local (older records); present must be a host id, never an empty stand-in.
+      (entry.executionHostId === undefined ||
+        (typeof entry.executionHostId === 'string' && entry.executionHostId.length > 0)) &&
+      (entry.cwd === undefined || (typeof entry.cwd === 'string' && entry.cwd.length > 0)) &&
+      (entry.hostAddress === undefined ||
+        (typeof entry.hostAddress === 'string' && entry.hostAddress.length > 0))
   )
 }
 
@@ -125,11 +131,7 @@ export function parseConversationRecord(
   }
   // Absent is the normal state — every conversation written before agents existed, and every
   // Brainstorming chat since. Only a present-but-unreadable binding is a refusal.
-  if (
-    parsed.agentId !== undefined &&
-    parsed.agentId !== null &&
-    !isAgentId(parsed.agentId)
-  ) {
+  if (parsed.agentId !== undefined && parsed.agentId !== null && !isAgentId(parsed.agentId)) {
     return unreadable('record has an unusable agent binding')
   }
   if (!isFiniteNumber(parsed.nextSeq)) {

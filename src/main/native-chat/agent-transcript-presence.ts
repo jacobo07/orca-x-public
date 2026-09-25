@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { WorkingSetFactPresence } from '../../shared/project-working-set-store-types'
-import type { AgentType } from '../../shared/native-chat-types'
+import type { ProviderType } from '../../shared/native-chat-types'
 import { toHostReadableTranscriptPath } from './host-readable-transcript-path'
 import { resolveSessionFilePath } from './session-file-resolver'
 
@@ -19,7 +19,7 @@ import { resolveSessionFilePath } from './session-file-resolver'
  */
 
 export type AgentTranscriptSubject = {
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   /** The path the agent's own hook reported, when there was one. A claim, not an observation. */
   transcriptPath?: string

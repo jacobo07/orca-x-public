@@ -47,17 +47,25 @@ export function usesSlotInCode(source, slot) {
 
 /** Files are `{ path, source }`. Tests are exempt: they must be able to NAME the slot to forbid it. */
 export function findReplacingSlotSites(files) {
-  return files
-    .map((file) => ({ ...file, path: file.path.split(path.sep).join('/') }))
-    .filter((file) => !isTestPath(file.path) && usesSlotInCode(file.source, REPLACING_SLOT))
-    .map((file) => file.path)
-    .sort()
+  return (
+    files
+      // Both separators, not `path.sep`: on Linux (where CI runs) `path.sep` is '/'.
+      .map((file) => ({ ...file, path: file.path.replace(/\\/g, '/') }))
+      .filter((file) => !isTestPath(file.path) && usesSlotInCode(file.source, REPLACING_SLOT))
+      .map((file) => file.path)
+      .sort()
+  )
 }
 
 async function gitLines(root, args) {
   try {
     const { stdout } = await run('git', args, { cwd: root, maxBuffer: 64 * 1024 * 1024 })
-    return { lines: stdout.split('\n').map((line) => line.trim()).filter(Boolean) }
+    return {
+      lines: stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    }
   } catch (error) {
     // `git grep` exits 1 with no output when nothing matched — an answer, not a failure.
     if (error?.code === 1 && typeof error.stdout === 'string' && error.stdout.trim() === '') {
@@ -82,7 +90,13 @@ export async function main(root = process.cwd(), log = console) {
   }
 
   const mentions = await gitLines(root, [
-    'grep', '-l', '-I', '-E', `${REPLACING_SLOT}|${LAYERED_SLOT}`, '--', ...SOURCE_PATHSPECS
+    'grep',
+    '-l',
+    '-I',
+    '-E',
+    `${REPLACING_SLOT}|${LAYERED_SLOT}`,
+    '--',
+    ...SOURCE_PATHSPECS
   ])
   if (mentions.lines === null) {
     log.error(`❌  check-agent-instruction-layer: could not sweep: ${mentions.error}`)
@@ -112,7 +126,9 @@ export async function main(root = process.cwd(), log = console) {
   const aperture = `${tracked.lines.length} tracked source files, ${files.length} mention an instruction slot`
   if (failures.length > 0) {
     log.error(`❌  check-agent-instruction-layer (${aperture}):`)
-    for (const failure of failures) log.error(`    - ${failure}`)
+    for (const failure of failures) {
+      log.error(`    - ${failure}`)
+    }
     return 1
   }
   log.log(

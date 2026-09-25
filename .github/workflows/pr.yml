@@ -122,6 +122,11 @@ jobs:
       - name: Check Workspace surface claims
         run: pnpm run check:workspace-surface-claims
 
+      # The program matrix's integrity, never its completion: the done-gate
+      # (`check:cognitive-workspace-completeness`) is red by construction until the program ends.
+      - name: Check cognitive workspace completeness matrix
+        run: pnpm run check:cognitive-workspace-matrix
+
       - name: Check VM runtime rollback compatibility
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

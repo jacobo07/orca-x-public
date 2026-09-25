@@ -60,6 +60,20 @@ export type ConversationProviderProvenance = {
   transcriptPath: string | null
   /** When Orca observed this binding, not when the provider created it. */
   observedAt: number
+  /**
+   * The execution host the provider thread lives on. A thread's history exists only on its host,
+   * so a turn resumes only a thread recorded for the host it runs on. Optional at schemaVersion 1
+   * on purpose — a bump would make every existing record unreadable — and ABSENT MEANS LOCAL,
+   * which is what every record written before remote turns existed actually was.
+   */
+  executionHostId?: string
+  /** The directory the thread was bound to on that host. Absent (older records) is UNKNOWN, so the
+   *  next resume asks the provider to confirm the location rather than assuming it did not move. */
+  cwd?: string
+  /** The same host named the same way on EVERY device (`user@host:port`). `executionHostId` carries a
+   *  target id each device mints for itself, so a record that roams to another device finds its
+   *  thread by this. Absent for local threads and older records. */
+  hostAddress?: string
 }
 
 export type ConversationTurn = {

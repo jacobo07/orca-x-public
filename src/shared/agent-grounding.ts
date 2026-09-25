@@ -13,6 +13,17 @@ export type AgentGroundingLocation =
   | { outcome: 'no-project' }
   | { outcome: 'unresolved'; projectId: string }
   | { outcome: 'not-ready'; projectId: string; setupState: ProjectHostSetupState }
+  // Mirrors the two host outcomes AgentProjectLocation gained on the Workspace branch. The runner
+  // executes a resolved-remote turn on that host, so it is a location, not the refusal below.
+  | {
+      outcome: 'resolved-remote'
+      projectId: string
+      hostId: `ssh:${string}`
+      setupId: string
+      path: string
+      displayName: string
+    }
+  | { outcome: 'ambiguous-host'; projectId: string; hostIds: ExecutionHostId[] }
   | { outcome: 'remote-host'; projectId: string; hostId: ExecutionHostId }
 
 /** The driver is named because it is the one conversations actually use today; there is no
