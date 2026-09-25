@@ -146,13 +146,14 @@ function startTurn(params: {
   const settle = (
     hasSubjectBoundGate(db, task.id)
       ? authorizeGatedEffect(db, task.id, captureRevisionSubject).then((authority) => {
-          if (authority.authorized) {
-            return run()
+          if (!authority.authorized) {
+            if (authority.reason === 'awaiting-approval') {
+              db.updateTaskStatus(task.id, 'blocked')
+            }
+            onLog(`Task ${task.id} not run: gate ${authority.gateId} ${authority.reason}`)
+            return undefined
           }
-          if (authority.reason === 'awaiting-approval') {
-            db.updateTaskStatus(task.id, 'blocked')
-          }
-          onLog(`Task ${task.id} not run: gate ${authority.gateId} ${authority.reason}`)
+          return run()
         })
       : run()
   )
