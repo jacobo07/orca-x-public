@@ -144,16 +144,19 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   UKDL: `~/.claude/knowledge_vault/ukdl/agent-review-and-human-approval.md` (HR-FED-01..06, PR, T).
 
 ## 4. Next 3 actions
-1. P8 GEX44 local provider through the SAME driver contract (Owner approved install; RTX 4000 Ada 20 GB):
-   measure headroom, pick model by measurement, serve, register as a routed provider. It is also the
-   cheapest way to a LIVE independent review (Claude builds, local model reviews) — Codex is signed out.
+1. P8 — MEASURED 2026-09-25, the premise changed: GEX44 ALREADY serves `qwen3-coder-30b`
+   (Qwen3-Coder-30B-A3B Q4_K_M) via `/opt/keos-llm/bin/llama-server` on 127.0.0.1:8081 (OpenAI-compatible,
+   `--jinja`, /health ok), owned by KEOS, holding 16.8 of 20 GB VRAM — no room for a second model, and
+   installing one would be "new before extend". P8 = an Orca provider driver that is a CLIENT of an
+   OpenAI-compatible endpoint (URL configured; loopback on GEX44, ssh tunnel from a desktop), through the
+   same ConversationTurnDriver + routing contract; never touch KEOS's server. Live proof runs ON GEX44
+   (vitest there, real endpoint), then the first LIVE independent review: claude builds, local reviews.
+   Disk 96% (68 GB free). Ralph cannot run on GEX44 yet: its claude is 2.1.113 (no `--bg`) and the Ralph
+   sweep is a Windows scheduled task.
 2. Open decisions: should headless serve (now hosting conversations) run agent tasks? Should tool-less
    Claude turns leave plan mode (it writes `~/.claude/plans/*.md`)?
 3. P7 remainder: more gates (session id provider-scoped, failed turn never completed) as aperture/AST
    checks; the Workspace program owns the pre-existing `workspace.*` localization debt.
-2. P7: architecture gates + UKDL + vault entries (list in section 3 of the session report).
-3. Plan-mode side effect: decide whether tool-less Claude turns also move to the Read/Grep/Glob posture.
-Then P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada 20 GB).
 Local host is starved (~0.9-4 GB free): run tests on GEX44 (`/home/kobii/fed-wt`, push
 `HEAD:refs/federation/head`, assert REV); local only for the opt-in live Claude tests.
 
