@@ -12,6 +12,7 @@ import type {
 } from '../conversation/conversation-turn-runner'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import { mapClaudeStreamLine, type ClaudeQuotaObservation } from './claude-stream-mapping'
+import { startTurnToolServer, turnToolMcpConfig } from '../conversation/turn-tool-mcp-server'
 
 /** A turn on a loaded host can be slow; this deadline ends a hung process rather than a slow one. */
 const DEFAULT_TURN_DEADLINE_MS = 300_000
@@ -28,12 +29,20 @@ export type ClaudeProcess = {
 
 export type SpawnClaudeProcess = (command: string, args: string[], cwd: string) => ClaudeProcess
 
+/** Orca's tools for this turn, served over MCP as the `orca` server. */
+export type ClaudeTurnMcp = { config: string; toolNames: readonly string[] }
+
+/** The only built-in tools a turn that is also offered Orca's tools gets: reading, never changing. */
+export const CLAUDE_READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob'] as const
+
 /**
  * The argv for one turn. `--setting-sources project` (measured) loads the project's own settings
- * and none of the user's global hooks; `--bare` would also drop OAuth. `plan` is read-only, the
- * same posture Codex conversations run under.
+ * and none of the user's global hooks; `--bare` would also drop OAuth. A turn with no Orca tools
+ * runs in `plan` (read-only, as Codex conversations do). `--strict-mcp-config` keeps every MCP
+ * server the user configured out of an agent's turn; only Orca's own, when offered, is loaded, and
+ * only its named tools are pre-allowed.
  */
-export function buildClaudeTurnArgs(request: ProviderTurnRequest): string[] {
+export function buildClaudeTurnArgs(request: ProviderTurnRequest, mcp: ClaudeTurnMcp | null = null): string[] {
   return [
     '-p',
     request.text,
@@ -42,8 +51,22 @@ export function buildClaudeTurnArgs(request: ProviderTurnRequest): string[] {
     '--verbose',
     '--setting-sources',
     'project',
-    '--permission-mode',
-    'plan',
+    '--strict-mcp-config',
+    ...(mcp
+      ? [
+          // Why not plan mode here (measured 2026-09-25): plan mode refuses the served tool even when
+          // pre-allowed ("delegating starts an agent, which plan mode doesn't allow"). Read-only is
+          // kept by construction instead: only the read tools exist, and only Orca's tools are allowed.
+          '--permission-mode',
+          'default',
+          '--tools',
+          CLAUDE_READ_ONLY_TOOLS.join(','),
+          '--mcp-config',
+          mcp.config,
+          '--allowedTools',
+          mcp.toolNames.map((name) => `mcp__orca__${name}`).join(',')
+        ]
+      : ['--permission-mode', 'plan']),
     ...(request.developerInstructions !== null
       ? ['--append-system-prompt', request.developerInstructions]
       : []),
@@ -83,6 +106,8 @@ export type ClaudeConversationDriverOptions = {
   spawnProcess?: SpawnClaudeProcess
   /** Every quota observation the provider reports, for availability to read. */
   observeQuota?: (observation: ClaudeQuotaObservation) => void
+  /** Every request the turn's tool server received; for diagnosing a client that never arrived. */
+  observeToolServerRequest?: (summary: { method: string | undefined; path: string | undefined }) => void
 }
 
 export function createClaudeConversationDriver(
@@ -92,15 +117,17 @@ export function createClaudeConversationDriver(
   return {
     provider: 'claude',
     async runTurn(request: ProviderTurnRequest): Promise<ProviderTurnResult> {
-      if (request.tools && request.tools.length > 0) {
-        // Claude can take tools over MCP; Orca does not serve them to it yet. Said, not hidden.
-        request.onEvent({
-          kind: 'provider-status',
-          status: 'tools-unavailable',
-          detail: `this provider was offered ${request.tools.length} tool(s) Orca cannot serve to it`
-        })
-      }
-      const child = spawnProcess(options.command ?? 'claude', buildClaudeTurnArgs(request), request.cwd)
+      const tools = request.tools ?? []
+      // Why per turn: the server holds this turn's bound tools and dies with it, so a later turn
+      // (or anything else on the machine) cannot reach a tool whose authority belonged to this one.
+      const toolServer =
+        tools.length > 0
+          ? await startTurnToolServer(tools, { onRequest: options.observeToolServerRequest })
+          : null
+      const mcp = toolServer
+        ? { config: turnToolMcpConfig(toolServer), toolNames: tools.map((tool) => tool.name) }
+        : null
+      const child = spawnProcess(options.command ?? 'claude', buildClaudeTurnArgs(request, mcp), request.cwd)
       let sessionId: string | null = null
       let settled = false
       let timedOut = false
@@ -143,6 +170,7 @@ export function createClaudeConversationDriver(
         }
       } finally {
         clearTimeout(deadline)
+        await toolServer?.close()
       }
       return { providerSessionId: sessionId }
     }

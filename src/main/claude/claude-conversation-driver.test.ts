@@ -163,15 +163,72 @@ describe('claude conversation driver', () => {
     expect(events.at(-1)).toMatchObject({ kind: 'turn-ended', reason: 'claude did not finish within 20 ms and was stopped' })
   })
 
-  it('says it cannot serve offered tools instead of dropping them silently', async () => {
-    const { spawn } = fakeSpawn(CAPTURED_OK)
-    const { request: turn, events } = request({
-      tools: [{ name: 'orca_delegate', description: 'd', inputSchema: {}, invoke: async () => ({ success: true, text: '' }) }]
+  // Inverted by the MCP bridge: offered tools are served to Claude for the turn, and only then.
+  it('serves offered tools over MCP for exactly the turn, pre-allowing only those tools', async () => {
+    const invoked: unknown[] = []
+    let url = ''
+    let listed: unknown = null
+    let called: unknown = null
+    const spawn: SpawnClaudeProcess = (_command, args) => {
+      const config = JSON.parse(args[args.indexOf('--mcp-config') + 1]) as {
+        mcpServers: { orca: { url: string; headers: { Authorization: string } } }
+      }
+      url = config.mcpServers.orca.url
+      const headers = { 'content-type': 'application/json', authorization: config.mcpServers.orca.headers.Authorization }
+      const rpc = async (method: string, params: unknown) =>
+        (await (await fetch(url, { method: 'POST', headers, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })).json()) as {
+          result: unknown
+        }
+      expect(args[args.indexOf('--allowedTools') + 1]).toBe('mcp__orca__orca_delegate')
+      return {
+        pid: 1,
+        lines: (async function* () {
+          listed = (await rpc('tools/list', {})).result
+          called = (await rpc('tools/call', { name: 'orca_delegate', arguments: { agent: 'b', task: 't' } })).result
+          yield* CAPTURED_OK
+        })(),
+        stderrTail: () => '',
+        exited: Promise.resolve(0),
+        kill: async () => {}
+      }
+    }
+    const { request: turn } = request({
+      tools: [
+        {
+          name: 'orca_delegate',
+          description: 'delegate',
+          inputSchema: { type: 'object' },
+          invoke: async (args) => {
+            invoked.push(args)
+            return { success: true, text: 'Delegated as task_9' }
+          }
+        }
+      ]
     })
 
     await createClaudeConversationDriver({ spawnProcess: spawn }).runTurn(turn)
 
-    expect(events[0]).toMatchObject({ kind: 'provider-status', status: 'tools-unavailable' })
+    expect(listed).toEqual({ tools: [{ name: 'orca_delegate', description: 'delegate', inputSchema: { type: 'object' } }] })
+    expect(called).toEqual({ content: [{ type: 'text', text: 'Delegated as task_9' }], isError: false })
+    expect(invoked).toEqual([{ agent: 'b', task: 't' }])
+    await expect(fetch(url, { method: 'POST', body: '{}' })).rejects.toThrow()
+  })
+
+  it('keeps every MCP server the user configured out of a turn, and adds none when no tool is offered', () => {
+    const args = buildClaudeTurnArgs(request().request)
+
+    expect(args).toContain('--strict-mcp-config')
+    expect(args).not.toContain('--mcp-config')
+    expect(args).not.toContain('--allowedTools')
+  })
+
+  it('gives a turn with Orca tools only the read tools, since plan mode refuses the served tool', () => {
+    const args = buildClaudeTurnArgs(request().request, { config: '{}', toolNames: ['orca_delegate'] })
+
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('default')
+    expect(args[args.indexOf('--tools') + 1]).toBe('Read,Grep,Glob')
+    expect(args[args.indexOf('--allowedTools') + 1]).toBe('mcp__orca__orca_delegate')
+    expect(args).not.toContain('plan')
   })
 })
 
