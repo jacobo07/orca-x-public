@@ -95,6 +95,7 @@ import { triggerStartupNotificationRegistration } from './ipc/startup-notificati
 import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
 import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
 import { SkillCloudService } from './skills/skill-cloud-service'
+import { getConversationHost } from './ipc/conversations'
 import { recoverPendingSkillTransactions } from './skills/skill-transaction-startup-recovery'
 import { isArtifactSharingEnabled } from '../shared/artifact-sharing-gate'
 import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
@@ -2938,6 +2939,15 @@ void app.whenReady().then(async () => {
     )
   )
   runtimeService.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
+  // Here and not in registerCoreHandlers: headless serve never opens a window, and a paired phone
+  // must reach the same conversations (same service, same turn admission) as the desktop does.
+  runtimeService.setConversationHost(
+    getConversationHost(
+      { readAgents: () => store!.getAgents() },
+      { readProjectHostSetups: () => store!.getProjectHostSetups() },
+      () => store!.getProjects()
+    )
+  )
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
@@ -3222,6 +3232,7 @@ void app.whenReady().then(async () => {
         showAutomationsButton: settings?.showAutomationsButton !== false,
         showMobileButton: settings?.showMobileButton !== false,
         showWorkspaceButton: settings?.showWorkspaceButton !== false,
+        showAgentWorkspaceButton: settings?.showAgentWorkspaceButton !== false,
         showTitlebarAppName: settings?.showTitlebarAppName !== false,
         statusBarVisible: ui?.statusBarVisible !== false
       }

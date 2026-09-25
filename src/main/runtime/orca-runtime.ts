@@ -164,6 +164,7 @@ import type {
   SkillCloudVersion
 } from '../../shared/skill-cloud-contract'
 import type { SkillCloudService } from '../skills/skill-cloud-service'
+import type { ConversationHost } from '../conversation/conversation-host'
 import {
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
@@ -610,6 +611,7 @@ import {
 } from '../../shared/worktree/visibility-sources'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+  CONVERSATIONS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
@@ -4837,6 +4839,17 @@ export class OrcaRuntimeService {
     this.skillCloudService = service
   }
 
+  private conversationHost: ConversationHost | null = null
+
+  /** Wired on every host (desktop and headless serve) before RPC serves; null until then. */
+  setConversationHost(host: ConversationHost | null): void {
+    this.conversationHost = host
+  }
+
+  getConversationHost(): ConversationHost | null {
+    return this.conversationHost
+  }
+
   assertAgentSkillSharingAllowed(): void {
     assertAgentSkillSharingAllowed(() => isAgentSkillSharingEnabled(this.store?.getSettings()))
   }
@@ -5934,6 +5947,9 @@ export class OrcaRuntimeService {
     )
     if (hasOffscreen) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
+    }
+    if (this.conversationHost !== null) {
+      capabilities.push(CONVERSATIONS_RUNTIME_CAPABILITY)
     }
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend

@@ -1,52 +1,40 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
-// PRODUCT REACHABILITY GATE — W-C4, Direct Agent Chat.
+// PRODUCT REACHABILITY GATE — W-C4, Direct Agent Chat, reached through Workspace.
 //
 // Below the UI it is proven that an agent-bound conversation has one producer, holds no project of
 // its own, and that the agent's role reaches the provider envelope. This asks the question only a
-// person can: from Agents, can they open THIS agent, talk to it, restart Orca, and find the same
-// conversation with the same agent?
+// person can: from Workspace, can they open THIS agent, talk to it, restart Orca, and find the same
+// conversation with the same agent? (Since 2026-09-24 the agent directory is the Workspace roster;
+// the separate Agents page and the Chats entry are gone.)
 //
 // The e2e profile has no CODEX_HOME, so the provider is honestly not signed in. The turn ends
 // auth-required, and that is enough for the claim here: the conversation, its agent binding and the
-// user's message are all made durable BEFORE the provider is asked anything. The provider leg is
-// proven separately against a real account.
+// user's message are all made durable BEFORE the provider is asked anything.
 //
-// Same instruments as agents-reachability.spec.ts, for the same reasons: `orcaPage` via the
-// helpers (never `page`), locale-free handles (this host runs Orca in Spanish), a real restart
-// rather than a reload, and cleanup that cannot replace the verdict.
+// `orcaPage` via the helpers (never `page`), locale-free handles (this host runs Orca in Spanish),
+// a real restart rather than a reload, and cleanup that cannot replace the verdict.
 
 const AGENT_NAME = 'Migration Reviewer'
 const AGENT_ROLE = 'reads every migration for data loss'
 const PROMPT = 'Which migration worries you most?'
 
-const agentsEntry = '[data-workspace-activity="agents"]'
-const chatsEntry = '[data-workspace-activity="conversations"]'
+const workspaceEntry = '[data-workspace-activity="agent-workspace"]'
 
 test.setTimeout(300_000)
 
-/** The same settings call the Settings UI makes. Both surfaces are opt-in. */
-async function enableSurfaces(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('window.__store is not available')
-    }
-    await store
-      .getState()
-      .updateSettingsOrThrow({ showAgentsButton: true, showConversationsButton: true })
-  })
-}
-
-async function openAgents(page: Page): Promise<void> {
-  await page.locator(agentsEntry).first().click()
-  await expect(page.getByTestId('agents-page')).toBeVisible()
+async function openWorkspaceAgents(page: Page, app: ElectronApplication): Promise<void> {
+  // Wide enough that the roster column is laid out beside the chat.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
+  await page.locator(workspaceEntry).first().click()
+  await expect(page.getByTestId('conversations-page')).toBeVisible()
+  await page.getByTestId('workspace-tab-agents').click()
 }
 
 async function openAgentChat(page: Page, agentId: string): Promise<void> {
-  await page.locator(`[data-agent-id="${agentId}"] [data-testid="agents-list-row-open"]`).click()
+  await page.locator(`[data-testid="workspace-agent-row"][data-agent-id="${agentId}"]`).click()
   // Station control: the chat is the scoped conversations surface, about THIS agent — not
   // Brainstorming, not a blank page, not the runtime Activity feed.
   const surface = page.getByTestId('conversations-page')
@@ -89,17 +77,16 @@ test('a person can talk to an agent and find the same conversation after a resta
     // ── First launch ────────────────────────────────────────────────────────────────────────────
     const first = await session.launch()
     await attachRepoAndOpenTerminal(first.page, testRepoPath)
-    await expect(first.page.locator('[data-workspace-activity="workspace"]')).toBeVisible()
-    await enableSurfaces(first.page)
-    await openAgents(first.page)
+    await expect(first.page.locator('[data-workspace-activity="workspace"]').first()).toBeVisible()
+    await openWorkspaceAgents(first.page, first.app)
 
-    await first.page.getByTestId('agents-new').click()
+    await first.page.getByTestId('workspace-new-agent').click()
     await first.page.getByTestId('new-agent-name').fill(AGENT_NAME)
     await first.page.getByTestId('new-agent-role').fill(AGENT_ROLE)
     await first.page.getByTestId('new-agent-submit').click()
     await expect(first.page.getByTestId('new-agent-dialog')).toHaveCount(0)
 
-    const row = first.page.getByTestId('agents-list-row')
+    const row = first.page.getByTestId('workspace-agent-row')
     await expect(row).toHaveCount(1)
     const agentId = await row.first().getAttribute('data-agent-id')
     expect(agentId).toMatch(/^agent_/)
@@ -133,29 +120,39 @@ test('a person can talk to an agent and find the same conversation after a resta
     expect(stored.projectId).toBeNull()
     expect(stored.userTexts).toEqual([PROMPT])
 
-    // ── Back navigation keeps the agent where it was ────────────────────────────────────────────
+    // ── Back returns to the directory the agent came from: the roster's Agents list ─────────────
     await first.page.getByTestId('agent-chat-back').click()
-    await expect(first.page.getByTestId('agents-page')).toBeVisible()
-    await expect(first.page.getByTestId('agents-list-row')).toHaveAttribute('data-agent-id', agentId!)
+    const brainstorm = first.page.getByTestId('conversations-page')
+    await expect(brainstorm).toHaveAttribute('data-conversation-scope', 'brainstorming')
+    await expect(first.page.getByTestId('workspace-tab-agents')).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await expect(first.page.getByTestId('workspace-agent-row')).toHaveAttribute(
+      'data-agent-id',
+      agentId!
+    )
 
     // ── Stage 7: Brainstorming stays agent-less, and does not list the agent's chat ─────────────
-    await first.page.locator(chatsEntry).first().click()
-    const brainstorm = first.page.getByTestId('conversations-page')
+    // Re-entered through the rail entry itself, not only through Back.
+    await first.page.locator(workspaceEntry).first().click()
     await expect(brainstorm).toHaveAttribute('data-conversation-scope', 'brainstorming')
     await expect(first.page.getByTestId('agent-chat-header')).toHaveCount(0)
     // The same selector found the row a moment ago, in the agent's scope.
     await expect(
-      first.page.locator(`[data-testid="conversations-list-row"][data-conversation-id="${conversationId}"]`)
+      first.page.locator(
+        `[data-testid="conversations-list-row"][data-conversation-id="${conversationId}"]`
+      )
     ).toHaveCount(0)
 
     // ── Stage 6: restart — a new process, the same profile on disk ─────────────────────────────
     await session.close(first.app)
     const second = await session.launch()
     await attachRepoAndOpenTerminal(second.page, testRepoPath)
-    await expect(second.page.locator('[data-workspace-activity="workspace"]')).toBeVisible()
-    await openAgents(second.page)
+    await expect(second.page.locator('[data-workspace-activity="workspace"]').first()).toBeVisible()
+    await openWorkspaceAgents(second.page, second.app)
 
-    await expect(second.page.getByTestId('agents-list-row')).toHaveCount(1)
+    await expect(second.page.getByTestId('workspace-agent-row')).toHaveCount(1)
     await openAgentChat(second.page, agentId!)
 
     // The agent's latest conversation opens by itself, by identity — and there is still one.

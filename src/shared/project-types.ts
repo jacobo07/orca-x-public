@@ -1,3 +1,4 @@
+import type { ProjectConnectedApplication } from './connected-application'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { GitRemoteIdentity } from './git-remote-identity'
@@ -23,6 +24,8 @@ export type Project = {
   gitRemoteIdentity?: GitRemoteIdentity
   /** Local Windows projects inherit the global runtime default unless this override is set. */
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
+  /** Separately deployed web apps this project exposes inside Orca (see connected-application.ts). */
+  connectedApplications?: ProjectConnectedApplication[]
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number

@@ -2073,6 +2073,13 @@ export class Store {
     return this.getProjectHostOperations().updateProject(id, updates)
   }
 
+  setProjectConnectedApplications(
+    id: string,
+    applications: NonNullable<Project['connectedApplications']>
+  ): Project | null {
+    return this.getProjectHostOperations().setProjectConnectedApplications(id, applications)
+  }
+
   getProjectHostSetups(): ProjectHostSetup[] {
     return this.getProjectHostOperations().getProjectHostSetups()
   }

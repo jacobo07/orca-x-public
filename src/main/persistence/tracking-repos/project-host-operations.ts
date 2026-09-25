@@ -101,6 +101,28 @@ export class ProjectHostPersistenceOperations {
     return { ...project }
   }
 
+  /** Replaces a project's connected applications. The caller validates; this only persists. */
+  setProjectConnectedApplications(
+    id: string,
+    applications: NonNullable<Project['connectedApplications']>
+  ): Project | null {
+    const project = this.state.projects.find((entry) => entry.id === id)
+    if (!project) {
+      return null
+    }
+    if (applications.length === 0) {
+      delete project.connectedApplications
+    } else {
+      project.connectedApplications = applications.map((application) => ({
+        ...application,
+        signInOrigins: [...application.signInOrigins]
+      }))
+    }
+    project.updatedAt = Date.now()
+    this.scheduleSave()
+    return { ...project }
+  }
+
   getProjectHostSetups(): ProjectHostSetup[] {
     return [...this.state.projectHostSetups]
   }

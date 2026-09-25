@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
   openConversationsPage: vi.fn(),
-  openAgentsPage: vi.fn(),
   openArtifactsPage: vi.fn(),
   openSkillsPage: vi.fn(),
   openWorkspacePage: vi.fn(),
@@ -76,10 +75,8 @@ vi.mock('@/components/ui/context-menu', () => ({
 }))
 
 import { WorkspaceActivityRailSection } from './WorkspaceActivityRailSection'
-import {
-  WORKSPACE_ACTIVITY_ORDER,
-  type WorkspaceActivityId
-} from './workspace-activity-items'
+import { AgentWorkspaceRailEntry } from './AgentWorkspaceRailEntry'
+import { WORKSPACE_ACTIVITY_ORDER, type WorkspaceActivityId } from './workspace-activity-items'
 
 let container: HTMLDivElement
 let root: Root
@@ -94,7 +91,6 @@ function renderRail(settings: Record<string, unknown> = {}): void {
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
     openConversationsPage: mocks.openConversationsPage,
-    openAgentsPage: mocks.openAgentsPage,
     openArtifactsPage: mocks.openArtifactsPage,
     openSkillsPage: mocks.openSkillsPage,
     openWorkspacePage: mocks.openWorkspacePage
@@ -161,8 +157,6 @@ describe('WorkspaceActivityRailSection', () => {
    */
   it('leaves no visible activity that dispatches nothing', () => {
     renderRail({
-      showConversationsButton: true,
-      showAgentsButton: true,
       showArtifactsButton: true,
       showSkillsButton: true,
       experimentalActivity: true
@@ -173,9 +167,8 @@ describe('WorkspaceActivityRailSection', () => {
     // itself blind to one. Keying by WorkspaceActivityId makes a missing entry a TYPECHECK failure,
     // which is the only form of this gate that a new activity cannot be added around.
     const dispatched: Record<WorkspaceActivityId, ReturnType<typeof vi.fn>> = {
+      'agent-workspace': mocks.openConversationsPage,
       workspace: mocks.openWorkspacePage,
-      conversations: mocks.openConversationsPage,
-      agents: mocks.openAgentsPage,
       tasks: mocks.openTaskPage,
       automations: mocks.openAutomationsPage,
       activity: mocks.openActivityPage,
@@ -193,6 +186,8 @@ describe('WorkspaceActivityRailSection', () => {
       const button = activity(id)
       // A missing button would make the click a no-op and the assertion below vacuous.
       expect(button, `${id} is not rendered`).not.toBeNull()
+      // Counted per click, so a shared page could never let one entry pass on another's call.
+      open.mockClear()
       act(() => button?.click())
       expect(open, `clicking ${id} dispatched nothing`).toHaveBeenCalledTimes(1)
     }
@@ -262,6 +257,7 @@ describe('WorkspaceActivityRailSection', () => {
 
   it('renders nothing when every activity is hidden', () => {
     renderRail({
+      showAgentWorkspaceButton: false,
       showWorkspaceButton: false,
       showTasksButton: false,
       showAutomationsButton: false,
@@ -269,5 +265,83 @@ describe('WorkspaceActivityRailSection', () => {
     })
 
     expect(container.querySelector('[data-workspace-activity-rail]')).toBeNull()
+  })
+
+  it('leads with Workspace and calls the launcher Terminals', () => {
+    renderRail()
+
+    const first = container.querySelector('[data-workspace-activity]')
+    expect(first?.getAttribute('data-workspace-activity')).toBe('agent-workspace')
+    expect(activity('agent-workspace')?.getAttribute('aria-label')).toBe('Workspace')
+    expect(activity('workspace')?.getAttribute('aria-label')).toBe('Terminals')
+
+    act(() => activity('agent-workspace')?.click())
+    expect(mocks.openConversationsPage).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves Workspace out when the caller draws it below Explorer', () => {
+    // Control: the same render without the flag does include it.
+    renderRail()
+    expect(activity('agent-workspace')).not.toBeNull()
+
+    act(() => {
+      root.render(
+        <TooltipProvider>
+          <WorkspaceActivityRailSection omitAgentWorkspace />
+        </TooltipProvider>
+      )
+    })
+    expect(activity('agent-workspace')).toBeNull()
+    expect(activity('workspace')).not.toBeNull()
+  })
+
+  it('hides Workspace through its own key, not the Chats one', () => {
+    renderRail()
+    const entry = activity('agent-workspace')?.closest('div')
+    const hide = [...(entry?.parentElement?.querySelectorAll('button') ?? [])].find((button) =>
+      button.textContent?.includes('Hide from sidebar')
+    )
+    expect(hide).toBeDefined()
+    act(() => hide?.click())
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showAgentWorkspaceButton: false })
+  })
+})
+
+describe('AgentWorkspaceRailEntry', () => {
+  function renderEntry(settings: Record<string, unknown>, activeView = 'terminal'): void {
+    mocks.state = {
+      settings,
+      activeView,
+      updateSettings: mocks.updateSettings,
+      openConversationsPage: mocks.openConversationsPage
+    }
+    act(() => {
+      root.render(
+        <TooltipProvider>
+          <AgentWorkspaceRailEntry />
+        </TooltipProvider>
+      )
+    })
+  }
+
+  it('opens the agent Workspace and marks itself current on that page', () => {
+    renderEntry({}, 'conversations')
+
+    expect(activity('agent-workspace')?.getAttribute('aria-current')).toBe('page')
+    act(() => activity('agent-workspace')?.click())
+    expect(mocks.openConversationsPage).toHaveBeenCalledTimes(1)
+  })
+
+  it('is absent once hidden, and offers the hide that got it there', () => {
+    renderEntry({ showAgentWorkspaceButton: false })
+    expect(activity('agent-workspace')).toBeNull()
+
+    renderEntry({})
+    const hide = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Hide from sidebar')
+    )
+    act(() => hide?.click())
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showAgentWorkspaceButton: false })
   })
 })

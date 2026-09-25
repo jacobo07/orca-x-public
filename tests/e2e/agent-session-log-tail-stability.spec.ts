@@ -176,8 +176,9 @@ async function seedSyntheticSession(
 
 async function openSessionHistory(page: Page): Promise<void> {
   // Why: startup hydration can overwrite a direct store route; use the same
-  // activity-bar action a user takes so the Agents panel wins that race.
-  await page.getByRole('button', { name: 'Agents', exact: true }).click()
+  // activity-bar action a user takes so the session-history panel wins that race. The tab is
+  // "Sessions" since 2026-09-24 ("Agents" now names the durable actors in Workspace).
+  await page.getByRole('button', { name: 'Sessions', exact: true }).click()
   await page.evaluate(async () => window.api.aiVault.listSessions({ force: true }))
   await page.getByRole('button', { name: 'Refresh Session History' }).click()
 }

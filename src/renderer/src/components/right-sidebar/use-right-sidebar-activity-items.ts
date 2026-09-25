@@ -70,7 +70,9 @@ export function useRightSidebarActivityItems({
       {
         id: 'vault',
         icon: AgentSessionHistoryIcon,
-        title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
+        // "Sessions", not "Agents": this is CLI session history, and "Agents" now means the
+        // durable actors in Workspace (Owner, 2026-09-24).
+        title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Sessions'),
         shortcut: ''
       },
       {

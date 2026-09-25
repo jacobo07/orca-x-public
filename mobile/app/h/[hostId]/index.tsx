@@ -6,7 +6,6 @@ import {
   Search,
   X,
   Pin,
-  List,
   SlidersHorizontal,
   Layers,
   ChevronDown,
@@ -16,7 +15,6 @@ import {
   Moon,
   Filter,
   Check,
-  UserCircle,
   PanelLeftClose,
   SquareTerminal
 } from 'lucide-react-native'
@@ -50,6 +48,7 @@ import type { RepoIcon } from '../../../../src/shared/repo-icon'
 import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { buildWorktreeNavigationActions } from '../../../src/agent-history/worktree-navigation-actions'
+import { HostToolbarShortcuts } from '../../../src/workspace/HostToolbarShortcuts'
 import { floatingWorkspaceSessionPath } from '../../../src/session/floating-workspace'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
@@ -942,37 +941,13 @@ export function HostScreen({
             </View>
 
             <View style={styles.embeddedToolbarRow}>
-              <Pressable
-                style={[
-                  styles.embeddedToolbarIconButton,
-                  connState !== 'connected' && styles.toolbarIconDisabled
-                ]}
-                onPress={() => navigateFromHostList(`/h/${hostId}/accounts`)}
-                disabled={connState !== 'connected'}
-                accessibilityRole="button"
-                accessibilityLabel="Accounts"
-              >
-                <UserCircle
-                  size={16}
-                  color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-                />
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.embeddedToolbarIconButton,
-                  connState !== 'connected' && styles.toolbarIconDisabled
-                ]}
-                onPress={() => navigateFromHostList(`/h/${hostId}/tasks`)}
-                disabled={connState !== 'connected'}
-                accessibilityRole="button"
-                accessibilityLabel="Tasks"
-              >
-                <List
-                  size={16}
-                  color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-                />
-              </Pressable>
+              <HostToolbarShortcuts
+                hostId={hostId}
+                connected={connState === 'connected'}
+                navigate={navigateFromHostList}
+                buttonStyle={styles.embeddedToolbarIconButton}
+                disabledStyle={styles.toolbarIconDisabled}
+              />
 
               {floatingWorkspaceEnabled ? (
                 <Pressable
@@ -1064,27 +1039,12 @@ export function HostScreen({
 
             <View style={styles.toolbarSpacer} />
 
-            <Pressable
-              style={styles.searchToggle}
-              onPress={() => navigateFromHostList(`/h/${hostId}/accounts`)}
-              disabled={connState !== 'connected'}
-            >
-              <UserCircle
-                size={16}
-                color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-              />
-            </Pressable>
-
-            <Pressable
-              style={styles.searchToggle}
-              onPress={() => navigateFromHostList(`/h/${hostId}/tasks`)}
-              disabled={connState !== 'connected'}
-            >
-              <List
-                size={16}
-                color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
-              />
-            </Pressable>
+            <HostToolbarShortcuts
+              hostId={hostId}
+              connected={connState === 'connected'}
+              navigate={navigateFromHostList}
+              buttonStyle={styles.searchToggle}
+            />
 
             <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
               {showSearch ? (

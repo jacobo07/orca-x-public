@@ -1,9 +1,9 @@
 import { Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import type {
   WorkspaceAgentRow,
   WorkspaceThreadRow
@@ -29,6 +29,7 @@ export type WorkspaceAgentsLoad =
  * agent is open, so the list beside a chat is always that chat's own history.
  */
 export function CognitiveWorkspaceRoster({
+  fullWidth,
   tab,
   onTabChange,
   agentsLoad,
@@ -44,6 +45,7 @@ export function CognitiveWorkspaceRoster({
   onNewThread,
   onNewAgent
 }: {
+  fullWidth: boolean
   tab: WorkspaceRosterTab
   onTabChange: (tab: WorkspaceRosterTab) => void
   agentsLoad: WorkspaceAgentsLoad
@@ -61,7 +63,10 @@ export function CognitiveWorkspaceRoster({
 }): React.JSX.Element {
   return (
     <aside
-      className="flex h-full w-72 shrink-0 flex-col border-r border-border bg-background"
+      className={cn(
+        'flex h-full shrink-0 flex-col bg-background',
+        fullWidth ? 'w-full' : 'w-64 border-r border-border'
+      )}
       aria-label={translate('workspace.roster.label', 'Cognitive Workspace')}
       data-testid="workspace-roster"
     >
@@ -70,7 +75,7 @@ export function CognitiveWorkspaceRoster({
           <h1 className="truncate text-base font-semibold">
             {translate('workspace.title', 'Cognitive Workspace')}
           </h1>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {translate('workspace.subtitle', 'Agents, conversations and execution.')}
           </p>
         </div>
@@ -100,7 +105,9 @@ export function CognitiveWorkspaceRoster({
         </TabsList>
       </Tabs>
 
-      <ScrollArea className="min-h-0 flex-1">
+      {/* A plain scroller, not ScrollArea: its viewport sizes content to max-content, which let
+          long thread titles push rows past the column edge instead of truncating. */}
+      <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col gap-4 p-2">
           {tab === 'agents' ? (
             <>
@@ -141,7 +148,7 @@ export function CognitiveWorkspaceRoster({
             />
           ) : null}
         </div>
-      </ScrollArea>
+      </div>
     </aside>
   )
 }

@@ -58,16 +58,19 @@ export function ContextCard({
 export function ContextRow({
   term,
   children,
-  testId
+  testId,
+  state
 }: {
   term: string
   children: ReactNode
   testId?: string
+  /** Locale-free machine state of the row, or 'pending' while its owner has not answered. */
+  state?: string
 }): React.JSX.Element {
   return (
     <>
       <dt className="text-muted-foreground">{term}</dt>
-      <dd className="min-w-0 break-words" data-testid={testId}>
+      <dd className="min-w-0 break-words" data-testid={testId} data-state={state}>
         {children}
       </dd>
     </>
@@ -141,11 +144,15 @@ export function AgentContextRail({
         <ContextRow
           term={translate('workspace.context.name', 'Name')}
           testId="agent-context-project-name"
+          state={row?.project.kind ?? 'pending'}
         >
           {row ? projectRefLabel(row.project) : pending}
         </ContextRow>
         {found && found.location.outcome === 'resolved' ? (
-          <ContextRow term={translate('workspace.context.path', 'Path')}>
+          <ContextRow
+            term={translate('workspace.context.path', 'Path')}
+            testId="agent-context-project-path"
+          >
             <span className="font-mono">{found.location.path}</span>
           </ContextRow>
         ) : null}
@@ -159,6 +166,7 @@ export function AgentContextRail({
         <ContextRow
           term={translate('workspace.context.runsOn', 'Next turn')}
           testId="agent-context-location"
+          state={found?.location.outcome ?? 'pending'}
         >
           {location ? <Fact fact={location} /> : pending}
         </ContextRow>
@@ -171,6 +179,7 @@ export function AgentContextRail({
         <ContextRow
           term={translate('workspace.context.credential', 'Credential')}
           testId="agent-context-credential"
+          state={found?.provider.credential.state ?? 'pending'}
         >
           {provider ? <Fact fact={provider.credential} /> : pending}
         </ContextRow>
@@ -189,7 +198,7 @@ export function AgentContextRail({
         title={translate('workspace.context.agent', 'Agent')}
         testId="agent-context-agent"
       >
-        <ContextRow term={translate('workspace.context.role', 'Role')}>
+        <ContextRow term={translate('workspace.context.role', 'Role')} testId="agent-context-role">
           {row?.agent.role || '—'}
         </ContextRow>
         <ContextRow
@@ -198,7 +207,10 @@ export function AgentContextRail({
         >
           {row ? String(row.threadCount) : pending}
         </ContextRow>
-        <ContextRow term={translate('workspace.context.lastActivity', 'Last activity')}>
+        <ContextRow
+          term={translate('workspace.context.lastActivity', 'Last activity')}
+          testId="agent-context-last-activity"
+        >
           {row?.lastActivityAt != null
             ? formatUiRelativeTime(row.lastActivityAt - Date.now())
             : translate('workspace.context.never', 'None yet')}
@@ -212,18 +224,24 @@ export function AgentContextRail({
 
       <ContextCard
         icon={<Activity className={iconClass} aria-hidden />}
-        title={translate('workspace.context.activity', 'Turns in this thread')}
+        // Provider turns, not messages: a send refused before the provider (sign-in, a missing
+        // project) keeps the user's message but starts no turn, so "nothing asked" would be false.
+        title={translate('workspace.context.activity', 'Provider turns in this thread')}
         testId="agent-context-activity"
       >
         {recentTurns.length === 0 ? (
-          <ContextRow term="—">
+          <ContextRow term="—" testId="agent-context-no-turns">
             <span className="text-muted-foreground">
-              {translate('workspace.context.noTurns', 'Nothing asked yet')}
+              {translate('workspace.context.noTurns', 'None has reached the provider yet')}
             </span>
           </ContextRow>
         ) : (
           recentTurns.map((turn) => (
-            <ContextRow key={turn.turnId} term={formatUiRelativeTime(turn.startedAt - Date.now())}>
+            <ContextRow
+              key={turn.turnId}
+              term={formatUiRelativeTime(turn.startedAt - Date.now())}
+              testId="agent-context-turn"
+            >
               {TURN_STATE_LABEL[turn.state]()}
             </ContextRow>
           ))

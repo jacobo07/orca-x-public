@@ -3232,6 +3232,13 @@ const api = {
     create: (args) => ipcRenderer.invoke('agents:create', args)
   } satisfies PreloadApi['agents'],
 
+  connectedApps: {
+    list: (args) => ipcRenderer.invoke('connectedApps:list', args),
+    add: (args) => ipcRenderer.invoke('connectedApps:add', args),
+    remove: (args) => ipcRenderer.invoke('connectedApps:remove', args),
+    status: (args) => ipcRenderer.invoke('connectedApps:status', args)
+  } satisfies PreloadApi['connectedApps'],
+
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
     setForConnectedTargets: (args) =>

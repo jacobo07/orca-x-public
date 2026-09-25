@@ -13,6 +13,7 @@ import type {
   ConversationLoadResult,
   ConversationRecord
 } from '../../shared/conversation-types'
+import type { Project } from '../../shared/project-types'
 import { checkCodexAuth } from '../codex/codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import { readAgentGrounding } from '../conversation/agent-grounding'
@@ -20,6 +21,11 @@ import {
   resolveAgentProjectLocation,
   type ProjectLocationReader
 } from '../conversation/agent-project-location'
+import {
+  createConversationHost,
+  type ConversationHost,
+  type ConversationTurnEventListener
+} from '../conversation/conversation-host'
 import {
   ConversationService,
   type ConversationAgentRoster
@@ -31,7 +37,7 @@ import {
   type ConversationTurnRequest
 } from '../conversation/conversation-turn-runner'
 import type { Agent } from '../../shared/agent-types'
-import { runAgentTask } from '../conversation/agent-task-execution'
+import { runAgentTask, type AgentTaskExecutionDeps } from '../conversation/agent-task-execution'
 import { ProviderQuotaObservations } from '../conversation/provider-quota-observations'
 import { composeProviderRouting } from '../conversation/provider-routing-composition'
 import { registerAgentTaskRunner } from '../runtime/orchestration/agent-task-runner-registry'
@@ -87,7 +93,9 @@ export type ConversationIpcHandlers = {
  */
 function requireConversationId(value: unknown): string {
   if (!isConversationId(value)) {
-    throw new Error(`conversations: refusing a value that is not a conversation id: ${String(value)}`)
+    throw new Error(
+      `conversations: refusing a value that is not a conversation id: ${String(value)}`
+    )
   }
   return value
 }
@@ -106,7 +114,8 @@ function requireText(value: unknown): string {
   return value
 }
 
-// Moved to an Electron-free module so provider routing can be composed outside this file.
+// Moved to an Electron-free module so provider routing can be composed outside this file; it keeps
+// the managed credential states (unreadable vs no-credential) the Workspace branch introduced.
 export { checkCodexAuth, codexAuthPath } from '../codex/codex-auth-readiness'
 
 export type ConversationIpcDeps = {
@@ -179,28 +188,56 @@ export function getConversationService(agentRoster: ConversationAgentRoster): Co
   return cachedService
 }
 
+const turnEventListeners = new Set<ConversationTurnEventListener>()
+
+/** Paired clients (runtime RPC) hear the same turn stream the windows do. */
+export function subscribeConversationTurnEvents(
+  listener: ConversationTurnEventListener
+): () => void {
+  turnEventListeners.add(listener)
+  return () => {
+    turnEventListeners.delete(listener)
+  }
+}
+
 /** Broadcast rather than reply-to-sender: a conversation is not owned by the window that happened
  *  to send the turn, and a second window showing the same conversation must see the same stream. */
-function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void {
+export function broadcastTurnEvent(conversationId: string, event: AgentTurnEvent): void {
   const payload: ConversationTurnEventPayload = { conversationId, event }
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       window.webContents.send(CONVERSATION_TURN_EVENT_CHANNEL, payload)
     }
   }
+  for (const listener of turnEventListeners) {
+    try {
+      listener(payload)
+    } catch (error) {
+      // One paired client's failure must not stop the turn or the other listeners.
+      console.warn('[conversations] turn event listener failed', error)
+    }
+  }
 }
 
-/** `agentRoster` reads the same PersistedState roster `agents:list` does, so there is one answer
- *  to "does this agent exist" and it follows Project id promotion. `projects` is read the same way
- *  and for the same reason: a setup that became ready must be visible without a restart. */
-export function registerConversationHandlers(
+let cachedHandlers: ConversationIpcHandlers | null = null
+let cachedTaskRunnerDeps: AgentTaskExecutionDeps | null = null
+
+/**
+ * One handler set per process, shared by the IPC channels and the runtime RPC, so desktop and a
+ * paired phone go through the same service and the same turn admission. `agentRoster` reads the
+ * same PersistedState roster `agents:list` does; `projects` is read per call so a setup that became
+ * ready is visible without a restart.
+ */
+export function getConversationHandlers(
   agentRoster: ConversationAgentRoster,
   projects: ProjectLocationReader
-): void {
+): ConversationIpcHandlers {
+  if (cachedHandlers) {
+    return cachedHandlers
+  }
   const service = getConversationService(agentRoster)
-  const codex = createCodexConversationDriver()
   const turnDeps = {
-    driver: codex,
+    driver: createCodexConversationDriver(),
     checkAuth: checkCodexAuth,
     resolveProjectLocation: (agent: Agent) => resolveAgentProjectLocation(agent, projects),
     // The user's home, never `process.cwd()`. Both are "not a project"; only one of them is a
@@ -210,27 +247,53 @@ export function registerConversationHandlers(
     mintItemId: () => `usr_${randomUUID()}`,
     emit: broadcastTurnEvent
   }
+  // Routed here, in the one handler set, so a paired phone's turn picks its provider exactly as a
+  // desktop turn does.
   const routing = composeProviderRouting({ base: { ...turnDeps, service }, quota: providerQuota })
-  const handlers = createConversationIpcHandlers({
+  cachedTaskRunnerDeps = {
+    ...turnDeps,
+    service,
+    readAgents: () => agentRoster.readAgents(),
+    runRoutedTurn: (turn, requirement) => routing.runTurn(turn, { prefersTools: true, ...requirement })
+  }
+  cachedHandlers = createConversationIpcHandlers({
     service,
     roster: agentRoster,
     turnDeps,
     runTurn: async (request) => (await routing.runTurn(request)).turn
   })
+  return cachedHandlers
+}
+
+/** The paired-client face of the same handlers (see conversation-host.ts for what it withholds). */
+export function getConversationHost(
+  agentRoster: ConversationAgentRoster,
+  projects: ProjectLocationReader,
+  readProjects: () => readonly Project[]
+): ConversationHost {
+  const handlers = getConversationHandlers(agentRoster, projects)
+  return createConversationHost({
+    list: handlers['conversations:list'],
+    read: handlers['conversations:read'],
+    agentGrounding: handlers['conversations:agentGrounding'],
+    createForAgent: handlers['conversations:createForAgent'],
+    sendTurn: handlers['conversations:sendTurn'],
+    readAgents: () => agentRoster.readAgents(),
+    readProjects,
+    subscribe: subscribeConversationTurnEvents
+  })
+}
+
+export function registerConversationHandlers(
+  agentRoster: ConversationAgentRoster,
+  projects: ProjectLocationReader
+): void {
+  const handlers = getConversationHandlers(agentRoster, projects)
   // A delegated task runs through these same deps and the same router, so it cannot find a second
-  // location rule, a second auth check or a second driver. It prefers a provider that can serve its
-  // delegate tool. Headless serve never reaches this and registers nothing.
-  registerAgentTaskRunner((request) =>
-    runAgentTask(
-      {
-        ...turnDeps,
-        service,
-        readAgents: () => agentRoster.readAgents(),
-        runRoutedTurn: (turn, requirement) => routing.runTurn(turn, { prefersTools: true, ...requirement })
-      },
-      request
-    )
-  )
+  // location rule, a second auth check or a second driver. Only the desktop registers it: headless
+  // serve now hosts conversations for paired phones, but its agent tasks still wait (P2b), stated.
+  const taskRunnerDeps = cachedTaskRunnerDeps!
+  registerAgentTaskRunner((request) => runAgentTask(taskRunnerDeps, request))
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, (_event, args) =>

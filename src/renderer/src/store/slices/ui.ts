@@ -538,7 +538,7 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
 
 function sanitizeHydratedActiveView(
   value: PersistedUIState['activeView'],
-  gates: { experimentalActivityEnabled: boolean; agentsEnabled: boolean }
+  gates: { experimentalActivityEnabled: boolean }
 ): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have
   // falls back to terminal rather than rendering nothing.
@@ -549,11 +549,10 @@ function sanitizeHydratedActiveView(
   if (value === 'activity' && !gates.experimentalActivityEnabled) {
     return 'terminal'
   }
-  // Why agents joins that list rather than mobile's: it is reachable ONLY from the rail entry its
-  // setting controls. Restoring onto it with the entry hidden strands someone on a page whose own
-  // navigation is gone — where Mobile and Automations stay reachable from Settings and the menu.
-  if (value === 'agents' && !gates.agentsEnabled) {
-    return 'terminal'
+  // The Agents directory merged into Workspace (2026-09-24): a profile saved on it reopens on the
+  // Workspace, whose roster lists the same agents, rather than on a page that no longer exists.
+  if (value === 'agents') {
+    return 'conversations'
   }
   return value
 }
@@ -766,7 +765,6 @@ export type UISlice = {
    *  and never persisted: a restart returns to Brainstorming, and Agents is the way back. */
   conversationAgentScope: string | null
   openAgentChat: (agentId: string) => void
-  openAgentsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1562,9 +1560,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   conversationAgentScope: null,
   // The same surface as Brainstorming, scoped: one chat stack, not an agent-shaped second one.
   openAgentChat: (agentId) => set({ activeView: 'conversations', conversationAgentScope: agentId }),
-  // Same shape as conversations, and for the same reason: no close or back affordance exists yet,
-  // so previous-view state would be written and never read.
-  openAgentsPage: () => set({ activeView: 'agents' }),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',
@@ -2725,8 +2720,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         activeView:
           source === 'startup'
             ? sanitizeHydratedActiveView(ui.activeView, {
-                experimentalActivityEnabled: s.settings?.experimentalActivity === true,
-                agentsEnabled: s.settings?.showAgentsButton === true
+                experimentalActivityEnabled: s.settings?.experimentalActivity === true
               })
             : s.activeView,
         persistedUIReady: true

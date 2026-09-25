@@ -1,3 +1,4 @@
+import { sanitizePersistedConnectedApplications } from './connected-application'
 import type { Project } from './project-types'
 
 export type ProjectIdentitySuccession = {
@@ -8,13 +9,21 @@ export type ProjectIdentitySuccession = {
 }
 
 function carryUserState(projected: Project, previous: Project): Project {
-  return previous.localWindowsRuntimePreference
-    ? {
-        ...projected,
-        localWindowsRuntimePreference: previous.localWindowsRuntimePreference,
-        updatedAt: Math.max(projected.updatedAt, previous.updatedAt)
-      }
-    : projected
+  // Connected applications are user state too: a Studio bound to `repo:x` must survive `git:x`.
+  const connectedApplications = sanitizePersistedConnectedApplications(
+    previous.connectedApplications
+  )
+  if (!previous.localWindowsRuntimePreference && connectedApplications.length === 0) {
+    return projected
+  }
+  return {
+    ...projected,
+    ...(previous.localWindowsRuntimePreference
+      ? { localWindowsRuntimePreference: previous.localWindowsRuntimePreference }
+      : {}),
+    ...(connectedApplications.length > 0 ? { connectedApplications } : {}),
+    updatedAt: Math.max(projected.updatedAt, previous.updatedAt)
+  }
 }
 
 function countSharedRepoIds(sourceRepoIds: readonly string[], other: ReadonlySet<string>): number {

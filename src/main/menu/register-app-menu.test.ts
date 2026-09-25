@@ -56,6 +56,7 @@ function buildMenuOptions() {
       showAutomationsButton: true,
       showMobileButton: true,
       showWorkspaceButton: true,
+      showAgentWorkspaceButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
     }))
@@ -521,7 +522,9 @@ describe('registerAppMenu', () => {
       showTasksButton: false,
       showAutomationsButton: false,
       showMobileButton: true,
-      showWorkspaceButton: true,
+      // Opposite values, so a menu that swapped the two keys fails here.
+      showWorkspaceButton: false,
+      showAgentWorkspaceButton: true,
       showTitlebarAppName: true,
       statusBarVisible: true
     })
@@ -549,9 +552,19 @@ describe('registerAppMenu', () => {
 
     // Pinned because it shipped without one: the Workspace entry could be hidden from its sidebar
     // context menu with no control anywhere to bring it back — a one-way door.
+    // Since 2026-09-24 "Workspace" is the agent surface and the launcher is "Terminals"; each
+    // entry keeps its own way back.
     const workspaceItem = appearanceSubmenu.find((item) => item.label === 'Show Workspace Button')
     expect(workspaceItem?.type).toBe('checkbox')
     expect(workspaceItem?.checked).toBe(true)
+    workspaceItem?.click?.({} as never, undefined, {} as never)
+    expect(options.onToggleAppearance).toHaveBeenLastCalledWith('showAgentWorkspaceButton')
+
+    const terminalsItem = appearanceSubmenu.find((item) => item.label === 'Show Terminals Button')
+    expect(terminalsItem?.type).toBe('checkbox')
+    expect(terminalsItem?.checked).toBe(false)
+    terminalsItem?.click?.({} as never, undefined, {} as never)
+    expect(options.onToggleAppearance).toHaveBeenLastCalledWith('showWorkspaceButton')
 
     const titlebarItem = appearanceSubmenu.find((item) => item.label === 'Show Titlebar App Name')
     expect(titlebarItem?.checked).toBe(true)

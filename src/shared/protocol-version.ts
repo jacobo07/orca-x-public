@@ -65,6 +65,10 @@ export const AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY = 'aiVault.session-title
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
 export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
+// Why: signals this host serves durable-agent conversations to paired clients (the conversations.*
+// methods). Runtime-conditional, like browser.headless.v1: advertised only once the host has wired
+// its conversation service, so a client never offers a Workspace the host cannot answer.
+export const CONVERSATIONS_RUNTIME_CAPABILITY = 'conversations.v1' as const
 export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: older hosts discard browser.tabCreate's page field, so clients may only
