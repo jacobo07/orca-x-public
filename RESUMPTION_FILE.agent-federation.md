@@ -100,22 +100,33 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   (revision-moved / patch-changed / subject-unreadable), `ReviewStore.settle` re-derives independence
   from the provider that ACTUALLY reviewed. GEX44: tsc 0, migration gate ok, 1342 passed, mutation CAUGHT.
 
+- **P4b SEALED** `5c51b36ee`..`da3ec43c0` (schema **v32**: reviews.policy, reviews.producer_task_id).
+  Fix: an unnamed builder is `unknown`, not independent. `review-subject-capture.ts` (diff-tree plumbing,
+  every config knob pinned, merge refused), `review-findings.ts` (`orca.review-findings/1`: structured /
+  unstructured / failed), task results record the provider that RAN them (`provider`), `requestReview`
+  (producer read from a completed task's result; `independent` refused when unkeepable; task+row in one
+  txn), coordinator: review tasks get no tools + exclude producer provider; `settleReviewForTask` on
+  every settlement path; RPC/CLI `review-request` / `review-show` (currency from git at read time).
+  GEX44 @550edc56e: tsc 0, migration gate 0, 2898 passed/324 files, 9/9 mutations CAUGHT, restores
+  SHA-verified. LIVE (commit 2e8c5516a, Claude only): independent review -> `failed/no-provider`; any ->
+  `degraded-same-provider`, structured approve + 2 minor; new commit -> `revision-moved`.
+  Deviation from the plan above: reviewer provider comes from the routed result, not conversation
+  provenance (stronger: the driver that actually ran). UNPROVEN: independent review across two live providers.
+- Schema order now: main v28, AEOS v29 (merged), federation v30-v33. If AEOS lands a v30 first, renumber
+  v30-v33 here in ONE dedicated commit before merging.
+
 ## 4. Next 3 actions
-1. P4b: the review FLOW. (a) `captureRevisionSubject(worktreePath, rev?)` = `git rev-parse <rev>^{commit}`
-   + sha256 of `git show --format= --no-color <sha>` (Git 2.25-safe; local worktrees only — remote is
-   `subject-unreadable`, stated). (b) `requestReview` creates a task assigned to the reviewer with that
-   subject + a `reviews` row carrying `review_task_id`. (c) coordinator: before running a task, look up a
-   review by task id and route with `exclude: [producer_provider]` (routing already supports it; the
-   requirement must travel AgentTaskRequest -> runAgentTask -> routing.runTurn). (d) on settle, the
-   reviewer's provider is read from the conversation's LAST provenance entry (evidence, not hope) and
-   `ReviewStore.settle` records findings. (e) RPC `orchestration.reviewRequest/reviewShow` + CLI, where
-   reviewShow recomputes currency from git. Independence with Codex signed out here will be `unknown`/
-   degraded unless producer ran on Codex — say so, never label it independent.
-2. P5: subject-bound approval (inverts P1's gate case).
-3. Claude MCP bridge so `orca_delegate` works when Claude is the provider (agent→agent is live only
-   via Codex today, and Codex is signed out/quota-blocked here).
-Then P6 surface, P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada
-20 GB, nothing installed).
+1. P5 (in progress, uncommitted: db.ts v33 gate columns, types.ts, skew, `subject-bound-gates.ts`):
+   db methods createGate(+subject/reviewRequirement), decideSubjectGate, staleSubjectGate, rebind;
+   effect checks `authorizeGatedEffect` in startTurn (agent) and before createDispatchContext
+   (terminal, new `approval-refused`); RPC gateResolve REFUSES subject-bound gates (a terminal agent
+   can call RPC, so RPC cannot prove a person) — they are decided through desktop IPC (P6 UI).
+   Rejection must not unblock (today resolveGate sets `ready` for ANY text).
+2. Claude MCP bridge so `orca_delegate` works when Claude is the provider.
+3. P6 surface: first merge `orca-x/cogws-product-surface@33b8d089a` (that pane waits on us).
+Then P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada 20 GB).
+Local host is starved (~0.9-4 GB free): run tests on GEX44 (`/home/kobii/fed-wt`, push
+`HEAD:refs/federation/head`, assert REV); local only for the opt-in live Claude tests.
 
 ## 5. Start
 `Set-Location C:\Users\User\Apps\orca-federation-wt`; prove `git worktree list`; read this file and
