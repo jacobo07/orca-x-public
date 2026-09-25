@@ -136,8 +136,21 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   en.json +25 keys (localization back to base, still red on pre-existing workspace.*). E2E spec
   `agent-federation-approval.spec.ts` (RPC-seeded gate, repo moves, rebind, approve, gateList).
 
+- **P6 SEALED**: e2e `agent-federation-approval.spec.ts` PASSED on GEX44 @ddc6f67d8 (fresh build, xvfb,
+  48.6 s). Mutations: U1 untrusted sender decides / U4 all ready / U2 UI hides moved commit (e2e) — all
+  CAUGHT, restores SHA-verified. Guard test `src/main/ipc/agent-federation.test.ts`.
+- **P7 (first gate) SEALED** `204738aaa`: `approval-authority-aperture.test.ts` — only the desktop IPC may
+  import decide/rebind; floor, reason, synthetic drill, and a REAL planted RPC import went red.
+  UKDL: `~/.claude/knowledge_vault/ukdl/agent-review-and-human-approval.md` (HR-FED-01..06, PR, T).
+
 ## 4. Next 3 actions
-1. P6: read the e2e result (GEX44 `/tmp/fed-e2e.log`); fix-forward if red.
+1. P8 GEX44 local provider through the SAME driver contract (Owner approved install; RTX 4000 Ada 20 GB):
+   measure headroom, pick model by measurement, serve, register as a routed provider. It is also the
+   cheapest way to a LIVE independent review (Claude builds, local model reviews) — Codex is signed out.
+2. Open decisions: should headless serve (now hosting conversations) run agent tasks? Should tool-less
+   Claude turns leave plan mode (it writes `~/.claude/plans/*.md`)?
+3. P7 remainder: more gates (session id provider-scoped, failed turn never completed) as aperture/AST
+   checks; the Workspace program owns the pre-existing `workspace.*` localization debt.
 2. P7: architecture gates + UKDL + vault entries (list in section 3 of the session report).
 3. Plan-mode side effect: decide whether tool-less Claude turns also move to the Read/Grep/Glob posture.
 Then P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada 20 GB).
