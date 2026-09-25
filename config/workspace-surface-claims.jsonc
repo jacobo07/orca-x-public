@@ -26,6 +26,10 @@
     {
       "module": "src/renderer/src/components/conversations/connected-application-presentation.ts",
       "toneType": "AppTone"
+    },
+    {
+      "module": "src/renderer/src/components/conversations/agent-federation-presentation.ts",
+      "toneType": "FederationTone"
     }
   ],
   "claims": {
@@ -83,6 +87,36 @@
       "producer": "src/shared/conversation-types.ts#ConversationTurn",
       "absent": "workspace.context.noTurns",
       "why": "Read from the durable record's turns; a send refused before the provider starts none."
+    },
+    "agent-review": {
+      "producer": "src/main/runtime/orchestration/agent-federation-view.ts#readAgentFederationView",
+      "absent": "omitted",
+      "why": "A review row is the stored review with its currency judged against git when it was read; independence is derived by Orca, never shown upgraded."
+    },
+    "agent-approval": {
+      "producer": "src/main/runtime/orchestration/agent-federation-view.ts#readAgentFederationView",
+      "absent": "omitted",
+      "why": "An approval row is a subject-bound gate on this agent's task, with whether approving would be accepted now; the decision itself is re-checked in main."
+    },
+    "agent-federation-none": {
+      "producer": "src/main/runtime/orchestration/agent-federation-view.ts#readAgentFederationView",
+      "absent": "workspace.federation.none",
+      "why": "Only a loaded, empty answer says there is nothing; reading and failure have their own rows."
+    },
+    "agent-federation-reading": {
+      "producer": "src/renderer/src/components/conversations/use-agent-federation.ts#useAgentFederation",
+      "absent": "workspace.context.reading",
+      "why": "Shown while main has not answered yet, and never as an empty list."
+    },
+    "agent-federation-unavailable": {
+      "producer": "src/main/runtime/orchestration/agent-federation-view.ts#readAgentFederationView",
+      "absent": "omitted",
+      "why": "A failed read is shown as main's reason, never as having no reviews."
+    },
+    "agent-federation-notice": {
+      "producer": "src/main/runtime/orchestration/subject-bound-gates.ts#decideSubjectGate",
+      "absent": "omitted",
+      "why": "A refused decision is main's refusal in its own words; the row disappears when a decision lands."
     },
     "agent-context-turn": {
       "producer": "src/shared/conversation-types.ts#ConversationTurn",
