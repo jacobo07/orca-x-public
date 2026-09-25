@@ -1,6 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { reloadWithFreezeFrame } from '../window/reload-with-freeze-frame'
-import { reloadWindowGracefully } from '../window/reload-window-gracefully'
+import { requestWindowReload } from '../window/window-reload-transaction'
 
 export type MenuReloadHooks = {
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
@@ -30,15 +29,15 @@ export function runMenuReload(
   }
 
   if (ignoreCache) {
-    // Routed through the shared authority so the menu, the accelerator and the renderer's own
-    // `app:reload` all capture the freeze frame; a menu-local reload would flash.
-    void reloadWithFreezeFrame(webContents, { ignoreCache, onBeforeReload })
+    // Routed through the window's one reload transaction so it overrides a Reload still preparing
+    // instead of reloading beside it.
+    void requestWindowReload(webContents, { kind: 'force', onBeforeReload })
     return
   }
   // Why prepared: an unprepared reload is vetoed by any dirty editor and skips the durable
   // checkpoint. A window that refuses or does not answer is left untouched and the user is told.
   const webContentsId = webContents.id
-  void reloadWindowGracefully(webContents, { onBeforeReload }).then((result) => {
+  void requestWindowReload(webContents, { kind: 'graceful', onBeforeReload }).then((result) => {
     if (result === 'refused' || result === 'timeout') {
       onReloadNotPerformed?.({ outcome: result, webContentsId })
     }

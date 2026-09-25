@@ -9,7 +9,7 @@ import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../share
 import { isReloadPreparationAnswer } from '../../shared/reload-preparation-wire'
 import { takeReloadFreezeFrame } from './reload-freeze-frame'
 import { settleReloadPreparation } from './reload-preparation'
-import { reloadWithFreezeFrame } from './reload-with-freeze-frame'
+import { requestWindowReload } from './window-reload-transaction'
 
 /**
  * The main-window service channels that answer one window, routed to the window that called.
@@ -57,8 +57,9 @@ function registerOnce(): void {
     if (!binding || event.sender.isDestroyed()) {
       return
     }
-    await reloadWithFreezeFrame(event.sender, {
-      ignoreCache: false,
+    // Already prepared by the preload, so it overrides a menu Reload still waiting on main's ask.
+    await requestWindowReload(event.sender, {
+      kind: 'prepared',
       ...(binding.onBeforeRendererReload ? { onBeforeReload: binding.onBeforeRendererReload } : {})
     })
   })

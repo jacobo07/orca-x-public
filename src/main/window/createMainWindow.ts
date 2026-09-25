@@ -67,7 +67,7 @@ import type { PersistedWindowTopologyEntry } from '../../shared/window-topology-
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
-import { reloadWithFreezeFrame } from './reload-with-freeze-frame'
+import { requestWindowReload } from './window-reload-transaction'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
@@ -794,8 +794,8 @@ export function createMainWindow(
         mainWindow.webContents.send('ui:openSettings')
         return
       case 'forceReload':
-        void reloadWithFreezeFrame(mainWindow.webContents, {
-          ignoreCache: true,
+        void requestWindowReload(mainWindow.webContents, {
+          kind: 'force',
           ...(opts?.onBeforeReload ? { onBeforeReload: opts.onBeforeReload } : {})
         })
         return
