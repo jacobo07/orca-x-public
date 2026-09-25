@@ -39,7 +39,8 @@ export function deriveIndependence(producer: ReviewParty, reviewer: ReviewParty)
   if (producer.agentId !== null && producer.agentId === reviewer.agentId) {
     return 'degraded-same-agent'
   }
-  if (producer.provider === null || reviewer.provider === null) {
+  // Why the agent too: an unnamed builder may be the reviewer itself.
+  if (producer.agentId === null || producer.provider === null || reviewer.provider === null) {
     return 'unknown'
   }
   return producer.provider === reviewer.provider ? 'degraded-same-provider' : 'independent'

@@ -17,6 +17,11 @@ describe('review independence is derived, never declared', () => {
     expect(deriveIndependence({ agentId: 'builder', provider: null }, { agentId: 'reviewer', provider: 'claude' })).toBe('unknown')
     expect(deriveIndependence({ agentId: null, provider: 'codex' }, { agentId: 'reviewer', provider: null })).toBe('unknown')
   })
+
+  it('does not call an unknown builder independent just because the providers differ', () => {
+    // An unnamed builder may be the reviewer itself; that is a missing fact, not independence.
+    expect(deriveIndependence({ agentId: null, provider: 'codex' }, { agentId: 'reviewer', provider: 'claude' })).toBe('unknown')
+  })
 })
 
 describe('a review describes one revision', () => {
