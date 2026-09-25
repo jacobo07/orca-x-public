@@ -16,17 +16,20 @@
  *   parse      -- xterm consumed them (credited from write callbacks, including
  *                 an empty FIFO probe, so it advances upstream of the renderer)
  *   render     -- xterm's render service reported a frame (`onRender`)
- *   paint      -- the presented canvas pixels actually changed
+ *   paint      -- the pixels drawn in that frame actually changed
  *
  * Each was added because the one before it returned "healthy" for a pane the
- * user could see was frozen. Paint is the last one that is still about this
- * pane's own pixels; there is nothing below it short of the compositor.
+ * user could see was frozen.
  */
 import {
   captureTerminalParseProgressGeneration,
   isTerminalWritePipelineCertifiedDead
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
-import { captureTerminalPaintSignature } from './terminal-paint-progress'
+import {
+  recordTerminalFrameDrawn,
+  startTerminalPaintObservation,
+  takeTerminalPaintSample
+} from './terminal-paint-progress'
 import {
   captureTerminalRenderProgressGeneration,
   isTerminalRenderProgressObservable,
@@ -61,7 +64,7 @@ type Observation = {
   receivedChars: number
   parseGeneration: number
   renderGeneration: number
-  /** null means the pane's pixels are not judgeable right now, never that they are frozen. */
+  /** null means no judgeable frame was sampled since the last tick, never that pixels froze. */
   paintSignature: string | null
   stallTicks: number
 }
@@ -72,9 +75,16 @@ const renderSubscriptions = new WeakMap<VisiblePaneLivenessEntry, () => void>()
 
 export function registerVisiblePaneLiveness(entry: VisiblePaneLivenessEntry): () => void {
   entries.add(entry)
-  // Why here and not at the pane: this judge is the only consumer of render progress, and owning
-  // the subscription keeps the entry contract — and pty-connection.ts — unchanged.
-  renderSubscriptions.set(entry, observeTerminalRenderProgress(entry.terminal))
+  // Why here and not at the pane: this judge is the only consumer of render and paint progress,
+  // and owning the subscriptions keeps the entry contract — and pty-connection.ts — unchanged.
+  const disposePaint = startTerminalPaintObservation(entry.terminal)
+  const disposeRender = observeTerminalRenderProgress(entry.terminal, () =>
+    recordTerminalFrameDrawn(entry.terminal)
+  )
+  renderSubscriptions.set(entry, () => {
+    disposeRender()
+    disposePaint()
+  })
   return () => {
     entries.delete(entry)
     observations.delete(entry)
@@ -116,6 +126,8 @@ export function judgeVisiblePaneLiveness(args: {
     const receivedChars = args.getReceivedChars(ptyId)
     const parseGeneration = captureTerminalParseProgressGeneration(entry.terminal)
     const renderGeneration = captureTerminalRenderProgressGeneration(entry.terminal)
+    // Taken every tick, so each comparison is between two frames drawn in consecutive windows.
+    const paintSignature = takeTerminalPaintSample(entry.terminal)
     const previous = observations.get(entry)
     if (!previous || previous.ptyId !== ptyId) {
       observations.set(entry, {
@@ -124,7 +136,7 @@ export function judgeVisiblePaneLiveness(args: {
         receivedChars,
         parseGeneration,
         renderGeneration,
-        paintSignature: captureTerminalPaintSignature(entry.terminal),
+        paintSignature,
         stallTicks: 0
       })
       continue
@@ -132,12 +144,6 @@ export function judgeVisiblePaneLiveness(args: {
     const parsed = parseGeneration !== previous.parseGeneration
     const presented = renderGeneration !== previous.renderGeneration
     const modelAdvanced = modelSequence > previous.modelSequence
-    // Why only when the model advanced: a readback stalls the GPU, and asking "did it paint?" when
-    // nothing was produced to paint is both expensive and meaningless. A quiet tick carries the
-    // previous signature forward, so pixels that changed while quiet still read as painted.
-    const paintSignature = modelAdvanced
-      ? captureTerminalPaintSignature(entry.terminal)
-      : previous.paintSignature
     const paintStalled =
       modelAdvanced &&
       paintSignature !== null &&

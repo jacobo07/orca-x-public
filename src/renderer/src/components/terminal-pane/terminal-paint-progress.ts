@@ -5,16 +5,21 @@
  * loop that stopped, never one that runs and paints nothing. The Owner's frozen pane came from a
  * build that already carried that fix, so the residual is the live failure, not a theoretical one.
  *
- * This reads the pixels Chromium actually presented, through the same `reachRenderInternals` seam
- * the render-desync sentinel uses. It is a CHANGE oracle, not the sentinel's missing-ink oracle:
- * a stale canvas is fully inked and wrong, so `measureDivergence` is the wrong question for it.
+ * This hashes the pixels the renderer drew, through the same `reachRenderInternals` seam the
+ * render-desync sentinel uses. It is a CHANGE oracle, not the sentinel's missing-ink oracle: a stale
+ * canvas is fully inked and wrong, so `measureDivergence` is the wrong question for it.
  *
- * Absent means UNKNOWN, never stalled. Four states return null rather than a signature, because in
- * each of them a canvas that does not change is behaving correctly:
- *   - no reachable renderer (the web client, and every terminal fixture)
- *   - the render service is paused
- *   - the viewport is scrolled back, so new output lands off-screen by the user's own choice
- *   - the readback failed
+ * WHEN it reads is the whole design. Orca creates the WebGL addon without `preserveDrawingBuffer`,
+ * so outside the task that drew a frame the drawing buffer reads back cleared, and every pane hashes
+ * the same. A first version read on the watchdog tick and would have flagged every healthy pane;
+ * the real-app control caught it. So a sample is ARMED per tick and taken synchronously inside the
+ * next `onRender` callback, which xterm fires in the same task as the draw. A render that painted
+ * nothing then reads back cleared on every armed frame, which is exactly a signature that stops
+ * changing.
+ *
+ * Absent means UNKNOWN, never stalled. The sampler returns null when not painting is correct or the
+ * read is impossible: no reachable renderer (the web client, and every terminal fixture), a paused
+ * render service, a viewport the user scrolled back, or a failed readback.
  */
 import { activeBuffer, reachRenderInternals } from './terminal-render-desync-frame'
 
@@ -22,25 +27,60 @@ import { activeBuffer, reachRenderInternals } from './terminal-render-desync-fra
  *  a few hundred KB rather than the multi-megabyte full canvas. */
 const SIGNATURE_MAX_DIMENSION = 256
 
+type ScrollableBuffer = { viewportY: number; baseY?: number }
+
 let signatureCanvas: HTMLCanvasElement | null = null
 let signatureContext: CanvasRenderingContext2D | null = null
 
-type ScrollableBuffer = { viewportY: number; baseY?: number }
+const armedTerminals = new WeakSet<object>()
+/** A sample taken since the last take. Present-but-null means "a frame rendered and was unjudgeable". */
+const samplesByTerminal = new WeakMap<object, string | null>()
 
 /** Test seam: happy-dom has no 2D canvas, so unit fixtures inject their own painted state. */
-let sampler: (terminal: object) => string | null = sampleFromPresentedCanvas
+let sampler: (terminal: object) => string | null = sampleDrawnFrame
 
-export function captureTerminalPaintSignature(terminal: object): string | null {
+/**
+ * Start sampling this terminal. Arms immediately, so the first judgement already has a baseline.
+ * Frames reach `recordTerminalFrameDrawn` through the render-progress subscription; a terminal with
+ * no `onRender` never calls it, so every take returns null and it is never judged.
+ */
+export function startTerminalPaintObservation(terminal: object): () => void {
+  armedTerminals.add(terminal)
+  return () => {
+    armedTerminals.delete(terminal)
+    samplesByTerminal.delete(terminal)
+  }
+}
+
+/** Called inside the render callback — the task that drew the frame, where the drawing buffer is
+ *  still readable. Reads only when a judgement armed it, so there is one readback per tick. */
+export function recordTerminalFrameDrawn(terminal: object): void {
+  if (!armedTerminals.has(terminal)) {
+    return
+  }
+  armedTerminals.delete(terminal)
+  samplesByTerminal.set(terminal, safeSample(terminal))
+}
+
+/** The signature read since the previous take, or null when no judgeable frame rendered in between.
+ *  Re-arms, so exactly one readback happens per judgement. */
+export function takeTerminalPaintSample(terminal: object): string | null {
+  const sample = samplesByTerminal.get(terminal) ?? null
+  samplesByTerminal.delete(terminal)
+  armedTerminals.add(terminal)
+  return sample
+}
+
+function safeSample(terminal: object): string | null {
   try {
     return sampler(terminal)
   } catch {
-    // Why swallowed: paint liveness is a diagnostic lane. A renderer that refuses readback must
-    // degrade to unknown -- which is never a stall -- not take down the watchdog tick.
+    // Why swallowed: a renderer that refuses readback degrades to unknown, which is never a stall.
     return null
   }
 }
 
-function sampleFromPresentedCanvas(terminal: object): string | null {
+function sampleDrawnFrame(terminal: object): string | null {
   const internals = reachRenderInternals(terminal)
   if (!internals || internals.isPaused) {
     return null
@@ -106,6 +146,6 @@ export function _setTerminalPaintSamplerForTests(fn: (terminal: object) => strin
 }
 
 export function _resetTerminalPaintProgressForTests(): void {
-  sampler = sampleFromPresentedCanvas
+  sampler = sampleDrawnFrame
   releaseTerminalPaintSignatureReadback()
 }

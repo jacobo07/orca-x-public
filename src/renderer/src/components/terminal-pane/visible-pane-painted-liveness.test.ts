@@ -8,11 +8,13 @@
  * blind here exactly as it was blind to the parse generation before `91a52e00e`: the same defect,
  * one stage further down the pipeline.
  *
- * The previous revision of this file asserted that blindness as today's behaviour. These are the
- * same cases with the expectations inverted; the diff between the two revisions is the evidence
- * that the gap was real rather than argued.
+ * The fixture models `preserveDrawingBuffer: false`, which is how Orca creates its WebGL addon: the
+ * canvas reads back its drawn frame only inside the render callback, and a cleared buffer anywhere
+ * else. The first implementation sampled on the watchdog tick; against a real canvas it hashed a
+ * cleared buffer every time and would have flagged every healthy pane. A fixture whose canvas read
+ * back correctly at any moment could not see that, so this one does not.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetWritePipelineHealthForTests,
   recordTerminalParseProgress
@@ -28,19 +30,21 @@ import {
   type VisiblePaneLivenessEntry
 } from './visible-pane-output-liveness'
 
-/** What the injected sampler reports per terminal. `null` is the unjudgeable case the real sampler
- *  returns for a paused renderer, a scrolled-back viewport, or no reachable canvas at all. */
-const paintStateByTerminal = new WeakMap<object, { frames: number; judgeable: boolean }>()
+type PaintState = { frames: number; judgeable: boolean; drawing: boolean }
+const paintStateByTerminal = new WeakMap<object, PaintState>()
 
-_setTerminalPaintSamplerForTests((terminal) => {
-  const painted = paintStateByTerminal.get(terminal)
-  if (!painted || !painted.judgeable) {
+/** Reads what a non-preserved WebGL canvas would: the drawn frame inside the render callback, a
+ *  cleared buffer outside it. `null` is the unjudgeable case the real sampler returns for a paused
+ *  renderer, a scrolled-back viewport, or no reachable canvas at all. */
+function readLikeANonPreservedCanvas(terminal: object): string | null {
+  const state = paintStateByTerminal.get(terminal)
+  if (!state || !state.judgeable) {
     return null
   }
-  return `frame-${painted.frames}`
-})
+  return state.drawing ? `frame-${state.frames}` : 'cleared-buffer'
+}
 
-/** A terminal that reports renders AND tracks what its canvas actually painted. The field state is
+/** A terminal that reports renders AND tracks what its canvas actually drew. The field state is
  *  `render()` advancing while `paint()` never does — a render loop that runs and lies. */
 function makePaintingTerminal() {
   const listeners = new Set<() => void>()
@@ -50,27 +54,27 @@ function makePaintingTerminal() {
       return { dispose: () => listeners.delete(listener) }
     }
   }
-  paintStateByTerminal.set(terminal, { frames: 0, judgeable: true })
+  const state: PaintState = { frames: 0, judgeable: true, drawing: false }
+  paintStateByTerminal.set(terminal, state)
   return {
     terminal,
     render: () => {
-      for (const listener of listeners) {
-        listener()
+      state.drawing = true
+      try {
+        for (const listener of listeners) {
+          listener()
+        }
+      } finally {
+        state.drawing = false
       }
     },
     paint: () => {
-      const painted = paintStateByTerminal.get(terminal)
-      if (painted) {
-        painted.frames += 1
-      }
+      state.frames += 1
     },
     setJudgeable: (judgeable: boolean) => {
-      const painted = paintStateByTerminal.get(terminal)
-      if (painted) {
-        painted.judgeable = judgeable
-      }
+      state.judgeable = judgeable
     },
-    paintedFrames: () => paintStateByTerminal.get(terminal)?.frames ?? 0
+    paintedFrames: () => state.frames
   }
 }
 
@@ -109,20 +113,25 @@ function tick(pane: Harness) {
 }
 
 /** One healthy interval up to the canvas: main advanced, bytes arrived, xterm parsed, the render
- *  service reported a frame. `paints` is the single variable these tests turn. */
+ *  service drew (or did not) and then reported a frame. `paints` is the variable these tests turn. */
 function advance(pane: Harness, options: { paints: boolean }) {
   pane.state.model += 5
   pane.state.received += 100
   recordTerminalParseProgress(pane.terminal)
-  pane.render()
   if (options.paints) {
     pane.paint()
   }
+  pane.render()
 }
+
+beforeEach(() => {
+  _setTerminalPaintSamplerForTests(readLikeANonPreservedCanvas)
+})
 
 afterEach(() => {
   _resetVisiblePaneLivenessForTests()
   _resetWritePipelineHealthForTests()
+  _resetTerminalPaintProgressForTests()
 })
 
 describe('visible pane painted liveness', () => {
@@ -141,6 +150,8 @@ describe('visible pane painted liveness', () => {
   })
 
   it('never flags a pane that paints every frame (control)', () => {
+    // Also the timing control: a sampler that read on the tick instead of inside the frame would
+    // see the cleared buffer every time here, and flag this healthy pane.
     const pane = makePane()
     for (let i = 0; i < 8; i++) {
       advance(pane, { paints: true })
@@ -198,14 +209,5 @@ describe('visible pane painted liveness', () => {
     const verdicts = tick(pane)
     expect(verdicts).toHaveLength(1)
     expect(verdicts[0]).toMatchObject({ cause: 'output-not-presented' })
-  })
-})
-
-afterEach(() => {
-  _resetTerminalPaintProgressForTests()
-  // Why re-armed: the reset restores the real canvas sampler, which happy-dom cannot serve.
-  _setTerminalPaintSamplerForTests((terminal) => {
-    const painted = paintStateByTerminal.get(terminal)
-    return !painted || !painted.judgeable ? null : `frame-${painted.frames}`
   })
 })

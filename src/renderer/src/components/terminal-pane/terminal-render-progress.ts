@@ -47,7 +47,12 @@ export function isTerminalRenderProgressObservable(terminal: object): boolean {
  * that exposes no `onRender`, in which case nothing is observed and the terminal stays unjudgeable
  * for presentation.
  */
-export function observeTerminalRenderProgress(terminal: object): () => void {
+export function observeTerminalRenderProgress(
+  terminal: object,
+  /** Runs inside the render callback, i.e. in the task that drew the frame. One subscription per
+   *  terminal serves both, rather than a second listener on every frame. */
+  onFrame?: () => void
+): () => void {
   const subscribe = (terminal as RenderProgressSubscribable).onRender
   if (typeof subscribe !== 'function') {
     return () => {}
@@ -56,6 +61,7 @@ export function observeTerminalRenderProgress(terminal: object): () => void {
   try {
     subscription = subscribe.call(terminal, () => {
       recordTerminalRenderProgress(terminal)
+      onFrame?.()
     })
   } catch {
     // Why swallowed: presentation liveness is a diagnostic lane. A terminal whose renderer refuses
