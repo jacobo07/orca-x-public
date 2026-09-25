@@ -4,7 +4,11 @@ import type { AppState } from '../types'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import {
+  terminalTabDormancy,
+  type TerminalLayoutSnapshot,
+  type TerminalTab
+} from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
@@ -137,6 +141,10 @@ import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  readSleepContinuityInputs,
+  resolveSleepContinuityByTabId
+} from '@/lib/workspace-sleep-continuity'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -3083,6 +3091,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       shutdownReason === 'auto-hibernate-completed-agent'
         ? collectHibernatedCompletionEvidenceForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)
         : []
+    // Why before anything stops: once the panes are down nothing here knows what they were, and the
+    // question is about the world they are being taken out of. A stalled probe is `unknown`.
+    const sleepContinuityByTabId =
+      shutdownReason === 'manual-sleep'
+        ? await resolveSleepContinuityByTabId({
+            tabIds: tabs.map((tab) => tab.id),
+            records: sleepingAgentSessionRecords,
+            ...readSleepContinuityInputs(get(), worktreeId)
+          })
+        : null
     let handlerSnapshots: ReturnType<typeof unregisterPtyDataHandlers> = []
     let partialRendererStopSettled = false
     const markShutdownPending = (): void => {
@@ -3315,7 +3333,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const markSleptTabsDormant = (current: TerminalTab[]): TerminalTab[] =>
       current.map((tab) =>
         sleptTabIds.has(tab.id) && !tab.dormancy
-          ? { ...tab, dormancy: { reason: 'workspace-sleep' } }
+          ? {
+              ...tab,
+              // Why the fallback withholds rather than denies: a tab this sleep did not judge is unknown.
+              dormancy: terminalTabDormancy(
+                'workspace-sleep',
+                sleepContinuityByTabId?.get(tab.id) ?? 'unconfirmed'
+              )
+            }
           : tab
       )
     set((s) => {

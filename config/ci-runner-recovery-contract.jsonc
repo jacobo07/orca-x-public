@@ -1,0 +1,70 @@
+// CI runner recovery contract -- the one place that says what "capacity came back" means for this
+// fork, and what to do the moment it does. `pnpm report:ci-capacity` READS this file for its
+// boundary, so the answer and the definition cannot drift apart.
+//
+// Every timestamp below was read from the GitHub API (`created_at`, `completed_at`), never
+// transcribed from a note. Two earlier records said "01:51 UTC" and "12:43 UTC": both were local
+// CEST time labelled as UTC, two hours late. The API values are the ones below.
+{
+  "repository": "jacobo07/orca-x",
+  // Resolved by config/scripts/ci-repo-scope.mjs: --repo=owner/name, else the `origin` remote.
+  // Never the tool default -- in this checkout `gh` resolves an unscoped call to `upstream`
+  // (stablyai/orca), whose CI is healthy, so an ambient answer can only ever say "restored".
+  "scopeRule": "explicit --repo, else origin remote; refuse otherwise",
+
+  "lastExecutedRun": {
+    "id": 34726494245,
+    "workflow": "E2E refs/heads/main",
+    "createdAt": "2026-09-12T23:51:28Z",
+    "lastJobCompletedAt": "2026-09-13T00:23:37Z",
+    "evidence": "12 of 13 jobs on real runners (runner_id 1000002308..1000002319); one condition-skipped",
+    "runUrl": "https://github.com/jacobo07/orca-x/actions/runs/34726494245"
+  },
+  "firstStarvedRun": {
+    "id": 34752613206,
+    "workflow": "Computer-use e2e",
+    "createdAt": "2026-09-13T10:43:50Z",
+    "evidence": "jobs with runner_id 0 and no steps, the rest condition-skipped",
+    "runUrl": "https://github.com/jacobo07/orca-x/actions/runs/34752613206"
+  },
+
+  // Execution observed at or after this instant ends the outage. It is the FIRST STARVATION, not
+  // the last execution: nothing is known about the ~10 h between them, and a run that executed in
+  // that window happened before capacity was lost, so it must not count as capacity returning.
+  "starvationBoundary": "2026-09-13T10:43:50Z",
+
+  // Highest rung reached by anything this fork has created since the boundary. Re-measure with
+  // `pnpm report:ci-capacity`; do not hand-edit this to a better answer.
+  "currentAltitude": {
+    "rung": "RUN_CREATED",
+    "state": "EXECUTOR_UNAVAILABLE",
+    "measuredAt": "2026-09-22T15:40:00Z",
+    "measurement": "20 most recent runs: 0 executed, 73 starved, 21 skipped, 0 unknown -> NOT_RESTORED",
+    "latestStarvedRunUrl": "https://github.com/jacobo07/orca-x/actions/runs/35738019166"
+  },
+
+  // What RESTORED requires, stated so nobody has to reconstruct it.
+  "restoredWhen": "a job on a run created at or after starvationBoundary has runner_id > 0 and at least one step; condition-skipped jobs, unreadable runs and unrecognised job shapes never count either way",
+
+  // Not claimed: nothing here has read the account's billing or runner settings. EXECUTOR_UNAVAILABLE
+  // is what run metadata shows. Why no runner is assigned is an Owner-only fact.
+  "ownerOnlyUnknowns": [
+    "why no runner is assigned (billing, spending limit, org policy, runner-group settings)",
+    "whether pushing more commits to PR #5 is wanted while another pane writes the same branch"
+  ],
+
+  "evidenceVehicle": {
+    "pr": 5,
+    "role": "puts the eight orphan ratchet gates and the meta-gate in front of a real runner",
+    "remoteHeadAtLastCheck": "239b7385e",
+    "note": "local branch is ahead of this; the PR does not contain the capacity reporter or the mutation transaction until pushed"
+  },
+
+  // The first thing to do once the verdict flips, in order. Uses the existing vehicle; opens nothing new.
+  "onRestored": [
+    "re-run `pnpm report:ci-capacity` and keep the RESTORED line with its run id as evidence",
+    "push the branch to PR #5 (after checking the sibling writer is quiescent) and let pr.yml run",
+    "classify that run with `pnpm report:ci-execution-rungs <runId>`; only VERDICT_OBSERVED jobs are statements about the code",
+    "start accruing CI evidence runs and flake history in config/reliability-gates.jsonc from runs that reached a runner, never from starved ones"
+  ]
+}

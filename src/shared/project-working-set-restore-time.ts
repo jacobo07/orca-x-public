@@ -1,4 +1,5 @@
 import { classifyCaptureTimeRestoreCapability } from './project-working-set-restore-capability'
+import { provenExactResume } from './proven-exact-resume'
 import type {
   WorkingSetFactPresence,
   WorkingSetRestoreEvidence
@@ -112,7 +113,7 @@ export function classifyRestoreTimeCapability(
   if (captured === 'exact-resume') {
     const transcript = facts?.transcript ?? 'unknown'
     if (transcript !== 'absent') {
-      if (transcript === 'present' && location === 'present') {
+      if (provenExactResume(transcript, location)) {
         return verdict('exact-resume')
       }
       reasons.push(location === 'present' ? 'resume-unconfirmed' : 'location-unconfirmed')

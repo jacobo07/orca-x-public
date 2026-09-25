@@ -60,6 +60,7 @@ import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentSessionLivePresenceHandlers } from './agent-session-live-presence-ipc'
+import { registerAgentTranscriptPresenceHandler } from './agent-transcript-presence-ipc'
 import {
   createLiveAgentSessionPresenceDeps,
   getLiveSessionMaterializationReservations
@@ -159,6 +160,7 @@ export function registerCoreHandlers(
     () => createLiveAgentSessionPresenceDeps(store, runtime),
     getLiveSessionMaterializationReservations
   )
+  registerAgentTranscriptPresenceHandler()
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerConversationHandlers(

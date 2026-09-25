@@ -5,6 +5,8 @@ import process from 'node:process'
 
 import { parse, printParseErrorCode } from 'jsonc-parser'
 
+import { readOriginUrlFromGit, resolveRepoScope } from './ci-repo-scope.mjs'
+import { RUNG } from './report-ci-execution-rungs.mjs'
 import {
   ASSERTION_BASELINE_PATH,
   createAssertionSourceReader,
@@ -21,7 +23,9 @@ const PROTECTION_LEVELS = new Set(['none', 'partial', 'active'])
 const EVIDENCE_RUN_RESULTS = new Set(['passed', 'failed', 'skipped'])
 const EVIDENCE_RUNNERS = new Set(['local', 'ci', 'soak', 'manual'])
 
-const ACTIONS_RUN_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/
+// The repository is captured: a well-formed URL naming another repository's run is still not
+// evidence about this one. See findCiEvidenceAttributionFailures.
+const ACTIONS_RUN_URL = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/actions\/runs\/\d+$/
 
 /**
  * `runner: "ci"` claims recorded before provenance was required.
@@ -32,7 +36,8 @@ const ACTIONS_RUN_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs
  * something a reader can open, and it is the only runner value where the claim is checkable at all.
  *
  * Why it matters here specifically: measured 2026-09-21, this repository has not been assigned a
- * GitHub-hosted runner since 2026-09-13 01:51 UTC. Every run created since then finished in
+ * GitHub-hosted runner since 2026-09-13T10:43:50Z (first starved run; the earlier "01:51 UTC" was
+ * CEST wall-clock -- see config/ci-runner-recovery-contract.jsonc). Every run created since then finished in
  * seconds with no runner and no steps. In that world a `ci` claim is not merely unverified, it is
  * the one claim that has become impossible to honestly make, and nothing in the schema noticed.
  *
@@ -465,7 +470,7 @@ export const VERDICT_CHECKER_INTERNAL_FAILURE = 'CHECKER INTERNAL FAILURE'
  * could not judge that gate — a different fact from the gate being invalid, and separated here so
  * one unanticipated field shape cannot take down the verdict for the whole manifest.
  */
-export async function validateManifest(manifest, root) {
+export async function validateManifest(manifest, root, { resolveSubjectRepo } = {}) {
   const failures = []
   const internalFailures = []
   if (!isRecord(manifest)) {
@@ -525,7 +530,91 @@ export async function validateManifest(manifest, root) {
         'any more; remove the stale entry from CI_EVIDENCE_WITHOUT_PROVENANCE'
     )
   }
+  const attribution = findCiEvidenceAttributionFailures(
+    manifest,
+    resolveSubjectRepo ??
+      (() =>
+        resolveRepoScope({
+          argv: process.argv.slice(2),
+          readOriginUrl: () => readOriginUrlFromGit(root)
+        }).repo)
+  )
+  failures.push(...attribution.failures)
+  if (attribution.internalFailure) {
+    internalFailures.push(attribution.internalFailure)
+  }
   return { failures, internalFailures }
+}
+
+/**
+ * A ci run URL proves a run happened. It proves neither that the run was about THIS repository nor
+ * that it executed anything, and on this fork both have failed:
+ *
+ * - `upstream` is alive, so a URL naming stablyai/orca is well-formed, opens, and shows a real
+ *   verdict -- about somebody else's code.
+ * - Since the 2026-09-13 starvation every run here completes in seconds with no runner. Its URL is
+ *   valid and its `failure` says nothing about any gate.
+ *
+ * So a ci run with a URL must name the subject repository and declare the highest rung it reached,
+ * which `pnpm report:ci-execution-rungs <runId>` prints. Only VERDICT_OBSERVED is evidence.
+ *
+ * The subject is resolved only when there is a URL to judge. A subject that cannot be resolved is
+ * the checker failing to judge, reported as such -- never a manifest failure, never a default.
+ */
+export function findCiEvidenceAttributionFailures(manifest, resolveSubjectRepo) {
+  const claims = []
+  const gates = isRecord(manifest) && Array.isArray(manifest.gates) ? manifest.gates : []
+  for (const gate of gates) {
+    if (!isRecord(gate)) {
+      continue
+    }
+    // Isolated per gate, like validateGate: a field that throws on access must not take down the
+    // verdict for every other gate. That gate is already reported as one the checker could not
+    // judge, so it is skipped here rather than reported twice.
+    let runs
+    try {
+      runs = asArray(gate.evidenceRuns)
+    } catch {
+      continue
+    }
+    runs.forEach((run, index) => {
+      const match =
+        isRecord(run) && run.runner === 'ci' ? ACTIONS_RUN_URL.exec(run.runUrl ?? '') : null
+      if (match) {
+        claims.push({ owner: `${gate.id}: evidenceRuns[${index}]`, run, repo: match[1] })
+      }
+    })
+  }
+  if (claims.length === 0) {
+    return { failures: [], internalFailure: null }
+  }
+  let subject
+  try {
+    subject = resolveSubjectRepo()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      failures: [],
+      internalFailure: `the checker could not tell which repository ci evidence must be about (${message})`
+    }
+  }
+  const failures = []
+  for (const { owner, run, repo } of claims) {
+    if (repo.toLowerCase() !== String(subject).toLowerCase()) {
+      failures.push(
+        `${owner}.runUrl names ${repo}, but this manifest's evidence is about ${subject}: ` +
+          "another repository's run is not evidence here"
+      )
+    }
+    if (run.highestRung !== RUNG.VERDICT_OBSERVED) {
+      failures.push(
+        `${owner}.highestRung must be ${RUNG.VERDICT_OBSERVED}: a run assigned no runner, or with ` +
+          'no step conclusion, says nothing about this gate (classify it with ' +
+          'pnpm report:ci-execution-rungs <runId>)'
+      )
+    }
+  }
+  return { failures, internalFailure: null }
 }
 
 /**
@@ -627,7 +716,8 @@ async function pruneAssertionBaseline(manifest, root) {
   return 0
 }
 
-export async function main(root = process.cwd()) {
+/** `options.resolveSubjectRepo` names the repository ci evidence must be about; tests inject it. */
+export async function main(root = process.cwd(), options = {}) {
   const manifestPath = path.join(root, MANIFEST_PATH)
   let raw
   try {
@@ -654,7 +744,7 @@ export async function main(root = process.cwd()) {
   }
   let result
   try {
-    result = await validateManifest(manifest, root)
+    result = await validateManifest(manifest, root, options)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`The checker failed before it could judge the manifest (${message})`)

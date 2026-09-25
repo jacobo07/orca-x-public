@@ -51,6 +51,7 @@
     "check:status-semantics": "node config/scripts/check-status-semantics.mjs",
     "check:ci-gate-coverage": "node config/scripts/check-ci-gate-coverage.mjs",
     "report:ci-execution-rungs": "node config/scripts/report-ci-execution-rungs.mjs",
+    "report:ci-capacity": "node config/scripts/report-ci-capacity.mjs",
     "discover:generated-images": "node config/scripts/codex-generated-image-discovery.mjs",
     "capture:visual-producer": "node config/scripts/capture-visual-producer.mjs",
     "generate:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --write",
