@@ -266,8 +266,22 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'gate-create'],
     summary: 'Create a decision gate blocking a task',
     usage:
-      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request']
+      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--worktree <path> --project <project_id> [--revision <rev>] [--require-review none|any|independent]] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'task',
+      'question',
+      'options',
+      'worktree',
+      'project',
+      'revision',
+      'require-review',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'With --worktree the gate approves that exact commit: only a person can decide it, in Orca, and the task runs only while the commit is unchanged.'
+    ]
   },
   {
     path: ['orchestration', 'gate-resolve'],

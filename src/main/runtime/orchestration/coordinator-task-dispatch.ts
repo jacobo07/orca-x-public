@@ -8,8 +8,10 @@ import {
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
 import { admitDispatch, describeDispatchRefusal } from './dispatch-admission'
+import { authorizeGatedEffect } from './subject-bound-gates'
+import { captureRevisionSubject } from './review-subject-capture'
 
-export type TaskDispatchResult = 'dispatched' | 'stale-base-refused' | 'budget-refused'
+export type TaskDispatchResult = 'dispatched' | 'stale-base-refused' | 'budget-refused' | 'approval-refused'
 
 // Why: 10 min = documented heartbeat cadence (5 min) × 2, so one missed heartbeat is the earliest a dispatch can look stale.
 const HUNG_THRESHOLD_MS = 10 * 60 * 1000
@@ -103,6 +105,17 @@ export async function dispatchTaskToWorker(params: {
       `${describeDispatchRefusal(task.id, admission)} Task remains in 'ready'; coordinator will retry on the next tick.`
     )
     return 'budget-refused'
+  }
+
+  // Why last among the awaits: from here to the prompt below is synchronous, so a subject-bound
+  // approval is judged against the commit as it is when the worker is told to act.
+  const approval = await authorizeGatedEffect(db, task.id, captureRevisionSubject)
+  if (!approval.authorized) {
+    if (approval.reason === 'awaiting-approval') {
+      db.updateTaskStatus(task.id, 'blocked')
+    }
+    onLog(`Not dispatching ${task.id}: gate ${approval.gateId} ${approval.reason}.`)
+    return 'approval-refused'
   }
 
   const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(targetHandle)

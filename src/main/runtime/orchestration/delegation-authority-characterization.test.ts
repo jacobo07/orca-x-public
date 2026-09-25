@@ -69,15 +69,22 @@ describe('delegation authority, as found', () => {
     expect(beyond).toThrow(/delegation-depth-exceeded/)
   })
 
-  it('resolves a decision gate with free text bound to no revision', () => {
+  // Inverted by P5: a gate can name the exact commit it approves, and then free text cannot decide it.
+  it('binds a decision gate to a commit, which free-text resolution can no longer approve', () => {
     const db = createDb()
     const task = db.createTask({ spec: 'change the migration' })
-    const gate = db.createGate({ taskId: task.id, question: 'Ship this patch?' })
+    const gate = db.createGate({
+      taskId: task.id,
+      question: 'Ship this patch?',
+      subject: { projectId: 'p', worktreePath: '/w', revision: 'a'.repeat(40), patchHash: 'h' }
+    })
 
-    const resolved = db.resolveGate(gate.id, 'approved')
-
-    expect(resolved?.status).toBe('resolved')
-    expect(Object.keys(resolved!).filter((key) => /subject|revision|commit/.test(key))).toEqual([])
-    expect(db.getTask(task.id)?.status).toBe('ready')
+    expect(JSON.parse(gate.subject!)).toMatchObject({ revision: 'a'.repeat(40), patchHash: 'h' })
+    expect(() => db.resolveGate(gate.id, 'approved')).toThrow(/decide it in Orca/)
+    expect(db.getGate(gate.id)?.status).toBe('pending')
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+    // A gate that names no commit keeps its free-text shape.
+    const loose = db.createGate({ taskId: db.createTask({ spec: 'other' }).id, question: 'Proceed?' })
+    expect(db.resolveGate(loose.id, 'approved')?.status).toBe('resolved')
   })
 })

@@ -1283,6 +1283,14 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
       options: getOptionalStringFlag(flags, 'options'),
+      ...(getOptionalStringFlag(flags, 'worktree')
+        ? {
+            worktree: resolvePath(cwd, getOptionalStringFlag(flags, 'worktree')!),
+            project: getOptionalStringFlag(flags, 'project'),
+            revision: getOptionalStringFlag(flags, 'revision'),
+            requireReview: getOptionalStringFlag(flags, 'require-review')
+          }
+        : {}),
       // Why: gates are Run-scoped, so the coordinator handle is the caller identity the runtime authorizes against.
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })

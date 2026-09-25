@@ -5,6 +5,8 @@ import type { GateStatus } from '../../orchestration/db'
 import { Coordinator } from '../../orchestration/coordinator'
 import { resolveRunScope } from './orchestration-run-scope'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { isAbsolute } from 'node:path'
+import { captureRevisionSubject } from '../../orchestration/review-subject-capture'
 
 // Why: the coordinator instance is stored at module scope so orchestration.runStop
 // can signal it to halt. Only one coordinator can run at a time (enforced by
@@ -26,7 +28,12 @@ const GateCreateParams = z.object({
   question: requiredString('Missing --question'),
   options: OptionalString,
   from: OptionalString,
-  run: OptionalString
+  run: OptionalString,
+  // Binding a gate to a commit: Orca captures it from --worktree; only a person can then decide it.
+  worktree: OptionalString,
+  project: OptionalString,
+  revision: OptionalString,
+  requireReview: z.enum(['none', 'any', 'independent']).optional()
 })
 
 const GateResolveParams = z.object({
@@ -42,6 +49,25 @@ const GateListParams = z.object({
   from: OptionalString,
   run: OptionalString
 })
+
+async function captureGateSubject(params: z.infer<typeof GateCreateParams>) {
+  if (!params.project) {
+    throw new Error('Missing --project: a gate bound to a commit must name its project')
+  }
+  if (!isAbsolute(params.worktree!)) {
+    throw new Error('Invalid --worktree: must be an absolute path')
+  }
+  const captured = await captureRevisionSubject(params.worktree!, params.revision)
+  if (captured.outcome !== 'captured') {
+    throw new OrchestrationError('subject_unreadable', `${captured.reason}: ${captured.detail}`)
+  }
+  return {
+    projectId: params.project,
+    worktreePath: params.worktree!,
+    revision: captured.subject.revision,
+    patchHash: captured.subject.patchHash
+  }
+}
 
 export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   // Why: Section 4.12 — orchestration.run returns immediately with a run ID.
@@ -111,7 +137,7 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.gateCreate',
     params: GateCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: async (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       let options: string[] | undefined
       if (params.options) {
@@ -142,10 +168,12 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
           `Task ${params.task} was not found in Run ${run.id}.`
         )
       }
+      const subject = params.worktree ? await captureGateSubject(params) : undefined
       const gate = db.createGate({
         taskId: params.task,
         question: params.question,
-        options
+        options,
+        ...(subject ? { subject, reviewRequirement: params.requireReview ?? 'none' } : {})
       })
       return { gate }
     }

@@ -7661,19 +7661,29 @@ export class OrchestrationDb {
 
   // ── Decision Gates ──
 
-  createGate(gate: { taskId: string; question: string; options?: string[] }): DecisionGateRow {
+  createGate(gate: {
+    taskId: string
+    question: string
+    options?: string[]
+    /** Binds the gate to an exact subject; only a person decides it (subject-bound-gates.ts). */
+    subject?: { projectId: string; worktreePath: string; revision: string; patchHash: string }
+    reviewRequirement?: 'none' | 'any' | 'independent'
+  }): DecisionGateRow {
     const id = generateId('gate')
     const optionsJson = JSON.stringify(gate.options ?? [])
     this.db
       .prepare(
-        'INSERT INTO decision_gates (id, run_id, task_id, question, options) VALUES (?, ?, ?, ?, ?)'
+        `INSERT INTO decision_gates (id, run_id, task_id, question, options, subject, review_requirement)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
         this.getTask(gate.taskId)?.run_id ?? LEGACY_RUN_ID,
         gate.taskId,
         gate.question,
-        optionsJson
+        optionsJson,
+        gate.subject ? JSON.stringify(gate.subject) : null,
+        gate.subject ? (gate.reviewRequirement ?? 'none') : null
       )
 
     this.completeActiveDispatchForTask(gate.taskId)
@@ -7689,6 +7699,14 @@ export class OrchestrationDb {
     if (!gate) {
       return undefined
     }
+    // Why here, not in the RPC: every free-text path passes through this method, and free text can
+    // come from a worker terminal, which cannot stand in for the person a subject-bound gate needs.
+    if (gate.subject !== null) {
+      throw new OrchestrationError(
+        'gate_requires_person',
+        'This gate approves an exact commit; decide it in Orca, where a person sees what it approves.'
+      )
+    }
 
     this.db
       .prepare(
@@ -7702,6 +7720,64 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
       | DecisionGateRow
       | undefined
+  }
+
+  /** A person's decision on a subject-bound gate. Approval readies the task; rejection fails it —
+   *  unlike free-text resolution, a "no" must never put the task back in line. */
+  decideSubjectGate(gateId: string, decision: 'approved' | 'rejected'): DecisionGateRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `UPDATE decision_gates SET status = 'resolved', resolution = ?, decision = ?,
+             resolved_at = datetime('now') WHERE id = ? AND status = 'pending'`
+        )
+        .run(decision, decision, gateId)
+      const gate = this.getGate(gateId)!
+      this.db
+        .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+        .run(decision === 'approved' ? 'ready' : 'failed', gate.task_id)
+      this.db.exec('COMMIT')
+      return gate
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  /** An approval that no longer holds at the effect: kept on record as what was approved, and the
+   *  gate is pending again so a person decides about what is there now. */
+  staleSubjectGate(gateId: string): void {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `UPDATE decision_gates SET status = 'pending', decision = 'stale', resolved_at = NULL
+             WHERE id = ? AND decision = 'approved'`
+        )
+        .run(gateId)
+      const gate = this.getGate(gateId)
+      if (gate) {
+        this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.task_id)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  /** Points a pending gate at the subject as it is now. Authorizes nothing: a person still decides. */
+  rebindSubjectGate(
+    gateId: string,
+    subject: { projectId: string; worktreePath: string; revision: string; patchHash: string }
+  ): DecisionGateRow | undefined {
+    this.db
+      .prepare(
+        "UPDATE decision_gates SET subject = ?, decision = NULL WHERE id = ? AND status = 'pending' AND subject IS NOT NULL"
+      )
+      .run(JSON.stringify(subject), gateId)
+    return this.getGate(gateId)
   }
 
   timeoutGate(gateId: string): DecisionGateRow | undefined {
