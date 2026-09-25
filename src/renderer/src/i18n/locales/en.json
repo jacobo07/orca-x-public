@@ -1,4 +1,33 @@
 {
+  "workspace": {
+    "federation": {
+      "approvalStale": "Approval stale: the commit changed",
+      "approve": "Approve this commit",
+      "approved": "Approved",
+      "approvedByReview": "Approved by review",
+      "awaiting": "Awaiting your decision",
+      "blockIndependent": "Needs an independent review of this commit.",
+      "blockMoved": "The worktree no longer holds this commit.",
+      "blockReview": "Needs an approving review of this exact commit.",
+      "blockUnreadable": "Orca cannot read this commit now.",
+      "changesRequested": "Changes requested",
+      "current": "Current",
+      "independenceUnknown": "Independence unknown",
+      "independent": "Independent",
+      "none": "No reviews or approvals for this agent",
+      "reject": "Reject",
+      "rejected": "Rejected",
+      "reviewFailed": "Review did not run",
+      "reviewRunning": "Review requested",
+      "reviewUnstructured": "Reviewed, no structured verdict",
+      "sameAgent": "Not independent: same agent",
+      "sameProvider": "Not independent: same provider",
+      "stale": "Stale: the commit has changed",
+      "title": "Reviews and approvals",
+      "unreadable": "Commit cannot be read now",
+      "useCurrent": "Use current commit"
+    }
+  },
   "durableExit": {
     "toast": {
       "parked": "Everything is asleep and saved. Orca is closing.",

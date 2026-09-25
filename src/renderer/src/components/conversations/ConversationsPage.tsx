@@ -15,6 +15,7 @@ import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 
 import { AgentChatHeader } from './AgentChatHeader'
 import { AgentContextRail } from './AgentContextRail'
+import { AgentFederationCards } from './AgentFederationCards'
 import { conversationsInScope, latestConversationForAgent } from './agent-chat-scope'
 import { CognitiveWorkspaceLayout } from './CognitiveWorkspaceLayout'
 import { ConnectedApplicationsCard } from './ConnectedApplicationsCard'
@@ -293,6 +294,7 @@ export default function ConversationsPage(): React.JSX.Element {
                 onOpen={setOpenApp}
               />
             ) : null}
+            <AgentFederationCards agentId={scopedRow?.agent.id ?? null} />
           </AgentContextRail>
         )
       }

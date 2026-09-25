@@ -129,13 +129,34 @@ Owner approved (2026-09-24): PLAN MODE; Claude driver YES; do NOT register ÁGOR
   DEBT: plan-mode Claude turns write `~/.claude/plans/<slug>.md` in the user's home (2 files from probes).
 - Live Claude spend this session: ~9 turns (P4b 3, bridge 3, delegation 3).
 
+- **Workspace merged** `4176d6b13` (cogws-product-surface@33b8d089a; unions; routing now in the shared
+  handler set, agent-task runner desktop-only). GEX44: tsc 0/0/2-inherited, 5 gates, 4430 passed.
+- **P6** `13a5b9e62`..`ddc6f67d8`: `readAgentFederationView` + IPC `federation:*` (decide/rebind only from
+  Orca's window) + `AgentFederationCards` in the agent rail; claims 18 sites green; recurring-work debt 0;
+  en.json +25 keys (localization back to base, still red on pre-existing workspace.*). E2E spec
+  `agent-federation-approval.spec.ts` (RPC-seeded gate, repo moves, rebind, approve, gateList).
+
+- **P6 SEALED**: e2e `agent-federation-approval.spec.ts` PASSED on GEX44 @ddc6f67d8 (fresh build, xvfb,
+  48.6 s). Mutations: U1 untrusted sender decides / U4 all ready / U2 UI hides moved commit (e2e) — all
+  CAUGHT, restores SHA-verified. Guard test `src/main/ipc/agent-federation.test.ts`.
+- **P7 (first gate) SEALED** `204738aaa`: `approval-authority-aperture.test.ts` — only the desktop IPC may
+  import decide/rebind; floor, reason, synthetic drill, and a REAL planted RPC import went red.
+  UKDL: `~/.claude/knowledge_vault/ukdl/agent-review-and-human-approval.md` (HR-FED-01..06, PR, T).
+
 ## 4. Next 3 actions
-1. P6 surface: merge `orca-x/cogws-product-surface@33b8d089a` (conflicts: pr.yml, package.json,
-   src/main/ipc/conversations.ts), then desktop IPC for gate decide/rebind + review/approval rows in
-   Workspace, each with a producer in `workspace-surface-claims.jsonc`; Electron e2e (on GEX44, xvfb).
-2. P7: architecture gates + UKDL + vault entries (list in section 3 of the session report).
-3. Plan-mode side effect: decide whether tool-less Claude turns also move to the Read/Grep/Glob posture.
-Then P7 gate + UKDL, P8 GEX44 local runtime (Owner approved install; RTX 4000 Ada 20 GB).
+1. P8 — MEASURED 2026-09-25, the premise changed: GEX44 ALREADY serves `qwen3-coder-30b`
+   (Qwen3-Coder-30B-A3B Q4_K_M) via `/opt/keos-llm/bin/llama-server` on 127.0.0.1:8081 (OpenAI-compatible,
+   `--jinja`, /health ok), owned by KEOS, holding 16.8 of 20 GB VRAM — no room for a second model, and
+   installing one would be "new before extend". P8 = an Orca provider driver that is a CLIENT of an
+   OpenAI-compatible endpoint (URL configured; loopback on GEX44, ssh tunnel from a desktop), through the
+   same ConversationTurnDriver + routing contract; never touch KEOS's server. Live proof runs ON GEX44
+   (vitest there, real endpoint), then the first LIVE independent review: claude builds, local reviews.
+   Disk 96% (68 GB free). Ralph cannot run on GEX44 yet: its claude is 2.1.113 (no `--bg`) and the Ralph
+   sweep is a Windows scheduled task.
+2. Open decisions: should headless serve (now hosting conversations) run agent tasks? Should tool-less
+   Claude turns leave plan mode (it writes `~/.claude/plans/*.md`)?
+3. P7 remainder: more gates (session id provider-scoped, failed turn never completed) as aperture/AST
+   checks; the Workspace program owns the pre-existing `workspace.*` localization debt.
 Local host is starved (~0.9-4 GB free): run tests on GEX44 (`/home/kobii/fed-wt`, push
 `HEAD:refs/federation/head`, assert REV); local only for the opt-in live Claude tests.
 

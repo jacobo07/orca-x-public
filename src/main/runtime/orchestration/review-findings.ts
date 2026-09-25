@@ -1,27 +1,26 @@
 // What a review concluded, as a structure its consumers (approvals, the Workspace) can act on.
 // The reviewer is asked for one JSON block; a reply that does not follow the contract is recorded
 // as `unstructured` — never guessed into a verdict — and a review that did not run is `failed`.
+import type {
+  ReviewFinding,
+  ReviewFindingsDocument,
+  ReviewSeverity,
+  ReviewVerdict
+} from '../../../shared/agent-federation-view'
+
 export const REVIEW_FINDINGS_SCHEMA = 'orca.review-findings/1'
 
 /** A patch larger than this is refused rather than truncated: a reviewer shown part of a subject
  *  would sign off on bytes it never saw. */
 export const REVIEW_PATCH_MAX_CHARS = 120_000
 
-export type ReviewSeverity = 'blocker' | 'major' | 'minor' | 'note'
-export type ReviewVerdict = 'approve' | 'changes-requested'
-export type ReviewFinding = { severity: ReviewSeverity; summary: string; location?: string }
-
-export type ReviewFindingsDocument =
-  | {
-      schema: typeof REVIEW_FINDINGS_SCHEMA
-      kind: 'structured'
-      verdict: ReviewVerdict
-      findings: ReviewFinding[]
-      /** True when the verdict asks for changes or any finding is a blocker. */
-      blocking: boolean
-    }
-  | { schema: typeof REVIEW_FINDINGS_SCHEMA; kind: 'unstructured'; problem: string; excerpt: string }
-  | { schema: typeof REVIEW_FINDINGS_SCHEMA; kind: 'failed'; reason: string; detail: string }
+// Why in shared: the Workspace renders this document as main stored it.
+export type {
+  ReviewFinding,
+  ReviewFindingsDocument,
+  ReviewSeverity,
+  ReviewVerdict
+} from '../../../shared/agent-federation-view'
 
 const SEVERITIES: readonly ReviewSeverity[] = ['blocker', 'major', 'minor', 'note']
 const VERDICTS: readonly ReviewVerdict[] = ['approve', 'changes-requested']
