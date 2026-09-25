@@ -582,6 +582,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
+      // No main process captured anything here, and a browser reload is the browser's own.
+      takeReloadFreezeFrame: () => Promise.resolve(null),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       // The web client cannot inspect local Mission Control shortcuts.
       getMacCapturedDigitRowChords: () => Promise.resolve([]),

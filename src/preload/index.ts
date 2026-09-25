@@ -100,6 +100,7 @@ import type {
 } from '../shared/notification-settings-types'
 import type { OnboardingState } from '../shared/onboarding-state-types'
 import type { PersistedUIState } from '../shared/persisted-ui-state-types'
+import type { ReloadFreezeFrame } from '../shared/reload-freeze-frame'
 import type { CustomPet } from '../shared/pet-types'
 import type { MemorySnapshot } from '../shared/process-stats-types'
 import type { NestedRepoScanResult } from '../shared/project-group-types'
@@ -580,6 +581,8 @@ const api = {
       startupDiagnosticsEnabled
         ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
         : Promise.resolve(),
+    takeReloadFreezeFrame: (): Promise<ReloadFreezeFrame | null> =>
+      ipcRenderer.invoke('app:takeReloadFreezeFrame'),
     // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
