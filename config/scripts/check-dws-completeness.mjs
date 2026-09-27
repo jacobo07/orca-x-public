@@ -22,8 +22,8 @@ export const MATRIX_PATH = 'config/dws-completion-matrix.jsonc'
 export const PACKAGE_PATH = 'package.json'
 
 // Why: a parser that silently stopped seeing rows reports a short, clean matrix. The floor forces
-// it to prove it could still see all 55 before its verdict is trusted.
-export const MINIMUM_ROWS = 55
+// it to prove it could still see all 76 (55 dws + 21 Host/Workspace Fabric) before its verdict is trusted.
+export const MINIMUM_ROWS = 76
 
 export const ROW_STATES = Object.freeze(['PASS', 'PARTIAL', 'ABSENT', 'BLOCKED', 'UNKNOWN', 'NAMED_DEBT'])
 export const STATE_SOURCES = Object.freeze(['stage-zero-seed', 'measured'])

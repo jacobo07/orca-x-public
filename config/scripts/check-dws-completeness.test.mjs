@@ -173,7 +173,7 @@ describe('population floor', () => {
   })
 
   it('pins the production floor so the override seam cannot quietly lower it', () => {
-    expect(MINIMUM_ROWS).toBe(55)
+    expect(MINIMUM_ROWS).toBe(76)
   })
 })
 
@@ -269,7 +269,7 @@ describe('the sweep can still see this repository', () => {
     expect([0, 1]).toContain(await main(REPO_ROOT))
   })
 
-  it('the real matrix has zero internal failures, 55 rows, and no stale citation', () => {
+  it('the real matrix has zero internal failures, 76 rows, and no stale citation', () => {
     const rawMatrix = readFileSync(path.join(REPO_ROOT, 'config', 'dws-completion-matrix.jsonc'), 'utf8')
     const withoutComments = rawMatrix.replace(/^\/\/.*$/gm, '')
     const matrix = JSON.parse(withoutComments)
@@ -283,7 +283,7 @@ describe('the sweep can still see this repository', () => {
       minimumRows: MINIMUM_ROWS
     })
     expect(internalFailures).toEqual([])
-    expect(counts.total).toBe(55)
+    expect(counts.total).toBe(76)
     expect(failures.filter((failure) => failure.kind === 'unresolved-evidence')).toEqual([])
   })
 })

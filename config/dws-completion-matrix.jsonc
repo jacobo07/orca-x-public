@@ -960,6 +960,363 @@
       ],
       "evidence": [],
       "reason": "Stage Zero: ABSENT — planted regression red not yet evidenced"
+    },
+    {
+      "id": 56,
+      "row": "HF Host identity for SSH targets",
+      "owner": "ssh-relay-session + fleet-host-identity",
+      "done": "an SSH target has a pinned host-key identity; a changed key is refused, never re-trusted",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        14
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: fleet-observation-service.ts:140-162 sshTargets not-enumerated; fabric.md:50 'no Orca identity'"
+    },
+    {
+      "id": 57,
+      "row": "HF Device registry durability",
+      "owner": "secure-file + durability-contracts",
+      "done": "orca-devices.json written with a barrier and carrying a durability contract",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        14
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: roaming scan 2026-09-20: orca-devices.json non-durable, uncontracted"
+    },
+    {
+      "id": 58,
+      "row": "HF Revocation at the mutating effect",
+      "owner": "runtime auth / device tokens",
+      "done": "a revoked device with a live connection is refused at the next mutation",
+      "state": "UNKNOWN",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        14
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: revocation exists at pairing; effect-time re-check not measured"
+    },
+    {
+      "id": 59,
+      "row": "HF Remote-first continuity",
+      "owner": "providers routed by connectionId/runtime owner",
+      "done": "a second client opens a host-only project; fs/git/pty/agents act on the owning host; reconnect keeps work",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        15
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: ssh-filesystem-dispatch.ts:21, repo-runtime-owner.ts:124-139; no two-host proof"
+    },
+    {
+      "id": 60,
+      "row": "HF Logical workspace identity without a remote",
+      "owner": "project-host-setup-projection",
+      "done": "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        16
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: project-host-setup-projection.ts:112-116 repo: fallback is per-host"
+    },
+    {
+      "id": 61,
+      "row": "HF Replica topology surface",
+      "owner": "Project + ProjectHostSetup",
+      "done": "UI and CLI list every replica of a logical workspace with its host and role",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        16
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: ProjectHostSetup exists (project-types.ts:50-70); no replica role/state surface"
+    },
+    {
+      "id": 62,
+      "row": "HF Replica state model",
+      "owner": "new workspace-replica-state module",
+      "done": "evidence-based states; unknown never healthy; timestamps never decide",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        17
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: no cross-host comparison in src/{main,relay,shared}"
+    },
+    {
+      "id": 63,
+      "row": "HF Cross-host comparison transport",
+      "owner": "relay git + bundle",
+      "done": "ancestry decided on transferred objects (bundle verified); relay capability-probed",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        17
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: git-exec-validator.ts:19 allowlist lacks rev-list/bundle"
+    },
+    {
+      "id": 64,
+      "row": "HF Dirty-state capsule",
+      "owner": "git tree objects (UWCP A6 semantics)",
+      "done": "uncommitted state captured as a content-addressed commit under refs/orca/capsules",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        17
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: no stash/bundle/tree capture in src"
+    },
+    {
+      "id": 65,
+      "row": "HF One-way safe sync",
+      "owner": "sync pipeline",
+      "done": "fast-forward of a proven descendant, capsule first, generation-fenced; disk-full/disconnect/stale stay failures",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        18
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: no sync pipeline"
+    },
+    {
+      "id": 66,
+      "row": "HF Divergence and conflict workflow",
+      "owner": "sync pipeline + merge-tree preview",
+      "done": "diverged replicas preserved as refs; conflict surfaced; neither side overwritten",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        19
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: conflict-summary.ts:196-277 preview exists, single host only"
+    },
+    {
+      "id": 67,
+      "row": "HF Dirty-both reconciliation",
+      "owner": "sync pipeline",
+      "done": "same-base disjoint edits reconciled only when merge-tree is clean; otherwise conflict",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        19
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: none"
+    },
+    {
+      "id": 68,
+      "row": "HF Environment contract",
+      "owner": "orca.yaml",
+      "done": "declared requirements with probes on local, SSH and runtime hosts",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        20
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: orca-yaml-hook-types.ts:6-16 setup scripts only; preflight.ts:91,183 agent detection"
+    },
+    {
+      "id": 69,
+      "row": "HF Prepare this device",
+      "owner": "preflight + orca.yaml setup",
+      "done": "satisfied/missing/incompatible/unsupported/needs-authorization/unknown; only authorized actions run; no secrets",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        20
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: none"
+    },
+    {
+      "id": 70,
+      "row": "HF Continue here across hosts",
+      "owner": "working-set restore planner",
+      "done": "a working set translates through projectId to another host; each pane reattach/resume/restart/unavailable",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        21
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: project-working-set-restore-plan.ts:136-141 scope-mismatch blocker"
+    },
+    {
+      "id": 71,
+      "row": "HF SSH targets in fleet observation",
+      "owner": "fleet observation",
+      "done": "SSH hosts measured with freshness through the relay; unmeasured stays unknown",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        22
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: fleet-observation-service.ts:140-162"
+    },
+    {
+      "id": 72,
+      "row": "HF Jobs placed across hosts",
+      "owner": "orchestration dispatch + dws phase 6 apply",
+      "done": "two jobs of one mission run concurrently on two hosts with observable placement and integrated results",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        22
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: orchestration db.ts:619-645 tasks have no host; fleet-placement.ts:63 proposal authorizes nothing"
+    },
+    {
+      "id": 73,
+      "row": "HF Host loss and reconnect",
+      "owner": "ssh-relay-session reconnect",
+      "done": "host drops, others continue, return creates no duplicate PTY/agent/job",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        23
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: ssh-relay-session.ts reconnecting state exists; no fabric-level proof"
+    },
+    {
+      "id": 74,
+      "row": "HF Mixed relay versions fail closed",
+      "owner": "relay-handshake + capability probes",
+      "done": "an old relay rejects new sync/fabric methods; client never widens",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        23
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: relay-handshake.ts:206 exact-version exit 42; no fabric methods yet"
+    },
+    {
+      "id": 75,
+      "row": "HF Real two-host Production Reality",
+      "owner": "GEX44 disposable root",
+      "done": "every HF row claiming a cross-host property is exercised Windows<->GEX44 over real SSH",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        15
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: authorized 2026-09-27; not yet run"
+    },
+    {
+      "id": 76,
+      "row": "HF Multi-host baseline family",
+      "owner": "CPP modules/tower",
+      "done": "family multi_host_fabric B0 built from verified origins; a synthetic future violation goes red",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        24
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: tower has 4 families, none multi-host"
     }
   ],
   "namedDebt": [
