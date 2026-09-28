@@ -75,7 +75,7 @@ P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratche
     U9 chosen Resume skips admission, U10 restore trusts store. Baseline 20/20 green first.
   - Knowledge: memory orca-x-resume-center-p4-state + trap-hydrated-pty-ids-look-bound; UKDL
     ~/.claude/knowledge_vault/ukdl/restore-is-not-materialization.md.
-  - Final GEX44 3-spec run @93cadd9c3: see /home/kobii/rc-final.log (launched last).
+  - PROVEN GEX44 @93cadd9c3 (final): resume-center-resume + restore-no-wake + P3 spec, 3 passed (2.6 min).
   - UNMEASURED: per-session wake memory cost (needs a real provider run; Owner Q1 asked for it).
 - NEXT: P5 multi-window Park & Exit + blue D1 control; restore/resume across windows.
 - FINDINGS: workspace activation (`activateAndRevealWorktree` / `...FolderWorkspace`,
