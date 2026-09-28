@@ -510,8 +510,9 @@ jobs:
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
 
-  # Why: PR E2E is advisory and only validates changed specs; scheduled and
-  # release runs retain full-suite coverage.
+  # Why: PR E2E is advisory and runs the specs the change reaches (changed specs,
+  # mapped sources, or a golden floor for unmapped src/); scheduled and release
+  # runs retain full-suite coverage.
   e2e-paths:
     name: detect changed e2e specs
     runs-on: ubuntu-latest
@@ -535,12 +536,9 @@ jobs:
           set -euo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
-          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
-          if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$'; then
-            TEST_FILES="$(printf '%s\n%s\n' "$TEST_FILES" 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' | sort -u)"
-          fi
-          TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+          # Why a selector, not a spec-name filter: a production change must select the specs that
+          # cover it (config/e2e-impact-map.jsonc), and unknown impact runs a floor, never nothing.
+          TEST_FILES_JSON="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD" | node config/scripts/select-pr-e2e-specs.mjs)"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -595,8 +593,9 @@ jobs:
       # is worse than the honest gap documented here.
       #
       # The order is: (1) widen the filter so a source change selects the specs that
-      # cover it — today there is exactly one such mapping, the hand-written
-      # ephemeral-vm case above; (2) get the suite green without weakening
+      # cover it — DONE: config/scripts/select-pr-e2e-specs.mjs over
+      # config/e2e-impact-map.jsonc, where an unmapped src/ change runs a golden
+      # floor instead of nothing; (2) get the suite green without weakening
       # assertions; (3) only then add `e2e` to needs, add E2E to the env below, and
       # check `success || skipped` AFTER the loop — outside it, or it would excuse
       # the jobs above.

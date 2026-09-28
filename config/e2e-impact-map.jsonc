@@ -1,0 +1,85 @@
+// Which E2E specs a PR must run because of the production files it changes.
+//
+// Why this exists: the PR E2E job selected only changed tests/e2e/*.spec.ts files, so a PR that
+// rewrote src/** and broke a journey selected nothing and the job was `skipped` — a regression gate
+// the protected behaviour could not reach. Selection now starts from what changed in production.
+//
+// Rules the selector (config/scripts/select-pr-e2e-specs.mjs) applies:
+//   - a changed spec always runs;
+//   - a changed file matching an entry runs that entry's specs;
+//   - a changed file under `productionRoots` that matches NO entry is UNKNOWN impact and runs the
+//     `unknownImpactSpecs` floor — unknown fails toward more evidence, never toward none;
+//   - a changed file under `sharedInfrastructure` (the harness every spec depends on) also runs the
+//     floor;
+//   - anything else (docs, mobile/, config) selects nothing.
+// The selector refuses a map naming a spec that does not exist or a pattern that matches no file,
+// so an entry cannot outlive the code it describes.
+//
+// Only full-line `//` comments are allowed: the detector job runs before any install.
+{
+  "schemaVersion": 1,
+  "productionRoots": ["src/"],
+  "sharedInfrastructure": [
+    "tests/e2e/helpers/**",
+    "tests/e2e/global-setup.ts",
+    "tests/playwright.config.ts",
+    "electron.vite.config.ts"
+  ],
+  "unknownImpactSpecs": [
+    "tests/e2e/golden-quit-relaunch-session.spec.ts",
+    "tests/e2e/golden-terminal-file-link.spec.ts",
+    "tests/e2e/golden-worktree-create-switch.spec.ts"
+  ],
+  "entries": [
+    {
+      "id": "ephemeral-vm-provisioning",
+      "sources": [
+        "src/main/ephemeral-vm-runtime-service.ts",
+        "src/main/ephemeral-vm-runtime-provisioning-persistence.ts",
+        "src/main/ephemeral-vm-failed-start-cleanup.ts",
+        "src/shared/ephemeral-vm-runtime-store.ts",
+        "src/shared/ephemeral-vm-runtime-feature-store.ts",
+        "src/shared/ephemeral-vm-runtime-rollback-projection.ts",
+        "src/shared/ephemeral-vm-runtimes.ts",
+        "src/shared/ephemeral-vm-recipes.ts",
+        "src/shared/orca-yaml-hook-types.ts"
+      ],
+      "specs": ["tests/e2e/ephemeral-vm-provisioned-root.spec.ts"]
+    },
+    {
+      "id": "multi-window-authority",
+      "sources": [
+        "src/main/runtime/runtime-notifier-router.ts",
+        "src/main/runtime/runtime-graph-owners.ts",
+        "src/main/window/**"
+      ],
+      "specs": [
+        "tests/e2e/two-window-unplaced-worktree-activation.spec.ts",
+        "tests/e2e/two-window-menu-command-routing.spec.ts",
+        "tests/e2e/two-window-menu-ownership.spec.ts",
+        "tests/e2e/two-window-ui-state-isolation.spec.ts"
+      ]
+    },
+    {
+      "id": "visible-pane-liveness",
+      "sources": [
+        "src/renderer/src/components/terminal-pane/visible-pane-*.ts",
+        "src/renderer/src/components/terminal-pane/terminal-paint-progress.ts",
+        "src/renderer/src/components/terminal-pane/terminal-render-progress.ts",
+        "src/renderer/src/components/terminal-pane/terminal-delivery-watchdog.ts"
+      ],
+      "specs": [
+        "tests/e2e/terminal-visible-pane-paint-recovery.spec.ts",
+        "tests/e2e/terminal-visible-pane-freeze-recovery.spec.ts"
+      ]
+    },
+    {
+      "id": "reveal-convergence",
+      "sources": [
+        "src/main/runtime/terminal-reveal-convergence.ts",
+        "src/main/ipc/pty-reveal-convergence-scheduler.ts"
+      ],
+      "specs": ["tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts"]
+    }
+  ]
+}
