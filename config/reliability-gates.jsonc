@@ -32,7 +32,7 @@
 // A `ci` run is the exception, because GitHub holds the record. It must carry `runUrl`, a GitHub
 // Actions run URL, so a reader can open the run rather than trust the note -- and so that a local
 // run somebody labelled `ci` cannot pass as one. Three entries predate the requirement and are
-// frozen in check-reliability-gates.mjs (CI_EVIDENCE_WITHOUT_PROVENANCE); that list may only
+// frozen in ci-evidence-provenance.mjs (CI_EVIDENCE_WITHOUT_PROVENANCE); that list may only
 // shrink, and an entry whose run has since gained a runUrl fails the check.
 //
 // Worth knowing before adding one: measured 2026-09-21, this repository has not been assigned a

@@ -249,7 +249,10 @@ describe('materializeRelocatedDaemonHost', () => {
   it('leaves a stale host a live daemon still runs from untouched and falls back', () => {
     const first = materializeRelocatedDaemonHost()
     const dest = join(localAppDataDir, 'Orca', 'daemon-host', '9.9.9')
-    writeFileSync(join(installDir, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js'), 'entry-v2')
+    writeFileSync(
+      join(installDir, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js'),
+      'entry-v2'
+    )
     lockedDirs.add(dest)
     try {
       expect(materializeRelocatedDaemonHost()).toBeNull()
