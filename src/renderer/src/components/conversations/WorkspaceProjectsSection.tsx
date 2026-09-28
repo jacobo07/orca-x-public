@@ -4,12 +4,18 @@ import { FolderPlus, Plus, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
-import { openProjectInWorkbench, type OpenProjectInWorkbenchOutcome } from '@/lib/open-project-in-workbench'
+import {
+  openProjectInWorkbench,
+  type OpenProjectInWorkbenchOutcome
+} from '@/lib/open-project-in-workbench'
 import { useAppStore } from '@/store'
 import type { WorkspaceAgentRow } from '../../../../shared/cognitive-workspace-projection'
 import type { AgentProjectChoice, AgentProjectHost } from '../agents/agent-project-choices'
 
-import { projectWorkspaceProjects, type WorkspaceOrphanGroup } from './workspace-projects-projection'
+import {
+  projectWorkspaceProjects,
+  type WorkspaceOrphanGroup
+} from './workspace-projects-projection'
 import { WorkspaceAgentButton } from './workspace-roster-rows'
 
 /** Only outcomes that leave the user here need words; the opened ones navigate away. */
@@ -18,7 +24,11 @@ function openOutcomeNotice(outcome: OpenProjectInWorkbenchOutcome, host: string)
     case 'no-workspace':
       return translate('workspace.projects.noWorkspace', 'No workspace on {{host}} yet.', { host })
     case 'workspace-lookup-failed':
-      return translate('workspace.projects.lookupFailed', '{{host}} could not be asked for its workspaces.', { host })
+      return translate(
+        'workspace.projects.lookupFailed',
+        '{{host}} could not be asked for its workspaces.',
+        { host }
+      )
     case 'activation-refused':
       return translate('workspace.projects.refused', 'Orca could not open that workspace.')
     case 'opened':
@@ -76,7 +86,10 @@ export function WorkspaceProjectsSection({
   return (
     <section className="flex flex-col gap-3" data-testid="workspace-projects">
       {projects.length === 0 ? (
-        <div className="flex flex-col items-start gap-2 px-2" data-testid="workspace-projects-empty">
+        <div
+          className="flex flex-col items-start gap-2 px-2"
+          data-testid="workspace-projects-empty"
+        >
           <p className="text-xs text-muted-foreground">
             {translate('workspace.projects.empty', 'Orca has no projects yet.')}
           </p>
@@ -87,16 +100,26 @@ export function WorkspaceProjectsSection({
         </div>
       ) : null}
       {projects.map(({ choice, agents: rows }) => (
-        <div key={choice.projectId} data-testid="workspace-project" data-project-id={choice.projectId}>
+        <div
+          key={choice.projectId}
+          data-testid="workspace-project"
+          data-project-id={choice.projectId}
+        >
           <div className="flex items-center gap-1 px-2">
-            <RepoBadgeLabel name={choice.displayName} color={choice.badgeColor} className="min-w-0 flex-1 text-xs font-medium" />
+            <RepoBadgeLabel
+              name={choice.displayName}
+              color={choice.badgeColor}
+              className="min-w-0 flex-1 text-xs font-medium"
+            />
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="size-6"
               onClick={() => onNewAgentHere(choice.projectId)}
-              aria-label={translate('workspace.projects.newAgent', 'New agent in {{project}}', { project: choice.displayName })}
+              aria-label={translate('workspace.projects.newAgent', 'New agent in {{project}}', {
+                project: choice.displayName
+              })}
               data-testid="workspace-project-new-agent"
             >
               <Plus className="size-3.5" />
@@ -114,7 +137,9 @@ export function WorkspaceProjectsSection({
                 type="button"
                 onClick={() => void open(choice.projectId, host)}
                 className="inline-flex items-center gap-1 rounded-sm border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                title={translate('workspace.projects.openOn', 'Open in Terminals on {{host}}', { host: host.label })}
+                title={translate('workspace.projects.openOn', 'Open in Terminals on {{host}}', {
+                  host: host.label
+                })}
                 data-testid="workspace-project-open"
                 data-host-id={host.id}
               >
@@ -131,7 +156,11 @@ export function WorkspaceProjectsSection({
           <ul className="flex flex-col gap-0.5 pt-1">
             {rows.map((row) => (
               <li key={row.agent.id}>
-                <WorkspaceAgentButton row={row} active={row.agent.id === activeAgentId} onOpen={onOpenAgent} />
+                <WorkspaceAgentButton
+                  row={row}
+                  active={row.agent.id === activeAgentId}
+                  onOpen={onOpenAgent}
+                />
               </li>
             ))}
           </ul>
@@ -139,11 +168,17 @@ export function WorkspaceProjectsSection({
       ))}
       {orphans.map((group) => (
         <div key={group.key} data-testid="workspace-project-group" data-group-key={group.key}>
-          <h2 className="px-2 pb-1 text-xs font-medium text-muted-foreground">{orphanHeading(group.key)}</h2>
+          <h2 className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+            {orphanHeading(group.key)}
+          </h2>
           <ul className="flex flex-col gap-0.5">
             {group.agents.map((row) => (
               <li key={row.agent.id}>
-                <WorkspaceAgentButton row={row} active={row.agent.id === activeAgentId} onOpen={onOpenAgent} />
+                <WorkspaceAgentButton
+                  row={row}
+                  active={row.agent.id === activeAgentId}
+                  onOpen={onOpenAgent}
+                />
               </li>
             ))}
           </ul>

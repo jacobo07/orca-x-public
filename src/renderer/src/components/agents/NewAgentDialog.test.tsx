@@ -121,9 +121,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  create = vi.fn(
-    async (): Promise<AgentCreationResult> => ({ outcome: 'created', agent: CREATED })
-  )
+  create = vi.fn(async (): Promise<AgentCreationResult> => ({ outcome: 'created', agent: CREATED }))
   onCreated = vi.fn()
   onOpenChange = vi.fn()
   ;(window as unknown as { api: unknown }).api = { agents: { create } }

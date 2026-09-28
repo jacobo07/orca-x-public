@@ -36,7 +36,10 @@ describe('agent project choices', () => {
   it('lists a project set up on two hosts once, naming both hosts', () => {
     const [choice] = buildAgentProjectChoices(
       [project('github:o/orca', 'Orca X')],
-      [setup('github:o/orca', 'local', 'C:\\orca'), setup('github:o/orca', 'ssh:gex44', '/home/k/orca')],
+      [
+        setup('github:o/orca', 'local', 'C:\\orca'),
+        setup('github:o/orca', 'ssh:gex44', '/home/k/orca')
+      ],
       HOSTS
     )
     expect(choice.hosts.map((host) => host.label)).toEqual(['This computer', 'GEX44'])
@@ -56,7 +59,10 @@ describe('agent project choices', () => {
   it('counts only ready setups, and keeps an unregistered host visible without a state', () => {
     const [choice] = buildAgentProjectChoices(
       [project('p1', 'App')],
-      [setup('p1', 'ssh:gone' as ExecutionHostId, '/x', 'ready'), setup('p1', 'local', '/y', 'error')],
+      [
+        setup('p1', 'ssh:gone' as ExecutionHostId, '/x', 'ready'),
+        setup('p1', 'local', '/y', 'error')
+      ],
       HOSTS
     )
     expect(choice.hosts).toEqual([

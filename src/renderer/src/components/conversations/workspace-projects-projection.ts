@@ -29,9 +29,7 @@ export function projectWorkspaceProjects(
     }
     // A project the agent names but the estate no longer holds is "unavailable", not "none".
     const key: WorkspaceOrphanGroup['key'] =
-      ref.kind === 'project' || ref.kind === 'unresolved'
-        ? `unresolved:${ref.projectId}`
-        : ref.kind
+      ref.kind === 'project' || ref.kind === 'unresolved' ? `unresolved:${ref.projectId}` : ref.kind
     orphans.set(key, [...(orphans.get(key) ?? []), row])
   }
   return {

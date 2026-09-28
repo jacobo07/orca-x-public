@@ -7,7 +7,14 @@ import type { AgentProjectChoice } from '../agents/agent-project-choices'
 import { projectWorkspaceProjects } from './workspace-projects-projection'
 
 function choice(projectId: string): AgentProjectChoice {
-  return { projectId, displayName: projectId, badgeColor: '#000', hosts: [], path: null, sharesName: false }
+  return {
+    projectId,
+    displayName: projectId,
+    badgeColor: '#000',
+    hosts: [],
+    path: null,
+    sharesName: false
+  }
 }
 
 function agent(id: string, project: WorkspaceProjectRef): WorkspaceAgentRow {

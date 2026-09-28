@@ -3,7 +3,10 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 
-import { describeRunningSessionLiveness, type RunningSessionTone } from './running-session-presentation'
+import {
+  describeRunningSessionLiveness,
+  type RunningSessionTone
+} from './running-session-presentation'
 import type { WorkspaceRunningSession } from './workspace-running-sessions'
 import { AgentMonogram } from './workspace-roster-rows'
 
@@ -40,7 +43,10 @@ export function RunningSessionsSection({
         {translate('workspace.sessions.heading', 'Running in terminals')}
       </h2>
       {sessions.length === 0 ? (
-        <p className="px-2 text-xs text-muted-foreground" data-testid="workspace-running-sessions-none">
+        <p
+          className="px-2 text-xs text-muted-foreground"
+          data-testid="workspace-running-sessions-none"
+        >
           {translate('workspace.sessions.none', 'No agent is running in a terminal.')}
         </p>
       ) : null}

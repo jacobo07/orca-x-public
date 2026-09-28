@@ -29,10 +29,7 @@ import { AgentProjectPicker } from './AgentProjectPicker'
  * always a deliberate one.
  */
 
-type Submission =
-  | { status: 'idle' }
-  | { status: 'saving' }
-  | { status: 'refused'; message: string }
+type Submission = { status: 'idle' } | { status: 'saving' } | { status: 'refused'; message: string }
 
 export function NewAgentDialog(props: {
   open: boolean

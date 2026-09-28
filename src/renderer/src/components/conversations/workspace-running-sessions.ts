@@ -16,7 +16,12 @@ export type WorkspaceRunningSession = {
   projectId: string | null
   worktreeName: string
   lastChangedAt: number
-  reveal: { worktreeId: string; tabId: string; leafId: string | null; executionHostId: ExecutionHostId }
+  reveal: {
+    worktreeId: string
+    tabId: string
+    leafId: string | null
+    executionHostId: ExecutionHostId
+  }
 }
 
 const UNREACHABLE: ReadonlySet<ExecutionHostHealth> = new Set(['disconnected', 'blocked', 'error'])
