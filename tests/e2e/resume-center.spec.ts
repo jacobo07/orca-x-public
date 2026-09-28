@@ -57,7 +57,8 @@ function tabRow(page: Page, tabId: string): Locator {
 }
 
 async function refreshDesk(page: Page): Promise<void> {
-  await page.getByTestId('resume-center-page').locator('header').getByRole('button').click()
+  // The page's own header: each workspace section carries a <header> with buttons of its own.
+  await page.getByTestId('resume-center-page').locator(':scope > header button').click()
 }
 
 /** Expand the row (a refresh remounts it collapsed) and return its preview's status and text. */
