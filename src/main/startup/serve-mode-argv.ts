@@ -53,7 +53,9 @@ export function parseServeBindHost(raw: string | null): string | null {
     return null
   }
   const trimmed = raw.trim()
-  if (trimmed === 'localhost' || isIP(trimmed) !== 0) {
+  // Why: a zone id (`fe80::1%eth0`) passes isIP but cannot be written into a ws:// URL, so the
+  // endpoint would be unparseable after the listener bound.
+  if (trimmed === 'localhost' || (isIP(trimmed) !== 0 && !trimmed.includes('%'))) {
     return trimmed
   }
   throw new Error(`Invalid --serve-bind-host value: ${raw}`)

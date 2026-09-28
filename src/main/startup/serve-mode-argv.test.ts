@@ -233,6 +233,10 @@ describe('serve-mode-argv', () => {
       'Invalid --serve-bind-host value: 127.0.0.1:6791'
     )
     expect(() => parseServeBindHost('   ')).toThrow('Invalid --serve-bind-host value:    ')
+    // Why: isIP accepts a zone id, but no ws:// URL can carry one.
+    expect(() => parseServeBindHost('fe80::1%eth0')).toThrow(
+      'Invalid --serve-bind-host value: fe80::1%eth0'
+    )
   })
 
   it('readServeBindHostArg fails closed on a present flag with no usable value (DWS-P2 CR-01)', () => {

@@ -1,5 +1,6 @@
 import { mkdtempSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -24,6 +25,13 @@ vi.mock('../git/worktree', () => {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
+})
+
+// Why: a host with IPv6 loopback disabled cannot bind ::1; skip the IPv6 pin case rather than fail on it.
+const ipv6LoopbackAvailable = await new Promise<boolean>((resolve) => {
+  const probe = createServer()
+  probe.once('error', () => resolve(false))
+  probe.listen(0, '::1', () => probe.close(() => resolve(true)))
 })
 
 describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
@@ -569,6 +577,33 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       await server.stop()
     }
   })
+
+  it.skipIf(!ipv6LoopbackAvailable)(
+    'brackets a pinned IPv6 host so the bound endpoint parses (DWS-P2 WR-01)',
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const server = new OrcaRuntimeRpcServer({
+        runtime: new OrcaRuntimeService(),
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0,
+        pinnedBindHost: '::1'
+      })
+
+      await server.start()
+      try {
+        const endpoint = server.getWebSocketEndpoint()!
+        // Why: `ws://::1:<port>` used to be emitted and `new URL` throws on it.
+        expect(endpoint).toMatch(/^ws:\/\/\[::1\]:\d+$/)
+        expect(new URL(endpoint).hostname).toBe('[::1]')
+        expect(server.createPairingOffer({ address: '[::1]', scope: 'runtime' })).toMatchObject({
+          available: true
+        })
+      } finally {
+        await server.stop()
+      }
+    }
+  )
 
   it('refuses to widen a pairing offer that arrives after the server has stopped', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

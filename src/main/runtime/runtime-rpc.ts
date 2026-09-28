@@ -1348,7 +1348,9 @@ export class OrcaRuntimeRpcServer {
     this.wsBoundHost = options.host
     return {
       transport: wsTransport,
-      endpoint: `ws://${options.host}:${wsTransport.resolvedPort}`
+      // Why: an unbracketed IPv6 literal (`ws://::1:6768`) is not a URL, so a `--bind-host ::1` pin would
+      // throw in resolveAdvertisedPairingEndpoint after the listener had already bound.
+      endpoint: `ws://${options.host.includes(':') ? `[${options.host}]` : options.host}:${wsTransport.resolvedPort}`
     }
   }
 
