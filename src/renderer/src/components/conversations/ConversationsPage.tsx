@@ -11,6 +11,7 @@ import type { ConversationSummary } from '../../../../shared/conversation-summar
 import type { ConversationRecord } from '../../../../shared/conversation-types'
 import { resolveDefaultProjectId } from '../agents/default-agent-project'
 import { NewAgentDialog } from '../agents/NewAgentDialog'
+import { useAgentProjectChoices } from '../agents/use-agent-project-choices'
 import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 
 import { AgentChatHeader } from './AgentChatHeader'
@@ -34,6 +35,7 @@ import {
 import { conversationToNativeChatSession } from './conversation-native-chat-session'
 import { useAgentGrounding } from './use-agent-grounding'
 import { useWorkspaceAgents } from './use-workspace-agents'
+import { useWorkspaceRunningSessions } from './use-workspace-running-sessions'
 
 /**
  * The Cognitive Workspace: roster | chat | context, over ONE conversation stack.
@@ -51,6 +53,8 @@ export default function ConversationsPage(): React.JSX.Element {
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
   const projects = useAppStore((s) => s.projects)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const projectChoices = useAgentProjectChoices()
+  const runningSessions = useWorkspaceRunningSessions()
   const roster = useWorkspaceAgents(agentScope)
   const [summaries, setSummaries] = useState<readonly ConversationSummary[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -67,6 +71,8 @@ export default function ConversationsPage(): React.JSX.Element {
   const [narrowPane, setNarrowPane] = useState<'roster' | 'chat'>('chat')
   const [groundingRevision, setGroundingRevision] = useState(0)
   const [newAgentOpen, setNewAgentOpen] = useState(false)
+  // undefined: the dialog's usual default; a project id: "New agent here" from the Projects tab.
+  const [newAgentProjectId, setNewAgentProjectId] = useState<string | undefined>(undefined)
   const [openApp, setOpenApp] = useState<ConnectedApplicationView | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const activeIdRef = useRef<string | null>(null)
@@ -277,7 +283,16 @@ export default function ConversationsPage(): React.JSX.Element {
             setNarrowPane('chat')
             startDraft()
           }}
-          onNewAgent={() => setNewAgentOpen(true)}
+          onNewAgent={() => {
+            setNewAgentProjectId(undefined)
+            setNewAgentOpen(true)
+          }}
+          projectChoices={projectChoices}
+          runningSessions={runningSessions}
+          onNewAgentHere={(projectId) => {
+            setNewAgentProjectId(projectId)
+            setNewAgentOpen(true)
+          }}
         />
       )}
       rail={
@@ -354,8 +369,8 @@ export default function ConversationsPage(): React.JSX.Element {
     >
       <NewAgentDialog
         open={newAgentOpen}
-        projects={projects}
-        defaultProjectId={resolveDefaultProjectId(activeRepoId, projects)}
+        projectChoices={projectChoices}
+        defaultProjectId={newAgentProjectId ?? resolveDefaultProjectId(activeRepoId, projects)}
         onOpenChange={setNewAgentOpen}
         onCreated={(agent) => {
           void roster.refresh()

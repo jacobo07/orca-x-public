@@ -228,7 +228,8 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       srcDoc={panelDocument ?? ''}
       onLoad={() => setLoadedFrameKey(panelFrameKey)}
       title={panel.title}
-      className="h-full w-full flex-1 border-0 bg-background"
+      // Why normal: a scheme mismatch with the srcdoc paints an opaque canvas behind the panel.
+      className="h-full w-full flex-1 border-0 bg-background [color-scheme:normal]"
     />
   )
 }

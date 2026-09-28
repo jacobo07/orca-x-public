@@ -7,7 +7,7 @@ Date: 2026-09-20. Branch at scan time: `orca-x/w0-durability-repros` @ `6e74986a
 7 worktrees live. **Program worktree: `C:\Users\User\Apps\orca-cogws-wt`, branch
 `orca-x/cognitive-workspace`, base `2f919f50b` (main).** SDD-OS tier: **T3**.
 `covers: [cognitive-workspace, brainstorming, agents, deliberation, provider-gateway,
-conversation-identity]`
+conversation-identity, workspace-shell, running-sessions, workspace-projects, project-picker]`
 
 > **This file is tracked.** `docs/**` is ignored by design; `.gitignore` carries an explicit
 > allow-list for durable docs and this spec is on it. Before this entry the spec of record lived
@@ -711,3 +711,51 @@ showed earlier in this session were the host, not the subject.
 - **The fold is not wired to the store by production code.** The reality gate calls both; nothing
   else does.
 - **Unverified beyond one host**: one machine, one Codex build, one account, one turn.
+
+---
+
+## 12. W-S — Workspace shell and reality (APPROVED, Owner 2026-09-28)
+
+Branch `orca-x/cogws-shell-reality` in `C:\Users\User\Apps\orca-cogws-shell-wt`, base integration
+`a3445471e`. Visual reference: the Owner's "Cognitive Workspace agents" mock (global rail | Workspace
+panel | agent chat | context rail). Broken state: a photo of the New agent project select, a light OS
+popup whose option text is white on white.
+
+### 12.1 Measured causes
+
+| Defect | Cause |
+|---|---|
+| Explorer in Workspace | `use-app-chrome-layout.ts` hides the worktree Sidebar only for settings/activity/space |
+| No agents | the roster reads only `agents.list()`; live hook agents (`agentStatusByPaneKey`, SSH included, every hook provider incl. Hermes) are never projected |
+| Empty Projects tab | it groups agents by project and never reads `s.projects` |
+| Unreadable project select | native `<select>`; `color-scheme` is set on no theme root, so the OS popup is light while options inherit the near-white foreground |
+| No way out | `previousViewBefore*` exists for eight views, not `conversations` |
+
+### 12.2 Contract
+
+1. `conversations` unmounts the worktree Sidebar. The roster stays in the page and keeps its own
+   width modes. The side panel is suppressed like Settings: the shell relocates the activity rail
+   beside Workspace. Suppression costs no more than closing the panel, which already unmounts its
+   content (`right-sidebar/index.tsx`, `panelContent = rightSidebarOpen ? … : null`); tab choice is
+   store state and survives. A closed-but-mounted panel was rejected: it is zero-width rail included,
+   which would strand a user with no way out.
+2. Back leaves Workspace for the view it was entered from (`previousViewBeforeConversations`),
+   recorded only by entries from outside the page, guarded like `closeSettingsPage`, not persisted.
+3. Agents shows **Running in terminals** (from `useLiveDashboardSnapshot`, every hook provider:
+   Claude Code, Hermes, Codex, …) and **Your agents**. A session on a disconnected, blocked or
+   erroring host is host-offline, never working. The two lists are never merged: agent chats are
+   app-server sessions and terminal agents are TUI sessions, so no real case of one entity in both
+   exists, and `DashboardCard` carries no provider session id to merge on — adding one would change
+   the dashboard wire for a merge with no subject. Revisit when an agent can drive a terminal session.
+4. Projects lists the canonical project estate, each project once with its hosts, and converges on
+   project and agent changes without polling.
+5. The project picker is Orca's Popover+Command, keeps "No project" as a deliberate null, and shows
+   host and path where names collide. Theme roots carry `color-scheme`.
+6. No control without an owner: Tools/Files/Plan/Memory tabs, Tasks/Knowledge cards, model and
+   uptime, and attaching a session to an agent (`agent-types.ts:8` forbids the binding) are omitted.
+
+### 12.3 Acceptance and rollback
+
+Each commit lands a failing test first and names the mutation that must turn it red. Proof: real
+Electron on GEX44 (shell, Back, picker, running sessions, host drop) plus a Windows screenshot of
+the OS-drawn popup. Rollback is per commit; nothing here migrates persisted state.
