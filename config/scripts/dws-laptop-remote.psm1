@@ -432,6 +432,135 @@ function Invoke-DwsRemoteRoundTrip {
   Write-Output "ROUNDTRIP=PASS nonce=$nonce serveSha=$($deployed.sha) handle=$handle"
 }
 
+# Why a plain TcpClient, not Test-NetConnection: Test-NetConnection's own default timeout is long
+# and its failure/timeout distinction is not exposed cleanly on PS 5.1; a raw ConnectAsync + bounded
+# Wait gives us all three outcomes (connected/refused/timeout) explicitly, which CTX-EXP-3's leg (b)
+# requires to avoid conflating "port closed" with "host unreachable".
+function Test-DwsTcpConnect {
+  param([Parameter(Mandatory)][string]$TargetHost, [Parameter(Mandatory)][int]$Port, [int]$TimeoutMs = 3000)
+  $client = New-Object System.Net.Sockets.TcpClient
+  try {
+    $connectTask = $client.ConnectAsync($TargetHost, $Port)
+    $finished = $connectTask.Wait($TimeoutMs)
+    if (-not $finished) { return 'timeout' }
+    if ($client.Connected) { return 'connected' }
+    return 'refused'
+  } catch {
+    return 'refused'
+  } finally {
+    $client.Close()
+  }
+}
+
+<#
+.SYNOPSIS
+CTX-EXP-3: "no public port" verified from outside, four ways, each instrument named beside its
+result. PASS only when all four legs pass.
+#>
+function Test-DwsNoPublicPort {
+  param([Parameter(Mandatory)][int]$Port)
+
+  $state = Get-DwsStateDir
+  if (-not (Test-Path (Join-Path $state 'deployed.json'))) {
+    Write-Output 'NO_PUBLIC_PORT=FAIL leg=precondition reason=no_deployed_json_run_Publish-DwsServeBuild_first'
+    return
+  }
+  $deployed = Get-Content (Join-Path $state 'deployed.json') -Raw | ConvertFrom-Json
+  $publicHost = '<gex44-host>'
+
+  # Leg (a): on GEX44, ss keyed by the exact port -- every local address must be 127.0.0.1:<Port>,
+  # owned by an electron process, running as orca-svc. Two ssh calls (list, then resolve owner)
+  # instead of one nested-quoted command, per host_rules' single-quoted-ssh-body discipline.
+  $ssResult = Invoke-DwsSsh -RemoteBody "sudo ss -Hltnp 'sport = :$Port'"
+  $ssLines = @($ssResult.Output -split "`n" | Where-Object { $_.Trim() -ne '' })
+  if ($ssResult.ExitCode -ne 0 -or $ssLines.Count -eq 0) {
+    Write-Output "NO_PUBLIC_PORT=FAIL leg=a instrument=ss reason=no_listener observed=$($ssResult.Output)"
+    return
+  }
+  $legAOk = $true
+  $pids = @()
+  foreach ($line in $ssLines) {
+    if ($line -notmatch [regex]::Escape("127.0.0.1:$Port ") -and $line -notmatch [regex]::Escape("127.0.0.1:$Port`t")) {
+      $legAOk = $false
+    }
+    if ($line -match 'pid=(\d+)') { $pids += $Matches[1] }
+  }
+  if ($pids.Count -eq 0) { $legAOk = $false }
+  foreach ($ownerPid in ($pids | Select-Object -Unique)) {
+    $ownerResult = Invoke-DwsSsh -RemoteBody "ps -o user=,comm= -p $ownerPid"
+    if ($ownerResult.ExitCode -ne 0 -or $ownerResult.Output -notmatch 'orca-svc' -or $ownerResult.Output -notmatch 'electron') {
+      $legAOk = $false
+    }
+  }
+  if (-not $legAOk) {
+    Write-Output "NO_PUBLIC_PORT=FAIL leg=a instrument=ss observed=$($ssResult.Output)"
+    return
+  }
+  $ssObservedFlat = $ssResult.Output -replace "`n", ' | '
+  Write-Output "LEG_A=PASS instrument=ss observed=$ssObservedFlat"
+
+  # Leg (b): from the laptop, a direct connect to the public address must NOT connect; the
+  # identical probe to :22 (sshd, known open) is the positive control that distinguishes
+  # "port closed" from "host unreachable" -- without it a dead host would look like a pass.
+  $directResult = Test-DwsTcpConnect -TargetHost $publicHost -Port $Port -TimeoutMs 3000
+  $controlResult = Test-DwsTcpConnect -TargetHost $publicHost -Port 22 -TimeoutMs 3000
+  if ($controlResult -ne 'connected') {
+    Write-Output "NO_PUBLIC_PORT=INCONCLUSIVE leg=b instrument=TcpClient reason=positive_control_failed control=$controlResult"
+    return
+  }
+  if ($directResult -eq 'connected') {
+    Write-Output "NO_PUBLIC_PORT=FAIL leg=b instrument=TcpClient reason=port_reachable_from_outside direct=$directResult"
+    return
+  }
+  Write-Output "LEG_B=PASS instrument=TcpClient direct=$directResult control=$controlResult"
+
+  # Leg (c): through the tunnel, the web client answers with content matching the deployed
+  # checkout's own file; stopping the tunnel and repeating the request must fail -- this is what
+  # proves the 200 came through the forward and not a laptop-local listener.
+  $tmpFile = Join-Path $state 'web-index-through-tunnel.html'
+  try {
+    Invoke-WebRequest -Uri "http://127.0.0.1:$Port/web-index.html" -UseBasicParsing -OutFile $tmpFile -TimeoutSec 10 | Out-Null
+  } catch {
+    Write-Output "NO_PUBLIC_PORT=FAIL leg=c instrument=Invoke-WebRequest reason=tunnel_request_failed error=$($_.Exception.Message)"
+    return
+  }
+  $localHash = (Get-FileHash -Path $tmpFile -Algorithm SHA256).Hash.ToLowerInvariant()
+  $remoteHashResult = Invoke-DwsSsh -RemoteBody "sudo sha256sum $($deployed.svcCheckout)/out/web/web-index.html | cut -d' ' -f1"
+  $remoteHash = $remoteHashResult.Output.Trim().ToLowerInvariant()
+  if ($remoteHashResult.ExitCode -ne 0 -or $localHash -ne $remoteHash) {
+    Write-Output "NO_PUBLIC_PORT=FAIL leg=c instrument=sha256 local=$localHash remote=$remoteHash"
+    return
+  }
+  Stop-DwsTunnel | Out-Null
+  $stoppedRequestFailed = $false
+  try {
+    Invoke-WebRequest -Uri "http://127.0.0.1:$Port/web-index.html" -UseBasicParsing -TimeoutSec 3 | Out-Null
+  } catch {
+    $stoppedRequestFailed = $true
+  }
+  Start-DwsTunnel -Port $Port | Out-Null
+  if (-not $stoppedRequestFailed) {
+    Write-Output "NO_PUBLIC_PORT=FAIL leg=c instrument=Invoke-WebRequest reason=request_succeeded_after_tunnel_stopped"
+    return
+  }
+  Write-Output "LEG_C=PASS instrument=sha256+stop-tunnel local=$localHash remote=$remoteHash"
+
+  # Leg (d): on GEX44 itself, loopback answers 200 and the public address is unreachable
+  # (curl exit 7 = could not connect) -- independent of the laptop's own network path.
+  $curlLocalResult = Invoke-DwsSsh -RemoteBody "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$Port/web-index.html"
+  $curlPublicResult = Invoke-DwsSsh -RemoteBody "curl --connect-timeout 3 http://$publicHost`:$Port/ >/dev/null 2>&1; echo CURL_EXIT=`$?"
+  $curlPublicExit = $null
+  if ($curlPublicResult.Output -match 'CURL_EXIT=(\d+)') { $curlPublicExit = [int]$Matches[1] }
+  if ($curlLocalResult.Output.Trim() -ne '200' -or $curlPublicExit -ne 7) {
+    Write-Output "NO_PUBLIC_PORT=FAIL leg=d instrument=curl local=$($curlLocalResult.Output.Trim()) publicExit=$curlPublicExit"
+    return
+  }
+  Write-Output "LEG_D=PASS instrument=curl local=$($curlLocalResult.Output.Trim()) publicExit=$curlPublicExit"
+
+  Write-Output "NO_PUBLIC_PORT=PASS port=$Port"
+}
+
 Export-ModuleMember -Function `
   Publish-DwsServeBuild, Get-DwsArtifact, Get-DwsServeReady, Start-DwsTunnel, Stop-DwsTunnel, `
-  Invoke-DwsCli, Invoke-DwsRemoteRoundTrip, Get-DwsStateDir, Get-DwsWorktreeRoot, Invoke-DwsSsh
+  Invoke-DwsCli, Invoke-DwsRemoteRoundTrip, Test-DwsNoPublicPort, Test-DwsTcpConnect, `
+  Get-DwsStateDir, Get-DwsWorktreeRoot, Invoke-DwsSsh
