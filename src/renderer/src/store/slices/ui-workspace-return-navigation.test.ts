@@ -36,6 +36,19 @@ describe('leaving Workspace returns to where it was entered from', () => {
     expect(store.getState().activeView).toBe('tasks')
   })
 
+  // Resume Center is reached from Workspace and its breadcrumb re-enters Workspace.
+  it('keeps the original target across a visit to Resume Center', () => {
+    const store = createUIStore()
+    store.getState().openTaskPage()
+    store.getState().openConversationsPage()
+    store.getState().openResumeCenter()
+    store.getState().openConversationsPage()
+
+    expect(store.getState().previousViewBeforeConversations).toBe('tasks')
+    store.getState().closeConversationsPage()
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
   it('falls back to terminals when the recorded view is no longer offered', () => {
     const store = createUIStore()
     store.setState({

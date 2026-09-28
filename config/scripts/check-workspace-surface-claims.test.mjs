@@ -102,6 +102,30 @@ describe('workspace surface claims gate', () => {
     expect(result.failures).toEqual([])
   })
 
+  it('treats an inline ClaimValue as a claim: unclassified refused, classified accepted', () => {
+    const inline = `<ClaimValue testId="desk-session-count">{count}</ClaimValue>`
+    expect(judge(surfaceSource({ extraRows: inline })).failures.join('\n')).toMatch(
+      /claim "desk-session-count" is not classified/
+    )
+    const classified = judge(
+      surfaceSource({ extraRows: inline }),
+      config({
+        'desk-session-count': {
+          producer: `${PRODUCER}#projectAgents`,
+          absent: 'state.unknown',
+          why: 'counted from the recorded desk, not estimated'
+        }
+      })
+    )
+    expect(classified.failures).toEqual([])
+    expect(classified.siteCount).toBe(MIN_CLAIM_SITES + 1)
+  })
+
+  it('refuses an inline ClaimValue with no literal identity', () => {
+    const result = judge(surfaceSource({ extraRows: `<ClaimValue testId={id}>3</ClaimValue>` }))
+    expect(result.failures.join('\n')).toMatch(/ClaimValue has no literal testId/)
+  })
+
   it('refuses a claim row with no literal identity', () => {
     const result = judge(
       surfaceSource({ extraRows: `<ContextRow term="Memory" testId={dynamicId}>1 GB</ContextRow>` })

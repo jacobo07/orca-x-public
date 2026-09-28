@@ -14842,5 +14842,80 @@
         "noPlan": "Esta sesión no se puede reanudar aquí."
       }
     }
+  },
+  "resumeCenter": {
+    "preview": {
+      "label": "Última pantalla guardada de {{title}}",
+      "loading": "Leyendo…",
+      "snapshot": "Instantánea",
+      "none": "No hay nada guardado",
+      "unreadable": "Guardado, pero no se pudo leer",
+      "notFound": "Ya no está en el escritorio",
+      "unavailable": "Vista previa no disponible"
+    },
+    "residency": {
+      "warm": "En ejecución",
+      "dormant": "Dormida",
+      "stopped": "Sin proceso",
+      "unknown": "Estado desconocido"
+    },
+    "resume": {
+      "exact": "Reanuda la misma sesión",
+      "unconfirmed": "Intentará reanudar la sesión",
+      "claimedElsewhere": "La sesión está abierta en otro lugar"
+    },
+    "workspace": {
+      "missing": "El workspace ya no existe",
+      "sessions": "sesiones",
+      "open": "Abrir",
+      "collapse": "Contraer",
+      "expand": "Expandir"
+    },
+    "window": {
+      "bound": "Ventana",
+      "numbered": "Ventana {{number}}",
+      "none": "Sin ventana",
+      "unrecorded": "Ventana no registrada"
+    },
+    "breadcrumb": {
+      "workspace": "Workspace"
+    },
+    "title": "Resume Center",
+    "greeting": {
+      "morning": "Buenos días",
+      "afternoon": "Buenas tardes",
+      "evening": "Buenas noches",
+      "sessions": "sesiones en tu escritorio",
+      "running": "en ejecución"
+    },
+    "refresh": "Actualizar",
+    "search": "Buscar workspaces y sesiones",
+    "sort": {
+      "window": "Por ventana",
+      "recent": "Más reciente"
+    },
+    "state": {
+      "loading": "Leyendo tu escritorio…",
+      "unavailable": "Este cliente no tiene un escritorio.",
+      "failed": "No se pudo leer el escritorio.",
+      "noMatch": "Nada coincide con esa búsqueda.",
+      "empty": "No hay workspaces con sesiones en este escritorio."
+    },
+    "summary": {
+      "title": "Resumen del escritorio",
+      "windows": "Ventanas",
+      "windowsUnrecorded": "No registrado",
+      "workspaces": "Workspaces",
+      "sessions": "Sesiones",
+      "panes": "Paneles de terminal",
+      "unreadable": "No se pudo leer"
+    },
+    "tip": {
+      "body": "Expande un workspace y una sesión para ver la última pantalla guardada de cada terminal. Las vistas previas salen del historial guardado y nunca inician un proceso.",
+      "dismiss": "Descartar"
+    },
+    "tab": {
+      "panes": "{{count}} paneles"
+    }
   }
 }

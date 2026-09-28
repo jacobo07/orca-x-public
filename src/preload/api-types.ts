@@ -65,6 +65,7 @@ import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cle
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
 import type { ProjectWorkingSetApi } from './api/project-working-set-api'
+import type { ContinuityApi } from './api/continuity-api'
 import type { DurableExitApi } from './api/durable-exit-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
@@ -130,6 +131,7 @@ export type PreloadApi = {
   session: WorkspaceSessionApi['session']
   remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
   workingSet: ProjectWorkingSetApi['workingSet']
+  continuity: ContinuityApi['continuity']
   durableExit: DurableExitApi['durableExit']
   conversations: ConversationApi['conversations']
   agentFederation: AgentFederationApi['agentFederation']

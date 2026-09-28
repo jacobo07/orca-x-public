@@ -3202,6 +3202,10 @@ const api = {
     read: (args) => ipcRenderer.invoke('workingSet:read', args),
     probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args)
   } satisfies PreloadApi['workingSet'],
+  continuity: {
+    readDesk: () => ipcRenderer.invoke('continuity:readDesk'),
+    renderPanePreview: (request) => ipcRenderer.invoke('continuity:renderPanePreview', request)
+  } satisfies PreloadApi['continuity'],
   durableExit: {
     park: (request) => ipcRenderer.invoke('durableExit:park', request),
     onParkPhaseRequest: (callback) => {

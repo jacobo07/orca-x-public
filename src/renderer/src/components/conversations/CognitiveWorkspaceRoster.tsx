@@ -1,9 +1,10 @@
-import { Plus } from 'lucide-react'
+import { History, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type {
   WorkspaceAgentRow,
   WorkspaceThreadRow
@@ -69,6 +70,7 @@ export function CognitiveWorkspaceRoster({
   onNewAgent: () => void
   onNewAgentHere: (projectId: string) => void
 }): React.JSX.Element {
+  const openResumeCenter = useAppStore((s) => s.openResumeCenter)
   return (
     <aside
       className={cn(
@@ -88,16 +90,28 @@ export function CognitiveWorkspaceRoster({
             {translate('workspace.subtitle', 'Agents, conversations and execution.')}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={onNewAgent}
-          aria-label={translate('agents.new', 'New agent')}
-          data-testid="workspace-new-agent"
-        >
-          <Plus className="size-4" />
-        </Button>
+        <div className="flex shrink-0 gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={openResumeCenter}
+            aria-label={translate('resumeCenter.title', 'Resume Center')}
+            data-testid="workspace-open-resume-center"
+          >
+            <History className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onNewAgent}
+            aria-label={translate('agents.new', 'New agent')}
+            data-testid="workspace-new-agent"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(value) => onTabChange(value as WorkspaceRosterTab)}>

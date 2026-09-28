@@ -11,3 +11,13 @@ export function resolvePageReturnTarget<V extends TopLevelView>(
 ): V | 'terminal' {
   return recorded === 'activity' && settings?.experimentalActivity !== true ? 'terminal' : recorded
 }
+
+/** Resume Center is entered from Workspace, so re-entering Workspace from it keeps the outer target. */
+export function workspaceReturnTarget(state: {
+  activeView: TopLevelView
+  previousViewBeforeConversations: Exclude<TopLevelView, 'conversations'>
+}): Exclude<TopLevelView, 'conversations'> {
+  return state.activeView === 'conversations' || state.activeView === 'resumeCenter'
+    ? state.previousViewBeforeConversations
+    : state.activeView
+}

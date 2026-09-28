@@ -147,7 +147,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
-import { resolvePageReturnTarget } from './page-return-target'
+import { resolvePageReturnTarget, workspaceReturnTarget } from './page-return-target'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -765,6 +765,7 @@ export type UISlice = {
   openConversationsPage: () => void
   /** Leave Workspace for the view it was entered from (terminals when that view is gone). */
   closeConversationsPage: () => void
+  openResumeCenter: () => void
   /** The agent the conversations surface is opened FOR, or null for Brainstorming. Window-local
    *  and never persisted: a restart returns to Brainstorming, and Agents is the way back. */
   conversationAgentScope: string | null
@@ -1564,25 +1565,20 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: 'conversations',
       conversationAgentScope: null,
-      previousViewBeforeConversations:
-        state.activeView === 'conversations'
-          ? state.previousViewBeforeConversations
-          : state.activeView
+      previousViewBeforeConversations: workspaceReturnTarget(state)
     })),
   closeConversationsPage: () =>
     set((state) => ({
       activeView: resolvePageReturnTarget(state.previousViewBeforeConversations, state.settings)
     })),
+  openResumeCenter: () => set({ activeView: 'resumeCenter' }),
   conversationAgentScope: null,
   // The same surface as Brainstorming, scoped: one chat stack, not an agent-shaped second one.
   openAgentChat: (agentId) =>
     set((state) => ({
       activeView: 'conversations',
       conversationAgentScope: agentId,
-      previousViewBeforeConversations:
-        state.activeView === 'conversations'
-          ? state.previousViewBeforeConversations
-          : state.activeView
+      previousViewBeforeConversations: workspaceReturnTarget(state)
     })),
   openMobilePage: () =>
     set((state) => ({

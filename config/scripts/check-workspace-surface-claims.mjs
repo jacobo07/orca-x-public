@@ -25,7 +25,8 @@ import { parse } from 'jsonc-parser'
  */
 
 export const CONFIG_PATH = 'config/workspace-surface-claims.jsonc'
-export const CLAIM_PRIMITIVES = Object.freeze(['ContextRow'])
+// ClaimValue is the inline form for dense surfaces (a count in a heading); same identity rule.
+export const CLAIM_PRIMITIVES = Object.freeze(['ContextRow', 'ClaimValue'])
 export const MIN_CLAIM_SITES = 10
 export const MIN_TONE_MAPS = 3
 
