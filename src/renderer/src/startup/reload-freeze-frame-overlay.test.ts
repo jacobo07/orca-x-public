@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  awaitReloadFreezeFrameDecision,
   dismissReloadFreezeFrame,
+  RELOAD_FREEZE_FRAME_DECISION_BOUND_MS,
   RELOAD_FREEZE_FRAME_MAX_VISIBLE_MS,
   RELOAD_FREEZE_FRAME_OVERLAY_ID,
   reportAppReadyForFreezeFrame,
@@ -147,6 +149,33 @@ describe('reload freeze frame overlay', () => {
     expect(overlayElement()?.style.opacity).toBe('0')
     vi.runAllTimers()
     expect(overlayElement()).toBeNull()
+  })
+
+  it('lets the app mount only once the frame is already on screen', async () => {
+    await expect(awaitReloadFreezeFrameDecision()).resolves.toBe(true)
+    // The mount follows this promise, so the overlay must exist before the shell can paint.
+    expect(overlayElement()).not.toBeNull()
+  })
+
+  it('lets a cold start mount as soon as main answers that it holds no frame', async () => {
+    setTakeReloadFreezeFrame(() => Promise.resolve(null))
+
+    await expect(awaitReloadFreezeFrameDecision()).resolves.toBe(false)
+    expect(overlayElement()).toBeNull()
+  })
+
+  it('never holds the app mount past its bound when main never answers', async () => {
+    vi.useFakeTimers()
+    setTakeReloadFreezeFrame(() => new Promise(() => {}))
+    let settled: boolean | undefined
+    void awaitReloadFreezeFrameDecision().then((value) => {
+      settled = value
+    })
+
+    await vi.advanceTimersByTimeAsync(RELOAD_FREEZE_FRAME_DECISION_BOUND_MS - 1)
+    expect(settled).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(false)
   })
 
   it('is safe to dismiss when nothing is showing', () => {

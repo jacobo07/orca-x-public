@@ -141,6 +141,13 @@ async function reloadAndObserve(
 
 function expectFrozenFrameCoveredHydration(probe: FreezeFrameProbe): void {
   expect(probe.addedAt, 'no freeze frame was painted after the reload').not.toBeNull()
+  // Until the new document's first contentful paint the old frame stays on screen, so that paint
+  // must be the frozen frame. Measured before the mount gate: FCP ran 20-25 ms ahead of it.
+  expect(probe.firstContentfulPaintAt, 'the reloaded document never painted').not.toBeNull()
+  expect(
+    probe.firstContentfulPaintAt!,
+    'the empty shell painted before the frozen frame covered it'
+  ).toBeGreaterThanOrEqual(probe.addedAt!)
   expect(
     probe.distinctColors,
     'the frozen frame is a flat colour, not a picture of the app'
