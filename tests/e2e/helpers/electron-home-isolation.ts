@@ -14,7 +14,17 @@ const RESTRICTED_ENV_KEYS = new Set([
   'ZDOTDIR',
   'ORCA_ORIG_ZDOTDIR',
   'BASH_ENV',
-  'ENV'
+  'ENV',
+  // Why: these reach a provider account without going through HOME; ANTHROPIC_API_KEY alone
+  // makes checkClaudeAuth report ready, turning an auth-required spec into a real paid turn.
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'OPENAI_API_KEY',
+  'CODEX_API_KEY'
 ])
 
 type ElectronHomeIsolationOptions = {
@@ -52,7 +62,7 @@ function assertOverlayDoesNotReplaceIsolation(
   }
 }
 
-function stripAmbientHomeAndCodexEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+function stripAmbientHomeAndProviderEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(
     Object.entries(env).filter(([key]) => !RESTRICTED_ENV_KEYS.has(key.toUpperCase()))
   )
@@ -84,7 +94,7 @@ export function createElectronHomeIsolation({
     isolatedHome,
     realHome,
     env: {
-      ...stripAmbientHomeAndCodexEnv(inheritedEnv),
+      ...stripAmbientHomeAndProviderEnv(inheritedEnv),
       ...launchEnv,
       ...extraEnv,
       HOME: isolatedHome,

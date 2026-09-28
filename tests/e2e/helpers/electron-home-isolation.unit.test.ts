@@ -62,6 +62,41 @@ describe('createElectronHomeIsolation', () => {
     ).not.toThrow()
   })
 
+  it('strips provider credentials and config pointers that bypass the isolated HOME', () => {
+    const providerEnv = {
+      ANTHROPIC_API_KEY: 'k',
+      ANTHROPIC_AUTH_TOKEN: 't',
+      CLAUDE_CODE_OAUTH_TOKEN: 'o',
+      CLAUDE_CONFIG_DIR: '/real/.claude',
+      CLAUDECODE: '1',
+      CLAUDE_CODE_ENTRYPOINT: 'cli',
+      OPENAI_API_KEY: 'sk',
+      CODEX_API_KEY: 'c'
+    }
+    const isolation = createElectronHomeIsolation({
+      inheritedEnv: { ...providerEnv, PATH: '/bin' },
+      launchEnv: {},
+      extraEnv: {},
+      userDataDir: createUserDataDir(),
+      realHome: '/real/home'
+    })
+
+    // Positive control: ordinary env still crosses, so the absences below are the filter's.
+    expect(isolation.env.PATH).toBe('/bin')
+    for (const key of Object.keys(providerEnv)) {
+      expect(isolation.env[key], key).toBeUndefined()
+    }
+    expect(() =>
+      createElectronHomeIsolation({
+        inheritedEnv: {},
+        launchEnv: { ANTHROPIC_API_KEY: 'k' },
+        extraEnv: {},
+        userDataDir: createUserDataDir(),
+        realHome: '/real/home'
+      })
+    ).toThrow(/launchEnv\.ANTHROPIC_API_KEY/)
+  })
+
   it('rejects generic fixture overlays that could escape the boundary', () => {
     expect(() =>
       createElectronHomeIsolation({
