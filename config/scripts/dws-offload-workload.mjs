@@ -68,9 +68,25 @@ function resolveAgentBinary(agentKind, agentBin) {
   return { path: firstLine ? firstLine.trim() : null, resolvedVia: 'where.exe' }
 }
 
-function classifyAgentReply(capturedOutput, nonce) {
-  const marker = `DWS-P2-AGENT-OK-${nonce}`
-  if (capturedOutput.includes(marker)) {
+/**
+ * The agent must ANSWER, not repeat: the expected reply is derived from the nonce (its characters
+ * reversed), so it never appears verbatim in the prompt. A CLI that echoes its input -- a header line,
+ * a verbose/debug dump, a usage error quoting the prompt -- therefore cannot read as a matched reply.
+ */
+export function expectedAgentAnswer(nonce) {
+  return `DWS-P2-AGENT-OK-${[...nonce].reverse().join('')}`
+}
+
+export function buildAgentPrompt(nonce) {
+  // The prefix is followed by a space and prose, never by the reversed nonce, so the expected answer
+  // is not a substring of this prompt even for a palindromic nonce.
+  return `Reply with exactly the text DWS-P2-AGENT-OK- immediately followed by the characters of ${nonce} in reverse order (last character first), and nothing else.`
+}
+
+export function classifyAgentReply(capturedOutput, nonce) {
+  // Scrubbing the prompt is belt and braces on top of the derivation above.
+  const scrubbed = capturedOutput.split(buildAgentPrompt(nonce)).join('')
+  if (scrubbed.includes(expectedAgentAnswer(nonce))) {
     return 'matched'
   }
   if (USAGE_LIMIT_PATTERNS.some((pattern) => pattern.test(capturedOutput))) {
@@ -112,7 +128,7 @@ function buildChildSpec(opts) {
     if (resolved.notFound) {
       return { notFound: true, resolvedVia: resolved.resolvedVia }
     }
-    const prompt = `Reply with exactly DWS-P2-AGENT-OK-${opts.nonce}`
+    const prompt = buildAgentPrompt(opts.nonce)
     const args = opts.agentKind === 'codex' ? ['exec', prompt] : ['-p', prompt]
     return { command: resolved.path, args, resolvedVia: resolved.resolvedVia }
   }
@@ -190,4 +206,9 @@ async function main() {
   process.exit(exitCode)
 }
 
-await main()
+// Why guarded on the test runner, not on "am I the entry script": a path comparison fails closed the
+// wrong way (a symlinked or junctioned checkout would run nothing and print no LEG markers), whereas
+// this can only skip the leg under vitest, which imports the classifiers above and must not start one.
+if (!process.env.VITEST) {
+  await main()
+}
