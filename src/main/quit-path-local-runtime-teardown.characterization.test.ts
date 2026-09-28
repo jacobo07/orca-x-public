@@ -37,7 +37,9 @@ function readKillAllPtySource(): string {
     throw new Error('killAllPty markers not found in pty.ts — update this characterization, do not delete it')
   }
   const rest = source.slice(start)
-  const lines = rest.split('\n')
+  // Why \r-strip: a CRLF checkout (Windows) leaves a trailing \r on every split line, so a strict
+  // '}' equality never matches; LF checkouts (GEX44) are unaffected either way.
+  const lines = rest.split('\n').map((line) => line.replace(/\r$/, ''))
   let closingLine = lines.length
   for (let i = 1; i < lines.length; i++) {
     if (lines[i] === '}') {
