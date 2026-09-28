@@ -6,12 +6,28 @@ import {
   extractRemoteProof,
   judgeAbsence,
   judgeBracket,
+  legWindowFromManifest,
+  observationDefects,
   parseSamples,
   redactCommandLine,
   subtreePids,
   summarizeLatencies,
   summarizeRun
 } from './dws-offload-measurement.mjs'
+
+// A run that was genuinely observed end to end; hand-built summaries spread this in so the verdicts
+// under test are about the family/bracket, not about observation validity.
+const OBSERVED = {
+  observation: {
+    samples: 10,
+    sawStart: true,
+    sawStop: true,
+    spanMs: 9000,
+    desktopRootPidValid: true,
+    legWindowCovered: null
+  },
+  freeMb: { before: 5000, after: 4990, min: 4990 }
+}
 
 // Why a synthetic estate rather than a real captured run: a drill pinned to real sampler bytes has
 // an interest in that exact process shape staying unchanged, and decays the day the run is re-taken.
@@ -319,9 +335,63 @@ describe('summarizeRun', () => {
 describe('judgeAbsence', () => {
   it('is PASS when the baseline saw the family (positive control) and the offload saw none', () => {
     const baseline = { perFamily: { codex: { maxCount: 1, observed: [{ pid: 10, commandLine: 'codex.exe' }] } } }
-    const offload = { perFamily: { codex: { maxCount: 0, observed: [] } } }
+    const offload = { ...OBSERVED, perFamily: { codex: { maxCount: 0, observed: [] } } }
     const verdict = judgeAbsence(baseline, offload, 'codex')
     expect(verdict.verdict).toBe('PASS')
+  })
+
+  // A sampler that died (or never sampled) reports zero for every family, exactly like a clean
+  // offload. Every case below would have been PASS before observation validity was checked.
+  describe('is INCONCLUSIVE, never PASS, when the offload run was not validly observed', () => {
+    const baseline = { perFamily: { codex: { maxCount: 1, observed: [{ pid: 10, commandLine: 'codex.exe' }] } } }
+    const emptyOffload = (overrides) => ({
+      ...OBSERVED,
+      ...overrides,
+      perFamily: { codex: { maxCount: 0, observed: [] } }
+    })
+
+    it('for a stream with zero samples (summarizeRun([]))', () => {
+      const offload = summarizeRun([], { desktopRootPid: 100, sawStart: true, sawStop: true })
+      const verdict = judgeAbsence(baseline, offload, 'codex')
+      expect(verdict.verdict).toBe('INCONCLUSIVE')
+      expect(verdict.reason).toContain('sample')
+    })
+
+    it('for a stream with no sampler-stop record (died mid-run)', () => {
+      const offload = emptyOffload({ observation: { ...OBSERVED.observation, sawStop: false } })
+      const verdict = judgeAbsence(baseline, offload, 'codex')
+      expect(verdict.verdict).toBe('INCONCLUSIVE')
+      expect(verdict.reason).toContain('sampler-stop')
+    })
+
+    it('for a stream with no sampler-start record', () => {
+      const offload = emptyOffload({ observation: { ...OBSERVED.observation, sawStart: false } })
+      expect(judgeAbsence(baseline, offload, 'codex').verdict).toBe('INCONCLUSIVE')
+    })
+
+    it('for a stream that stops before the legs did', () => {
+      const offload = emptyOffload({ observation: { ...OBSERVED.observation, legWindowCovered: false } })
+      const verdict = judgeAbsence(baseline, offload, 'codex')
+      expect(verdict.verdict).toBe('INCONCLUSIVE')
+      expect(verdict.reason).toContain('legs window')
+    })
+
+    it('for a manifest whose desktopRootPid is not a positive integer', () => {
+      const offload = emptyOffload({ observation: { ...OBSERVED.observation, desktopRootPidValid: false } })
+      expect(judgeAbsence(baseline, offload, 'codex').verdict).toBe('INCONCLUSIVE')
+    })
+
+    it('for a summary with no observation record at all', () => {
+      const offload = { perFamily: { codex: { maxCount: 0, observed: [] } } }
+      expect(judgeAbsence(baseline, offload, 'codex').verdict).toBe('INCONCLUSIVE')
+    })
+
+    it('but still FAIL when the family was positively seen, even in an invalid run', () => {
+      const offload = {
+        perFamily: { codex: { maxCount: 1, observed: [{ pid: 9, commandLine: 'codex.exe' }] } }
+      }
+      expect(judgeAbsence(baseline, offload, 'codex').verdict).toBe('FAIL')
+    })
   })
 
   it('is UNJUDGED with reason "no positive control" when the baseline never saw the family', () => {
@@ -373,9 +443,61 @@ describe('judgeBracket', () => {
   })
 
   it('is OK when free-memory drift is smaller than the delta', () => {
-    const run = { freeMb: { before: 1000, after: 950 }, unreadableLines: 0 }
+    const run = { ...OBSERVED, freeMb: { before: 1000, after: 950 }, unreadableLines: 0 }
     const verdict = judgeBracket(run, 100)
     expect(verdict.verdict).toBe('OK')
+  })
+
+  // `|null - null| === 0` is smaller than any positive delta, so an empty stream used to bracket OK.
+  it('is INCONCLUSIVE, never OK, for an empty sample stream', () => {
+    const run = summarizeRun([], { desktopRootPid: 100, sawStart: true, sawStop: true })
+    expect(run.freeMb).toEqual({ before: null, after: null, min: null })
+    const verdict = judgeBracket(run, 100)
+    expect(verdict.verdict).toBe('INCONCLUSIVE')
+    expect(verdict.reason).toContain('sample')
+  })
+
+  it('is INCONCLUSIVE, never OK, for a truncated stream missing its sampler-stop record', () => {
+    const run = { ...OBSERVED, observation: { ...OBSERVED.observation, sawStop: false }, unreadableLines: 0 }
+    expect(judgeBracket(run, 100).verdict).toBe('INCONCLUSIVE')
+  })
+
+  it('is INCONCLUSIVE when the free-memory bracket is null even if the stream has samples', () => {
+    const run = { ...OBSERVED, freeMb: { before: null, after: null, min: null }, unreadableLines: 0 }
+    expect(judgeBracket(run, 100).verdict).toBe('INCONCLUSIVE')
+  })
+
+  // Positive control: a genuinely observed run built through summarizeRun still judges OK/PASS, so
+  // the validity gate is not simply refusing everything.
+  it('still judges a fully observed run end to end (positive control)', () => {
+    const nonce = 'NONCE-XYZ'
+    const samples = buildThreeSampleFixture(nonce)
+    const legWindow = legWindowFromManifest({
+      legs: [{ startUtc: samples[0].utc, endUtc: samples[2].utc }]
+    })
+    const offload = summarizeRun(samples, {
+      desktopRootPid: 100,
+      nonce,
+      harnessRootPids: [600],
+      sawStart: true,
+      sawStop: true,
+      legWindow
+    })
+    expect(observationDefects(offload)).toEqual([])
+    expect(judgeBracket(offload, 1000).verdict).toBe('OK')
+  })
+
+  it('is INCONCLUSIVE when the stream ends before the legs did (legs window not covered)', () => {
+    const samples = buildThreeSampleFixture('NONCE-XYZ')
+    const lastMs = Date.parse(samples[2].utc)
+    const offload = summarizeRun(samples, {
+      desktopRootPid: 100,
+      sawStart: true,
+      sawStop: true,
+      legWindow: { startMs: Date.parse(samples[0].utc), endMs: lastMs + 60_000 }
+    })
+    expect(offload.observation.legWindowCovered).toBe(false)
+    expect(judgeBracket(offload, 1000).verdict).toBe('INCONCLUSIVE')
   })
 
   it('is INCONCLUSIVE when the run has unreadable lines, regardless of drift', () => {
@@ -489,6 +611,7 @@ describe('computeDelta absence verdicts', () => {
       workloadTotal: { peakMb: 360, medianMb: 300 }
     }
     const offload = {
+      ...OBSERVED,
       perFamily: {
         vitest: { peakMb: 0, medianMb: 0, maxCount: 0 },
         esbuild: { peakMb: 0, medianMb: 0, maxCount: 0 },
@@ -499,7 +622,40 @@ describe('computeDelta absence verdicts', () => {
     const delta = computeDelta(baseline, offload)
     expect(delta.absenceByFamily.vitest.verdict).toBe('PASS')
     expect(delta.absenceByFamily.esbuild.verdict).toBe('UNJUDGED')
+    expect(delta.bracket.verdict).toBe('OK')
     // Existing 02-03 shape is untouched by the addition.
     expect(delta.perFamily.vitest).toEqual({ peakDeltaMb: 320, medianDeltaMb: 300 })
+  })
+
+  it('an empty offload sample stream yields INCONCLUSIVE absence and bracket, not PASS/OK', () => {
+    const baseline = {
+      perFamily: { vitest: { peakMb: 320, medianMb: 300, maxCount: 1 } },
+      workloadTotal: { peakMb: 360, medianMb: 300 }
+    }
+    const offload = summarizeRun([], { desktopRootPid: 100, sawStart: true, sawStop: true })
+    const delta = computeDelta(baseline, offload)
+    expect(delta.absenceByFamily.vitest.verdict).toBe('INCONCLUSIVE')
+    expect(delta.bracket.verdict).toBe('INCONCLUSIVE')
+  })
+})
+
+describe('legWindowFromManifest', () => {
+  it('spans the legs that carry both stamps and ignores a TIMEOUT leg with no end', () => {
+    const window = legWindowFromManifest({
+      legs: [
+        { leg: 'test', startUtc: '2026-09-28T00:00:10.000Z', endUtc: '2026-09-28T00:00:20.000Z' },
+        { leg: 'build', startUtc: '2026-09-28T00:00:25.000Z', endUtc: '2026-09-28T00:00:40.000Z' },
+        { leg: 'agent', startUtc: '2026-09-28T00:00:45.000Z', exit: 'TIMEOUT' }
+      ]
+    })
+    expect(window).toEqual({
+      startMs: Date.parse('2026-09-28T00:00:10.000Z'),
+      endMs: Date.parse('2026-09-28T00:00:40.000Z')
+    })
+  })
+
+  it('is null (unknown), never a fabricated window, when no leg carries both stamps', () => {
+    expect(legWindowFromManifest({ legs: [{ leg: 'test', exit: 'TIMEOUT' }] })).toBeNull()
+    expect(legWindowFromManifest({})).toBeNull()
   })
 })

@@ -323,6 +323,86 @@ function quantile(sortedValues, q) {
 
 const DEFAULT_INSTRUMENT = 'Win32_Process.WorkingSetSize via Get-CimInstance'
 
+/** Fewer samples than this cannot show a run was observed at all (the sampler runs at ~1s cadence). */
+export const MIN_OBSERVED_SAMPLES = 3
+const LEG_WINDOW_TOLERANCE_MS = 5000
+
+/**
+ * The window the manifest's legs spanned, as epoch ms, from the legs that carry both stamps. Null
+ * when none does (a TIMEOUT leg has no endUtc) -- "unknown", never a fabricated window.
+ */
+export function legWindowFromManifest(manifest) {
+  const legs = Array.isArray(manifest?.legs) ? manifest.legs : []
+  const starts = []
+  const ends = []
+  for (const leg of legs) {
+    const startMs = Date.parse(leg?.startUtc ?? '')
+    const endMs = Date.parse(leg?.endUtc ?? '')
+    if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+      starts.push(startMs)
+      ends.push(endMs)
+    }
+  }
+  return starts.length > 0 ? { startMs: Math.min(...starts), endMs: Math.max(...ends) } : null
+}
+
+function buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow }) {
+  const utcMs = samples.map((s) => Date.parse(s.utc ?? '')).filter(Number.isFinite)
+  const monoMs = samples.map((s) => s.monoMs).filter((v) => typeof v === 'number')
+  const firstMs = utcMs.length > 0 ? Math.min(...utcMs) : null
+  const lastMs = utcMs.length > 0 ? Math.max(...utcMs) : null
+  let legWindowCovered = null
+  if (legWindow) {
+    legWindowCovered =
+      firstMs !== null &&
+      lastMs !== null &&
+      firstMs <= legWindow.startMs + LEG_WINDOW_TOLERANCE_MS &&
+      lastMs >= legWindow.endMs - LEG_WINDOW_TOLERANCE_MS
+  }
+  return {
+    samples: samples.length,
+    sawStart,
+    sawStop,
+    spanMs: monoMs.length > 1 ? Math.max(...monoMs) - Math.min(...monoMs) : 0,
+    desktopRootPidValid: Number.isInteger(desktopRootPid) && desktopRootPid > 0,
+    legWindowCovered
+  }
+}
+
+/**
+ * Why a run cannot be judged: empty, truncated or unattributable sample streams. A summary with no
+ * `observation` record is a defect too -- an unknown observation is not a clean one. Every entry is
+ * a reason to answer INCONCLUSIVE rather than PASS/OK (a run that was never observed reads exactly
+ * like a run in which nothing happened). The CLI passes `ignoreDesktopPid` for its exit code only:
+ * the sampler self-test legitimately has no desktop, but every verdict still counts the pid.
+ */
+export function observationDefects(summary, { ignoreDesktopPid = false } = {}) {
+  const obs = summary?.observation
+  if (!obs) {
+    return ['no observation record (summary predates the validity checks, or was hand-built)']
+  }
+  const defects = []
+  if (!(obs.samples >= MIN_OBSERVED_SAMPLES)) {
+    defects.push(`only ${obs.samples ?? 0} sample(s) (< ${MIN_OBSERVED_SAMPLES})`)
+  }
+  if (obs.sawStart !== true) {
+    defects.push('sampler-start record missing')
+  }
+  if (obs.sawStop !== true) {
+    defects.push('sampler-stop record missing (the sampler may have died mid-run)')
+  }
+  if (obs.legWindowCovered === false) {
+    defects.push('sample stream does not cover the legs window (truncated)')
+  }
+  if (summary.freeMb?.before == null || summary.freeMb?.after == null) {
+    defects.push('free-memory bracket missing')
+  }
+  if (!ignoreDesktopPid && obs.desktopRootPidValid !== true) {
+    defects.push('manifest desktopRootPid is not a positive integer')
+  }
+  return defects
+}
+
 /**
  * Aggregates one run's samples into per-family peak/median (median taken only over samples where
  * the family is present -- an absent family is not a zero data point, it is no data point), a
@@ -336,7 +416,13 @@ export function summarizeRun(samples, opts = {}) {
     nonce,
     harnessRootPids = [],
     unreadableLines = 0,
-    instrument = DEFAULT_INSTRUMENT
+    instrument = DEFAULT_INSTRUMENT,
+    // Whether the sampler-start / sampler-stop records were seen; null = the caller did not say,
+    // which observationDefects() treats as a defect (unknown is not "fine").
+    sawStart = null,
+    sawStop = null,
+    // {startMs, endMs} spanned by the manifest's legs, or null when no leg carries both stamps.
+    legWindow = null
   } = opts
 
   // Why classify per (sample, proc) occurrence here, NOT via classifyRun's per-pid cache: a pid is
@@ -432,6 +518,7 @@ export function summarizeRun(samples, opts = {}) {
     },
     instrument,
     unreadableLines,
+    observation: buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow }),
     patterns: FAMILY_PATTERNS,
     desktopSubtreeSize: desktopSubtreeUnionForReporting.size,
     harnessSubtreeSize: harnessSubtreeUnionForReporting.size
@@ -453,6 +540,15 @@ export function judgeAbsence(baselineSummary, offloadSummary, family) {
 
   const offloadCount = offloadFamily?.maxCount ?? 0
   if (offloadCount === 0) {
+    // Absence is only a claim about a run that was actually observed: an empty or truncated stream
+    // reports zero for every family, exactly like a clean offload.
+    const defects = observationDefects(offloadSummary)
+    if (defects.length > 0) {
+      return {
+        verdict: 'INCONCLUSIVE',
+        reason: `offload run was not validly observed: ${defects.join('; ')}`
+      }
+    }
     return {
       verdict: 'PASS',
       reason: `baseline saw ${family} (max concurrent count ${baselineFamily.maxCount}); offload saw none`
@@ -513,6 +609,12 @@ export function computeDelta(baselineSummary, offloadSummary) {
 export function judgeBracket(runSummary, deltaMb) {
   if ((runSummary.unreadableLines ?? 0) > 0) {
     return { verdict: 'INCONCLUSIVE', reason: `unreadable lines present (${runSummary.unreadableLines})` }
+  }
+  // Null free-memory readings would make the drift `|null - null| = 0`, which is smaller than any
+  // positive delta and reads as OK -- an unobserved run must never bracket as OK.
+  const defects = observationDefects(runSummary)
+  if (defects.length > 0) {
+    return { verdict: 'INCONCLUSIVE', reason: `run was not validly observed: ${defects.join('; ')}` }
   }
   const drift = Math.abs(runSummary.freeMb.before - runSummary.freeMb.after)
   const threshold = Math.abs(deltaMb)
@@ -595,12 +697,27 @@ function runSummarizeCommand(options) {
     desktopRootPid: manifest.desktopRootPid,
     nonce: manifest.nonce,
     harnessRootPids: manifest.harnessRootPids ?? [],
-    unreadableLines: parsed.unreadableLines
+    unreadableLines: parsed.unreadableLines,
+    sawStart: parsed.start !== null,
+    sawStop: parsed.stop !== null,
+    legWindow: legWindowFromManifest(manifest)
   })
   writeJsonOutputIfRequested(options.out, summary)
   process.stdout.write(
     `SUMMARY observedCadenceMs=${summary.cadence.medianMs ?? 'null'} unreadableLines=${summary.unreadableLines} totalLines=${parsed.totalLines}\n`
   )
+  process.stdout.write(`OBSERVATION ${JSON.stringify(summary.observation)}\n`)
+  // Empty or truncated streams: the summary is still written (with its observation record, so
+  // compare/judge answer INCONCLUSIVE), but the command must not exit 0 as if the run were judgeable.
+  const hardDefects = observationDefects(summary, { ignoreDesktopPid: true })
+  const allDefects = observationDefects(summary)
+  if (allDefects.length > hardDefects.length) {
+    process.stderr.write('OBSERVATION-WARNING manifest desktopRootPid is not a positive integer; verdicts will be INCONCLUSIVE\n')
+  }
+  if (hardDefects.length > 0) {
+    process.stderr.write(`OBSERVATION-DEFECT ${hardDefects.join('; ')}\n`)
+    process.exitCode = 3
+  }
   // CTX-MEAS-3: print the family patterns beside every count, so "0 processes for family X" is
   // never a bare claim.
   for (const pattern of summary.patterns) {
