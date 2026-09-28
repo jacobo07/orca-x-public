@@ -33,6 +33,7 @@ describe('dispatching a resolved transcript to the surface that was captured', (
     renderer = null
     state = null
     commandField = ''
+    salvaged = []
   })
 
   function Harness({ tabId }: { tabId: string }): null {
@@ -72,15 +73,25 @@ describe('dispatching a resolved transcript to the surface that was captured', (
       },
       notifyInserted: vi.fn(),
       notifyNoTarget: vi.fn(),
+      salvageTranscript: vi.fn(async (text: string) => {
+        salvaged.push(text)
+        return true
+      }),
+      notifySalvaged: vi.fn(),
       ...overrides
     }
     return base as DictationDeliveryHandlers & {
       insertIntoLiveTerminal: ReturnType<typeof vi.fn>
+      salvageTranscript: ReturnType<typeof vi.fn>
+      notifySalvaged: ReturnType<typeof vi.fn>
     }
   }
+  let salvaged: string[] = []
 
   function dispatch(target: DictationTarget | null, text: string, h: DictationDeliveryHandlers) {
-    act(() => dispatchDictationDelivery(resolveDictationDelivery(text, target), appendBufferedDictation, h))
+    act(() =>
+      dispatchDictationDelivery(resolveDictationDelivery(text, target), appendBufferedDictation, h)
+    )
   }
 
   it('WAS LEAK — words spoken into tab A reach tab A after the user switches to tab B', async () => {
@@ -102,7 +113,11 @@ describe('dispatching a resolved transcript to the surface that was captured', (
   it('delivers to the originating tab when nothing moved', async () => {
     // The control that makes the case above a retarget rather than a lost write.
     await mount('tab-a')
-    dispatch({ surface: 'native-chat', draftKey: TAB_A_CHAT }, 'delete the old branches', handlers())
+    dispatch(
+      { surface: 'native-chat', draftKey: TAB_A_CHAT },
+      'delete the old branches',
+      handlers()
+    )
 
     expect(state?.composerText).toBe('delete the old branches')
   })
@@ -133,11 +148,23 @@ describe('dispatching a resolved transcript to the surface that was captured', (
     expect(state?.composerText).toBe('')
     expect(commandField).toBe('')
     expect(h.notifyInserted).toHaveBeenCalledTimes(1)
+    // A delivered transcript retains nothing.
+    expect(h.salvageTranscript).not.toHaveBeenCalled()
+    expect(h.notifySalvaged).not.toHaveBeenCalled()
   })
 
-  it('says nothing landed when the captured PTY did not take the bytes', async () => {
-    // A send that failed already told the user why; a second "inserted" would be a
-    // false success. Paired with the case above so silence is attributable.
+  it('a chat transcript delivered to its captured composer is delivered once and retains nothing', async () => {
+    await mount('tab-a')
+    const h = handlers()
+    dispatch({ surface: 'native-chat', draftKey: TAB_A_CHAT }, 'hello', h)
+    await act(async () => undefined)
+
+    expect(state?.composerText).toBe('hello')
+    expect(h.notifyInserted).toHaveBeenCalledTimes(1)
+    expect(h.salvageTranscript).not.toHaveBeenCalled()
+  })
+
+  it('OXI-003 — a PTY that did not take the bytes: the words are kept, and go nowhere else', async () => {
     await mount('tab-a')
 
     const h = handlers({ insertIntoLiveTerminal: vi.fn(async () => false) })
@@ -146,14 +173,38 @@ describe('dispatching a resolved transcript to the surface that was captured', (
 
     expect(h.insertIntoLiveTerminal).toHaveBeenCalledTimes(1)
     expect(h.notifyInserted).not.toHaveBeenCalled()
+    // Was: dropped silently. Now: handed to the durable salvage store and reported.
+    expect(salvaged).toEqual(['git status'])
+    expect(h.notifySalvaged).toHaveBeenCalledWith({ reason: 'not-landed', kept: true })
 
-    // And it goes NOWHERE ELSE. This is the whole safety property when a captured
-    // subject dies mid-ASR: the words are refused, not re-aimed at whatever surface
-    // happens to be in front of the user now. What the product still owes is a way
-    // to GET THEM BACK -- tracked as voice.unclaimed-transcript-recovery, which is a
-    // different capability from owning the target.
+    // And it goes NOWHERE ELSE: never re-aimed at whatever surface is in front of
+    // the user now, and never submitted.
     expect(state?.composerText).toBe('')
     expect(commandField).toBe('')
+  })
+
+  it('a PTY send that throws is salvaged the same way as one that did not land', async () => {
+    await mount('tab-a')
+    const h = handlers({
+      insertIntoLiveTerminal: vi.fn(async () => {
+        throw new Error('socket closed')
+      })
+    })
+    dispatch({ surface: 'terminal', handle: 'pty-gone', liveInputEnabled: true }, 'ls', h)
+    await act(async () => undefined)
+
+    expect(salvaged).toEqual(['ls'])
+    expect(h.notifySalvaged).toHaveBeenCalledWith({ reason: 'not-landed', kept: true })
+  })
+
+  it('reports a salvage that could not be kept as not kept, never as kept', async () => {
+    await mount('tab-a')
+    const h = handlers({ salvageTranscript: vi.fn(async () => false) })
+    dispatch(null, 'lost words', h)
+    await act(async () => undefined)
+
+    expect(h.salvageTranscript).toHaveBeenCalledTimes(1)
+    expect(h.notifySalvaged).toHaveBeenCalledWith({ reason: 'no-target', kept: false })
   })
 
   it('a buffered terminal transcript appends to the command field, not to a chat draft', async () => {
@@ -168,16 +219,28 @@ describe('dispatching a resolved transcript to the surface that was captured', (
     expect(h.insertIntoLiveTerminal).not.toHaveBeenCalled()
   })
 
-  it('refuses when nothing was captured, and writes to no surface at all', async () => {
+  it('OXI-003 — refuses when nothing was captured, keeps the words, and writes to no surface', async () => {
     await mount('tab-a')
 
     const h = handlers()
     dispatch(null, 'delete the old branches', h)
+    await act(async () => undefined)
 
-    expect(h.notifyNoTarget).toHaveBeenCalledTimes(1)
+    expect(salvaged).toEqual(['delete the old branches'])
+    expect(h.notifySalvaged).toHaveBeenCalledWith({ reason: 'no-target', kept: true })
     expect(h.notifyInserted).not.toHaveBeenCalled()
     expect(state?.composerText).toBe('')
     expect(commandField).toBe('')
     expect(h.insertIntoLiveTerminal).not.toHaveBeenCalled()
+  })
+
+  it('an empty refused transcript has nothing to keep and still says it had no target', async () => {
+    await mount('tab-a')
+    const h = handlers()
+    dispatch(null, '   ', h)
+    await act(async () => undefined)
+
+    expect(h.notifyNoTarget).toHaveBeenCalledTimes(1)
+    expect(h.salvageTranscript).not.toHaveBeenCalled()
   })
 })

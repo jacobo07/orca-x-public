@@ -55,6 +55,24 @@
       ]
     },
     {
+      "id": "mobile.user-drafts",
+      "state": "AsyncStorage keys orca:user-draft:v1:<sha256(surface, host, worktree, subject)> — unsent chat composer text per tab, and recognized dictation that reached no surface (dictation-salvage, per host and worktree)",
+      "writer": "mobile/src/storage/draft-journal.ts",
+      "tier": "atomic-only",
+      "lostIf": "The user's own unsent words. Before this contract they lived only in React state, so the OS killing the app discarded them with no notice, and recognized dictation whose target had gone was dropped outright. A key is replaced whole, so a reader sees the old draft or the new one; the newest edit can be lost inside the 300 ms save debounce. Load keeps 'unreadable' (the corrupt entry is removed and the user told) apart from 'failed' (a storage error removes nothing), and a draft is cleared only after the host confirms the send.",
+      "provenBy": [
+        "mobile/src/storage/draft-journal.test.ts",
+        "mobile/src/session/use-mobile-native-chat-drafts-persistence.test.ts",
+        "mobile/src/dictation/mobile-dictation-transcript-dispatch.test.ts"
+      ],
+      "knownGaps": [
+        "No real process-death run yet: persistence is proven by remounting the hook over the same storage, not by killing the app on an emulator.",
+        "The markdown editor and the file preview editor still hold unsaved edits only in memory (variant-parity drafts.user-invested-input-survives-process-death stays open).",
+        "Salvaged dictation is kept and the user told, but no screen yet lists or re-inserts it.",
+        "Host removal purges drafts outside the per-key mutation queue, so a save in flight at that instant can recreate one entry."
+      ]
+    },
+    {
       "id": "speech.openai-api-key",
       "state": "~/.orca/openai-speech-token.enc — the safeStorage-encrypted OpenAI speech key",
       "writer": "src/main/speech/openai-api-key-store.ts",

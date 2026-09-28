@@ -19,10 +19,13 @@ import {
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-pending-echo'
-import { useCapturedDraftWrites } from './mobile-native-chat-captured-draft-writes'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import {
+  usePersistedCapturedDraftWrites,
+  type MobileNativeChatDraftPersistenceOptions
+} from './use-mobile-native-chat-draft-persistence'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
@@ -32,23 +35,25 @@ const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 // Ack-lost sends wait for a transcript echo before surfacing as unconfirmed.
 const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 
-export function useMobileNativeChatDrafts(args: {
-  hostId: string
-  worktreeId: string
-  tabId: string | null
-  sessionId: string | null
-  messages: readonly NativeChatMessage[]
-  /** Host-provided launch context still parked as an unsent TUI-input draft. */
-  launchDraft?: string | null
-  launchDraftCreatedAt?: number | null
-  /** Whether the tab is currently resolved to the chat view. Off-chat the
-   *  launch-draft effects hold their state instead of acting on it. */
-  chatActive?: boolean
-  /** `messages` is not yet this session's real history (read in flight, or the
-   *  transcript still belongs to the previously active tab), so it cannot be
-   *  trusted to decline or retire the seed. */
-  transcriptLoading?: boolean
-}): {
+export function useMobileNativeChatDrafts(
+  args: {
+    hostId: string
+    worktreeId: string
+    tabId: string | null
+    sessionId: string | null
+    messages: readonly NativeChatMessage[]
+    /** Host-provided launch context still parked as an unsent TUI-input draft. */
+    launchDraft?: string | null
+    launchDraftCreatedAt?: number | null
+    /** Whether the tab is currently resolved to the chat view. Off-chat the
+     *  launch-draft effects hold their state instead of acting on it. */
+    chatActive?: boolean
+    /** `messages` is not yet this session's real history (read in flight, or the
+     *  transcript still belongs to the previously active tab), so it cannot be
+     *  trusted to decline or retire the seed. */
+    transcriptLoading?: boolean
+  } & MobileNativeChatDraftPersistenceOptions
+): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
   pending: MobileNativeChatPendingMessage[]
@@ -70,6 +75,9 @@ export function useMobileNativeChatDrafts(args: {
   /** Put the text back after a definite rejection, unless newer edits exist. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
+  /** A send the host accepted that is not a chat turn (slash/control command):
+   *  retire the durable copy without adding an optimistic echo. */
+  settleSentDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
@@ -118,19 +126,15 @@ export function useMobileNativeChatDrafts(args: {
     setDrafts
   })
 
-  const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
-    (value) => {
-      if (!draftKey) {
-        return
-      }
-      setDrafts((previous) => {
-        const current = previous[draftKey] ?? ''
-        const next = typeof value === 'function' ? value(current) : value
-        return next === current ? previous : { ...previous, [draftKey]: next }
-      })
-    },
-    [draftKey]
-  )
+  // Durable drafts (OXI-001): user edits persist; the send-time clear does not.
+  const {
+    setComposerText,
+    clearDraftForSend,
+    restoreRejectedDraft,
+    appendDictationToDraft,
+    settleSentDraftKey,
+    settleSentDraft
+  } = usePersistedCapturedDraftWrites({ ...args, draftKey, drafts, setDrafts })
 
   const captureSendOrigin = useCallback(
     (text: string) => {
@@ -149,11 +153,9 @@ export function useMobileNativeChatDrafts(args: {
     [draftKey, pendingKey]
   )
 
-  const { clearDraftForSend, restoreRejectedDraft, appendDictationToDraft } =
-    useCapturedDraftWrites(setDrafts)
-
   const acceptSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
+      settleSentDraftKey(origin.draftKey, text)
       if (!origin.pendingKey && !images?.length) {
         return
       }
@@ -170,7 +172,7 @@ export function useMobileNativeChatDrafts(args: {
         )
       }
     },
-    []
+    [settleSentDraftKey]
   )
 
   // Why: a relay drop mid-send loses only the ack in the common case — the
@@ -200,6 +202,7 @@ export function useMobileNativeChatDrafts(args: {
         isActiveTranscript &&
         findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0
       ) {
+        settleSentDraftKey(origin.draftKey, text)
         return
       }
       entry.deadline = setTimeout(() => {
@@ -208,7 +211,7 @@ export function useMobileNativeChatDrafts(args: {
       }, UNCONFIRMED_SEND_DEADLINE_MS)
       unconfirmedRef.current = [...unconfirmedRef.current, entry]
     },
-    []
+    [settleSentDraftKey]
   )
 
   useEffect(() => {
@@ -228,8 +231,10 @@ export function useMobileNativeChatDrafts(args: {
     unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !landedSet.has(entry))
     for (const entry of landed) {
       clearTimeout(entry.deadline ?? undefined)
+      // The transcript echo is the delivery proof an ack-lost send never got.
+      settleSentDraftKey(entry.draftKey, entry.text)
     }
-  }, [messages, draftKey, pendingKey])
+  }, [messages, draftKey, pendingKey, settleSentDraftKey])
 
   useEffect(() => {
     mountedRef.current = true
@@ -328,6 +333,7 @@ export function useMobileNativeChatDrafts(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
+    settleSentDraft,
     holdUnconfirmedSend
   }
 }

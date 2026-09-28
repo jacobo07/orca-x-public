@@ -145,6 +145,8 @@ import {
   type DictationTarget
 } from '../../../../src/dictation/mobile-dictation-delivery'
 import { dispatchDictationDelivery } from '../../../../src/dictation/mobile-dictation-transcript-dispatch'
+import { appendDictationSalvage } from '../../../../src/storage/draft-journal'
+import { journalChatDraftStore } from '../../../../src/session/mobile-native-chat-draft-journal-store'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import {
   recoverActiveTerminalAfterForeground,
@@ -1105,7 +1107,17 @@ export default function SessionScreen() {
     nativeChatInputLeaseReady,
     connState,
     onSendError: nativeChatSendError.show,
-    onSendResolved: nativeChatSendError.clear
+    onSendResolved: nativeChatSendError.clear,
+    // OXI-001: composer drafts survive process death; restore never submits.
+    draftStore: journalChatDraftStore,
+    onDraftPersistenceIssue: (issue) =>
+      showToast(
+        issue.kind === 'restore-unreadable'
+          ? 'A saved chat draft was unreadable and was discarded'
+          : issue.kind === 'restore-failed'
+            ? 'Could not check for a saved chat draft'
+            : 'Chat draft could not be saved on this device'
+      )
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
@@ -1133,7 +1145,18 @@ export default function SessionScreen() {
         appendToCommandField: setInput,
         notifyInserted: () => showToast('Dictation inserted'),
         // Why: a transcript that never had a destination is not a transcript that went somewhere quietly.
-        notifyNoTarget: () => showToast('Dictation had no target — nothing was inserted')
+        notifyNoTarget: () => showToast('Dictation had no target — nothing was inserted'),
+        // Why: words that reached no surface are kept, never re-aimed or submitted (OXI-003).
+        salvageTranscript: async (salvageText) =>
+          (await appendDictationSalvage({ hostId, worktreeId }, salvageText)).kind === 'saved',
+        notifySalvaged: ({ reason, kept }) =>
+          showToast(
+            kept
+              ? reason === 'no-target'
+                ? 'Dictation had no target — your words were kept, nothing was inserted'
+                : 'Dictation did not reach the terminal — your words were kept'
+              : 'Dictation was not inserted and could not be kept'
+          )
       })
     },
     onError: (err) => {
