@@ -71,6 +71,27 @@ test.describe('visible terminal pane paint recovery', () => {
     await waitForActiveTerminalManager(orcaPage)
     const ptyId = await waitForActivePanePtyId(orcaPage)
 
+    // Precondition: the production judge samples the WebGL canvas and abstains without one, so on a
+    // DOM-rendered pane this file would fail identically with or without the fix. Skip, named.
+    const webglDecision = await orcaPage.evaluate(async () => {
+      const report = (await (window as DeliveryWatchdogWindow).__orcaTerminalFreezeReport?.()) as
+        | {
+            renderer?: {
+              paneRendering?: {
+                hasWebgl?: boolean
+                terminalWebglAutoDecision?: { reason?: string }
+              }[]
+            }
+          }
+        | undefined
+      const pane = report?.renderer?.paneRendering?.[0]
+      return { hasWebgl: pane?.hasWebgl === true, reason: pane?.terminalWebglAutoDecision?.reason }
+    })
+    test.skip(
+      !webglDecision.hasWebgl,
+      `UNJUDGEABLE HERE: pane is not WebGL-rendered (${webglDecision.reason ?? 'unknown'})`
+    )
+
     // Positive control for the oracle itself: a gate that can only ever report "unchanged" would
     // pass every assertion below, so prove it moves on a pane that is demonstrably healthy.
     // Precondition, bounded on the condition: a shell that has not printed its prompt yet drops the
@@ -112,14 +133,14 @@ test.describe('visible terminal pane paint recovery', () => {
     await expect
       .poll(async () => getTerminalContent(orcaPage), { timeout: 20_000 })
       .toContain('painted-101')
-    expect(await presentedSignature(orcaPage), 'canvas painted while plant was in').toBe(
-      frozen
-    )
+    expect(await presentedSignature(orcaPage), 'canvas painted while plant was in').toBe(frozen)
     expect(await orcaPage.evaluate(recoveryCount)).toBe(baseline)
 
     // Recovery: keep the PTY producing across several fast ticks, with no input to the pane.
     await orcaPage.evaluate(() => {
-      ;(window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.configure({ intervalMs: 1_000 })
+      ;(window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.configure({
+        intervalMs: 1_000
+      })
     })
     for (let i = 0; i < 8; i++) {
       await orcaPage.evaluate(([id, n]) => window.api.pty.write(id, `echo producing-${n}\r`), [
@@ -134,7 +155,9 @@ test.describe('visible terminal pane paint recovery', () => {
 
     // The cause must name the layer that lied, or the next field report is unattributed again.
     const report = JSON.stringify(
-      await orcaPage.evaluate(() => (window as DeliveryWatchdogWindow).__orcaTerminalFreezeReport?.())
+      await orcaPage.evaluate(() =>
+        (window as DeliveryWatchdogWindow).__orcaTerminalFreezeReport?.()
+      )
     )
     expect(report).toContain('output-not-painted')
 
@@ -155,9 +178,11 @@ test.describe('visible terminal pane paint recovery', () => {
   })
 })
 
+// eslint-disable-next-line no-control-regex
+const TERMINAL_ESCAPES = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[\]P^_][^\x07\x1b]*(\x07|\x1b\\)?/g
+
 function printableText(serialized: string): string {
-  // eslint-disable-next-line no-control-regex
-  return serialized.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[\]P^_][^\x07\x1b]*(\x07|\x1b\\)?/g, '').trim()
+  return serialized.replace(TERMINAL_ESCAPES, '').trim()
 }
 
 function recoveryCount(): number {

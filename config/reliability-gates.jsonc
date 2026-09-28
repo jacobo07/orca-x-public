@@ -12490,7 +12490,8 @@
         "Accumulate CI evidence once a runner is assigned again."
       ],
       "knownGaps": [
-        "Composited-pixel recovery E2E not yet run on this branch.",
+        "No real-app evidence on a WebGL-rendered pane yet. Linux under xvfb (GEX44, 2026-09-28) renders through the DOM renderer (terminalWebglAutoDecision linux-webgl2-unavailable): the recovery spec failed identically at the fix 48818fddc and before it 5d7c65961, i.e. INCONCLUSIVE, and now skips with a named reason instead.",
+        "Product gap: a pane without WebGL2 renders through the DOM and has no paint signature, so a paint stall there is undetectable by design (the judge abstains rather than guess). Hosts without a GPU and many VMs take this path.",
         "No CI evidence: runners unassigned since 2026-09-13."
       ],
       "demotionRule": "Demote to protection none if the painted-liveness test stops failing with the paint verdict removed, or if the judge starts flagging idle or off-screen panes."
