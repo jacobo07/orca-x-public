@@ -82,7 +82,8 @@ describe('dws characterization (a): a committed desktop quit kills the local PTY
   })
 
   it('rejects a will-quit handler that no longer kills local PTYs', () => {
-    const withoutKill = readWillQuitSource().replace('killAllPty()', '')
+    // Why replaceAll: the handler's own "Why:" comment above the call also says `killAllPty()`.
+    const withoutKill = readWillQuitSource().replaceAll('killAllPty()', '')
     expect(judgeLocalTeardown(withoutKill, readKillAllPtySource())).toEqual({
       ok: false,
       reason: 'local-pty-kill-missing',
@@ -91,7 +92,7 @@ describe('dws characterization (a): a committed desktop quit kills the local PTY
   })
 
   it('rejects a killAllPty that stops scoping to the local provider', () => {
-    const widenedKillAll = readKillAllPtySource().replace('localProvider.killAll()', '')
+    const widenedKillAll = readKillAllPtySource().replaceAll('localProvider.killAll()', '')
     expect(judgeLocalTeardown(readWillQuitSource(), widenedKillAll)).toEqual({
       ok: false,
       reason: 'kill-scope-changed',
