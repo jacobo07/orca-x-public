@@ -51,7 +51,9 @@ function executorScope(
     return 'not-local'
   }
   const wsl = path ? parseWslUncPath(path) : null
-  return wsl ? { kind: 'wsl', hostId: 'local', distro: wsl.distro } : { kind: 'local', hostId: 'local' }
+  return wsl
+    ? { kind: 'wsl', hostId: 'local', distro: wsl.distro }
+    : { kind: 'local', hostId: 'local' }
 }
 
 /**
@@ -68,7 +70,11 @@ export async function decideWakeAdmission(
   }
   const scope = executorScope(parsed.hostId, deps.workspacePath(parsed.workspaceKey, parsed.hostId))
   if (scope === null) {
-    return { verdict: 'refused', reason: 'invalid-request', detail: `unknown host ${parsed.hostId}` }
+    return {
+      verdict: 'refused',
+      reason: 'invalid-request',
+      detail: `unknown host ${parsed.hostId}`
+    }
   }
   const label = `workspace ${parsed.workspaceKey}`
   const observation: DispatchObservationResult =

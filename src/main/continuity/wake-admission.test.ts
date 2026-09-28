@@ -28,7 +28,9 @@ function deps(available: number, path: string | null = '/repos/app') {
 describe('decideWakeAdmission', () => {
   it('admits a local wake while the host holds at least the floor', async () => {
     const d = deps(PROVISIONAL_WAKE_FLOOR_BYTES + 1)
-    await expect(decideWakeAdmission({ hostId: 'local', workspaceKey: 'wt-1' }, d)).resolves.toEqual({
+    await expect(
+      decideWakeAdmission({ hostId: 'local', workspaceKey: 'wt-1' }, d)
+    ).resolves.toEqual({
       verdict: 'admitted',
       availableMemoryBytes: PROVISIONAL_WAKE_FLOOR_BYTES + 1,
       floorBytes: PROVISIONAL_WAKE_FLOOR_BYTES
@@ -100,7 +102,11 @@ describe('withE2EWakeReading', () => {
       ORCA_E2E_USER_DATA_DIR: '/tmp/x',
       ORCA_E2E_WAKE_AVAILABLE_BYTES: '5000000000, 100'
     })
-    const figures = [(await read()).availableMemory, (await read()).availableMemory, (await read()).availableMemory]
+    const figures = [
+      (await read()).availableMemory,
+      (await read()).availableMemory,
+      (await read()).availableMemory
+    ]
     expect(figures).toEqual([5_000_000_000, 100, 100])
   })
 })

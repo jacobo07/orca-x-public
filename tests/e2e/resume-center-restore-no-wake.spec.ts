@@ -139,14 +139,16 @@ test('Resume Center open restores a slept workspace without starting any process
     await waitForTerminalOutput(page, marker)
     await page.evaluate(
       ({ paneKey, worktreeId, providerSessionId, transcriptPath }) => {
-        window.__store?.getState().setAgentStatus(
-          paneKey,
-          { state: 'working', prompt: 'finish the task', agentType: 'codex' },
-          'Codex',
-          undefined,
-          { worktreeId },
-          { providerSession: { key: 'session_id', id: providerSessionId, transcriptPath } }
-        )
+        window.__store
+          ?.getState()
+          .setAgentStatus(
+            paneKey,
+            { state: 'working', prompt: 'finish the task', agentType: 'codex' },
+            'Codex',
+            undefined,
+            { worktreeId },
+            { providerSession: { key: 'session_id', id: providerSessionId, transcriptPath } }
+          )
       },
       {
         paneKey: descriptor.paneKey,
