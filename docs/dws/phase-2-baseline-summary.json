@@ -1,0 +1,143 @@
+{
+  "instrument": "Win32_Process.WorkingSetSize via Get-CimInstance",
+  "cadence": {
+    "medianMs": 1014.5,
+    "samples": 265
+  },
+  "freeMb": {
+    "before": 6235.52,
+    "after": 6702.07,
+    "min": 2723.05
+  },
+  "unreadableLines": 0,
+  "desktopSubtreeSize": 251,
+  "harnessSubtreeSize": 285,
+  "workloadTotal": {
+    "peakMb": 956.8599999999999,
+    "medianMb": 142.305
+  },
+  "perFamily": {
+    "vitest": {
+      "maxCount": 1,
+      "peakMb": 610.184,
+      "medianMb": 235.656,
+      "rules": null
+    },
+    "tsc": {
+      "maxCount": 2,
+      "peakMb": 903.6569999999999,
+      "medianMb": 476.1039999999999,
+      "rules": null
+    },
+    "esbuild": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "claude": {
+      "maxCount": 1,
+      "peakMb": 233.859,
+      "medianMb": 214.414,
+      "rules": null
+    },
+    "codex": {
+      "maxCount": 1,
+      "peakMb": 12.391,
+      "medianMb": 12.391,
+      "rules": null
+    },
+    "indexer": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "workload-wrapper": {
+      "maxCount": 1,
+      "peakMb": 56.195,
+      "medianMb": 56.156,
+      "rules": null
+    },
+    "orca-cli": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "nonce": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "control-surface": {
+      "maxCount": 19,
+      "peakMb": 1362.0349999999996,
+      "medianMb": 1013.4209999999999,
+      "rules": null
+    }
+  },
+  "families": {
+    "vitest": {
+      "maxCount": 1,
+      "peakMb": 610.184,
+      "medianMb": 235.656,
+      "rules": null
+    },
+    "tsc": {
+      "maxCount": 2,
+      "peakMb": 903.6569999999999,
+      "medianMb": 476.1039999999999,
+      "rules": null
+    },
+    "esbuild": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "claude": {
+      "maxCount": 1,
+      "peakMb": 233.859,
+      "medianMb": 214.414,
+      "rules": null
+    },
+    "codex": {
+      "maxCount": 1,
+      "peakMb": 12.391,
+      "medianMb": 12.391,
+      "rules": null
+    },
+    "indexer": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "workload-wrapper": {
+      "maxCount": 1,
+      "peakMb": 56.195,
+      "medianMb": 56.156,
+      "rules": null
+    },
+    "orca-cli": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "nonce": {
+      "maxCount": 0,
+      "peakMb": 0,
+      "medianMb": 0,
+      "rules": null
+    },
+    "control-surface": {
+      "maxCount": 19,
+      "peakMb": 1362.0349999999996,
+      "medianMb": 1013.4209999999999,
+      "rules": null
+    }
+  }
+}

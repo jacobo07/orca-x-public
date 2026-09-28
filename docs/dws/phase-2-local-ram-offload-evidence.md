@@ -143,3 +143,99 @@ exit 1
 Red by design (this matrix spans the whole DWS workstream, not just this plan). This plan does
 not modify `config/dws-completion-matrix.jsonc` — that entry lands in plan 02-06 — so the row
 counts above are identical to (not longer than) this plan's pre-task state.
+
+## Criterion 1 — baseline (plan 02-04)
+
+This section records DWS-P2-SC1: a measured local baseline of the same workload later offloaded
+(scoped vitest pair, CLI typecheck, and a one-turn agent leg), run in a terminal of the local Orca
+desktop, sampled at ~1 s cadence, with per-family peak/median working set and the positive controls
+DWS-P2-SC4's later absence claim depends on (CTX-MEAS-1, CTX-MEAS-3). Verdict vocabulary as defined
+above.
+
+### Identity
+
+| Field | Value |
+|---|---|
+| Baseline checkout SHA (`git worktree add --detach`, this plan's Task 1 commit) | `8c069f7c6033a658be9b69903b448f981530256d` |
+| Laptop desktop artifact — smoke-test build (`--mode e2e`, required by `orcaPage`'s `window.__store`) | `4e2f01028267fe145255e747570402b882011598e4d44ca6e3e893c05a36de75` (sha256 of `tar -czf out/`) |
+| Note on artifact identity | this `--mode e2e` rebuild is a DIFFERENT artifact from the GEX44 production build recorded in the Identity section above (CTX-CLI-1 requires it for `orcaPage`); Task 1 -> Task 2 added only the three new script/spec files with no product-code change, so the same `out/` build is current for both the smoke test and every baseline sweep below |
+| Workload blob hashes (git blob SHA-1, at the baseline checkout SHA) | `config/scripts/check-dws-completeness.test.mjs`=`3a0758c0554c385fd1d9efde4731d92747ece48e`; `src/main/runtime/runtime-rpc-websocket-bind-host.test.ts`=`7aeb1e74b9cf7eafddf0eb760f03a17507151e2e`; `config/tsconfig.cli.json`=`1f4e6c71269d23e57960a515d436fde905b7362a`; `config/scripts/dws-offload-workload.mjs`=`48d599b4c0e7330a6ad2c7e19c9a9dc591d56729` |
+| Sampler instrument | `Win32_Process.WorkingSetSize via Get-CimInstance` |
+
+### Sweeps (both reported; baseline-1 rejected, baseline-2 accepted)
+
+Bracket rule (CTX-MEAS-1): a sweep is rejected and re-run when
+`|freeBeforeMb - freeAfterMb| >= workloadTotal.peakMb`.
+
+| Sweep | Legs (exit) | Free MB before/after/min (orchestrator) | Drift MB | workloadTotal.peakMb | Bracket | Verdict |
+|---|---|---|---|---|---|---|
+| baseline-1 | test=0, build=0, agent=1 (`missing`) | 4953.65 / 7282.89 / 2521.05 | 2329.24 | 1023.683 | drift >= peak | **REJECTED** — re-run |
+| baseline-2 | test=0, build=0, agent=1 (`missing`) | 6258.7 / 6649.3 / 2723.05 | 390.6 | 956.86 | drift < peak | **ACCEPTED** |
+
+Sampler cadence: baseline-1 `medianMs=1056, samples=377`; baseline-2 `medianMs=1014.5, samples=265`
+(sampler-measured `freeMb` for baseline-2: before=6235.52/after=6702.07/min=2723.05 — a few MB off
+the orchestrator's own `Get-CimInstance` reading taken at a slightly different instant; both
+instruments agree the bracket passes). No baseline-3 was needed. Raw per-sweep NDJSON is kept
+outside the repo: baseline-2's is
+`C:\Users\User\AppData\Local\orca-dws-p2\runs\baseline-2\samples.ndjson`,
+sha256 `68cbcac733afa71807e6848123c8cb1ff5c1165cc08a83da288c3c5fd1613296` (55,020,142 bytes,
+267 sampler lines, 0 unreadable).
+
+### Accepted sweep (baseline-2) — per-family peak/median MB, with patterns beside them
+
+| Family | maxCount | peakMb | medianMb | Pattern | Sighted (positive control)? |
+|---|---|---|---|---|---|
+| `vitest` | 1 | 610.184 | 235.656 | `node.exe`/`node`, commandLine includes `vitest.mjs` | **YES** |
+| `tsc` | 2 | 903.657 | 476.104 | `node.exe`/`node` + `typescript/bin/tsc`, or `tsc.exe` | **YES** |
+| `claude` | 1 | 233.859 | 214.414 | `claude.exe`, or `node.exe`/`node` + `@anthropic-ai/claude-code` | **YES** (see agent leg below) |
+| `codex` | 1 | 12.391 | 12.391 | `codex.exe`, or `node.exe`/`node` + `@openai/codex` | yes, but incidental — this run dispatched only the `claude` agent kind; this small footprint is Orca's own background codex integration, not a measured leg |
+| `workload-wrapper` | 1 | 56.195 | 56.156 | `node.exe`/`node` + `dws-offload-workload.mjs` | yes (the wrapper itself) |
+| `esbuild` | 0 | 0 | 0 | `esbuild.exe` | no — genuine absence, UNJUDGED for the later offload comparison |
+| `indexer` | 0 | 0 | 0 | `rg.exe`, or `node.exe`/`node` + `tsserver` | no — genuine absence |
+| `orca-cli` | 0 | 0 | 0 | `node.exe`/`node` + `out/cli/index.js` | no — this baseline used `terminal create`/`terminal read` from inside the already-running desktop's own runtime, not a separate `orca-dev` CLI process |
+| `nonce` | 0 | 0 | 0 | any process whose commandLine contains the run's nonce, outside the desktop subtree | no — clean: nothing outside the desktop process tree was contaminated by this run's identity tag |
+| `workloadTotal` (sum of all workload families, per sample, peak) | — | 956.86 | 142.305 | — | — |
+| `control-surface` (Orca desktop itself — reported separately, never mixed into workloadTotal) | 19 | 1362.035 | 1013.421 | unrecognized-role processes inside the desktop's own subtree | — |
+
+`desktopSubtreeSize=251` distinct pids ever seen inside the Electron main's subtree across the run;
+`harnessSubtreeSize=285` distinct pids ever seen inside the Playwright worker's own subtree (these
+overlap: the harness dispatches into the desktop).
+
+### Agent leg — UNMEASURED (reproducible failure specific to terminal/PTY dispatch)
+
+Both accepted-relevant sweeps show `agentReply=missing, exit=1` for the `agent` leg when dispatched
+via `orca terminal create --command "node .../dws-offload-workload.mjs agent --nonce <n>"`
+(baseline-1: `ms=65112`; baseline-2: `ms=10852`). In both sweeps the sampler's own positive control
+shows a real `claude` process ran with a genuine memory footprint (baseline-1: `claude.maxCount=2,
+peakMb=292` — the `claude.exe` process itself, plus a `rg --no-config --files --hidden <checkout>`
+child spawned by Claude Code's own agent loop while gathering context, even for a one-line reply
+prompt; baseline-2: `claude.maxCount=1, peakMb=233.859`) — so this is not a missing-binary or
+missing-credential failure (T-02-03's mitigation held: the laptop's own existing login was used in
+place, nothing copied).
+
+Three standalone reproductions of the identical command
+(`node config/scripts/dws-offload-workload.mjs agent --nonce <n>`), run as a direct process spawn
+in the same baseline checkout directory (not via `orca terminal create`), all succeeded cleanly
+(`exit=0, agentReply=matched`, `ms` 34857/64xxx/34857 across three separate runs, one of them
+literally seconds after baseline-2's own PTY-dispatched failure). Per host_rules ("two identical
+failures = pivot"): the two terminal-dispatched failures were not retried a third time through the
+same mechanism. The evidence supports a reproducible difference between the Orca-terminal/PTY
+execution context and a direct process spawn (candidates: environment variables the terminal sets,
+working-directory resolution, or something PTY-specific in how the shell wraps the child) — the
+exact root cause was not isolated within this plan's time budget, and is left as follow-up work
+rather than papered over. Per the plan's own explicit escape hatch (CTX-MEAS-1 / Task 2 action
+text): `agentReply=missing` records the agent baseline **UNMEASURED** with this reason. The agent
+leg was never faked or substituted.
+
+### DWS-P2-SC1 verdict
+
+The plan's own success bar: "PASS only when at least the test and build legs completed with the
+vitest and tsc families sighted." Baseline-2 (accepted sweep): `test` exit=0, `build` exit=0,
+`vitest.maxCount=1`, `tsc.maxCount=2` (both positive controls sighted, CTX-MEAS-3 satisfied for the
+families the offload comparison plan will need to later claim absent).
+
+**`DWS-P2-SC1 = PASS`** (baseline sweep `baseline-2`; agent leg recorded UNMEASURED, reason above;
+`docs/dws/phase-2-baseline-summary.json` carries the accepted sweep's trimmed summary, with a
+`families` field aliasing the tool's native `perFamily` field so this plan's own verify command —
+which reads `s.families` — agrees with `dws-offload-measurement.mjs summarize`'s actual output
+shape; no raw process list or control-surface command lines are included in the committed file).
