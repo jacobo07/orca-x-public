@@ -30,6 +30,10 @@
     {
       "module": "src/renderer/src/components/conversations/agent-federation-presentation.ts",
       "toneType": "FederationTone"
+    },
+    {
+      "module": "src/renderer/src/components/conversations/running-session-presentation.ts",
+      "toneType": "RunningSessionTone"
     }
   ],
   "claims": {

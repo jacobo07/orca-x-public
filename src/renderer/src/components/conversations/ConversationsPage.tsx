@@ -35,6 +35,7 @@ import {
 import { conversationToNativeChatSession } from './conversation-native-chat-session'
 import { useAgentGrounding } from './use-agent-grounding'
 import { useWorkspaceAgents } from './use-workspace-agents'
+import { useWorkspaceRunningSessions } from './use-workspace-running-sessions'
 
 /**
  * The Cognitive Workspace: roster | chat | context, over ONE conversation stack.
@@ -53,6 +54,7 @@ export default function ConversationsPage(): React.JSX.Element {
   const projects = useAppStore((s) => s.projects)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const projectChoices = useAgentProjectChoices()
+  const runningSessions = useWorkspaceRunningSessions()
   const roster = useWorkspaceAgents(agentScope)
   const [summaries, setSummaries] = useState<readonly ConversationSummary[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -286,6 +288,7 @@ export default function ConversationsPage(): React.JSX.Element {
             setNewAgentOpen(true)
           }}
           projectChoices={projectChoices}
+          runningSessions={runningSessions}
           onNewAgentHere={(projectId) => {
             setNewAgentProjectId(projectId)
             setNewAgentOpen(true)

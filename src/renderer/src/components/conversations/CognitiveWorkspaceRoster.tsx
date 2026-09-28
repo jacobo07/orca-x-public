@@ -10,7 +10,9 @@ import type {
 } from '../../../../shared/cognitive-workspace-projection'
 import type { AgentProjectChoice } from '../agents/agent-project-choices'
 
+import { RunningSessionsSection } from './RunningSessionsSection'
 import { WorkspaceAgentButton, WorkspaceThreadButton } from './workspace-roster-rows'
+import type { WorkspaceRunningSession } from './workspace-running-sessions'
 import { WorkspaceExitButton } from './WorkspaceExitButton'
 import { WorkspaceProjectsSection } from './WorkspaceProjectsSection'
 
@@ -35,6 +37,7 @@ export function CognitiveWorkspaceRoster({
   agentsLoad,
   agents,
   projectChoices,
+  runningSessions,
   recentThreads,
   allThreads,
   threadsLoading,
@@ -53,6 +56,7 @@ export function CognitiveWorkspaceRoster({
   agentsLoad: WorkspaceAgentsLoad
   agents: readonly WorkspaceAgentRow[]
   projectChoices: readonly AgentProjectChoice[]
+  runningSessions: readonly WorkspaceRunningSession[]
   recentThreads: readonly WorkspaceThreadRow[]
   allThreads: readonly WorkspaceThreadRow[]
   threadsLoading: boolean
@@ -116,6 +120,10 @@ export function CognitiveWorkspaceRoster({
         <div className="flex flex-col gap-4 p-2">
           {tab === 'agents' ? (
             <>
+              <RunningSessionsSection sessions={runningSessions} />
+              <h2 className="-mb-3 px-2 text-xs font-medium text-muted-foreground">
+                {translate('workspace.yourAgents', 'Your agents')}
+              </h2>
               <AgentsSection
                 load={agentsLoad}
                 agents={agents}

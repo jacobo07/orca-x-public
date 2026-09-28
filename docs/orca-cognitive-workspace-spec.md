@@ -741,10 +741,12 @@ popup whose option text is white on white.
    which would strand a user with no way out.
 2. Back leaves Workspace for the view it was entered from (`previousViewBeforeConversations`),
    recorded only by entries from outside the page, guarded like `closeSettingsPage`, not persisted.
-3. Agents shows **Running sessions** (from `useLiveDashboardSnapshot`) and **Your agents**. A host
-   that is disconnected shows its sessions as host-offline, never working. The two render once only
-   when a session's provider session id is bound on one of the agent's conversations; otherwise
-   they are labelled as the different things they are.
+3. Agents shows **Running in terminals** (from `useLiveDashboardSnapshot`, every hook provider:
+   Claude Code, Hermes, Codex, …) and **Your agents**. A session on a disconnected, blocked or
+   erroring host is host-offline, never working. The two lists are never merged: agent chats are
+   app-server sessions and terminal agents are TUI sessions, so no real case of one entity in both
+   exists, and `DashboardCard` carries no provider session id to merge on — adding one would change
+   the dashboard wire for a merge with no subject. Revisit when an agent can drive a terminal session.
 4. Projects lists the canonical project estate, each project once with its hosts, and converges on
    project and agent changes without polling.
 5. The project picker is Orca's Popover+Command, keeps "No project" as a deliberate null, and shows
