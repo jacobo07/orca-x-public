@@ -59,6 +59,25 @@ export function parseServeBindHost(raw: string | null): string | null {
   throw new Error(`Invalid --serve-bind-host value: ${raw}`)
 }
 
+/**
+ * Read `--serve-bind-host` from argv by presence, not by value: a present flag with a missing,
+ * empty or flag-shaped value throws, never degrades to "no pin" (which binds 0.0.0.0 under
+ * `orca serve`). Also reads the `--serve-bind-host=<host>` spelling, which the normalizer passes through.
+ */
+export function readServeBindHostArg(argv: readonly string[]): string | null {
+  const flag = '--serve-bind-host'
+  const index = argv.findIndex((token) => token === flag || token.startsWith(`${flag}=`))
+  if (index === -1) {
+    return null
+  }
+  const token = argv[index]!
+  const raw = token === flag ? argv[index + 1] : token.slice(flag.length + 1)
+  if (raw === undefined || raw.trim() === '' || isFlagToken(raw)) {
+    throw new Error('Missing value for --serve-bind-host.')
+  }
+  return parseServeBindHost(raw)
+}
+
 // Why: a CLI-form `serve` is not a serve launch when help was asked for. The AppImage redirect
 // already hands these to the CLI (the same three tokens); without the refusal here,
 // `<binary> serve --help` binds a network-exposed runtime server with pairing on and prints nothing.

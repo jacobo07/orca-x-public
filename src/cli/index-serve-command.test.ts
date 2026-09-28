@@ -232,4 +232,37 @@ describe('orca cli worktree awareness', () => {
 
     process.exitCode = priorExitCode
   })
+
+  // Why: a valueless --bind-host used to read as "no pin", so serve bound 0.0.0.0 for an operator
+  // who asked for loopback. Every spelling must refuse before launching the app.
+  it.each([
+    ['bare, last argument', ['serve', '--bind-host']],
+    ['followed by another flag', ['serve', '--bind-host', '--json']],
+    ['followed by --port', ['serve', '--bind-host', '--port', '6791']],
+    ['empty `=` spelling', ['serve', '--bind-host=']]
+  ])('rejects a value-less --bind-host (%s) before launching the app', async (_label, argv) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(argv, '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing value for --bind-host.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('still pins a valid bind host in the `=` spelling (green control)', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--bind-host=127.0.0.1', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith(
+      expect.objectContaining({ bindHost: '127.0.0.1' })
+    )
+  })
 })

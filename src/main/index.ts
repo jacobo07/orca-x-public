@@ -166,7 +166,7 @@ import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
 import {
   argvRequestsServeMode,
   normalizeServeModeArgv,
-  parseServeBindHost
+  readServeBindHostArg
 } from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
@@ -2059,7 +2059,7 @@ function getServeOptions(argv = process.argv): ServeOptions {
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root'),
-    bindHost: parseServeBindHost(valueAfter('--serve-bind-host'))
+    bindHost: readServeBindHostArg(argv)
   }
 }
 

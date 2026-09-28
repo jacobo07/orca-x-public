@@ -59,6 +59,19 @@ function getOptionalServePort(flags: Map<string, string | boolean>): string | nu
   return rawPort
 }
 
+// Why: fail closed. A present-but-valueless --bind-host (bare, `=`, or followed by another flag) must
+// not read as "no pin": `orca serve` then binds 0.0.0.0 for an operator who asked for loopback.
+function getOptionalServeBindHost(flags: Map<string, string | boolean>): string | null {
+  if (!flags.has('bind-host')) {
+    return null
+  }
+  const rawBindHost = flags.get('bind-host')
+  if (typeof rawBindHost !== 'string' || rawBindHost.trim().length === 0) {
+    throw new RuntimeClientError('invalid_argument', 'Missing value for --bind-host.')
+  }
+  return rawBindHost
+}
+
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
   'claude-teams': async ({ client, rawArgs }) => {
     if (process.platform === 'win32') {
@@ -121,6 +134,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const port = getOptionalServePort(flags)
+    const bindHost = getOptionalServeBindHost(flags)
     const exitCode = await serveOrcaApp({
       json,
       port,
@@ -132,8 +146,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       mobilePairing: flags.get('mobile-pairing') === true,
       recipeJson: flags.get('recipe-json') === true,
       projectRoot,
-      bindHost:
-        typeof flags.get('bind-host') === 'string' ? (flags.get('bind-host') as string) : null
+      bindHost
     })
     process.exitCode = exitCode
   },

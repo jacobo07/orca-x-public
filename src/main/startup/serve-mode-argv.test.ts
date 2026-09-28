@@ -3,7 +3,8 @@ import {
   argvRequestsServeMode,
   findServeSubcommandIndex,
   normalizeServeModeArgv,
-  parseServeBindHost
+  parseServeBindHost,
+  readServeBindHostArg
 } from './serve-mode-argv'
 
 describe('serve-mode-argv', () => {
@@ -232,5 +233,45 @@ describe('serve-mode-argv', () => {
       'Invalid --serve-bind-host value: 127.0.0.1:6791'
     )
     expect(() => parseServeBindHost('   ')).toThrow('Invalid --serve-bind-host value:    ')
+  })
+
+  it('readServeBindHostArg fails closed on a present flag with no usable value (DWS-P2 CR-01)', () => {
+    // Why: valueAfter() used to return null for these, i.e. "no pin", and serve bound 0.0.0.0.
+    for (const argv of [
+      ['/AppRun', '--serve', '--serve-bind-host'],
+      ['/AppRun', '--serve', '--serve-bind-host', '--serve-json'],
+      ['/AppRun', '--serve', '--serve-bind-host', ''],
+      ['/AppRun', '--serve', '--serve-bind-host', '   '],
+      ['/AppRun', '--serve', '--serve-bind-host='],
+      // CLI-form spellings, through the real normalizer.
+      ...[
+        ['/AppRun', 'serve', '--bind-host'],
+        ['/AppRun', 'serve', '--bind-host', '--json'],
+        ['/AppRun', 'serve', '--bind-host=']
+      ].map((cli) => normalizeServeModeArgv(cli))
+    ]) {
+      expect(() => readServeBindHostArg(argv), argv.join(' ')).toThrow(
+        'Missing value for --serve-bind-host.'
+      )
+    }
+  })
+
+  it('readServeBindHostArg still rejects an invalid value and pins a valid one (green control)', () => {
+    expect(readServeBindHostArg(['/AppRun', '--serve'])).toBeNull()
+    expect(readServeBindHostArg(['/AppRun', '--serve', '--serve-bind-host', '127.0.0.1'])).toBe(
+      '127.0.0.1'
+    )
+    // The `=` spelling is not rewritten by the normalizer, so it must be read as-is.
+    expect(readServeBindHostArg(['/AppRun', '--serve', '--serve-bind-host=127.0.0.1'])).toBe(
+      '127.0.0.1'
+    )
+    expect(
+      readServeBindHostArg(
+        normalizeServeModeArgv(['/AppRun', 'serve', '--bind-host', '127.0.0.1', '--json'])
+      )
+    ).toBe('127.0.0.1')
+    expect(() =>
+      readServeBindHostArg(['/AppRun', '--serve', '--serve-bind-host', 'example.com'])
+    ).toThrow('Invalid --serve-bind-host value: example.com')
   })
 })
