@@ -12091,36 +12091,86 @@
       "id": "terminal-observability.restore-convergence-selfcheck",
       "title": "Post-restore convergence self-check flags renderer/mirror divergence as an anomaly",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-rendering",
       "layer": "renderer-observability",
       "surfaces": ["hidden-output restore", "snapshot replay", "anomaly breadcrumbs", "telemetry"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap only; the anomaly-breadcrumb machinery exists in this branch but no convergence probe is implemented.",
+      "coveredPlatforms": ["windows", "linux"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Windows: unit level (comparator and scheduler). Linux: a real Electron app under xvfb on the local provider, where the renderer's visibility report drives the probe end to end. The probe compares main's headless mirror with the renderer's serialized buffer, so it judges the DOM renderer as well as WebGL. Daemon, ssh and remote-runtime panes are not exercised: where main holds no headless mirror the probe answers mirror-unavailable rather than guess.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
       ],
       "invariant": "After every hidden-to-visible reveal settles — whether or not a restore was triggered — the renderer buffer must converge with the current main-mirror state; divergence is recorded as a compact, content-free terminal_lifecycle_anomaly breadcrumb and counted in telemetry instead of failing silently. Restore-scoped checking is insufficient: #7173's frozen-output variant restores faithfully and then silently drops later hidden output, so it never triggers another restore.",
       "oracle": "Deterministic tests inject forced divergence in both shapes — stale bytes written after a faithful restore, and a frozen pane whose reveal triggers no restore — and assert exactly one deduped breadcrumb with row-hash evidence and no terminal content; the production probe is a bounded row-hash sample comparison against current mirror rows that runs once per reveal with no polling and a strict time budget.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-reveal-convergence.test.ts src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/runtime/terminal-reveal-convergence.test.ts",
+        "src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+        "tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/terminal-reveal-convergence.test.ts",
+          "assertions": [
+            "flags output that reached the mirror after a faithful restore but never reached the pane",
+            "flags a frozen pane whose reveal triggered no restore",
+            "carries no terminal text, only row indices and digests",
+            "keeps a failed read apart from an empty screen"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+          "assertions": [
+            "never polls a pane that stays visible",
+            "reports the same divergence once across reveals, and a new one again",
+            "stays silent on a converged pane (control)"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts",
+          "assertions": [
+            "a revealed pane that diverges from the mirror is recorded once, without its content"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-28",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-reveal-convergence.test.ts src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+          "result": "passed",
+          "durationSeconds": 15,
+          "summary": "13/13 (comparator 7, scheduler 6), with the two existing suites that drive pty:setRendererPtyVisible still green."
+        },
+        {
+          "date": "2026-09-28",
+          "runner": "manual",
+          "platform": "linux",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 33,
+          "summary": "GEX44 under xvfb at 9225842ce: a healthy reveal recorded no anomaly, a row planted only in the renderer's xterm produced exactly one content-free anomaly, and a second reveal of the same divergence was not reported again."
+        }
+      ],
       "runtimeBudget": {
-        "p95Seconds": 30,
-        "scope": "renderer observability unit gate"
+        "p95Seconds": 60,
+        "scope": "two main unit files plus one Electron spec"
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Probe and tests not yet implemented."
+        "evidence": "One run of each; no CI executor since 2026-09-13."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs an intentionally divergent restore fixture proving the probe fires, dedupes, and stays silent on faithful restores."
+        "status": "complete",
+        "evidence": "The same E2E spec at the parent commit 6eb9ac233, which has no probe, failed at the one-anomaly assertion after its healthy-reveal control passed (GEX44, xvfb), and passed at 9225842ce."
       },
       "performanceBudget": {
         "required": true,
@@ -12132,8 +12182,9 @@
         "Watch anomaly telemetry after each terminal release as the in-production regression signal."
       ],
       "knownGaps": [
-        "No manifest command yet.",
-        "Probe not implemented; #7133-class and #7173-class corruption is currently silent in production.",
+        "Recorded as a reveal-convergence-anomaly breadcrumb in main's delivery ring (carried by the freeze report), not yet counted in telemetry and not named terminal_lifecycle_anomaly as the invariant says.",
+        "Zero false positives is shown for one healthy reveal only, not across the existing restore test corpus; that sweep is the promotion criterion still owed.",
+        "Daemon, ssh and remote-runtime panes answer mirror-unavailable where main keeps no headless mirror, so they are not judged.",
         "Pixel-level divergence is out of scope for this probe (see terminal-render.pixel-refresh-repair).",
         "Renderer-vs-mirror comparison cannot see corruption upstream of the mirror itself (#7192's stale-width mirror); mirror-vs-PTY truth is owned by terminal-geometry.visible-convergence."
       ],
