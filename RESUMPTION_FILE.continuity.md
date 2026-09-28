@@ -42,11 +42,17 @@ P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratche
   `ContinuityTone` registered, runtime client-ui-schemas accepts 'resumeCenter'. lint 0, tsc 0/0/0, surface
   gate green (28 sites), 47 continuity tests. verify:localization-catalog red ONLY on pre-existing
   terminalPreview.* keys in TerminalPreviewCard.tsx (not ours).
-- NEXT: P3 proof — e2e `tests/e2e/resume-center.spec.ts` on GEX44 (orcaPage; open Workspace →
-  `workspace-open-resume-center` → a seeded worktree section with its tab rows, expand → a rendered
-  preview with the tab's own output; station control via `data-testid="resume-center-page"`). Then P4
-  wake admission (reuse observeDispatchHostResources; token contract; no-wake activation option for
-  Restore-layout-only). The blue D1 token belongs to P5.
+- DONE P3 proof `837e047ff`+`d021f34a3`: e2e `tests/e2e/resume-center.spec.ts` GREEN on GEX44 at
+  d021f34a3 (1 passed, 40.6 s; worktree /home/kobii/rc-e2e, build --mode e2e). Two live tabs print
+  node-concatenated markers; both rows read `warm`; each expanded row's daemon-history snapshot holds
+  its own marker and not its sibling's. Red drill (GEX44, same commit): every pane resolved from the
+  first tab (findTab ignores the id + per-leaf ptyId lookup off) -> RED "the RCB row never showed its
+  own recorded screen" (rendered, wrong screen). A findTab-only mutant SURVIVED and is equivalent: with
+  a leaf id the session comes from the requested tab's layout; `tab.ptyId` is only the leafless
+  fallback. Localization extraction: 133 missing keys, NONE resumeCenter
+  (90 workspace, 17 agents, 15 conversations, 7 terminalPreview, 3 auto, 1 activity — other programs).
+- NEXT: P4 wake admission (reuse observeDispatchHostResources; token contract; no-wake activation
+  option for Restore-layout-only). The blue D1 token belongs to P5.
 - FINDINGS: workspace activation (`activateAndRevealWorktree` / `...FolderWorkspace`,
   lib/worktree-activation.ts:119,195) calls `resumeSleepingAgentSessionsForWorktree` — "Abrir" wakes
   sleeping agents, so P4 "Restore layout only" needs a no-wake activation option. Greeting name producer =

@@ -50,7 +50,9 @@ ahead of its status.
 - **Previews** render durable history in a main-process `HeadlessEmulator`. The source is
   `daemon-history`, `session-ref`, `sealed-working-set` or `none`, loaded on expand, never labelled
   live, and never resizing or focusing a terminal. The workspace thumbnail is composed from these
-  previews, not screen-captured. PLANNED.
+  previews, not screen-captured. LIVE for `daemon-history` (real app, local panes:
+  `tests/e2e/resume-center.spec.ts`); `session-ref` unit-tested only, not yet run against a real
+  remote; `sealed-working-set` PLANNED.
 - **Desk snapshots** are sealed records of window placement plus one Working Set per workspace.
   They restore the terminal rail and window placement only, and the UI says so: editors, browser
   tabs and split geometry are not restored. Each member reports its own outcome
