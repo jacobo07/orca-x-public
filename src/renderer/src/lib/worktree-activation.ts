@@ -67,6 +67,8 @@ export function activateAndRevealFolderWorkspace(
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
+    /** false = layout only: no sleeping-agent resume and no seeded terminal. Waking is its own intent. */
+    wake?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -116,8 +118,13 @@ export function activateAndRevealFolderWorkspace(
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
-  resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
+  const wake = opts?.wake !== false
+  if (wake) {
+    resumeSleepingAgentSessionsForWorktree(workspaceKey)
+  }
+  const primaryTabId = wake
+    ? ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
+    : null
 
   if (opts?.sidebarRevealBehavior) {
     state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
@@ -141,9 +148,12 @@ export function activateAndRevealWorktree(
     revealInSidebar?: boolean
     executionHostId?: ExecutionHostId
     backendStartupTerminalSpawned?: boolean
+    /** false = layout only: no sleeping-agent resume, no seeded terminal, no host terminal after wake. */
+    wake?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
+  const wake = opts?.wake !== false
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
   if (!wt) {
     return false
@@ -192,18 +202,22 @@ export function activateAndRevealWorktree(
   }
 
   // Why: sleeping destroys the local PTY but preserves the provider session id, so waking should restore those CLI sessions automatically.
-  resumeSleepingAgentSessionsForWorktree(worktreeId)
+  if (wake) {
+    resumeSleepingAgentSessionsForWorktree(worktreeId)
+  }
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    useAppStore.getState(),
-    worktreeId,
-    opts?.startup,
-    opts?.setup,
-    opts?.issueCommand,
-    opts?.defaultTabs,
-    opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : undefined
-  )
+  const primaryTabId = wake
+    ? ensureWorktreeHasInitialTerminal(
+        useAppStore.getState(),
+        worktreeId,
+        opts?.startup,
+        opts?.setup,
+        opts?.issueCommand,
+        opts?.defaultTabs,
+        opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : undefined
+      )
+    : null
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
@@ -234,7 +248,7 @@ export function activateAndRevealWorktree(
     }
   }
 
-  if (opts?.notifyHostRuntime !== false && !opts?.backendStartupTerminalSpawned) {
+  if (wake && opts?.notifyHostRuntime !== false && !opts?.backendStartupTerminalSpawned) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
   }
 

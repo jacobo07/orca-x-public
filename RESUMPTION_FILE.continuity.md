@@ -51,8 +51,26 @@ P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratche
   a leaf id the session comes from the requested tab's layout; `tab.ptyId` is only the leafless
   fallback. Localization extraction: 133 missing keys, NONE resumeCenter
   (90 workspace, 17 agents, 15 conversations, 7 terminalPreview, 3 auto, 1 activity — other programs).
-- NEXT: P4 wake admission (reuse observeDispatchHostResources; token contract; no-wake activation
-  option for Restore-layout-only). The blue D1 token belongs to P5.
+- P4 (2026-09-28, Owner answers Q1-6: provisional 4 GB floor; SSH/WSL refused in Resume all, allowed
+  alone as "not measured"; Continue button, no polling; orphans shown; Open = layout only; Windows
+  proof of restore->zero wake required). Commits 8fab83831 (RED e2e) 458e9de54 562b3d118 9e34ae6b1
+  f0434b7e0 d24fc6625 ed7039b3e f51571840 1b5318870 85a554b49 1bb84fff0.
+  - PROVEN GEX44 @85a554b49: resume-center-restore-no-wake (RED before fix at 8fab83831: a host session
+    started), resume-center-resume (restore 0 / Resume A +1 own / Resume all B woken, C refused / Continue
+    0), P3 spec: 3 passed. Gate @f51571840: lint 0, tsc 0/0/0, vitest 26 files/182, surface claims 34,
+    recurring-work 236 debt 0 (no new producer), loc catalog red ONLY on foreign terminalPreview keys.
+  - FOUND BY THE REAL APP: hydration refills ptyIdsByTabId + tab.ptyId with the remembered id, so a
+    store-only "bound" check left the one row that had to be marked; restore now reads the host's
+    listSessions() at click time. Unit fixture had encoded the same wrong assumption.
+  - FOUND BY UNIT: e2e wake-reading parsed an unset var as 0 bytes (Number('') === 0) -> fixed.
+  - Owners reused: decideTerminalTabMount + dormancy marker (new reason layout-restore), activation
+    wake:false, requestDormantTerminalTabOpen, resumeSleepingAgentSessionsForWorktree (+onlyPaneKeys),
+    decideDispatchAdmission/observeDispatchHostResources. No new scheduler.
+  - PENDING at write time: Windows run of restore-no-wake (local build of 1bb84fff0 done); real-app
+    drills M2/M3/M4/M8 on GEX44 (/home/kobii/rc-mut, log /home/kobii/rc-drill.log); unit drills;
+    uncommitted test resume-sleeping-agent-session-only-pane-keys.test.ts; vault/UKDL; memory.
+  - UNMEASURED: per-session wake memory cost (needs a real provider run; Owner Q1 asked for it).
+- NEXT: P5 multi-window Park & Exit + blue D1 control; restore/resume across windows.
 - FINDINGS: workspace activation (`activateAndRevealWorktree` / `...FolderWorkspace`,
   lib/worktree-activation.ts:119,195) calls `resumeSleepingAgentSessionsForWorktree` — "Abrir" wakes
   sleeping agents, so P4 "Restore layout only" needs a no-wake activation option. Greeting name producer =

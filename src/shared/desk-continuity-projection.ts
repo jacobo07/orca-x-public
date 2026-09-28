@@ -1,4 +1,9 @@
 import type { ExecutionHostId } from './execution-host'
+import {
+  orphanSessionsOf,
+  workspaceKeysWithContent,
+  type DeskOrphanSession
+} from './desk-orphan-sessions'
 import type { PersistedWindowTopologyEntry } from './window-topology-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import type {
@@ -64,6 +69,8 @@ export type DeskTab = {
   panes: DeskPane[]
 }
 
+export type { DeskOrphanSession }
+
 export type DeskWindowMembership =
   | { kind: 'bound'; windowId: string; sequence: number }
   | {
@@ -80,6 +87,7 @@ export type DeskWorkspace =
       window: DeskWindowMembership
       lastVisitedAt: number | null
       tabs: DeskTab[]
+      orphanSessions: DeskOrphanSession[]
       openFileCount: number
       browserTabCount: number
     }
@@ -250,6 +258,7 @@ function projectWorkspace(
     window: windowMembership(key, bindings),
     lastVisitedAt: worktreeId ? (state.lastVisitedAtByWorktreeId?.[worktreeId] ?? null) : null,
     tabs: projectedTabs,
+    orphanSessions: orphanSessionsOf(state, key, tabs),
     openFileCount: state.openFilesByWorktree?.[key]?.length ?? 0,
     browserTabCount: state.browserTabsByWorktree?.[key]?.length ?? 0
   }
@@ -294,13 +303,13 @@ export function projectDesk(input: DeskProjectionInput): DeskProjection {
         return parsed ? [parsed.tabId] : []
       })
     )
-    const workspaces = Object.entries(loaded.session.state.tabsByWorktree)
-      .filter(([, tabs]) => tabs.length > 0)
-      .map(([key, tabs]): DeskWorkspace => {
+    // Why records too: a workspace whose only remaining trace is a resumable agent still belongs here.
+    const workspaces = workspaceKeysWithContent(loaded.session.state)
+      .map((key): DeskWorkspace => {
         try {
           return projectWorkspace(
             key,
-            tabs,
+            loaded.session.state.tabsByWorktree[key] ?? [],
             loaded,
             bindings,
             input.describeWorkspace,

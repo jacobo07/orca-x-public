@@ -176,6 +176,10 @@ export function resumeSleepingAgentSessionsForWorktree(
     if (currentState.sleepingAgentSessionsByPaneKey[record.paneKey] !== record) {
       continue
     }
+    // Why before any clearing: a selected resume must not tidy away records nobody selected.
+    if (options?.onlyPaneKeys && !options.onlyPaneKeys.has(record.paneKey)) {
+      continue
+    }
     const claimKey = getProviderSessionClaimKey(record)
     // Why: a mounted pane already consumed (or latched) the in-place
     // hibernation wake for this session; its record clears when that spawn

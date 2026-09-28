@@ -3,27 +3,14 @@ import { ChevronDown, ChevronUp, FolderGit2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { Button } from '@/components/ui/button'
-import {
-  activateAndRevealFolderWorkspace,
-  activateAndRevealWorktree
-} from '@/lib/worktree-activation'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { WorkspaceRowModel } from './resume-center-model'
 import { describeWindow, describeWorkspaceName } from './resume-center-presentation'
+import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
 import { ClaimValue } from './ClaimValue'
 import { PanePreviewThumb } from './PanePreviewThumb'
 import { ResumeCenterTabRow } from './ResumeCenterTabRow'
-
-function openWorkspace(row: WorkspaceRowModel): void {
-  if (row.key.startsWith('folder:')) {
-    activateAndRevealFolderWorkspace(row.key.slice('folder:'.length), {
-      executionHostId: row.hostId
-    })
-    return
-  }
-  const worktreeId = row.key.startsWith('worktree:') ? row.key.slice('worktree:'.length) : row.key
-  activateAndRevealWorktree(worktreeId, { executionHostId: row.hostId })
-}
+import { ResumeCenterOrphanRow } from './ResumeCenterOrphanRow'
 
 export function ResumeCenterWorkspaceSection({
   row
@@ -73,8 +60,9 @@ export function ResumeCenterWorkspaceSection({
           <Button
             size="sm"
             variant="outline"
+            data-testid="resume-center-workspace-open"
             disabled={row.identity.kind === 'missing'}
-            onClick={() => openWorkspace(row)}
+            onClick={() => void restoreWorkspaceLayoutOnly(row)}
           >
             {translate('resumeCenter.workspace.open', 'Open')}
           </Button>
@@ -107,7 +95,10 @@ export function ResumeCenterWorkspaceSection({
           ) : null}
           <ul className="flex min-w-0 flex-1 flex-col gap-2">
             {row.tabs.map((tab) => (
-              <ResumeCenterTabRow key={tab.tabId} tab={tab} hostId={row.hostId} />
+              <ResumeCenterTabRow key={tab.tabId} tab={tab} hostId={row.hostId} row={row} />
+            ))}
+            {row.orphanSessions.map((orphan) => (
+              <ResumeCenterOrphanRow key={orphan.paneKey} orphan={orphan} row={row} />
             ))}
           </ul>
         </div>

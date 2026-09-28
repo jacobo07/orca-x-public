@@ -34,6 +34,7 @@ function workspace(
         : { kind: 'bound', windowId: `w${sequence}`, sequence },
     lastVisitedAt,
     tabs,
+    orphanSessions: [],
     openFileCount: 0,
     browserTabCount: 0
   }

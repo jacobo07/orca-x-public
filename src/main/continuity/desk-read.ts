@@ -27,7 +27,7 @@ export type DeskReadDeps = {
   now: () => number
 }
 
-function describeWorkspace(store: DeskReadStore, key: string): DeskWorkspaceIdentity {
+export function describeWorkspace(store: DeskReadStore, key: string): DeskWorkspaceIdentity {
   if (key.startsWith('folder:')) {
     const folder = store.getFolderWorkspace(key.slice('folder:'.length))
     return folder

@@ -1,8 +1,15 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { DeskReadResult, PanePreviewResult } from '../../shared/desk-continuity-read-types'
-import { readDesk } from '../continuity/desk-read'
+import type {
+  DeskReadResult,
+  PanePreviewResult,
+  WakeAdmissionResult
+} from '../../shared/desk-continuity-read-types'
+import { describeWorkspace, readDesk } from '../continuity/desk-read'
 import { renderPanePreview } from '../continuity/pane-preview'
+import { decideWakeAdmission } from '../continuity/wake-admission'
+import { withE2EWakeReading } from '../continuity/wake-admission-e2e-reading'
+import { collectHostMemory } from '../memory/host-memory'
 import { HistoryReader } from '../daemon/history-reader'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { getHistoryDir } from '../daemon/daemon-init'
@@ -39,4 +46,19 @@ export function registerContinuityHandlers(store: Store): void {
     previewChain = next.catch(() => undefined)
     return next
   })
+
+  const readHostMemory = withE2EWakeReading(collectHostMemory)
+  ipcMain.removeHandler('continuity:admitWake')
+  ipcMain.handle(
+    'continuity:admitWake',
+    (_event, request: unknown): Promise<WakeAdmissionResult> =>
+      decideWakeAdmission(request, {
+        workspacePath: (key) => {
+          const identity = describeWorkspace(store, key)
+          return identity.kind === 'known' ? identity.path : null
+        },
+        collectHostMemory: readHostMemory,
+        now: () => new Date()
+      })
+  )
 }

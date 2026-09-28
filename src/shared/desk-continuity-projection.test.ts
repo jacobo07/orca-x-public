@@ -283,3 +283,63 @@ describe('projectDesk panes and previews', () => {
     })
   })
 })
+
+function record(paneKey: string, worktreeId: string, capturedAt: number, tabId?: string) {
+  return {
+    paneKey,
+    ...(tabId ? { tabId } : {}),
+    worktreeId,
+    agent: 'codex',
+    providerSession: { key: 'session_id', id: `s-${paneKey}` },
+    prompt: '',
+    state: 'working',
+    capturedAt,
+    updatedAt: capturedAt
+  } as never
+}
+
+function onlyWorkspaces(result: ReturnType<typeof projectDesk>) {
+  const host = result.hosts[0]
+  if (host?.kind !== 'loaded') {
+    throw new Error('expected a loaded host')
+  }
+  return host.workspaces.flatMap((workspace) => (workspace.kind === 'projected' ? [workspace] : []))
+}
+
+describe('projectDesk orphan sessions', () => {
+  it('lists a resumable record whose tab is gone, beside the rows that remain', () => {
+    const state = session({
+      tabsByWorktree: { wt1: [tab('t1', 'wt1')] },
+      sleepingAgentSessionsByPaneKey: {
+        [`gone:${LEAF_A}`]: record(`gone:${LEAF_A}`, 'wt1', 20, 'gone'),
+        [`t1:${LEAF_B}`]: record(`t1:${LEAF_B}`, 'wt1', 10, 't1')
+      }
+    })
+    const [workspace] = onlyWorkspaces(projectDesk(input([localHost(state)])))
+    expect(workspace?.orphanSessions).toEqual([
+      { paneKey: `gone:${LEAF_A}`, agent: 'codex', capturedAt: 20, resume: 'unconfirmed' }
+    ])
+    expect(workspace?.tabs.map((row) => row.tabId)).toEqual(['t1'])
+  })
+
+  it('keeps a workspace whose only trace is an orphaned agent', () => {
+    const state = session({
+      tabsByWorktree: { wt1: [] },
+      sleepingAgentSessionsByPaneKey: {
+        [`gone:${LEAF_A}`]: record(`gone:${LEAF_A}`, 'wt1', 5, 'gone')
+      }
+    })
+    const workspaces = onlyWorkspaces(projectDesk(input([localHost(state)])))
+    expect(workspaces.map((w) => [w.key, w.tabs.length, w.orphanSessions.length])).toEqual([
+      ['wt1', 0, 1]
+    ])
+  })
+
+  it('does not call a record orphaned while its tab still exists', () => {
+    const state = session({
+      tabsByWorktree: { wt1: [tab('t1', 'wt1')] },
+      sleepingAgentSessionsByPaneKey: { [`t1:${LEAF_A}`]: record(`t1:${LEAF_A}`, 'wt1', 1) }
+    })
+    expect(onlyWorkspaces(projectDesk(input([localHost(state)])))[0]?.orphanSessions).toEqual([])
+  })
+})
