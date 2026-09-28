@@ -177,6 +177,31 @@
       "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
       "absent": "omitted",
       "why": "Same warm count as the summary, from an observed live listing."
+    },
+    "resume-center-resume-all-done": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items of the started plan already answered, one wake at a time; drawn only while it runs."
+    },
+    "resume-center-resume-all-total": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items the plan holds from where this run began; the plan is fixed when Resume all is pressed."
+    },
+    "resume-center-resume-all-started": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Wakes whose PTY bound, the runtime's evidence; a request that never bound is not counted."
+    },
+    "resume-center-resume-all-remaining": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items left asleep when admission refused, including the refused one; Continue starts there."
+    },
+    "resume-center-resume-all-left-asleep": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items not started in a finished run: unmeasured hosts, declined resumes, or no bind in time."
     }
   }
 }

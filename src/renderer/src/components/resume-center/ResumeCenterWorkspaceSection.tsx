@@ -10,6 +10,7 @@ import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
 import { ClaimValue } from './ClaimValue'
 import { PanePreviewThumb } from './PanePreviewThumb'
 import { ResumeCenterTabRow } from './ResumeCenterTabRow'
+import { ResumeCenterOrphanRow } from './ResumeCenterOrphanRow'
 
 export function ResumeCenterWorkspaceSection({
   row
@@ -94,7 +95,10 @@ export function ResumeCenterWorkspaceSection({
           ) : null}
           <ul className="flex min-w-0 flex-1 flex-col gap-2">
             {row.tabs.map((tab) => (
-              <ResumeCenterTabRow key={tab.tabId} tab={tab} hostId={row.hostId} />
+              <ResumeCenterTabRow key={tab.tabId} tab={tab} hostId={row.hostId} row={row} />
+            ))}
+            {row.orphanSessions.map((orphan) => (
+              <ResumeCenterOrphanRow key={orphan.paneKey} orphan={orphan} row={row} />
             ))}
           </ul>
         </div>

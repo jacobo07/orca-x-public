@@ -9,6 +9,7 @@ import { describeGreeting } from './resume-center-presentation'
 import { useDeskContinuity } from './use-desk-continuity'
 import { clearPanePreviewCache } from './use-pane-preview'
 import { ClaimValue } from './ClaimValue'
+import { ResumeCenterResumeAll } from './ResumeCenterResumeAll'
 import { ResumeCenterSummaryPanel } from './ResumeCenterSummaryPanel'
 import { ResumeCenterWorkspaceSection } from './ResumeCenterWorkspaceSection'
 
@@ -27,6 +28,14 @@ export default function ResumeCenterPage(): React.JSX.Element {
     () =>
       state.status === 'loaded' ? buildResumeCenterModel(state.projection, { query, sort }) : null,
     [state, query, sort]
+  )
+  // Why unfiltered: a search narrows what is shown, never what Resume all covers.
+  const deskRows = useMemo(
+    () =>
+      state.status === 'loaded'
+        ? buildResumeCenterModel(state.projection, { query: '', sort: 'window' }).workspaces
+        : [],
+    [state]
   )
 
   return (
@@ -56,17 +65,21 @@ export default function ResumeCenterPage(): React.JSX.Element {
             </p>
           ) : null}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            clearPanePreviewCache()
-            refresh()
-          }}
-        >
-          <RefreshCw className="size-3.5" aria-hidden />
-          {translate('resumeCenter.refresh', 'Refresh')}
-        </Button>
+        <div className="flex items-start gap-2">
+          {deskRows.length > 0 ? <ResumeCenterResumeAll rows={deskRows} /> : null}
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="resume-center-refresh"
+            onClick={() => {
+              clearPanePreviewCache()
+              refresh()
+            }}
+          >
+            <RefreshCw className="size-3.5" aria-hidden />
+            {translate('resumeCenter.refresh', 'Refresh')}
+          </Button>
+        </div>
       </header>
 
       <div className="flex items-center gap-2 px-6 pb-3">

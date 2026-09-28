@@ -14916,6 +14916,33 @@
     },
     "tab": {
       "panes": "{{count}} paneles"
+    },
+    "resumeAction": "Reanudar",
+    "orphan": {
+      "title": "Sesión de {{agent}}, pestaña cerrada",
+      "note": "No hay pestaña que restaurar; Reanudar la abre en una pestaña nueva."
+    },
+    "wake": {
+      "checking": "Comprobando los recursos libres…",
+      "starting": "Iniciando…",
+      "startingUnmeasured": "Iniciando, en un host que no se mide…",
+      "running": "En ejecución",
+      "refusedMemory": "No hay suficiente memoria libre para iniciarla ahora. No se inició nada.",
+      "refusedUnmeasured": "Su host no se puede medir, así que Reanudar todo la dejó dormida. Reanúdala por separado.",
+      "refusedUnchecked": "No se pudieron comprobar los recursos libres, así que no se inició nada.",
+      "unavailable": "Este cliente no puede iniciar sesiones.",
+      "gone": "Esta fila ya no está en el escritorio.",
+      "notLaunched": "No se pudo reanudar esta sesión del agente.",
+      "notStarted": "Se pidió que se iniciara y todavía no lo ha hecho. Sigue dormida hasta que lo haga."
+    },
+    "resumeAll": {
+      "start": "Reanudar todo",
+      "continue": "Continuar",
+      "running": "Reanudando de una en una:",
+      "stopped": "En pausa. Iniciadas:",
+      "remaining": "siguen dormidas:",
+      "finished": "Listo. Iniciadas:",
+      "leftAsleep": "dejadas dormidas:"
     }
   }
 }

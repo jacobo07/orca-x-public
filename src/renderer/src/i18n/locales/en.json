@@ -16778,6 +16778,33 @@
     },
     "tab": {
       "panes": "{{count}} panes"
+    },
+    "resumeAction": "Resume",
+    "orphan": {
+      "title": "{{agent}} session, tab closed",
+      "note": "No tab to restore; Resume opens it in a new tab."
+    },
+    "wake": {
+      "checking": "Checking free resources…",
+      "starting": "Starting…",
+      "startingUnmeasured": "Starting, on a host that is not measured…",
+      "running": "Running",
+      "refusedMemory": "Not enough free memory to start it now. Nothing was started.",
+      "refusedUnmeasured": "Its host cannot be measured, so Resume all left it asleep. Resume it on its own.",
+      "refusedUnchecked": "Free resources could not be checked, so nothing was started.",
+      "unavailable": "This client cannot start sessions.",
+      "gone": "This row is no longer on the desk.",
+      "notLaunched": "This agent session could not be resumed.",
+      "notStarted": "It was asked to start and has not started yet. It stays asleep until it does."
+    },
+    "resumeAll": {
+      "start": "Resume all",
+      "continue": "Continue",
+      "running": "Resuming one at a time:",
+      "stopped": "Paused. Started:",
+      "remaining": "still asleep:",
+      "finished": "Done. Started:",
+      "leftAsleep": "left asleep:"
     }
   }
 }
