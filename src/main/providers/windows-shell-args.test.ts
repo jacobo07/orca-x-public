@@ -11,7 +11,8 @@ import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { getPowerShellStartupCommandBoundary } from '../powershell-osc133-bootstrap'
 import {
   CMD_PROMPT_AFTER_EMBEDDED_STARTUP,
-  CMD_PROMPT_BEFORE_ANY_COMMAND
+  CMD_PROMPT_BEFORE_ANY_COMMAND,
+  CMD_PROMPT_WITHOUT_STARTUP
 } from './cmd-osc133-prompt'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
@@ -71,7 +72,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
     expect(result.shellArgs).toEqual([
       '/K',
-      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`
+      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & ${CMD_PROMPT_WITHOUT_STARTUP}`
     ])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')

@@ -70,10 +70,8 @@ describe('cmd.exe OSC 133 prompt', () => {
     const tracker = createShellPromptStateTracker(() => shellPromptMarkerTrust(CMD, 'win32'))
     tracker.observe(renderCmdPrompt(CMD_PROMPT_WITHOUT_STARTUP, '$P$G', 'C:\\repo'))
     expect(resolveShellPromptState(tracker, shellPromptMarkerTrust(CMD, 'win32'))).toBe('prompt')
-  })
-
-  it('draws an A-only first prompt while a startup command is still to be typed', () => {
-    const preflightOnly = resolveWindowsShellLaunchArgs(
+    // Why: a managed Codex home puts the preflight on every real pane; it is not a pending command.
+    const withPreflight = resolveWindowsShellLaunchArgs(
       'cmd.exe',
       'C:\\r',
       'C:\\r',
@@ -81,7 +79,10 @@ describe('cmd.exe OSC 133 prompt', () => {
       undefined,
       'codex-preflight'
     )
-    expect(preflightOnly.shellArgs.join(' ')).not.toContain('133;D')
+    expect(withPreflight.shellArgs[1]?.endsWith(` & ${CMD_PROMPT_WITHOUT_STARTUP}`)).toBe(true)
+  })
+
+  it('draws an A-only first prompt while a startup command is still to be typed', () => {
     const quoted = resolveWindowsShellLaunchArgs(
       'cmd.exe',
       'C:\\r',

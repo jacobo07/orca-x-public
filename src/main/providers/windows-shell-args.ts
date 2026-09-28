@@ -193,11 +193,9 @@ export function resolveWindowsShellLaunchArgs(
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
     // Why: cmd emits OSC 133 only through PROMPT; a D may appear only once a command returned.
-    // A pending stdin startup (or Codex preflight) keeps the A-only first prompt until it returns.
-    const firstPrompt =
-      startupCommand || codexLaunchPreflightCommand
-        ? CMD_PROMPT_BEFORE_ANY_COMMAND
-        : CMD_PROMPT_WITHOUT_STARTUP
+    // A pending stdin startup keeps the A-only first prompt until it returns. The Codex preflight
+    // is ambient on every pane with a managed Codex home, so it is no sign of a pending command.
+    const firstPrompt = startupCommand ? CMD_PROMPT_BEFORE_ANY_COMMAND : CMD_PROMPT_WITHOUT_STARTUP
     const startupCommands = [
       CMD_UTF8_SETUP_COMMAND,
       ...(codexLaunchPreflightCommand ? [CMD_CODEX_LAUNCH_PREFLIGHT] : []),

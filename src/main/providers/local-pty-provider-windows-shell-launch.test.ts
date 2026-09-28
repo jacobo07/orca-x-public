@@ -120,7 +120,7 @@ import {
   type LocalPtyMockProcess
 } from './local-pty-provider-test-harness'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
-import { CMD_PROMPT_BEFORE_ANY_COMMAND } from './cmd-osc133-prompt'
+import { CMD_PROMPT_WITHOUT_STARTUP } from './cmd-osc133-prompt'
 
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
@@ -630,7 +630,7 @@ describe('LocalPtyProvider', () => {
         'cmd.exe',
         [
           '/K',
-          `chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1 & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`
+          `chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1 & ${CMD_PROMPT_WITHOUT_STARTUP}`
         ],
         expect.objectContaining({
           env: expect.objectContaining({
