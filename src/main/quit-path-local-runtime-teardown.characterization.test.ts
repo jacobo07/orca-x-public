@@ -53,11 +53,22 @@ function readKillAllPtySource(): string {
   return lines.slice(0, closingLine).join('\n')
 }
 
+// Why line-stripped, not a bare substring: the handler's own "Why:" comment above the call also
+// contains the literal text killAllPty() — .includes() alone is satisfied by the comment even
+// after the real call is deleted. Requiring a statement-position match closes that gap.
+function hasLocalPtyKillCall(willQuit: string): boolean {
+  const withoutComments = willQuit
+    .split('\n')
+    .map((line) => line.replace(/\r$/, '')) // CRLF-safe, mirrors readKillAllPtySource
+    .filter((line) => !line.trim().startsWith('//'))
+  return withoutComments.some((line) => /^\s*killAllPty\(\);?\s*$/.test(line))
+}
+
 function judgeLocalTeardown(willQuit: string, killAll: string): LocalTeardownVerdict {
   if (willQuit.length < WILL_QUIT_MIN_LENGTH) {
     return { ok: false, reason: 'too-short', detail: `${willQuit.length} chars` }
   }
-  if (!willQuit.includes('killAllPty()')) {
+  if (!hasLocalPtyKillCall(willQuit)) {
     return { ok: false, reason: 'local-pty-kill-missing', detail: 'killAllPty()' }
   }
   if (
@@ -87,6 +98,19 @@ describe('dws characterization (a): a committed desktop quit kills the local PTY
     // Why replaceAll: the handler's own "Why:" comment above the call also says `killAllPty()`.
     const withoutKill = readWillQuitSource().replaceAll('killAllPty()', '')
     expect(judgeLocalTeardown(withoutKill, readKillAllPtySource())).toEqual({
+      ok: false,
+      reason: 'local-pty-kill-missing',
+      detail: 'killAllPty()'
+    })
+  })
+
+  it('rejects a will-quit handler where only the real call was removed, leaving the explanatory comment', () => {
+    const source = readWillQuitSource()
+    const withoutRealCallOnly = source.replace(/^\s*killAllPty\(\);?\s*$/m, '')
+    // Sanity: the comment's mention of killAllPty() must still be present — this drill is narrower
+    // than the total-removal drill above, and would pass vacuously if it accidentally matched both.
+    expect(withoutRealCallOnly).toContain('killAllPty()')
+    expect(judgeLocalTeardown(withoutRealCallOnly, readKillAllPtySource())).toEqual({
       ok: false,
       reason: 'local-pty-kill-missing',
       detail: 'killAllPty()'
