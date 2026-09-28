@@ -1298,9 +1298,6 @@ export class OrcaRuntimeRpcServer {
   // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
   // counting it would republish the runtime on every interface one restart after the user declined that.
   private resolveInitialWebSocketBindHost(): string {
-    console.error(
-      `[dws-debug] resolveInitialWebSocketBindHost pinnedBindHost=${JSON.stringify(this.pinnedBindHost)} exposeNetworkByDefault=${this.exposeNetworkByDefault}`
-    )
     // Why: DWS-P2 (CTX-EXP-1) — an explicit pin outranks exposeNetworkByDefault and every device-reach
     // heuristic below; it is the first branch on purpose.
     if (this.pinnedBindHost !== null) {

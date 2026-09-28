@@ -3265,7 +3265,6 @@ void app.whenReady().then(async () => {
   }
   // Why: existing installs may have pairing creds under the late app.getPath('userData'); copy them forward before switching to the canonical path.
   migrateMobilePairingDataToCanonicalUserDataPath(app.getPath('userData'))
-  console.error(`[dws-debug] serveOptions=${JSON.stringify(serveOptions)}`)
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
