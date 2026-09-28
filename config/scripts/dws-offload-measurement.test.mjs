@@ -265,6 +265,54 @@ describe('summarizeRun', () => {
     const summary = summarizeRun(samples, { desktopRootPid: 100, nonce, harnessRootPids: [600] })
     expect(summary.perFamily.codex).toEqual({ peakMb: 0, medianMb: 0, maxCount: 0, samplesPresent: 0, observed: [] })
   })
+
+  // Regression for a real incident (2026-09-28, this plan's own baseline run): a pid was an
+  // unrelated `.claude/hooks/anti-thrash.js` process in an early sample, exited, and was reused by
+  // the REAL vitest.mjs process ~137s later in the same run. A per-pid-for-the-whole-run
+  // classification cache would attribute every later sample's bytes to the EARLY, unrelated
+  // process's identity -- silently zeroing the positive control this instrument exists to prove
+  // (CTX-MEAS-3) while folding the bytes into `control-surface` instead (still "plausible"-looking,
+  // which is exactly what makes this class of bug dangerous).
+  it('classifies a reused pid by whichever process actually held it at each sample, not by the pid\'s first-ever sighting', () => {
+    const desktop100 = { pid: 100, ppid: 1, name: 'electron.exe', commandLine: '"C:\\orca\\electron.exe" .' }
+    const reusedPid = 35888
+    const samples = [
+      makeSample({
+        monoMs: 0,
+        freeMb: 5000,
+        procs: [
+          makeProc({ ...desktop100, workingSetMb: 200 }),
+          // Early sample: an unrelated background hook process, briefly holding this pid.
+          makeProc({ pid: reusedPid, ppid: 1, name: 'node.exe', commandLine: 'node .claude/hooks/anti-thrash.js', workingSetMb: 12 })
+        ]
+      }),
+      makeSample({
+        monoMs: 1000,
+        freeMb: 4995,
+        // The hook process has exited; nothing holds the pid this sample.
+        procs: [makeProc({ ...desktop100, workingSetMb: 200 })]
+      }),
+      makeSample({
+        monoMs: 2000,
+        freeMb: 4990,
+        procs: [
+          makeProc({ ...desktop100, workingSetMb: 200 }),
+          // The pid is reused by the real vitest.mjs process, inside the desktop subtree.
+          makeProc({ pid: reusedPid, ppid: 100, name: 'node.exe', commandLine: 'node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts x.test.mjs', workingSetMb: 310 })
+        ]
+      })
+    ]
+    const summary = summarizeRun(samples, { desktopRootPid: 100, nonce: 'NONCE-UNUSED', harnessRootPids: [] })
+
+    expect(summary.perFamily.vitest.maxCount).toBe(1)
+    expect(summary.perFamily.vitest.peakMb).toBe(310)
+    // The early, unrelated occupant must not be folded into control-surface either -- it matches
+    // no family and is outside THAT SAMPLE's desktop subtree, so it is correctly 'background'.
+    // Only the desktop root itself (pid 100, present every sample) is control-surface.
+    expect(summary.perFamily['control-surface'].observed).toEqual([
+      { pid: 100, commandLine: '"C:\\orca\\electron.exe" .' }
+    ])
+  })
 })
 
 describe('judgeAbsence', () => {

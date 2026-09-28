@@ -230,14 +230,10 @@ function classifyOneProcess(proc, { desktopSubtree, nonce }) {
 }
 
 /**
- * Classifies every unique process seen across the run into control-plane / control-surface /
- * workload:<family> / background. `harnessRootPids` (the measurement executor's own root pids,
- * e.g. this session's claude.exe) is resolved into its own subtree and exposed as
- * `harnessSubtreeSize` for observability -- it never overrides a nonce match (see
- * classifyOneProcess), since the self-test's own smoke processes are children of the harness yet
- * must still be accused via the nonce as the positive control that identity attribution fires.
+ * Subtree membership (ppid-chain ancestry), unioned across every sample. Shared by classifyRun
+ * and summarizeRun so the two never compute it differently.
  */
-export function classifyRun(samples, { desktopRootPid, nonce, harnessRootPids = [] } = {}) {
+export function computeSubtrees(samples, { desktopRootPid, harnessRootPids = [] } = {}) {
   const desktopSubtree = new Set()
   const harnessSubtree = new Set()
   for (const sample of samples) {
@@ -250,6 +246,34 @@ export function classifyRun(samples, { desktopRootPid, nonce, harnessRootPids = 
       }
     }
   }
+  return { desktopSubtree, harnessSubtree }
+}
+
+/**
+ * Classifies every unique process PID seen across the run, using the FIRST sample in which each
+ * pid appears, into control-plane / control-surface / workload:<family> / background.
+ * `harnessRootPids` (the measurement executor's own root pids, e.g. this session's claude.exe) is
+ * resolved into its own subtree and exposed as `harnessSubtreeSize` for observability -- it never
+ * overrides a nonce match (see classifyOneProcess), since the self-test's own smoke processes are
+ * children of the harness yet must still be accused via the nonce as the positive control that
+ * identity attribution fires.
+ *
+ * CAUTION -- this is a "first sighting per pid" DIAGNOSTIC view, not the instrument that judges a
+ * run: on a long (multi-minute), heavily-loaded Windows host, PIDs churn fast enough that a pid can
+ * belong to a short-lived, unrelated process in an early sample and then be REUSED by the real
+ * workload later in the same run -- this function would report the workload's bytes under the
+ * earlier, unrelated process's identity forever, because it locks in one classification per pid for
+ * the whole run. Measured live during this plan's own baseline run (2026-09-28): pid 35888 was a
+ * `.claude/hooks/anti-thrash.js` helper at sample[27], exited, and was reused by the REAL
+ * `vitest.mjs` process at sample[117] (137s later) -- a naive per-pid cache attributed zero bytes to
+ * vitest and silently folded them into `control-surface` instead, at real memory numbers big enough
+ * (control-surface peakMb 2216 vs an expected few hundred) that the run still "looked" plausible.
+ * `summarizeRun` does NOT use this function's output for that reason -- it classifies every
+ * (sample, proc) occurrence fresh instead (see below). This function is kept for its own tests and
+ * for any future caller that genuinely wants a single first-seen identity per pid.
+ */
+export function classifyRun(samples, { desktopRootPid, nonce, harnessRootPids = [] } = {}) {
+  const { desktopSubtree, harnessSubtree } = computeSubtrees(samples, { desktopRootPid, harnessRootPids })
 
   const byPid = new Map()
   for (const sample of samples) {
@@ -312,15 +336,24 @@ export function summarizeRun(samples, opts = {}) {
     instrument = DEFAULT_INSTRUMENT
   } = opts
 
-  const classification = classifyRun(samples, { desktopRootPid, nonce, harnessRootPids })
-  const familyKeyByPid = new Map()
-  for (const proc of classification.processes) {
-    if (proc.classification.startsWith('workload:')) {
-      familyKeyByPid.set(proc.pid, proc.classification.slice('workload:'.length))
-    } else if (proc.classification === 'control-surface') {
-      familyKeyByPid.set(proc.pid, 'control-surface')
-    }
-  }
+  // Why classify per (sample, proc) occurrence here, NOT via classifyRun's per-pid cache: a pid is
+  // only a stable identity for as long as one real process holds it. On a long, heavily-loaded
+  // Windows host a pid can be reused by an unrelated process partway through the run, and
+  // classifyRun's "first sighting wins" cache would then attribute every later sample's bytes to
+  // the FIRST process's identity forever -- see classifyRun's own doc comment for the real
+  // measured incident this fixes (2026-09-28 baseline run, pid 35888: an unrelated hook process at
+  // sample[27], the real vitest.mjs from sample[117] onward). Classifying fresh per occurrence
+  // means a reused pid is judged by whichever process actually held it at that sample.
+  //
+  // Desktop-subtree MEMBERSHIP is also computed fresh per sample below (subtreePids on that
+  // sample's own procs), not via a set unioned across the whole run: a unioned set has the
+  // identical reuse vulnerability one level removed -- a pid that is a desktop descendant in a
+  // LATER sample would otherwise leak that membership backward onto an unrelated EARLIER
+  // occupant of the same pid number. computeSubtrees' unioned sizes are kept only as a
+  // reporting-only diagnostic (desktopSubtreeSize/harnessSubtreeSize below), never for
+  // classification.
+  const { desktopSubtree: desktopSubtreeUnionForReporting, harnessSubtree: harnessSubtreeUnionForReporting } =
+    computeSubtrees(samples, { desktopRootPid, harnessRootPids })
 
   const trackedFamilies = [...new Set([...FAMILY_PATTERNS.map((def) => def.family), 'nonce', 'control-surface'])]
   const mbBySampleByFamily = new Map(trackedFamilies.map((f) => [f, new Array(samples.length).fill(0)]))
@@ -329,16 +362,27 @@ export function summarizeRun(samples, opts = {}) {
   const workloadTotalPerSampleMb = new Array(samples.length).fill(0)
 
   samples.forEach((sample, sampleIndex) => {
+    const sampleDesktopSubtree = subtreePids(sample.procs ?? [], desktopRootPid)
     for (const proc of sample.procs ?? []) {
-      const family = familyKeyByPid.get(proc.pid)
+      const classification = classifyOneProcess(proc, { desktopSubtree: sampleDesktopSubtree, nonce })
+      let family = null
+      if (classification.startsWith('workload:')) {
+        family = classification.slice('workload:'.length)
+      } else if (classification === 'control-surface') {
+        family = 'control-surface'
+      }
       if (!family) {
         continue
       }
       const mb = proc.workingSetMb ?? 0
       mbBySampleByFamily.get(family)[sampleIndex] += mb
       countBySampleByFamily.get(family)[sampleIndex] += 1
-      if (!observedByFamily.get(family).has(proc.pid)) {
-        observedByFamily.get(family).set(proc.pid, proc.commandLine ?? '')
+      // Keyed by pid+commandLine (not pid alone): a reused pid whose later occupant has a
+      // different commandLine is a genuinely different observation and must not be folded
+      // into -- or silently overwrite -- the earlier one.
+      const observedKey = `${proc.pid}\u0000${proc.commandLine ?? ''}`
+      if (!observedByFamily.get(family).has(observedKey)) {
+        observedByFamily.get(family).set(observedKey, { pid: proc.pid, commandLine: proc.commandLine ?? '' })
       }
       if (family !== 'control-surface') {
         workloadTotalPerSampleMb[sampleIndex] += mb
@@ -356,7 +400,7 @@ export function summarizeRun(samples, opts = {}) {
       medianMb: presentMb.length > 0 ? median(presentMb) : 0,
       maxCount: countSeries.length > 0 ? Math.max(...countSeries) : 0,
       samplesPresent: presentMb.length,
-      observed: [...observedByFamily.get(family).entries()].map(([pid, commandLine]) => ({ pid, commandLine }))
+      observed: [...observedByFamily.get(family).values()]
     }
   }
 
@@ -386,8 +430,8 @@ export function summarizeRun(samples, opts = {}) {
     instrument,
     unreadableLines,
     patterns: FAMILY_PATTERNS,
-    desktopSubtreeSize: classification.desktopSubtreeSize,
-    harnessSubtreeSize: classification.harnessSubtreeSize
+    desktopSubtreeSize: desktopSubtreeUnionForReporting.size,
+    harnessSubtreeSize: harnessSubtreeUnionForReporting.size
   }
 }
 
