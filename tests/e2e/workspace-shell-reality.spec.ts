@@ -1,3 +1,4 @@
+import type { Page } from '@stablyai/playwright-test'
 import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
@@ -15,6 +16,18 @@ test.setTimeout(300_000)
 // Rendered only while the worktree sidebar is mounted and open (`.worktree-sidebar-scrollbar` is CSS-only).
 const WORKTREE_LIST = '[data-sidebar-resize-handle]'
 const SIDE_PANEL = '[data-side-panel-content]'
+
+/** Screenshots taken mid-transition showed a faded popover and a tab underline still sliding. */
+async function settleAnimations(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined))
+    )
+  )
+}
 
 test('Workspace owns its shell and shows the running agent and the project estate', async ({
   testRepoPath
@@ -49,25 +62,36 @@ test('Workspace owns its shell and shows the running agent and the project estat
     await expect(page.locator(WORKTREE_LIST)).toHaveCount(0)
     await expect(page.locator(SIDE_PANEL)).toHaveCount(0)
 
-    await page.getByTestId('workspace-tab-agents').dispatchEvent('mousedown')
+    const agentsTab = page.getByTestId('workspace-tab-agents')
+    await agentsTab.dispatchEvent('mousedown')
+    await expect(agentsTab).toHaveAttribute('data-state', 'active')
     const running = page.getByTestId('workspace-running-session')
     await expect(running).toHaveCount(1)
     await expect(running).toHaveAttribute('data-pane-key', pane.paneKey)
     await expect(running).toHaveAttribute('data-liveness', 'working')
+    await settleAnimations(page)
     await page.screenshot({ path: testInfo.outputPath('workspace-agents.png') })
 
-    await page.getByTestId('workspace-tab-projects').dispatchEvent('mousedown')
+    const projectsTab = page.getByTestId('workspace-tab-projects')
+    await projectsTab.dispatchEvent('mousedown')
+    await expect(projectsTab).toHaveAttribute('data-state', 'active')
     const projectCount = await page.evaluate(() => window.__store!.getState().projects.length)
     expect(projectCount).toBeGreaterThan(0)
     await expect(page.getByTestId('workspace-project')).toHaveCount(projectCount)
+    await settleAnimations(page)
     await page.screenshot({ path: testInfo.outputPath('workspace-projects.png') })
 
     await page.getByTestId('workspace-new-agent').click()
     await page.getByTestId('new-agent-project').click()
+    const projectList = page.getByTestId('new-agent-project-list')
+    await expect(projectList).toBeVisible()
     await expect(page.getByTestId('new-agent-project-option')).toHaveCount(projectCount)
     expect(await page.getByTestId('new-agent-dialog').locator('select').count()).toBe(0)
+    await settleAnimations(page)
     await page.screenshot({ path: testInfo.outputPath('workspace-project-picker.png') })
+    // One Escape per layer: the popover's layer stays registered until its exit animation ends.
     await page.keyboard.press('Escape')
+    await expect(projectList).toHaveCount(0)
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('new-agent-dialog')).toHaveCount(0)
 
