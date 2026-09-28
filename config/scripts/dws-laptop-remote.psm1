@@ -54,7 +54,13 @@ Publishes an incremental bundle of the current worktree HEAD to GEX44, fences a 
 <Sha>, builds it, and installs it under the orca-svc service (CTX-SVC-1/2/3).
 #>
 function Publish-DwsServeBuild {
-  param([Parameter(Mandatory)][string]$Sha)
+  param(
+    [Parameter(Mandatory)][string]$Sha,
+    # Why a switch, not a default-on flag: the sandbox contingency (T-02-05) is a recorded,
+    # deliberate exception -- never the default posture. Plan's own contingency: one retry with
+    # this set is acceptable; a second identical failure is a pivot point, never a third retry.
+    [switch]$NoSandbox
+  )
 
   $state = Get-DwsStateDir
   $short = $Sha.Substring(0, 7)
@@ -117,7 +123,8 @@ function Publish-DwsServeBuild {
   if ($build.Output -notmatch 'ARTIFACT=(\S+)') { throw 'Publish-DwsServeBuild: no ARTIFACT= path in build output' }
   $artifactRemotePath = $Matches[1]
 
-  $install = Invoke-DwsSsh -RemoteBody "sudo bash $script:DwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh install $Sha $artifactRemotePath $artifactSha256" -TimeoutSec 180
+  $installPrefix = if ($NoSandbox) { 'sudo env DWS_SERVE_NO_SANDBOX=1' } else { 'sudo' }
+  $install = Invoke-DwsSsh -RemoteBody "$installPrefix bash $script:DwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh install $Sha $artifactRemotePath $artifactSha256" -TimeoutSec 180
   Write-Output $install.Output
   if ($install.ExitCode -ne 0 -or $install.Output -notmatch 'READY boundEndpoint=(\S+)') {
     throw "Publish-DwsServeBuild: install failed (exit $($install.ExitCode)): $($install.Output)"
