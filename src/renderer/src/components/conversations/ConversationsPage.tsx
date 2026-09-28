@@ -69,6 +69,8 @@ export default function ConversationsPage(): React.JSX.Element {
   const [narrowPane, setNarrowPane] = useState<'roster' | 'chat'>('chat')
   const [groundingRevision, setGroundingRevision] = useState(0)
   const [newAgentOpen, setNewAgentOpen] = useState(false)
+  // undefined: the dialog's usual default; a project id: "New agent here" from the Projects tab.
+  const [newAgentProjectId, setNewAgentProjectId] = useState<string | undefined>(undefined)
   const [openApp, setOpenApp] = useState<ConnectedApplicationView | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const activeIdRef = useRef<string | null>(null)
@@ -279,7 +281,15 @@ export default function ConversationsPage(): React.JSX.Element {
             setNarrowPane('chat')
             startDraft()
           }}
-          onNewAgent={() => setNewAgentOpen(true)}
+          onNewAgent={() => {
+            setNewAgentProjectId(undefined)
+            setNewAgentOpen(true)
+          }}
+          projectChoices={projectChoices}
+          onNewAgentHere={(projectId) => {
+            setNewAgentProjectId(projectId)
+            setNewAgentOpen(true)
+          }}
         />
       )}
       rail={
@@ -357,7 +367,7 @@ export default function ConversationsPage(): React.JSX.Element {
       <NewAgentDialog
         open={newAgentOpen}
         projectChoices={projectChoices}
-        defaultProjectId={resolveDefaultProjectId(activeRepoId, projects)}
+        defaultProjectId={newAgentProjectId ?? resolveDefaultProjectId(activeRepoId, projects)}
         onOpenChange={setNewAgentOpen}
         onCreated={(agent) => {
           void roster.refresh()

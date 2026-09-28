@@ -8,13 +8,11 @@ import type {
   WorkspaceAgentRow,
   WorkspaceThreadRow
 } from '../../../../shared/cognitive-workspace-projection'
+import type { AgentProjectChoice } from '../agents/agent-project-choices'
 
-import {
-  projectRefLabel,
-  WorkspaceAgentButton,
-  WorkspaceThreadButton
-} from './workspace-roster-rows'
+import { WorkspaceAgentButton, WorkspaceThreadButton } from './workspace-roster-rows'
 import { WorkspaceExitButton } from './WorkspaceExitButton'
+import { WorkspaceProjectsSection } from './WorkspaceProjectsSection'
 
 export type WorkspaceRosterTab = 'agents' | 'threads' | 'projects'
 
@@ -24,10 +22,11 @@ export type WorkspaceAgentsLoad =
   | { status: 'failed'; reason: string }
 
 /**
- * The Cognitive Workspace's left column: who you can talk to, what you have talked about, and which
- * project each belongs to. Every row comes from the shared projection; this component only lays
- * it out. "Recent threads" under Agents are the open agent's threads, or Brainstorming's when no
- * agent is open, so the list beside a chat is always that chat's own history.
+ * The Cognitive Workspace's left column: who you can talk to, what you have talked about, and the
+ * project estate they work in. Agent and thread rows come from the shared projection, projects from
+ * the canonical estate the Terminals view reads; this component only lays them out. "Recent
+ * threads" under Agents are the open agent's threads, or Brainstorming's when no agent is open, so
+ * the list beside a chat is always that chat's own history.
  */
 export function CognitiveWorkspaceRoster({
   fullWidth,
@@ -35,6 +34,7 @@ export function CognitiveWorkspaceRoster({
   onTabChange,
   agentsLoad,
   agents,
+  projectChoices,
   recentThreads,
   allThreads,
   threadsLoading,
@@ -44,13 +44,15 @@ export function CognitiveWorkspaceRoster({
   onOpenAgent,
   onOpenThread,
   onNewThread,
-  onNewAgent
+  onNewAgent,
+  onNewAgentHere
 }: {
   fullWidth: boolean
   tab: WorkspaceRosterTab
   onTabChange: (tab: WorkspaceRosterTab) => void
   agentsLoad: WorkspaceAgentsLoad
   agents: readonly WorkspaceAgentRow[]
+  projectChoices: readonly AgentProjectChoice[]
   recentThreads: readonly WorkspaceThreadRow[]
   allThreads: readonly WorkspaceThreadRow[]
   threadsLoading: boolean
@@ -61,6 +63,7 @@ export function CognitiveWorkspaceRoster({
   onOpenThread: (row: WorkspaceThreadRow) => void
   onNewThread: () => void
   onNewAgent: () => void
+  onNewAgentHere: (projectId: string) => void
 }): React.JSX.Element {
   return (
     <aside
@@ -142,12 +145,19 @@ export function CognitiveWorkspaceRoster({
             />
           ) : null}
           {tab === 'projects' ? (
-            <ProjectsSection
-              load={agentsLoad}
-              agents={agents}
-              activeAgentId={activeAgentId}
-              onOpenAgent={onOpenAgent}
-            />
+            <>
+              {/* Only a failure or a pending read: "no agents" is not news on a projects list. */}
+              {agentsLoad.status === 'ready' ? null : (
+                <AgentsLoadNotice load={agentsLoad} empty={false} />
+              )}
+              <WorkspaceProjectsSection
+                choices={projectChoices}
+                agents={agents}
+                activeAgentId={activeAgentId}
+                onOpenAgent={onOpenAgent}
+                onNewAgentHere={onNewAgentHere}
+              />
+            </>
           ) : null}
         </div>
       </div>
@@ -260,55 +270,6 @@ function ThreadsSection({
         <Plus className="size-4" />
         {translate('workspace.newThread', 'New thread')}
       </Button>
-    </section>
-  )
-}
-
-/** Agents grouped by the project that owns them, in roster order; "no project" and
- *  "project unavailable" keep their own headings rather than being folded together. */
-function ProjectsSection({
-  load,
-  agents,
-  activeAgentId,
-  onOpenAgent
-}: {
-  load: WorkspaceAgentsLoad
-  agents: readonly WorkspaceAgentRow[]
-  activeAgentId: string | null
-  onOpenAgent: (agentId: string) => void
-}): React.JSX.Element {
-  const groups = new Map<string, { label: string; rows: WorkspaceAgentRow[] }>()
-  for (const row of agents) {
-    const key =
-      row.project.kind === 'project' || row.project.kind === 'unresolved'
-        ? `${row.project.kind}:${row.project.projectId}`
-        : row.project.kind
-    const existing = groups.get(key)
-    if (existing) {
-      existing.rows.push(row)
-    } else {
-      groups.set(key, { label: projectRefLabel(row.project), rows: [row] })
-    }
-  }
-  return (
-    <section className="flex flex-col gap-3" data-testid="workspace-projects">
-      <AgentsLoadNotice load={load} empty={agents.length === 0} />
-      {[...groups.entries()].map(([key, group]) => (
-        <div key={key} data-testid="workspace-project-group" data-group-key={key}>
-          <h2 className="px-2 pb-1 text-xs font-medium text-muted-foreground">{group.label}</h2>
-          <ul className="flex flex-col gap-0.5">
-            {group.rows.map((row) => (
-              <li key={row.agent.id}>
-                <WorkspaceAgentButton
-                  row={row}
-                  active={row.agent.id === activeAgentId}
-                  onOpen={onOpenAgent}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
     </section>
   )
 }
