@@ -37,14 +37,23 @@ ahead of its status.
   ids, release, read back. When Park refuses, the app quits warm and says so. A standing preference
   never authorizes releasing work the user did not see; it only selects which transaction is
   attempted. Default: warm. PLANNED.
-- **Restore layout only** opens the windows and workspaces with dormant rows as they are. It wakes
-  nothing. Proof is by PTY id set, not count. PLANNED.
-- **Resume / Resume all** are wake intents. Every wake asks the wake-admission owner for a token
-  (`admitted | queued(position) | refused(reason)`), reports completion, and is released when its
-  window closes. Admission reads the executing host's resources: an SSH or WSL executor is
-  `unobservable`, admitted under a concurrency cap only and labelled as not measured. The queue
-  advances on events, not a timer. Resuming a provider session goes through the live-session
-  collision gate. PLANNED.
+- **Restore layout only** is the Resume Center's **Open**. Every row the host does not list as
+  running gets the `layout-restore` dormancy marker (through `terminalTabDormancy`), then the
+  workspace activates with `wake: false`: no sleeping-agent resume, no seeded terminal, no host
+  terminal after wake. "Running" is the local host's `listSessions()` read at click time, never the
+  store: hydration refills `ptyIdsByTabId`/`tab.ptyId` with the remembered id. LIVE, calling window
+  only (real app: `resume-center-restore-no-wake.spec.ts` on GEX44; Windows run recorded in
+  `RESUMPTION_FILE.continuity.md`). Multi-window: PLANNED.
+- **Resume / Resume all** are wake intents. Each wake asks `continuity:admitWake` (main,
+  `src/main/continuity/wake-admission.ts`), which reuses `observeDispatchHostResources` +
+  `decideDispatchAdmission` against a PROVISIONAL 4 GB free-memory floor
+  (`PROVISIONAL_WAKE_FLOOR_BYTES`); admission is a reading, not a reservation. SSH, runtime and WSL
+  executors are `executor-unobservable`: Resume all skips them, a chosen Resume proceeds labelled
+  "not measured". A row is `running` only when a PTY binds and clears its marker. Resume all wakes
+  one at a time, each after the previous bound (event-driven, no timer); the first host-wide refusal
+  stops it and **Continue** asks again over the same plan. Orphaned agents (tab gone) are listed and
+  resume through the canonical sleeping-agent resume filtered by `onlyPaneKeys`. LIVE (real app:
+  `resume-center-resume.spec.ts`, GEX44). Per-session wake cost: UNMEASURED (needs a real provider).
 - **Window membership** is `bound(windowId)` or `unattributed`. It is never inferred from the
   profile-global active worktree. PLANNED.
 - **Previews** render durable history in a main-process `HeadlessEmulator`. The source is
