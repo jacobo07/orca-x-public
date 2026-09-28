@@ -3282,6 +3282,8 @@ void app.whenReady().then(async () => {
           preferPinnedWsPort: true
         }
       : {}),
+    // Why: DWS-P2 (CTX-EXP-1) — an explicit --bind-host pins the listener even under exposeNetworkByDefault.
+    ...(serveOptions?.bindHost ? { pinnedBindHost: serveOptions.bindHost } : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   registerMobileHandlers(runtimeRpc, {
