@@ -195,14 +195,22 @@ function Get-DwsArtifact {
     Move-Item -Path $outDir -Destination $movedAside -Force
     Write-Output "PREVIOUS_OUT_MOVED_TO=$movedAside"
   }
-  New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+  # Why -C $worktree, not -C $outDir: the tarball was built with `tar -czf ... -C $CLONE_DIR out`
+  # (GEX44 side), so its own top-level entry IS "out/" -- extracting that into an already-existing
+  # "out" directory nests it as out\out\... (found via a real Get-DwsArtifact run: out\cli\index.js
+  # was missing, out\out\cli\index.js existed). Extracting one level up lets the tarball's own
+  # "out/" entry land at $worktree\out directly; must not pre-create $outDir first, or tar would
+  # extract into it as an empty target that already exists rather than creating it fresh.
   # Why the full path, not a bare `tar.exe`: MSYS2's GNU tar (C:\msys64\usr\bin\tar.exe) is earlier
   # on this host's PATH than Windows' own bsdtar, and GNU tar's remote-archive heuristic treats a
   # Windows path's drive letter + colon as a "host:path" spec -- "cannot connect to C: name
   # resolution failed" -- rather than a local file. The Windows-native bsdtar at this fixed path
   # (present since Windows 10 1803) has no such heuristic.
-  & 'C:\Windows\System32\tar.exe' -xzf $localArtifact -C $outDir
+  & 'C:\Windows\System32\tar.exe' -xzf $localArtifact -C $worktree
   if ($LASTEXITCODE -ne 0) { throw 'Get-DwsArtifact: tar extraction failed' }
+  if (-not (Test-Path (Join-Path $outDir 'cli\index.js'))) {
+    throw "Get-DwsArtifact: extraction did not produce $outDir\cli\index.js -- tarball layout changed?"
+  }
   Write-Output "ARTIFACT_EXTRACTED=$outDir"
 }
 
