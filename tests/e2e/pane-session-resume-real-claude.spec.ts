@@ -26,6 +26,9 @@ import {
 // its hooks and the shell. Opt-in; see preflightRealClaude for the required environment.
 
 const preflight = preflightRealClaude(process.env)
+// cmd.exe marks an agent exit only through its tagged PROMPT; PowerShell through PSReadLine.
+const SHELL = process.env.ORCA_E2E_REAL_CLAUDE_SHELL === 'cmd.exe' ? 'cmd.exe' : 'powershell.exe'
+const SHELL_PROMPT = SHELL === 'cmd.exe' ? /^[A-Z]:\\[^\n]*>/m : /^PS [A-Z]:\\[^\n]*>/m
 const REPLY_MARKER = 'READY34'
 const TRUST_OR_LOGIN =
   /trust (this|the files in this) folder|Select login method|Please run \/login|Invalid API key|inside another Claude Code session/i
@@ -192,12 +195,21 @@ async function savedAgentCommand(page: Page, paneKey: string): Promise<string> {
 }
 
 // Only the provider process gets the real home back (login + hooks); the binary is real.
-// PowerShell syntax because Orca runs a local Windows startup command through PowerShell.
+// Written in the pane shell's own syntax: Orca runs the startup command through that shell.
 // Store-only like the stand-in golden, so it must be applied again after every launch.
-async function useRealClaudeHome(page: Page, config: RealClaudeConfig): Promise<void> {
+function realClaudeCommand(config: RealClaudeConfig): string {
   // Auto-update is off so the provider version cannot change mid-run. Plan mode makes the
   // session unable to edit anything even when the user's default is bypass permissions.
-  const command = `$env:USERPROFILE='${config.home}'; $env:HOME='${config.home}'; $env:DISABLE_AUTOUPDATER='1'; & '${config.bin}' --permission-mode plan`
+  if (SHELL === 'cmd.exe') {
+    // No quotes and no space before &&: a quoted command skips /K delivery, and cmd keeps
+    // trailing spaces in a set value.
+    return `set USERPROFILE=${config.home}&& set HOME=${config.home}&& set DISABLE_AUTOUPDATER=1&& ${config.bin} --permission-mode plan`
+  }
+  return `$env:USERPROFILE='${config.home}'; $env:HOME='${config.home}'; $env:DISABLE_AUTOUPDATER='1'; & '${config.bin}' --permission-mode plan`
+}
+
+async function useRealClaudeHome(page: Page, config: RealClaudeConfig): Promise<void> {
+  const command = realClaudeCommand(config)
   await page.evaluate((command) => {
     const store = window.__store!
     const settings = store.getState().settings!
@@ -229,6 +241,8 @@ async function exitProvider(page: Page, paneKey: string, ptyId: string, sessionI
       }
     )
     .toBe('prompt')
+  // The shell under test is the one that reported the exit, not a default that won instead.
+  await waitForScreen(page, paneKey, SHELL_PROMPT, 30_000)
   await expect
     .poll(async () => (await probe(page, paneKey)).capability, { timeout: 30_000 })
     .toBe('available')
@@ -348,6 +362,11 @@ test('real Claude: exit, full relaunch, one-click resume of the exact session, t
       store.getState().setActiveWorktree(worktree!.id)
       return worktree!.id
     }, config.fixture)
+    // Persisted, not store-only: main resolves the pane shell from its own settings.
+    await page.evaluate(
+      (shell) => window.__store!.getState().updateSettings({ terminalWindowsShell: shell }),
+      SHELL
+    )
     await useRealClaudeHome(page, config)
 
     await page.getByTestId('tab-bar-new-tab').click()
@@ -368,7 +387,7 @@ test('real Claude: exit, full relaunch, one-click resume of the exact session, t
       .not.toBeNull()
     const { sessionId } = await probe(page, paneKey)
     // The resume replays the recorded command, so it must be the one carrying the real home.
-    expect(await savedAgentCommand(page, paneKey)).toContain('$env:USERPROFILE')
+    expect(await savedAgentCommand(page, paneKey)).toContain(`USERPROFILE=`)
     const prompt = 'Reply with the word READY immediately followed by 34. Use no tools.'
     await typeLine(page, shellPty, prompt)
     // Test input delivery only: Claude can drop an Enter while its own startup hooks finish.
@@ -417,7 +436,7 @@ test('real Claude: exit, full relaunch, one-click resume of the exact session, t
     )
     expect(restored.sessionId).toBe(sessionId)
     expect(restored.block).toBe('agent-exited')
-    expect(await savedAgentCommand(page, paneKey)).toContain('$env:USERPROFILE')
+    expect(await savedAgentCommand(page, paneKey)).toContain(`USERPROFILE=`)
     const inspection = await page.evaluate(
       (id) => window.api.pty.inspectProcess(id),
       restored.tabPtyIds[0]
