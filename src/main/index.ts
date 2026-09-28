@@ -163,7 +163,11 @@ import {
   installUnhandledRejectionLogging
 } from './startup/main-process-error-guards'
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
-import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
+import {
+  argvRequestsServeMode,
+  normalizeServeModeArgv,
+  parseServeBindHost
+} from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   readActiveGpuFallbackMarker,
@@ -2025,6 +2029,8 @@ type ServeOptions = {
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
+  // DWS-P2 (CTX-EXP-1): pins the WS listener host, outranking exposeNetworkByDefault.
+  bindHost: string | null
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -2052,7 +2058,8 @@ function getServeOptions(argv = process.argv): ServeOptions {
     noPairing: argv.includes('--serve-no-pairing'),
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
-    projectRoot: valueAfter('--serve-project-root')
+    projectRoot: valueAfter('--serve-project-root'),
+    bindHost: parseServeBindHost(valueAfter('--serve-bind-host'))
   }
 }
 

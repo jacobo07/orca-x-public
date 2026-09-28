@@ -74,6 +74,9 @@ type OrcaRuntimeRpcServerOptions = {
   // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
   // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
   exposeNetworkByDefault?: boolean
+  // Why: DWS-P2 (CTX-EXP-1) — pins the listener to this host; outranks exposeNetworkByDefault and
+  // makes the pairing-time widen (ensureNetworkExposure) a permanent no-op while set.
+  pinnedBindHost?: string
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
@@ -531,6 +534,7 @@ export class OrcaRuntimeRpcServer {
   private readonly wsPort: number
   private readonly preferPinnedWsPort: boolean
   private readonly exposeNetworkByDefault: boolean
+  private readonly pinnedBindHost: string | null
   private readonly webClientRoot: string | undefined
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   private wsBoundHost: string | null = null
@@ -589,6 +593,7 @@ export class OrcaRuntimeRpcServer {
     wsPort = DEFAULT_WS_PORT,
     preferPinnedWsPort = false,
     exposeNetworkByDefault = false,
+    pinnedBindHost,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
@@ -603,6 +608,7 @@ export class OrcaRuntimeRpcServer {
     this.wsPort = wsPort
     this.preferPinnedWsPort = preferPinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
+    this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
@@ -1292,6 +1298,11 @@ export class OrcaRuntimeRpcServer {
   // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
   // counting it would republish the runtime on every interface one restart after the user declined that.
   private resolveInitialWebSocketBindHost(): string {
+    // Why: DWS-P2 (CTX-EXP-1) — an explicit pin outranks exposeNetworkByDefault and every device-reach
+    // heuristic below; it is the first branch on purpose.
+    if (this.pinnedBindHost !== null) {
+      return this.pinnedBindHost
+    }
     if (this.exposeNetworkByDefault) {
       return WS_BIND_HOST_ALL_INTERFACES
     }
@@ -1413,7 +1424,9 @@ export class OrcaRuntimeRpcServer {
     if (
       !this.enableWebSocket ||
       this.stopping ||
-      this.wsBoundHost === WS_BIND_HOST_ALL_INTERFACES
+      this.wsBoundHost === WS_BIND_HOST_ALL_INTERFACES ||
+      // Why: DWS-P2 (CTX-EXP-1) — a pinned bind host makes the pairing-time widen a permanent no-op.
+      this.pinnedBindHost !== null
     ) {
       return
     }
