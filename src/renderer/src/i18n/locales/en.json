@@ -16704,5 +16704,80 @@
     "composerHint": "Enter sends. Shift+Enter starts a new line.",
     "sending": "Working…",
     "send": "Send"
+  },
+  "resumeCenter": {
+    "preview": {
+      "label": "Last recorded screen of {{title}}",
+      "loading": "Reading…",
+      "snapshot": "Snapshot",
+      "none": "Nothing recorded",
+      "unreadable": "Recorded, but could not be read",
+      "notFound": "No longer on the desk",
+      "unavailable": "Preview unavailable"
+    },
+    "residency": {
+      "warm": "Running",
+      "dormant": "Sleeping",
+      "stopped": "Not running",
+      "unknown": "State unknown"
+    },
+    "resume": {
+      "exact": "Resumes the same session",
+      "unconfirmed": "Will try to resume the session",
+      "claimedElsewhere": "Session is open elsewhere"
+    },
+    "workspace": {
+      "missing": "Workspace no longer exists",
+      "sessions": "sessions",
+      "open": "Open",
+      "collapse": "Collapse",
+      "expand": "Expand"
+    },
+    "window": {
+      "bound": "Window",
+      "numbered": "Window {{number}}",
+      "none": "No window",
+      "unrecorded": "Window not recorded"
+    },
+    "breadcrumb": {
+      "workspace": "Workspace"
+    },
+    "title": "Resume Center",
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "sessions": "sessions on your desk",
+      "running": "running"
+    },
+    "refresh": "Refresh",
+    "search": "Search workspaces and sessions",
+    "sort": {
+      "window": "By window",
+      "recent": "Most recent"
+    },
+    "state": {
+      "loading": "Reading your desk…",
+      "unavailable": "This client does not hold a desk.",
+      "failed": "The desk could not be read.",
+      "noMatch": "Nothing matches that search.",
+      "empty": "No workspaces with sessions on this desk."
+    },
+    "summary": {
+      "title": "Desk summary",
+      "windows": "Windows",
+      "windowsUnrecorded": "Not recorded",
+      "workspaces": "Workspaces",
+      "sessions": "Sessions",
+      "panes": "Terminal panes",
+      "unreadable": "Could not be read"
+    },
+    "tip": {
+      "body": "Expand a workspace and a session to see the last recorded screen of each terminal. Previews come from saved history and never start a process.",
+      "dismiss": "Dismiss"
+    },
+    "tab": {
+      "panes": "{{count}} panes"
+    }
   }
 }

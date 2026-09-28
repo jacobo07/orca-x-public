@@ -14821,5 +14821,80 @@
         "noPlan": "このセッションはここでは再開できません。"
       }
     }
+  },
+  "resumeCenter": {
+    "preview": {
+      "label": "{{title}} の最後に記録された画面",
+      "loading": "読み込み中…",
+      "snapshot": "スナップショット",
+      "none": "記録なし",
+      "unreadable": "記録はありますが読み込めませんでした",
+      "notFound": "デスクにもうありません",
+      "unavailable": "プレビューを利用できません"
+    },
+    "residency": {
+      "warm": "実行中",
+      "dormant": "スリープ中",
+      "stopped": "停止中",
+      "unknown": "状態不明"
+    },
+    "resume": {
+      "exact": "同じセッションを再開します",
+      "unconfirmed": "セッションの再開を試みます",
+      "claimedElsewhere": "セッションは別の場所で開かれています"
+    },
+    "workspace": {
+      "missing": "ワークスペースはもう存在しません",
+      "sessions": "セッション",
+      "open": "開く",
+      "collapse": "折りたたむ",
+      "expand": "展開"
+    },
+    "window": {
+      "bound": "ウィンドウ",
+      "numbered": "ウィンドウ {{number}}",
+      "none": "ウィンドウなし",
+      "unrecorded": "ウィンドウは記録されていません"
+    },
+    "breadcrumb": {
+      "workspace": "ワークスペース"
+    },
+    "title": "再開センター",
+    "greeting": {
+      "morning": "おはようございます",
+      "afternoon": "こんにちは",
+      "evening": "こんばんは",
+      "sessions": "デスク上のセッション",
+      "running": "実行中"
+    },
+    "refresh": "更新",
+    "search": "ワークスペースとセッションを検索",
+    "sort": {
+      "window": "ウィンドウ順",
+      "recent": "最近"
+    },
+    "state": {
+      "loading": "デスクを読み込んでいます…",
+      "unavailable": "このクライアントにはデスクがありません。",
+      "failed": "デスクを読み込めませんでした。",
+      "noMatch": "一致するものはありません。",
+      "empty": "このデスクにはセッションのあるワークスペースがありません。"
+    },
+    "summary": {
+      "title": "デスクの概要",
+      "windows": "ウィンドウ",
+      "windowsUnrecorded": "記録なし",
+      "workspaces": "ワークスペース",
+      "sessions": "セッション",
+      "panes": "ターミナルペイン",
+      "unreadable": "読み込めませんでした"
+    },
+    "tip": {
+      "body": "ワークスペースとセッションを展開すると、各ターミナルの最後に記録された画面が表示されます。プレビューは保存済みの履歴から作られ、プロセスを起動することはありません。",
+      "dismiss": "閉じる"
+    },
+    "tab": {
+      "panes": "{{count}} ペイン"
+    }
   }
 }

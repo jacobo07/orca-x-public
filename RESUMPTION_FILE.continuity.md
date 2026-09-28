@@ -36,15 +36,18 @@ P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratche
 - DONE P2 `552dc32f4` `continuity:renderPanePreview` (main `src/main/continuity/pane-preview.ts`,
   caller names a pane; daemon history with ignoreCleanEnd / session ref; 7 tests, 6/6 mutations).
 - DONE P3a `22f49f14d` surface-claims gate reads `ClaimValue` too.
-- IN PROGRESS P3c: `src/renderer/src/components/resume-center/` — presenter written
-  (`resume-center-presentation.ts`, tone type `ContinuityTone`). Still to write: `resume-center-model.ts`
-  (+test), `use-desk-continuity.ts`, `use-pane-preview.ts`, `ClaimValue.tsx`, `PanePreviewThumb.tsx`,
-  `ResumeCenterTabRow.tsx`, `ResumeCenterWorkspaceSection.tsx`, `ResumeCenterSummaryPanel.tsx`,
-  `ResumeCenterPage.tsx`; keys `resumeCenter.*` in en/es/ja/ko/zh; register presenter + claims in
-  `config/workspace-surface-claims.jsonc` (+ surface root); new blue token in main.css (both themes +
-  @theme inline) for the D1 control. Then P3b plumbing: TopLevelView `resumeCenter` (+ top-level-view.ts
-  lookup), `openResumeCenter` in store/slices/ui.ts, lazy route in app-shell/AppWorkspaceShell.tsx, entry
-  button in ConversationsPage header, breadcrumb back.
+- P3c WRITTEN, UNCOMMITTED: all of `src/renderer/src/components/resume-center/` (presenter with tone
+  type `ContinuityTone`, model + test 5/5, two hooks, ClaimValue, PanePreviewThumb, TabRow,
+  WorkspaceSection, SummaryPanel, Page); `resumeCenter: true` in src/shared/top-level-view.ts; lazy
+  route in app-shell/AppWorkspaceShell.tsx. REMAINING before the commit: add `'resumeCenter'` to the
+  TopLevelView union (src/shared/ui-chrome-types.ts ~136); `openResumeCenter` in store/slices/ui.ts
+  (interface ~763, impl ~1559, same shape as openConversationsPage); entry button in the
+  ConversationsPage header; `resumeCenter.*` keys (grep the component folder for `translate('resumeCenter.`)
+  in en/es/ja/ko/zh; config/workspace-surface-claims.jsonc: add surface root
+  `src/renderer/src/components/resume-center`, presenter {module resume-center-presentation.ts, toneType
+  ContinuityTone}, a claim per ClaimValue testId (producer src/shared/desk-continuity-projection.ts#projectDesk,
+  absent "omitted"; resume-center-window-count absent resumeCenter.summary.windowsUnrecorded); then
+  fmt/lint/tsc x3/gate/tests. The blue D1 token belongs to P5 (the control lives there).
 - FINDINGS: workspace activation (`activateAndRevealWorktree` / `...FolderWorkspace`,
   lib/worktree-activation.ts:119,195) calls `resumeSleepingAgentSessionsForWorktree` — "Abrir" wakes
   sleeping agents, so P4 "Restore layout only" needs a no-wake activation option. Greeting name producer =
