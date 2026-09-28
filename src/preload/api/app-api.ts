@@ -8,6 +8,7 @@ import type {
 import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { ReloadFreezeFrame } from '../../shared/reload-freeze-frame'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
@@ -40,6 +41,10 @@ export type AppApi = {
   recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
   /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
+  /** The frame this window painted just before a deliberate reload, so the new document can show it
+   *  instead of a flash and an empty shell. Single-use and age-bounded in main: null on a cold
+   *  start, a crash recovery, or a second ask. */
+  takeReloadFreezeFrame: () => Promise<ReloadFreezeFrame | null>
   /** macOS active input mode, or layout ID when no IME is selected (e.g. `com.apple.keylayout.PolishPro`).
    *  Distinguishes CJK IMEs and Option-layer-composing layouts that look like US QWERTY (issue #1205).
    *  Returns null on non-Darwin or when the defaults read fails. */

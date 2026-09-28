@@ -9,6 +9,7 @@ import type { TerminalMenuCommand } from '../../shared/terminal-menu-command'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { requestParkFromMenu } from '../durable-exit/park-menu-command'
+import { reloadWithFreezeFrame } from '../window/reload-with-freeze-frame'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { buildAppearanceSubmenu } from './appearance-menu'
 import { buildTerminalMenu } from './terminal-menu'
@@ -46,10 +47,7 @@ type RegisterAppMenuOptions = {
   onZoomReset: (window?: Electron.BaseWindow | null) => void
   onToggleLeftSidebar: (window?: Electron.BaseWindow | null) => void
   onToggleRightSidebar: (window?: Electron.BaseWindow | null) => void
-  onTerminalCommand: (
-    command: TerminalMenuCommand,
-    window?: Electron.BaseWindow | null
-  ) => void
+  onTerminalCommand: (command: TerminalMenuCommand, window?: Electron.BaseWindow | null) => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -95,14 +93,9 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       return
     }
 
-    onBeforeReload?.({ ignoreCache, webContentsId: webContents.id })
-
-    if (ignoreCache) {
-      webContents.reloadIgnoringCache()
-      return
-    }
-
-    webContents.reload()
+    // Routed through the shared authority so the menu, the accelerator and the renderer's own
+    // `app:reload` all capture the freeze frame; a menu-local reload would flash.
+    void reloadWithFreezeFrame(webContents, { ignoreCache, onBeforeReload })
   }
 
   // Why: modifier-click update checks are hidden power-user affordances.
