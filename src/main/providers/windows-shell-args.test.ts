@@ -9,6 +9,10 @@ import {
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { getPowerShellStartupCommandBoundary } from '../powershell-osc133-bootstrap'
+import {
+  CMD_PROMPT_AFTER_EMBEDDED_STARTUP,
+  CMD_PROMPT_BEFORE_ANY_COMMAND
+} from './cmd-osc133-prompt'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 const CMD_CODEX_LAUNCH_PREFLIGHT =
@@ -65,7 +69,10 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       CODEX_LAUNCH_PREFLIGHT
     )
-    expect(result.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT}`])
+    expect(result.shellArgs).toEqual([
+      '/K',
+      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`
+    ])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice')
@@ -82,7 +89,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
     expect(result.shellArgs).toEqual([
       '/K',
-      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & codex --no-alt-screen`
+      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & codex --no-alt-screen & ${CMD_PROMPT_AFTER_EMBEDDED_STARTUP}`
     ])
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
@@ -97,7 +104,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       'cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"'
     )
-    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(result.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
@@ -110,7 +117,10 @@ describe('resolveWindowsShellLaunchArgs', () => {
       `codex ${'x'.repeat(7000)}`,
       CODEX_LAUNCH_PREFLIGHT
     )
-    expect(result.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT}`])
+    expect(result.shellArgs).toEqual([
+      '/K',
+      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`
+    ])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 

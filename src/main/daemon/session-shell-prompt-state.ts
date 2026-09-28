@@ -26,6 +26,11 @@ export class SessionShellPromptState {
     this.input.noteWrite(data)
   }
 
+  /** The host typed a command line itself; see `ShellPromptStateTracker.noteSubmittedCommand`. */
+  noteSubmittedCommand(): void {
+    this.tracker.noteSubmittedCommand()
+  }
+
   read(): ShellPromptState {
     return resolveShellPromptState(this.tracker, this.trust())
   }

@@ -120,6 +120,7 @@ import {
   type LocalPtyMockProcess
 } from './local-pty-provider-test-harness'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
+import { CMD_PROMPT_BEFORE_ANY_COMMAND } from './cmd-osc133-prompt'
 
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
@@ -571,6 +572,41 @@ describe('LocalPtyProvider', () => {
       )
     })
 
+    it('brackets a typed cmd.exe startup line so its finish is a trusted prompt', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({ getWindowsShell: () => 'cmd.exe' })
+      vi.useFakeTimers()
+      try {
+        const { id } = await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo',
+          command: 'claude "--resume" "abc"'
+        })
+        const emit = mockProc.onData.mock.calls[0][0] as (data: string) => void
+        const tagged = (payload: string): string => `\x1b]133;${payload};orca\x1b\\`
+        // cmd's first prompt can land after Orca queued the line; it proves nothing ran.
+        emit(`${tagged('A')}C:\\Users\\jin\\repo>`)
+        for (let i = 0; i < 40 && mockProc.write.mock.calls.length === 0; i++) {
+          await vi.advanceTimersByTimeAsync(100)
+        }
+        expect(mockProc.write).toHaveBeenCalledWith(
+          'claude "--resume" "abc" & prompt $e]133;D;;orca$e\\%PROMPT%\r'
+        )
+        expect((await provider.inspectProcess(id)).promptState).toBe('running')
+        emit(`${tagged('D;')}${tagged('A')}C:\\Users\\jin\\repo>`)
+        const settled = await provider.inspectProcess(id)
+        expect(settled.promptState).toBe('prompt')
+        expect(settled.inputSincePrompt).toBe('clean')
+      } finally {
+        vi.useRealTimers()
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
+
     it('runs the Codex preflight once in the cmd.exe startup chain', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -594,7 +630,7 @@ describe('LocalPtyProvider', () => {
         'cmd.exe',
         [
           '/K',
-          'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+          `chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1 & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`
         ],
         expect.objectContaining({
           env: expect.objectContaining({

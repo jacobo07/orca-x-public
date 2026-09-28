@@ -1,4 +1,5 @@
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import { isCmdShellPath, withCmdCommandFinishedPrompt } from '../providers/cmd-osc133-prompt'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
 import { normalizePtySize } from './daemon-pty-size'
@@ -145,11 +146,14 @@ async function spawnAndPublishSession(
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(
-      buildStartupCommandSubmission(opts.command, {
+      buildStartupCommandSubmission(withCmdCommandFinishedPrompt(opts.command, subprocess.shellPath), {
         submit,
         bracketedPasteSafe: shellReadySupported
       })
     )
+    if (isCmdShellPath(subprocess.shellPath)) {
+      session.shellPromptState.noteSubmittedCommand()
+    }
   }
 
   return {

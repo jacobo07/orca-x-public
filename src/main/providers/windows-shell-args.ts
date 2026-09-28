@@ -14,6 +14,7 @@ import {
   getPowerShellStartupCommandBoundary
 } from '../powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
+import { CMD_PROMPT_AFTER_EMBEDDED_STARTUP, CMD_PROMPT_BEFORE_ANY_COMMAND } from './cmd-osc133-prompt'
 
 const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
@@ -187,10 +188,13 @@ export function resolveWindowsShellLaunchArgs(
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
+    // Why: cmd emits OSC 133 only through PROMPT; a D may appear only once a command returned.
     const startupCommands = [
       CMD_UTF8_SETUP_COMMAND,
       ...(codexLaunchPreflightCommand ? [CMD_CODEX_LAUNCH_PREFLIGHT] : []),
-      ...(shellArgStartupCommand ? [shellArgStartupCommand] : [])
+      ...(shellArgStartupCommand
+        ? [shellArgStartupCommand, CMD_PROMPT_AFTER_EMBEDDED_STARTUP]
+        : [CMD_PROMPT_BEFORE_ANY_COMMAND])
     ]
     return {
       shellArgs: ['/K', startupCommands.join(' & ')],
