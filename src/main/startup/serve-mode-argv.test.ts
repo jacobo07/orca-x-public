@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   argvRequestsServeMode,
   findServeSubcommandIndex,
-  normalizeServeModeArgv
+  normalizeServeModeArgv,
+  parseServeBindHost
 } from './serve-mode-argv'
 
 describe('serve-mode-argv', () => {
@@ -204,5 +205,32 @@ describe('serve-mode-argv', () => {
     walk([])
 
     expect(disagreements).toEqual([])
+  })
+
+  it('rewrites --bind-host into --serve-bind-host and does not treat its value as positional (DWS-P2)', () => {
+    expect(
+      normalizeServeModeArgv(['/AppRun', 'serve', '--bind-host', '127.0.0.1', '--port', '6791'])
+    ).toEqual(['/AppRun', '--serve', '--serve-bind-host', '127.0.0.1', '--serve-port', '6791'])
+    // Why: the IP literal after --bind-host must be consumed as a value, never mistaken for a
+    // later `serve` subcommand or positional (mirrors the existing --user-data-dir case).
+    expect(findServeSubcommandIndex(['app', '--bind-host', 'serve'])).toBe(-1)
+  })
+
+  it('parseServeBindHost accepts IP literals and localhost, rejects everything else (DWS-P2)', () => {
+    expect(parseServeBindHost(null)).toBeNull()
+    expect(parseServeBindHost('127.0.0.1')).toBe('127.0.0.1')
+    expect(parseServeBindHost('::1')).toBe('::1')
+    expect(parseServeBindHost('localhost')).toBe('localhost')
+    // Why 0.0.0.0 is accepted: it is a deliberate, explicit operator choice (all-interfaces bind
+    // via the same option), distinct from the implicit exposeNetworkByDefault default.
+    expect(parseServeBindHost('0.0.0.0')).toBe('0.0.0.0')
+
+    expect(() => parseServeBindHost('example.com')).toThrow(
+      'Invalid --serve-bind-host value: example.com'
+    )
+    expect(() => parseServeBindHost('127.0.0.1:6791')).toThrow(
+      'Invalid --serve-bind-host value: 127.0.0.1:6791'
+    )
+    expect(() => parseServeBindHost('   ')).toThrow('Invalid --serve-bind-host value:    ')
   })
 })
