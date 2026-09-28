@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { mintAgentId } from '../../shared/agent-identity'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { ConversationService } from './conversation-service'
 import { routeConversationTurn, type ConversationProviderEntry } from './conversation-provider-routing'
@@ -117,8 +118,42 @@ describe('routeConversationTurn', () => {
     })
 
     expect(preferred).toMatchObject({ outcome: 'routed', entry: { provider: 'codex' } })
-    expect(needed).toMatchObject({ outcome: 'refused' })
-    expect(needed.skipped.map((skip) => skip.provider)).toEqual(['claude', 'codex'])
+    // Codex could serve the tools and is only signed out: signing in fixes it, so it is not absent.
+    expect(needed).toMatchObject({ outcome: 'auth-required', entry: { provider: 'codex' } })
+    expect(needed.skipped.map((skip) => [skip.provider, skip.kind])).toEqual([
+      ['claude', 'capability'],
+      ['codex', 'auth']
+    ])
+  })
+
+  it('answers auth-required, not refused, when signing in is all that stands in the way', async () => {
+    const route = await routeConversationTurn({
+      entries: [
+        entry('codex', { auth: SIGNED_OUT }),
+        entry('claude', { auth: { ready: false, detail: 'claude credential is absent' } })
+      ],
+      requirement: {},
+      quota: new ProviderQuotaObservations(),
+      now
+    })
+
+    expect(route).toMatchObject({ outcome: 'auth-required', entry: { provider: 'codex' } })
+    expect(route.skipped.map((skip) => skip.kind)).toEqual(['auth', 'auth'])
+  })
+
+  it('refuses only when a reason sign-in would not fix blocks every provider', async () => {
+    const quota = new ProviderQuotaObservations()
+    quota.record('claude', { status: 'rejected', utilization: 1, resetsAtMs: now + 60_000 }, now)
+
+    const route = await routeConversationTurn({
+      entries: [entry('codex'), entry('claude')],
+      requirement: { exclude: ['codex'] },
+      quota,
+      now
+    })
+
+    expect(route).toMatchObject({ outcome: 'refused' })
+    expect(route.skipped.map((skip) => skip.kind)).toEqual(['excluded', 'quota'])
   })
 
   it('never routes to an excluded provider', async () => {
@@ -182,24 +217,67 @@ describe('runRoutedConversationTurn', () => {
     })
   })
 
-  it('refuses with every reason and commits nothing when no provider can run the turn', async () => {
+  // Inverted in place. It used to pin `no-provider` with nothing committed for this exact input: an
+  // installed provider that was only signed out was reported absent, and the user's message dropped.
+  it('asks for sign-in naming every provider, and keeps the message, when every provider is signed out', async () => {
     const conversation = await service.create({})
+    const calls: ProviderTurnRequest[] = []
 
     const result = await runRoutedConversationTurn(
       deps([
-        entry('codex', { auth: SIGNED_OUT }),
-        entry('claude', { auth: { ready: false, detail: 'claude credential is absent' } })
+        entry('codex', { auth: SIGNED_OUT, calls }),
+        entry('claude', { auth: { ready: false, detail: 'claude credential is absent' }, calls })
       ]),
       { conversationId: conversation.id, text: 'hello', cwd: null }
     )
 
     expect(result.turn).toEqual({
+      outcome: 'auth-required',
+      detail: 'sign in to run this turn (codex: codex credential is no-credential; claude: claude credential is absent)'
+    })
+    expect(result.provider).toBe('codex')
+    expect(calls).toEqual([])
+    const loaded = await service.read(conversation.id)
+    expect(loaded.outcome === 'loaded' && loaded.record.messages.map((m) => m.role)).toEqual(['user'])
+  })
+
+  it('still refuses with every reason and commits nothing when no sign-in could help', async () => {
+    const conversation = await service.create({})
+
+    const result = await runRoutedConversationTurn(
+      deps([entry('codex', { auth: SIGNED_OUT }), entry('claude')]),
+      { conversationId: conversation.id, text: 'hello', cwd: null },
+      { exclude: ['codex', 'claude'] }
+    )
+
+    expect(result.turn).toEqual({
       outcome: 'no-provider',
-      detail:
-        'no provider can run this turn (codex: codex credential is no-credential; claude: claude credential is absent)'
+      detail: 'no provider can run this turn (codex: excluded for this turn; claude: excluded for this turn)'
     })
     const loaded = await service.read(conversation.id)
     expect(loaded.outcome === 'loaded' && loaded.record.messages).toEqual([])
+  })
+
+  it('checks the agent project before sign-in, so a signed-out provider cannot mask an unplaceable turn', async () => {
+    const agent = { id: mintAgentId(), name: 'Ada', role: 'r', projectId: 'p1', createdAt: 1, updatedAt: 1 }
+    const agentService = new ConversationService(() => join(root, 'agent-conversations'), {
+      readAgents: () => [agent]
+    })
+    const created = await agentService.createForAgent({ agentId: agent.id, title: 'Ada' })
+    if (created.outcome !== 'created') {
+      throw new Error(`precondition: ${created.outcome}`)
+    }
+
+    const result = await runRoutedConversationTurn(
+      {
+        ...deps([entry('codex', { auth: SIGNED_OUT })]),
+        service: agentService,
+        resolveProjectLocation: () => ({ outcome: 'unresolved' as const, projectId: 'p1' })
+      },
+      { conversationId: created.record.id, text: 'hello', cwd: null }
+    )
+
+    expect(result.turn).toMatchObject({ outcome: 'project-unavailable', projectId: 'p1', reason: 'unresolved' })
   })
 
   it('stays on the provider a conversation already uses', async () => {

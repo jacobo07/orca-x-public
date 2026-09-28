@@ -22,7 +22,7 @@ export type RoutedTurnDeps = Omit<ConversationTurnDeps, 'driver' | 'checkAuth'> 
 
 export type RoutedTurnResult = {
   turn: ConversationTurnOutcome
-  /** Null when no provider could run the turn. */
+  /** Null when no provider could run the turn; on auth-required, the one that would run it. */
   provider: ProviderType | null
   route: string
 }
@@ -46,10 +46,18 @@ export async function runRoutedConversationTurn(
   if (route.outcome === 'refused') {
     return { turn: { outcome: 'no-provider', detail: explained }, provider: null, route: explained }
   }
-  deps.emit(request.conversationId, { kind: 'provider-status', status: 'routed', detail: explained })
-  const turn = await runConversationTurn(
-    { ...deps, driver: route.entry.driver, checkAuth: route.entry.checkAuth },
-    request
-  )
+  // Signed out is not absent: the runner keeps its own order (project gate, durable message, auth)
+  // and answers auth-required naming every provider. Re-asked there, so a sign-in meanwhile counts.
+  const checkAuth: ConversationTurnDeps['checkAuth'] =
+    route.outcome === 'routed'
+      ? route.entry.checkAuth
+      : async () => {
+          const auth = await route.entry.checkAuth()
+          return auth.ready ? auth : { ready: false, detail: explained }
+        }
+  if (route.outcome === 'routed') {
+    deps.emit(request.conversationId, { kind: 'provider-status', status: 'routed', detail: explained })
+  }
+  const turn = await runConversationTurn({ ...deps, driver: route.entry.driver, checkAuth }, request)
   return { turn, provider: route.entry.provider, route: explained }
 }

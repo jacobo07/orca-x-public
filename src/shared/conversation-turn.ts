@@ -42,7 +42,8 @@ export type ConversationTurnOutcome =
       detail: string
     }
   | { outcome: 'auth-required'; detail: string }
-  /** No provider could run the turn (signed out, quota exhausted, lacking a required capability).
+  /** No provider could run the turn for a reason sign-in would not fix (excluded, quota exhausted,
+   *  lacking a required capability). A signed-out provider is `auth-required`, never this.
    *  Refused before anything was committed or sent; `detail` names every provider's reason. */
   | { outcome: 'no-provider'; detail: string }
   /** The provider cannot run on the host at all: install it, or update it. Not a failed turn. */
