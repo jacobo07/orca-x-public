@@ -12,14 +12,16 @@ import {
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import type { Agent } from '../../../../shared/agent-types'
-import type { Project } from '../../../../shared/project-types'
+
+import type { AgentProjectChoice } from './agent-project-choices'
+import { AgentProjectPicker } from './AgentProjectPicker'
 
 /**
  * Creating an agent. Three fields, because the record owns three things.
  *
- * The project select is a plain <select> rather than the styled Select primitive: it is one
- * required choice from a list the user already knows, and a native control is keyboard-operable
- * and screen-reader-correct without anything being wired for it.
+ * The project is chosen with Orca's picker, not a native <select>: the platform draws a native
+ * popup from color-scheme, and in the dark theme it opened as a light list of white-on-white
+ * names. The picker keeps keyboard and screen-reader operation through the Command primitive.
  *
  * "No project" is an explicit option, not a fallback. `Agent.projectId` is `string | null` and its
  * own comment says null means "an agent owned by no project", so refusing it would contradict the
@@ -32,19 +34,17 @@ type Submission =
   | { status: 'saving' }
   | { status: 'refused'; message: string }
 
-const NO_PROJECT = '__none__'
-
 export function NewAgentDialog(props: {
   open: boolean
-  projects: readonly Project[]
+  projectChoices: readonly AgentProjectChoice[]
   defaultProjectId: string | null
   onOpenChange: (open: boolean) => void
   onCreated: (agent: Agent) => void
 }): React.JSX.Element {
-  const { open, projects, defaultProjectId, onOpenChange, onCreated } = props
+  const { open, projectChoices, defaultProjectId, onOpenChange, onCreated } = props
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
-  const [projectId, setProjectId] = useState<string>(defaultProjectId ?? NO_PROJECT)
+  const [projectId, setProjectId] = useState<string | null>(defaultProjectId)
   const [submission, setSubmission] = useState<Submission>({ status: 'idle' })
   const nameRef = useRef<HTMLInputElement | null>(null)
 
@@ -56,7 +56,7 @@ export function NewAgentDialog(props: {
     // the user their own text disappearing.
     setName('')
     setRole('')
-    setProjectId(defaultProjectId ?? NO_PROJECT)
+    setProjectId(defaultProjectId)
     setSubmission({ status: 'idle' })
   }, [open, defaultProjectId])
 
@@ -73,13 +73,9 @@ export function NewAgentDialog(props: {
 
     let result
     try {
-      result = await window.api.agents.create({
-        name,
-        role,
-        // Always explicit. The host refuses an absent binding rather than reading it as "no
-        // project", so this must say which of the two it means.
-        projectId: projectId === NO_PROJECT ? null : projectId
-      })
+      // Always explicit. The host refuses an absent binding rather than reading it as "no
+      // project", so this must say which of the two it means.
+      result = await window.api.agents.create({ name, role, projectId })
     } catch (error) {
       setSubmission({
         status: 'refused',
@@ -160,22 +156,12 @@ export function NewAgentDialog(props: {
             <label className="text-sm" htmlFor="new-agent-project">
               {translate('agents.create.projectLabel', 'Project')}
             </label>
-            <select
+            <AgentProjectPicker
               id="new-agent-project"
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+              choices={projectChoices}
               value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
-              data-testid="new-agent-project"
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.displayName}
-                </option>
-              ))}
-              <option value={NO_PROJECT}>
-                {translate('agents.create.noProject', 'No project')}
-              </option>
-            </select>
+              onValueChange={setProjectId}
+            />
           </div>
 
           {submission.status === 'refused' ? (

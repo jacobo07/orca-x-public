@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
+import { pickNewAgentProject } from './helpers/new-agent-project-picker'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { waitForActivePaneHookDescriptor } from './helpers/terminal'
@@ -20,7 +21,7 @@ async function createAgent(page: Page, name: string): Promise<string> {
   await page.getByTestId('workspace-new-agent').click()
   await page.getByTestId('new-agent-name').fill(name)
   await page.getByTestId('new-agent-role').fill('approval probe')
-  await page.getByTestId('new-agent-project').selectOption({ index: 0 })
+  await pickNewAgentProject(page, 'first')
   await page.getByTestId('new-agent-submit').click()
   await expect(page.getByTestId('new-agent-dialog')).toHaveCount(0)
   await expect(page.getByTestId('agent-chat-name')).toHaveText(name)

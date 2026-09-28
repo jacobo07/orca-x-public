@@ -11,6 +11,7 @@ import type { ConversationSummary } from '../../../../shared/conversation-summar
 import type { ConversationRecord } from '../../../../shared/conversation-types'
 import { resolveDefaultProjectId } from '../agents/default-agent-project'
 import { NewAgentDialog } from '../agents/NewAgentDialog'
+import { useAgentProjectChoices } from '../agents/use-agent-project-choices'
 import { NativeChatMessageList } from '../native-chat/NativeChatMessageList'
 
 import { AgentChatHeader } from './AgentChatHeader'
@@ -51,6 +52,7 @@ export default function ConversationsPage(): React.JSX.Element {
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
   const projects = useAppStore((s) => s.projects)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const projectChoices = useAgentProjectChoices()
   const roster = useWorkspaceAgents(agentScope)
   const [summaries, setSummaries] = useState<readonly ConversationSummary[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -354,7 +356,7 @@ export default function ConversationsPage(): React.JSX.Element {
     >
       <NewAgentDialog
         open={newAgentOpen}
-        projects={projects}
+        projectChoices={projectChoices}
         defaultProjectId={resolveDefaultProjectId(activeRepoId, projects)}
         onOpenChange={setNewAgentOpen}
         onCreated={(agent) => {
