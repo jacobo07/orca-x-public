@@ -12410,6 +12410,92 @@
       "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
     },
     {
+      "id": "terminal-render.visible-pane-painted-liveness",
+      "title": "A visible pane whose model advances but whose canvas stops painting is flagged and recovered",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": ["WebGL rendering", "render loop", "visible pane liveness", "terminal recovery"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": [],
+      "coverageNotes": "Windows coverage is unit-level only: the layered liveness judge (received, parsed, presented, painted) on the merged stability branch. The composited-pixel recovery spec exists (tests/e2e/terminal-visible-pane-paint-recovery.spec.ts, @headful) but has not been run on this branch, so no real-app platform or provider is claimed. Distinct from terminal-render.pixel-refresh-repair, whose buffer-vs-pixels staleness invariant this gate does not test.",
+      "motivatingLinks": ["https://github.com/jacobo07/orca-x/pull/5"],
+      "invariant": "Progress at one layer is never taken as progress at the next: when a visible pane's model advances and its render loop keeps running but the painted-pixel signature stops changing, the pane is judged output-not-painted and recovered; a pane that is idle, off screen, or whose pixels cannot be read is never judged.",
+      "oracle": "Drive the judge with a fake terminal whose model sequence advances while its paint signature is frozen, and require an output-not-painted verdict after the recovery streak; controls: a pane that paints every frame, a null signature, and a quiet tick are never flagged, and a stopped render loop outranks paint.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts",
+        "src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts",
+        "src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts",
+          "assertions": [
+            "flags a pane whose render loop runs while its canvas paints nothing",
+            "never flags a pane that paints every frame (control)",
+            "never judges pixels it is not entitled to judge",
+            "still flags the render loop stopping, which outranks paint"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts",
+          "assertions": [
+            "flags a pane that keeps parsing while its canvas stops presenting",
+            "never flags a pane that parses and presents (negative control)"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts",
+          "assertions": [
+            "flags bytes received but never parsed",
+            "treats unknown model progress as unknown, never as a stall"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-28",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts",
+          "result": "passed",
+          "durationSeconds": 11,
+          "summary": "25/25 on orca-x/stability-closure (origin/main 14dfd2d56 merged with the painted-liveness chain 0d21c867b)."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "three renderer unit files"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One local run; no CI executor has run since 2026-09-13, so no repeated history exists."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Replacing the paintStalled branch of the verdict with false turned exactly 'flags a pane whose render loop runs while its canvas paints nothing' red (24 green), byte-exact restore. The composited-pixel E2E red branch is not yet run on this branch."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The paint signature is one downscaled sample taken inside onRender and judged on the existing watchdog tick; no new timer or readback surface is added by this gate."
+      },
+      "promotionCriteria": [
+        "Run tests/e2e/terminal-visible-pane-paint-recovery.spec.ts (@headful) on Linux under xvfb and on Windows, with its red branch, and record both.",
+        "Accumulate CI evidence once a runner is assigned again."
+      ],
+      "knownGaps": [
+        "Composited-pixel recovery E2E not yet run on this branch.",
+        "No CI evidence: runners unassigned since 2026-09-13."
+      ],
+      "demotionRule": "Demote to protection none if the painted-liveness test stops failing with the paint verdict removed, or if the judge starts flagging idle or off-screen panes."
+    },
+    {
       "id": "pty-delivery.renderer-lifecycle-accounting-reset",
       "title": "Renderer lifecycle reset clears leaked PTY delivery accounting so surviving PTYs cannot freeze",
       "maturity": "experimental",
