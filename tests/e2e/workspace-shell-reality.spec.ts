@@ -92,6 +92,31 @@ test('Workspace owns its shell and shows the running agent and the project estat
     // One Escape per layer: the popover's layer stays registered until its exit animation ends.
     await page.keyboard.press('Escape')
     await expect(projectList).toHaveCount(0)
+
+    // The defect was a light native list in a dark window: the list must be dark in dark mode.
+    await page.evaluate(() => window.__store!.getState().updateSettingsOrThrow({ theme: 'dark' }))
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+      .toBe(true)
+    await page.getByTestId('new-agent-project').click()
+    await expect(projectList).toBeVisible()
+    await settleAnimations(page)
+    const darkPaint = await projectList.evaluate((list) => {
+      // Canvas resolves any CSS color space (tokens may be oklch) to sRGB bytes.
+      const context = document.createElement('canvas').getContext('2d')!
+      context.fillStyle = getComputedStyle(list).backgroundColor
+      context.fillRect(0, 0, 1, 1)
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data
+      return {
+        colorScheme: getComputedStyle(document.documentElement).colorScheme,
+        luminance: (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+      }
+    })
+    expect(darkPaint.colorScheme).toBe('dark')
+    expect(darkPaint.luminance).toBeLessThan(0.3)
+    await page.screenshot({ path: testInfo.outputPath('workspace-project-picker-dark.png') })
+    await page.keyboard.press('Escape')
+    await expect(projectList).toHaveCount(0)
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('new-agent-dialog')).toHaveCount(0)
 
