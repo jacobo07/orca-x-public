@@ -268,3 +268,87 @@ describe('runtime graph ownership across windows', () => {
     expect(focusA).not.toHaveBeenCalled()
   })
 })
+
+describe('a target no window owns, with two windows', () => {
+  const WT_UNPLACED = 'repo-1::/tmp/worktree-new'
+
+  function spyNotifier() {
+    const notifier = { ...makeNotifier(vi.fn()) }
+    for (const key of Object.keys(notifier) as (keyof RuntimeNotifier)[]) {
+      ;(notifier as Record<string, unknown>)[key] = vi.fn()
+    }
+    return notifier as unknown as Record<
+      'activateWorktree' | 'closeTerminal' | 'terminalDriverChanged' | 'focusTerminal',
+      ReturnType<typeof vi.fn>
+    > &
+      RuntimeNotifier
+  }
+
+  function twoWindows() {
+    const { runtime, internals } = createRuntime()
+    const a = spyNotifier()
+    const b = spyNotifier()
+    runtime.attachWindow(WINDOW_A)
+    publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
+    runtime.setNotifier(a, WINDOW_A)
+    runtime.attachWindow(WINDOW_B)
+    publish(runtime, WINDOW_B, 'gen-b', [tab('tab-b', WT_B)], [leaf('tab-b', WT_B, 'leaf-b')])
+    runtime.setNotifier(b, WINDOW_B)
+    return { runtime, internals, a, b }
+  }
+
+  it('activates a new worktree in exactly one window — the one last focused', () => {
+    const { runtime, internals, a, b } = twoWindows()
+    runtime.noteWindowFocused(WINDOW_B)
+
+    internals.notifier?.activateWorktree('repo-1', WT_UNPLACED)
+
+    // Every window used to receive it, so each ran the worktree's setup and startup launch.
+    expect(a.activateWorktree).not.toHaveBeenCalled()
+    expect(b.activateWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses to close a tab no window holds, and says so', () => {
+    const { internals, a, b } = twoWindows()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    internals.notifier?.closeTerminal('tab-nobody-has')
+
+    expect(a.closeTerminal).not.toHaveBeenCalled()
+    expect(b.closeTerminal).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('refused closeTerminal'))
+    warn.mockRestore()
+  })
+
+  it('still sends a placed target to its owner only', () => {
+    const { internals, a, b } = twoWindows()
+
+    internals.notifier?.closeTerminal('tab-a')
+
+    expect(a.closeTerminal).toHaveBeenCalledTimes(1)
+    expect(b.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('still broadcasts a notification about an unplaced terminal', () => {
+    const { internals, a, b } = twoWindows()
+
+    internals.notifier?.terminalDriverChanged('pty-unplaced', { kind: 'idle' } as never)
+
+    expect(a.terminalDriverChanged).toHaveBeenCalledTimes(1)
+    expect(b.terminalDriverChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps one window’s behaviour byte-identical: an unplaced worktree goes to that window', () => {
+    const { runtime, internals } = createRuntime()
+    const only = spyNotifier()
+    runtime.attachWindow(WINDOW_A)
+    publish(runtime, WINDOW_A, 'gen-a', [tab('tab-a', WT_A)], [leaf('tab-a', WT_A, 'leaf-a')])
+    runtime.setNotifier(only, WINDOW_A)
+
+    internals.notifier?.activateWorktree('repo-1', WT_UNPLACED)
+    internals.notifier?.closeTerminal('tab-nobody-has')
+
+    expect(only.activateWorktree).toHaveBeenCalledTimes(1)
+    expect(only.closeTerminal).toHaveBeenCalledTimes(1)
+  })
+})
