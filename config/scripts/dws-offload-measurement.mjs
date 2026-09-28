@@ -1,3 +1,7 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 /**
  * Pure analysis functions for the DWS-P2 local RAM offload measurement instrument (CTX-MEAS-1..4).
  *
@@ -468,4 +472,132 @@ export function summarizeLatencies(values, { instrument, resolutionMs } = {}) {
     instrument,
     resolutionMs
   }
+}
+
+// --- CLI (summarize / compare / latency) -----------------------------------------------------
+// Guarded by an import.meta.url check so `import`ing this module for its pure functions (as the
+// test file does) never triggers CLI side effects.
+
+function parseCliArgs(args) {
+  const options = {}
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg.startsWith('--')) {
+      options[arg.slice(2)] = args[i + 1]
+      i += 1
+    }
+  }
+  return options
+}
+
+function readTextFileOrExit(filePath, label) {
+  if (!filePath) {
+    process.stderr.write(`UNREADABLE INPUT: ${label} not provided\n`)
+    process.exit(2)
+  }
+  try {
+    return fs.readFileSync(filePath, 'utf8')
+  } catch (error) {
+    process.stderr.write(`UNREADABLE INPUT: ${label} (${filePath}): ${error.message}\n`)
+    process.exit(2)
+  }
+}
+
+function readJsonFileOrExit(filePath, label) {
+  const text = readTextFileOrExit(filePath, label)
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    process.stderr.write(`UNREADABLE INPUT: ${label} is not valid JSON (${filePath}): ${error.message}\n`)
+    process.exit(2)
+  }
+}
+
+function writeJsonOutputIfRequested(outPath, value) {
+  if (outPath) {
+    fs.writeFileSync(outPath, JSON.stringify(value, null, 2))
+  }
+}
+
+function runSummarizeCommand(options) {
+  const samplesText = readTextFileOrExit(options.samples, 'samples file')
+  const manifest = readJsonFileOrExit(options.manifest, 'manifest file')
+  const parsed = parseSamples(samplesText)
+  const summary = summarizeRun(parsed.samples, {
+    desktopRootPid: manifest.desktopRootPid,
+    nonce: manifest.nonce,
+    harnessRootPids: manifest.harnessRootPids ?? [],
+    unreadableLines: parsed.unreadableLines
+  })
+  writeJsonOutputIfRequested(options.out, summary)
+  process.stdout.write(
+    `SUMMARY observedCadenceMs=${summary.cadence.medianMs ?? 'null'} unreadableLines=${summary.unreadableLines} totalLines=${parsed.totalLines}\n`
+  )
+  // CTX-MEAS-3: print the family patterns beside every count, so "0 processes for family X" is
+  // never a bare claim.
+  for (const pattern of summary.patterns) {
+    const entry = summary.perFamily[pattern.family]
+    process.stdout.write(
+      `FAMILY ${pattern.family} maxCount=${entry ? entry.maxCount : 0} peakMb=${entry ? entry.peakMb : 0} medianMb=${entry ? entry.medianMb : 0} rules=${JSON.stringify(pattern.rules)}\n`
+    )
+  }
+  const nonceEntry = summary.perFamily.nonce
+  if (nonceEntry) {
+    process.stdout.write(`FAMILY nonce maxCount=${nonceEntry.maxCount} peakMb=${nonceEntry.peakMb} medianMb=${nonceEntry.medianMb}\n`)
+  }
+  const controlSurfaceEntry = summary.perFamily['control-surface']
+  if (controlSurfaceEntry) {
+    process.stdout.write(
+      `FAMILY control-surface maxCount=${controlSurfaceEntry.maxCount} peakMb=${controlSurfaceEntry.peakMb} medianMb=${controlSurfaceEntry.medianMb}\n`
+    )
+  }
+}
+
+function runCompareCommand(options) {
+  const baseline = readJsonFileOrExit(options.baseline, 'baseline summary file')
+  const offload = readJsonFileOrExit(options.offload, 'offload summary file')
+  const delta = computeDelta(baseline, offload)
+  writeJsonOutputIfRequested(options.out, delta)
+  process.stdout.write(
+    `COMPARE workloadTotalPeakDeltaMb=${delta.workloadTotalDelta.peakDeltaMb} workloadTotalMedianDeltaMb=${delta.workloadTotalDelta.medianDeltaMb}\n`
+  )
+}
+
+function runLatencyCommand(options) {
+  const values = readJsonFileOrExit(options.values, 'latency values file')
+  const resolutionMs = options['resolution-ms'] !== undefined ? Number(options['resolution-ms']) : undefined
+  const result = summarizeLatencies(values, { instrument: options.instrument, resolutionMs })
+  writeJsonOutputIfRequested(options.out, result)
+  process.stdout.write(`LATENCY verdict=${result.verdict} medianMs=${result.medianMs ?? 'null'} iqrMs=${result.iqrMs ?? 'null'}\n`)
+}
+
+async function runCli(argv) {
+  const [command, ...rest] = argv
+  const options = parseCliArgs(rest)
+  if (command === 'summarize') {
+    return runSummarizeCommand(options)
+  }
+  if (command === 'compare') {
+    return runCompareCommand(options)
+  }
+  if (command === 'latency') {
+    return runLatencyCommand(options)
+  }
+  process.stderr.write(`Unknown command: ${command}. Expected one of: summarize, compare, latency\n`)
+  process.exit(2)
+}
+
+function isRunAsCli() {
+  if (!process.argv[1]) {
+    return false
+  }
+  try {
+    return path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  } catch {
+    return false
+  }
+}
+
+if (isRunAsCli()) {
+  await runCli(process.argv.slice(2))
 }
