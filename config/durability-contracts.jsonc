@@ -47,11 +47,13 @@
       "writer": "src/main/runtime/e2ee-keypair.ts",
       "tier": "crash-durable",
       "lostIf": "Every paired device at once. The key was published by a rename with no fsync, so a power loss could leave a zero-length file; the loader then caught the parse failure and minted a fresh keypair, which changes the fingerprint. Each paired device holds a shared secret derived from the old public key and a device registry keyed to a host that no longer exists, so pairing fails with nothing to explain it. The loader now refuses a file it cannot use instead of replacing it, and discarding the identity is an explicit act (forgetHostIdentity).",
+      "onFailure": "Three answers, and none replaces the key. A mint whose durable write fails throws the storage error (code intact); no in-memory key is returned, so a failed write cannot become an unpersisted identity, and pairing reports e2ee_key_unavailable with the check-writability guidance. A file that parses as invalid throws E2EEKeypairUnusableError (damaged: re-pair is the explicit recovery). A file that could not be READ — a lock, a permission, an I/O error — throws E2EEKeypairUnreadableError with its code, and the guidance says nothing was replaced; it used to collapse into 'damaged', whose advice to re-pair would have replaced a key that may have been fine. Proven by src/main/runtime/e2ee-keypair.test.ts (injected ENOSPC with firing proof; real EISDIR read fault).",
       "provenBy": ["src/main/runtime/e2ee-keypair.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see the comment in shared/secure-file.ts), so on Windows the barrier proves the file's contents reached disk before the rename, not that the rename itself survives a power loss.",
         "<userData>/orca-devices.json, the paired-device registry keyed to this identity, is still published by the non-durable writeSecureJsonFile and carries no contract of its own. It is downstream of this key rather than the root, and is not fixed here.",
-        "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind."
+        "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind.",
+        "The side-effect-free observer readE2EEPublicKey still answers null for both 'invalid' and 'could not be read'; only the loader, which decides guidance and replacement, keeps them apart."
       ]
     },
     {

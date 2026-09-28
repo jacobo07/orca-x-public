@@ -36,25 +36,51 @@ export class E2EEKeypairUnusableError extends Error {
   }
 }
 
-/** `null` for a file that exists and cannot be used; never throws. */
-function readKeypairFile(filePath: string): E2EEKeypair | null {
+/**
+ * A key file that exists but could not be READ — a lock, a permission, an I/O error. Its contents
+ * are unknown, not damaged, so the only safe advice is to retry; telling the Owner to re-pair would
+ * replace a key that may be perfectly good.
+ */
+export class E2EEKeypairUnreadableError extends Error {
+  constructor(
+    readonly keypairPath: string,
+    readonly code: string
+  ) {
+    super(`E2EE keypair at ${keypairPath} could not be read (${code})`)
+    this.name = 'E2EEKeypairUnreadableError'
+  }
+}
+
+type KeypairFileRead =
+  | { readonly kind: 'ok'; readonly keypair: E2EEKeypair }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'unreadable'; readonly code: string }
+
+/** Never throws; a read error and invalid contents are different answers. */
+function readKeypairFile(filePath: string): KeypairFileRead {
+  let text: string
   try {
     // Why: valid keypair files are tiny, so an oversized one is corrupt rather than slow to parse.
     if (statSync(filePath).size > MAX_KEYPAIR_FILE_BYTES) {
-      return null
+      return { kind: 'invalid' }
     }
-    const raw: Partial<KeypairFile> = JSON.parse(readFileSync(filePath, 'utf-8'))
+    text = readFileSync(filePath, 'utf-8')
+  } catch (error) {
+    return { kind: 'unreadable', code: (error as NodeJS.ErrnoException).code ?? 'UNKNOWN' }
+  }
+  try {
+    const raw: Partial<KeypairFile> = JSON.parse(text)
     if (raw.v !== KEYPAIR_VERSION || typeof raw.publicKeyB64 !== 'string' || !raw.secretKeyB64) {
-      return null
+      return { kind: 'invalid' }
     }
     const publicKey = Uint8Array.from(Buffer.from(raw.publicKeyB64, 'base64'))
     const secretKey = Uint8Array.from(Buffer.from(raw.secretKeyB64, 'base64'))
     if (publicKey.length !== 32 || secretKey.length !== 32) {
-      return null
+      return { kind: 'invalid' }
     }
-    return { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 }
+    return { kind: 'ok', keypair: { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 } }
   } catch {
-    return null
+    return { kind: 'invalid' }
   }
 }
 
@@ -68,7 +94,8 @@ export function readE2EEPublicKey(userDataPath: string): string | null | undefin
   if (!existsSync(filePath)) {
     return undefined
   }
-  return readKeypairFile(filePath)?.publicKeyB64 ?? null
+  const read = readKeypairFile(filePath)
+  return read.kind === 'ok' ? read.keypair.publicKeyB64 : null
 }
 
 /**
@@ -89,8 +116,11 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
       // Best effort: a failed ACL tightening must not decide whether the key is readable.
     }
     const loaded = readKeypairFile(filePath)
-    if (loaded) {
-      return loaded
+    if (loaded.kind === 'ok') {
+      return loaded.keypair
+    }
+    if (loaded.kind === 'unreadable') {
+      throw new E2EEKeypairUnreadableError(filePath, loaded.code)
     }
     // Why refuse rather than replace: a truncated file is what a half-written key looks like, and
     // regenerating turns a recoverable interruption into a permanent identity fork.
