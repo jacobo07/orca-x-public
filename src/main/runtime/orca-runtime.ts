@@ -494,6 +494,11 @@ import {
   type RuntimeNotifierMethod
 } from './runtime-notifier-router'
 import {
+  compareRevealConvergence,
+  REVEAL_CONVERGENCE_RECHECK_MS,
+  type RevealConvergenceVerdict
+} from './terminal-reveal-convergence'
+import {
   LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
   clampLinearSearchLimit
@@ -13394,6 +13399,57 @@ export class OrcaRuntimeService {
       return this.parseVisibleSnapshotLines(snapshot)
     } catch {
       return []
+    }
+  }
+
+  /**
+   * One bounded check that a pane which just became visible shows what the main mirror holds.
+   *
+   * Why a second read on divergence: a renderer still parsing lagged bytes differs once and then
+   * catches up, while output it dropped stays different — only the second is an anomaly.
+   */
+  async probeRevealConvergence(ptyId: string): Promise<RevealConvergenceVerdict> {
+    const first = await this.sampleRevealConvergence(ptyId)
+    if (first.verdict !== 'diverged') {
+      return first
+    }
+    await new Promise((resolve) => setTimeout(resolve, REVEAL_CONVERGENCE_RECHECK_MS))
+    return this.sampleRevealConvergence(ptyId)
+  }
+
+  private async sampleRevealConvergence(ptyId: string): Promise<RevealConvergenceVerdict> {
+    const before = await this.readHeadlessVisibleTerminalState(ptyId)
+    const rendererLines = await this.readRendererConvergenceLines(ptyId)
+    const after = await this.readHeadlessVisibleTerminalState(ptyId)
+    return compareRevealConvergence({
+      mirror: after ? { lines: after.lines } : null,
+      renderer: rendererLines ? { lines: rendererLines } : null,
+      mirrorSequenceBefore: before?.sequence ?? -1,
+      mirrorSequenceAfter: after?.sequence ?? -1
+    })
+  }
+
+  /** The renderer's visible rows, or null when they could not be read — never an empty stand-in. */
+  private async readRendererConvergenceLines(ptyId: string): Promise<string[] | null> {
+    const controller = this.ptyController
+    if (!controller?.serializeBuffer) {
+      return null
+    }
+    if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
+      return null
+    }
+    try {
+      const snapshot = await withTimeout(
+        controller.serializeBuffer(ptyId, { scrollbackRows: 0, altScreenForcesZeroRows: false }),
+        VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        null
+      )
+      if (!snapshot) {
+        return null
+      }
+      return snapshot.data.length === 0 ? [] : await this.parseVisibleSnapshotLines(snapshot)
+    } catch {
+      return null
     }
   }
 
