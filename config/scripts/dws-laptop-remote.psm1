@@ -70,14 +70,22 @@ function Publish-DwsServeBuild {
   $codexMtimeBefore = $beforeLines[2].Trim()
   Write-Output "ORCA_X_HEAD_BEFORE=$orcaXHeadBefore"
 
-  # Incremental bundle since the Phase-1 fence commit (present in orca-x since Phase 1).
+  # Why HEAD, not the raw $Sha: git bundle create (2.52) refuses "Refusing to create empty
+  # bundle" for a bare commit hash that is not the tip of a named ref, even when rev-list over
+  # the identical hash returns real commits -- a bundle records ref NAMES, and a raw SHA has
+  # none. This function is always called immediately after committing $Sha, so HEAD == $Sha is
+  # a real invariant here (single sequential writer), verified below rather than assumed.
+  $localHead = (& $script:DwsGitExe rev-parse HEAD).Trim()
+  if ($localHead -ne $Sha) {
+    throw "Publish-DwsServeBuild: local HEAD ($localHead) does not match requested Sha ($Sha) -- bundle would not cover the requested commit"
+  }
   $bundlePath = Join-Path $state "dws-p2-$short.bundle"
   $baseRef = $script:DwsBaseFenceSha
   $mergeBaseCheck = & $script:DwsGitExe cat-file -e "$baseRef^{commit}" 2>&1
   if ($LASTEXITCODE -ne 0) {
     $baseRef = (& $script:DwsGitExe merge-base HEAD $script:DwsBaseFenceSha).Trim()
   }
-  & $script:DwsGitExe bundle create $bundlePath "$Sha" "^$baseRef" | Out-Null
+  & $script:DwsGitExe bundle create $bundlePath HEAD "^$baseRef" 2>&1 | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "Publish-DwsServeBuild: git bundle create failed" }
   Write-Output "BUNDLE_LOCAL=$bundlePath BUNDLE_BYTES=$((Get-Item $bundlePath).Length)"
 

@@ -45,6 +45,17 @@ cmd_fetch_bundle() {
   echo "CLONE_HEAD_BEFORE=$clone_before_head"
 
   git -C "$CLONE_DIR" fetch /home/kobii/orca-x "refs/heads/dws-p2-$short:refs/heads/dws-p2-$short"
+  # Why: $CLONE_DIR is a disposable, private scratch clone reused across DWS plans (01-04-SUMMARY
+  # "Task 2 resumed"); a prior in-place edit here can leave tracked-file modifications that block
+  # a plain checkout. Discard tracked changes only (never touches the node_modules symlink or any
+  # other untracked path) -- safe because nothing here is this program's source of truth.
+  local dirty_tracked
+  dirty_tracked=$(git -C "$CLONE_DIR" status --porcelain --untracked-files=no)
+  if [ -n "$dirty_tracked" ]; then
+    echo "CLONE_DIRTY_DISCARDED:"
+    echo "$dirty_tracked"
+    git -C "$CLONE_DIR" checkout -- .
+  fi
   git -C "$CLONE_DIR" checkout --detach "$sha"
 
   local clone_head
