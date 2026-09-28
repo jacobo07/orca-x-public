@@ -9,6 +9,10 @@ $script:DwsSshTimeoutSec = 20
 $script:DwsRemoteClone = '/home/kobii/dws-0104-clone'
 $script:DwsRemoteOrcaX = '/home/kobii/orca-x'
 $script:DwsBaseFenceSha = '865c80de25f4ebbd00ca83c71b0812113b24ac10'
+# Why in-memory, not on $readyPath: the pairing URL is a bearer credential (STA-2370). It must
+# never touch disk -- Get-DwsServeReady holds it here only for the lifetime of this PowerShell
+# process; Invoke-DwsCli reads it from here, never from the redacted serve-ready.json cache.
+$script:DwsLastPairingUrl = $null
 
 function Get-DwsStateDir {
   $dir = Join-Path $env:LOCALAPPDATA 'orca-dws-p2'
@@ -209,17 +213,30 @@ function Get-DwsServeReady {
   if ($result.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($result.Output)) {
     throw "Get-DwsServeReady: ready-json failed (exit $($result.ExitCode))"
   }
-  $result.Output | Set-Content -Encoding ascii $readyPath
+  # Why parse-before-write: the raw ready-json line carries the live pairing URL/token. It is
+  # parsed here, held in $script:DwsLastPairingUrl (memory only, this process's lifetime), and
+  # NEVER written to disk -- only the redacted object below is persisted.
   $json = $result.Output | ConvertFrom-Json
   $boundEndpoint = $json.boundEndpoint
   $port = ([uri]$boundEndpoint).Port
   $pairingSha12 = $null
+  $pairingAvailable = $false
   if ($json.pairing -and $json.pairing.url) {
+    $script:DwsLastPairingUrl = $json.pairing.url
+    $pairingAvailable = [bool]$json.pairing.available
     $sha256 = [System.Security.Cryptography.SHA256]::Create()
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($json.pairing.url)
     $hashBytes = $sha256.ComputeHash($bytes)
     $pairingSha12 = -join ($hashBytes[0..5] | ForEach-Object { $_.ToString('x2') })
+  } else {
+    $script:DwsLastPairingUrl = $null
   }
+  [pscustomobject]@{
+    boundEndpoint    = $boundEndpoint
+    port             = $port
+    pairingSha12     = $pairingSha12
+    pairingAvailable = $pairingAvailable
+  } | ConvertTo-Json | Set-Content -Encoding ascii $readyPath
   return [pscustomobject]@{
     boundEndpoint = $boundEndpoint
     port          = $port
@@ -296,11 +313,13 @@ function Invoke-DwsCli {
   $worktree = Get-DwsWorktreeRoot
   $readyPath = Join-Path $state 'serve-ready.json'
   if (-not (Test-Path $readyPath)) { throw 'Invoke-DwsCli: no serve-ready.json; call Get-DwsServeReady first' }
-  $json = Get-Content $readyPath -Raw | ConvertFrom-Json
-  $pairingCode = $null
+  # Why $script:DwsLastPairingUrl, not $readyPath: the pairing URL/token is a bearer credential
+  # and must never be written to disk (host constraint). $readyPath only holds the redacted
+  # boundEndpoint/port/pairingSha12; the real value lives in memory for this process's lifetime,
+  # set by the Get-DwsServeReady call that populated $readyPath in the first place.
   # Why .url, not .code: the ready-json pairing object has no separate "code" field -- the CLI's
   # ORCA_PAIRING_CODE / --pairing-code both take the full `orca://pair?code=...` URL (help.ts).
-  if ($json.pairing -and $json.pairing.available) { $pairingCode = $json.pairing.url }
+  $pairingCode = $script:DwsLastPairingUrl
 
   foreach ($a in $Args) {
     if ($a.Contains('"')) { throw "Invoke-DwsCli: argument contains a double quote, unsupported: $a" }
