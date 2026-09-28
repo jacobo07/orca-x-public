@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 // Why: a static `import` of a `.mjs` file gets compiled to a CJS `require()` by Playwright's own
@@ -244,6 +244,172 @@ test.describe('DWS-P2 offload workload harness', () => {
       expect(marker.exit, `leg ${marker.leg} did not produce a LEG-END marker in time`).not.toBe(
         'TIMEOUT'
       )
+    }
+  })
+
+  test('remote workload', async ({ orcaPage, electronApp }) => {
+    test.skip(
+      process.env.ORCA_DWS_P2_TARGET !== 'remote',
+      'runs only when ORCA_DWS_P2_TARGET=remote'
+    )
+
+    const checkout = process.env.ORCA_DWS_P2_CHECKOUT
+    const runDir = process.env.ORCA_DWS_P2_RUN_DIR
+    const legsRaw = process.env.ORCA_DWS_P2_LEGS
+    const pairingFile = process.env.ORCA_DWS_P2_PAIRING_FILE
+    const envName = process.env.ORCA_DWS_P2_ENV_NAME ?? 'gex44-svc'
+    const svcSha = process.env.ORCA_DWS_P2_SVC_SHA
+    const baselineManifestPath = process.env.ORCA_DWS_P2_BASELINE_MANIFEST
+    const agentKind = process.env.ORCA_DWS_P2_AGENT_KIND
+    const agentBin = process.env.ORCA_DWS_P2_AGENT_BIN
+    if (!checkout || !runDir || !legsRaw || !pairingFile || !svcSha) {
+      throw new Error(
+        'ORCA_DWS_P2_CHECKOUT, ORCA_DWS_P2_RUN_DIR, ORCA_DWS_P2_LEGS, ORCA_DWS_P2_PAIRING_FILE and ORCA_DWS_P2_SVC_SHA are all required for the remote workload test'
+      )
+    }
+    const legs = legsRaw
+      .split(',')
+      .map((leg) => leg.trim())
+      .filter(Boolean)
+    const legTimeoutMs = process.env.ORCA_DWS_P2_LEG_TIMEOUT_MS
+      ? Number(process.env.ORCA_DWS_P2_LEG_TIMEOUT_MS)
+      : DEFAULT_LEG_TIMEOUT_MS
+    test.setTimeout(legs.length * legTimeoutMs + 600_000)
+
+    await expect(orcaPage.locator('[data-workspace-activity-rail]')).toBeVisible({
+      timeout: 60_000
+    })
+
+    const { attachDwsRemoteRuntime } = await import('./helpers/dws-remote-runtime-attach')
+    const attachResult = await attachDwsRemoteRuntime(orcaPage, { name: envName, pairingFile })
+    expect(attachResult.environmentId).toBeTruthy()
+
+    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    const nonce = randomUUID().replace(/-/g, '').slice(0, 16)
+
+    const createOrcaRpc = await loadCreateOrcaRpc()
+    const rpc = createOrcaRpc({
+      envName,
+      env: {
+        ...process.env,
+        ORCA_DEV_REPO_ROOT: REPO_ROOT,
+        ORCA_CLI_COMMAND: 'orca-dev',
+        ORCA_USER_DATA_PATH: userDataDir
+      }
+    })
+
+    const repoAdd = rpc.orcaJsonSync(['repo', 'add', '--path', checkout], { timeoutMs: 60_000 })
+    expect(repoAdd.result).toBeTruthy()
+
+    const legMarkers: LegMarker[] = []
+
+    for (const leg of legs) {
+      const title = `dws-p2-${leg}-${nonce}`
+      const commandParts = ['node', 'config/scripts/dws-offload-workload.mjs', leg, '--nonce', nonce]
+      if (leg === 'agent') {
+        if (agentKind) {
+          commandParts.push('--agent-kind', agentKind)
+        }
+        if (agentBin) {
+          commandParts.push('--agent-bin', agentBin)
+        }
+      }
+      const command = commandParts.join(' ')
+      rpc.orcaJsonSync(
+        ['terminal', 'create', '--worktree', `path:${checkout}`, '--title', title, '--command', command],
+        { timeoutMs: 30_000 }
+      )
+
+      // Why terminal list + preview, not terminal read --terminal <handle>: each orcaJsonSync call
+      // is a new node process making a new WS connection to the headless serve, and a handle
+      // returned by the connection that created it does not survive that connection's exit
+      // (`terminal_handle_stale`) even though the PTY itself keeps running -- see
+      // 02-01-SUMMARY.md deviation #12, and dws-laptop-remote.psm1's Invoke-DwsRemoteRoundTrip,
+      // which this loop mirrors.
+      const marker: LegMarker = { leg }
+      const deadline = Date.now() + legTimeoutMs
+      let sawEnd = false
+      while (Date.now() < deadline && !sawEnd) {
+        // eslint-disable-next-line no-await-in-loop -- sequential polling of one live terminal.
+        const listResult = rpc.orcaJsonSync(
+          ['terminal', 'list', '--worktree', `path:${checkout}`],
+          { timeoutMs: 30_000 }
+        )
+        const terminals =
+          (listResult.result as { terminals?: { preview?: string }[] }).terminals ?? []
+        for (const terminalEntry of terminals) {
+          const preview = terminalEntry.preview ?? ''
+          const startMatch = LEG_START_RE.exec(preview)
+          if (startMatch && startMatch[1] === nonce && startMatch[2] === leg) {
+            marker.startUtc = startMatch[4]
+            marker.childPid = startMatch[3]
+          }
+          const endMatch = LEG_END_RE.exec(preview)
+          if (endMatch && endMatch[1] === nonce && endMatch[2] === leg) {
+            marker.exit = endMatch[3]
+            marker.ms = endMatch[4]
+            marker.endUtc = endMatch[5]
+            marker.agentReply = endMatch[6]
+            sawEnd = true
+          }
+        }
+        if (!sawEnd) {
+          // eslint-disable-next-line no-await-in-loop -- deliberate poll interval.
+          await sleep(3_000)
+        }
+      }
+
+      if (!sawEnd) {
+        marker.exit = 'TIMEOUT'
+      }
+      legMarkers.push(marker)
+    }
+
+    // CTX-SVC-2 / acceptance criteria: workload blob hashes must equal the baseline's, or this
+    // sweep is refused rather than silently compared against a differently-shaped workload.
+    const blobHashPaths = [
+      'config/scripts/check-dws-completeness.test.mjs',
+      'src/main/runtime/runtime-rpc-websocket-bind-host.test.ts',
+      'config/tsconfig.cli.json',
+      'config/scripts/dws-offload-workload.mjs'
+    ]
+    const blobHashes: Record<string, string> = {}
+    for (const blobPath of blobHashPaths) {
+      blobHashes[blobPath] = gitRevParse(['rev-parse', `${svcSha}:${blobPath}`], REPO_ROOT)
+    }
+    let blobHashesMatchBaseline: boolean | 'no-baseline-manifest' = 'no-baseline-manifest'
+    if (baselineManifestPath) {
+      const baselineManifest = JSON.parse(readFileSync(baselineManifestPath, 'utf8')) as {
+        blobHashes?: Record<string, string>
+      }
+      blobHashesMatchBaseline = blobHashPaths.every(
+        (blobPath) => baselineManifest.blobHashes?.[blobPath] === blobHashes[blobPath]
+      )
+    }
+
+    const manifest = {
+      nonce,
+      checkoutSha: svcSha,
+      checkout,
+      envName,
+      environmentId: attachResult.environmentId,
+      blobHashes,
+      blobHashesMatchBaseline,
+      legs: legMarkers
+    }
+    mkdirSync(runDir, { recursive: true })
+    writeFileSync(path.join(runDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
+
+    if (blobHashesMatchBaseline === false) {
+      throw new Error(
+        'remote workload blob hashes do not match docs/dws baseline manifest -- refusing to treat this as a comparable sweep'
+      )
+    }
+    for (const marker of legMarkers) {
+      expect(
+        marker.exit,
+        `leg ${marker.leg} did not produce a LEG-END marker in time (remote)`
+      ).not.toBe('TIMEOUT')
     }
   })
 })

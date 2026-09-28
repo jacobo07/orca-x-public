@@ -6,24 +6,55 @@
   summarizes the captured samples against the manifest the spec itself writes.
 
 .PARAMETER Target
-  'local' runs the workload inside a terminal of the LOCAL desktop (this plan's baseline). Other
-  values are accepted for future reuse but only 'local' is fully wired today.
+  'local' runs the workload inside a terminal of the LOCAL desktop (this plan's baseline).
+  'remote' runs it through the paired GEX44 environment, bracketing a remote `ps --forest`
+  capture around the sweep and judging the result via `dws-offload-measurement.mjs remote-proof`.
 
 .PARAMETER Legs
   One or more of test, build, agent. Passed through as ORCA_DWS_P2_LEGS (comma-joined).
 
 .PARAMETER Checkout
-  Path to the checkout the workload runs against (a `repo add` target).
+  Path to the checkout the workload runs against (a `repo add` target). In -Target remote mode this
+  is OPTIONAL: when omitted, it is read from deployed.json's `svcCheckout` (written by
+  Publish-DwsServeBuild) rather than hard-coded by the caller.
 
 .PARAMETER RunId
   Identifies this run's state directory under $env:LOCALAPPDATA\orca-dws-p2\runs\<RunId>\ — never
   committed, kept outside the repo (raw NDJSON/manifest are evidence artifacts, not source).
+
+.PARAMETER PairingFile
+  (remote only) Path to a throwaway `{ pairing: { pairingUrl, pairingSha12 } }` file — required.
+
+.PARAMETER EnvName
+  (remote only) The paired runtime environment's display name. Default gex44-svc.
+
+.PARAMETER SvcSha
+  (remote only) The git SHA of the GEX44 service checkout the workload legs actually run against.
+
+.PARAMETER BaselineManifest
+  (remote only) Path to the accepted LOCAL baseline's manifest.json, for the blob-hash comparability
+  refusal. Optional — if omitted, blobHashesMatchBaseline is recorded as 'no-baseline-manifest'.
+
+.PARAMETER AgentKind / AgentBin
+  (remote only) Forwarded to the agent leg's dispatch when 'agent' is in -Legs.
+
+.PARAMETER CaptureCount / CaptureIntervalSec
+  (remote only) `ps-capture <count> <interval>` on GEX44 — one CAPTURE block per interval. Default
+  600 x 3s = 30 minutes of coverage; raise for a longer expected sweep (agent leg especially).
 #>
 param(
   [string]$Target = 'local',
   [string[]]$Legs = @('test', 'build'),
-  [Parameter(Mandatory = $true)][string]$Checkout,
-  [Parameter(Mandatory = $true)][string]$RunId
+  [string]$Checkout,
+  [Parameter(Mandatory = $true)][string]$RunId,
+  [string]$PairingFile,
+  [string]$EnvName = 'gex44-svc',
+  [string]$SvcSha,
+  [string]$BaselineManifest,
+  [string]$AgentKind,
+  [string]$AgentBin,
+  [int]$CaptureCount = 600,
+  [int]$CaptureIntervalSec = 3
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,9 +67,49 @@ $ndjsonPath = Join-Path $stateDir 'samples.ndjson'
 $stopFile = Join-Path $stateDir 'stop.flag'
 $manifestPath = Join-Path $stateDir 'manifest.json'
 $summaryPath = Join-Path $stateDir 'summary.json'
+$remotePsPath = Join-Path $stateDir 'remote-ps.txt'
+$remoteProofPath = Join-Path $stateDir 'remote-proof.json'
 
 if (Test-Path $stopFile) {
   Remove-Item $stopFile -Force
+}
+
+if ($Target -eq 'local' -and -not $Checkout) {
+  throw "dws-offload-run.ps1 -Target local requires -Checkout"
+}
+
+if ($Target -eq 'remote') {
+  if (-not $PairingFile) {
+    throw "dws-offload-run.ps1 -Target remote requires -PairingFile"
+  }
+  Import-Module (Join-Path $PSScriptRoot 'dws-laptop-remote.psm1') -Force
+
+  # Acceptance criteria (02-05 Task 2): the service checkout is taken from deployed.json, never
+  # hard-coded by the caller, and the run refuses when deployed.json's sha disagrees with what the
+  # systemd unit's WorkingDirectory is ACTUALLY checked out to on GEX44 -- deployed.json is this
+  # process's own state cache and can go stale if someone redeploys outside Publish-DwsServeBuild.
+  $deployedJsonPath = Join-Path (Get-DwsStateDir) 'deployed.json'
+  if (-not (Test-Path $deployedJsonPath)) {
+    throw "dws-offload-run.ps1 -Target remote: $deployedJsonPath not found -- run Publish-DwsServeBuild first"
+  }
+  $deployed = Get-Content $deployedJsonPath -Raw | ConvertFrom-Json
+  if (-not $Checkout) {
+    $Checkout = $deployed.svcCheckout
+  }
+  if (-not $SvcSha) {
+    $SvcSha = $deployed.sha
+  }
+  $workingDirResult = Invoke-DwsSsh -RemoteBody 'systemctl show orca-dws-serve.service -p WorkingDirectory --value'
+  $workingDir = $workingDirResult.Output.Trim()
+  if ($workingDirResult.ExitCode -ne 0 -or -not $workingDir) {
+    throw "dws-offload-run.ps1 -Target remote: could not read WorkingDirectory from orca-dws-serve.service (exit $($workingDirResult.ExitCode)): $($workingDirResult.Output)"
+  }
+  $actualHeadResult = Invoke-DwsSsh -RemoteBody "sudo git -c safe.directory=$workingDir -C $workingDir rev-parse HEAD"
+  $actualHead = $actualHeadResult.Output.Trim()
+  if ($actualHeadResult.ExitCode -ne 0 -or $actualHead -ne $deployed.sha) {
+    throw "dws-offload-run.ps1 -Target remote: deployed.json sha ($($deployed.sha)) disagrees with the running unit's WorkingDirectory HEAD ($actualHead) -- refusing (re-run Publish-DwsServeBuild)"
+  }
+  Write-Output "DWS-P2-RUN remoteChecksVerified svcCheckout=$Checkout svcSha=$SvcSha workingDirectory=$workingDir"
 }
 
 function Get-FreeMb {
@@ -72,6 +143,48 @@ if (-not $samplerStarted) {
 }
 Write-Output "DWS-P2-RUN samplerPid=$($samplerProc.Id) samplerStarted=true"
 
+# --- Remote target: bracket a `ps --forest` capture on GEX44 around the sweep, and pre/post the
+# serve unit's own MainPID so a restart mid-run is INCONCLUSIVE, never silently accepted -------
+# Why a hardcoded remote path/host, not a getter from dws-laptop-remote.psm1: $script:DwsSshHost
+# and $script:DwsRemoteClone are module-PRIVATE ($script: scope), and the module exports no
+# accessor for either. Duplicated here (values must match dws-laptop-remote.psm1's own constants).
+$dwsRemoteSshHost = 'gex44'
+$dwsRemoteClone = '/home/kobii/dws-0104-clone'
+$remotePsProc = $null
+$servePidBefore = $null
+if ($Target -eq 'remote') {
+  $statusBefore = Invoke-DwsSsh -RemoteBody "bash $dwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh status"
+  if ($statusBefore.ExitCode -ne 0) {
+    New-Item -ItemType File -Path $stopFile -Force | Out-Null
+    throw "remote status (before) failed (exit $($statusBefore.ExitCode)): $($statusBefore.Output)"
+  }
+  $statusBeforeLines = $statusBefore.Output -split "`n"
+  $servePidBefore = ($statusBeforeLines | Select-Object -Index 1).Trim()
+  Write-Output "DWS-P2-RUN remoteServeActive=$($statusBeforeLines[0].Trim()) remoteServeMainPidBefore=$servePidBefore"
+
+  # Why Start-Process -RedirectStandardOutput, not Invoke-DwsSsh: Invoke-DwsSsh blocks until ssh
+  # exits, but `ps-capture` is a long-running remote loop meant to run FOR THE DURATION of the
+  # workload sweep below -- it must be started in the background. The remote command is still ONE
+  # single argv element (host_rules' single-argument ssh-body rule), it is simply passed to
+  # Start-Process's own array instead of through the (synchronous) Invoke-DwsSsh helper.
+  $remotePsProc = Start-Process -FilePath 'ssh' -ArgumentList @(
+    '-o', 'ConnectTimeout=20', '-o', 'BatchMode=yes', $dwsRemoteSshHost,
+    "bash $dwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh ps-capture $CaptureCount $CaptureIntervalSec"
+  ) -RedirectStandardOutput $remotePsPath -PassThru -WindowStyle Hidden
+  Write-Output "DWS-P2-RUN remotePsCapturePid=$($remotePsProc.Id) count=$CaptureCount intervalSec=$CaptureIntervalSec"
+
+  if ('agent' -in $Legs) {
+    # Existence-only credential check (never reads contents) -- host_rules: the agent-turn leg may
+    # use ONLY a credential minted inside orca-svc's own HOME; if absent, record BLOCKED, never
+    # fake/substitute it locally.
+    $credCheck = Invoke-DwsSsh -RemoteBody 'test -s ~/.claude/.credentials.json && echo CLAUDE_CRED=1 || echo CLAUDE_CRED=0; test -s ~/.codex/auth.json && echo CODEX_CRED=1 || echo CODEX_CRED=0'
+    Write-Output "DWS-P2-RUN agentCredentialCheck=$($credCheck.Output -replace "`n", ' ')"
+    if ($credCheck.Output -notmatch 'CLAUDE_CRED=1' -and $credCheck.Output -notmatch 'CODEX_CRED=1') {
+      Write-Output "DWS-P2-RUN agentLeg=BLOCKED reason=no_credential_in_orca-svc_home (never copying kobii's/laptop's credential per host_rules)"
+    }
+  }
+}
+
 # --- Resolve the Playwright CLI, recording which form ran ---------------------------------------
 & node (Join-Path $repoRoot 'config/scripts/ensure-native-runtime.mjs') --runtime=electron
 if ($LASTEXITCODE -ne 0) {
@@ -92,12 +205,24 @@ if (Test-Path $playwrightCliJs) {
 }
 Write-Output "DWS-P2-RUN playwrightResolvedVia=$pwResolvedVia"
 
-$grepPattern = if ($Target -eq 'local') { 'local workload' } else { 'desktop artifact answers status' }
+$grepPattern = switch ($Target) {
+  'local' { 'local workload' }
+  'remote' { 'remote workload' }
+  default { 'desktop artifact answers status' }
+}
 
 $env:ORCA_DWS_P2_TARGET = $Target
 $env:ORCA_DWS_P2_CHECKOUT = $Checkout
 $env:ORCA_DWS_P2_LEGS = ($Legs -join ',')
 $env:ORCA_DWS_P2_RUN_DIR = $stateDir
+if ($Target -eq 'remote') {
+  $env:ORCA_DWS_P2_PAIRING_FILE = $PairingFile
+  $env:ORCA_DWS_P2_ENV_NAME = $EnvName
+  $env:ORCA_DWS_P2_SVC_SHA = $SvcSha
+  if ($BaselineManifest) { $env:ORCA_DWS_P2_BASELINE_MANIFEST = $BaselineManifest }
+  if ($AgentKind) { $env:ORCA_DWS_P2_AGENT_KIND = $AgentKind }
+  if ($AgentBin) { $env:ORCA_DWS_P2_AGENT_BIN = $AgentBin }
+}
 
 $pwArgs = $pwPrefixArgs + @(
   'test',
@@ -118,6 +243,12 @@ try {
   Remove-Item Env:\ORCA_DWS_P2_CHECKOUT -ErrorAction SilentlyContinue
   Remove-Item Env:\ORCA_DWS_P2_LEGS -ErrorAction SilentlyContinue
   Remove-Item Env:\ORCA_DWS_P2_RUN_DIR -ErrorAction SilentlyContinue
+  Remove-Item Env:\ORCA_DWS_P2_PAIRING_FILE -ErrorAction SilentlyContinue
+  Remove-Item Env:\ORCA_DWS_P2_ENV_NAME -ErrorAction SilentlyContinue
+  Remove-Item Env:\ORCA_DWS_P2_SVC_SHA -ErrorAction SilentlyContinue
+  Remove-Item Env:\ORCA_DWS_P2_BASELINE_MANIFEST -ErrorAction SilentlyContinue
+  Remove-Item Env:\ORCA_DWS_P2_AGENT_KIND -ErrorAction SilentlyContinue
+  Remove-Item Env:\ORCA_DWS_P2_AGENT_BIN -ErrorAction SilentlyContinue
 }
 
 # --- Stop the sampler, record free memory AFTER --------------------------------------------------
@@ -125,6 +256,37 @@ New-Item -ItemType File -Path $stopFile -Force | Out-Null
 $samplerExited = $samplerProc.WaitForExit(10000)
 if (-not $samplerExited -and -not $samplerProc.HasExited) {
   Stop-Process -Id $samplerProc.Id -Force -ErrorAction SilentlyContinue
+}
+
+# --- Remote target: stop the ps-capture, verify the serve unit's MainPID did not change, and
+# judge the manifest's legs against the capture via `remote-proof` -------------------------------
+$remoteProofSummary = $null
+if ($Target -eq 'remote') {
+  if ($remotePsProc -and -not $remotePsProc.HasExited) {
+    Stop-Process -Id $remotePsProc.Id -Force -ErrorAction SilentlyContinue
+  }
+  $statusAfter = Invoke-DwsSsh -RemoteBody "bash $dwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh status"
+  $servePidAfter = $null
+  if ($statusAfter.ExitCode -eq 0) {
+    $servePidAfter = (($statusAfter.Output -split "`n") | Select-Object -Index 1).Trim()
+  }
+  Write-Output "DWS-P2-RUN remoteServeMainPidAfter=$servePidAfter"
+  $servePidStable = ($servePidBefore -and $servePidAfter -and $servePidBefore -eq $servePidAfter)
+  if (-not $servePidStable) {
+    Write-Output "DWS-P2-RUN remoteServeMainPidVerdict=INCONCLUSIVE reason=serve_restarted_mid_run before=$servePidBefore after=$servePidAfter"
+  } else {
+    Write-Output "DWS-P2-RUN remoteServeMainPidVerdict=STABLE pid=$servePidBefore"
+  }
+
+  if ((Test-Path $manifestPath) -and (Test-Path $remotePsPath) -and $servePidBefore) {
+    & node (Join-Path $repoRoot 'config/scripts/dws-offload-measurement.mjs') remote-proof `
+      --capture $remotePsPath --manifest $manifestPath --serve-pid $servePidBefore --out $remoteProofPath
+    if (Test-Path $remoteProofPath) {
+      $remoteProofSummary = Get-Content $remoteProofPath -Raw | ConvertFrom-Json
+    }
+  } else {
+    Write-Output "DWS-P2-RUN warning=remote_proof_skipped manifestExists=$(Test-Path $manifestPath) captureExists=$(Test-Path $remotePsPath) servePidBefore=$servePidBefore"
+  }
 }
 
 $freeAfterMb = Get-FreeMb
