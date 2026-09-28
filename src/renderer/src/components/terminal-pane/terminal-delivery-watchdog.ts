@@ -14,6 +14,7 @@
  * data hot path (one Map upsert per received chunk; a tick does no IPC while
  * output flows or while no PTY delivery is expected).
  */
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
@@ -21,6 +22,11 @@ import { deliverPulledPtyModelRestoreMarkers } from './pty-model-restore-channel
 import { getProcessedPtyCharTotals } from './terminal-pty-ack-gate'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 import { collectOnScreenPtyIds, judgeVisiblePaneLiveness } from './visible-pane-output-liveness'
+
+/** Name under which a visible-pane stall reaches main's crash-breadcrumb ring, where it outlives
+ *  the remount that the stall itself triggers. Exported so a test can assert on it rather than on a
+ *  string literal that a rename would silently orphan. */
+export const TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB = 'terminal-visible-pane-stall'
 
 const WATCHDOG_INTERVAL_MS = 15_000
 // Why 2: one tick can straddle a chunk in transit; two ticks of model progress with a frozen pane cannot.
@@ -157,6 +163,12 @@ function recoverStalledVisiblePanes(health: PtyRendererDeliveryHealthReply): voi
     }
     // Why the cause travels: which layer lied is the one fact no earlier field report carried.
     recordTerminalFreezeBreadcrumb('visible-pane-stall', detail)
+    // Why mirrored out of the renderer: the ring above is DevTools-only, so the remount this very
+    // function is about to request — or a reload — destroys the evidence of its own cause. That is
+    // why several field freezes stayed unattributed. Main's crash-breadcrumb ring outlives the
+    // renderer and reaches `crashReports:copyLatestDiagnostics`, which is the same escape hatch the
+    // WebGL crumbs already take for exactly this reason.
+    recordRendererCrashBreadcrumb(TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB, detail)
     console.warn('[terminal] visible pane stopped advancing while its PTY kept producing', detail)
     verdict.entry.requestRecovery(verdict.cause)
   }
