@@ -1,3 +1,4 @@
+import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ExecutionHostId } from './execution-host'
 import type { PersistedWindowTopologyEntry } from './window-topology-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
@@ -64,6 +65,17 @@ export type DeskTab = {
   panes: DeskPane[]
 }
 
+/**
+ * A resumable agent whose tab is gone: no pane or layout to restore, so only an explicit Resume
+ * brings it back, as a new tab. Kept visible rather than dropped with the tab.
+ */
+export type DeskOrphanSession = {
+  paneKey: string
+  agent: string
+  capturedAt: number
+  resume: DormantResumeContinuity
+}
+
 export type DeskWindowMembership =
   | { kind: 'bound'; windowId: string; sequence: number }
   | {
@@ -80,6 +92,7 @@ export type DeskWorkspace =
       window: DeskWindowMembership
       lastVisitedAt: number | null
       tabs: DeskTab[]
+      orphanSessions: DeskOrphanSession[]
       openFileCount: number
       browserTabCount: number
     }
@@ -250,6 +263,7 @@ function projectWorkspace(
     window: windowMembership(key, bindings),
     lastVisitedAt: worktreeId ? (state.lastVisitedAtByWorktreeId?.[worktreeId] ?? null) : null,
     tabs: projectedTabs,
+    orphanSessions: orphanSessionsOf(state, key, tabs),
     openFileCount: state.openFilesByWorktree?.[key]?.length ?? 0,
     browserTabCount: state.browserTabsByWorktree?.[key]?.length ?? 0
   }
@@ -265,6 +279,54 @@ function workspaceOrder(a: DeskWorkspace, b: DeskWorkspace): number {
     return aSeq - bSeq
   }
   return (b.lastVisitedAt ?? 0) - (a.lastVisitedAt ?? 0)
+}
+
+function recordTabId(paneKey: string, tabId: string | undefined): string | null {
+  return tabId ?? parsePaneKey(paneKey)?.tabId ?? null
+}
+
+/** A record the projection can place. A malformed one is skipped, never allowed to sink its workspace. */
+function placeableRecords(state: WorkspaceSessionState): SleepingAgentSessionRecord[] {
+  return Object.values(state.sleepingAgentSessionsByPaneKey ?? {}).filter(
+    (record) =>
+      typeof record?.paneKey === 'string' &&
+      typeof record.worktreeId === 'string' &&
+      record.worktreeId.length > 0
+  )
+}
+
+/** Sleeping records of this workspace whose tab no longer exists, oldest first. */
+export function orphanSessionsOf(
+  state: WorkspaceSessionState,
+  key: string,
+  tabs: readonly TerminalTab[]
+): DeskOrphanSession[] {
+  const tabIds = new Set(tabs.map((tab) => tab.id))
+  return placeableRecords(state)
+    .filter((record) => {
+      const tabId = recordTabId(record.paneKey, record.tabId)
+      return record.worktreeId === key && (tabId === null || !tabIds.has(tabId))
+    })
+    .sort((a, b) => a.capturedAt - b.capturedAt)
+    .map((record) => ({
+      paneKey: record.paneKey,
+      agent: record.agent,
+      capturedAt: record.capturedAt,
+      // Why unconfirmed: a record is a handle, and nothing re-checked the conversation today.
+      resume: readDormantResumeContinuity(undefined, true)
+    }))
+}
+
+function workspaceKeysWithContent(state: WorkspaceSessionState): string[] {
+  const keys = new Set(
+    Object.entries(state.tabsByWorktree)
+      .filter(([, tabs]) => tabs.length > 0)
+      .map(([key]) => key)
+  )
+  for (const record of placeableRecords(state)) {
+    keys.add(record.worktreeId)
+  }
+  return [...keys]
 }
 
 export function projectDesk(input: DeskProjectionInput): DeskProjection {
@@ -294,13 +356,13 @@ export function projectDesk(input: DeskProjectionInput): DeskProjection {
         return parsed ? [parsed.tabId] : []
       })
     )
-    const workspaces = Object.entries(loaded.session.state.tabsByWorktree)
-      .filter(([, tabs]) => tabs.length > 0)
-      .map(([key, tabs]): DeskWorkspace => {
+    // Why records too: a workspace whose only remaining trace is a resumable agent still belongs here.
+    const workspaces = workspaceKeysWithContent(loaded.session.state)
+      .map((key): DeskWorkspace => {
         try {
           return projectWorkspace(
             key,
-            tabs,
+            loaded.session.state.tabsByWorktree[key] ?? [],
             loaded,
             bindings,
             input.describeWorkspace,
