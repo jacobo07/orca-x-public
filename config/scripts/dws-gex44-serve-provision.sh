@@ -305,7 +305,15 @@ KillMode=mixed
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
-ExecStart=/usr/bin/xvfb-run -a $svc_checkout/node_modules/electron/dist/electron $svc_checkout serve --bind-host 127.0.0.1 --port $SERVE_PORT --pairing-address 127.0.0.1 --json${no_sandbox_flag}
+# Why the --serve-* flag form, not the CLI "serve --bind-host ..." subcommand form: this unpacked
+# invocation passes $svc_checkout as an Electron app-path argument, which process.argv keeps
+# (Electron does not strip it for an unpackaged app) -- argvRequestsServeMode()/getServeOptions()
+# scan from index 1, so the CLI subcommand form is never detected past that extra positional and
+# the process silently launches as a normal desktop app instead (found via a real install run:
+# WS bound to the loopback default port 6769, never :$SERVE_PORT, and no ready JSON ever printed).
+# The --serve*/--serve-port/--serve-bind-host flag form is detected by a plain `.includes()` /
+# `indexOf()` over the WHOLE argv array, so it is immune to this position dependency.
+ExecStart=/usr/bin/xvfb-run -a $svc_checkout/node_modules/electron/dist/electron $svc_checkout --serve --serve-bind-host 127.0.0.1 --serve-port $SERVE_PORT --serve-pairing-address 127.0.0.1 --serve-json${no_sandbox_flag}
 
 [Install]
 WantedBy=multi-user.target
