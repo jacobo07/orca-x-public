@@ -30,3 +30,25 @@ export type PanePreviewResult =
   | { status: 'not-found' }
   | { status: 'invalid-request' }
   | { status: 'unavailable' }
+
+/** Names a workspace on the desk; main resolves its host scope and path itself. */
+export type WakeAdmissionRequest = { hostId: string; workspaceKey: string }
+
+/**
+ * Whether one more session may wake now. Admission is a reading, not a reservation, and never a
+ * claim that anything started. `unavailable` is a client with no desktop to ask.
+ */
+export type WakeAdmissionResult =
+  | { verdict: 'admitted'; availableMemoryBytes: number | null; floorBytes: number }
+  | {
+      verdict: 'refused'
+      reason:
+        | 'invalid-request'
+        | 'requirement-malformed'
+        | 'executor-unobservable'
+        | 'observation-unavailable'
+        | 'observation-stale'
+        | 'insufficient-available-memory'
+      detail: string
+    }
+  | { verdict: 'unavailable' }

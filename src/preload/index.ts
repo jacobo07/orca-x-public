@@ -3204,7 +3204,8 @@ const api = {
   } satisfies PreloadApi['workingSet'],
   continuity: {
     readDesk: () => ipcRenderer.invoke('continuity:readDesk'),
-    renderPanePreview: (request) => ipcRenderer.invoke('continuity:renderPanePreview', request)
+    renderPanePreview: (request) => ipcRenderer.invoke('continuity:renderPanePreview', request),
+    admitWake: (request) => ipcRenderer.invoke('continuity:admitWake', request)
   } satisfies PreloadApi['continuity'],
   durableExit: {
     park: (request) => ipcRenderer.invoke('durableExit:park', request),
