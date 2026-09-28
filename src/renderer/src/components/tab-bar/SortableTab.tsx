@@ -22,7 +22,7 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
-import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { TerminalTabIdentitySlot } from './TerminalTabIdentitySlot'
 import {
   isTerminalTabActivityLive,
   resolveTerminalTabActivityStatus,
@@ -109,9 +109,6 @@ export default function SortableTab({
   )
   const renamingTabId = useAppStore((s) => s.renamingTabId)
   const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
-
-  // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
-  const shellForIcon = tab.shellOverride
 
   // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
   const tabAgent = useTabAgent(tab)
@@ -267,12 +264,13 @@ export default function SortableTab({
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
       )}
-      <TerminalTabLeadingIcon
+      <TerminalTabIdentitySlot
+        tab={tab}
         agent={tabAgent}
         activityStatus={activityStatus}
-        shell={shellForIcon}
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
+        onActivate={onActivate}
       />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />

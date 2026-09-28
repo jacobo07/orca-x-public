@@ -50,7 +50,8 @@ function unavailableText(reason: string): string {
   }
 }
 
-function failureText(result: PaneSessionResumeResult): string | null {
+/** Why a resume attempt did not start, in product words; null when it started or was cancelled. */
+export function paneSessionResumeFailureText(result: PaneSessionResumeResult): string | null {
   if (result.outcome === 'spawn-failed') {
     return translate('agentSession.paneResume.failed', "Couldn't resume this session. Try again.")
   }
@@ -118,7 +119,7 @@ export function PaneSessionResumeBanner({
     const result = await onResume().catch(
       (): PaneSessionResumeResult => ({ outcome: 'spawn-failed' })
     )
-    const message = failureText(result)
+    const message = paneSessionResumeFailureText(result)
     setPhase(message ? { kind: 'failed', message } : { kind: 'idle' })
   }
 

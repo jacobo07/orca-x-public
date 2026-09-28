@@ -14813,6 +14813,10 @@
       "back": "返回",
       "continue": "继续"
     },
+    "tabResume": {
+      "resume": "恢复会话",
+      "several": "此标签页中有多个会话已结束。请在其窗格中选择一个。"
+    },
     "paneResume": {
       "ended": "会话已结束",
       "resume": "恢复此会话",

@@ -203,6 +203,10 @@ vi.mock('./drop-indicator', () => ({
   getTabRootStateClasses: () => ''
 }))
 
+vi.mock('./TerminalTabSessionResumeButton', () => ({
+  TerminalTabSessionResumeButton: () => null
+}))
+
 vi.mock('./middle-button-default-guard', () => ({
   preventMiddleButtonDefault: vi.fn()
 }))

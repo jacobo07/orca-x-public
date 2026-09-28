@@ -14804,6 +14804,10 @@
       "back": "뒤로",
       "continue": "계속"
     },
+    "tabResume": {
+      "resume": "세션 재개",
+      "several": "이 탭에서 여러 세션이 종료되었습니다. 해당 창에서 하나를 선택하세요."
+    },
     "paneResume": {
       "ended": "세션이 종료되었습니다",
       "resume": "이 세션 재개",
