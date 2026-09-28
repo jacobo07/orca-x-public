@@ -14,6 +14,7 @@ import {
   WorkspaceAgentButton,
   WorkspaceThreadButton
 } from './workspace-roster-rows'
+import { WorkspaceExitButton } from './WorkspaceExitButton'
 
 export type WorkspaceRosterTab = 'agents' | 'threads' | 'projects'
 
@@ -71,7 +72,8 @@ export function CognitiveWorkspaceRoster({
       data-testid="workspace-roster"
     >
       <div className="flex items-start justify-between gap-2 px-4 pb-2 pt-4">
-        <div className="min-w-0">
+        <WorkspaceExitButton />
+        <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-semibold">
             {translate('workspace.title', 'Cognitive Workspace')}
           </h1>

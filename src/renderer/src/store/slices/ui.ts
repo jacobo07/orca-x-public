@@ -147,6 +147,7 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
+import { resolvePageReturnTarget } from './page-return-target'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -666,6 +667,7 @@ export type UISlice = {
   previousViewBeforeSpace: Exclude<TopLevelView, 'space'>
   previousViewBeforeSkills: Exclude<TopLevelView, 'skills'>
   previousViewBeforeMobile: Exclude<TopLevelView, 'mobile'>
+  previousViewBeforeConversations: Exclude<TopLevelView, 'conversations'>
   previousViewBeforeArtifacts: Exclude<TopLevelView, 'artifacts'>
   setActiveView: (view: UISlice['activeView']) => void
   /** Shows the workspace launcher: open a project, rather than browse the whole project list. */
@@ -761,6 +763,8 @@ export type UISlice = {
   openMobilePage: () => void
   closeMobilePage: () => void
   openConversationsPage: () => void
+  /** Leave Workspace for the view it was entered from (terminals when that view is gone). */
+  closeConversationsPage: () => void
   /** The agent the conversations surface is opened FOR, or null for Brainstorming. Window-local
    *  and never persisted: a restart returns to Brainstorming, and Agents is the way back. */
   conversationAgentScope: string | null
@@ -1278,6 +1282,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   pendingSkillsSharedView: false,
   previousViewBeforeMobile: 'terminal',
   previousViewBeforeArtifacts: 'terminal',
+  previousViewBeforeConversations: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -1554,12 +1559,31 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   // No closeWorkspacePage twin: the launcher is left by opening a project, which is a real
   // navigation to that workspace, not a dismissal that has to restore where you came from.
   openWorkspacePage: () => set({ activeView: 'workspace' }),
-  // No previous-view tracking: conversations has no close or back affordance yet, and state that
-  // nothing reads is worse than state that does not exist.
-  openConversationsPage: () => set({ activeView: 'conversations', conversationAgentScope: null }),
+  // Entries from inside Workspace keep the recorded target, so Back never returns to Workspace.
+  openConversationsPage: () =>
+    set((state) => ({
+      activeView: 'conversations',
+      conversationAgentScope: null,
+      previousViewBeforeConversations:
+        state.activeView === 'conversations'
+          ? state.previousViewBeforeConversations
+          : state.activeView
+    })),
+  closeConversationsPage: () =>
+    set((state) => ({
+      activeView: resolvePageReturnTarget(state.previousViewBeforeConversations, state.settings)
+    })),
   conversationAgentScope: null,
   // The same surface as Brainstorming, scoped: one chat stack, not an agent-shaped second one.
-  openAgentChat: (agentId) => set({ activeView: 'conversations', conversationAgentScope: agentId }),
+  openAgentChat: (agentId) =>
+    set((state) => ({
+      activeView: 'conversations',
+      conversationAgentScope: agentId,
+      previousViewBeforeConversations:
+        state.activeView === 'conversations'
+          ? state.previousViewBeforeConversations
+          : state.activeView
+    })),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',
@@ -1583,14 +1607,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }))
   },
   closeSettingsPage: () =>
-    set((state) => {
-      const previousView =
-        state.previousViewBeforeSettings === 'activity' &&
-        state.settings?.experimentalActivity !== true
-          ? 'terminal'
-          : state.previousViewBeforeSettings
-      return { activeView: previousView }
-    }),
+    set((state) => ({
+      activeView: resolvePageReturnTarget(state.previousViewBeforeSettings, state.settings)
+    })),
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => {
     if (!isSettingsNavigationTarget(target)) {

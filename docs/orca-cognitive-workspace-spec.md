@@ -734,7 +734,11 @@ popup whose option text is white on white.
 ### 12.2 Contract
 
 1. `conversations` unmounts the worktree Sidebar. The roster stays in the page and keeps its own
-   width modes. The right side panel is closed on entry and restored on exit, never unmounted.
+   width modes. The side panel is suppressed like Settings: the shell relocates the activity rail
+   beside Workspace. Suppression costs no more than closing the panel, which already unmounts its
+   content (`right-sidebar/index.tsx`, `panelContent = rightSidebarOpen ? … : null`); tab choice is
+   store state and survives. A closed-but-mounted panel was rejected: it is zero-width rail included,
+   which would strand a user with no way out.
 2. Back leaves Workspace for the view it was entered from (`previousViewBeforeConversations`),
    recorded only by entries from outside the page, guarded like `closeSettingsPage`, not persisted.
 3. Agents shows **Running sessions** (from `useLiveDashboardSnapshot`) and **Your agents**. A host
