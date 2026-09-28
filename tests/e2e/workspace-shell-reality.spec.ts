@@ -26,6 +26,11 @@ test('Workspace owns its shell and shows the running agent and the project estat
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0]?.setSize(1440, 900)
     })
+    // Docked left, an open side panel replaces the worktree list; close it (it stays mounted).
+    await page.evaluate(() => {
+      window.__store!.getState().setRightSidebarOpen(false)
+      window.__store!.getState().setSidebarOpen(true)
+    })
     // Positive controls: in Terminals both are mounted, so their absence below means something.
     await expect(page.locator(WORKTREE_LIST).first()).toBeAttached()
     await expect(page.locator(SIDE_PANEL).first()).toBeAttached()
