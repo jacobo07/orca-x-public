@@ -57,6 +57,11 @@ import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-
 import { shouldWriteTerminalOutputStamp } from '@/lib/terminal-output-recency'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
+import {
+  applyLayoutRestore,
+  type LayoutRestoreOutcome,
+  type LayoutRestoreRequest
+} from '@/lib/terminal-tab-layout-restore'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
 import {
@@ -691,6 +696,11 @@ export type TerminalSlice = {
   setTabColor: (tabId: string, color: string | null) => void
   /** Explicit open of one dormant tab; a no-op for any other tab. Returns whether it asked. */
   requestDormantTerminalTabOpen: (tabId: string) => boolean
+  /** Layout-only restore of the named rows; a row with a PTY bound here is left running. */
+  restoreTerminalTabsLayoutOnly: (
+    worktreeId: string,
+    requests: readonly LayoutRestoreRequest[]
+  ) => LayoutRestoreOutcome[]
   updateTabPtyId: (
     tabId: string,
     ptyId: string,
@@ -2354,6 +2364,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return s
     })
     return requested
+  },
+
+  restoreTerminalTabsLayoutOnly: (worktreeId, requests) => {
+    let outcomes: LayoutRestoreOutcome[] = []
+    set((s) => {
+      const applied = applyLayoutRestore(s.tabsByWorktree, s.ptyIdsByTabId, worktreeId, requests)
+      outcomes = applied.outcomes
+      return applied.tabsByWorktree === s.tabsByWorktree
+        ? s
+        : { tabsByWorktree: applied.tabsByWorktree }
+    })
+    return outcomes
   },
 
   setTabColor: (tabId, color) => {
