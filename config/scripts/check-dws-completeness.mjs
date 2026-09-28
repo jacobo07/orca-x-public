@@ -276,6 +276,14 @@ export async function main(root = process.cwd(), { minimumRows = MINIMUM_ROWS } 
     console.error(`Verdict: ${VERDICT_UNREADABLE_INPUT}`)
     return 3
   }
+  // Why: JSON.parse does not throw on the input text "null" — it returns the value null. Without
+  // this guard, manifest.scripts below throws uncaught and Node's default exit code (1) collides
+  // with CONTRACT_INVALID, hiding a checker crash behind the steady-state red.
+  if (!isRecord(manifest)) {
+    console.error(`${PACKAGE_PATH}: parsed to a non-object value (${JSON.stringify(manifest)})`)
+    console.error(`Verdict: ${VERDICT_UNREADABLE_INPUT}`)
+    return 3
+  }
   const scripts = isRecord(manifest.scripts) ? manifest.scripts : {}
   const gateScripts = Object.keys(scripts)
 

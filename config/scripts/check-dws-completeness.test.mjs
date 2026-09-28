@@ -247,6 +247,12 @@ describe('unreadable input gets its own verdict, distinct from the steady red', 
     const root = makeMatrixEstate({ rows, rawPackage: '{ invalid json', files: rows.map((row) => row.evidence[0].path) })
     expect(await main(root, SMALL)).toBe(3)
   })
+
+  it('a package.json that parses to the valid-but-degenerate JSON value null', async () => {
+    const rows = [passRow(1), passRow(2), passRow(3)]
+    const root = makeMatrixEstate({ rows, rawPackage: 'null', files: rows.map((row) => row.evidence[0].path) })
+    expect(await main(root, SMALL)).toBe(3)
+  })
 })
 
 describe('JSONC tolerance', () => {
