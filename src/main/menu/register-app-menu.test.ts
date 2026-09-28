@@ -39,7 +39,10 @@ import {
   resetReloadPreparationForTest,
   settleReloadPreparation
 } from '../window/reload-preparation'
-import { GRACEFUL_RELOAD_PREPARE_TIMEOUT_MS } from '../window/reload-window-gracefully'
+import {
+  GRACEFUL_RELOAD_PREPARE_TIMEOUT_MS,
+  resetWindowReloadTransactionsForTest
+} from '../window/window-reload-transaction'
 
 const isMac = process.platform === 'darwin'
 
@@ -155,6 +158,7 @@ describe('registerAppMenu', () => {
 
   afterEach(() => {
     resetReloadPreparationForTest()
+    resetWindowReloadTransactionsForTest()
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -313,6 +317,78 @@ describe('registerAppMenu', () => {
       webContentsId: 105
     })
     expect(webContents.reload).not.toHaveBeenCalled()
+  })
+
+  describe('one reload at a time per window', () => {
+    function clickView(label: string): void {
+      getSubmenu(getTemplate(), 'View')
+        .find((item) => item.label === label || item.label?.startsWith(`${label}\t`))
+        ?.click?.({} as never, {} as never, {} as never)
+    }
+
+    function requestIdsSentTo(webContents: { send: ReturnType<typeof vi.fn> }): string[] {
+      return webContents.send.mock.calls.map(([, payload]) => (payload as { requestId: string }).requestId)
+    }
+
+    it('a second Reload while the first is preparing joins it instead of starting another', async () => {
+      const { webContents } = createFocusedWebContents(301, { prepare: 'silent' })
+      const options = buildMenuOptions()
+      getFocusedWindowMock.mockReturnValue({ webContents })
+      registerAppMenu(options)
+
+      clickView('Reload')
+      clickView('Reload')
+      await vi.waitFor(() => expect(webContents.send).toHaveBeenCalled())
+      const [requestId] = requestIdsSentTo(webContents)
+      expect(settleReloadPreparation(301, { requestId, outcome: 'prepared' })).toEqual({
+        proceed: true
+      })
+
+      await vi.waitFor(() => expect(webContents.reload).toHaveBeenCalledTimes(1))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      // One preparation, one reload, and no "left as it was" notice for the joined click.
+      expect(webContents.send).toHaveBeenCalledTimes(1)
+      expect(webContents.reload).toHaveBeenCalledTimes(1)
+      expect(options.onReloadNotPerformed).not.toHaveBeenCalled()
+    })
+
+    it('Force Reload overrides a Reload that is still preparing, and the window reloads once', async () => {
+      const { webContents } = createFocusedWebContents(302, { prepare: 'silent' })
+      const options = buildMenuOptions()
+      getFocusedWindowMock.mockReturnValue({ webContents })
+      registerAppMenu(options)
+
+      clickView('Reload')
+      await vi.waitFor(() => expect(webContents.send).toHaveBeenCalledTimes(1))
+      const [staleRequestId] = requestIdsSentTo(webContents)
+      clickView('Force Reload')
+      await vi.waitFor(() => expect(webContents.reloadIgnoringCache).toHaveBeenCalledTimes(1))
+
+      // A reload is on its way, so the renderer keeps its unload bypass — but this answer must not
+      // cause a second reload.
+      expect(settleReloadPreparation(302, { requestId: staleRequestId, outcome: 'prepared' })).toEqual(
+        { proceed: true }
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(webContents.reload).not.toHaveBeenCalled()
+      expect(webContents.reloadIgnoringCache).toHaveBeenCalledTimes(1)
+      expect(options.onReloadNotPerformed).not.toHaveBeenCalled()
+      expect(options.onBeforeReload).toHaveBeenCalledTimes(1)
+      expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 302 })
+    })
+
+    it('a Reload after the previous one finished starts a fresh preparation', async () => {
+      const { webContents } = createFocusedWebContents(303)
+      getFocusedWindowMock.mockReturnValue({ webContents })
+      registerAppMenu(buildMenuOptions())
+
+      clickView('Reload')
+      await vi.waitFor(() => expect(webContents.reload).toHaveBeenCalledTimes(1))
+      clickView('Reload')
+      await vi.waitFor(() => expect(webContents.reload).toHaveBeenCalledTimes(2))
+
+      expect(webContents.send).toHaveBeenCalledTimes(2)
+    })
   })
 
   describe.each([
