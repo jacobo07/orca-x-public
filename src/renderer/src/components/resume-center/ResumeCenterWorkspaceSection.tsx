@@ -61,7 +61,7 @@ export function ResumeCenterWorkspaceSection({
             variant="outline"
             data-testid="resume-center-workspace-open"
             disabled={row.identity.kind === 'missing'}
-            onClick={() => restoreWorkspaceLayoutOnly(row)}
+            onClick={() => void restoreWorkspaceLayoutOnly(row)}
           >
             {translate('resumeCenter.workspace.open', 'Open')}
           </Button>

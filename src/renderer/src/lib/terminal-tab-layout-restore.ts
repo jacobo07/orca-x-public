@@ -11,24 +11,28 @@ export type LayoutRestoreRequest = {
 }
 
 /**
- * `marked` became dormant; `already-dormant` kept its own marker; `bound` holds a PTY in this window,
- * so it is running here and restoring it is a reattach; `not-found` is not a row of this workspace.
+ * `marked` became dormant; `already-dormant` kept its own marker; `running` has a session the host
+ * lists as live, so restoring it is a reattach; `not-found` is not a row of this workspace.
  */
 export type LayoutRestoreOutcome = {
   tabId: string
-  outcome: 'marked' | 'already-dormant' | 'bound' | 'not-found'
+  outcome: 'marked' | 'already-dormant' | 'running' | 'not-found'
 }
 
 /**
  * Layout-only restore: every requested row of the workspace is made dormant so activation mounts
- * nothing for it, and waking stays a separate, explicit open. Judged against the state it is applied
- * to, so a row that bound a PTY after the caller looked is left running rather than marked.
+ * nothing for it, and waking stays a separate, explicit open.
+ *
+ * "Running" is the host's answer, never the store's: hydration refills `ptyIdsByTabId` and
+ * `tab.ptyId` from the saved session, so a remembered id looks exactly like a bound one. `null`
+ * means the host could not be asked; the caller's own judgement then stands.
  */
 export function applyLayoutRestore(
   tabsByWorktree: Record<string, TerminalTab[]>,
   ptyIdsByTabId: Record<string, string[]>,
   worktreeId: string,
-  requests: readonly LayoutRestoreRequest[]
+  requests: readonly LayoutRestoreRequest[],
+  liveSessionIds: ReadonlySet<string> | null
 ): { tabsByWorktree: Record<string, TerminalTab[]>; outcomes: LayoutRestoreOutcome[] } {
   const tabs = tabsByWorktree[worktreeId] ?? []
   const indexById = new Map(tabs.map((tab, index) => [tab.id, index] as const))
@@ -39,18 +43,16 @@ export function applyLayoutRestore(
       return { tabId: request.tabId, outcome: 'not-found' }
     }
     const tab = tabs[index]!
-    if ((ptyIdsByTabId[tab.id] ?? []).length > 0) {
-      return { tabId: tab.id, outcome: 'bound' }
+    const sessionIds = [tab.ptyId, ...(ptyIdsByTabId[tab.id] ?? [])]
+    if (liveSessionIds && sessionIds.some((id) => id && liveSessionIds.has(id))) {
+      return { tabId: tab.id, outcome: 'running' }
     }
     if (tab.dormancy) {
       return { tabId: tab.id, outcome: 'already-dormant' }
     }
     nextTabs ??= [...tabs]
-    // Why drop the open request: a stale request on a newly dormant row would mount it at once.
-    const { dormantOpenRequested: _requested, ...rest } = tab
-    void _requested
     nextTabs[index] = {
-      ...rest,
+      ...tab,
       dormancy: terminalTabDormancy('layout-restore', request.resumeContinuity)
     }
     return { tabId: tab.id, outcome: 'marked' }

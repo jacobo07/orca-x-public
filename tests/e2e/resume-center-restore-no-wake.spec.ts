@@ -195,8 +195,22 @@ test('Resume Center open restores a slept workspace without starting any process
       relaunched.locator(`[data-testid="resume-center-tab-row"][data-tab-id="${targetTabIds[0]}"]`)
     ).toHaveAttribute('data-residency', 'no-process', { timeout: 30_000 })
 
+    const readTarget = () =>
+      relaunched.evaluate((wt) => {
+        const s = window.__store!.getState()
+        const tabs = s.tabsByWorktree[wt] ?? []
+        return {
+          tabIds: tabs.map((tab) => tab.id),
+          rememberedPtyIds: tabs.map((tab) => tab.ptyId ?? null),
+          boundPtys: tabs.flatMap((tab) => s.ptyIdsByTabId[tab.id] ?? []),
+          dormancy: tabs.map((tab) => tab.dormancy?.reason ?? null)
+        }
+      }, target)
+
     const baseline = await quiescedBaseline(relaunched)
     await section.locator('header [data-slot="button"]').first().click()
+    // Evidence for a red run: whether the restore marked the rows before anything could mount them.
+    const afterClick = await readTarget()
 
     // The layout came back: the workspace is active and its row is still there.
     await expect
@@ -217,22 +231,14 @@ test('Resume Center open restores a slept workspace without starting any process
       }
       await relaunched.waitForTimeout(250)
     }
-    expect(strays, 'opening the workspace from the Resume Center started host sessions').toEqual([])
+    const state = await readTarget()
+    expect(
+      strays,
+      `opening the workspace from the Resume Center started host sessions; after click ${JSON.stringify(afterClick)}, after window ${JSON.stringify(state)}`
+    ).toEqual([])
 
-    const state = await relaunched.evaluate(
-      (wt) => {
-        const s = window.__store!.getState()
-        const tabs = s.tabsByWorktree[wt] ?? []
-        return {
-          tabIds: tabs.map((tab) => tab.id),
-          boundPtys: tabs.flatMap((tab) => s.ptyIdsByTabId[tab.id] ?? []),
-          dormancy: tabs.map((tab) => tab.dormancy?.reason ?? null)
-        }
-      },
-      target
-    )
     expect(state.tabIds, 'the restore dropped or duplicated rows').toEqual(targetTabIds)
-    expect(state.boundPtys, 'a restored row bound a PTY').toEqual([])
+    // Not ptyIdsByTabId: hydration refills it with the remembered id, so it cannot witness a spawn.
     expect(state.dormancy).toEqual(['layout-restore'])
     await expect(relaunched.getByTestId('dormant-terminal-open')).toBeVisible({ timeout: 15_000 })
   } finally {

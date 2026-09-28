@@ -696,10 +696,11 @@ export type TerminalSlice = {
   setTabColor: (tabId: string, color: string | null) => void
   /** Explicit open of one dormant tab; a no-op for any other tab. Returns whether it asked. */
   requestDormantTerminalTabOpen: (tabId: string) => boolean
-  /** Layout-only restore of the named rows; a row with a PTY bound here is left running. */
+  /** Layout-only restore of the named rows; a row the host lists as live is left running. */
   restoreTerminalTabsLayoutOnly: (
     worktreeId: string,
-    requests: readonly LayoutRestoreRequest[]
+    requests: readonly LayoutRestoreRequest[],
+    liveSessionIds: ReadonlySet<string> | null
   ) => LayoutRestoreOutcome[]
   updateTabPtyId: (
     tabId: string,
@@ -2366,10 +2367,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     return requested
   },
 
-  restoreTerminalTabsLayoutOnly: (worktreeId, requests) => {
+  restoreTerminalTabsLayoutOnly: (worktreeId, requests, liveSessionIds) => {
     let outcomes: LayoutRestoreOutcome[] = []
     set((s) => {
-      const applied = applyLayoutRestore(s.tabsByWorktree, s.ptyIdsByTabId, worktreeId, requests)
+      const applied = applyLayoutRestore(
+        s.tabsByWorktree,
+        s.ptyIdsByTabId,
+        worktreeId,
+        requests,
+        liveSessionIds
+      )
       outcomes = applied.outcomes
       return applied.tabsByWorktree === s.tabsByWorktree
         ? s
