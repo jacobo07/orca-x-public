@@ -42,8 +42,8 @@ ahead of its status.
   workspace activates with `wake: false`: no sleeping-agent resume, no seeded terminal, no host
   terminal after wake. "Running" is the local host's `listSessions()` read at click time, never the
   store: hydration refills `ptyIdsByTabId`/`tab.ptyId` with the remembered id. LIVE, calling window
-  only (real app: `resume-center-restore-no-wake.spec.ts` on GEX44; Windows run recorded in
-  `RESUMPTION_FILE.continuity.md`). Multi-window: PLANNED.
+  only (real app: `resume-center-restore-no-wake.spec.ts`, passing on GEX44 and on Windows at
+  `93cadd9c3`). Multi-window: PLANNED.
 - **Resume / Resume all** are wake intents. Each wake asks `continuity:admitWake` (main,
   `src/main/continuity/wake-admission.ts`), which reuses `observeDispatchHostResources` +
   `decideDispatchAdmission` against a PROVISIONAL 4 GB free-memory floor

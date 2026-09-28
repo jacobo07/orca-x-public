@@ -97,18 +97,6 @@ async function removeProfileDir(userDataDir: string): Promise<void> {
   }
 }
 
-/** Kills a daemon the spec wants gone. Why ESRCH is fine: on Windows the daemon already exited with
- *  the app; each spec proves the precondition itself (a row with no process). */
-export function killE2EDaemon(pid: number): void {
-  try {
-    process.kill(pid, 'SIGKILL')
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-      throw error
-    }
-  }
-}
-
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }

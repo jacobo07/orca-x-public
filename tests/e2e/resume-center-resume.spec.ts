@@ -11,11 +11,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import {
-  attachRepoAndOpenTerminal,
-  createRestartSession,
-  killE2EDaemon
-} from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 
 /**
@@ -147,7 +143,14 @@ test('Resume wakes exactly the chosen row, and Resume all stops at admission', a
     const daemonPid = readDaemonPid(session.userDataDir)
     await session.close(firstApp)
     firstApp = null
-    killE2EDaemon(daemonPid)
+    // ESRCH: on Windows the daemon is already gone after quit; the no-process residency proves it.
+    try {
+      process.kill(daemonPid, 'SIGKILL')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw error
+      }
+    }
 
     const second = await session.launch()
     secondApp = second.app

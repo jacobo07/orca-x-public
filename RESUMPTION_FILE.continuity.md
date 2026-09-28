@@ -66,9 +66,16 @@ P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratche
   - Owners reused: decideTerminalTabMount + dormancy marker (new reason layout-restore), activation
     wake:false, requestDormantTerminalTabOpen, resumeSleepingAgentSessionsForWorktree (+onlyPaneKeys),
     decideDispatchAdmission/observeDispatchHostResources. No new scheduler.
-  - PENDING at write time: Windows run of restore-no-wake (local build of 1bb84fff0 done); real-app
-    drills M2/M3/M4/M8 on GEX44 (/home/kobii/rc-mut, log /home/kobii/rc-drill.log); unit drills;
-    uncommitted test resume-sleeping-agent-session-only-pane-keys.test.ts; vault/UKDL; memory.
+  - PROVEN WINDOWS @93cadd9c3: restore-no-wake 1 passed (1.8 min) in the real Windows app, local e2e
+    build. Harness fixes it needed: target = a second repo the test creates (the seeded secondary
+    worktree is never discovered on Windows); daemon kill tolerates ESRCH only.
+  - MUTATIONS (all restored clean, each caught by its named assertion): real app GEX44 @85a554b49 M2 no
+    marking, M3 admission bypass, M4 Resume opens siblings, M8 running-from-store (the found bug);
+    unit U1 wake flag ignored, U5 running before bind, U6 no single-flight, U7 onlyPaneKeys ignored,
+    U9 chosen Resume skips admission, U10 restore trusts store. Baseline 20/20 green first.
+  - Knowledge: memory orca-x-resume-center-p4-state + trap-hydrated-pty-ids-look-bound; UKDL
+    ~/.claude/knowledge_vault/ukdl/restore-is-not-materialization.md.
+  - PROVEN GEX44 @93cadd9c3 (final): resume-center-resume + restore-no-wake + P3 spec, 3 passed (2.6 min).
   - UNMEASURED: per-session wake memory cost (needs a real provider run; Owner Q1 asked for it).
 - NEXT: P5 multi-window Park & Exit + blue D1 control; restore/resume across windows.
 - FINDINGS: workspace activation (`activateAndRevealWorktree` / `...FolderWorkspace`,
