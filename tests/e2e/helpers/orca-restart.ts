@@ -120,6 +120,9 @@ export function createRestartSession(
   let runtimeWsPort: number | null = null
   // Every main process this session started: disposal proves each gone before touching the profile.
   const launchedPids: number[] = []
+  // Launches not yet closed. A spec that never calls close() would otherwise leave its main process
+  // alive under dispose(); on Windows that surfaced as an EPERM misread as a transient lock.
+  const openApps = new Set<ElectronApplication>()
 
   // Why: this helper bypasses the shared `electronApp` fixture, so it must
   // seed the same completed onboarding profile or first-run overlays cover
@@ -165,6 +168,8 @@ export function createRestartSession(
     if (mainPid) {
       launchedPids.push(mainPid)
     }
+    openApps.add(app)
+    app.once('close', () => openApps.delete(app))
     // Why: attach before firstWindow — the main-process daemon guard and the
     // plugin-system startup metrics can both emit before the renderer is ready.
     if (options?.onStderr) {
@@ -189,6 +194,11 @@ export function createRestartSession(
   }
 
   const dispose = async (): Promise<void> => {
+    for (const app of openApps) {
+      console.log('[e2e-cleanup] restart-session closing a launch the spec left open')
+      await closeElectronAppForE2E(app)
+      openApps.delete(app)
+    }
     if (process.env.ORCA_E2E_PRESERVE_RESTART_PROFILE === '1') {
       await cleanupE2EDaemons(userDataDir)
       console.log(`[e2e] Preserved restart profile at ${userDataDir}`)
