@@ -36,18 +36,17 @@ P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratche
 - DONE P2 `552dc32f4` `continuity:renderPanePreview` (main `src/main/continuity/pane-preview.ts`,
   caller names a pane; daemon history with ignoreCleanEnd / session ref; 7 tests, 6/6 mutations).
 - DONE P3a `22f49f14d` surface-claims gate reads `ClaimValue` too.
-- P3c WRITTEN, UNCOMMITTED: all of `src/renderer/src/components/resume-center/` (presenter with tone
-  type `ContinuityTone`, model + test 5/5, two hooks, ClaimValue, PanePreviewThumb, TabRow,
-  WorkspaceSection, SummaryPanel, Page); `resumeCenter: true` in src/shared/top-level-view.ts; lazy
-  route in app-shell/AppWorkspaceShell.tsx. REMAINING before the commit: add `'resumeCenter'` to the
-  TopLevelView union (src/shared/ui-chrome-types.ts ~136); `openResumeCenter` in store/slices/ui.ts
-  (interface ~763, impl ~1559, same shape as openConversationsPage); entry button in the
-  ConversationsPage header; `resumeCenter.*` keys (grep the component folder for `translate('resumeCenter.`)
-  in en/es/ja/ko/zh; config/workspace-surface-claims.jsonc: add surface root
-  `src/renderer/src/components/resume-center`, presenter {module resume-center-presentation.ts, toneType
-  ContinuityTone}, a claim per ClaimValue testId (producer src/shared/desk-continuity-projection.ts#projectDesk,
-  absent "omitted"; resume-center-window-count absent resumeCenter.summary.windowsUnrecorded); then
-  fmt/lint/tsc x3/gate/tests. The blue D1 token belongs to P5 (the control lives there).
+- DONE P3 `a78bd9d99`: Resume Center view (`resumeCenter` TopLevelView, entry = History icon beside New
+  agent in CognitiveWorkspaceRoster, breadcrumb back), components in
+  `src/renderer/src/components/resume-center/`, 49 keys x5 locales, 10 ClaimValues classified, presenter
+  `ContinuityTone` registered, runtime client-ui-schemas accepts 'resumeCenter'. lint 0, tsc 0/0/0, surface
+  gate green (28 sites), 47 continuity tests. verify:localization-catalog red ONLY on pre-existing
+  terminalPreview.* keys in TerminalPreviewCard.tsx (not ours).
+- NEXT: P3 proof — e2e `tests/e2e/resume-center.spec.ts` on GEX44 (orcaPage; open Workspace →
+  `workspace-open-resume-center` → a seeded worktree section with its tab rows, expand → a rendered
+  preview with the tab's own output; station control via `data-testid="resume-center-page"`). Then P4
+  wake admission (reuse observeDispatchHostResources; token contract; no-wake activation option for
+  Restore-layout-only). The blue D1 token belongs to P5.
 - FINDINGS: workspace activation (`activateAndRevealWorktree` / `...FolderWorkspace`,
   lib/worktree-activation.ts:119,195) calls `resumeSleepingAgentSessionsForWorktree` — "Abrir" wakes
   sleeping agents, so P4 "Restore layout only" needs a no-wake activation option. Greeting name producer =
