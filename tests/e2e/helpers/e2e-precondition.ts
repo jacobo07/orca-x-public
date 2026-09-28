@@ -19,6 +19,9 @@
  */
 
 export const PRECONDITION_FAILURE_MARKER = 'ORCA-E2E-PRECONDITION-FAILED'
+/** Thrown by e2e-profile-disposal.ts for real residue. A spec's own finally runs it inside the body,
+ *  so origin alone would name leaked residue a product failure. */
+export const CLEANUP_FAILURE_MARKER = 'ORCA-E2E-CLEANUP-FAILED'
 
 /** The ordered phases the shared fixture walks before a spec's own assertions begin. */
 export type E2ESetupPhase =
@@ -71,7 +74,7 @@ export function classifyE2EFailure(input: {
   }
   // Before the harness patterns, not after: a closed page is teardown's expected end state, so
   // reading it there as harness ill-health would report a sick harness on every healthy run.
-  if (input.origin === 'teardown') {
+  if (input.origin === 'teardown' || message.includes(CLEANUP_FAILURE_MARKER)) {
     return 'cleanup-failed'
   }
   if (HARNESS_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
