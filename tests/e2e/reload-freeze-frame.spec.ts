@@ -14,6 +14,8 @@ type FreezeFrameProbe = {
   distinctColors: number | null
   viewportWidth: number
   viewportHeight: number
+  firstPaintAt?: number | null
+  firstContentfulPaintAt?: number | null
 }
 
 const OVERLAY_ID = 'orca-reload-freeze-frame'
@@ -93,10 +95,23 @@ async function installProbe(page: Page): Promise<void> {
 }
 
 async function readProbe(page: Page): Promise<FreezeFrameProbe | null> {
-  return page.evaluate(
-    () =>
-      (window as unknown as { __freezeFrameProbe?: FreezeFrameProbe }).__freezeFrameProbe ?? null
-  )
+  return page.evaluate(() => {
+    const probe = (window as unknown as { __freezeFrameProbe?: FreezeFrameProbe })
+      .__freezeFrameProbe
+    if (!probe) {
+      return null
+    }
+    // The document's own paint timeline: a first paint earlier than addedAt is a frame of the
+    // new document drawn with no freeze frame over it.
+    const paints = Object.fromEntries(
+      performance.getEntriesByType('paint').map((entry) => [entry.name, entry.startTime])
+    )
+    return {
+      ...probe,
+      firstPaintAt: paints['first-paint'] ?? null,
+      firstContentfulPaintAt: paints['first-contentful-paint'] ?? null
+    }
+  })
 }
 
 async function reloadAndObserve(
