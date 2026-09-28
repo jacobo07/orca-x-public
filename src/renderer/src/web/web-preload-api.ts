@@ -867,7 +867,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     // Why explicit: the fallback would answer with an empty desk; a web client holds no desk at all.
     continuity: {
-      readDesk: () => Promise.resolve({ status: 'unavailable' as const })
+      readDesk: () => Promise.resolve({ status: 'unavailable' as const }),
+      renderPanePreview: () => Promise.resolve({ status: 'unavailable' as const })
     },
     // Why explicit: a web client cannot quit the desktop app or its daemon.
     durableExit: {

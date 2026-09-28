@@ -108,7 +108,7 @@ function getRuntimeDir(): string {
   return dir
 }
 
-function getHistoryDir(): string {
+export function getHistoryDir(): string {
   const dir = join(app.getPath('userData'), 'terminal-history')
   mkdirSync(dir, { recursive: true })
   return dir

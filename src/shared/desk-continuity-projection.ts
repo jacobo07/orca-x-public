@@ -152,26 +152,42 @@ function residencyOf(
   return liveness.kind === 'observed' ? 'no-process' : 'unknown'
 }
 
+/** A tab's leaves in layout order; empty for a tab with no recorded layout. */
+export function listTabLeafIds(layout: TerminalLayoutSnapshot | undefined): string[] {
+  const leafIds: string[] = []
+  collectLeafIds(layout?.root ?? null, 0, leafIds)
+  return leafIds
+}
+
+/** Where a pane's durable history lives. The one rule both the desk and its previews use. */
+export function resolvePanePreviewSource(args: {
+  tab: TerminalTab
+  layout: TerminalLayoutSnapshot | undefined
+  hostId: ExecutionHostId
+  leafId: string | null
+}): DeskPanePreviewSource {
+  const { tab, layout, hostId, leafId } = args
+  const ref = leafId ? layout?.scrollbackRefsByLeafId?.[leafId] : undefined
+  if (ref) {
+    return { source: 'session-ref', ref }
+  }
+  // Why local only: the daemon history lives on this machine; a remote host's is not ours to read.
+  const sessionId =
+    (leafId ? layout?.ptyIdsByLeafId?.[leafId] : undefined) ??
+    (listTabLeafIds(layout).length <= 1 ? tab.ptyId : null)
+  return hostId === 'local' && sessionId
+    ? { source: 'daemon-history', sessionId }
+    : { source: 'none' }
+}
+
 function projectPanes(
   tab: TerminalTab,
   layout: TerminalLayoutSnapshot | undefined,
   hostId: ExecutionHostId
 ): DeskPane[] {
-  const leafIds: string[] = []
-  collectLeafIds(layout?.root ?? null, 0, leafIds)
-  const preview = (leafId: string | null): DeskPanePreviewSource => {
-    const ref = leafId ? layout?.scrollbackRefsByLeafId?.[leafId] : undefined
-    if (ref) {
-      return { source: 'session-ref', ref }
-    }
-    // Why local only: the daemon history lives on this machine; a remote host's is not ours to read.
-    const sessionId =
-      (leafId ? layout?.ptyIdsByLeafId?.[leafId] : undefined) ??
-      (leafIds.length <= 1 ? tab.ptyId : null)
-    return hostId === 'local' && sessionId
-      ? { source: 'daemon-history', sessionId }
-      : { source: 'none' }
-  }
+  const leafIds = listTabLeafIds(layout)
+  const preview = (leafId: string | null): DeskPanePreviewSource =>
+    resolvePanePreviewSource({ tab, layout, hostId, leafId })
   if (leafIds.length === 0) {
     return [{ leafId: null, title: null, preview: preview(null) }]
   }

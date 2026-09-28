@@ -30,8 +30,12 @@ P5 Park & Exit multi-window + D1 blue control. P6 desk snapshots (+ retention, d
 P7 Cursor bridge. P8 real-app proof, mutations, perf, KV/UKDL, continuity ratchet.
 
 ## 5. State
-- DONE: spec + this file.
-- NEXT: P1 `src/shared/desk-continuity-projection.ts` + test.
+- DONE: spec `8918ba792`; P1 projection `8c7db1f49` (12 tests, 5/5 mutations); P1b
+  `continuity:readDesk` `919391fe9` (main `src/main/continuity/desk-read.ts`, preload + web 'unavailable';
+  5 tests, 3/3 mutations). tsc node/tc.web/tc.cli 0.
+- NEXT: P2 previews — render a pane's durable history in main via `HeadlessEmulator`
+  (`src/main/daemon/headless-emulator.ts`), source from `daemon/history-reader.ts` for local panes and the
+  session scrollback ref otherwise; lazy per expand; never labelled live.
 
 ## 6. Start
 `Set-Location C:\Users\User\Apps\orca-continuity-wt`; prove `git worktree list` and HEAD; read the spec.
