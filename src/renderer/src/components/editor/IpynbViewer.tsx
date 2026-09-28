@@ -481,7 +481,9 @@ function OutputItem({ item }: { item: IpynbOutputItem }): React.JSX.Element | nu
         sandbox=""
         referrerPolicy="no-referrer"
         loading="lazy"
-        className="block h-80 w-full border-0 bg-background"
+        // Why normal: the root carries the theme's color-scheme, and an iframe whose scheme differs
+        // from its document's gets an opaque light canvas behind the output.
+        className="block h-80 w-full border-0 bg-background [color-scheme:normal]"
         srcDoc={html}
       />
     )

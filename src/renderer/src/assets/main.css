@@ -136,6 +136,9 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  /* Why: native controls (select popups, scrollbars, date pickers) are drawn by the platform from
+     this, not from the tokens; without it a dark window got a light popup with white option text. */
+  color-scheme: light;
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -282,6 +285,7 @@
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {
+  color-scheme: dark;
   --orca-security-background: #0a0a0a;
   --orca-security-foreground: #fafafa;
   --orca-security-card: #171717;
@@ -643,8 +647,9 @@
 
 /* Radix owns the available-height variable on PopoverContent. Make that same
    node scrollable so Chromium scrollbar hit-testing stays inside the layer. */
+/* No color-scheme here: it inherits the theme root's, where a fixed `dark` gave light-theme
+   popovers dark scrollbars. */
 .popover-scroll-content {
-  color-scheme: dark;
   max-height: min(15rem, var(--radix-popover-content-available-height, 15rem));
   overflow-x: hidden;
   overflow-y: auto;
