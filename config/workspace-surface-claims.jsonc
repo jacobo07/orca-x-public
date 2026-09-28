@@ -1,0 +1,207 @@
+// Every value the Workspace surface CLAIMS about an agent, a turn or a connected app, and who
+// produces it. Checked by config/scripts/check-workspace-surface-claims.mjs (pnpm
+// check:workspace-surface-claims).
+//
+// A claim site is a `ContextRow` (the surface's own claim primitive), identified by its testId.
+// Each is classified here with:
+//   producer  "path#export" of the module that decides the value — or null for a DECLARED
+//             unknown, a row that states Orca has no producer instead of guessing one;
+//   absent    the translate key the consumer renders when the producer has no answer yet (it must
+//             appear in the consumer file), or "omitted" when the row is not drawn at all;
+//   why       one sentence someone can disagree with.
+//
+// Visual polish never authorizes a value: a new row with no entry here fails the gate, and so
+// does a status colour that is not reached through a presenter's tone map.
+{
+  "surfaces": [
+    "src/renderer/src/components/conversations",
+    "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx",
+    "mobile/src/workspace",
+    "src/renderer/src/components/resume-center"
+  ],
+  "presenters": [
+    {
+      "module": "src/renderer/src/components/conversations/agent-grounding-presentation.ts",
+      "toneType": "GroundingTone"
+    },
+    {
+      "module": "src/renderer/src/components/conversations/connected-application-presentation.ts",
+      "toneType": "AppTone"
+    },
+    {
+      "module": "src/renderer/src/components/conversations/agent-federation-presentation.ts",
+      "toneType": "FederationTone"
+    },
+    {
+      "module": "src/renderer/src/components/resume-center/resume-center-presentation.ts",
+      "toneType": "ContinuityTone"
+    }
+  ],
+  "claims": {
+    "agent-context-project-name": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "workspace.context.reading",
+      "why": "The agent's project comes from the roster record, never from the window's active repo."
+    },
+    "agent-context-project-path": {
+      "producer": "src/renderer/src/components/conversations/use-agent-grounding.ts#useAgentGrounding",
+      "absent": "omitted",
+      "why": "A path is shown only when the turn runner's own resolver located the project here."
+    },
+    "agent-context-location": {
+      "producer": "src/renderer/src/components/conversations/agent-grounding-presentation.ts#describeTurnLocation",
+      "absent": "workspace.context.reading",
+      "why": "Where the next turn runs is the turn runner's answer, including its refusals."
+    },
+    "agent-context-provider": {
+      "producer": "src/renderer/src/components/conversations/agent-grounding-presentation.ts#describeProvider",
+      "absent": "workspace.context.reading",
+      "why": "The driver the turn path will use, as main reports it."
+    },
+    "agent-context-credential": {
+      "producer": "src/renderer/src/components/conversations/agent-grounding-presentation.ts#describeProvider",
+      "absent": "workspace.context.reading",
+      "why": "The same credential check the turn makes, not a separate guess."
+    },
+    "agent-context-model": {
+      "producer": null,
+      "absent": "workspace.context.modelUnrecorded",
+      "why": "Nothing records which model the provider chose, so the row says so rather than naming one."
+    },
+    "agent-context-role": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "omitted",
+      "why": "The role the person gave the agent; an empty role renders a dash, not invented text."
+    },
+    "agent-context-threads": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "workspace.context.reading",
+      "why": "Counted from durable conversation summaries bound to this agent."
+    },
+    "agent-context-last-activity": {
+      "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
+      "absent": "workspace.context.never",
+      "why": "The latest update of a conversation bound to this agent; none is 'None yet', not a date."
+    },
+    "agent-context-now": {
+      "producer": "src/renderer/src/components/conversations/conversation-live-state.ts#applyConversationLiveEvent",
+      "absent": "workspace.context.idle",
+      "why": "Working only while a turn event stream says so; this is not an online/liveness claim."
+    },
+    "agent-context-no-turns": {
+      "producer": "src/shared/conversation-types.ts#ConversationTurn",
+      "absent": "workspace.context.noTurns",
+      "why": "Read from the durable record's turns; a send refused before the provider starts none."
+    },
+    "agent-review": {
+      "producer": "src/renderer/src/components/conversations/use-agent-federation.ts#useAgentFederation",
+      "absent": "omitted",
+      "why": "A review row is the stored review with its currency judged against git when it was read; independence is derived by Orca, never shown upgraded."
+    },
+    "agent-approval": {
+      "producer": "src/renderer/src/components/conversations/use-agent-federation.ts#useAgentFederation",
+      "absent": "omitted",
+      "why": "An approval row is a subject-bound gate on this agent's task, with whether approving would be accepted now; the decision itself is re-checked in main."
+    },
+    "agent-federation-none": {
+      "producer": "src/renderer/src/components/conversations/use-agent-federation.ts#useAgentFederation",
+      "absent": "workspace.federation.none",
+      "why": "Only a loaded, empty answer says there is nothing; reading and failure have their own rows."
+    },
+    "agent-federation-reading": {
+      "producer": "src/renderer/src/components/conversations/use-agent-federation.ts#useAgentFederation",
+      "absent": "workspace.context.reading",
+      "why": "Shown while main has not answered yet, and never as an empty list."
+    },
+    "agent-federation-unavailable": {
+      "producer": "src/renderer/src/components/conversations/use-agent-federation.ts#useAgentFederation",
+      "absent": "omitted",
+      "why": "A failed read is shown as main's reason, never as having no reviews."
+    },
+    "agent-federation-notice": {
+      "producer": "src/renderer/src/components/conversations/use-agent-federation.ts#useAgentFederation",
+      "absent": "omitted",
+      "why": "A refused decision is main's refusal in its own words; the row disappears when a decision lands."
+    },
+    "agent-context-turn": {
+      "producer": "src/shared/conversation-types.ts#ConversationTurn",
+      "absent": "omitted",
+      "why": "One row per provider turn recorded on the conversation, newest five."
+    },
+    "resume-center-workspace-session-count": {
+      "producer": "src/renderer/src/components/resume-center/resume-center-model.ts#buildResumeCenterModel",
+      "absent": "omitted",
+      "why": "Counted from the tabs the saved session holds for that workspace, not from live windows."
+    },
+    "resume-center-window-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "resumeCenter.summary.windowsUnrecorded",
+      "why": "The recorded window list; an unreadable list says so instead of claiming zero windows."
+    },
+    "resume-center-workspace-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Workspaces with at least one saved tab, across every host partition that could be read."
+    },
+    "resume-center-session-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Saved terminal tabs on the desk; the panel is not drawn until the desk is read."
+    },
+    "resume-center-pane-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Leaves of each saved split layout, one per tab without a layout."
+    },
+    "resume-center-warm-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Tabs whose session id a host listed as live; a host that could not be asked counts none here."
+    },
+    "resume-center-dormant-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Tabs carrying the dormancy marker their lifecycle wrote, never inferred from a missing process."
+    },
+    "resume-center-unknown-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Tabs on hosts whose liveness could not be observed, kept apart from not-running."
+    },
+    "resume-center-greeting-sessions": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Same total as the summary; the line is not drawn until the desk is read."
+    },
+    "resume-center-greeting-running": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Same warm count as the summary, from an observed live listing."
+    },
+    "resume-center-resume-all-done": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items of the started plan already answered, one wake at a time; drawn only while it runs."
+    },
+    "resume-center-resume-all-total": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items the plan holds from where this run began; the plan is fixed when Resume all is pressed."
+    },
+    "resume-center-resume-all-started": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Wakes whose PTY bound, the runtime's evidence; a request that never bound is not counted."
+    },
+    "resume-center-resume-all-remaining": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items left asleep when admission refused, including the refused one; Continue starts there."
+    },
+    "resume-center-resume-all-left-asleep": {
+      "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
+      "absent": "omitted",
+      "why": "Items not started in a finished run: unmeasured hosts, declined resumes, or no bind in time."
+    }
+  }
+}

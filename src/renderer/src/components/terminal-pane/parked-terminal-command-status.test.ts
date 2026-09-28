@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, ProviderType } from '../../../../shared/agent-status-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 const PTY_ID_LOCAL = 'pty-1'
@@ -14,11 +14,11 @@ const DONE_SETTLE_MS = 1500
 const ROUTING = { connectionId: null }
 
 type MockStoreState = {
-  tabsByWorktree: Record<string, { id: string; launchAgent?: AgentType }[]>
+  tabsByWorktree: Record<string, { id: string; launchAgent?: ProviderType }[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
-  retainedAgentsByPaneKey: Record<string, { agentType: AgentType } | undefined>
+  retainedAgentsByPaneKey: Record<string, { agentType: ProviderType } | undefined>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
-  agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
+  agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: ProviderType } } | undefined>
   runtimePaneTitlesByTabId: Record<string, Record<number, string | undefined>>
   setAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>

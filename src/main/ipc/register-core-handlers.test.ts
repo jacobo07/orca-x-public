@@ -37,6 +37,7 @@ const {
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
+  registerConversationHandlersMock,
   registerClaudeAccountHandlersMock,
   registerMiniMaxCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
@@ -105,6 +106,7 @@ const {
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
+  registerConversationHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
@@ -346,6 +348,10 @@ vi.mock('./agent-trust', () => ({
   registerAgentTrustHandlers: registerAgentTrustHandlersMock
 }))
 
+vi.mock('./conversations', () => ({
+  registerConversationHandlers: registerConversationHandlersMock
+}))
+
 vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
@@ -449,6 +455,7 @@ describe('registerCoreHandlers', () => {
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
+    registerConversationHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
     registerMiniMaxCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
@@ -565,6 +572,10 @@ describe('registerCoreHandlers', () => {
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerProjectWorkingSetHandlersMock).toHaveBeenCalledOnce()
     expect(registerDurableExitHandlersMock).toHaveBeenCalledOnce()
+    // Asserted, not merely mocked: a vi.mock entry only grants permission for the module to load.
+    // Without this line the conversation handlers could stop being registered entirely and every
+    // test in this file would still pass.
+    expect(registerConversationHandlersMock).toHaveBeenCalledOnce()
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store, {
       isDashboardPopoutRenderer: isDashboardPopoutRendererMock
     })

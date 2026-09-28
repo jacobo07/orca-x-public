@@ -53,6 +53,28 @@ jobs:
       - name: Check durability contracts
         run: pnpm run check:durability-contracts
 
+      - name: Check E2E fixture binding
+        run: pnpm run check:e2e-fixture-binding
+
+      # Both gates guard one invariant from opposite ends: at most one durable product actor
+      # catalog may exist, and exactly one module may mint an identity into it. They join the
+      # per-gate list here rather than arriving as a new workflow, and rather than riding in on
+      # `lint` — which no workflow in this repository invokes.
+      - name: Check durable actor catalogs
+        run: pnpm run check:durable-actor-catalogs
+
+      - name: Check agent identity authority
+        run: pnpm run check:agent-identity-authority
+
+      - name: Check agent instruction layer
+        run: pnpm run check:agent-instruction-layer
+
+      # Same family, one rung further out: the instruction layer governs WHAT an agent says to the
+      # provider, this governs WHERE its turn runs. An absent location used to become
+      # `process.cwd()`, i.e. Orca's own install directory on a packaged build.
+      - name: Check agent turn location authority
+        run: pnpm run check:agent-turn-location-authority
+
       # Why these are listed individually rather than via `pnpm lint`: no workflow runs `pnpm lint`,
       # and it chains nineteen commands with `&&`, so the first failure prevents every later gate
       # from running at all while reporting as one red. A step per gate keeps each one's verdict its
@@ -80,6 +102,30 @@ jobs:
 
       - name: Check status semantics
         run: pnpm run check:status-semantics
+
+      # Four gates the two merged programs each chained only into `lint`, which no workflow runs.
+      - name: Check dispatch admission
+        run: pnpm run check:dispatch-admission
+
+      - name: Check orchestration migration coherence
+        run: pnpm run check:orchestration-migration
+
+      - name: Check provider noun debt
+        run: pnpm run check:provider-noun-debt
+
+      - name: Check workspace trust authority
+        run: pnpm run check:workspace-trust-authority
+
+      # What the Workspace SHOWS about an agent must come from an owner: every claim row is
+      # classified to a producer, status colours only via presenter tone maps, no model or host
+      # written into the surface. Visual polish never authorizes a value.
+      - name: Check Workspace surface claims
+        run: pnpm run check:workspace-surface-claims
+
+      # The program matrix's integrity, never its completion: the done-gate
+      # (`check:cognitive-workspace-completeness`) is red by construction until the program ends.
+      - name: Check cognitive workspace completeness matrix
+        run: pnpm run check:cognitive-workspace-matrix
 
       - name: Check VM runtime rollback compatibility
         env:

@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 
 export type NativeChatComposerProps = {
@@ -8,7 +8,7 @@ export type NativeChatComposerProps = {
   paneKey: string
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
-  agent: AgentType
+  agent: ProviderType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */

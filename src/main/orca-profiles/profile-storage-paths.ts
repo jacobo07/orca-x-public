@@ -7,6 +7,7 @@ const PROFILE_INDEX_FILE_NAME = 'orca-profile-index.json'
 const PROFILE_DATA_FILE_NAME = 'orca-data.json'
 const PROFILE_BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
 const PROFILE_DIRECTORY_NAME = 'profiles'
+const PROFILE_CONVERSATIONS_DIRECTORY_NAME = 'conversations'
 
 export const LEGACY_BACKUP_COUNT = 5
 
@@ -36,6 +37,25 @@ export function getOrcaProfileDirectory(
   userDataPath = getProfileUserDataPath()
 ): string {
   return join(getOrcaProfilesDirectory(userDataPath), profileId)
+}
+
+/**
+ * Where a profile's Orca conversations live: one record per file, published by ConversationStore.
+ *
+ * Nested inside the profile directory rather than beside it, so a profile owns its conversations
+ * the way it owns its data file — deleting a profile takes them with it instead of orphaning them
+ * in a shared pool keyed by an id nobody reads. Isolation is a property of this owner; callers do
+ * not compose the path themselves, because a caller that forgets the profile id produces a single
+ * shared directory and every profile then reads every conversation.
+ */
+export function getOrcaConversationsDirectory(
+  profileId: string,
+  userDataPath = getProfileUserDataPath()
+): string {
+  return join(
+    getOrcaProfileDirectory(profileId, userDataPath),
+    PROFILE_CONVERSATIONS_DIRECTORY_NAME
+  )
 }
 
 export function getOrcaProfileDataFile(

@@ -1,20 +1,7 @@
 import React from 'react'
-import {
-  AppWindow,
-  Bell,
-  BookOpen,
-  CalendarClock,
-  EyeOff,
-  Files,
-  Github,
-  Gitlab,
-  List,
-  Smartphone
-} from 'lucide-react'
+import { EyeOff, Github, Gitlab } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -28,13 +15,17 @@ import { useVisibleTaskProviders } from '@/hooks/useVisibleTaskProviders'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
 import { useMobileSidebarOnboardingBadge } from '@/components/sidebar/mobile-sidebar-onboarding-badge'
 import type { TaskProvider } from '../../../../shared/task-providers'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from '@/components/right-sidebar/right-sidebar-titlebar-drag-regions'
 import {
   activeViewForWorkspaceActivity,
   getVisibleWorkspaceActivities,
   type WorkspaceActivityId
 } from './workspace-activity-items'
+import {
+  ActivityRailItemWithHide,
+  HIDE_SETTING_BY_ACTIVITY,
+  WorkspaceActivityRailButton,
+  type ActivityBadge
+} from './workspace-activity-rail-button'
 
 /**
  * The application-level section of the far-left activity rail.
@@ -43,125 +34,7 @@ import {
  * (Projects, and the panel's own tabs) because that is the scope order: application surface first,
  * then what fills it. They were previously full-width text rows inside the project sidebar, which
  * made a global mode switch look like a sidebar item.
- *
- * Icons and translate keys are reused from those rows verbatim, so no locale key moves and no
- * surface silently changes name.
  */
-
-const ACTIVITY_ICONS: Record<
-  WorkspaceActivityId,
-  React.ComponentType<{ size?: number; className?: string }>
-> = {
-  workspace: AppWindow,
-  tasks: List,
-  automations: CalendarClock,
-  agents: Bell,
-  artifacts: Files,
-  skills: BookOpen,
-  mobile: Smartphone
-}
-
-function activityLabel(activity: WorkspaceActivityId): string {
-  switch (activity) {
-    case 'workspace':
-      return translate('auto.components.sidebar.SidebarNav.workspace', 'Workspace')
-    case 'tasks':
-      return translate('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')
-    case 'automations':
-      return translate('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')
-    case 'agents':
-      return translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')
-    case 'artifacts':
-      return translate('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')
-    case 'skills':
-      return translate('auto.components.sidebar.SidebarNav.skills', 'Skills')
-    case 'mobile':
-      return translate('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')
-  }
-}
-
-/**
- * The rows carried two informational badges — an unread count on Agents and a "New" marker on
- * Orca Mobile. A rail entry has no room for a word, so the count keeps its number and the marker
- * becomes a dot; both stay in the accessible name so the information is not pointer-only.
- */
-type ActivityBadge = { count: number } | { dot: true } | null
-
-function WorkspaceActivityRailButton({
-  activity,
-  active,
-  onSelect,
-  disabled = false,
-  onPrefetch,
-  badge = null,
-  badgeLabel
-}: {
-  activity: WorkspaceActivityId
-  active: boolean
-  onSelect: () => void
-  disabled?: boolean
-  onPrefetch?: () => void
-  badge?: ActivityBadge
-  /** Appended to the accessible name so a badge is not conveyed by colour and position alone. */
-  badgeLabel?: string
-}): React.JSX.Element {
-  const Icon = ACTIVITY_ICONS[activity]
-  const baseLabel = activityLabel(activity)
-  const label = badge && badgeLabel ? `${baseLabel} — ${badgeLabel}` : baseLabel
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          // Why a data hook: the accessible name is translated, so selecting by it passes in one
-          // locale and silently stops matching in every other.
-          data-workspace-activity={activity}
-          aria-current={active ? 'page' : undefined}
-          aria-disabled={disabled || undefined}
-          aria-label={label}
-          className={cn(
-            'relative flex h-10 w-10 shrink-0 items-center justify-center transition-colors',
-            RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
-            active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground',
-            disabled && 'cursor-not-allowed opacity-50 hover:text-muted-foreground/60'
-          )}
-          onPointerEnter={onPrefetch}
-          onFocus={onPrefetch}
-          onClick={() => {
-            if (disabled) {
-              return
-            }
-            onSelect()
-          }}
-        >
-          <Icon size={18} />
-          {badge && 'count' in badge ? (
-            <span
-              aria-hidden="true"
-              className="absolute top-1 right-0.5 min-w-[14px] rounded-full bg-primary px-1 text-[9px] leading-[14px] font-semibold text-primary-foreground"
-            >
-              {badge.count}
-            </span>
-          ) : null}
-          {badge && 'dot' in badge ? (
-            <span
-              aria-hidden="true"
-              className="absolute top-[7px] right-[7px] size-[7px] rounded-full bg-primary ring-1 ring-sidebar"
-            />
-          ) : null}
-          {active ? (
-            <div className="absolute top-[25%] right-0 bottom-[25%] w-[2px] rounded-l bg-foreground" />
-          ) : null}
-        </button>
-      </TooltipTrigger>
-      {/* Docked against the window's left edge, so the tooltip opens inward. */}
-      <TooltipContent side="right" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 const TASK_PROVIDER_ICONS: Record<
   TaskProvider,
@@ -249,57 +122,12 @@ function TasksActivityRailButton({
   )
 }
 
-/**
- * The settings flag each activity's "Hide from sidebar" writes, or null where hiding is not
- * offered. Carried over so the rows' right-click hide survives their removal — an activity you
- * cannot hide is a capability lost, not a simplification.
- */
-const HIDE_SETTING_BY_ACTIVITY: Record<WorkspaceActivityId, keyof GlobalSettings | null> = {
-  workspace: 'showWorkspaceButton',
-  tasks: 'showTasksButton',
-  automations: 'showAutomationsButton',
-  mobile: 'showMobileButton',
-  artifacts: 'showArtifactsButton',
-  skills: 'showSkillsButton',
-  // Agents is an experiment toggle rather than a sidebar preference; it never offered hiding.
-  agents: null
-}
-
-function HideActivityMenu({ onHide }: { onHide: () => void }): React.JSX.Element {
-  return (
-    <ContextMenuContent>
-      <ContextMenuItem onSelect={onHide}>
-        <EyeOff className="size-3.5" />
-        {translate('auto.components.sidebar.SidebarNav.d599269755', 'Hide from sidebar')}
-      </ContextMenuItem>
-    </ContextMenuContent>
-  )
-}
-
-/** Wraps an activity in its hide menu, or renders it plainly when hiding is not offered. */
-function ActivityRailItemWithHide({
-  activity,
-  onHide,
-  children
+/** `omitAgentWorkspace`: the caller draws that entry itself (below Explorer in the panel strip). */
+export function WorkspaceActivityRailSection({
+  omitAgentWorkspace = false
 }: {
-  activity: WorkspaceActivityId
-  onHide: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  if (HIDE_SETTING_BY_ACTIVITY[activity] === null) {
-    return <>{children}</>
-  }
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div>{children}</div>
-      </ContextMenuTrigger>
-      <HideActivityMenu onHide={onHide} />
-    </ContextMenu>
-  )
-}
-
-export function WorkspaceActivityRailSection(): React.JSX.Element | null {
+  omitAgentWorkspace?: boolean
+} = {}): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const activeView = useAppStore((s) => s.activeView)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -310,36 +138,45 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
+  const openConversationsPage = useAppStore((s) => s.openConversationsPage)
 
-  const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
-  const showsAgents = visible.includes('agents')
+  const visible = React.useMemo(
+    () =>
+      getVisibleWorkspaceActivities(settings).filter(
+        (activity) => !(omitAgentWorkspace && activity === 'agent-workspace')
+      ),
+    [settings, omitAgentWorkspace]
+  )
+  const showsActivity = visible.includes('activity')
   const showsMobile = visible.includes('mobile')
-  const agentsUnreadCount = useActivityUnreadCount(showsAgents, 'sidebar-badge')
+  const activityUnreadCount = useActivityUnreadCount(showsActivity, 'sidebar-badge')
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showsMobile)
 
   const badgeFor = React.useCallback(
     (activity: WorkspaceActivityId): ActivityBadge => {
-      if (activity === 'agents' && agentsUnreadCount > 0) {
-        return { count: agentsUnreadCount }
+      if (activity === 'activity' && activityUnreadCount > 0) {
+        return { count: activityUnreadCount }
       }
       if (activity === 'mobile' && mobileOnboardingBadge.visible) {
         return { dot: true }
       }
       return null
     },
-    [agentsUnreadCount, mobileOnboardingBadge.visible]
+    [activityUnreadCount, mobileOnboardingBadge.visible]
   )
 
   const select = React.useCallback(
-    (activity: WorkspaceActivityId) => {
+    (activity: WorkspaceActivityId): void => {
       switch (activity) {
+        case 'agent-workspace':
+          return openConversationsPage()
         case 'workspace':
           return openWorkspacePage()
         case 'tasks':
           return openTaskPage()
         case 'automations':
           return openAutomationsPage()
-        case 'agents':
+        case 'activity':
           return openActivityPage()
         case 'artifacts':
           return openArtifactsPage()
@@ -349,6 +186,14 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
           // Opening the surface retires the "New" marker, exactly as the row did.
           mobileOnboardingBadge.dismiss()
           return openMobilePage()
+        default: {
+          // A rail entry that dispatches nothing is a dead control, and it looks identical to a
+          // working one: it renders, it takes focus, and it does nothing. `conversations` shipped
+          // exactly that way — visible, with no case here — and only a run that clicked it in the
+          // real app noticed. This makes the next omission a compile error instead.
+          const unhandled: never = activity
+          return unhandled
+        }
       }
     },
     [
@@ -356,6 +201,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
       openActivityPage,
       openArtifactsPage,
       openAutomationsPage,
+      openConversationsPage,
       openMobilePage,
       openSkillsPage,
       openTaskPage,
@@ -406,7 +252,7 @@ export function WorkspaceActivityRailSection(): React.JSX.Element | null {
               badgeLabel={
                 activity === 'mobile'
                   ? translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')
-                  : String(agentsUnreadCount)
+                  : String(activityUnreadCount)
               }
             />
           </ActivityRailItemWithHide>

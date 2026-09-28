@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import {
   createClaudeCatalogOptions,
   getAgentSessionOptionCatalog,
@@ -70,7 +70,7 @@ export function resolveNativeChatModelDiscoveryContext(
 }
 
 export async function discoverNativeChatCatalogModels(
-  agent: AgentType,
+  agent: ProviderType,
   context: RuntimeGitContext
 ): Promise<CatalogModel[] | null> {
   const result = await discoverRuntimeCommitMessageModels(context, agent)

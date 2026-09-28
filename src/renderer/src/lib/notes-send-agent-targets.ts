@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { ProviderType } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { resolveTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
@@ -20,7 +20,7 @@ export type NotesSendAgentTarget = {
   paneKey: string
   tabId: string
   leafId: string
-  agentType: AgentType | null | undefined
+  agentType: ProviderType | null | undefined
   tabTitle: string
   status: 'eligible' | 'disabled'
   disabledReason?: string
@@ -99,9 +99,9 @@ export function deriveNotesSendAgentTargets(
 }
 
 function resolveNotesTargetAgentType(
-  entryAgentType: AgentType | null | undefined,
-  launchAgent: AgentType | null | undefined
-): AgentType | null | undefined {
+  entryAgentType: ProviderType | null | undefined,
+  launchAgent: ProviderType | null | undefined
+): ProviderType | null | undefined {
   if (entryAgentType && entryAgentType !== 'unknown') {
     return entryAgentType
   }

@@ -121,6 +121,20 @@
       ]
     },
     {
+      "id": "conversation.orca-owned-record",
+      "state": "conversations/<conversationId>.json — the Orca-owned conversation: its minted identity, title, optional agent binding, provider provenance, turn lifecycle and product-visible messages. It deliberately carries no project of its own: the agent owns that relation, because only PersistedState can take part in Project id succession",
+      "writer": "src/main/conversation/conversation-store.ts",
+      "tier": "crash-durable",
+      "lostIf": "This is the only copy. The provider transcript is evidence, not a substitute: it belongs to the provider, it rotates, the provider may delete it, and it carries no Orca conversation identity — so a lost record cannot be reconstructed from it, only guessed at. Losing one costs the conversation as a product entity: its id, anything later bound to that id, and the ability to reopen it at all.",
+      "provenBy": ["src/main/conversation/conversation-store-syscall-proof.test.ts"],
+      "onFailure": "Never reported as success. conversation-store does not catch writeFileDurable, so ENOSPC/EACCES reject: conversations:create and createForAgent reject to the renderer with the OS error message; during a turn, conversation-turn-runner catches it and returns outcome 'failed' with that message as the reason, after trying to mark unsettled turns failed (if that second write also fails, the IPC call rejects instead). The prior record is kept, because the temp file is renamed over it only after its fsync. Weakness: the user sees the raw OS message, not product copy.",
+      "knownGaps": [
+        "Reachable since W3: src/main/ipc/conversations.ts calls the service and src/preload/index.ts exposes conversations:create, so a user with the Conversations surface enabled writes real records. This contract now describes state users have, not a capability. The surface is still opt-in (showConversationsButton), so the population is small rather than absent.",
+        "No backup ring. Unlike the profile file there is no .bak behind a conversation, so a record that fails to parse is refused rather than recovered; the bytes are preserved on disk for a later repair, but nothing rotates a known-good copy forward.",
+        "Never exercised against a real power loss, and no real-app run: the syscall-order proof counts the barrier at the module boundary under vitest."
+      ]
+    },
+    {
       "id": "browser.session-meta",
       "state": "browser-session-meta.json — browser profiles, default source, pending cookie imports",
       "writer": "src/main/browser/browser-session-meta-store.ts",

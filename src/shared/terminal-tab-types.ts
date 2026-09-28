@@ -69,7 +69,8 @@ export type TerminalTab = {
   dormantOpenRequested?: true
 }
 
-export type TerminalTabDormancyReason = 'working-set-restore' | 'workspace-sleep'
+/** `layout-restore`: the Resume Center brought the row back as layout only; waking is a separate Resume. */
+export type TerminalTabDormancyReason = 'working-set-restore' | 'workspace-sleep' | 'layout-restore'
 
 /**
  * What this row may honestly say about resuming — the continuity authority's verdict, carried.

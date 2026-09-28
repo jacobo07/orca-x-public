@@ -4,7 +4,7 @@
 // mirrored copy to drift, unlike the agent-specific parsers in src/shared that
 // Metro forces us to duplicate.
 
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 
 export type SlashCommandSuggestion = {
   /** The command token without its leading slash, e.g. `clear`. */
@@ -78,7 +78,7 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'subagents', description: 'Switch the active agent thread' }
 ]
 
-const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
+const COMMANDS_BY_AGENT: Partial<Record<ProviderType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
   codex: CODEX_COMMANDS
@@ -86,7 +86,7 @@ const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggesti
 
 /** Known slash commands for an agent, falling back to a small common set so the
  *  `/` menu is never empty for a recognized agent. */
-export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
+export function getAgentSlashCommands(agent: ProviderType): readonly SlashCommandSuggestion[] {
   return COMMANDS_BY_AGENT[agent] ?? COMMON_COMMANDS
 }
 

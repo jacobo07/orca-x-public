@@ -1,12 +1,12 @@
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import { surfaceSkillInvocationUserTurns } from '../../../../shared/native-chat-command-envelope'
 import { normalizeImageTranscriptMessages } from '../../../../shared/native-chat-image-transcript-markers'
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { ProviderType, NativeChatMessage } from '../../../../shared/native-chat-types'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 
 export function prepareNativeChatLiveMessages(
   messages: NativeChatMessage[],
-  agent: AgentType
+  agent: ProviderType
 ): NativeChatMessage[] {
   const commandNames = new Set(getVerifiedNativeChatCommands(agent).map((command) => command.name))
   const surfaced = surfaceSkillInvocationUserTurns(messages, commandNames)

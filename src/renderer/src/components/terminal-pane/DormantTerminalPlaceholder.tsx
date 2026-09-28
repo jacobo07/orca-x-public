@@ -29,6 +29,8 @@ export default function DormantTerminalPlaceholder({
   })
   const reason = dormancy?.reason
   const slept = reason === 'workspace-sleep'
+  // A layout restore brings back the remembered terminal, so its open is a restart, not a new one.
+  const remembered = slept || reason === 'layout-restore'
   const requestOpen = useAppStore((state) => state.requestDormantTerminalTabOpen)
   const agentLabel = agent ? getAgentLabel(agent) : null
   // The continuity authority's verdict, carried here by the dormancy marker because the resume
@@ -59,7 +61,7 @@ export default function DormantTerminalPlaceholder({
         { agent: agentLabel }
       )
     }
-    return slept
+    return remembered
       ? translate(
           'workingSet.dormantTerminal.sleptFreshBody',
           'Opening it starts this terminal again in its folder.'

@@ -582,6 +582,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
+      // No main process captured anything here, and a browser reload is the browser's own.
+      takeReloadFreezeFrame: () => Promise.resolve(null),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       // The web client cannot inspect local Mission Control shortcuts.
       getMacCapturedDigitRowChords: () => Promise.resolve([]),
@@ -862,6 +864,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       list: () => Promise.resolve({ status: 'unavailable' as const }),
       read: () => Promise.resolve({ status: 'unavailable' as const }),
       probeRestoreEvidence: () => Promise.resolve({ status: 'unavailable' as const })
+    },
+    // Why explicit: the fallback would answer with an empty desk; a web client holds no desk at all.
+    continuity: {
+      readDesk: () => Promise.resolve({ status: 'unavailable' as const }),
+      renderPanePreview: () => Promise.resolve({ status: 'unavailable' as const }),
+      admitWake: () => Promise.resolve({ verdict: 'unavailable' as const })
     },
     // Why explicit: a web client cannot quit the desktop app or its daemon.
     durableExit: {

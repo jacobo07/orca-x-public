@@ -15,6 +15,7 @@ import type { GlobalSettings } from './global-settings-types'
 import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
+import type { Agent } from './agent-types'
 import type { ProjectGroup } from './project-group-types'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
@@ -53,6 +54,9 @@ export type PersistedState = {
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
+  /** Durable product actors. The one catalog declared in config/durable-actor-catalogs.jsonc;
+   *  their projectId is remapped by rebuildRepoBackedProjectState when a Project id is promoted. */
+  agents: Agent[]
   folderWorkspaces: FolderWorkspace[]
   /** Folder-workspace review notes, keyed by FolderWorkspace.id. Top-level, NOT nested in
    *  folderWorkspaces[]: normalizeFolderWorkspaces rebuilds each record field-by-field, so an

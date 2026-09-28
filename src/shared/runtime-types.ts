@@ -3,7 +3,7 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentStatusState,
-  AgentType
+  ProviderType
 } from './agent-status-types'
 import type {
   BrowserCertificateFailure,
@@ -752,7 +752,7 @@ export type RuntimeWorktreeAgentRow = {
   /** paneKey of the orchestration parent, or null for a root agent. */
   parentPaneKey: string | null
   state: AgentStatusState
-  agentType: AgentType | null
+  agentType: ProviderType | null
   /** Raw hook-reported prompt. Display surfaces can prefer displayName. */
   prompt: string
   /** Explicit orchestration task title, or null outside dispatch. */

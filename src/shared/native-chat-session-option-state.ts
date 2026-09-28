@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import type {
   CatalogMidSessionApply,
   AgentSessionOptionCatalog
@@ -11,13 +11,13 @@ export type TrackedNativeChatSessionOption = {
 }
 
 export type NativeChatSessionOptionRecord = {
-  agent: AgentType
+  agent: ProviderType
   model?: TrackedNativeChatSessionOption
   valuesByModel: Record<string, Record<string, TrackedNativeChatSessionOption>>
 }
 
 export function createNativeChatSessionOptionRecord(
-  agent: AgentType
+  agent: ProviderType
 ): NativeChatSessionOptionRecord {
   return { agent, valuesByModel: {} }
 }

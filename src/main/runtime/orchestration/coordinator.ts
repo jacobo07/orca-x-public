@@ -13,6 +13,13 @@ import {
   listAvailableWorkerTerminals,
   warnStaleDispatches
 } from './coordinator-task-dispatch'
+import {
+  createAgentTaskDispatchState,
+  dispatchAgentTasks,
+  runningAgentTurns,
+  settleInterruptedAgentTasks,
+  type AgentTaskDispatchState
+} from './coordinator-agent-tasks'
 
 export type CoordinatorOptions = {
   spec: string
@@ -38,6 +45,7 @@ export class Coordinator {
   private db: OrchestrationDb
   private runtime: CoordinatorRuntime
   private state: CoordinatorState
+  private agentTasks: AgentTaskDispatchState = createAgentTaskDispatchState()
   private stopped = false
   private opts: Required<Omit<CoordinatorOptions, 'onLog' | 'worktree'>> & {
     onLog: (msg: string) => void
@@ -99,6 +107,7 @@ export class Coordinator {
   }> {
     this.state.runId = runId
     this.opts.onLog(`Coordinator run ${runId} started`)
+    settleInterruptedAgentTasks(this.db, this.opts.onLog)
 
     try {
       await this.decompose()
@@ -228,13 +237,31 @@ export class Coordinator {
   private async dispatchReadyTasks(): Promise<void> {
     this.state.phase = 'dispatching'
     const readyTasks = this.db.listTasks({ ready: true })
-    if (readyTasks.length === 0) {
+
+    // Why not every dispatched row: an agent task waiting for its delegated children is
+    // `dispatched` yet runs nothing; counting it would let waiting parents starve their children.
+    const terminalDispatched = this.db
+      .listTasks({ status: 'dispatched' })
+      .filter((task) => task.assignee_agent_id === null).length
+    let slotsAvailable =
+      this.opts.maxConcurrent - terminalDispatched - runningAgentTurns(this.agentTasks)
+    if (slotsAvailable <= 0) {
       return
     }
 
-    const dispatched = this.db.listTasks({ status: 'dispatched' })
-    let slotsAvailable = this.opts.maxConcurrent - dispatched.length
-    if (slotsAvailable <= 0) {
+    // Why: an agent-assigned task belongs to that agent; handing it to a free terminal would run it
+    // under whoever happens to be idle, which is exactly the identity the assignment names. Runs even
+    // with nothing ready, because a parent whose children settled is owed its follow-up turn.
+    const agentTasks = readyTasks.filter((task) => task.assignee_agent_id !== null)
+    slotsAvailable -= dispatchAgentTasks({
+      db: this.db,
+      tasks: agentTasks,
+      slots: slotsAvailable,
+      state: this.agentTasks,
+      onLog: this.opts.onLog
+    })
+    const terminalTasks = readyTasks.filter((task) => task.assignee_agent_id === null)
+    if (terminalTasks.length === 0 || slotsAvailable <= 0) {
       return
     }
 
@@ -248,7 +275,7 @@ export class Coordinator {
       // Why: create at most one terminal per tick to avoid spawning many at once.
       try {
         const created = await this.runtime.createTerminal(this.opts.worktree, {
-          title: `Worker: ${readyTasks[0].spec.slice(0, 40)}`
+          title: `Worker: ${terminalTasks[0].spec.slice(0, 40)}`
         })
         terminals.push(created.handle)
         this.opts.onLog(`Created worker terminal ${created.handle}`)
@@ -266,7 +293,7 @@ export class Coordinator {
         })
       : null
 
-    for (const task of readyTasks) {
+    for (const task of terminalTasks) {
       if (slotsAvailable <= 0 || terminals.length === 0) {
         break
       }
@@ -286,7 +313,9 @@ export class Coordinator {
           onLog: this.opts.onLog,
           onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
         })
-        if (result === 'stale-base-refused') {
+        // Why not `=== 'stale-base-refused'`: every refusal must return the slot and the terminal,
+        // so a refusal added later cannot silently consume capacity by not being named here.
+        if (result !== 'dispatched') {
           terminals.unshift(targetHandle)
           slotsAvailable++
         } else {

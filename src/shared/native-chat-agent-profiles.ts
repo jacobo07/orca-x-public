@@ -1,14 +1,14 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import { getAgentSlashCommands, type SlashCommandSuggestion } from './native-chat-slash-commands'
 
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'
   groupedSlash: boolean
   /** OpenClaude reads Claude-owned roots, so this can differ from the agent. */
-  skillSourceOwner: AgentType
+  skillSourceOwner: ProviderType
 }
 
-const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfile>> = {
+const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<ProviderType, NativeChatAgentProfile>> = {
   codex: {
     skillPrefix: '$',
     groupedSlash: false,
@@ -32,7 +32,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
 }
 
 export function getNativeChatAgentProfile(
-  agent: AgentType | null | undefined
+  agent: ProviderType | null | undefined
 ): NativeChatAgentProfile | null {
   return agent ? (NATIVE_CHAT_AGENT_PROFILES[agent] ?? null) : null
 }
@@ -40,6 +40,6 @@ export function getNativeChatAgentProfile(
 /** The catalog that send classification, collision detection, and transcript
  *  envelope surfacing key off. Grok has no verified catalog yet, so its slash
  *  surface stays skills-only — this is the single place that policy lives. */
-export function getVerifiedNativeChatCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
+export function getVerifiedNativeChatCommands(agent: ProviderType): readonly SlashCommandSuggestion[] {
   return agent === 'grok' ? [] : getAgentSlashCommands(agent)
 }

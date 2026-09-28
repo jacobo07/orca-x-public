@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -46,7 +46,7 @@ const IDLE_STATE: StoredDiscoveryState = {
 const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 
 export function isNativeChatSkillForAgent(
-  agent: AgentType,
+  agent: ProviderType,
   skill: DiscoveredSkill,
   result?: Pick<SkillDiscoveryResult, 'sources'>
 ): boolean {
@@ -71,7 +71,7 @@ export function isNativeChatSkillForAgent(
 }
 
 export function useNativeChatSkills(
-  agent: AgentType,
+  agent: ProviderType,
   terminalTabId: string,
   enabled = false
 ): NativeChatSkillDiscovery {

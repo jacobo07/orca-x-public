@@ -75,7 +75,11 @@ export function createOrchestrationRpcHarness() {
     const method = findMethod(name)
     const scopedParams = { ...params }
     if (activeRunId) {
-      if (name === 'orchestration.taskCreate' || name === 'orchestration.taskUpdate') {
+      if (
+        name === 'orchestration.taskCreate' ||
+        name === 'orchestration.taskUpdate' ||
+        name === 'orchestration.reviewRequest'
+      ) {
         scopedParams.run ??= activeRunId
         scopedParams.callerTerminalHandle ??= 'term_coord'
       } else if (name === 'orchestration.taskList') {

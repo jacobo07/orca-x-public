@@ -1,14 +1,16 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
 import { performance } from 'node:perf_hooks'
 import { EventEmitter } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, win32 } from 'node:path'
+
+import { workspaceConsentKey } from '../workspace-execution-consent'
 import { ipcMain } from 'electron'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
@@ -1324,6 +1326,40 @@ function createFolderWorkspaceRuntimeStore(
 function makeRpcRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
+
+// Why: the two remote-Codex cases below assert that a spawn materializes provider trust on the
+// remote host, and that effect now requires recorded workspace execution consent. The harness
+// grants it for exactly the connection, canonical remote path and provider under test, so those
+// assertions still measure the spawn wiring rather than the gate — and a broadened grant cannot
+// hide a scoping bug. This file therefore cannot testify that consent is required;
+// agent-trust-consent-characterization.test.ts owns that claim.
+const consentEnvAtLoad = process.env.ORCA_USER_DATA_PATH
+
+function grantRemoteCodexConsent(connectionId: string, remotePath: string): void {
+  const dir = mkdtempSync(join(tmpdir(), 'runtime-remote-consent-'))
+  process.env.ORCA_USER_DATA_PATH = dir
+  writeFileSync(
+    join(dir, 'workspace-execution-consent.json'),
+    `${JSON.stringify({
+      version: 1,
+      grants: {
+        [workspaceConsentKey({
+          scope: { kind: 'ssh', connectionId },
+          workspacePath: remotePath,
+          preset: 'codex'
+        })]: { decision: 'granted', at: '2026-01-01T00:00:00.000Z' }
+      }
+    })}\n`
+  )
+}
+
+afterAll(() => {
+  if (consentEnvAtLoad === undefined) {
+    delete process.env.ORCA_USER_DATA_PATH
+  } else {
+    process.env.ORCA_USER_DATA_PATH = consentEnvAtLoad
+  }
+})
 
 function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
   return {
@@ -45563,6 +45599,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     try {
+      grantRemoteCodexConsent('ssh-1', '/remote/mobile-codex-draft')
       const result = await runtime.createManagedWorktree({
         repoSelector: TEST_REPO_ID,
         name: 'mobile-codex-draft',
@@ -45676,6 +45713,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     try {
+      grantRemoteCodexConsent('ssh-1', '/remote/mobile-codex-command')
       const result = await runtime.createManagedWorktree({
         repoSelector: TEST_REPO_ID,
         name: 'mobile-codex-command',

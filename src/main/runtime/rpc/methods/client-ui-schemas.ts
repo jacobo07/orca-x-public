@@ -177,7 +177,20 @@ const TopLevelViewSchema = z.enum([
   'space',
   'skills',
   'artifacts',
-  'mobile'
+  'mobile',
+  // Accepting a value is the safe direction: a paired client that never sends it is unaffected.
+  // PUBLISHING it is the direction that reaches old clients, and it only happens once someone
+  // turns on an opt-in surface and navigates to it; an older decoder then sees an activeView it
+  // does not know. Tracked as remote-wire debt rather than hidden, per
+  // docs/reference/remote-wire-compatibility.md.
+  'conversations',
+  // Same shape of debt as `conversations`, and the same reasoning: accepting is safe, publishing is
+  // the direction that reaches an older decoder — which rejects an unknown view through
+  // `isTopLevelView` and falls back to 'terminal' rather than rendering nothing. Reachable only
+  // once someone turns on `showAgentsButton` and navigates there.
+  'agents',
+  // Same debt and reasoning; reachable only by opening the Resume Center from the Workspace.
+  'resumeCenter'
 ])
 const UiUpdateFields = z
   .object({

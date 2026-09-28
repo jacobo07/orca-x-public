@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 
 // Shared so the desktop renderer and the mobile app show the same agent name
 // (e.g. native chat's empty state on both surfaces) from one source of truth.
@@ -27,7 +27,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   kimi: 'Kimi'
 }
 
-export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
+export function formatAgentTypeLabel(agentType: ProviderType | null | undefined): string {
   if (!agentType || agentType === 'unknown') {
     return 'Agent'
   }

@@ -1,6 +1,6 @@
 import type { Tab } from '../../../../shared/tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript
@@ -21,7 +21,7 @@ export type NativeChatAvailabilityInput = {
   /** The agent identity from a live agent-status entry for any pane of this tab,
    *  when one exists — i.e. an agent detected at runtime even though
    *  `launchAgent` was not set (manually-started agents, resumed sessions). */
-  detectedAgent?: AgentType | null
+  detectedAgent?: ProviderType | null
   /** The agent identity from another trusted tab signal (for example the
    *  terminal title resolver) when it identifies the foreground as an agent
    *  before hooks arrive. */

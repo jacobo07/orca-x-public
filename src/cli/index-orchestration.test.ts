@@ -190,6 +190,27 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('delegates a task to a durable agent with --assignee-agent', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
+    callMock.mockResolvedValueOnce({
+      id: 'req_task_create',
+      ok: true,
+      result: { task: { id: 'task_2', status: 'ready' } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['orchestration', 'task-create', '--spec', 'review the fix', '--assignee-agent', 'agent_keos'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.taskCreate',
+      expect.objectContaining({ spec: 'review the fix', assigneeAgent: 'agent_keos' })
+    )
+  })
+
   it('passes dev mode to injected orchestration dispatches', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
     process.env.ORCA_USER_DATA_PATH = '/tmp/orca-dev'

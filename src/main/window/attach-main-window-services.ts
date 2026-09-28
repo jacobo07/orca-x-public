@@ -8,6 +8,8 @@ import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/up
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
+import { registerAgentHandlers } from '../ipc/agents'
+import { registerConnectedApplicationHandlers } from '../ipc/connected-applications'
 import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -123,6 +125,15 @@ export function attachMainWindowServices(
   mainWebContents.on('render-process-gone', () => releaseTccPromptClaimFor(mainWebContents.id))
   mainWindow.on('closed', unbindWindowServiceIpc)
   registerRepoHandlers(mainWindow, store)
+  // Why here and not register-core-handlers: the agent roster lives in PersistedState, so it needs
+  // the store, and this is where the store is. The handler reads through it per call rather than
+  // capturing a snapshot, so a Project id promotion stays visible.
+  registerAgentHandlers({
+    readAgents: () => store.getAgents(),
+    createAgent: (input) => store.createAgent(input)
+  })
+  // Same reason as agents: bindings live on Projects in PersistedState and follow id promotion.
+  registerConnectedApplicationHandlers(store)
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {

@@ -70,7 +70,7 @@ import {
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentStatusState,
-  type AgentType,
+  type ProviderType,
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -99,7 +99,7 @@ type ActivityEvent = {
   repo: Repo | null
   entry: AgentStatusEntry
   tab: TerminalTab
-  agentType: AgentType
+  agentType: ProviderType
   agentAlive: boolean
   migrationUnsupportedPtyId?: string
   unread: boolean
@@ -112,7 +112,7 @@ type ActivityLiveAgentSnapshot = {
   repo: Repo | null
   entry: AgentStatusEntry
   tab: TerminalTab
-  agentType: AgentType
+  agentType: ProviderType
 }
 
 // Why: keyed per agent pane (tab + leaf id), not per workspace, so the list shows one row per agent; paneKey is `${tabId}:${leafId}`.
@@ -122,7 +122,7 @@ type AgentPaneThread = {
   worktree: Worktree
   repo: Repo | null
   tab: TerminalTab
-  agentType: AgentType
+  agentType: ProviderType
   currentAgentState: ActivityLiveAgentState | null
   currentAgentEntry: AgentStatusEntry | null
   responsePreview: string
@@ -542,7 +542,7 @@ function appendActivityEvent(args: {
   repo: Repo | null
   entry: AgentStatusEntry
   tab: TerminalTab
-  agentType: AgentType
+  agentType: ProviderType
   agentAlive: boolean
   acknowledgedAt: number
   migrationUnsupportedPtyId?: string
@@ -574,7 +574,7 @@ function appendActivityEventsForEntry(args: {
   worktree: Worktree
   repo: Repo | null
   tab: TerminalTab
-  agentType: AgentType
+  agentType: ProviderType
   agentAlive: boolean
   acknowledgedAt: number
   migrationUnsupportedPtyId?: string

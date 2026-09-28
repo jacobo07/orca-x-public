@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { ConversationTurnEventPayload } from './api/conversation-api'
 import type { ParkPhaseRequest } from '../shared/durable-exit-types'
 import type { ProcessPresenceProbe } from '../shared/process-stats-types'
 import type { PtyProcessInspection } from '../shared/pty-process-inspection'
@@ -101,6 +102,7 @@ import type {
 } from '../shared/notification-settings-types'
 import type { OnboardingState } from '../shared/onboarding-state-types'
 import type { PersistedUIState } from '../shared/persisted-ui-state-types'
+import type { ReloadFreezeFrame } from '../shared/reload-freeze-frame'
 import type { CustomPet } from '../shared/pet-types'
 import type { MemorySnapshot } from '../shared/process-stats-types'
 import type { NestedRepoScanResult } from '../shared/project-group-types'
@@ -307,7 +309,7 @@ import type {
 } from '../shared/ai-vault-types'
 import type { AiVaultSessionTitlesArgs } from '../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
-import type { AgentType } from '../shared/native-chat-types'
+import type { ProviderType } from '../shared/native-chat-types'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
@@ -346,6 +348,7 @@ import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import {
+  answerReloadPreparationRequests,
   prepareAndInvokeAppRestart,
   prepareAndInvokeUpdaterInstall,
   registerRendererRestartIpcRelays
@@ -372,6 +375,7 @@ const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
 )
 
 registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
+answerReloadPreparationRequests(ipcRenderer, window, awaitBeforeUnloadCheckpoint)
 
 function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
   if (process.platform !== 'linux') {
@@ -581,6 +585,8 @@ const api = {
       startupDiagnosticsEnabled
         ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
         : Promise.resolve(),
+    takeReloadFreezeFrame: (): Promise<ReloadFreezeFrame | null> =>
+      ipcRenderer.invoke('app:takeReloadFreezeFrame'),
     // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
@@ -3196,6 +3202,11 @@ const api = {
     read: (args) => ipcRenderer.invoke('workingSet:read', args),
     probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args)
   } satisfies PreloadApi['workingSet'],
+  continuity: {
+    readDesk: () => ipcRenderer.invoke('continuity:readDesk'),
+    renderPanePreview: (request) => ipcRenderer.invoke('continuity:renderPanePreview', request),
+    admitWake: (request) => ipcRenderer.invoke('continuity:admitWake', request)
+  } satisfies PreloadApi['continuity'],
   durableExit: {
     park: (request) => ipcRenderer.invoke('durableExit:park', request),
     onParkPhaseRequest: (callback) => {
@@ -3213,6 +3224,41 @@ const api = {
       return () => ipcRenderer.removeListener('durableExit:parkFromMenu', listener)
     }
   } satisfies PreloadApi['durableExit'],
+
+  conversations: {
+    list: () => ipcRenderer.invoke('conversations:list'),
+    create: (args) => ipcRenderer.invoke('conversations:create', args),
+    createForAgent: (args) => ipcRenderer.invoke('conversations:createForAgent', args),
+    read: (args) => ipcRenderer.invoke('conversations:read', args),
+    agentGrounding: (args) => ipcRenderer.invoke('conversations:agentGrounding', args),
+    sendTurn: (args) => ipcRenderer.invoke('conversations:sendTurn', args),
+    onTurnEvent: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: ConversationTurnEventPayload
+      ): void => callback(payload)
+      ipcRenderer.on('conversations:turnEvent', listener)
+      return () => ipcRenderer.removeListener('conversations:turnEvent', listener)
+    }
+  } satisfies PreloadApi['conversations'],
+
+  agentFederation: {
+    view: (args) => ipcRenderer.invoke('federation:agentView', args),
+    decide: (args) => ipcRenderer.invoke('federation:decideGate', args),
+    rebind: (args) => ipcRenderer.invoke('federation:rebindGate', args)
+  } satisfies PreloadApi['agentFederation'],
+
+  agents: {
+    list: () => ipcRenderer.invoke('agents:list'),
+    create: (args) => ipcRenderer.invoke('agents:create', args)
+  } satisfies PreloadApi['agents'],
+
+  connectedApps: {
+    list: (args) => ipcRenderer.invoke('connectedApps:list', args),
+    add: (args) => ipcRenderer.invoke('connectedApps:add', args),
+    remove: (args) => ipcRenderer.invoke('connectedApps:remove', args),
+    status: (args) => ipcRenderer.invoke('connectedApps:status', args)
+  } satisfies PreloadApi['connectedApps'],
 
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),
@@ -4469,7 +4515,7 @@ const api = {
 
   nativeChat: {
     readSession: (
-      agent: AgentType,
+      agent: ProviderType,
       sessionId: string,
       limit?: number,
       transcriptPath?: string
@@ -4479,7 +4525,7 @@ const api = {
     subscribe: (
       args: {
         subscriptionId: string
-        agent: AgentType
+        agent: ProviderType
         sessionId: string
         transcriptPath?: string
         limit?: number

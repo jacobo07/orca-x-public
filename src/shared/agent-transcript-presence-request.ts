@@ -1,4 +1,4 @@
-import type { AgentType } from './native-chat-types'
+import type { ProviderType } from './native-chat-types'
 import type { WorkingSetFactPresence } from './project-working-set-store-types'
 
 /**
@@ -14,7 +14,7 @@ export const AGENT_TRANSCRIPT_PRESENCE_CHANNEL = 'agentSession:probeTranscriptPr
 const MAX_FIELD_LENGTH = 4096
 
 export type AgentTranscriptPresenceRequest = {
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   /** The path the agent's own hook reported, when it reported one. */
   transcriptPath?: string
@@ -39,7 +39,7 @@ export function parseAgentTranscriptPresenceRequest(
     return null
   }
   return {
-    agent: agent as AgentType,
+    agent: agent as ProviderType,
     sessionId,
     ...(transcriptPath ? { transcriptPath } : {})
   }

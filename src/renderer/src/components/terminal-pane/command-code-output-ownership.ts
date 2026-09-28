@@ -1,11 +1,11 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export function canCommandCodeOutputOwnPane(args: {
   foregroundAgent?: TuiAgent | null
   shellForeground?: boolean
-  paneOwnerAgent?: AgentType | null
-  retainedPaneOwnerAgent?: AgentType | null
+  paneOwnerAgent?: ProviderType | null
+  retainedPaneOwnerAgent?: ProviderType | null
 }): boolean {
   if (args.foregroundAgent) {
     return args.foregroundAgent === 'command-code'

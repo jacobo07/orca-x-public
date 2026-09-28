@@ -19,6 +19,8 @@ export type ResumeSleepingAgentSessionsOptions = {
    *  cleared only after the in-place spawn succeeds, so the generic resume
    *  must neither launch nor clear them here. */
   skipClaimKeys?: ReadonlySet<string>
+  /** Consider only these records; every other record is left exactly as it is (an explicit Resume). */
+  onlyPaneKeys?: ReadonlySet<string>
   /** Called with the tab id of each freshly launched resume tab, so
    *  navigation-suppressed callers can background-mount exactly those tabs. */
   onSessionLaunched?: (tabId: string) => void

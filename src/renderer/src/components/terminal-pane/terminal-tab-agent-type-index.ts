@@ -1,7 +1,7 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, ProviderType } from '../../../../shared/agent-status-types'
 
 export type TerminalTabAgentTypeState = Record<string, AgentStatusEntry>
-export type TerminalTabAgentTypesByLeaf = Readonly<Record<string, AgentType>>
+export type TerminalTabAgentTypesByLeaf = Readonly<Record<string, ProviderType>>
 
 type SelectorDependencies = {
   onEntryVisited?: (paneKey: string) => void
@@ -11,7 +11,7 @@ const EMPTY_AGENT_TYPES_BY_LEAF: TerminalTabAgentTypesByLeaf = Object.freeze({})
 
 function reuseRecordIfEqual(
   previous: TerminalTabAgentTypesByLeaf | undefined,
-  next: Record<string, AgentType>
+  next: Record<string, ProviderType>
 ): TerminalTabAgentTypesByLeaf {
   if (!previous) {
     return next
@@ -34,7 +34,7 @@ export function createTerminalTabAgentTypeSelector(
     // Zustand notifications skip the global scan entirely.
     if (state !== cachedState) {
       const previousByTabId = cachedByTabId
-      const nextByTabId = new Map<string, Record<string, AgentType>>()
+      const nextByTabId = new Map<string, Record<string, ProviderType>>()
       for (const [paneKey, entry] of Object.entries(state)) {
         dependencies.onEntryVisited?.(paneKey)
         if (!entry.agentType) {

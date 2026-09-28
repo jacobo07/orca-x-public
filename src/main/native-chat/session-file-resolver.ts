@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { basename, extname, join } from 'node:path'
-import type { AgentType } from '../../shared/native-chat-types'
+import type { ProviderType } from '../../shared/native-chat-types'
 import {
   resolveNativeChatTranscriptAgent,
   type NativeChatTranscriptAgent
@@ -85,7 +85,7 @@ export type ResolveSessionFileOptions = {
  * Returns null when no matching transcript exists.
  */
 export async function resolveSessionFilePath(
-  agent: AgentType,
+  agent: ProviderType,
   sessionId: string,
   options: ResolveSessionFileOptions = {},
   signal?: AbortSignal

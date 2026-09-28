@@ -12,6 +12,7 @@ import {
 } from '../../orchestration/db'
 import { MESSAGE_TYPES } from '../../orchestration/types'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
+import { admitDispatch, describeDispatchRefusal } from '../../orchestration/dispatch-admission'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
@@ -23,6 +24,7 @@ import {
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
+import { ORCHESTRATION_REVIEW_METHODS } from './orchestration-reviews'
 import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
@@ -185,7 +187,10 @@ const TaskCreateParams = z.object({
   deps: OptionalString,
   parent: OptionalString,
   callerTerminalHandle: OptionalString,
-  run: OptionalString
+  run: OptionalString,
+  // Why no requester here: a caller could name any agent. Who delegated is derived by Orca from
+  // where the request came from; over this RPC that is a person or a terminal, so it stays null.
+  assigneeAgent: OptionalString
 })
 
 const TaskListParams = z.object({
@@ -1346,7 +1351,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               createdByRunGeneration: run.consumer_generation
             }
           : {}),
-        runId: run.id
+        runId: run.id,
+        ...(params.assigneeAgent ? { assigneeAgentId: params.assigneeAgent } : {})
       })
       return { task }
     }
@@ -1485,6 +1491,20 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
+      // Same seam as the coordinator's: before the reservation, so a refusal creates no row.
+      const { admission, strippedSpec } = await admitDispatch({
+        spec: task.spec,
+        targetHandle: to,
+        probe: (handle: string) => runtime.observeHostResources(handle)
+      })
+      if (admission.verdict === 'refused') {
+        throw new OrchestrationError(
+          'resource_admission_refused',
+          describeDispatchRefusal(task.id, admission),
+          { reason: admission.reason, detail: admission.detail }
+        )
+      }
+
       const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
       const assigneePaneKey =
         dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
@@ -1505,7 +1525,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         to,
         assigneePaneKey,
         dispatchAuthority?.launchTokenHash ?? undefined,
-        processIncarnation
+        processIncarnation,
+        JSON.stringify(admission.envelope)
       )
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
@@ -1519,7 +1540,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
-        taskSpec: task.spec,
+        // Why: the resource declaration is infra, not instruction, so the worker never reads it.
+        taskSpec: strippedSpec,
         coordinatorHandle: params.from ?? 'coordinator',
         workerHandle: to,
         dispatchCapability,
@@ -1740,6 +1762,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   }),
 
   ...ORCHESTRATION_GATE_METHODS,
+  ...ORCHESTRATION_REVIEW_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',

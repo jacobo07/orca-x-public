@@ -1,5 +1,5 @@
 import { detectAgentStatusFromTitle, getAgentLabel } from './agent-detection'
-import type { AgentStatusEntry, AgentType } from './agent-status-types'
+import type { AgentStatusEntry, ProviderType } from './agent-status-types'
 import {
   getSyntheticAgentTitleProfile,
   SYNTHETIC_AGENT_TITLE_PROFILES,
@@ -110,9 +110,9 @@ function hasIdleSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile)
  * launch ownership still identifies the user-selected agent.
  */
 export function resolveCompatibleAgentTypeForOwner(
-  incomingAgentType: AgentType | null | undefined,
-  ownerAgentType: AgentType | null | undefined
-): AgentType | undefined {
+  incomingAgentType: ProviderType | null | undefined,
+  ownerAgentType: ProviderType | null | undefined
+): ProviderType | undefined {
   if (!incomingAgentType) {
     return undefined
   }
@@ -125,7 +125,7 @@ export function resolveCompatibleAgentTypeForOwner(
   ) {
     return incomingAgentType
   }
-  return ownerAgentType as AgentType
+  return ownerAgentType as ProviderType
 }
 
 /**
@@ -134,7 +134,7 @@ export function resolveCompatibleAgentTypeForOwner(
  */
 export function normalizeCompatibleAgentTitleForOwner(
   title: string,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: ProviderType | null | undefined
 ): string {
   const ownerProfile = getSyntheticAgentTitleProfile(ownerAgentType)
   if (!ownerProfile?.titleIdentityGroup) {
@@ -172,7 +172,7 @@ export function normalizeCompatibleAgentTitleForOwner(
  */
 export function normalizeCompatibleAgentStatusEntryForOwner(
   entry: AgentStatusEntry,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: ProviderType | null | undefined
 ): AgentStatusEntry {
   const agentType = resolveCompatibleAgentTypeForOwner(entry.agentType, ownerAgentType)
   const terminalTitle = entry.terminalTitle

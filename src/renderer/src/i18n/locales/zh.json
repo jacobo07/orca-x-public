@@ -153,6 +153,10 @@
     "view": "查看",
     "reload": "重新加载",
     "forceReload": "强制重新加载",
+    "reloadRefusedTitle": "此窗口未重新加载",
+    "reloadRefusedDetail": "Orca 未能先保存此窗口中未保存的编辑和会话，因此保持窗口原样。你的工作仍在其中打开。",
+    "reloadNotRespondingTitle": "此窗口未响应重新加载",
+    "reloadNotRespondingDetail": "未重新加载任何内容。如果窗口仍无响应，请使用 视图 > 强制重新加载。",
     "resetSize": "重置缩放",
     "zoomIn": "放大",
     "zoomOut": "缩小",
@@ -11167,7 +11171,7 @@
             "6306b48afd": "source-control",
             "ef182dcb12": "搜索",
             "fc3095d2ed": "资源管理器",
-            "aiVaultSessionHistory": "智能体",
+            "aiVaultSessionHistory": "会话",
             "folderWorkspaces": "已附加的工作树",
             "parentPrChecks": "PR 检查"
           },
@@ -14836,6 +14840,108 @@
         "deleting": "此工作区正在删除。",
         "noPlan": "此会话无法在此处恢复。"
       }
+    }
+  },
+  "resumeCenter": {
+    "preview": {
+      "label": "{{title}} 最后记录的屏幕",
+      "loading": "正在读取…",
+      "snapshot": "快照",
+      "none": "没有记录",
+      "unreadable": "已记录，但无法读取",
+      "notFound": "已不在桌面上",
+      "unavailable": "预览不可用"
+    },
+    "residency": {
+      "warm": "运行中",
+      "dormant": "休眠中",
+      "stopped": "未运行",
+      "unknown": "状态未知"
+    },
+    "resume": {
+      "exact": "恢复同一会话",
+      "unconfirmed": "将尝试恢复会话",
+      "claimedElsewhere": "会话已在别处打开"
+    },
+    "workspace": {
+      "missing": "工作区已不存在",
+      "sessions": "个会话",
+      "open": "打开",
+      "collapse": "折叠",
+      "expand": "展开"
+    },
+    "window": {
+      "bound": "窗口",
+      "numbered": "窗口 {{number}}",
+      "none": "无窗口",
+      "unrecorded": "未记录窗口"
+    },
+    "breadcrumb": {
+      "workspace": "工作区"
+    },
+    "title": "恢复中心",
+    "greeting": {
+      "morning": "早上好",
+      "afternoon": "下午好",
+      "evening": "晚上好",
+      "sessions": "个会话在你的桌面上",
+      "running": "运行中"
+    },
+    "refresh": "刷新",
+    "search": "搜索工作区和会话",
+    "sort": {
+      "window": "按窗口",
+      "recent": "最近"
+    },
+    "state": {
+      "loading": "正在读取你的桌面…",
+      "unavailable": "此客户端没有桌面。",
+      "failed": "无法读取桌面。",
+      "noMatch": "没有匹配的结果。",
+      "empty": "此桌面上没有带会话的工作区。"
+    },
+    "summary": {
+      "title": "桌面概览",
+      "windows": "窗口",
+      "windowsUnrecorded": "未记录",
+      "workspaces": "工作区",
+      "sessions": "会话",
+      "panes": "终端窗格",
+      "unreadable": "无法读取"
+    },
+    "tip": {
+      "body": "展开工作区和会话即可查看每个终端最后记录的屏幕。预览来自已保存的历史记录，绝不会启动进程。",
+      "dismiss": "关闭"
+    },
+    "tab": {
+      "panes": "{{count}} 个窗格"
+    },
+    "resumeAction": "恢复",
+    "orphan": {
+      "title": "{{agent}} 会话，标签页已关闭",
+      "note": "没有可恢复的标签页；恢复会在新标签页中打开它。"
+    },
+    "wake": {
+      "checking": "正在检查可用资源…",
+      "starting": "正在启动…",
+      "startingUnmeasured": "正在未计量的主机上启动…",
+      "running": "正在运行",
+      "refusedMemory": "可用内存不足，现在无法启动。未启动任何内容。",
+      "refusedUnmeasured": "无法计量其主机，因此“全部恢复”让它保持休眠。请单独恢复它。",
+      "refusedUnchecked": "无法检查可用资源，因此未启动任何内容。",
+      "unavailable": "此客户端无法启动会话。",
+      "gone": "此行已不在工作台上。",
+      "notLaunched": "无法恢复此代理会话。",
+      "notStarted": "已请求启动，但尚未启动。在启动之前它会保持休眠。"
+    },
+    "resumeAll": {
+      "start": "全部恢复",
+      "continue": "继续",
+      "running": "正在逐个恢复：",
+      "stopped": "已暂停。已启动：",
+      "remaining": "仍在休眠：",
+      "finished": "完成。已启动：",
+      "leftAsleep": "保持休眠："
     }
   }
 }

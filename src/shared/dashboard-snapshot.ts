@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
@@ -81,7 +81,7 @@ export type DashboardCard = {
   /** Resolved live PTY id for the terminal preview, or null when the agent has
    *  no live pane (e.g. a retained/done row whose pane is gone). */
   ptyId: string | null
-  agentType: AgentType
+  agentType: ProviderType
   bucket: DashboardBucket
   dotState: DashboardCardDotState
   /** One-line task/prompt text shown on the card. */

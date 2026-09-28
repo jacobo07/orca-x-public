@@ -6,6 +6,10 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 
+An E2E spec drives the app through **`orcaPage`**, never Playwright's `page`. Both resolve, which is the trap: `page` is a stock blank Chromium tab with no Orca in it, so every locator times out and — worse — every `toHaveCount(0)` passes. `pnpm check:e2e-fixture-binding` fails any spec under `tests/e2e/` that binds it; `{ orcaPage: page }` is a rename of the real window and is allowed.
+
+A negative assertion needs a **station control**: prove the containing surface is present before concluding something inside it is absent, using a handle that survives translation. Most rail and shell labels are localized and the E2E host may not be running in English — assert on `data-*` attributes the product already exposes (for example `[data-workspace-activity="…"]`) rather than on visible text.
+
 # Style
 ## Concise/Brief Non-obviosu comments ONLY
   * DO NOT: be verbose, explain the obvious, walk through the code ("WHY not HOW")
@@ -85,6 +89,28 @@ A state file also owes a rule about its own backup: never spend the last known-g
 A timer, poll, watcher, worker or retry loop must say what multiplies it. `pnpm check:recurring-work` finds every recurring producer in `src/` and fails until it is classified in [`config/recurring-work-inventory.jsonc`](./config/recurring-work-inventory.jsonc) with its cadence, lifetime, scaling, hidden/dormant behaviour and spawned binaries.
 
 Cost should follow the live or visible set, not everything the user has ever opened. A producer that multiplies with panes, rows, worktrees, hosts or subscriptions and never stops on its own needs a stated `bound`, or it is `debt` — and the debt list in `config/recurring-work-debt-baseline.txt` only shrinks. Prefer one shared producer over one per consumer, and an existing event over a poll; but a safety check at the moment of a destructive action keeps its own fresh read. Renaming a producer re-keys it, so it must be classified again. Local worktree and git-metadata polls register with `src/main/ipc/worktree-observation-clock.ts` instead of owning a timer, and fewer timers alone is not a shrink: measure the repeated work at several counts, and keep an external-change test that does not go through Orca's own write path. See [`docs/reference/resource-elasticity-fabric.md`](./docs/reference/resource-elasticity-fabric.md) (R4).
+
+## Workspace Surface Claims
+
+A value the Workspace shows about an agent, a turn or a connected app — where it runs, its provider, its credential, a count, a status — must come from an owner. `pnpm check:workspace-surface-claims` enforces three rules over the surfaces listed in [`config/workspace-surface-claims.jsonc`](./config/workspace-surface-claims.jsonc): every `ContextRow` has a literal `testId` classified to a producer (`path#export`, exported and imported by the surface) and to the unknown state the consumer renders; a status colour appears only in a tone map keyed by a presenter's tone type; and no model or host name is written into a surface file. A row with nothing to say states it (the model row reads "not recorded") rather than guessing. Visual concept art never authorizes a value — no Online dot, memory, uptime or task count without a producer.
+
+## Provider Naming
+
+The provider brand — claude, codex, gemini, cursor — is `ProviderType`. Name new code after it. "Agent" is reserved for the durable Orca persona, so a record whose provider field reads `AgentType` is a bug in the vocabulary, not a style preference.
+
+The lowercase `agentType` **wire** field is a different thing and does not move: it arrives from processes Orca does not own (hook integrations, OSC 9999) and is republished to paired clients, so its spelling is a compatibility contract. The two tokens sit on the same lines (`agentType: ProviderType`), which is why any sweep over them must be case-sensitive. `src/shared/agent-status-wire-field-name.test.ts` pins the wire half.
+
+`pnpm check:provider-noun-debt` freezes the identifiers that still spell it the old way (`baselineAgentType`, `resolveExplicitTerminalTitleAgentType`) in `config/provider-noun-debt-baseline.txt`. The list only shrinks: a new one fails the build, and an entry whose identifier was renamed must be pruned with `--update` or the list stops being a ratchet.
+
+## Workspace Execution Consent
+
+A third-party CLI's "Do you trust this folder?" prompt is its safety control against executing untrusted repository content. Orca may pre-write the artifact that answers it — which lives in the user's **real** home, globally and permanently — only once the user has actually granted consent for that workspace. "Orca launched an agent here" is not "the user trusts this folder".
+
+[`src/main/workspace-execution-consent.ts`](./src/main/workspace-execution-consent.ts) is the only authority. It fails closed on everything that is not an explicit recorded grant, and distinguishes three refusals — `denied`, `unrecorded`, `unreadable` — because they need different fixes. A grant is keyed by provider and by host, after canonicalization, and for Codex by the **resolved trust root** rather than the caller's path: a linked worktree's artifact trusts the repository root, so keying on the argument would let consent for one worktree authorize the whole repository.
+
+The gate lives in the four producer functions, not in their callers. The effect has five call sites across desktop launch prep, desktop resume, a renderer-callable IPC channel, remote worktrees and the runtime/headless host; guarding callers would fence those five and leave every future one open. A refusal is not a failure — the provider shows its own prompt, which is the control working. There is no product grant surface yet, so today every call degrades that way.
+
+`pnpm check:workspace-trust-authority` enforces it. The population is enumerated by what code **does** (writes one of the three artifacts), never by searching for the guard, with a floor so a blinded sweep cannot read as a clean bill. `preflightTrust` in `src/shared/tui-agent-config.ts` is an optional field, so a new provider that adds one line would otherwise inherit the whole effect silently: the gate fails until a gated producer handles that preset.
 
 ## Forked IPC Children
 

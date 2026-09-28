@@ -7,6 +7,10 @@ import type {
   MinimaxCredentialsApi
 } from './api/agent-account-api'
 import type { AgentHooksApi, HooksApi } from './api/agent-hook-api'
+import type { AgentDirectoryApi } from './api/agent-directory-api'
+import type { ConnectedApplicationApi } from './api/connected-application-api'
+import type { ConversationApi } from './api/conversation-api'
+import type { AgentFederationApi } from './api/agent-federation-api'
 import type { SkillsApi } from './api/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-status-api'
 import type {
@@ -61,6 +65,7 @@ import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cle
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
 import type { ProjectWorkingSetApi } from './api/project-working-set-api'
+import type { ContinuityApi } from './api/continuity-api'
 import type { DurableExitApi } from './api/durable-exit-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
@@ -126,7 +131,12 @@ export type PreloadApi = {
   session: WorkspaceSessionApi['session']
   remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
   workingSet: ProjectWorkingSetApi['workingSet']
+  continuity: ContinuityApi['continuity']
   durableExit: DurableExitApi['durableExit']
+  conversations: ConversationApi['conversations']
+  agentFederation: AgentFederationApi['agentFederation']
+  agents: AgentDirectoryApi['agents']
+  connectedApps: ConnectedApplicationApi['connectedApps']
   updater: UpdaterApi
   notebook: FilesystemApi['notebook']
   stats: StatsApi

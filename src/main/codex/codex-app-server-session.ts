@@ -1,6 +1,10 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
+import {
+  createCodexInboundRouter,
+  type CodexAppServerHandlers
+} from './codex-app-server-inbound-router'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -17,6 +21,9 @@ export type CodexAppServerInvocation = {
   envToDelete?: readonly string[]
   /** Whole-session deadline. The codex child is SIGKILLed when it lapses. */
   timeoutMs: number
+  /** How long a clean stdin EOF gets before the reap kills the child. A remote child's shutdown
+   *  crosses a network round trip, so it needs longer than a local one. Default 1500 ms. */
+  exitGraceMs?: number
 }
 
 /** Codex-side absence of the requested app-server RPC surface (old CLI without
@@ -49,7 +56,15 @@ type JsonRpcResponse = {
 export type CodexAppServerRpc = {
   request: (method: string, params?: Record<string, unknown>) => Promise<unknown>
   notify: (method: string, params?: Record<string, unknown>) => void
+  /** The peer's own `initialize` answer — its version, stated before any request depends on it. */
+  initializeResult?: unknown
 }
+
+export type {
+  CodexAppServerHandlers,
+  CodexServerRequestOutcome,
+  CodexTransportDiagnosticKind
+} from './codex-app-server-inbound-router'
 
 const JSON_RPC_METHOD_NOT_FOUND = -32601
 const STDERR_TAIL_MAX_BYTES = 8192
@@ -103,7 +118,11 @@ function isMethodNotFoundError(error: { code?: number; message?: string }): bool
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
   body: (rpc: CodexAppServerRpc) => Promise<T>,
-  spawnImpl: typeof spawn = spawn
+  spawnImpl: typeof spawn = spawn,
+  // Why installed before the spawn rather than handed to `body`: W0 observed
+  // `remoteControl/status/changed` arriving DURING the handshake. A sink the body registers is
+  // already too late for the traffic that motivated having one.
+  handlers: CodexAppServerHandlers = {}
 ): Promise<T> {
   // Why: a default-home grant must run against the real ~/.codex, so strip an
   // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
@@ -174,17 +193,29 @@ export async function runCodexAppServerSession<T>(
       if (!line) {
         continue
       }
-      let message: JsonRpcResponse
+      let parsed: unknown
       try {
-        message = JSON.parse(line) as JsonRpcResponse
+        parsed = JSON.parse(line)
       } catch {
+        router.reportUnparsable(line)
         continue
       }
-      if (typeof message.id === 'number' && pending.has(message.id)) {
-        const waiter = pending.get(message.id)!
-        pending.delete(message.id)
-        waiter.resolve(message)
+      router.route(parsed)
+    }
+  })
+
+  const router = createCodexInboundRouter({
+    handlers,
+    sendLine: (payload) => sendLine(payload),
+    isClosed: () => exited || timedOut,
+    deliverResponse: (response) => {
+      const waiter = pending.get(response.id)
+      if (!waiter) {
+        return false
       }
+      pending.delete(response.id)
+      waiter.resolve(response)
+      return true
     }
   })
 
@@ -238,10 +269,10 @@ export async function runCodexAppServerSession<T>(
     const id = nextRequestId++
     const response = await new Promise<JsonRpcResponse>((resolve, reject) => {
       pending.set(id, { resolve, reject })
-      const payload: Record<string, unknown> = { method, id }
-      if (params !== undefined) {
-        payload.params = params
-      }
+      // Why always present: JSON-RPC 2.0 lets params be omitted, and this server does not.
+      // Measured against the installed binary — `account/read` with no params member came back
+      // -32600 Invalid Request, so a parameterless call silently failed for every caller.
+      const payload: Record<string, unknown> = { method, id, params: params ?? {} }
       try {
         sendLine(payload)
       } catch (error) {
@@ -273,17 +304,27 @@ export async function runCodexAppServerSession<T>(
     )
   }
 
+  // Why: a child that dies while the body awaits a NOTIFICATION (a running turn) has no pending
+  // request to fail. Without this the session waited out its whole deadline, then reported a lost
+  // host or a crashed provider as a timeout. It rejects with the child's own error, code intact.
+  // One tick later, so a failure the session is already reporting (an oversized response kills the
+  // child and then fails the request) wins over the generic early exit.
+  const childGone = new Promise<never>((_, reject) => {
+    child.on('close', () => setImmediate(() => reject(spawnError ?? buildEarlyExitError())))
+  })
+  childGone.catch(() => {})
+
   try {
     const session = async (): Promise<T> => {
-      await requestRpc('initialize', {
+      const initializeResult = await requestRpc('initialize', {
         clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
       })
       notify('initialized')
-      return body({ request: requestRpc, notify })
+      return body({ request: requestRpc, notify, initializeResult })
     }
     // Why: the timeout owns the whole callback, including time between RPCs;
     // killing the child alone cannot settle a callback awaiting unrelated work.
-    return await Promise.race([session(), deadlinePromise])
+    return await Promise.race([session(), deadlinePromise, childGone])
   } catch (error) {
     if (
       error instanceof Error &&
@@ -297,6 +338,7 @@ export async function runCodexAppServerSession<T>(
     }
     throw error
   } finally {
+    await router.drain()
     try {
       child.stdin.end()
     } catch {
@@ -305,7 +347,7 @@ export async function runCodexAppServerSession<T>(
     if (!exited) {
       // Why: the server exits promptly on stdin EOF; the grace period only
       // bounds a wedged child before the guaranteed SIGKILL reap.
-      await waitForProcessExitUntil(exitPromise, 1500)
+      await waitForProcessExitUntil(exitPromise, invocation.exitGraceMs ?? 1500)
       if (!exited) {
         killCodexAppServerProcessTree(child)
         await waitForProcessExitUntil(exitPromise, 1000)

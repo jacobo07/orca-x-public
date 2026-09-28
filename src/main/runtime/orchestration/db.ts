@@ -35,8 +35,21 @@ import type {
   FederatedDispatchRow,
   RemoteDispatchAttachmentRow,
   FederationRelayDirection,
-  FederationRelayItemRow
+  FederationRelayItemRow,
+  DelegationSubject
 } from './types'
+import {
+  DelegationRefusedError,
+  MAX_DELEGATION_DEPTH,
+  judgeDelegation,
+  type DelegationAncestor
+} from './delegation-bounds'
+import {
+  REVIEWS_TABLE_SQL,
+  ReviewStore,
+  type ReviewCreateInput,
+  type ReviewRow
+} from './review-records'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -310,8 +323,10 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity.
-const SCHEMA_VERSION = 28
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 durable federation acknowledgments, v28 durable local mutation caller identity, v29 dispatch admission envelope, v30 task assignee/requester Agent + delegation subject, v31 revision-bound reviews, v32 review policy + producer task, v33 subject-bound decision gates.
+// Exported so a test can assert "this database is at the current schema" without restating the
+// number: four files hardcoded 28 and all of them broke on the v29 bump.
+export const SCHEMA_VERSION = 33
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -620,7 +635,10 @@ export class OrchestrationDb {
         deps          TEXT NOT NULL DEFAULT '[]',
         result        TEXT,
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-        completed_at  TEXT
+        completed_at  TEXT,
+        assignee_agent_id  TEXT,
+        requester_agent_id TEXT,
+        subject            TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -644,7 +662,8 @@ export class OrchestrationDb {
         dispatched_at       TEXT,
         completed_at        TEXT,
         created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-        last_heartbeat_at   TEXT
+        last_heartbeat_at   TEXT,
+        admission_envelope  TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);
@@ -661,7 +680,10 @@ export class OrchestrationDb {
           CHECK(status IN ('pending', 'resolved', 'timeout')),
         resolution    TEXT,
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-        resolved_at   TEXT
+        resolved_at   TEXT,
+        subject       TEXT,
+        review_requirement TEXT,
+        decision      TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_gates_task ON decision_gates(task_id);
@@ -683,7 +705,31 @@ export class OrchestrationDb {
         scheduler_lost_at   TEXT
       );
     `)
+    this.db.exec(REVIEWS_TABLE_SQL)
     this.createMailboxDeliveryIndexesIfPossible()
+  }
+
+  /** Reviews bound to an exact revision; the logic lives in review-records.ts. */
+  reviews(): ReviewStore {
+    return new ReviewStore(this.db, () => generateId('review'))
+  }
+
+  /** A review's task and its review row land together: a task without its row would be dispatched
+   *  as ordinary work, with no provider excluded and nothing to settle. */
+  createReviewTask(
+    task: Parameters<OrchestrationDb['createTask']>[0],
+    review: Omit<ReviewCreateInput, 'runId' | 'reviewTaskId'>
+  ): { task: TaskRow; review: ReviewRow } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const created = this.createTask(task)
+      const row = this.reviews().create({ ...review, runId: created.run_id, reviewTaskId: created.id })
+      this.db.exec('COMMIT')
+      return { task: created, review: row }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
@@ -1078,6 +1124,40 @@ export class OrchestrationDb {
             caller_fingerprint  TEXT NOT NULL UNIQUE
           );
         `)
+      }
+      if (current < 29 && !this.hasColumn('dispatch_contexts', 'admission_envelope')) {
+        this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN admission_envelope TEXT')
+      }
+      if (current < 30 && !this.hasColumn('tasks', 'assignee_agent_id')) {
+        this.db.exec('ALTER TABLE tasks ADD COLUMN assignee_agent_id TEXT')
+      }
+      if (current < 30 && !this.hasColumn('tasks', 'requester_agent_id')) {
+        this.db.exec('ALTER TABLE tasks ADD COLUMN requester_agent_id TEXT')
+      }
+      if (current < 30 && !this.hasColumn('tasks', 'subject')) {
+        this.db.exec('ALTER TABLE tasks ADD COLUMN subject TEXT')
+      }
+      if (current < 31) {
+        this.db.exec(REVIEWS_TABLE_SQL)
+      }
+      if (current < 32) {
+        // Why: a v31 database that lost its reviews table would otherwise fail the ALTERs below.
+        this.db.exec(REVIEWS_TABLE_SQL)
+      }
+      if (current < 32 && !this.hasColumn('reviews', 'policy')) {
+        this.db.exec("ALTER TABLE reviews ADD COLUMN policy TEXT NOT NULL DEFAULT 'any'")
+      }
+      if (current < 32 && !this.hasColumn('reviews', 'producer_task_id')) {
+        this.db.exec('ALTER TABLE reviews ADD COLUMN producer_task_id TEXT')
+      }
+      if (current < 33 && !this.hasColumn('decision_gates', 'subject')) {
+        this.db.exec('ALTER TABLE decision_gates ADD COLUMN subject TEXT')
+      }
+      if (current < 33 && !this.hasColumn('decision_gates', 'review_requirement')) {
+        this.db.exec('ALTER TABLE decision_gates ADD COLUMN review_requirement TEXT')
+      }
+      if (current < 33 && !this.hasColumn('decision_gates', 'decision')) {
+        this.db.exec('ALTER TABLE decision_gates ADD COLUMN decision TEXT')
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -4427,6 +4507,9 @@ export class OrchestrationDb {
     createdByProcessIncarnation?: string
     createdByRunGeneration?: number
     runId?: string
+    assigneeAgentId?: string
+    requesterAgentId?: string
+    subject?: DelegationSubject
   }): TaskRow {
     const runId = task.runId ?? LEGACY_RUN_ID
     this.requireRun(runId)
@@ -4435,6 +4518,21 @@ export class OrchestrationDb {
       if (!parent || parent.run_id !== runId) {
         throw new Error(`Parent task ${task.parentId} must belong to run ${runId}`)
       }
+    }
+    const refusal = judgeDelegation({
+      assigneeAgentId: task.assigneeAgentId ?? null,
+      requesterAgentId: task.requesterAgentId ?? null,
+      ancestors: this.delegationAncestors(task.parentId),
+      parentChildCount: task.parentId
+        ? (
+            this.db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?').get(task.parentId) as {
+              n: number
+            }
+          ).n
+        : 0
+    })
+    if (refusal) {
+      throw new DelegationRefusedError(refusal)
     }
     for (const depId of task.deps ?? []) {
       const dependency = this.getTask(depId)
@@ -4454,9 +4552,10 @@ export class OrchestrationDb {
         `INSERT INTO tasks (
            id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
            created_by_process_incarnation, created_by_run_generation,
-           task_title, display_name, spec, status, deps
+           task_title, display_name, spec, assignee_agent_id, requester_agent_id, subject,
+           status, deps
          ) VALUES (
-           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
            CASE WHEN EXISTS (
              SELECT 1
              FROM json_each(?) requested
@@ -4479,11 +4578,31 @@ export class OrchestrationDb {
         display.taskTitle || null,
         display.displayName || null,
         task.spec,
+        task.assigneeAgentId ?? null,
+        task.requesterAgentId ?? null,
+        task.subject ? JSON.stringify(task.subject) : null,
         depsJson,
         runId,
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
+  }
+
+  // Nearest first. Bounded one past the depth cap: past it the verdict is already decided.
+  private delegationAncestors(parentId: string | undefined): DelegationAncestor[] {
+    const ancestors: DelegationAncestor[] = []
+    let cursor = parentId
+    while (cursor && ancestors.length <= MAX_DELEGATION_DEPTH + 1) {
+      const row = this.db
+        .prepare('SELECT parent_id, assignee_agent_id FROM tasks WHERE id = ?')
+        .get(cursor) as { parent_id: string | null; assignee_agent_id: string | null } | undefined
+      if (!row) {
+        break
+      }
+      ancestors.push({ assigneeAgentId: row.assignee_agent_id })
+      cursor = row.parent_id ?? undefined
+    }
+    return ancestors
   }
 
   // Why: return the active creator Dispatch proof with the Task read; runtime still owns pane/process currency.
@@ -7107,7 +7226,10 @@ export class OrchestrationDb {
     // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
     assigneePaneKey?: string,
     launchTokenHash?: string,
-    processIncarnation?: string
+    processIncarnation?: string,
+    // Why: the admission decision is taken BEFORE this call (a refusal must not create a row), so
+    // the envelope arrives as evidence of a judgement already made, not as something to re-judge.
+    admissionEnvelope?: string
   ): DispatchContextRow {
     const task = this.getTask(taskId)
     if (!task) {
@@ -7138,8 +7260,8 @@ export class OrchestrationDb {
         `INSERT INTO dispatch_contexts (
            id, run_id, task_id, contract_version, launch_token_hash,
            assignee_handle, assignee_pane_key, process_incarnation,
-           status, failure_count, dispatched_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now'))`
+           status, failure_count, dispatched_at, admission_envelope
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, datetime('now'), ?)`
       )
       .run(
         id,
@@ -7150,7 +7272,8 @@ export class OrchestrationDb {
         assigneeHandle,
         assigneePaneKey ?? null,
         processIncarnation ?? null,
-        priorFailures
+        priorFailures,
+        admissionEnvelope ?? null
       )
     this.hasAnyDispatchContextsCache = true
 
@@ -7538,19 +7661,29 @@ export class OrchestrationDb {
 
   // ── Decision Gates ──
 
-  createGate(gate: { taskId: string; question: string; options?: string[] }): DecisionGateRow {
+  createGate(gate: {
+    taskId: string
+    question: string
+    options?: string[]
+    /** Binds the gate to an exact subject; only a person decides it (subject-bound-gates.ts). */
+    subject?: { projectId: string; worktreePath: string; revision: string; patchHash: string }
+    reviewRequirement?: 'none' | 'any' | 'independent'
+  }): DecisionGateRow {
     const id = generateId('gate')
     const optionsJson = JSON.stringify(gate.options ?? [])
     this.db
       .prepare(
-        'INSERT INTO decision_gates (id, run_id, task_id, question, options) VALUES (?, ?, ?, ?, ?)'
+        `INSERT INTO decision_gates (id, run_id, task_id, question, options, subject, review_requirement)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
         this.getTask(gate.taskId)?.run_id ?? LEGACY_RUN_ID,
         gate.taskId,
         gate.question,
-        optionsJson
+        optionsJson,
+        gate.subject ? JSON.stringify(gate.subject) : null,
+        gate.subject ? (gate.reviewRequirement ?? 'none') : null
       )
 
     this.completeActiveDispatchForTask(gate.taskId)
@@ -7566,6 +7699,14 @@ export class OrchestrationDb {
     if (!gate) {
       return undefined
     }
+    // Why here, not in the RPC: every free-text path passes through this method, and free text can
+    // come from a worker terminal, which cannot stand in for the person a subject-bound gate needs.
+    if (gate.subject !== null) {
+      throw new OrchestrationError(
+        'gate_requires_person',
+        'This gate approves an exact commit; decide it in Orca, where a person sees what it approves.'
+      )
+    }
 
     this.db
       .prepare(
@@ -7579,6 +7720,64 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
       | DecisionGateRow
       | undefined
+  }
+
+  /** A person's decision on a subject-bound gate. Approval readies the task; rejection fails it —
+   *  unlike free-text resolution, a "no" must never put the task back in line. */
+  decideSubjectGate(gateId: string, decision: 'approved' | 'rejected'): DecisionGateRow {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `UPDATE decision_gates SET status = 'resolved', resolution = ?, decision = ?,
+             resolved_at = datetime('now') WHERE id = ? AND status = 'pending'`
+        )
+        .run(decision, decision, gateId)
+      const gate = this.getGate(gateId)!
+      this.db
+        .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+        .run(decision === 'approved' ? 'ready' : 'failed', gate.task_id)
+      this.db.exec('COMMIT')
+      return gate
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  /** An approval that no longer holds at the effect: kept on record as what was approved, and the
+   *  gate is pending again so a person decides about what is there now. */
+  staleSubjectGate(gateId: string): void {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `UPDATE decision_gates SET status = 'pending', decision = 'stale', resolved_at = NULL
+             WHERE id = ? AND decision = 'approved'`
+        )
+        .run(gateId)
+      const gate = this.getGate(gateId)
+      if (gate) {
+        this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.task_id)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  /** Points a pending gate at the subject as it is now. Authorizes nothing: a person still decides. */
+  rebindSubjectGate(
+    gateId: string,
+    subject: { projectId: string; worktreePath: string; revision: string; patchHash: string }
+  ): DecisionGateRow | undefined {
+    this.db
+      .prepare(
+        "UPDATE decision_gates SET subject = ?, decision = NULL WHERE id = ? AND status = 'pending' AND subject IS NOT NULL"
+      )
+      .run(JSON.stringify(subject), gateId)
+    return this.getGate(gateId)
   }
 
   timeoutGate(gateId: string): DecisionGateRow | undefined {

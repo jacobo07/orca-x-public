@@ -55,7 +55,7 @@ const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
 // tested. Grepping for the context check itself would only ever find the methods that already have
 // one, which is the shape of an instrument that cannot return the other answer.
 const MUTATION_VERB =
-  /\.(create|createAgentSession|ensureAgentSession|delete|remove|rm|close|closeTab|closeLifecycle|rename|write|writeTerminalArtifact|move|set|update|activate|checkout|commit|discard|stage|unstage|bulkStage|bulkUnstage|push|pull|fetch|fastForward|forkSync|rebaseFromBase|abortMerge|abortRebase|forceDeleteBranch|sleep|send|focus|clearBuffer|multiplex|adoptOrphans|prefetchCreateBase|mergePR|setPRAutoMerge|requestPRReviewers|removePRReviewers|addIssueComment|createIssue|addPRReviewComment|addPRReviewCommentReply)$/
+  /\.(create|createAgentSession|ensureAgentSession|createForAgent|sendTurn|delete|remove|rm|close|closeTab|closeLifecycle|rename|write|writeTerminalArtifact|move|set|update|activate|checkout|commit|discard|stage|unstage|bulkStage|bulkUnstage|push|pull|fetch|fastForward|forkSync|rebaseFromBase|abortMerge|abortRebase|forceDeleteBranch|sleep|send|focus|clearBuffer|multiplex|adoptOrphans|prefetchCreateBase|mergePR|setPRAutoMerge|requestPRReviewers|removePRReviewers|addIssueComment|createIssue|addPRReviewComment|addPRReviewCommentReply)$/
 
 /**
  * Mobile-reachable mutations whose schema requires nothing at all.

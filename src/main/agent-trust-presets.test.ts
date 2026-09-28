@@ -38,8 +38,35 @@ vi.mock('node:os', async () => {
   }
 })
 
+import type { AgentTrustPreset } from './agent-trust-presets'
+
 const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
   await import('./agent-trust-presets')
+const { LOCAL_WORKSPACE_SCOPE, workspaceConsentKey } = await import('./workspace-execution-consent')
+
+// These cases exercise the artifact WRITERS, so they supply the consent those writers now require.
+// That makes this file structurally unable to testify that consent is required at all; the
+// inversion in agent-trust-consent-characterization.test.ts is what proves the gate, and it is the
+// only file that may.
+//
+// A grant names the path the effect actually targets — for a linked worktree that is the repository
+// root, not the workspace that was passed in. The two adversarial cases grant EVERY candidate root
+// on purpose: if resolution wrongly broadened, the artifact would then be written and the existing
+// assertion would catch it. Granting only the expected root would let a refusal stand in for a
+// correct resolution, and the case would pass for the wrong reason.
+function grantConsent(preset: AgentTrustPreset, ...targets: string[]): void {
+  const grants: Record<string, { decision: string; at: string }> = {}
+  for (const target of targets) {
+    grants[workspaceConsentKey({ scope: LOCAL_WORKSPACE_SCOPE, workspacePath: target, preset })] = {
+      decision: 'granted',
+      at: '2026-01-01T00:00:00.000Z'
+    }
+  }
+  writeFileSync(
+    join(testState.userDataDir, 'workspace-execution-consent.json'),
+    `${JSON.stringify({ version: 1, grants }, null, 2)}\n`
+  )
+}
 
 beforeEach(() => {
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
@@ -65,6 +92,7 @@ describe('markCursorWorkspaceTrusted', () => {
   it('writes ~/.cursor/projects/<slug>/.workspace-trusted with the cwd payload', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
     try {
+      grantConsent('cursor', workspace)
       markCursorWorkspaceTrusted(workspace)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
       const slugDirs = readdirSync(projectsDir)
@@ -82,6 +110,7 @@ describe('markCursorWorkspaceTrusted', () => {
   it('is idempotent — re-marking the same workspace does not overwrite trustedAt', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
     try {
+      grantConsent('cursor', workspace)
       markCursorWorkspaceTrusted(workspace)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
       const slugDirs = readdirSync(projectsDir)
@@ -100,6 +129,7 @@ describe('markCopilotFolderTrusted', () => {
   it('appends the workspace to trustedFolders in ~/.copilot/config.json', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     try {
+      grantConsent('copilot', workspace)
       markCopilotFolderTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
       expect(existsSync(configPath)).toBe(true)
@@ -116,6 +146,7 @@ describe('markCopilotFolderTrusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     const realpath = realpathSync(workspace)
     try {
+      grantConsent('copilot', workspace)
       mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
       writeFileSync(
         join(testState.fakeHomeDir, '.copilot', 'config.json'),
@@ -148,6 +179,7 @@ describe('markCodexProjectTrusted', () => {
       writeFileSync(join(workspace, '.git'), `gitdir: ${worktreeGitDir}\n`, 'utf-8')
       writeFileSync(join(worktreeGitDir, 'gitdir'), join(workspace, '.git'), 'utf-8')
 
+      grantConsent('codex', repository, workspace)
       markCodexProjectTrusted(workspace)
 
       const repositoryRoot = realpathSync.native(repository)
@@ -183,6 +215,7 @@ describe('markCodexProjectTrusted', () => {
       writeFileSync(join(workspace, '.git'), `gitdir: ${arbitraryGitDir}\n`, 'utf-8')
       writeFileSync(join(arbitraryGitDir, 'commondir'), join(unrelatedRoot, '.git'), 'utf-8')
 
+      grantConsent('codex', workspace, unrelatedRoot)
       markCodexProjectTrusted(workspace)
       const structuredGitDir = join(unrelatedRoot, '.git', 'worktrees', 'feature')
       mkdirSync(structuredGitDir, { recursive: true })
@@ -206,6 +239,7 @@ describe('markCodexProjectTrusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     try {
       const realpath = realpathSync.native(workspace)
+      grantConsent('codex', workspace)
       markCodexProjectTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
       const runtimeConfigPath = join(
@@ -231,6 +265,7 @@ describe('markCodexProjectTrusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const realpath = realpathSync.native(workspace)
     try {
+      grantConsent('codex', workspace)
       const codexDir = join(testState.fakeHomeDir, '.codex')
       const runtimeCodexDir = join(testState.userDataDir, 'codex-runtime-home', 'home')
       mkdirSync(codexDir, { recursive: true })

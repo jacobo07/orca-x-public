@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import type { AgentType } from '../../../../shared/native-chat-types'
+import type { ProviderType } from '../../../../shared/native-chat-types'
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
@@ -54,7 +54,7 @@ export function useNativeChatInteractiveSend(
   terminalTabId: string,
   paneKey: string,
   targetPtyId: string | null,
-  agent: AgentType
+  agent: ProviderType
 ): NativeChatInteractiveSend {
   // The in-flight answer's cancel handle; cleared on a new send, on Stop, and on
   // unmount so a detached setTimeout chain can't keep writing PTY bytes after

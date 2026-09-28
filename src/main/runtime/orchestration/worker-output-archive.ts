@@ -1,4 +1,4 @@
-import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
+import type { ProviderType, NativeChatMessage } from '../../../shared/native-chat-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
 import {
@@ -11,7 +11,7 @@ import { readWorkerTranscript } from './worker-transcript-read'
 const TERMINAL_ARCHIVE_MAX_CHARS = 262_144
 
 export type WorkerTranscriptPinArchive = {
-  agent: AgentType
+  agent: ProviderType
   providerSessionKey: string
   providerSessionId: string
   transcriptPath: string | null
@@ -22,7 +22,7 @@ export type WorkerTranscriptPinArchive = {
 
 export type WorkerTranscriptSnapshotArchive = {
   version: 2
-  agent: AgentType
+  agent: ProviderType
   processIncarnation: string
   messages: NativeChatMessage[]
   limited: boolean

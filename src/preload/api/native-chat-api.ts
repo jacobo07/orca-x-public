@@ -1,5 +1,5 @@
 import type {
-  AgentType,
+  ProviderType,
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
@@ -45,7 +45,7 @@ export type NativeChatSubscribeArgs = {
   /** Unique per-caller id, echoed on every append so multiple live panes in
    *  one renderer don't cross-talk. */
   subscriptionId: string
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
@@ -57,7 +57,7 @@ export type NativeChatApi = {
   /** Read the on-disk transcript for an agent + session id, windowed to the most recent `limit`
    *  turns. `transcriptPath` is the hook-reported authoritative path, preferred over the id glob. */
   readSession: (
-    agent: AgentType,
+    agent: ProviderType,
     sessionId: string,
     limit?: number,
     transcriptPath?: string

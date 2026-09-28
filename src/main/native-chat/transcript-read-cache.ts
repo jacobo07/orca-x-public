@@ -1,4 +1,4 @@
-import type { AgentType } from '../../shared/native-chat-types'
+import type { ProviderType } from '../../shared/native-chat-types'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
 import { wslGatedStat } from './wsl-transcript-fs-access'
@@ -71,7 +71,7 @@ function setCached(key: string, value: CachedTranscript): void {
   }
 }
 
-function cacheKey(agent: AgentType, filePath: string): string {
+function cacheKey(agent: ProviderType, filePath: string): string {
   return `${agent}:${filePath}`
 }
 
@@ -95,7 +95,7 @@ async function fileStat(filePath: string): Promise<{ mtimeMs: number; bytes: num
  * canonical, unwindowed result; callers apply their own windowing/truncation.
  */
 export async function readNativeChatTranscriptCached(
-  agent: AgentType,
+  agent: ProviderType,
   sessionId: string,
   /** Hook-reported authoritative transcript path, preferred over the id glob. */
   transcriptPath?: string

@@ -70,7 +70,14 @@ export function buildAppearanceSubmenu({
         click: () => onToggleAppearance('showMobileButton')
       },
       {
-        label: translateMain('menu.showWorkspaceButton', 'Show Workspace Button'),
+        label: translateMain('menu.showAgentWorkspaceButton', 'Show Workspace Button'),
+        type: 'checkbox',
+        checked: appearance.showAgentWorkspaceButton,
+        click: () => onToggleAppearance('showAgentWorkspaceButton')
+      },
+      {
+        // The key keeps its old name; the entry it governs is the launcher, now called Terminals.
+        label: translateMain('menu.showWorkspaceButton', 'Show Terminals Button'),
         type: 'checkbox',
         checked: appearance.showWorkspaceButton,
         click: () => onToggleAppearance('showWorkspaceButton')

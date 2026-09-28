@@ -77,6 +77,50 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('window:unload-prevented')
   })
 
+  it('treats a vetoed reload as this window’s reload, not as a quit abort', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      id: 7,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const onQuitAborted = vi.fn()
+    const onReloadVetoed = vi.fn()
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { getIsQuitting: () => false, onQuitAborted, onReloadVetoed })
+
+    windowHandlers['will-prevent-unload']()
+
+    expect(onQuitAborted).not.toHaveBeenCalled()
+    expect(onReloadVetoed).toHaveBeenCalledWith(7)
+    // The renderer still hears it, so a prepared restart it started is released.
+    expect(webContents.send).toHaveBeenCalledWith('window:unload-prevented')
+  })
+
   it('allows close after the renderer process is gone', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

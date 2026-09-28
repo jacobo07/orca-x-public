@@ -9,6 +9,7 @@ import type { TerminalMenuCommand } from '../../shared/terminal-menu-command'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { requestParkFromMenu } from '../durable-exit/park-menu-command'
+import { runMenuReload, type MenuReloadHooks } from './menu-reload-command'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { buildAppearanceSubmenu } from './appearance-menu'
 import { buildTerminalMenu } from './terminal-menu'
@@ -18,6 +19,7 @@ export type AppearanceMenuState = {
   showAutomationsButton: boolean
   showMobileButton: boolean
   showWorkspaceButton: boolean
+  showAgentWorkspaceButton: boolean
   showTitlebarAppName: boolean
   statusBarVisible: boolean
 }
@@ -36,7 +38,8 @@ type RegisterAppMenuOptions = {
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
-  onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
+  onBeforeReload?: MenuReloadHooks['onBeforeReload']
+  onReloadNotPerformed?: MenuReloadHooks['onReloadNotPerformed']
   // Why each of these takes the invoking window: Electron hands every click the window whose menu
   // ran it, and a handler that drops it has to guess. The guess in main was a module-level reference
   // assigned on window creation, so with two windows open a command invoked from the older one acted
@@ -64,6 +67,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onOpenCrashReport,
     onCheckForUpdates,
     onBeforeReload,
+    onReloadNotPerformed,
     onZoomIn,
     onZoomOut,
     onZoomReset,
@@ -84,22 +88,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       getKeybindings?.()
     )
     return formatKeybindingList(bindings, process.platform)
-  }
-
-  const reloadFocusedWindow = (ignoreCache: boolean): void => {
-    const webContents = BrowserWindow.getFocusedWindow()?.webContents
-    if (!webContents) {
-      return
-    }
-
-    onBeforeReload?.({ ignoreCache, webContentsId: webContents.id })
-
-    if (ignoreCache) {
-      webContents.reloadIgnoringCache()
-      return
-    }
-
-    webContents.reload()
   }
 
   // Why: modifier-click update checks are hidden power-user affordances.
@@ -253,11 +241,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [
       {
         label: translateMain('menu.reload', 'Reload'),
-        click: () => reloadFocusedWindow(false)
+        click: (_menuItem, window) =>
+          runMenuReload(false, window, { onBeforeReload, onReloadNotPerformed })
       },
       {
         label: `${translateMain('menu.forceReload', 'Force Reload')}\t${shortcutLabel('app.forceReload')}`,
-        click: () => reloadFocusedWindow(true)
+        click: (_menuItem, window) =>
+          runMenuReload(true, window, { onBeforeReload, onReloadNotPerformed })
       },
       { role: 'toggleDevTools' },
       { type: 'separator' },

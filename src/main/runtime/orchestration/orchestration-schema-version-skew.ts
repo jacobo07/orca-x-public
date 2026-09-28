@@ -25,8 +25,24 @@ const POST_V6_COLUMNS = [
   ['legacy_mail_receipts', 'principal_id']
 ] as const
 
+// Why versioned: an entry here is required only of databases at or past its
+// version, so a legitimately older one is not dropped to a replay from v6.
+// A new post-v6 ladder column belongs here, never in the unversioned list above.
 const VERSIONED_POST_V6_COLUMNS = [
-  { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' }
+  { version: 24, table: 'tasks', column: 'created_by_pane_key' },
+  { version: 24, table: 'tasks', column: 'created_by_process_incarnation' },
+  { version: 24, table: 'tasks', column: 'created_by_run_generation' },
+  { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' },
+  { version: 29, table: 'dispatch_contexts', column: 'admission_envelope' },
+  { version: 30, table: 'tasks', column: 'assignee_agent_id' },
+  { version: 30, table: 'tasks', column: 'requester_agent_id' },
+  { version: 30, table: 'tasks', column: 'subject' },
+  // Why no v31 `reviews` entry: this registry names columns, and a lost table has no `policy` either.
+  { version: 32, table: 'reviews', column: 'policy' },
+  { version: 32, table: 'reviews', column: 'producer_task_id' },
+  { version: 33, table: 'decision_gates', column: 'subject' },
+  { version: 33, table: 'decision_gates', column: 'review_requirement' },
+  { version: 33, table: 'decision_gates', column: 'decision' }
 ] as const
 
 const POST_V6_INDEXES = [

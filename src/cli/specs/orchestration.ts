@@ -128,7 +128,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--assignee-agent <agent_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'spec',
@@ -137,9 +137,38 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'deps',
       'parent',
       'run',
+      'assignee-agent',
       'from',
       'retry-request'
     ]
+  },
+  {
+    path: ['orchestration', 'review-request'],
+    summary: 'Ask an agent to review one exact commit',
+    usage:
+      'orca orchestration review-request --reviewer-agent <agent_id> --project <project_id> [--worktree <path>] [--revision <rev>] [--producer-task <task_id>] [--independent] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'reviewer-agent',
+      'project',
+      'worktree',
+      'revision',
+      'producer-task',
+      'independent',
+      'run',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'Orca captures the commit and its patch from git; --worktree defaults to the current directory, --revision to HEAD.',
+      '--independent keeps the review off the provider that built --producer-task, and is refused when that is unknown.'
+    ]
+  },
+  {
+    path: ['orchestration', 'review-show'],
+    summary: 'Show a review, its findings, and whether it still describes the subject',
+    usage: 'orca orchestration review-show --id <review_id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id']
   },
   {
     path: ['orchestration', 'task-list'],
@@ -237,8 +266,22 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'gate-create'],
     summary: 'Create a decision gate blocking a task',
     usage:
-      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request']
+      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--worktree <path> --project <project_id> [--revision <rev>] [--require-review none|any|independent]] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'task',
+      'question',
+      'options',
+      'worktree',
+      'project',
+      'revision',
+      'require-review',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'With --worktree the gate approves that exact commit: only a person can decide it, in Orca, and the task runs only while the commit is unchanged.'
+    ]
   },
   {
     path: ['orchestration', 'gate-resolve'],

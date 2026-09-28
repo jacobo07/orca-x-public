@@ -37,6 +37,7 @@ import { setAgentBrowserBridgeRef, registerBrowserHandlers } from './browser'
 import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { registerSessionHandlers } from './session'
 import { registerProjectWorkingSetHandlers } from './project-working-set'
+import { registerContinuityHandlers } from './continuity'
 import { registerDurableExitHandlers } from './durable-exit'
 import { registerWorkspaceWindowClaimHandlers } from './workspace-window-claim'
 import { registerSettingsHandlers } from './settings'
@@ -68,6 +69,8 @@ import {
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
 import { registerAgentTrustHandlers } from './agent-trust'
+import { registerConversationHandlers } from './conversations'
+import { registerAgentFederationHandlers } from './agent-federation'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
 import { registerGrokAccountHandlers } from './grok-accounts'
@@ -162,6 +165,11 @@ export function registerCoreHandlers(
   registerAgentTranscriptPresenceHandler()
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
+  registerConversationHandlers(
+    { readAgents: () => store.getAgents() },
+    { readProjectHostSetups: () => store.getProjectHostSetups() }
+  )
+  registerAgentFederationHandlers(() => runtime.getOrchestrationDb())
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
@@ -216,6 +224,7 @@ export function registerCoreHandlers(
   registerPetHandlers()
   registerSessionHandlers(store)
   registerProjectWorkingSetHandlers()
+  registerContinuityHandlers(store)
   registerDurableExitHandlers(() => store.getDataFilePath())
   registerWorkspaceWindowClaimHandlers({
     openNewWindow: lifecycleOptions.onOpenNewWindow,

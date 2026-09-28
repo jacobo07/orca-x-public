@@ -246,7 +246,7 @@ describe('skill discovery', () => {
 
   it('names every source owner after a real agent id', () => {
     // Why: renderer coverage joins `owner` to a TuiAgent id by string equality, and
-    // AgentType widens to string — a typo here reads Missing forever, type-clean.
+    // ProviderType widens to string — a typo here reads Missing forever, type-clean.
     const owners = buildSkillDiscoverySources({
       homeDir: '/home/test',
       repos: [],

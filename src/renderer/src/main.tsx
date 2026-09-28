@@ -14,11 +14,15 @@ import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { showReloadFreezeFrameIfPresent } from './startup/reload-freeze-frame-overlay'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+// Before React mounts: on the far side of a deliberate reload this paints the frame the window was
+// showing, so the empty shell and its hydration jumps never reach the screen.
+void showReloadFreezeFrameIfPresent()
 
 if (
   import.meta.env.DEV &&

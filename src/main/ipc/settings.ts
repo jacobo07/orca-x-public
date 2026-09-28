@@ -63,6 +63,9 @@ const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTasksButton',
   'showAutomationsButton',
   'showMobileButton',
+  // Both were missing: hiding either from the rail's own menu left the View menu's checkbox stale.
+  'showWorkspaceButton',
+  'showAgentWorkspaceButton',
   'showTitlebarAppName'
 ]
 

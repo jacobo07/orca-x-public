@@ -538,7 +538,7 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
 
 function sanitizeHydratedActiveView(
   value: PersistedUIState['activeView'],
-  experimentalActivityEnabled: boolean
+  gates: { experimentalActivityEnabled: boolean }
 ): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have
   // falls back to terminal rather than rendering nothing.
@@ -546,8 +546,13 @@ function sanitizeHydratedActiveView(
     return 'terminal'
   }
   // Why: activity is hidden when its setting is off, so gate only it (mobile/automations stay functional when hidden).
-  if (value === 'activity' && !experimentalActivityEnabled) {
+  if (value === 'activity' && !gates.experimentalActivityEnabled) {
     return 'terminal'
+  }
+  // The Agents directory merged into Workspace (2026-09-24): a profile saved on it reopens on the
+  // Workspace, whose roster lists the same agents, rather than on a page that no longer exists.
+  if (value === 'agents') {
+    return 'conversations'
   }
   return value
 }
@@ -755,6 +760,12 @@ export type UISlice = {
   closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
+  openConversationsPage: () => void
+  openResumeCenter: () => void
+  /** The agent the conversations surface is opened FOR, or null for Brainstorming. Window-local
+   *  and never persisted: a restart returns to Brainstorming, and Agents is the way back. */
+  conversationAgentScope: string | null
+  openAgentChat: (agentId: string) => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -1544,6 +1555,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   // No closeWorkspacePage twin: the launcher is left by opening a project, which is a real
   // navigation to that workspace, not a dismissal that has to restore where you came from.
   openWorkspacePage: () => set({ activeView: 'workspace' }),
+  // No previous-view tracking: conversations has no close or back affordance yet, and state that
+  // nothing reads is worse than state that does not exist.
+  openConversationsPage: () => set({ activeView: 'conversations', conversationAgentScope: null }),
+  openResumeCenter: () => set({ activeView: 'resumeCenter' }),
+  conversationAgentScope: null,
+  // The same surface as Brainstorming, scoped: one chat stack, not an agent-shaped second one.
+  openAgentChat: (agentId) => set({ activeView: 'conversations', conversationAgentScope: agentId }),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',
@@ -2703,7 +2721,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'
-            ? sanitizeHydratedActiveView(ui.activeView, s.settings?.experimentalActivity === true)
+            ? sanitizeHydratedActiveView(ui.activeView, {
+                experimentalActivityEnabled: s.settings?.experimentalActivity === true
+              })
             : s.activeView,
         persistedUIReady: true
       }

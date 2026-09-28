@@ -1,7 +1,7 @@
 import {
   isTextBlock,
   NATIVE_CHAT_SOURCE_PRIORITY,
-  type AgentType,
+  type ProviderType,
   type NativeChatMessage,
   type NativeChatSession,
   type NativeChatSessionStatus
@@ -21,7 +21,7 @@ export type NativeChatSources = {
 export type AssembleNativeChatSessionInput = {
   sources: NativeChatSources
   sessionId: string | null
-  agent: AgentType
+  agent: ProviderType
   /** Overrides the derived status. The derived value is 'empty' when no
    *  messages survive merge, otherwise 'ready'. Callers pass 'loading',
    *  'working', or 'error' when out-of-band signals apply. */

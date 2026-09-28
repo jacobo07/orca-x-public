@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 
 /**
  * The owner-evidence signals a terminal pane can carry, strongest launch intent
@@ -7,23 +7,23 @@ import type { AgentType } from './agent-status-types'
  */
 export type PaneAgentOwnerSignals = {
   /** Tab-scoped launch intent — what Orca launched into this tab. */
-  launchAgent?: AgentType | null
+  launchAgent?: ProviderType | null
   /** Never-cleared per-connection launch seed (pane connection only). */
-  startupLaunchAgent?: AgentType | null
+  startupLaunchAgent?: ProviderType | null
   /** Startup-provided initial agent status (pane connection only). */
-  initialStatusAgent?: AgentType | null
+  initialStatusAgent?: ProviderType | null
   /** Agent inferred from a manually typed shell command (pane connection only). */
-  commandInferredAgent?: AgentType | null
+  commandInferredAgent?: ProviderType | null
   /** Live focused-pane hook identity — host-stamped, published, mirror-safe. */
-  hookAgent?: AgentType | null
+  hookAgent?: ProviderType | null
   /** Live sibling-pane hook identity. */
-  siblingHookAgent?: AgentType | null
+  siblingHookAgent?: ProviderType | null
   /** Last completed focused-pane hook — survives the live hook row clearing. */
-  completedHookAgent?: AgentType | null
+  completedHookAgent?: ProviderType | null
   /** Last completed sibling-pane hook. */
-  siblingCompletedHookAgent?: AgentType | null
+  siblingCompletedHookAgent?: ProviderType | null
   /** Hibernated session record — the final durable identity while a pane sleeps. */
-  sleepingSessionAgent?: AgentType | null
+  sleepingSessionAgent?: ProviderType | null
 }
 
 /**
@@ -42,7 +42,7 @@ export type PaneAgentOwnerSignals = {
  * launch/live-hook above the completed/sleeping records keeps a genuine pane on
  * its real agent and stops a stale record from hijacking it.
  */
-export function resolvePaneAgentOwner(signals: PaneAgentOwnerSignals): AgentType | null {
+export function resolvePaneAgentOwner(signals: PaneAgentOwnerSignals): ProviderType | null {
   return (
     signals.launchAgent ??
     signals.startupLaunchAgent ??

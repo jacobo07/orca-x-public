@@ -1,5 +1,5 @@
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { AgentType, NativeChatMessage } from './native-chat-types'
+import type { ProviderType, NativeChatMessage } from './native-chat-types'
 import type { RuntimeTerminalRead, RuntimeTerminalState } from './runtime-types'
 
 export const ORCHESTRATION_WORKER_READ_SOURCES = ['auto', 'transcript', 'terminal'] as const
@@ -19,7 +19,7 @@ export type OrchestrationWorkerReadFallbackReason =
 export type ExactWorkerProviderSession = {
   paneKey: string
   processIncarnation: string
-  agent: AgentType
+  agent: ProviderType
   providerSession: AgentProviderSessionMetadata
   observedAt: number
 }
@@ -35,7 +35,7 @@ export type OrchestrationWorkerReadTranscriptResult = {
   dispatchId: string
   source: 'transcript'
   sourceIdentity: string
-  provider: AgentType
+  provider: ProviderType
   transcript: OrchestrationWorkerTranscriptPage
   cursor: string
   status: {

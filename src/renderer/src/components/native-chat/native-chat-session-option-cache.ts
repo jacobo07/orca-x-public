@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import {
   cloneNativeChatSessionOptionRecord,
@@ -31,7 +31,7 @@ export function writeNativeChatSessionOptionCache(
 
 export function seedNativeChatAppliedSessionOptions(
   scopeKey: string,
-  agent: AgentType,
+  agent: ProviderType,
   values: Record<string, SessionOptionValue> | null | undefined
 ): void {
   const modelId = typeof values?.model === 'string' ? values.model : null

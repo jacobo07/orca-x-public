@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { ProviderType, NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   applyAppends,
   createIncrementalAssembler,
@@ -39,7 +39,7 @@ function sharesPrefix(
 
 /** Keeps transcript assembly off the status-only render axis. */
 export function useNativeChatAssembledMessages(args: {
-  agent: AgentType
+  agent: ProviderType
   sessionId: string | null
   baseMessages: readonly NativeChatMessage[]
   appended: NativeChatMessage[]

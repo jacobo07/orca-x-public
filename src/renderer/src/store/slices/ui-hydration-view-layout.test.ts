@@ -184,7 +184,10 @@ describe('createUISlice hydratePersistedUI', () => {
 
     store
       .getState()
-      .hydratePersistedUI(makePersistedUI({ sidebarWidth: 420, rightSidebarOpen: false }), 'startup')
+      .hydratePersistedUI(
+        makePersistedUI({ sidebarWidth: 420, rightSidebarOpen: false }),
+        'startup'
+      )
 
     expect(store.getState().sidebarWidth).toBe(420)
     expect(store.getState().rightSidebarOpen).toBe(false)
@@ -223,6 +226,19 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
 
     expect(store.getState().activeView).toBe('activity')
+  })
+
+  it('reopens a profile saved on the retired Agents directory in the Workspace', () => {
+    // Both the old opt-in state and the default: the directory is gone either way, and the
+    // Workspace roster lists the same agents.
+    for (const showAgentsButton of [true, false]) {
+      const store = createUIStore()
+      store.setState({ settings: { showAgentsButton } as AppState['settings'] })
+
+      store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'agents' }), 'startup')
+
+      expect(store.getState().activeView).toBe('conversations')
+    }
   })
 
   it('restores a default-on view (mobile) even when its nav button is hidden', () => {

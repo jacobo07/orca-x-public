@@ -7,7 +7,9 @@ import {
   nativeTheme,
   Notification,
   powerMonitor,
-  screen
+  screen,
+  session,
+  shell
 } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
@@ -15,6 +17,12 @@ import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import {
+  attachConnectedApplicationGuestPolicy,
+  hardenConnectedApplicationSession
+} from '../connected-apps/connected-application-guest-policy'
+import { connectedApplicationRegistry } from '../connected-apps/connected-application-registry'
+import { decideConnectedApplicationNavigation } from '../../shared/connected-application'
 import { translateMain } from '../i18n/main-i18n'
 import type { MenuPopupRequest, MenuTopLevelItem } from '../../shared/app-menu-strip'
 import { bindWindowChromeIpc } from './window-chrome-ipc-router'
@@ -67,6 +75,7 @@ import type { PersistedWindowTopologyEntry } from '../../shared/window-topology-
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
+import { reloadWithFreezeFrame } from './reload-with-freeze-frame'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
@@ -229,6 +238,8 @@ type CreateMainWindowOptions = {
   getIsQuitting?: () => boolean
   /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
   onQuitAborted?: () => void
+  /** The renderer vetoed unload with no close or quit in flight: this window's reload was refused. */
+  onReloadVetoed?: (webContentsId: number) => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
@@ -335,7 +346,7 @@ export function createMainWindow(
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? cascadeBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? cascadeBounds?.height ?? defaultBounds.height,
-    ...(savedBounds ?? cascadeBounds
+    ...((savedBounds ?? cascadeBounds)
       ? { x: (savedBounds ?? cascadeBounds)!.x, y: (savedBounds ?? cascadeBounds)!.y }
       : {}),
     minWidth: MIN_WIDTH,
@@ -568,9 +579,16 @@ export function createMainWindow(
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
+    const connectedApplication = connectedApplicationRegistry.applicationForPartition(partition)
 
     // Why: fail closed — deny any src or partition not in the registry allowlist so a renderer bug can't smuggle preload/Node into an unprivileged guest.
-    if (!normalizedSrc || !browserSessionRegistry.isAllowedPartition(partition)) {
+    if (
+      !normalizedSrc ||
+      (!connectedApplication && !browserSessionRegistry.isAllowedPartition(partition)) ||
+      // A connected app's guest may only START on its own origin, not on any URL a renderer names.
+      (connectedApplication &&
+        decideConnectedApplicationNavigation(normalizedSrc, connectedApplication) !== 'allow')
+    ) {
       event.preventDefault()
       return
     }
@@ -595,6 +613,22 @@ export function createMainWindow(
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    // A connected app's guest gets its own, narrower policy — never the browser tab's, which can
+    // open Orca tabs and native popups.
+    const connectedApplication = connectedApplicationRegistry
+      .partitions()
+      .map((partition) => ({
+        partition,
+        application: connectedApplicationRegistry.applicationForPartition(partition)
+      }))
+      .find(({ partition }) => session.fromPartition(partition) === guest.session)?.application
+    if (connectedApplication) {
+      hardenConnectedApplicationSession(guest.session)
+      attachConnectedApplicationGuestPolicy(guest, connectedApplication, {
+        openExternal: (url) => void shell.openExternal(url)
+      })
+      return
+    }
     // Why: attach guest popup/nav policy at creation; waiting for renderer registration races target=_blank/early redirects past it.
     browserManager.attachGuestPolicies(guest)
   })
@@ -791,8 +825,10 @@ export function createMainWindow(
         mainWindow.webContents.send('ui:openSettings')
         return
       case 'forceReload':
-        opts?.onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
-        mainWindow.webContents.reloadIgnoringCache()
+        void reloadWithFreezeFrame(mainWindow.webContents, {
+          ignoreCache: true,
+          ...(opts?.onBeforeReload ? { onBeforeReload: opts.onBeforeReload } : {})
+        })
         return
       case 'toggleLeftSidebar':
         mainWindow.webContents.send('ui:toggleLeftSidebar')
@@ -1163,10 +1199,16 @@ export function createMainWindow(
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
-    // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
-    windowClosing = false
-    clearQuitRendererAckTimer()
-    opts?.onQuitAborted?.()
+    // Why the split: beforeunload also runs for a reload. With no close or quit in flight the veto
+    // belongs to this window's reload, and resetting the app-wide quit latch for it was wrong.
+    if (windowClosing || (opts?.getIsQuitting?.() ?? false)) {
+      // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
+      windowClosing = false
+      clearQuitRendererAckTimer()
+      opts?.onQuitAborted?.()
+    } else {
+      opts?.onReloadVetoed?.(mainWindow.webContents.id)
+    }
     mainWindow.webContents.send('window:unload-prevented')
   })
 

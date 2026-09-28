@@ -237,8 +237,18 @@ export type GlobalSettings = {
   showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
-  /** Only toggles the sidebar shortcut; the workspace launcher stays reachable from Settings. */
+  /** @deprecated LEGACY, read by nothing. Governed the opt-in "Chats" rail entry that merged into
+   *  Workspace (2026-09-24). Declared only because profiles written before then still hold it; it
+   *  must never gate Workspace — it defaulted to false, so a stored false is not a choice. */
+  showConversationsButton?: boolean
+  /** @deprecated LEGACY, read by nothing. Governed the opt-in "Agents" rail entry that merged into
+   *  Workspace (2026-09-24); kept for the same reason as `showConversationsButton`. */
+  showAgentsButton?: boolean
+  /** Only toggles the sidebar shortcut; the workspace launcher (labelled "Terminals") stays
+   *  reachable from Settings. The key keeps its old name so persisted profiles keep their choice. */
   showWorkspaceButton?: boolean
+  /** Default-on: the agent Workspace is the canonical entry. Governs the rail entry only. */
+  showAgentWorkspaceButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */

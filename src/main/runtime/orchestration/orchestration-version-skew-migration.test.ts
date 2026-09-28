@@ -180,6 +180,131 @@ describe('OrchestrationDb version-skew migration', () => {
     expect(db.getQuestion(question.message.id)).toMatchObject({ status: 'pending' })
   })
 
+  // Why: the v24 task columns were added to the ladder but never registered, so a
+  // database claiming v24+ without them was never probed and never repaired.
+  it('repairs a database that claims the current schema but lost a v24 task column', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v24-skew-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const run = db.createRun({
+      objective: 'survive a v24 repair',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'keep me', runId: run.id, createdByPaneKey: 'tab_a:leaf_a' })
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    raw.exec('ALTER TABLE tasks DROP COLUMN created_by_run_generation')
+    expect(claimed).toBeGreaterThanOrEqual(24)
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(6)
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    expect(db.getTask(task.id)).toMatchObject({
+      spec: 'keep me',
+      created_by_pane_key: 'tab_a:leaf_a',
+      created_by_run_generation: null
+    })
+    db.close()
+    db = undefined
+
+    const reopened = new Database(dbPath)
+    const columns = (reopened.pragma('table_info(tasks)') as { name: string }[]).map((c) => c.name)
+    expect(columns).toContain('created_by_run_generation')
+    expect(reopened.pragma('user_version', { simple: true })).toBe(claimed)
+    reopened.close()
+  })
+
+  it('repairs a database that claims the current schema but lost the v29 admission column', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v29-skew-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const run = db.createRun({
+      objective: 'survive a v29 repair',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'keep me', runId: run.id })
+    const dispatch = db.createDispatchContext(
+      task.id,
+      'term_worker',
+      'tab_w:leaf_w',
+      undefined,
+      undefined,
+      '{"schema":"orca.dispatch-admission/1","reason":"no-requirement-declared"}'
+    )
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    raw.exec('ALTER TABLE dispatch_contexts DROP COLUMN admission_envelope')
+    expect(claimed).toBeGreaterThanOrEqual(29)
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(6)
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    // The envelope's bytes went with the dropped column; the dispatch itself must not.
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+      task_id: task.id,
+      assignee_handle: 'term_worker',
+      admission_envelope: null
+    })
+    db.close()
+    db = undefined
+
+    const reopened = new Database(dbPath)
+    const columns = (
+      reopened.pragma('table_info(dispatch_contexts)') as { name: string }[]
+    ).map((c) => c.name)
+    expect(columns).toContain('admission_envelope')
+    expect(reopened.pragma('user_version', { simple: true })).toBe(claimed)
+    reopened.close()
+  })
+
+  it('repairs a database that claims the current schema but lost a v30 delegation column', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v30-skew-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    const task = db.createTask({ spec: 'keep me', assigneeAgentId: 'agent_keep' })
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    raw.exec('ALTER TABLE tasks DROP COLUMN subject')
+    expect(claimed).toBeGreaterThanOrEqual(30)
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(6)
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+    expect(db.getTask(task.id)).toMatchObject({ assignee_agent_id: 'agent_keep', subject: null })
+    db.close()
+    db = undefined
+
+    const reopened = new Database(dbPath)
+    const columns = (reopened.pragma('table_info(tasks)') as { name: string }[]).map((c) => c.name)
+    expect(columns).toEqual(expect.arrayContaining(['assignee_agent_id', 'requester_agent_id', 'subject']))
+    expect(reopened.pragma('user_version', { simple: true })).toBe(claimed)
+    reopened.close()
+  })
+
+  it('leaves a healthy current database at its stored version', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v24-healthy-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    db.close()
+    db = undefined
+
+    const raw = new Database(dbPath)
+    const claimed = raw.pragma('user_version', { simple: true }) as number
+    expect(resolveOrchestrationMigrationStartVersion(raw, claimed, claimed)).toBe(claimed)
+    raw.close()
+  })
+
   it('does not repair an incomplete schema written by a future binary', () => {
     const dbPath = createLegacySchemaClaimingVersion(20)
     const raw = new Database(dbPath)

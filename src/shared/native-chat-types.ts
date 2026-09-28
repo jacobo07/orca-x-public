@@ -6,9 +6,9 @@
 // here must be plain JSON: these values cross the IPC boundary, so no class
 // instances, Maps, or Dates.
 
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 
-export type { AgentType }
+export type { ProviderType }
 
 /** Where a message came from. Used for dedup precedence: a transcript message
  *  supersedes a hook message, which supersedes a scrape message. */
@@ -110,7 +110,7 @@ export type NativeChatSession = {
   /** Provider-owned conversation id once known; null before the agent reports
    *  one (the view shows live hook state and backfills later). */
   sessionId: string | null
-  agent: AgentType
+  agent: ProviderType
   /** Human-readable error when `status === 'error'`. */
   error?: string
 }

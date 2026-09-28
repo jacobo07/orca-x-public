@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type {
   NativeChatBlock,
   NativeChatMessage,
-  AgentType
+  ProviderType
 } from '../../../../shared/native-chat-types'
 import {
   readNativeChatTranscriptTail,
@@ -23,7 +23,7 @@ const NativeChatSession = z.object({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing agent'))
-    .transform((v) => v as AgentType),
+    .transform((v) => v as ProviderType),
   sessionId: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

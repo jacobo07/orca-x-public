@@ -1,6 +1,6 @@
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
 import type {
-  AgentType,
+  ProviderType,
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
@@ -18,7 +18,7 @@ import {
 export { clearNativeChatTranscriptCache }
 
 export type NativeChatReadSessionArgs = {
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   /** How many of the most-recent turns to return. The renderer starts at the
    *  default window and raises this to page in older history as it scrolls up. */
@@ -48,7 +48,7 @@ export type NativeChatSubscribeArgs = {
   /** Renderer-minted id, unique per webContents, echoed back on every emit so
    *  the renderer can route appends to the right hook instance. */
   subscriptionId: string
-  agent: AgentType
+  agent: ProviderType
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string

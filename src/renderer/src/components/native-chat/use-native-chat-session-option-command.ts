@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ProviderType } from '../../../../shared/agent-status-types'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   nativeChatComposerTargetIsRemote,
@@ -15,7 +15,7 @@ import {
 import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
 
 export function useNativeChatSessionOptionCommand(args: {
-  agent: AgentType
+  agent: ProviderType
   disabled: boolean
   onSlashCommand?: (command: string) => void
   resolveTarget: () => NativeChatResolvedTarget | null

@@ -1,7 +1,7 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
+import type { AgentStatusState, ProviderType } from '../../../shared/agent-status-types'
 import { tabHasLivePty } from './tab-has-live-pty'
 import type { WorktreeStatus } from './worktree-status'
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
@@ -137,7 +137,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
 }
 
 // Why: return null (not a 'claude' fallback) for unknown so Codex panes don't flash the Claude icon before the hook fires.
-export function agentTypeToIconAgent(agentType: AgentType | null | undefined): TuiAgent | null {
+export function agentTypeToIconAgent(agentType: ProviderType | null | undefined): TuiAgent | null {
   if (!agentType || agentType === 'unknown') {
     return null
   }
@@ -145,7 +145,7 @@ export function agentTypeToIconAgent(agentType: AgentType | null | undefined): T
 }
 
 // Why: shared resolver so all send paths stamp identical agent_kind on agent_prompt_sent telemetry.
-export function agentKindForAgentType(agentType: AgentType | null | undefined): AgentKind {
+export function agentKindForAgentType(agentType: ProviderType | null | undefined): AgentKind {
   const tuiAgent = agentTypeToIconAgent(agentType)
   return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }

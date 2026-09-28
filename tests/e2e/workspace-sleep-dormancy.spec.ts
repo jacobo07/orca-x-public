@@ -19,6 +19,7 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { worktreeRowSurface } from './worktree-row-locators'
 
 const PROVIDER_SESSION_ID = 'e2e-workspace-sleep-dormancy-session'
+const GONE_SESSION_ID = 'e2e-workspace-sleep-gone-session'
 
 async function rowIds(page: Page, worktreeId: string): Promise<string[]> {
   return page.evaluate(
@@ -46,6 +47,16 @@ async function dormancyReasons(page: Page, worktreeId: string): Promise<(string 
     (wt) =>
       (window.__store!.getState().tabsByWorktree[wt] ?? []).map(
         (tab) => tab.dormancy?.reason ?? null
+      ),
+    worktreeId
+  )
+}
+
+async function continuityVerdicts(page: Page, worktreeId: string): Promise<(string | null)[]> {
+  return page.evaluate(
+    (wt) =>
+      (window.__store!.getState().tabsByWorktree[wt] ?? []).map(
+        (tab) => tab.dormancy?.resumeContinuity ?? null
       ),
     worktreeId
   )
@@ -149,10 +160,11 @@ test('a workspace slept from its menu stays asleep through navigation, selection
       window.__store!.getState().updateSettings({ agentCmdOverrides: { codex: 'echo' } })
     )
 
+    // The second row only has to be a terminal carrying no agent. Pinning cmd.exe made this spec
+    // Windows-only: elsewhere the PTY never spawns, the row never goes live, and the sleep is
+    // never reached. The platform's own default is what every sibling dormant spec uses.
     await page.evaluate((wt) => {
-      window.__store!.getState().createTab(wt, undefined, 'cmd.exe', {
-        launchProfileId: 'shell:cmd.exe'
-      })
+      window.__store!.getState().createTab(wt)
     }, worktreeId)
     await expect
       .poll(() => liveRowIds(page, worktreeId), {
@@ -162,6 +174,9 @@ test('a workspace slept from its menu stays asleep through navigation, selection
       .toHaveLength(2)
     const ids = await rowIds(page, worktreeId)
     const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
+    // The control that makes `exact` falsifiable: without a conversation actually on disk, the
+    // verdict asserted below could be reached by a probe that answers `present` to anything.
+    expect(existsSync(transcriptPath)).toBe(true)
     await page.evaluate(
       ({ wt, tabId, id, transcriptPath: path }) => {
         const s = window.__store!.getState()
@@ -211,6 +226,9 @@ test('a workspace slept from its menu stays asleep through navigation, selection
       ids
     )
     expect(sleptSessions).toEqual([ids[0]])
+    // Sleep judged before it stopped: the agent row's conversation was found, so it may promise an
+    // exact resume; the plain shell captured no session, so there is nothing to resume at all.
+    expect(await continuityVerdicts(page, worktreeId)).toEqual(['exact', 'none'])
 
     // Coming back starts nothing.
     const baseline = await mainSessionIds(page)
@@ -250,10 +268,19 @@ test('a workspace slept from its menu stays asleep through navigation, selection
       window.__store!.getState().updateSettings({ agentCmdOverrides: { codex: 'echo' } })
     )
     expect(await dormancyReasons(page2, worktreeId)).toEqual(['workspace-sleep', null])
+    // The verdict is only worth writing if it survives the trip through disk: this process never
+    // judged anything, so an `exact` here was read back from the session the first one persisted.
+    expect(await continuityVerdicts(page2, worktreeId)).toEqual(['exact', null])
     const baseline2 = await mainSessionIds(page2)
     await enterWorkspace(page2, worktreeId)
     await selectRow(page2, worktreeId, ids[0])
     await expect(page2.getByTestId('dormant-terminal-placeholder')).toBeVisible()
+    // On the attribute, not the sentence, which is translated. `exact` cannot arrive here by
+    // default: the fallback for a row carrying no verdict is `unconfirmed`, never this.
+    await expect(page2.getByTestId('dormant-terminal-placeholder')).toHaveAttribute(
+      'data-resume-continuity',
+      'exact'
+    )
     const liveAfterRelaunch = await liveRowIds(page2, worktreeId)
     expect(liveAfterRelaunch).not.toContain(ids[0])
     await expectHeldFor(page2, worktreeId, { live: liveAfterRelaunch, baseline: baseline2 })
@@ -283,6 +310,117 @@ test('a workspace slept from its menu stays asleep through navigation, selection
     }
     if (firstApp) {
       await session.close(firstApp)
+    }
+    await session.dispose()
+  }
+})
+
+/**
+ * The control that makes `exact` above mean something: identical in every respect but one.
+ *
+ * The row records a conversation path that is not there, so the probe stats it and gets ENOENT.
+ * Nothing else moves -- same fixture, same agent, same workspace, same menu -- so a verdict that
+ * changed can only have come from the fact the sleep went and checked.
+ *
+ * Read through the dormant row's own data attribute, as the restore suite does, rather than its
+ * test id.
+ */
+test('a workspace slept with its conversation gone promises only an attempt', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+{}, testInfo) => {
+  const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+  if (!repoPath || !existsSync(repoPath)) {
+    test.skip(true, 'Global setup did not produce a seeded test repo')
+    return
+  }
+
+  const session = createRestartSession(testInfo)
+  let app: ElectronApplication | null = null
+
+  try {
+    const launched = await session.launch()
+    app = launched.app
+    const page = await app.firstWindow()
+    const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
+    await waitForSessionReady(page)
+    await waitForActiveWorktree(page)
+    await ensureTerminalVisible(page)
+    await waitForActiveTerminalManager(page, 30_000)
+    await waitForPaneCount(page, 1, 30_000)
+    await page.evaluate(() =>
+      window.__store!.getState().updateSettings({ agentCmdOverrides: { codex: 'echo' } })
+    )
+    await expect
+      .poll(() => liveRowIds(page, worktreeId), {
+        timeout: 30_000,
+        message: 'the row is running before the sleep'
+      })
+      .toHaveLength(1)
+    const ids = await rowIds(page, worktreeId)
+
+    // Seeded so the fixture is provably sound, then recorded against a sibling path that was never
+    // written: the seeded file surviving is what rules out "the seeding silently did nothing".
+    const seeded = session.seedCodexResumeRollout(GONE_SESSION_ID, repoPath)
+    const missing = `${seeded}.moved-away`
+    expect(existsSync(seeded)).toBe(true)
+    expect(existsSync(missing)).toBe(false)
+    await page.evaluate(
+      ({ wt, tabId, id, transcriptPath }) => {
+        const s = window.__store!.getState()
+        const root = s.terminalLayoutsByTabId[tabId]?.root
+        const leafId = root?.type === 'leaf' ? root.leafId : null
+        if (!leafId) {
+          throw new Error('row 0 has no single leaf')
+        }
+        s.setAgentStatus(
+          `${tabId}:${leafId}`,
+          { state: 'done', prompt: '', agentType: 'codex' },
+          'Codex',
+          undefined,
+          { worktreeId: wt, tabId },
+          { providerSession: { key: 'session_id', id, transcriptPath } }
+        )
+      },
+      { wt: worktreeId, tabId: ids[0], id: GONE_SESSION_ID, transcriptPath: missing }
+    )
+
+    await showWorkspaceList(page, worktreeId)
+    await worktreeRowSurface(page, worktreeId).click({ button: 'right' })
+    await page.getByTestId('worktree-menu-sleep').click()
+    await expect
+      .poll(() => liveRowIds(page, worktreeId), {
+        timeout: 45_000,
+        message: 'sleep released every row'
+      })
+      .toEqual([])
+
+    // Loud precondition: the verdict is ABOUT a captured record. Without this, a fixture that
+    // never registered an agent reads as the product honestly answering `none`, and the
+    // falsification below would pass for the wrong reason.
+    const sleptSessions = await page.evaluate(
+      (tabIds) =>
+        Object.values(window.__store!.getState().sleepingAgentSessionsByPaneKey)
+          .filter((record) => record.tabId && tabIds.includes(record.tabId))
+          .map((record) => record.tabId),
+      ids
+    )
+    expect(sleptSessions).toEqual([ids[0]])
+
+    // Absent and unknown are different answers and neither earns a promise; this is the one a
+    // conversation that is no longer there produces.
+    expect(await continuityVerdicts(page, worktreeId)).toEqual(['unconfirmed'])
+    await enterWorkspace(page, worktreeId)
+    await selectRow(page, worktreeId, ids[0])
+    await expect(page.locator('[data-dormant-terminal-tab-id]').first()).toHaveAttribute(
+      'data-resume-continuity',
+      'unconfirmed'
+    )
+
+    console.log(
+      `[workspace-sleep-falsification] seeded=${existsSync(seeded)} missing=${!existsSync(missing)}`
+    )
+  } finally {
+    if (app) {
+      await session.close(app)
     }
     await session.dispose()
   }

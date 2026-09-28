@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { ProviderType } from './agent-status-types'
 
 /** Baseline snapshot the renderer captured when it observed the submit
  *  keystroke. The main process re-validates every field against its own
@@ -8,7 +8,7 @@ export type AgentQuestionAnsweredInferenceRequest = {
   baselineUpdatedAt: number
   baselineStateStartedAt: number
   baselinePrompt: string
-  baselineAgentType: AgentType | undefined
+  baselineAgentType: ProviderType | undefined
 }
 
 /** True for the ask-the-user-a-question tool across agents: Claude's

@@ -7,7 +7,7 @@
 // docs/plans/2026-06-17-001-feat-native-chat-view-plan.md (U6).
 
 import type {
-  AgentType,
+  ProviderType,
   NativeChatMessage,
   NativeChatSession
 } from '../../../../shared/native-chat-types'
@@ -113,7 +113,7 @@ export type ScrapeNativeChatSession = {
  */
 export function scrapeNativeChatSession(
   rawScrollback: string,
-  agent: AgentType
+  agent: ProviderType
 ): ScrapeNativeChatSession {
   const messages = scrapeScrollbackToMessages(rawScrollback)
   const session = assembleNativeChatSession({

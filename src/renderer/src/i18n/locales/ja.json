@@ -153,6 +153,10 @@
     "view": "表示",
     "reload": "リロード",
     "forceReload": "強制リロード",
+    "reloadRefusedTitle": "このウィンドウはリロードされませんでした",
+    "reloadRefusedDetail": "Orca はこのウィンドウの未保存の編集とセッションを先に保存できなかったため、ウィンドウをそのままにしました。作業内容は開いたままです。",
+    "reloadNotRespondingTitle": "このウィンドウはリロードに応答しませんでした",
+    "reloadNotRespondingDetail": "何もリロードされていません。ウィンドウが応答しないままの場合は、表示 > 強制リロード を使用してください。",
     "resetSize": "サイズをリセット",
     "zoomIn": "ズームイン",
     "zoomOut": "ズームアウト",
@@ -11147,7 +11151,7 @@
             "6306b48afd": "source-control",
             "ef182dcb12": "検索",
             "fc3095d2ed": "エクスプローラ",
-            "aiVaultSessionHistory": "Agent",
+            "aiVaultSessionHistory": "セッション",
             "folderWorkspaces": "添付ワークツリー",
             "parentPrChecks": "PR チェック"
           },
@@ -14816,6 +14820,108 @@
         "deleting": "このワークスペースは削除中です。",
         "noPlan": "このセッションはここでは再開できません。"
       }
+    }
+  },
+  "resumeCenter": {
+    "preview": {
+      "label": "{{title}} の最後に記録された画面",
+      "loading": "読み込み中…",
+      "snapshot": "スナップショット",
+      "none": "記録なし",
+      "unreadable": "記録はありますが読み込めませんでした",
+      "notFound": "デスクにもうありません",
+      "unavailable": "プレビューを利用できません"
+    },
+    "residency": {
+      "warm": "実行中",
+      "dormant": "スリープ中",
+      "stopped": "停止中",
+      "unknown": "状態不明"
+    },
+    "resume": {
+      "exact": "同じセッションを再開します",
+      "unconfirmed": "セッションの再開を試みます",
+      "claimedElsewhere": "セッションは別の場所で開かれています"
+    },
+    "workspace": {
+      "missing": "ワークスペースはもう存在しません",
+      "sessions": "セッション",
+      "open": "開く",
+      "collapse": "折りたたむ",
+      "expand": "展開"
+    },
+    "window": {
+      "bound": "ウィンドウ",
+      "numbered": "ウィンドウ {{number}}",
+      "none": "ウィンドウなし",
+      "unrecorded": "ウィンドウは記録されていません"
+    },
+    "breadcrumb": {
+      "workspace": "ワークスペース"
+    },
+    "title": "再開センター",
+    "greeting": {
+      "morning": "おはようございます",
+      "afternoon": "こんにちは",
+      "evening": "こんばんは",
+      "sessions": "デスク上のセッション",
+      "running": "実行中"
+    },
+    "refresh": "更新",
+    "search": "ワークスペースとセッションを検索",
+    "sort": {
+      "window": "ウィンドウ順",
+      "recent": "最近"
+    },
+    "state": {
+      "loading": "デスクを読み込んでいます…",
+      "unavailable": "このクライアントにはデスクがありません。",
+      "failed": "デスクを読み込めませんでした。",
+      "noMatch": "一致するものはありません。",
+      "empty": "このデスクにはセッションのあるワークスペースがありません。"
+    },
+    "summary": {
+      "title": "デスクの概要",
+      "windows": "ウィンドウ",
+      "windowsUnrecorded": "記録なし",
+      "workspaces": "ワークスペース",
+      "sessions": "セッション",
+      "panes": "ターミナルペイン",
+      "unreadable": "読み込めませんでした"
+    },
+    "tip": {
+      "body": "ワークスペースとセッションを展開すると、各ターミナルの最後に記録された画面が表示されます。プレビューは保存済みの履歴から作られ、プロセスを起動することはありません。",
+      "dismiss": "閉じる"
+    },
+    "tab": {
+      "panes": "{{count}} ペイン"
+    },
+    "resumeAction": "再開",
+    "orphan": {
+      "title": "{{agent}} セッション（タブは閉じられています）",
+      "note": "復元するタブはありません。再開すると新しいタブで開きます。"
+    },
+    "wake": {
+      "checking": "空きリソースを確認しています…",
+      "starting": "起動しています…",
+      "startingUnmeasured": "計測されていないホストで起動しています…",
+      "running": "実行中",
+      "refusedMemory": "今は起動できるだけの空きメモリがありません。何も起動していません。",
+      "refusedUnmeasured": "ホストを計測できないため、「すべて再開」ではスリープのままにしました。個別に再開してください。",
+      "refusedUnchecked": "空きリソースを確認できなかったため、何も起動していません。",
+      "unavailable": "このクライアントではセッションを起動できません。",
+      "gone": "この行はもうデスクにありません。",
+      "notLaunched": "このエージェントセッションは再開できませんでした。",
+      "notStarted": "起動を要求しましたが、まだ起動していません。起動するまではスリープのままです。"
+    },
+    "resumeAll": {
+      "start": "すべて再開",
+      "continue": "続行",
+      "running": "1つずつ再開しています:",
+      "stopped": "一時停止中。起動済み:",
+      "remaining": "スリープ中:",
+      "finished": "完了。起動済み:",
+      "leftAsleep": "スリープのまま:"
     }
   }
 }
