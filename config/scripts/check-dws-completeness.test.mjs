@@ -292,6 +292,32 @@ describe('the sweep can still see this repository', () => {
     expect(counts.total).toBe(76)
     expect(failures.filter((failure) => failure.kind === 'unresolved-evidence')).toEqual([])
   })
+
+  // Phase 1 Task 2: no Stage-Zero-seeded PASS may survive unmeasured. RED before Task 2's matrix
+  // edit (rows 3, 28, 29, 31, 42 were seeded PASS with stateSource "stage-zero-seed" and
+  // evidence: []); GREEN after (each row is either a measured PASS with resolvable evidence, or
+  // demoted to a measured non-PASS state with a named reason).
+  it('no Stage-Zero PASS survives unmeasured (kind unmeasured-pass)', () => {
+    const rawMatrix = readFileSync(path.join(REPO_ROOT, 'config', 'dws-completion-matrix.jsonc'), 'utf8')
+    const withoutComments = rawMatrix.replace(/^\/\/.*$/gm, '')
+    const matrix = JSON.parse(withoutComments)
+    const manifest = JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'))
+    const gateScripts = Object.keys(manifest.scripts ?? {})
+    const exists = (relativePath) => existsSync(path.join(REPO_ROOT, relativePath))
+    const { failures } = evaluateMatrix({ matrix, exists, gateScripts, minimumRows: MINIMUM_ROWS })
+    expect(failures.filter((failure) => failure.kind === 'unmeasured-pass')).toEqual([])
+  })
+
+  it('no PASS row in the real matrix lacks resolvable evidence (kind no-resolvable-evidence)', () => {
+    const rawMatrix = readFileSync(path.join(REPO_ROOT, 'config', 'dws-completion-matrix.jsonc'), 'utf8')
+    const withoutComments = rawMatrix.replace(/^\/\/.*$/gm, '')
+    const matrix = JSON.parse(withoutComments)
+    const manifest = JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'))
+    const gateScripts = Object.keys(manifest.scripts ?? {})
+    const exists = (relativePath) => existsSync(path.join(REPO_ROOT, relativePath))
+    const { failures } = evaluateMatrix({ matrix, exists, gateScripts, minimumRows: MINIMUM_ROWS })
+    expect(failures.filter((failure) => failure.kind === 'no-resolvable-evidence')).toEqual([])
+  })
 })
 
 describe('pure helpers', () => {

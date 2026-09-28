@@ -68,11 +68,35 @@
       "owner": "E2EE pairing + device tokens",
       "done": "existing pairing/revocation tests (cite)",
       "state": "PASS",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [],
       "dependsOn": [],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/runtime/pairing-endpoint.test.ts",
+          "note": "Endpoint/hostname normalization for advertised pairing addresses (loopback default, LAN/tailnet/relay forms)"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-pairing-offer.test.ts",
+          "note": "RPC server creates a pairing offer for the active WebSocket transport"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-relay-pairing.test.ts",
+          "note": "Relay pairing offer minting, remint, and device revoke-on-cleanup-failure paths"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-device-revocation.test.ts",
+          "note": "Pre-auth E2EE WebSocket state is cleaned up (revoked) when the socket closes"
+        }
+      ],
+      "reason": "Measured 2026-09-28: all 4 cited test files pass on GEX44 (dws-0104-clone @ 05a26246e, 4 files/83 tests) — device pairing-offer creation, relay pairing/remint/revoke, and pre-auth E2EE cleanup on socket close are the existing pairing/revocation tests the done condition asks to cite"
     },
     {
       "id": 4,
@@ -532,12 +556,26 @@
       "row": "Cognitive Routing",
       "owner": "federation routing",
       "done": "cite P3 gates",
-      "state": "PASS",
-      "stateSource": "stage-zero-seed",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [],
       "dependsOn": [],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/agent-identity.ts",
+          "note": "mintAgentId() takes no arguments, on purpose: an agent's id cannot inherit a provider's, host's or session's lifetime"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-conversation-turn.test.ts",
+          "note": "provider routing exists (codex/claude, ranked by continuity/preference/tools/quota/auth) but no cited test runs the same agent on provider X then Y"
+        }
+      ],
+      "reason": "Measured 2026-09-28: MISSION.md's own definition of Cognitive Routing is 'prove Agent identity persists across model change' — the same underlying claim as row 32 (Model switching), which this matrix already carries as PARTIAL. AgentId is architecturally provider-independent (agent-identity.ts) and provider routing exists, but no test in this worktree exercises one agent across provider X then Y to prove coherence; 'P3 gates' (federation Phase 3's own gate suite) is not a resolvable artifact in this worktree. Demoted from the Stage-Zero PASS seed for consistency with row 32's own PARTIAL."
     },
     {
       "id": 29,
@@ -545,11 +583,25 @@
       "owner": "claude-auth-readiness etc.",
       "done": "cite",
       "state": "PASS",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [],
       "dependsOn": [],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/claude/claude-auth-readiness.ts",
+          "note": "checkClaudeAuth distinguishes absent/unreadable/no-token/expired credential states, and an env API key, without reading a token out of the function"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/claude/claude-auth-readiness.test.ts",
+          "note": "5 tests pin every readiness state named above, plus the macOS keychain vs Linux/Windows credential-file split"
+        }
+      ],
+      "reason": "Measured 2026-09-28: cited test file passes on GEX44 (dws-0104-clone @ 05a26246e) — matches the row's owner (claude-auth-readiness) and done condition verbatim"
     },
     {
       "id": 30,
@@ -574,12 +626,26 @@
       "row": "Agent identity portability",
       "owner": "cogws roster",
       "done": "cite P3 live evidence",
-      "state": "PASS",
-      "stateSource": "stage-zero-seed",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [],
       "dependsOn": [],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/agent-identity.ts",
+          "note": "mintAgentId() takes no arguments 'on purpose' (source comment): no mint function takes a project id, conversation id, display name, provider, provider session or pane"
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/agent-identity.test.ts",
+          "note": "pins the zero-argument mint signature as the contract worth pinning, 'not the string' — a mint accepting a provider would let identity inherit its lifetime"
+        }
+      ],
+      "reason": "Measured 2026-09-28: the capability exists and is architecturally sound (AgentId minted independent of provider/host/session, pinned by test) but the done condition asks to cite 'P3 live evidence' — an actual live cross-host/cross-provider demonstration — which is not a committed, resolvable artifact in this worktree; if it exists it is only in federation's git-excluded .planning records (orca-federation-wt), which cannot be cited per CONTEXT.md. 'cogws roster' (CognitiveWorkspaceRoster.tsx) is a rendering surface, not a portability proof, so it is not cited as evidence."
     },
     {
       "id": 32,
@@ -761,11 +827,25 @@
       "owner": "routing reasons",
       "done": "cite",
       "state": "PASS",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [],
       "dependsOn": [],
-      "evidence": []
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/conversation/conversation-provider-routing.ts",
+          "note": "describeRoute() renders one line naming who ran the turn and every provider it passed over with its reason; routeConversationTurn() never silently falls back"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-conversation-turn.test.ts",
+          "note": "asserts the exact explained-route string, e.g. 'running on claude (codex: codex credential is no-credential)', and every skip reason (quota/auth/exclude/tools)"
+        }
+      ],
+      "reason": "Measured 2026-09-28: cited test file passes on GEX44 (dws-0104-clone @ 05a26246e) — directly proves 'routing reasons' (the row's owner) render an explained route with a named reason for every provider skipped"
     },
     {
       "id": 43,
