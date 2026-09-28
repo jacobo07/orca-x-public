@@ -13,8 +13,13 @@ and shows the real estate (projects, running sessions) with Orca's own controls.
 - `e7bcd8949` C1 color-scheme on :root/.dark; iframes pinned normal
 - `2b8707714` C2 AgentProjectPicker (Popover+Command, one row per Project, host labels from
   `useSidebarHostScopeOptions`), 5 e2e sites via `tests/e2e/helpers/new-agent-project-picker.ts`
-- UNCOMMITTED: `agent-project-choices.ts` host now carries `repoId` (+ both test fixtures). Tests 17/17.
-Coherence anchor: `git log --oneline a3445471e..HEAD` shows exactly the 5 commits above.
+- `751d3407d` host choice carries repoId · `a98b934a3` C7 Projects tab = canonical estate
+  (WorkspaceProjectsSection, per-host Open via openProjectInWorkbench)
+- `7d29cd800` C5/C6 Running in terminals (useLiveDashboardSnapshot → projectRunningSessions;
+  host-offline from registry health; presenter registered; no merge, spec 12.2(3))
+Coherence anchor: `git log --oneline a3445471e..HEAD` shows 8 commits, last `7d29cd800`.
+OWED: real-Electron e2e + screenshots (GEX44 headless; Windows for the native popup), full tsc,
+oxfmt on LF, knowledge/UKDL/CBR, final report.
 
 ## 3. Active decisions
 - Side panel SUPPRESSED on 'conversations' (closing it already unmounts panel content; closed =
