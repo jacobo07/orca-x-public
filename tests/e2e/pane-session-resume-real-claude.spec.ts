@@ -74,7 +74,14 @@ function screen(page: Page, paneKey: string): Promise<string> {
     const buffer = pane?.terminal.buffer.active
     const lines: string[] = []
     for (let i = 0; i < (buffer?.length ?? 0); i++) {
-      lines.push(buffer?.getLine(i)?.translateToString(true) ?? '')
+      const line = buffer?.getLine(i)
+      const text = line?.translateToString(true) ?? ''
+      // Why join soft wraps: a long cwd wraps the shell prompt across rows.
+      if (line?.isWrapped && lines.length > 0) {
+        lines[lines.length - 1] += text
+      } else {
+        lines.push(text)
+      }
     }
     return lines.join('\n')
   }, paneKey)
@@ -457,6 +464,97 @@ test('real Claude: exit, full relaunch, one-click resume of the exact session, t
     rmSync(cacheDir, { recursive: true, force: true })
   }
   // Why: Claude rewrites ~/.claude.json on exit; read it only once this run's providers are gone.
+  await expect
+    .poll(() => listClaudeProcesses(config.bin).filter((p) => !claudeBefore.has(p.pid)).length, {
+      timeout: 30_000
+    })
+    .toBe(0)
+  expect(captureRealClaudeIntegrity(config), 'trust, login, hooks and fixture untouched').toEqual(
+    integrityBefore
+  )
+})
+
+// A plain cmd tab has no startup command for Orca to bracket, so its prompt carries only the
+// A marker. This asks whether an agent the USER typed there still has its exit marked.
+test('real Claude typed into a plain cmd.exe tab: its exit is marked', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo.
+{}, testInfo) => {
+  test.skip(SHELL !== 'cmd.exe', 'only cmd.exe lacks a D on a plain tab')
+  test.skip(!preflight.ready, preflight.ready ? '' : preflight.reason)
+  if (!preflight.ready) {
+    return
+  }
+  test.setTimeout(300_000)
+  const { config } = preflight
+  const integrityBefore = captureRealClaudeIntegrity(config)
+  const claudeBefore = new Set(listClaudeProcesses(config.bin).map((p) => p.pid))
+  for (const key of INHERITED_CLAUDE_ENV) {
+    delete process.env[key]
+  }
+  const session = createRestartSession(testInfo)
+  let app: ElectronApplication | null = null
+  try {
+    const launched = await session.launch()
+    app = launched.app
+    const page = launched.page
+    await waitForSessionReady(page)
+    const paneKey = await page.evaluate(
+      async ({ folder, shell }) => {
+        const result = await window.api.repos.add({ path: folder, kind: 'folder' })
+        if ('error' in result) {
+          throw new Error(result.error)
+        }
+        const store = window.__store!
+        await store.getState().updateSettings({ terminalWindowsShell: shell })
+        await store.getState().fetchRepos()
+        await store.getState().fetchWorktrees(result.repo.id)
+        const worktreeId = store.getState().worktreesByRepo[result.repo.id]![0]!.id
+        store.getState().setActiveWorktree(worktreeId)
+        const created = store.getState().createTab(worktreeId, undefined, shell) as
+          | string
+          | { id: string }
+        const tabId = typeof created === 'string' ? created : created.id
+        store.getState().activateTab(tabId, { worktreeId })
+        store.getState().setActiveTab(tabId)
+        const started = Date.now()
+        while (Date.now() - started < 60_000) {
+          const state = store.getState()
+          const leaf = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+          if (leaf && (state.ptyIdsByTabId[tabId] ?? [])[0]) {
+            return `${tabId}:${leaf}`
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200))
+        }
+        throw new Error(`ORCA-E2E-PRECONDITION-FAILED [pty-start] ${tabId} never spawned`)
+      },
+      { folder: config.fixture, shell: SHELL }
+    )
+    await ensureTerminalVisible(page)
+    await waitForActiveTerminalManager(page, 60_000)
+    const ptyId = (await probe(page, paneKey)).tabPtyIds[0]!
+    await waitForScreen(page, paneKey, SHELL_PROMPT, 60_000)
+
+    await typeLine(page, ptyId, realClaudeCommand(config))
+    await waitForScreen(page, paneKey, /^❯/m, 120_000)
+    await expect
+      .poll(async () => (await probe(page, paneKey)).sessionId, { timeout: 60_000 })
+      .not.toBeNull()
+    const { sessionId } = await probe(page, paneKey)
+
+    await typeLine(page, ptyId, '/exit')
+    await waitForScreen(page, paneKey, SHELL_PROMPT, 60_000)
+    await expect
+      .poll(async () => (await probe(page, paneKey)).block, {
+        timeout: 60_000,
+        message: 'a typed agent exit in a plain cmd tab must be marked'
+      })
+      .toBe('agent-exited')
+    expect((await probe(page, paneKey)).sessionId).toBe(sessionId)
+  } finally {
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
+  }
   await expect
     .poll(() => listClaudeProcesses(config.bin).filter((p) => !claudeBefore.has(p.pid)).length, {
       timeout: 30_000
