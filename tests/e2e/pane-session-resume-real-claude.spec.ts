@@ -303,7 +303,10 @@ async function resumeOnce(args: {
     .poll(
       () =>
         listClaudeProcesses(config.bin).filter(
-          (p) => !priorClaude.has(p.pid) && p.commandLine.includes(`--resume ${sessionId}`)
+          // Why unquote: cmd hands the child `"--resume" "<id>"` with its quotes intact.
+          (p) =>
+            !priorClaude.has(p.pid) &&
+            p.commandLine.replace(/"/g, '').includes(`--resume ${sessionId}`)
         ).length,
       { timeout: 60_000, message: 'the real claude binary is asked for the exact session' }
     )
