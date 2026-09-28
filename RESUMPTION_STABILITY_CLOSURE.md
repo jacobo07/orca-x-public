@@ -25,10 +25,17 @@ python/quotes through PowerShell→ssh break every time. Evidence in `/home/kobi
 **Host.** 0.6–2.3 GB free; ripgrep over src times out (use `git grep`); files are CRLF — run
 `oxfmt <files>` then check `git diff -w --numstat` for laundered hunks before committing.
 
-**Next 3.** (1) F: PR E2E selection by production impact (`.github/workflows/pr.yml:538-541`), unknown
-→ wider, script-tested. (2) H: trace the 6 crash-durable contracts' caller-visible failures
-(`config/durability-failure-semantics-baseline.txt`), credential + e2ee identity first, ENOSPC on GEX44.
-(3) CPP: UKDL amend `single-owner-to-many-owners` (sentinel inversion) + CBR obligations in
-`skills/claude-power-pack/modules/capability_runtime/applicability.py` with first tests.
+**Also sealed.** F `cda936887` E2E impact selector (drill caught). H1 `91822df33` e2ee identity: read
+error ≠ damaged (baseline 6→5). Linux cross-check 142/142 at `cda936887`. UKDL: new
+`refusal-is-not-recovery`; amended `single-owner-to-many-owners`, `a-gate-that-cannot-fail`,
+`an-instrument-that-cannot-see-the-answer`, `absence-does-not-describe-itself`.
 
-**Start.** `git log --oneline -12` must show `91e45c037`; continue at Next (1).
+**Next 3.** (1) CBR: read `~/.claude/skills/claude-power-pack/modules/capability_runtime/applicability.py`
++ `modules/setup_os/graph.py:353` (ProjectProfile); add a versioned constitutive obligation set
+(authority semantics, user-intent durability, oracle reachability, failure-state separation) with
+scope predicates; FIRST tests there: multi-window profile inherits, static library does not,
+anti-downgrade mutation, stale entry. (2) H: next contract `integrations.credential-file`, then
+`persistence.profile-data-file`; real ENOSPC via GEX44 loopback. (3) I: historical persisted-session
+corpus from OLD writers (`git show <old>:`), gate `startup-upgrade.persisted-session-corpus`.
+
+**Start.** `git log --oneline -15` must show `91822df33`; continue at Next (1).
