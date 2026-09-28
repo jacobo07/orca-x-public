@@ -17,9 +17,11 @@ and shows the real estate (projects, running sessions) with Orca's own controls.
   (WorkspaceProjectsSection, per-host Open via openProjectInWorkbench)
 - `7d29cd800` C5/C6 Running in terminals (useLiveDashboardSnapshot → projectRunningSessions;
   host-offline from registry health; presenter registered; no merge, spec 12.2(3))
-Coherence anchor: `git log --oneline a3445471e..HEAD` shows 8 commits, last `7d29cd800`.
-OWED: real-Electron e2e + screenshots (GEX44 headless; Windows for the native popup), full tsc,
-oxfmt on LF, knowledge/UKDL/CBR, final report.
+- `3c0fafc38` e2e `workspace-shell-reality.spec.ts` · `d966b3e30` oxfmt (made on GEX44 LF, ff'd back)
+Coherence anchor: `git log --oneline a3445471e..HEAD` shows 11 commits, last `d966b3e30`.
+VERIFIED on GEX44 (`/home/kobii/cw-shell-wt`, node 24): tsc node/cli/web clean incl. uncached
+(`--composite false --incremental false`); oxfmt --check clean; 8 affected vitest files 45/45.
+OWED: e2e result (`/home/kobii/cw-shell-e2e-run/`), Windows native popup, knowledge/UKDL, report.
 
 ## 3. Active decisions
 - Side panel SUPPRESSED on 'conversations' (closing it already unmounts panel content; closed =
@@ -29,12 +31,10 @@ oxfmt on LF, knowledge/UKDL/CBR, final report.
 - Local vitest per file is fine (â‰ˆ1â€“40 s); `tsc -p config/tsconfig.tc.web.json` locally 68 s.
 
 ## 4. Next 3 actions
-1. C7: new `WorkspaceProjectsSection.tsx` over `useAgentProjectChoices()` + agent rows; per-host
-   "Open" via `openProjectInWorkbench(host.repoId)` showing its outcome; "New agent here". Replace
-   ProjectsSection in CognitiveWorkspaceRoster.tsx (file at ~305 lines; keep â‰¤400).
-2. C5/C6: `workspace-running-sessions.ts` over `useLiveDashboardSnapshot()`; optional
-   `providerSessionId` on DashboardCard (remote-wire doc); host-offline from registry health.
-3. GEX44 batch: full tsc, oxfmt --check, affected vitest, e2e (shell, Back, picker, sessions).
+1. Read the GEX44 e2e verdict: `cat /home/kobii/cw-shell-e2e-run/exit` + `run.log`; scp the PNGs
+   back and look at them. Fix any red before anything else.
+2. Windows: the picker is a Radix popover, so confirm it opens in the real app on this host.
+3. Distil the lessons, write the final report; branch stays unpushed until the Owner says so.
 
 ## 5. Start
 Open Claude Code IN this worktree. Prove `git worktree list` + HEAD. Read Â§12 and this file.

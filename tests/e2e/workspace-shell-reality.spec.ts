@@ -12,7 +12,8 @@ import { waitForActivePaneHookDescriptor } from './helpers/terminal'
 
 test.setTimeout(300_000)
 
-const WORKTREE_LIST = '.worktree-sidebar-scrollbar'
+// Rendered only while the worktree sidebar is mounted and open (`.worktree-sidebar-scrollbar` is CSS-only).
+const WORKTREE_LIST = '[data-sidebar-resize-handle]'
 const SIDE_PANEL = '[data-side-panel-content]'
 
 test('Workspace owns its shell and shows the running agent and the project estate', async ({
@@ -25,8 +26,9 @@ test('Workspace owns its shell and shows the running agent and the project estat
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0]?.setSize(1440, 900)
     })
-    // Positive control: in Terminals the worktree list is mounted, so its absence below means something.
+    // Positive controls: in Terminals both are mounted, so their absence below means something.
     await expect(page.locator(WORKTREE_LIST).first()).toBeAttached()
+    await expect(page.locator(SIDE_PANEL).first()).toBeAttached()
 
     // A terminal agent reports itself through the real hook endpoint.
     const pane = await waitForActivePaneHookDescriptor(page)
