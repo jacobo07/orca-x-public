@@ -291,7 +291,9 @@ function Invoke-DwsCli {
   if (-not (Test-Path $readyPath)) { throw 'Invoke-DwsCli: no serve-ready.json; call Get-DwsServeReady first' }
   $json = Get-Content $readyPath -Raw | ConvertFrom-Json
   $pairingCode = $null
-  if ($json.pairing -and $json.pairing.available) { $pairingCode = $json.pairing.code }
+  # Why .url, not .code: the ready-json pairing object has no separate "code" field -- the CLI's
+  # ORCA_PAIRING_CODE / --pairing-code both take the full `orca://pair?code=...` URL (help.ts).
+  if ($json.pairing -and $json.pairing.available) { $pairingCode = $json.pairing.url }
 
   foreach ($a in $Args) {
     if ($a.Contains('"')) { throw "Invoke-DwsCli: argument contains a double quote, unsupported: $a" }
@@ -350,7 +352,9 @@ function Invoke-DwsRemoteRoundTrip {
   $handle = $null
   try {
     $created = $createResult.Output | ConvertFrom-Json
-    $handle = $created.terminal
+    # Why .terminal.handle: `terminal create --json` nests the handle under a `terminal` object
+    # (index-terminal-commands.test.ts), it is not a bare string field.
+    $handle = $created.terminal.handle
     if (-not $handle) { $handle = $created.handle }
     if (-not $handle) { $handle = $created.id }
   } catch {

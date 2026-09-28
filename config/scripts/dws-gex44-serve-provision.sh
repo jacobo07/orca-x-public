@@ -24,6 +24,9 @@ SVC_CHECKOUT_ROOT="$SVC_HOME/dws-p2"
 SERVE_PORT=6791
 UNIT_NAME="orca-dws-serve.service"
 NODE24_BIN="/home/kobii/.orca-toolchain/node24/bin"
+# Why a separate literal, not "$NODE24_BIN/..": systemd's BindReadOnlyPaths= refuses to normalize
+# a trailing "/.." and silently ignores the whole directive (found via a real install run).
+NODE24_ROOT="/home/kobii/.orca-toolchain/node24"
 
 cmd="${1:-}"
 shift || true
@@ -290,7 +293,7 @@ WorkingDirectory=$svc_checkout
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 Environment=PATH=$SVC_ROOT/node24/bin:/usr/local/bin:/usr/bin:/bin
 BindReadOnlyPaths=/home/kobii/orca-x/node_modules:$svc_checkout/node_modules
-BindReadOnlyPaths=$NODE24_BIN/..:$SVC_ROOT/node24
+BindReadOnlyPaths=$NODE24_ROOT:$SVC_ROOT/node24
 ${claude_bind}
 ${codex_bind}
 ${vite_bind}
