@@ -105,7 +105,8 @@ test('Resume Center open restores a slept workspace without starting any process
     test.skip(true, 'Global setup did not produce a seeded test repo')
     return
   }
-  test.skip(process.platform === 'win32', 'Uses POSIX SIGKILL to simulate daemon death')
+  // Why no Windows skip: Node's process.kill is an unconditional TerminateProcess there, and all this
+  // needs is a daemon that is gone, not POSIX signal semantics.
 
   const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
