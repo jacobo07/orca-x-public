@@ -188,7 +188,12 @@ export async function launchUnattachedOrca(): Promise<UnattachedOrcaApp> {
         }
       }
       await cleanupE2EDaemons(userDataDir)
-      rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
+      try {
+        rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
+      } catch (error) {
+        // Why not rethrown: a temp profile still locked by a dying helper must not turn a judged run red.
+        console.error(`[unattached-orca] left ${userDataDir}: ${String(error)}`)
+      }
     }
   }
 }

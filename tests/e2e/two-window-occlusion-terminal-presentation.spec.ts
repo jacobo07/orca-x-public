@@ -42,6 +42,9 @@ const RETURN_BUDGET_MS = 10_000
 const SELF_HEAL_WATCH_MS = Number(process.env.ORCA_E2E_SELF_HEAL_WATCH_MS) || 50_000
 const FRAMES = 3
 const FRAME_DELAY_MS = 700
+/** Opt-in for a desktop someone is using: a background process cannot take the foreground, so A is held
+ *  topmost (not focused) only while a return is judged. Every verdict line says which mode produced it. */
+const PIN_A_WHILE_JUDGING = process.env.ORCA_E2E_PIN_A_WHILE_JUDGING === '1'
 
 type OcclusionStoreState = {
   activeWorktreeId: string | null
@@ -77,7 +80,13 @@ type OcclusionRendererGlobals = {
   __orcaTerminalFreezeReport?: () => Promise<OcclusionFreezeReport>
   api: {
     repos: { add: (a: { path: string }) => Promise<{ repo?: { id: string }; error?: string }> }
-    pty: { write: (id: string, text: string) => void }
+    pty: {
+      write: (id: string, text: string) => void
+      getMainBufferSnapshot: (
+        id: string,
+        opts: { scrollbackRows: number }
+      ) => Promise<{ data: string; seq?: number } | null>
+    }
     ui: { createWindow: () => unknown }
   }
 }
@@ -228,6 +237,21 @@ test('a terminal keeps painting after its window returns from behind another Orc
     )
     await poll('workload-running', 60_000, async () => (await readModel()).includes('OCCL-'))
 
+    /** Main's headless model of the PTY: what the hover preview shows, independent of A's renderer. */
+    const readPreview = (): Promise<string> =>
+      app.evalWindow(
+        windowIdA,
+        async (id: string) => {
+          const snapshot = await (
+            window as unknown as OcclusionRendererGlobals
+          ).api.pty.getMainBufferSnapshot(id, {
+            scrollbackRows: 0
+          })
+          return snapshot ? `${snapshot.seq ?? ''}:${snapshot.data.slice(-2000)}` : ''
+        },
+        ptyId
+      )
+
     await app.evalWindow(
       windowIdA,
       () => (window as unknown as OcclusionRendererGlobals).api.ui.createWindow(),
@@ -355,9 +379,37 @@ test('a terminal keeps painting after its window returns from behind another Orc
 
     const results: PhaseResult[] = []
 
+    const setPinned = (pinned: boolean): Promise<void> =>
+      app.evalMain(
+        ({ BrowserWindow }, input: { id: number; pinned: boolean }) => {
+          BrowserWindow.fromId(input.id)?.setAlwaysOnTop(input.pinned, 'screen-saver')
+        },
+        { id: windowIdA, pinned }
+      )
+
     const judgeReturn = async (phase: string, budgetMs: number): Promise<PhaseResult> => {
+      if (PIN_A_WHILE_JUDGING) {
+        await setPinned(true)
+      }
+      try {
+        const result = await judgeReturnOnTop(phase, budgetMs)
+        return {
+          ...result,
+          detail: `[pin=${PIN_A_WHILE_JUDGING ? 'topmost' : 'off'}] ${result.detail}`
+        }
+      } finally {
+        if (PIN_A_WHILE_JUDGING) {
+          await setPinned(false)
+        }
+      }
+    }
+
+    const judgeReturnOnTop = async (phase: string, budgetMs: number): Promise<PhaseResult> => {
       const deadline = Date.now() + budgetMs
-      let sawOnTop = false
+      // Why the preview is the precondition: the field symptom is a frozen terminal beside a live hover
+      // preview (main's headless model). A renderer model that stops while the preview moves IS the
+      // freeze, so it cannot be the precondition; only "the PTY stopped producing" is inconclusive.
+      let sawFrozenWhileJudgeable = false
       let reading = ''
       while (Date.now() < deadline) {
         const rect = await surfaceRect()
@@ -366,6 +418,7 @@ test('a terminal keeps painting after its window returns from behind another Orc
           await new Promise((r) => setTimeout(r, 500))
           continue
         }
+        const previewBefore = await readPreview()
         const modelBefore = await readModel()
         const screen = readPhysicalScreen({
           rect,
@@ -376,24 +429,25 @@ test('a terminal keeps painting after its window returns from behind another Orc
           label: `${phase}-${Date.now()}`
         })
         const modelAdvanced = (await readModel()) !== modelBefore
+        const previewAdvanced = (await readPreview()) !== previewBefore
         const moving = framesKeptMoving(screen.frames)
-        reading = `onTop=${screen.expectedWindowOnTop} top=${screen.topWindowHandle} modelAdvanced=${modelAdvanced} moving=${moving}`
+        reading = `onTop=${screen.expectedWindowOnTop} top=${screen.topWindowHandle} previewAdvanced=${previewAdvanced} modelAdvanced=${modelAdvanced} moving=${moving}`
         if (!screen.expectedWindowOnTop) {
-          await raise(windowIdA)
+          await (PIN_A_WHILE_JUDGING ? setPinned(true) : raise(windowIdA))
           continue
         }
-        sawOnTop = true
-        if (!modelAdvanced) {
-          reading += ' (model did not advance: upstream of presentation)'
+        if (!previewAdvanced) {
+          reading += ' (PTY produced nothing during the reading)'
           continue
         }
-        if (moving) {
+        if (moving && modelAdvanced) {
           return { phase, verdict: 'LIVE', detail: reading }
         }
+        sawFrozenWhileJudgeable = true
       }
       return {
         phase,
-        verdict: sawOnTop ? 'STALE' : 'INCONCLUSIVE',
+        verdict: sawFrozenWhileJudgeable ? 'STALE' : 'INCONCLUSIVE',
         detail: `${reading} state=${await rendererState()}`
       }
     }
