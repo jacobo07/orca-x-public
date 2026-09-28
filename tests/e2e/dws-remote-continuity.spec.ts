@@ -183,6 +183,10 @@ test.describe('DWS-P2 continuity harness', () => {
       )
     ])
     const quitExitedUtc = new Date().toISOString()
+    // Lower bound of the unattached window: the newest tick once no laptop client can be attached.
+    // Ticks between exit and this read are excluded, which only makes the back-fill check stricter.
+    const tailAtQuitExit = sshExec(`sudo tail -n 1 ${logPath}`)
+    const tQuitExitLine = tailAtQuitExit.output.trim()
 
     mkdirSync(runDir, { recursive: true })
     const continuity = {
@@ -193,6 +197,7 @@ test.describe('DWS-P2 continuity harness', () => {
       logPath,
       mainPidAtDispatch,
       tQuitLine,
+      tQuitExitLine,
       quitStartedUtc,
       quitExitedUtc,
       exitCode: exitResult.code,

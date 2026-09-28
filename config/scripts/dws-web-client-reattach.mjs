@@ -22,6 +22,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { chromium } from 'playwright-core'
+import { judgeBackfill } from './dws-backfill-verdict.mjs'
 
 const REATTACH_RESOLUTION_MS = 17 // one rAF frame at ~60Hz -- matches 02-05's stream-latency convention.
 
@@ -274,6 +275,9 @@ async function main() {
     const context = await browser.newContext()
     const page = await context.newPage()
 
+    // Newest tick that existed before this client navigated: the upper bound of the unattached
+    // window whose replay the BACKFILL verdict checks. Read BEFORE goto, never after.
+    const lAttach0Line = sshExec(`sudo tail -n 1 ${continuity.logPath}`).output.trim()
     const tAttachRemote = sshExec('date -u +%H:%M:%S').output.trim()
     const { worktreeId, tabId, firstAttachLatencyMs } = await firstAttach(
       page,
@@ -287,7 +291,8 @@ async function main() {
 
     // Live-reader control: two reads >= 2s apart must show the tick number growing, or the
     // reader has not been proven live and no BACKFILL verdict beyond INCONCLUSIVE is honest.
-    const read1 = extractMaxTick(await readTabContent(page, tabId), continuity.nonce)
+    const content1 = await readTabContent(page, tabId)
+    const read1 = extractMaxTick(content1, continuity.nonce)
     await new Promise((resolve) => setTimeout(resolve, 2_500))
     const read2 = extractMaxTick(await readTabContent(page, tabId), continuity.nonce)
     const readerLive = read1 !== null && read2 !== null && read2 > read1
@@ -297,19 +302,29 @@ async function main() {
     result.tQuitLine = continuity.tQuitLine
     result.nQuitTick = nQuit
 
-    if (!readerLive) {
-      result.backfillVerdict = 'INCONCLUSIVE'
-      result.backfillReason =
-        'reader did not validate as live (two reads >= 2s apart did not show the tick number growing)'
-    } else if (nQuit === null) {
-      result.backfillVerdict = 'INCONCLUSIVE'
-      result.backfillReason = 'could not parse a tick number out of the recorded T_quit line'
-    } else if (read1 !== null && read1 > nQuit) {
-      result.backfillVerdict = 'PASS'
-      result.backfillReason = `visible tick ${read1} > tick at quit ${nQuit} (output produced while no client was attached)`
-    } else {
-      result.backfillVerdict = 'FAIL'
-      result.backfillReason = `no visible tick greater than the tick at quit (${nQuit}); highest visible was ${read1}`
+    // Why not `read1 > nQuit`: the tick loop keeps running, so a client that received NO replay and
+    // only saw live ticks after attaching still exceeds the tick at quit. The verdict is about the
+    // unattached window (tick after the desktop process exited .. tick before this client attached).
+    const lQuitExit = parseTick(continuity.tQuitExitLine, continuity.nonce)
+    const lAttach0 = parseTick(lAttach0Line, continuity.nonce)
+    result.tQuitExitLine = continuity.tQuitExitLine ?? null
+    result.lQuitExitTick = lQuitExit
+    result.lAttach0Line = lAttach0Line
+    result.lAttach0Tick = lAttach0
+    const backfill = judgeBackfill({
+      content: content1,
+      nonce: continuity.nonce,
+      lQuitExit,
+      lAttach0,
+      readerLive
+    })
+    result.backfillVerdict = backfill.verdict
+    result.backfillReason = backfill.reason
+    result.backfillWindow = {
+      lQuitExit: backfill.lQuitExit ?? lQuitExit,
+      lAttach0: backfill.lAttach0 ?? lAttach0,
+      visibleInWindow: backfill.visibleInWindow ?? null,
+      truncatedAtOldestEnd: backfill.truncatedAtOldestEnd ?? null
     }
 
     result.deviceCountAfterPairing = await page
