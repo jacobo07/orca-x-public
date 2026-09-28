@@ -36,8 +36,10 @@ Measured in the real app by `tests/e2e/shell-unsent-input-support-matrix.spec.ts
 | Git Bash (`Git\bin\bash.exe`) | `unsupported` | `undefined` | **no** — renderer witness only |
 
 `cmd.exe` speaks only through `PROMPT` (`src/main/providers/cmd-osc133-prompt.ts`): a tagged 133;A
-on every prompt, and a 133;D only after an Orca startup command has returned. It has no pre-exec
-hook, so it never emits 133;C. What stands in for it:
+on every prompt, and a 133;D once no Orca startup command is pending. A pane with no startup command
+reports a D on every prompt, so an agent the user types there is seen exiting; a pane whose startup
+command is still to be typed draws an A-only first prompt, and a D only after that command returns.
+It has no pre-exec hook, so it never emits 133;C. What stands in for it:
 
 - a line the user submits stays `typed` until the prompt returns, so every reader that refuses on
   `typed` treats a running cmd command as unsafe to destroy;

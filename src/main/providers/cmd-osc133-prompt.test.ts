@@ -7,6 +7,7 @@ import {
 import {
   CMD_PROMPT_AFTER_EMBEDDED_STARTUP,
   CMD_PROMPT_BEFORE_ANY_COMMAND,
+  CMD_PROMPT_WITHOUT_STARTUP,
   isCmdShellPath,
   withCmdCommandFinishedPrompt
 } from './cmd-osc133-prompt'
@@ -63,9 +64,24 @@ describe('cmd.exe OSC 133 prompt', () => {
     ])
   })
 
-  it('draws an A-only first prompt when no startup command rides in the args', () => {
+  it('reports every finish in a plain pane, so a typed agent exit is seen', () => {
     const plain = resolveWindowsShellLaunchArgs('cmd.exe', 'C:\\r', 'C:\\r')
-    expect(plain.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`])
+    expect(plain.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_PROMPT_WITHOUT_STARTUP}`])
+    const tracker = createShellPromptStateTracker(() => shellPromptMarkerTrust(CMD, 'win32'))
+    tracker.observe(renderCmdPrompt(CMD_PROMPT_WITHOUT_STARTUP, '$P$G', 'C:\\repo'))
+    expect(resolveShellPromptState(tracker, shellPromptMarkerTrust(CMD, 'win32'))).toBe('prompt')
+  })
+
+  it('draws an A-only first prompt while a startup command is still to be typed', () => {
+    const preflightOnly = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\r',
+      'C:\\r',
+      undefined,
+      undefined,
+      'codex-preflight'
+    )
+    expect(preflightOnly.shellArgs.join(' ')).not.toContain('133;D')
     const quoted = resolveWindowsShellLaunchArgs(
       'cmd.exe',
       'C:\\r',

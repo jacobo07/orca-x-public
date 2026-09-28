@@ -14,6 +14,13 @@ const COMMAND_FINISHED = `$e]133;D;;${ORCA_PROMPT_MARKER_TAG}$e\\`
  */
 export const CMD_PROMPT_BEFORE_ANY_COMMAND = `prompt ${PROMPT_START}%PROMPT%`
 
+/**
+ * A plain pane with no startup command at all: every prompt reports the finish, so an agent the
+ * user TYPES is seen exiting. No launch identity exists to retire, and a D after agent evidence is
+ * re-confirmed against the foreground process before it clears anything.
+ */
+export const CMD_PROMPT_WITHOUT_STARTUP = `prompt ${COMMAND_FINISHED}${PROMPT_START}%PROMPT%`
+
 /** Last in the /K line, where %PROMPT% still expands to the user's own prompt. */
 export const CMD_PROMPT_AFTER_EMBEDDED_STARTUP = `prompt ${COMMAND_FINISHED}${PROMPT_START}%PROMPT%`
 

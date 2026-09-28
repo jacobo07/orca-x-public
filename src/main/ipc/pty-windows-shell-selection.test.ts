@@ -11,7 +11,7 @@ import {
   POWERSHELL_OSC133_ARGS
 } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { CMD_PROMPT_BEFORE_ANY_COMMAND } from '../providers/cmd-osc133-prompt'
+import { CMD_PROMPT_WITHOUT_STARTUP } from '../providers/cmd-osc133-prompt'
 import { registerPtyHandlers } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -123,7 +123,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\system32\\cmd.exe',
-        ['/K', `chcp 65001 > nul & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`],
+        ['/K', `chcp 65001 > nul & ${CMD_PROMPT_WITHOUT_STARTUP}`],
         expect.any(Object)
       )
     })
@@ -237,7 +237,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\system32\\cmd.exe',
-        ['/K', `chcp 65001 > nul & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`],
+        ['/K', `chcp 65001 > nul & ${CMD_PROMPT_WITHOUT_STARTUP}`],
         expect.any(Object)
       )
     })
@@ -413,7 +413,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'cmd.exe',
-        ['/K', `chcp 65001 > nul & ${CMD_PROMPT_BEFORE_ANY_COMMAND}`],
+        ['/K', `chcp 65001 > nul & ${CMD_PROMPT_WITHOUT_STARTUP}`],
         expect.any(Object)
       )
     })
