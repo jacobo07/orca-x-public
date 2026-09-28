@@ -373,15 +373,32 @@ function Invoke-DwsRemoteRoundTrip {
     return
   }
 
+  # Why `terminal list --worktree`, not `terminal read --terminal $handle`: each Invoke-DwsCli
+  # call is a brand-new `node` process making a brand-new WS connection, which the runtime treats
+  # as a fresh headless graph owner. When that process exits, its owned graph (including the
+  # handle `terminal create` just returned) is torn down and every waiter on it rejects with
+  # `terminal_handle_stale` -- even though the underlying PTY keeps running on GEX44 (confirmed via
+  # `status` ps-capture showing the bash process alive throughout). `terminal list` resolves live
+  # terminals by worktree selector, not by a specific owner-scoped handle, so it survives the
+  # create-process's exit; its `preview` field already carries the tail output we need, so no
+  # separate `read` call (and no second stale-handle problem) is required at all.
   $deadline = (Get-Date).AddSeconds(30)
   $sawAll = $false
-  $lastRead = ''
+  $lastList = ''
   while ((Get-Date) -lt $deadline) {
-    $readResult = Invoke-DwsCli -Args @('terminal', 'read', '--terminal', $handle)
-    $lastRead = $readResult.Output
-    if ($lastRead -match [regex]::Escape("DWS-P2-TRACER-$nonce") -and $lastRead -match 'orca-svc' -and $lastRead -match 'kobicraft-gex44') {
-      $sawAll = $true
-      break
+    $listResult = Invoke-DwsCli -Args @('terminal', 'list', '--worktree', "path:$($deployed.svcCheckout)")
+    $lastList = $listResult.Output
+    if ($listResult.ExitCode -eq 0) {
+      try {
+        $listed = $lastList | ConvertFrom-Json
+        $match = $listed.result.terminals | Where-Object { $_.preview -match [regex]::Escape("DWS-P2-TRACER-$nonce") }
+        if ($match -and $match.preview -match 'orca-svc' -and $match.preview -match 'kobicraft-gex44') {
+          $sawAll = $true
+          break
+        }
+      } catch {
+        # transient unparseable output during a create/list race; keep polling
+      }
     }
     Start-Sleep -Milliseconds 750
   }
@@ -390,10 +407,10 @@ function Invoke-DwsRemoteRoundTrip {
   Write-Output "STATUS_CAPTURE:`n$($statusCapture.Output)"
 
   if (-not $sawAll) {
-    Write-Output "ROUNDTRIP=FAIL reason=marker_not_observed nonce=$nonce lastRead=$lastRead"
+    Write-Output "ROUNDTRIP=FAIL reason=marker_not_observed nonce=$nonce lastList=$lastList"
     return
   }
-  Write-Output "ROUNDTRIP=PASS nonce=$nonce serveSha=$($deployed.sha)"
+  Write-Output "ROUNDTRIP=PASS nonce=$nonce serveSha=$($deployed.sha) handle=$handle"
 }
 
 Export-ModuleMember -Function `
