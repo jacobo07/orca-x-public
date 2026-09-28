@@ -131,7 +131,9 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       noPairing: flags.get('no-pairing') === true,
       mobilePairing: flags.get('mobile-pairing') === true,
       recipeJson: flags.get('recipe-json') === true,
-      projectRoot
+      projectRoot,
+      bindHost:
+        typeof flags.get('bind-host') === 'string' ? (flags.get('bind-host') as string) : null
     })
     process.exitCode = exitCode
   },

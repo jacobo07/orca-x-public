@@ -69,7 +69,37 @@ describe('orca cli worktree awareness', () => {
       noPairing: true,
       mobilePairing: false,
       recipeJson: false,
-      projectRoot: null
+      projectRoot: null,
+      bindHost: null
+    })
+  })
+
+  it('starts a foreground headless server with an explicit bind host', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(
+      [
+        'serve',
+        '--bind-host',
+        '127.0.0.1',
+        '--port',
+        '6791',
+        '--pairing-address',
+        '127.0.0.1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+      json: true,
+      port: '6791',
+      pairingAddress: '127.0.0.1',
+      noPairing: false,
+      mobilePairing: false,
+      recipeJson: false,
+      projectRoot: null,
+      bindHost: '127.0.0.1'
     })
   })
 
@@ -88,7 +118,8 @@ describe('orca cli worktree awareness', () => {
       noPairing: false,
       mobilePairing: true,
       recipeJson: false,
-      projectRoot: null
+      projectRoot: null,
+      bindHost: null
     })
   })
 
@@ -114,7 +145,8 @@ describe('orca cli worktree awareness', () => {
       noPairing: false,
       mobilePairing: false,
       recipeJson: true,
-      projectRoot: '/workspace/repo'
+      projectRoot: '/workspace/repo',
+      bindHost: null
     })
   })
 

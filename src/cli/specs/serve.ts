@@ -6,10 +6,11 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]',
+      'orca serve [--port <port>] [--bind-host <host>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
+      'bind-host',
       'pairing-address',
       'mobile-pairing',
       'no-pairing',
@@ -18,6 +19,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
+      '--bind-host pins the listener (IP literal or localhost); --pairing-address only changes the advertised address.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
