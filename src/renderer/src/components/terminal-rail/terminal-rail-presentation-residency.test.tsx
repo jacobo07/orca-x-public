@@ -199,7 +199,9 @@ describe('terminal rail presentation residency', () => {
     // A count is not a cost: what each subscriber does on a store write is measured separately, in
     // `terminal-rail-derivation-fanout.test.tsx`. Lowering this number while moving the same work
     // into a more expensive selector would pass here and fail there.
-    expect({ domPerRow, listenersPerRow }).toEqual({ domPerRow: 9, listenersPerRow: 13 })
+    // 9/13 -> 10/14: Resume beside the logo. The row is a button, so the control is a sibling in a
+    // wrapper (+1 node), and it holds one subscription answered from a per-snapshot index.
+    expect({ domPerRow, listenersPerRow }).toEqual({ domPerRow: 10, listenersPerRow: 14 })
 
     const report = { domPerRow, listenersPerRow, points }
     if (process.env.RAIL_RESIDENCY_REPORT) {

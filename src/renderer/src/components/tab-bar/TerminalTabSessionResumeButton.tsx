@@ -7,7 +7,8 @@ import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   decodeTabSessionResumeTarget,
-  resolveTabSessionResumeTargetKey
+  resolveTabSessionResumeTargetKey,
+  type TabSessionResumeTarget
 } from '@/lib/tab-session-resume-target'
 import {
   hasPaneSessionResumeHandler,
@@ -36,22 +37,42 @@ function waitingText(reason: string | undefined): string {
   )
 }
 
+type ResumeTab = { id: string; worktreeId: string }
+
+/** The tab's one store subscription for Resume; a surface that must reserve room reads it first. */
+export function useTabSessionResumeTarget(tab: ResumeTab): TabSessionResumeTarget {
+  return decodeTabSessionResumeTarget(
+    useAppStore((state) => resolveTabSessionResumeTargetKey(state, tab))
+  )
+}
+
 /**
  * Beside the agent logo: resume the exact session this tab's agent exited from. A projection of
  * the pane capability; the click goes through the pane's own resume, which re-checks everything.
  */
-export function TerminalTabSessionResumeButton({
-  tab,
-  isActive,
-  onActivate
-}: {
-  tab: { id: string; worktreeId: string }
+export function TerminalTabSessionResumeButton(props: {
+  tab: ResumeTab
   isActive: boolean
   onActivate: (tabId: string) => void
 }): React.JSX.Element | null {
-  const target = decodeTabSessionResumeTarget(
-    useAppStore((state) => resolveTabSessionResumeTargetKey(state, tab))
-  )
+  return <TabSessionResumeControl target={useTabSessionResumeTarget(props.tab)} {...props} />
+}
+
+export function TabSessionResumeControl({
+  target,
+  tab,
+  isActive,
+  onActivate,
+  className,
+  style
+}: {
+  target: TabSessionResumeTarget
+  tab: ResumeTab
+  isActive: boolean
+  onActivate: (tabId: string) => void
+  className?: string
+  style?: React.CSSProperties
+}): React.JSX.Element | null {
   const paneKey = target.kind === 'one' ? target.paneKey : null
   const readDispatch = (): string =>
     paneKey === null
@@ -116,8 +137,10 @@ export function TerminalTabSessionResumeButton({
             'relative mr-1 inline-flex size-4 shrink-0 items-center justify-center rounded-sm after:absolute after:-inset-1 after:content-[""]',
             'text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             !isActive && 'opacity-70',
-            (waiting || resuming) && 'cursor-default hover:bg-transparent'
+            (waiting || resuming) && 'cursor-default hover:bg-transparent',
+            className
           )}
+          style={style}
           onPointerDown={(event) => {
             if (event.button === 0) {
               event.stopPropagation()
