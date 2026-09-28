@@ -37,7 +37,11 @@
 # had been living inside that row's reason prose as "the second half", where it could not
 # be counted: desktop RETAINS a transcript whose origin has gone and tells the user, and
 # mobile refuses and stops. Splitting it is what makes it debt someone can be assigned.
+#
+# 2026-09-28: runtime.command-acts-on-the-window-that-owns-the-target left CLOSED, on the host,
+# so every client inherits it: an unowned target is refused for read/act, placed in one window for
+# place, and broadcast only for global/notify. Proven in a real two-window Electron run that fails
+# on the pre-fix build. The unresolved total genuinely falls to three.
 drafts.user-invested-input-survives-process-death
-runtime.command-acts-on-the-window-that-owns-the-target
 terminal.launch-profile-identity
 voice.unclaimed-transcript-recovery
