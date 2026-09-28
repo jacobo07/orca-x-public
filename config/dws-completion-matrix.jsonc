@@ -18,7 +18,9 @@
       "owner": "Orca Workspace nav",
       "done": "Workstreams visible from two authorized clients",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         4
@@ -26,8 +28,14 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — Workstreams visible from two authorized clients not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/workstream-surface.characterization.test.mjs",
+          "note": "RED characterization: no Orca surface lists Workstreams today; Phase 4 inverts it in place"
+        }
+      ],
+      "reason": "Measured 2026-09-28: structural sweep over renderer/shared/mobile/preload/main-ipc found zero Workstream producers or surfaces (0 raw hits before exclusions); Workstreams are not visible from any Orca surface today"
     },
     {
       "id": 2,
@@ -35,7 +43,9 @@
       "owner": "paired hosts + UWCP home (derived)",
       "done": "new paired device lists Workstreams, sees no contents",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         4
@@ -43,8 +53,14 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — new paired device lists Workstreams, sees no contents not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/workstream-surface.characterization.test.mjs",
+          "note": "RED characterization: no Orca surface lists Workstreams today; Phase 4 inverts it in place"
+        }
+      ],
+      "reason": "Measured 2026-09-28: same structural sweep as row 1 — no Workstream listing surface exists for any client, paired or not, so a paired device cannot list Workstreams today"
     },
     {
       "id": 3,
@@ -169,8 +185,10 @@
       "row": "Detach without cancellation",
       "owner": "runtime lifecycle",
       "done": "client quit, remote work continues",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         2,
@@ -182,8 +200,19 @@
         "Decision D2 (transport)",
         "Phase 2"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — client quit, remote work continues not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-client-disconnect.characterization.test.ts",
+          "note": "RED characterization: a client disconnect aborts an unspawned agent-session creation caller signal (agent-session.ts:239-257, orca-runtime.ts:26889-26891/27068-27070); a spawned PTY is not killed and conversations.sendTurn never receives the signal at all (conversations.ts:67-72); Phase 3 inverts in place"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/quit-path-local-runtime-teardown.characterization.test.ts",
+          "note": "RED characterization: a committed desktop quit kills only in-process local PTYs (src/main/index.ts will-quit handler + pty.ts killAllPty); Phase 3 inverts in place"
+        }
+      ],
+      "reason": "unit level only: a client disconnect stops runtime work only for agent-session creation not yet spawned; a spawned PTY and an in-flight conversation turn are unaffected, and a committed local quit kills only local PTYs; the product done condition (client quits, remote work on a GEX44 runtime continues) is unproven — Phases 2-3"
     },
     {
       "id": 11,
@@ -331,7 +360,9 @@
       "owner": "fleet proposal + UWCP placement.py",
       "done": "one rule set, apply path",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         6
@@ -340,8 +371,14 @@
         "Phase 5",
         "UWCP lease store S4-S5"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — one rule set, apply path not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/fleet-placement-apply-path.characterization.test.mjs",
+          "note": "RED characterization: a placement proposal has no apply path; Phase 6 inverts it in place"
+        }
+      ],
+      "reason": "Measured 2026-09-28: a proposal engine exists (src/shared/fleet-placement.ts, planFleetPlacement) with exactly 4 read-only importers (view method, observation service, cli formatter, cli printer) and 0 importers that act on proposal.selected; no apply path exists today"
     },
     {
       "id": 20,
