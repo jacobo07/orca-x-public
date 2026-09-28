@@ -1,4 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -13,7 +15,6 @@ import {
 } from './helpers/terminal'
 import {
   ensureTerminalVisible,
-  switchToOtherWorktree,
   switchToWorktree,
   waitForActiveWorktree,
   waitForSessionReady
@@ -36,6 +37,38 @@ import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-restore-no-wake-session'
 const OBSERVE_AFTER_OPEN_MS = 8_000
+
+/** ESRCH only: on Windows the daemon can already be gone after quit, which is the state wanted. */
+function killDaemon(pid: number): void {
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      throw error
+    }
+  }
+}
+
+/** A throwaway repository with one commit, owned by this test, to be the workspace restored. */
+function createSecondRepo(): string {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restore-target-'))
+  const git = (...args: string[]): void => {
+    execFileSync('git', args, { cwd: dir, stdio: 'pipe' })
+  }
+  git('init', '-q')
+  git(
+    '-c',
+    'user.email=e2e@orca.test',
+    '-c',
+    'user.name=e2e',
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'seed'
+  )
+  return dir
+}
 
 function stubPersistedResumeCommand(userDataDir: string): void {
   const dataPath = path.join(
@@ -122,9 +155,9 @@ test('Resume Center open restores a slept workspace without starting any process
     await ensureTerminalVisible(page)
     await waitForActiveTerminalManager(page, 30_000)
 
-    const targetWorktreeId = await switchToOtherWorktree(page, homeWorktreeId)
-    expect(targetWorktreeId, 'global setup left no second worktree to restore').toBeTruthy()
-    const target = targetWorktreeId as string
+    // Why a second repo, not the seeded secondary worktree: that worktree is never discovered on
+    // Windows (measured twice), and the subject only needs a second workspace startup won't mount.
+    const target = await attachRepoAndOpenTerminal(page, createSecondRepo())
     await expect
       .poll(async () => page.evaluate(() => window.__store?.getState().activeWorktreeId))
       .toBe(target)
@@ -169,7 +202,7 @@ test('Resume Center open restores a slept workspace without starting any process
     await session.close(firstApp)
     firstApp = null
     stubPersistedResumeCommand(session.userDataDir)
-    process.kill(daemonPid, 'SIGKILL')
+    killDaemon(daemonPid)
 
     const second = await session.launch()
     secondApp = second.app

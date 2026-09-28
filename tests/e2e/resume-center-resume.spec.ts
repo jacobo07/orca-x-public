@@ -144,7 +144,14 @@ test('Resume wakes exactly the chosen row, and Resume all stops at admission', a
     const daemonPid = readDaemonPid(session.userDataDir)
     await session.close(firstApp)
     firstApp = null
-    process.kill(daemonPid, 'SIGKILL')
+    // ESRCH: on Windows the daemon is already gone after quit; the no-process residency proves it.
+    try {
+      process.kill(daemonPid, 'SIGKILL')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw error
+      }
+    }
 
     const second = await session.launch()
     secondApp = second.app
