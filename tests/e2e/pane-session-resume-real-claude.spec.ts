@@ -468,10 +468,15 @@ test('real Claude: exit, full relaunch, one-click resume of the exact session, t
   }
   // Why: Claude rewrites ~/.claude.json on exit; read it only once this run's providers are gone.
   await expect
-    .poll(() => listClaudeProcesses(config.bin).filter((p) => !claudeBefore.has(p.pid)).length, {
-      timeout: 30_000
-    })
-    .toBe(0)
+    .poll(
+      // Why name them: the user's own global hooks can spawn claude inside this session.
+      () =>
+        listClaudeProcesses(config.bin)
+          .filter((p) => !claudeBefore.has(p.pid))
+          .map((p) => `${p.pid} ${p.commandLine}`),
+      { timeout: 90_000 }
+    )
+    .toEqual([])
   expect(captureRealClaudeIntegrity(config), 'trust, login, hooks and fixture untouched').toEqual(
     integrityBefore
   )
@@ -559,10 +564,15 @@ test('real Claude typed into a plain cmd.exe tab: its exit is marked', async (//
     await session.dispose()
   }
   await expect
-    .poll(() => listClaudeProcesses(config.bin).filter((p) => !claudeBefore.has(p.pid)).length, {
-      timeout: 30_000
-    })
-    .toBe(0)
+    .poll(
+      // Why name them: the user's own global hooks can spawn claude inside this session.
+      () =>
+        listClaudeProcesses(config.bin)
+          .filter((p) => !claudeBefore.has(p.pid))
+          .map((p) => `${p.pid} ${p.commandLine}`),
+      { timeout: 90_000 }
+    )
+    .toEqual([])
   expect(captureRealClaudeIntegrity(config), 'trust, login, hooks and fixture untouched').toEqual(
     integrityBefore
   )
