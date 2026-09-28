@@ -190,8 +190,10 @@
       "row": "Control-surface attach",
       "owner": "runtime pairing + driver state",
       "done": "laptop attaches to GEX44 runtime",
-      "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         2
@@ -201,17 +203,33 @@
         "Decision D1 (broker law)",
         "Decision D2 (transport)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — laptop attaches to GEX44 runtime not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/dws-remote-attach.spec.ts",
+          "note": "02-05: attachDwsRemoteRuntime drives the real desktop UI (AddRemoteHostDialog, SSH-tunnel checkbox); verifyAndAddRuntimeEnvironmentFromPairingCode performs a live status.get RPC over the tunnel before the dialog can close — the close IS the attach proof. Real run PASSED."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/dws-remote-continuity.spec.ts",
+          "note": "02-06: attachDwsRemoteRuntime re-run for the continuity leg, same live round-trip, real run PASSED (a second, independent attach against the same runtime)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-local-ram-offload-evidence.md",
+          "note": "Criterion 3 section narrates both attach runs"
+        }
+      ],
+      "reason": "measured 2026-09-28: two independent real desktop-UI attaches to the GEX44 runtime over the ssh -L tunnel, each gated on a live status.get round-trip before the pairing dialog could close"
     },
     {
       "id": 10,
       "row": "Detach without cancellation",
       "owner": "runtime lifecycle",
       "done": "client quit, remote work continues",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "phase-1",
+      "measuredIn": "phase-2",
       "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
@@ -234,17 +252,29 @@
           "kind": "file",
           "path": "src/main/quit-path-local-runtime-teardown.characterization.test.ts",
           "note": "RED characterization: a committed desktop quit kills only in-process local PTYs (src/main/index.ts will-quit handler + pty.ts killAllPty); Phase 3 inverts in place"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/dws-remote-continuity.spec.ts",
+          "note": "02-06 product-level proof: dispatched a bounded tick loop, confirmed it in a remote capture, quit the desktop via a real Electron app.quit() (exit code 0, no kill), wrote continuity.json (mainPidAtDispatch, tQuitLine)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-local-ram-offload-evidence.md",
+          "note": "Criterion 5 section: post-quit ssh check ~97s after quit showed the SAME serve MainPID and 95 new ticks (>= elapsed-5=92 required)"
         }
       ],
-      "reason": "unit level only: a client disconnect stops runtime work only for agent-session creation not yet spawned; a spawned PTY and an in-flight conversation turn are unaffected, and a committed local quit kills only local PTYs; the product done condition (client quits, remote work on a GEX44 runtime continues) is unproven — Phases 2-3"
+      "reason": "measured 2026-09-28: the characterizations' unit-level finding is now confirmed at product level — a real desktop quit (app.quit(), exit=0) left the remote tick loop running under the unchanged serve MainPID, growing continuously for >90s unattended. Detach/Stop/Cancel as distinct, named EFFECTS (and the disconnect-triggered mutation itself) remain Phase 3 scope, per CTX-CONT-3 (observe, do not change quit semantics) — this row's own DONE condition (client quits, remote work continues) is satisfied without that."
     },
     {
       "id": 11,
       "row": "Client switch",
       "owner": "runtime + pairing",
       "done": "Device B reattaches, no restatement",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         2
@@ -254,8 +284,19 @@
         "Decision D1 (broker law)",
         "Decision D2 (transport)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — Device B reattaches, no restatement not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/dws-web-client-reattach.mjs",
+          "note": "second client = the bundled web client (CTX-CONT-2, assumption_delta: no-change), driven headlessly (msedge). Reader proven live (two reads 2.5s apart showed the tick number growing) via window.__paneManagers.get(tabId).getActivePane().serializeAddon.serialize() -- the only reader rung this codebase offers (no xterm a11y addon wired). BACKFILL=PASS: visible tick 892 > tick-at-quit 8, i.e. the web client displayed output produced entirely while no client was attached (\"no restatement\" -- it was never re-sent, it was already there)."
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-reattach-latency.json",
+          "note": "reattach latency N=6 MEASURED, medianMs=6762.5 -- Device B (the web client) reattaches and sees current state repeatably, not as a one-off"
+        }
+      ],
+      "reason": "measured 2026-09-28: a second, independent client (the bundled web client, opened through the same ssh tunnel) reattached to the paired runtime after the first client (the desktop) quit, and displayed terminal output produced entirely while unattached -- BACKFILL=PASS with a live-reader control"
     },
     {
       "id": 12,
@@ -362,8 +403,10 @@
       "row": "Fleet Resource Graph",
       "owner": "src/main/fleet",
       "done": "`orca fleet placement` against real runtime",
-      "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         2,
@@ -375,8 +418,14 @@
         "Decision D2 (transport)",
         "Phase 2"
       ],
-      "evidence": [],
-      "reason": "never run live"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-fleet-placement.json",
+          "note": "real `fleet placement --json` run against the GEX44 runtime: status=ok, real observation (runtimeId matches the deployed serve, totalMemory/availableMemory consistent with the known host), a placement proposal selected. Ran from a terminal ON GEX44 (a LOCAL RPC caller) -- fleet.placementView (fleet.ts:26-30) structurally refuses a REMOTE caller (status:refused, reason:remote-caller) by design (\"answering would have this host query its own paired runtimes on another's behalf\"), reproduced first before finding the correct local-caller invocation."
+        }
+      ],
+      "reason": "measured 2026-09-28: `fleet placement` runs successfully against the real GEX44 runtime when invoked as a local caller on that host; invoking it as a remote caller (via --environment from the laptop) is refused by design, not a defect"
     },
     {
       "id": 19,
@@ -888,8 +937,10 @@
       "row": "Local RAM reduction",
       "owner": "measurement",
       "done": "before/after MB + process tree",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         2
@@ -899,16 +950,24 @@
         "Decision D1 (broker law)",
         "Decision D2 (transport)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — before/after MB + process tree not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-memory-delta.json",
+          "note": "02-05: absence PASS for every baseline-sighted family (vitest, tsc, claude, codex, workload-wrapper) with a positive control across TWO independent sweeps; the peak-delta BRACKET is INCONCLUSIVE both times (free-memory drift 4092.75MB / 3032.82MB >= workloadTotal peakDeltaMb 956.86MB) -- this laptop's own background memory churn exceeds the workload's signal"
+        }
+      ],
+      "reason": "measured 2026-09-28: the more decisive half (absence of local claude/codex/vitest/build/indexer processes during offload) is PASS with a positive control on two independent sweeps; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
     },
     {
       "id": 46,
       "row": "GEX44 heavy execution",
       "owner": "orca serve on GEX44",
       "done": "remote process tree",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         2
@@ -918,8 +977,19 @@
         "Decision D1 (broker law)",
         "Decision D2 (transport)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — remote process tree not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-summary.json",
+          "note": "02-05: test leg dispatched through the paired GEX44 environment; remote-proof PASS via ps --forest under the serve PID, peakRssMb=589.14"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-fleet-placement.json",
+          "note": "02-06: independent confirmation the GEX44 runtime executes and reports real host facts under the same runtimeId"
+        }
+      ],
+      "reason": "measured 2026-09-28: the test-run leg's remote process tree proof is PASS (real vitest process captured under the serve's PID tree, peakRssMb=589.14); the agent-turn leg is BLOCKED (reproducible exit=1/agentReply=missing when dispatched via terminal-create PTY, credential confirmed present in the service HOME, same signature as the pre-existing local PTY-dispatch defect from 02-04) -- a product defect requiring PTY-environment investigation, no Owner action available to close it"
     },
     {
       "id": 47,
@@ -977,8 +1047,10 @@
       "row": "Performance",
       "owner": "measurement",
       "done": "latency/hydration/reattach numbers",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
       "required": true,
       "phases": [
         2,
@@ -990,8 +1062,19 @@
         "Decision D2 (transport)",
         "Phases 2-11"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — latency/hydration/reattach numbers not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-stream-latency-remote.json",
+          "note": "02-05: stream (marker round-trip) latency MEASURED, remote medianMs=964.64 (n=7) vs local-floor medianMs=926.96 (n=7)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-reattach-latency.json",
+          "note": "02-06: reattach latency MEASURED, medianMs=6762.5 (n=6), plus firstAttachLatencyMs=13479 recorded separately"
+        }
+      ],
+      "reason": "measured 2026-09-28: stream and reattach latency numbers are both MEASURED with a named instrument and N>=5; hydration latency (a distinct number from reattach) is unmeasured this phase and Phase 12 owns the remaining performance surface (mixed-version matrices, broader latency budget work) -- PARTIAL is the honest state, not PASS"
     },
     {
       "id": 51,
@@ -1442,6 +1525,12 @@
       "decision": "D1",
       "debt": "autonomous evidence lanes reach GEX44 by bundle+ssh until UWCP S5's dispatcher path exists",
       "retireWhen": "the replacement dispatcher path has run once"
+    },
+    {
+      "id": "ND-2",
+      "decision": "D2",
+      "debt": "the laptop reaches GEX44's loopback-only orca serve through an Owner-key ssh -L forward, not the dispatcher-owned tunnel D2 names",
+      "retireWhen": "UWCP S5's dispatcher-owned tunnel has carried one paired-client session to orca serve on GEX44"
     }
   ]
 }

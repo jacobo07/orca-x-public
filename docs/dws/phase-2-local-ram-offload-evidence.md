@@ -453,3 +453,137 @@ bracket's ability to attribute the ~957MB peak delta specifically to the offload
 this laptop's own multi-GB background memory churn — a host characteristic outside this plan's
 control, not a defect in the measurement instrument (CTX-MEAS-1's bracket rule correctly refused to
 claim more than the data supports).
+
+## Criterion 5 — quit continuity, reader rung, backfill, reattach latency, device count (plan 02-06)
+
+This section records DWS-P2-SC5: after the laptop desktop quits NORMALLY (a real `app.quit()`, not
+a socket drop or kill), the long-running remote workload keeps running on GEX44 under the same
+serve MainPID, and a SECOND, independent client (the bundled web client) reattaches and displays
+terminal output produced entirely while unattached (BACKFILL), with reattach latency MEASURED at
+N>=5.
+
+### Quit + continuity (CTX-CONT-1, CTX-CONT-3)
+
+A bounded (2h, self-terminating) tick loop was dispatched through the paired GEX44 runtime,
+confirmed dispatched via a remote `status=active` + `sudo wc -l` >= 5 lines check (no nonce-in-`ps`
+check — a compound `for`-loop's own source text is never what `ps` shows for a running shell; see
+the spec's deviation note), then the laptop desktop was quit with a real Electron `app.quit()`
+while racing the process's own `exit` event against a 30s timeout:
+
+| Field | Value |
+|---|---|
+| Serve MainPID at dispatch | `692875` |
+| Tick line at the moment of quit (`sudo tail -n 1`) | `DWS-TICK-16c66be3b2ea-8 20:51:41` |
+| Quit instrument | `electronApp.evaluate(({app}) => app.quit())` raced against `proc.once('exit', ...)`, 30s timeout |
+| Exit result | `code=0, signal=null` (359ms) — a clean exit, never a kill |
+| Post-quit check (~97s after `quitExitedUtc`) | `status=active`, MainPID still `692875`; tick log at 103 lines (tick 8 at quit → tick 103), i.e. **95 new ticks in ~97 elapsed seconds** (>= elapsed-5=92 required) |
+
+**`CTX-CONT-1/CTX-CONT-3 = PASS`** — the remote workload continued running, unattended, under the
+unchanged serve process, entirely independent of the laptop desktop's own lifecycle.
+
+### Reader rung and BACKFILL (research assumption A2, CTX-CONT-2)
+
+The bundled web client (`out/web`, a projected/minified copy of the desktop renderer bundle) has no
+xterm accessibility addon wired — the only viable terminal-content reader in this codebase is
+`window.__paneManagers.get(tabId).getActivePane().serializeAddon.serialize()`, gated behind the
+`VITE_EXPOSE_STORE` build-time flag (a test-instrumentation-only change; no product code touched).
+Established live, via a throwaway instrument-first probe before writing the real script.
+
+| Claim | Instrument | Observed | Verdict |
+|---|---|---|---|
+| The reader is live, not a frozen snapshot | two reads of the pane buffer 2.5s apart | `read1=892, read2=895` | **PASS** |
+| BACKFILL: the web client displays output produced entirely while unattached | `read1=892` (live poll immediately after first attach) vs `nQuitTick=8` (tick visible at quit) | `892 > 8` by a wide margin | **PASS** |
+
+**`BACKFILL = PASS`** — resolves research assumption A2 (yes, the web client backfills scrollback
+produced while disconnected; it was never re-sent, it was already there).
+
+### Reattach latency (N>=5) and device count
+
+`docs/dws/phase-2-reattach-latency.json` — instrument: `Date.now()` immediately before
+`page.reload()`, stopped by `page.waitForFunction(..., {polling:'raf'})` observing a tick number
+>= the value read over ssh (`sudo tail -n 1`) immediately before the reload:
+
+| Field | Value |
+|---|---|
+| N | `6` (>= 5 required) |
+| medianMs | `6762.5` |
+| minMs / maxMs | `6489` / `8293` |
+| iqrMs | `443` |
+| resolutionMs | `17` |
+| firstAttachLatencyMs (recorded separately, not part of the N=6 set) | `13479` |
+
+**Honest caveat** (recorded in the committed JSON's own `note` field, not hidden): each reattach
+probe includes this script's own tab-rediscovery loop, which linear-scans up to 6 terminal tabs
+accumulated on this checkout by prior plans' own runs (~700ms settle each) before finding the
+tick-loop tab by its nonce content. Part of the measured number is this script's own
+O(existing-tab-count) discovery approach, not necessarily an inherent product floor.
+
+**Device count after pairing**: `deviceCountAfterPairing=1`, read from
+`window.__store.getState().runtimeEnvironments.length` in the web client's own freshly-paired
+context — this measures the web client's own local environment-list length, not a server-side
+`DeviceRegistry` paired-device count; recorded honestly as what was actually measured.
+
+### DWS-P2-SC5 verdict
+
+**`DWS-P2-SC5 = PASS`** (continuity PASS with a real clean quit and 95 new remote ticks unattended;
+BACKFILL PASS with a live-reader control; reattach latency MEASURED, N=6, medianMs=6762.5;
+`docs/dws/phase-2-reattach-latency.json`, `tests/e2e/dws-remote-continuity.spec.ts`,
+`config/scripts/dws-web-client-reattach.mjs`)
+
+## Phase 2 verdict table
+
+| Criterion | Verdict | Instrument | Evidence file | SHA |
+|---|---|---|---|---|
+| SC1 (local baseline) | **PASS** (baseline sweep `baseline-2`; agent leg UNMEASURED, reason recorded in Criterion 1) | `dws-offload-workload.mjs` + laptop process sampler, ~1s cadence | `docs/dws/phase-2-baseline-summary.json` | `883138dcf` |
+| SC2 (loopback-only serve, no public port) | **PASS** (all four legs (a)-(d)) | `Test-DwsNoPublicPort -Port 6791`, `ss`/`curl`/`TcpClient` from inside and outside the host | `docs/dws/phase-2-local-ram-offload-evidence.md` Criterion 2 | `b8e385a0b` |
+| SC3 (desktop attach + remote execution proof) | **BLOCKED** (agent-turn leg: reproducible PTY-dispatch failure, `agentReply=missing exit=1`, same signature as the accepted local baseline's own agent leg, credential confirmed present; test-run and build legs PASS) | `extractRemoteProof` against timestamped `ps --forest` captures under the serve MainPID | `docs/dws/phase-2-offload-summary.json`, `tests/e2e/dws-offload-workload.spec.ts` | `0b805a9b2` |
+| SC4 (laptop absence + memory delta + stream latency) | **INCONCLUSIVE** (absence PASS on every baseline-sighted family with positive controls, both sweeps; the quantitative MB bracket is INCONCLUSIVE — free-memory drift exceeds the workload's peak delta in both sweeps; stream latency MEASURED N=7) | laptop process sampler + `dws-offload-measurement.mjs compare`/`latency` | `docs/dws/phase-2-memory-delta.json`, `docs/dws/phase-2-stream-latency-remote.json` | `77314485a` / `d1a0ca38f` |
+| SC5 (quit continuity + web-client reattach + backfill) | **PASS** (real clean quit, 95 new remote ticks unattended under the unchanged serve MainPID; BACKFILL PASS with a live-reader control; reattach latency MEASURED N=6) | `electronApp.evaluate(app.quit())` raced against the process `exit` event; `window.__paneManagers...serializeAddon.serialize()` via a headless msedge second client | `tests/e2e/dws-remote-continuity.spec.ts`, `config/scripts/dws-web-client-reattach.mjs`, `docs/dws/phase-2-reattach-latency.json` | `84ca86e8c` |
+
+Only SC1, SC2 and SC5 are unqualified PASS. SC3 is BLOCKED on a product defect (not a credential or
+configuration gap). SC4's decisive half (absence) is proven; its quantitative bracket is
+INCONCLUSIVE on this specific laptop's own background memory churn. Neither BLOCKED nor
+INCONCLUSIVE is upgraded to PASS by this plan — both are carried forward honestly, per host_rules
+("never upgrade SC3/SC4 without new evidence").
+
+## Named debt
+
+| ID | Decision | Debt | Retire when |
+|---|---|---|---|
+| ND-1 | D1 | Autonomous evidence lanes reach GEX44 by bundle+ssh until UWCP S5's dispatcher path exists | The replacement dispatcher path has run once |
+| ND-2 | D2 | The laptop reaches GEX44's loopback-only `orca serve` through an Owner-key `ssh -L` forward, not the dispatcher-owned tunnel D2 names | UWCP S5's dispatcher-owned tunnel has carried one paired-client session to `orca serve` on GEX44 |
+
+## Open legs
+
+| Item | State | Reason | Owner action to close |
+|---|---|---|---|
+| SC3 agent-turn leg | BLOCKED | Reproducible PTY-dispatch failure (`agentReply=missing exit=1`), same signature as the accepted local baseline's own agent leg; credential confirmed present in the service HOME, ruling out a missing-credential cause | None available today — this is a product defect in Orca's terminal/PTY dispatch path, tracked as follow-up investigation; root cause not isolated within this plan's time budget |
+| SC3 build leg remote-proof | UNJUDGED | The leg completed successfully (`exit=0`, `897ms`) but ran faster than the 2s `ps-capture` sampling interval could reliably catch | None — not a failure of the leg itself; a tighter capture interval (< 897ms) would close this, at the cost of larger capture files |
+| SC4 quantitative MB bracket | INCONCLUSIVE | Free-memory drift on this laptop (4092.75MB / 3032.82MB across two independent sweeps) exceeds the workload's own peak delta (956.86MB), swamping the signal | None available from this plan — would require running the same comparison on a laptop with materially less background memory churn, or a longer/heavier workload whose delta exceeds typical drift |
+| Row 46 agent-turn leg (GEX44 heavy execution) | BLOCKED | Same PTY-dispatch defect as the SC3 agent-turn leg, reproduced again on GEX44 | Same as SC3 agent-turn leg — one underlying product defect, two matrix rows |
+| ND-2 (ssh -L tunnel) | Named debt | The laptop reaches GEX44 through an Owner-key `ssh -L` forward, not a dispatcher-owned tunnel | Retires when UWCP S5's dispatcher-owned tunnel carries one paired-client session to `orca serve` on GEX44 |
+| Row 49 (Security), 52 (Knowledge Vault), 53 (UKDL), 54 (Constitutive Baseline Ratchet) | ABSENT | `reason: program` — out of this plan's scope, owned by later phases/programs | None — tracked at the program level, not this plan |
+
+## State left in place
+
+**GEX44:**
+
+- `orca-svc` service account, unchanged.
+- `orca-dws-serve.service` — `active`, bound to `127.0.0.1:6791`, MainPID `692875` (unchanged
+  across the entire duration of this plan's execution, including the desktop quit and both Task 2
+  measurement passes).
+- Service checkout: `/home/orca-svc/dws-p2/b8e385a`.
+- Build clone HEAD (`/home/kobii/dws-0104-clone`, used for dispatching `status`/provisioning
+  commands): unchanged by this plan — never moved, per host_rules.
+- Tarballs, bundles and refs under `/home/kobii/orca-x`: unchanged by this plan.
+- Tick-loop shells and idle terminal shells created by this plan's own dispatches were stopped and
+  verified via a fresh `status`/`ps -u orca-svc` capture returning to the same 5 pre-existing
+  (unrelated, prior-plan) `bash --rcfile` shells present before this plan started.
+
+**Laptop:**
+
+- Worktree: `C:\Users\User\Apps\orca-dws-wt` (this checkout).
+- `$env:LOCALAPPDATA\orca-dws-p2\` — unchanged.
+- `ssh -L` tunnel (PID `43824`, forwarding `127.0.0.1:6791`): stopped via `Stop-DwsTunnel`;
+  confirmed no ssh process holding the `6791` forward remains.
+- No orphaned Electron, Playwright, or msedge processes remain from this plan's execution.
