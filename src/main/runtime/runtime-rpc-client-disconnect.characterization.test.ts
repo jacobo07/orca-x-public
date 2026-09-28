@@ -155,7 +155,7 @@ describe('dws characterization (a): a client disconnect stops runtime work it ha
         }
       })
     }
-    const { server, ws, deviceToken } = setUpServer(runtime)
+    const { server, ws, deviceToken } = setUpServer(runtime as unknown as Partial<OrcaRuntimeService>)
     const replies: Record<string, unknown>[] = []
 
     try {
