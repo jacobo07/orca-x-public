@@ -277,6 +277,16 @@ cmd_install() {
   local no_sandbox_flag=""
   [ "${DWS_SERVE_NO_SANDBOX:-}" = "1" ] && no_sandbox_flag=" --no-sandbox"
 
+  # Why the --serve-* flag form below, not the CLI "serve --bind-host ..." subcommand form: this
+  # unpacked invocation passes $svc_checkout as an Electron app-path argument, which process.argv
+  # keeps (Electron does not strip it for an unpackaged app) -- argvRequestsServeMode()/
+  # getServeOptions() scan from index 1, so the CLI subcommand form is never detected past that
+  # extra positional and the process silently launches as a normal desktop app instead (found via
+  # a real install run: WS bound to the loopback default port 6769, never :$SERVE_PORT, no ready
+  # JSON ever printed). The --serve-*/--serve-port/--serve-bind-host flag form is detected by a
+  # plain includes()/indexOf() over the WHOLE argv array, so it is immune to this position issue.
+  # This comment is deliberately OUTSIDE the heredoc below: a backtick inside an unquoted heredoc
+  # body is command substitution, not literal text, and this exact sentence broke that heredoc.
   cat > "/etc/systemd/system/$UNIT_NAME" <<UNIT
 [Unit]
 Description=Orca DWS-P2 serve (loopback-pinned, orca-svc)
@@ -305,14 +315,6 @@ KillMode=mixed
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
-# Why the --serve-* flag form, not the CLI "serve --bind-host ..." subcommand form: this unpacked
-# invocation passes $svc_checkout as an Electron app-path argument, which process.argv keeps
-# (Electron does not strip it for an unpackaged app) -- argvRequestsServeMode()/getServeOptions()
-# scan from index 1, so the CLI subcommand form is never detected past that extra positional and
-# the process silently launches as a normal desktop app instead (found via a real install run:
-# WS bound to the loopback default port 6769, never :$SERVE_PORT, and no ready JSON ever printed).
-# The --serve*/--serve-port/--serve-bind-host flag form is detected by a plain `.includes()` /
-# `indexOf()` over the WHOLE argv array, so it is immune to this position dependency.
 ExecStart=/usr/bin/xvfb-run -a $svc_checkout/node_modules/electron/dist/electron $svc_checkout --serve --serve-bind-host 127.0.0.1 --serve-port $SERVE_PORT --serve-pairing-address 127.0.0.1 --serve-json${no_sandbox_flag}
 
 [Install]
