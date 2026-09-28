@@ -20,11 +20,12 @@ import {
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { assertE2EProfileDisposed, disposeE2EProfile } from './e2e-profile-disposal'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import {
@@ -84,20 +85,15 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
   return Math.max(parsed, 0)
 })()
 
-async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      rmSync(userDataDir, { recursive: true, force: true })
-      return
-    } catch (error) {
-      if (attempt === 4) {
-        throw error
-      }
-      // Why: Windows can briefly keep Electron profile files locked after the
-      // process exits; retrying avoids turning a passed flow into teardown noise.
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
-    }
-  }
+async function removeUserDataDirAfterShutdown(
+  userDataDir: string,
+  app: ElectronApplication
+): Promise<void> {
+  const mainPid = app.process().pid
+  assertE2EProfileDisposed(
+    'orca-app',
+    await disposeE2EProfile(userDataDir, { ownedPids: mainPid ? [mainPid] : [] })
+  )
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
@@ -259,16 +255,17 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     } catch (error) {
       await closeElectronAppForE2E(app)
-      await cleanupE2EDaemons(userDataDir)
-      await removeUserDataDirAfterShutdown(userDataDir)
+      // The isolation failure stays the reported error; a disposal failure is printed beside it.
+      await removeUserDataDirAfterShutdown(userDataDir, app).catch((cleanupError: unknown) => {
+        console.error(`[e2e-cleanup] also failed after setup failed: ${String(cleanupError)}`)
+      })
       throw error
     }
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.
     await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
-    await removeUserDataDirAfterShutdown(userDataDir)
+    await removeUserDataDirAfterShutdown(userDataDir, app)
   },
 
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.

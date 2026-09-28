@@ -1,11 +1,12 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
+import { _electron as electron, expect, type ElectronApplication } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import { disposeE2EProfile, e2eProfileResidue } from './e2e-profile-disposal'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
@@ -228,19 +229,23 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       offer,
       dispose: async () => {
         await closeElectronAppForE2E(app)
-        await cleanupE2EDaemons(userDataDir)
-        rmSync(userDataDir, { recursive: true, force: true })
+        await disposeHostProfile(userDataDir, app)
       }
     }
   } catch (error) {
-    try {
-      if (app) {
-        await closeElectronAppForE2E(app)
-      }
-      await cleanupE2EDaemons(userDataDir)
-    } finally {
-      rmSync(userDataDir, { recursive: true, force: true })
+    if (app) {
+      await closeElectronAppForE2E(app)
     }
+    // The launch failure stays the reported error; a disposal failure is printed beside it.
+    await disposeHostProfile(userDataDir, app).catch((cleanupError: unknown) => {
+      console.error(`[e2e-cleanup] also failed after setup failed: ${String(cleanupError)}`)
+    })
     throw error
   }
+}
+
+async function disposeHostProfile(userDataDir: string, app: ElectronApplication | undefined): Promise<void> {
+  const mainPid = app?.process().pid
+  const result = await disposeE2EProfile(userDataDir, { ownedPids: mainPid ? [mainPid] : [] })
+  expect.soft(e2eProfileResidue('headless-paired-runtime-host', result), 'profile disposal').toBeNull()
 }

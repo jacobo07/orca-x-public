@@ -104,7 +104,8 @@ describe('disposeE2EProfile', () => {
     const result = await disposeE2EProfile(dir, { deadlineMs: 200 }, { remove: locked })
 
     expect(result).toMatchObject({ state: 'PROCESS_STILL_ALIVE', pids: [child.pid] })
-  })
+    // Why 30s: the real Windows process-table scan measured 8s on a loaded host (its own cap is 20s).
+  }, 30_000)
 
   it('does not wait on an error that will not fix itself', async () => {
     const dir = profile()

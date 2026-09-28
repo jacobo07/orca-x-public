@@ -1,17 +1,19 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import {
   _electron as electron,
+  expect,
   type ElectronApplication,
   type Page,
   type TestInfo
 } from '@stablyai/playwright-test'
 
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import { disposeE2EProfile, e2eProfileResidue } from './e2e-profile-disposal'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
@@ -59,18 +61,10 @@ function readDirectSshAttemptTargetIds(probePath: string): string[] {
   }
 }
 
-async function removeProfile(userDataDir: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      rmSync(userDataDir, { recursive: true, force: true })
-      return
-    } catch (error) {
-      if (attempt === 4) {
-        throw error
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
-    }
-  }
+async function removeProfile(userDataDir: string, app: ElectronApplication): Promise<void> {
+  const mainPid = app.process().pid
+  const result = await disposeE2EProfile(userDataDir, { ownedPids: mainPid ? [mainPid] : [] })
+  expect.soft(e2eProfileResidue('paired-electron-client', result), 'profile disposal').toBeNull()
 }
 
 export async function createRuntimeDesktopPairingOffer(
@@ -240,8 +234,7 @@ export async function launchPairedElectronClient(
       captureDirectSshAttempts,
       dispose: async () => {
         await closeElectronAppForE2E(app)
-        await cleanupE2EDaemons(userDataDir)
-        await removeProfile(userDataDir)
+        await removeProfile(userDataDir, app)
       },
       getDirectSshAttemptTargetIds: async () => {
         return readDirectSshAttemptTargetIds(directSshProbePath).filter(
@@ -253,8 +246,9 @@ export async function launchPairedElectronClient(
     }
   } catch (error) {
     await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
-    await removeProfile(userDataDir)
+    await removeProfile(userDataDir, app).catch((cleanupError: unknown) => {
+      console.error(`[e2e-cleanup] also failed after setup failed: ${String(cleanupError)}`)
+    })
     throw error
   }
 }

@@ -113,12 +113,8 @@ test('a person can create a conversation, send, and find it again after a restar
 
     await session.close(second.app)
   } finally {
-    // Cleanup must not decide the verdict. `dispose()` removes a temp userDataDir and on Windows
-    // that intermittently throws EPERM while Electron still holds a handle; a bare await here
-    // would replace a real assertion failure with a cleanup error. Observed live on 2026-09-23,
-    // in the sibling spec that already carried this guard. See agents-reachability.spec.ts.
-    await session.dispose().catch((error: unknown) => {
-      console.error(`[conversations-e2e] cleanup failed (not a test result): ${String(error)}`)
-    })
+    // dispose() waits out a transient Windows lock and reports residue softly, so it never
+    // replaces a body failure and is never silently accepted.
+    await session.dispose()
   }
 })
