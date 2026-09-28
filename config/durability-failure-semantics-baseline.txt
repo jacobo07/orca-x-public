@@ -9,7 +9,10 @@
 #
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green — answer the
 # contract's onFailure instead. An entry whose contract has since answered is reported as stale.
-runtime.e2ee-host-identity
+#
+# 2026-09-28: runtime.e2ee-host-identity answered. Its loader told a lock or permission error it
+# was "damaged" and advised re-pairing, which would have replaced a possibly good key; a read
+# failure is now its own error with its own guidance, and nothing is ever replaced.
 persistence.profile-data-file
 integrations.credential-file
 codex-accounts.managed-credential

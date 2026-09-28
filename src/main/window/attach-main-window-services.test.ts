@@ -138,6 +138,7 @@ type MainWindowStub = {
 type RuntimeStub = {
   attachWindow: MockFn
   setNotifier: MockFn
+  noteWindowFocused: MockFn
   markRendererReloading: MockFn
   markRendererReloadCancelled: MockFn
   markGraphReloadFailed: MockFn
@@ -180,6 +181,7 @@ function createRuntime(): RuntimeStub {
   return {
     attachWindow: vi.fn(),
     setNotifier: vi.fn(),
+    noteWindowFocused: vi.fn(),
     markRendererReloading: vi.fn(),
     markRendererReloadCancelled: vi.fn(),
     markGraphReloadFailed: vi.fn(),

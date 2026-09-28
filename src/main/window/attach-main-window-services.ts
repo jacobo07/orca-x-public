@@ -455,6 +455,10 @@ function registerRuntimeWindowLifecycle(
       send('runtime:browserDriverChanged', { browserPageId, driver })
   }
   runtime.setNotifier(windowNotifier, mainWindow.id)
+  // Why: a new worktree has no owning window yet; exactly one window must take it, and the one the
+  // user last worked in is the only non-arbitrary choice.
+  runtime.noteWindowFocused(mainWindow.id)
+  mainWindow.on('focus', () => runtime.noteWindowFocused(mainWindow.id))
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)

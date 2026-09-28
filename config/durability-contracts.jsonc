@@ -47,11 +47,31 @@
       "writer": "src/main/runtime/e2ee-keypair.ts",
       "tier": "crash-durable",
       "lostIf": "Every paired device at once. The key was published by a rename with no fsync, so a power loss could leave a zero-length file; the loader then caught the parse failure and minted a fresh keypair, which changes the fingerprint. Each paired device holds a shared secret derived from the old public key and a device registry keyed to a host that no longer exists, so pairing fails with nothing to explain it. The loader now refuses a file it cannot use instead of replacing it, and discarding the identity is an explicit act (forgetHostIdentity).",
+      "onFailure": "Three answers, and none replaces the key. A mint whose durable write fails throws the storage error (code intact); no in-memory key is returned, so a failed write cannot become an unpersisted identity, and pairing reports e2ee_key_unavailable with the check-writability guidance. A file that parses as invalid throws E2EEKeypairUnusableError (damaged: re-pair is the explicit recovery). A file that could not be READ — a lock, a permission, an I/O error — throws E2EEKeypairUnreadableError with its code, and the guidance says nothing was replaced; it used to collapse into 'damaged', whose advice to re-pair would have replaced a key that may have been fine. Proven by src/main/runtime/e2ee-keypair.test.ts (injected ENOSPC with firing proof; real EISDIR read fault).",
       "provenBy": ["src/main/runtime/e2ee-keypair.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see the comment in shared/secure-file.ts), so on Windows the barrier proves the file's contents reached disk before the rename, not that the rename itself survives a power loss.",
         "<userData>/orca-devices.json, the paired-device registry keyed to this identity, is still published by the non-durable writeSecureJsonFile and carries no contract of its own. It is downstream of this key rather than the root, and is not fixed here.",
-        "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind."
+        "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind.",
+        "The side-effect-free observer readE2EEPublicKey still answers null for both 'invalid' and 'could not be read'; only the loader, which decides guidance and replacement, keeps them apart."
+      ]
+    },
+    {
+      "id": "mobile.user-drafts",
+      "state": "AsyncStorage keys orca:user-draft:v1:<sha256(surface, host, worktree, subject)> — unsent chat composer text per tab, and recognized dictation that reached no surface (dictation-salvage, per host and worktree)",
+      "writer": "mobile/src/storage/draft-journal.ts",
+      "tier": "atomic-only",
+      "lostIf": "The user's own unsent words. Before this contract they lived only in React state, so the OS killing the app discarded them with no notice, and recognized dictation whose target had gone was dropped outright. A key is replaced whole, so a reader sees the old draft or the new one; the newest edit can be lost inside the 300 ms save debounce. Load keeps 'unreadable' (the corrupt entry is removed and the user told) apart from 'failed' (a storage error removes nothing), and a draft is cleared only after the host confirms the send.",
+      "provenBy": [
+        "mobile/src/storage/draft-journal.test.ts",
+        "mobile/src/session/use-mobile-native-chat-drafts-persistence.test.ts",
+        "mobile/src/dictation/mobile-dictation-transcript-dispatch.test.ts"
+      ],
+      "knownGaps": [
+        "No real process-death run yet: persistence is proven by remounting the hook over the same storage, not by killing the app on an emulator.",
+        "The markdown editor and the file preview editor still hold unsaved edits only in memory (variant-parity drafts.user-invested-input-survives-process-death stays open).",
+        "Salvaged dictation is kept and the user told, but no screen yet lists or re-inserts it.",
+        "Host removal purges drafts outside the per-key mutation queue, so a save in flight at that instant can recreate one entry."
       ]
     },
     {

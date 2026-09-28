@@ -22,7 +22,12 @@ import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
-import { E2EEKeypairUnusableError, loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
+import {
+  E2EEKeypairUnreadableError,
+  E2EEKeypairUnusableError,
+  loadOrCreateE2EEKeypair,
+  type E2EEKeypair
+} from './e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from './rpc/unpaired-device-auth-throttle'
 import {
   MobileSocketWiring,
@@ -130,6 +135,10 @@ const E2EE_KEY_UNAVAILABLE_GUIDANCE =
 // every paired device, so recovery stays an explicit act.
 const E2EE_KEY_UNUSABLE_GUIDANCE =
   'This computer’s E2EE identity file exists but is damaged. Orca will not replace it automatically, because a new identity would unpair every device. Re-pair this computer to create a new identity.'
+// Why a third: a key that could not be READ is not known to be damaged. Re-pairing would replace a
+// key that may be fine, so the advice is to retry, and the identity is explicitly left alone.
+const E2EE_KEY_UNREADABLE_GUIDANCE =
+  'This computer’s E2EE identity file could not be read right now (another program may be holding it, or its permissions changed). Nothing was replaced and your paired devices are unaffected. Try again in a moment.'
 
 type MobileRelayPairingProvider = {
   createPairingRelay(
@@ -1161,7 +1170,9 @@ export class OrcaRuntimeRpcServer {
           'e2ee_key_unavailable',
           error instanceof E2EEKeypairUnusableError
             ? E2EE_KEY_UNUSABLE_GUIDANCE
-            : E2EE_KEY_UNAVAILABLE_GUIDANCE
+            : error instanceof E2EEKeypairUnreadableError
+              ? E2EE_KEY_UNREADABLE_GUIDANCE
+              : E2EE_KEY_UNAVAILABLE_GUIDANCE
         )
       }
     }

@@ -31,8 +31,8 @@ export type DictationDelivery =
   // Nothing was captured when recording started, so there is no subject to
   // deliver to. Distinct from a delivery that reached a surface and failed:
   // this one never had a destination, and the caller must say so rather than
-  // choosing one now.
-  | { readonly kind: 'refused'; readonly reason: 'no-target-captured' }
+  // choosing one now. The text rides along so it can be salvaged, never re-aimed.
+  | { readonly kind: 'refused'; readonly reason: 'no-target-captured'; readonly text: string }
 
 export function captureDictationTarget(surfaces: {
   readonly nativeChatVisible: boolean
@@ -63,7 +63,7 @@ export function resolveDictationDelivery(
   target: DictationTarget | null
 ): DictationDelivery {
   if (!target) {
-    return { kind: 'refused', reason: 'no-target-captured' }
+    return { kind: 'refused', reason: 'no-target-captured', text }
   }
   if (target.surface === 'native-chat') {
     return { kind: 'native-chat', draftKey: target.draftKey, text }

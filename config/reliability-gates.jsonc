@@ -12091,36 +12091,86 @@
       "id": "terminal-observability.restore-convergence-selfcheck",
       "title": "Post-restore convergence self-check flags renderer/mirror divergence as an anomaly",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-rendering",
       "layer": "renderer-observability",
       "surfaces": ["hidden-output restore", "snapshot replay", "anomaly breadcrumbs", "telemetry"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap only; the anomaly-breadcrumb machinery exists in this branch but no convergence probe is implemented.",
+      "coveredPlatforms": ["windows", "linux"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Windows: unit level (comparator and scheduler). Linux: a real Electron app under xvfb on the local provider, where the renderer's visibility report drives the probe end to end. The probe compares main's headless mirror with the renderer's serialized buffer, so it judges the DOM renderer as well as WebGL. Daemon, ssh and remote-runtime panes are not exercised: where main holds no headless mirror the probe answers mirror-unavailable rather than guess.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
       ],
       "invariant": "After every hidden-to-visible reveal settles — whether or not a restore was triggered — the renderer buffer must converge with the current main-mirror state; divergence is recorded as a compact, content-free terminal_lifecycle_anomaly breadcrumb and counted in telemetry instead of failing silently. Restore-scoped checking is insufficient: #7173's frozen-output variant restores faithfully and then silently drops later hidden output, so it never triggers another restore.",
       "oracle": "Deterministic tests inject forced divergence in both shapes — stale bytes written after a faithful restore, and a frozen pane whose reveal triggers no restore — and assert exactly one deduped breadcrumb with row-hash evidence and no terminal content; the production probe is a bounded row-hash sample comparison against current mirror rows that runs once per reveal with no polling and a strict time budget.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-reveal-convergence.test.ts src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/runtime/terminal-reveal-convergence.test.ts",
+        "src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+        "tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/terminal-reveal-convergence.test.ts",
+          "assertions": [
+            "flags output that reached the mirror after a faithful restore but never reached the pane",
+            "flags a frozen pane whose reveal triggered no restore",
+            "carries no terminal text, only row indices and digests",
+            "keeps a failed read apart from an empty screen"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+          "assertions": [
+            "never polls a pane that stays visible",
+            "reports the same divergence once across reveals, and a new one again",
+            "stays silent on a converged pane (control)"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts",
+          "assertions": [
+            "a revealed pane that diverges from the mirror is recorded once, without its content"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-28",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-reveal-convergence.test.ts src/main/ipc/pty-reveal-convergence-scheduler.test.ts",
+          "result": "passed",
+          "durationSeconds": 15,
+          "summary": "13/13 (comparator 7, scheduler 6), with the two existing suites that drive pty:setRendererPtyVisible still green."
+        },
+        {
+          "date": "2026-09-28",
+          "runner": "manual",
+          "platform": "linux",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-convergence-selfcheck.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 33,
+          "summary": "GEX44 under xvfb at 9225842ce: a healthy reveal recorded no anomaly, a row planted only in the renderer's xterm produced exactly one content-free anomaly, and a second reveal of the same divergence was not reported again."
+        }
+      ],
       "runtimeBudget": {
-        "p95Seconds": 30,
-        "scope": "renderer observability unit gate"
+        "p95Seconds": 60,
+        "scope": "two main unit files plus one Electron spec"
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Probe and tests not yet implemented."
+        "evidence": "One run of each; no CI executor since 2026-09-13."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs an intentionally divergent restore fixture proving the probe fires, dedupes, and stays silent on faithful restores."
+        "status": "complete",
+        "evidence": "The same E2E spec at the parent commit 6eb9ac233, which has no probe, failed at the one-anomaly assertion after its healthy-reveal control passed (GEX44, xvfb), and passed at 9225842ce."
       },
       "performanceBudget": {
         "required": true,
@@ -12132,8 +12182,9 @@
         "Watch anomaly telemetry after each terminal release as the in-production regression signal."
       ],
       "knownGaps": [
-        "No manifest command yet.",
-        "Probe not implemented; #7133-class and #7173-class corruption is currently silent in production.",
+        "Recorded as a reveal-convergence-anomaly breadcrumb in main's delivery ring (carried by the freeze report), not yet counted in telemetry and not named terminal_lifecycle_anomaly as the invariant says.",
+        "Zero false positives is shown for one healthy reveal only, not across the existing restore test corpus; that sweep is the promotion criterion still owed.",
+        "Daemon, ssh and remote-runtime panes answer mirror-unavailable where main keeps no headless mirror, so they are not judged.",
         "Pixel-level divergence is out of scope for this probe (see terminal-render.pixel-refresh-repair).",
         "Renderer-vs-mirror comparison cannot see corruption upstream of the mirror itself (#7192's stale-width mirror); mirror-vs-PTY truth is owned by terminal-geometry.visible-convergence."
       ],
@@ -12408,6 +12459,93 @@
         "Buffer-clean, pixels-stale variants are otherwise invisible to every buffer oracle in the manifest."
       ],
       "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
+    },
+    {
+      "id": "terminal-render.visible-pane-painted-liveness",
+      "title": "A visible pane whose model advances but whose canvas stops painting is flagged and recovered",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "renderer-unit",
+      "surfaces": ["WebGL rendering", "render loop", "visible pane liveness", "terminal recovery"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": [],
+      "coverageNotes": "Windows coverage is unit-level only: the layered liveness judge (received, parsed, presented, painted) on the merged stability branch. The composited-pixel recovery spec exists (tests/e2e/terminal-visible-pane-paint-recovery.spec.ts, @headful) but has not been run on this branch, so no real-app platform or provider is claimed. Distinct from terminal-render.pixel-refresh-repair, whose buffer-vs-pixels staleness invariant this gate does not test.",
+      "motivatingLinks": ["https://github.com/jacobo07/orca-x/pull/5"],
+      "invariant": "Progress at one layer is never taken as progress at the next: when a visible pane's model advances and its render loop keeps running but the painted-pixel signature stops changing, the pane is judged output-not-painted and recovered; a pane that is idle, off screen, or whose pixels cannot be read is never judged.",
+      "oracle": "Drive the judge with a fake terminal whose model sequence advances while its paint signature is frozen, and require an output-not-painted verdict after the recovery streak; controls: a pane that paints every frame, a null signature, and a quiet tick are never flagged, and a stopped render loop outranks paint.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts",
+        "src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts",
+        "src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts",
+          "assertions": [
+            "flags a pane whose render loop runs while its canvas paints nothing",
+            "never flags a pane that paints every frame (control)",
+            "never judges pixels it is not entitled to judge",
+            "still flags the render loop stopping, which outranks paint"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts",
+          "assertions": [
+            "flags a pane that keeps parsing while its canvas stops presenting",
+            "never flags a pane that parses and presents (negative control)"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts",
+          "assertions": [
+            "flags bytes received but never parsed",
+            "treats unknown model progress as unknown, never as a stall"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-28",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/visible-pane-painted-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts",
+          "result": "passed",
+          "durationSeconds": 11,
+          "summary": "25/25 on orca-x/stability-closure (origin/main 14dfd2d56 merged with the painted-liveness chain 0d21c867b)."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "three renderer unit files"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One local run; no CI executor has run since 2026-09-13, so no repeated history exists."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Replacing the paintStalled branch of the verdict with false turned exactly 'flags a pane whose render loop runs while its canvas paints nothing' red (24 green), byte-exact restore. The composited-pixel E2E red branch is not yet run on this branch."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The paint signature is one downscaled sample taken inside onRender and judged on the existing watchdog tick; no new timer or readback surface is added by this gate."
+      },
+      "promotionCriteria": [
+        "Run tests/e2e/terminal-visible-pane-paint-recovery.spec.ts (@headful) on Linux under xvfb and on Windows, with its red branch, and record both.",
+        "Accumulate CI evidence once a runner is assigned again."
+      ],
+      "knownGaps": [
+        "No real-app evidence on a WebGL-rendered pane yet. Linux under xvfb (GEX44, 2026-09-28) renders through the DOM renderer (terminalWebglAutoDecision linux-webgl2-unavailable): the recovery spec failed identically at the fix 48818fddc and before it 5d7c65961, i.e. INCONCLUSIVE, and now skips with a named reason instead.",
+        "Product gap: a pane without WebGL2 renders through the DOM and has no paint signature, so a paint stall there is undetectable by design (the judge abstains rather than guess). Hosts without a GPU and many VMs take this path.",
+        "No CI evidence: runners unassigned since 2026-09-13."
+      ],
+      "demotionRule": "Demote to protection none if the painted-liveness test stops failing with the paint verdict removed, or if the judge starts flagging idle or off-screen panes."
     },
     {
       "id": "pty-delivery.renderer-lifecycle-accounting-reset",

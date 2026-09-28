@@ -60,6 +60,8 @@ export function useMobileNativeChatMessageSend(args: {
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
+  /** Retire the durable draft copy for an accepted send that is not a chat turn. */
+  settleSentDraft?: (origin: MobileNativeChatSendOrigin, text: string) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
@@ -79,6 +81,7 @@ export function useMobileNativeChatMessageSend(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
+    settleSentDraft,
     holdUnconfirmedSend,
     onSendError
   } = args
@@ -213,10 +216,15 @@ export function useMobileNativeChatMessageSend(args: {
         // `images` are local preview URIs for the optimistic echo only — the actual
         // image bytes already rode along as a bracketed paste before this text send.
         acceptSend(origin, text, images)
-      } else if (recordControlSend) {
-        // The session-option catalog can recognize controls omitted from the
-        // autocomplete catalog (for example Claude `/model` and `/fast`).
-        recordCommand(text.trim())
+      } else {
+        if (syncComposer) {
+          settleSentDraft?.(origin, text)
+        }
+        if (recordControlSend) {
+          // The session-option catalog can recognize controls omitted from the
+          // autocomplete catalog (for example Claude `/model` and `/fast`).
+          recordCommand(text.trim())
+        }
       }
       return 'accepted'
     },
@@ -233,7 +241,8 @@ export function useMobileNativeChatMessageSend(args: {
       holdUnconfirmedSend,
       onSendError,
       readSeededLaunchDraftSeed,
-      restoreRejectedDraft
+      restoreRejectedDraft,
+      settleSentDraft
     ]
   )
 

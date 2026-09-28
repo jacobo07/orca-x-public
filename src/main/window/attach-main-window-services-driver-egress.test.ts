@@ -84,6 +84,7 @@ function attachAndCaptureNotifier(send: ReturnType<typeof vi.fn>): DriverNotifie
   const runtime = {
     attachWindow: vi.fn(),
     setNotifier,
+    noteWindowFocused: vi.fn(),
     markRendererReloading: vi.fn(),
     markRendererReloadCancelled: vi.fn(),
     markGraphReloadFailed: vi.fn(),

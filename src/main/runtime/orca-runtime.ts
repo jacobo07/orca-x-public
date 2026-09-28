@@ -488,7 +488,17 @@ import {
   type RuntimeGraphEpochToken,
   type RuntimeGraphOwner
 } from './runtime-graph-owners'
-import { createRuntimeNotifierRouter } from './runtime-notifier-router'
+import {
+  createRuntimeNotifierRouter,
+  resolveNotifierTargets,
+  RUNTIME_NOTIFIER_AUTHORITY,
+  type RuntimeNotifierMethod
+} from './runtime-notifier-router'
+import {
+  compareRevealConvergence,
+  REVEAL_CONVERGENCE_RECHECK_MS,
+  type RevealConvergenceVerdict
+} from './terminal-reveal-convergence'
 import {
   LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
@@ -3023,6 +3033,7 @@ export class OrcaRuntimeService {
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
   private ptyController: RuntimePtyController | null = null
   private readonly notifiersByWindowId = new Map<number, RuntimeNotifier>()
+  private lastFocusedWindowId: number | null = null
   /** The router over `notifiersByWindowId`, rebuilt on every change; null while no window is bound. */
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
@@ -6041,10 +6052,12 @@ export class OrcaRuntimeService {
         ? null
         : createRuntimeNotifierRouter(
             {
-              forWorktree: (worktreeId) =>
-                this.notifiersFor(this.graphOwners.ownerOfWorktree(worktreeId)),
-              forTab: (tabId) => this.notifiersFor(this.graphOwners.ownerOfTab(tabId)),
-              forPty: (ptyId) => this.notifiersFor(this.graphOwnerForPty(ptyId)),
+              forWorktree: (worktreeId, method) =>
+                this.notifiersFor(this.graphOwners.ownerOfWorktree(worktreeId), method, worktreeId),
+              forTab: (tabId, method) =>
+                this.notifiersFor(this.graphOwners.ownerOfTab(tabId), method, tabId),
+              forPty: (ptyId, method) =>
+                this.notifiersFor(this.graphOwnerForPty(ptyId), method, ptyId),
               all: () => [...this.notifiersByWindowId.values()]
             },
             () => [...this.notifiersByWindowId.values()]
@@ -6057,11 +6070,32 @@ export class OrcaRuntimeService {
     }
   }
 
-  private notifiersFor(owner: RuntimeGraphOwner | null): RuntimeNotifier[] {
-    const owned = owner ? this.notifiersByWindowId.get(owner.windowId) : undefined
-    // Why every window when the target cannot be placed: it used to reach the only notifier there
-    // was, and dropping the command silently would be a worse answer than delivering it widely.
-    return owned ? [owned] : [...this.notifiersByWindowId.values()]
+  /** The window a new placement lands in when nothing owns the target yet. */
+  noteWindowFocused(windowId: number): void {
+    this.lastFocusedWindowId = windowId
+  }
+
+  private notifiersFor(
+    owner: RuntimeGraphOwner | null,
+    method: RuntimeNotifierMethod,
+    targetId: string
+  ): RuntimeNotifier[] {
+    const resolution = resolveNotifierTargets({
+      owned: owner ? this.notifiersByWindowId.get(owner.windowId) : undefined,
+      registered: [...this.notifiersByWindowId.values()],
+      authority: RUNTIME_NOTIFIER_AUTHORITY[method],
+      placement:
+        this.lastFocusedWindowId === null
+          ? undefined
+          : this.notifiersByWindowId.get(this.lastFocusedWindowId)
+    })
+    if (resolution.kind === 'refused') {
+      // Ids only: the refusal is what a user would otherwise see as "nothing happened".
+      console.warn(
+        `[runtime-notifier] refused ${method} for ${targetId}: no window owns it among ${this.notifiersByWindowId.size}`
+      )
+    }
+    return resolution.notifiers
   }
 
   private graphOwnerForPty(ptyId: string): RuntimeGraphOwner | null {
@@ -13384,6 +13418,57 @@ export class OrcaRuntimeService {
       return this.parseVisibleSnapshotLines(snapshot)
     } catch {
       return []
+    }
+  }
+
+  /**
+   * One bounded check that a pane which just became visible shows what the main mirror holds.
+   *
+   * Why a second read on divergence: a renderer still parsing lagged bytes differs once and then
+   * catches up, while output it dropped stays different — only the second is an anomaly.
+   */
+  async probeRevealConvergence(ptyId: string): Promise<RevealConvergenceVerdict> {
+    const first = await this.sampleRevealConvergence(ptyId)
+    if (first.verdict !== 'diverged') {
+      return first
+    }
+    await new Promise((resolve) => setTimeout(resolve, REVEAL_CONVERGENCE_RECHECK_MS))
+    return this.sampleRevealConvergence(ptyId)
+  }
+
+  private async sampleRevealConvergence(ptyId: string): Promise<RevealConvergenceVerdict> {
+    const before = await this.readHeadlessVisibleTerminalState(ptyId)
+    const rendererLines = await this.readRendererConvergenceLines(ptyId)
+    const after = await this.readHeadlessVisibleTerminalState(ptyId)
+    return compareRevealConvergence({
+      mirror: after ? { lines: after.lines } : null,
+      renderer: rendererLines ? { lines: rendererLines } : null,
+      mirrorSequenceBefore: before?.sequence ?? -1,
+      mirrorSequenceAfter: after?.sequence ?? -1
+    })
+  }
+
+  /** The renderer's visible rows, or null when they could not be read — never an empty stand-in. */
+  private async readRendererConvergenceLines(ptyId: string): Promise<string[] | null> {
+    const controller = this.ptyController
+    if (!controller?.serializeBuffer) {
+      return null
+    }
+    if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
+      return null
+    }
+    try {
+      const snapshot = await withTimeout(
+        controller.serializeBuffer(ptyId, { scrollbackRows: 0, altScreenForcesZeroRows: false }),
+        VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        null
+      )
+      if (!snapshot) {
+        return null
+      }
+      return snapshot.data.length === 0 ? [] : await this.parseVisibleSnapshotLines(snapshot)
+    } catch {
+      return null
     }
   }
 

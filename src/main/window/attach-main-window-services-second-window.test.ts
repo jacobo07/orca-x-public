@@ -181,6 +181,7 @@ function createRuntime(): Record<string, MockFn> {
   return {
     attachWindow: vi.fn(),
     setNotifier: vi.fn(),
+    noteWindowFocused: vi.fn(),
     markRendererReloading: vi.fn(),
     markRendererReloadCancelled: vi.fn(),
     markGraphReloadFailed: vi.fn(),

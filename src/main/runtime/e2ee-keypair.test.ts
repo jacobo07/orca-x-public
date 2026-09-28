@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,11 +11,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 const syscalls: string[] = []
+let failNextWriteWith: string | null = null
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const record = <A extends unknown[], R>(name: string, fn: (...args: A) => R) => {
     return (...args: A): R => {
+      if (name === 'writeFileSync' && failNextWriteWith) {
+        const code = failNextWriteWith
+        failNextWriteWith = null
+        syscalls.push(`writeFileSync:failed:${code}`)
+        throw Object.assign(new Error(`injected ${code}`), { code })
+      }
       syscalls.push(name)
       return fn(...args)
     }
@@ -29,8 +36,13 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 
-const { loadOrCreateE2EEKeypair, readE2EEPublicKey, forgetHostIdentity, E2EEKeypairUnusableError } =
-  await import('./e2ee-keypair')
+const {
+  loadOrCreateE2EEKeypair,
+  readE2EEPublicKey,
+  forgetHostIdentity,
+  E2EEKeypairUnusableError,
+  E2EEKeypairUnreadableError
+} = await import('./e2ee-keypair')
 
 const KEYPAIR_FILENAME = 'orca-e2ee-keypair.json'
 
@@ -63,6 +75,17 @@ describe('the mint is durable', () => {
     ).toBeGreaterThanOrEqual(0)
     expect(renameAt).toBeGreaterThanOrEqual(0)
     expect(fsyncAt).toBeLessThan(renameAt)
+  })
+
+  it('a mint whose write fails throws the storage error and leaves no identity behind', () => {
+    // Arrange: the disk is full at the moment the new key is staged.
+    failNextWriteWith = 'ENOSPC'
+
+    // Act / Assert: the caller is told, and no in-memory key outlives the failed write.
+    expect(() => loadOrCreateE2EEKeypair(dir)).toThrow(expect.objectContaining({ code: 'ENOSPC' }))
+    expect(syscalls, 'the injected fault never fired').toContain('writeFileSync:failed:ENOSPC')
+    expect(syscalls).not.toContain('renameSync')
+    expect(readE2EEPublicKey(dir), 'a key was published despite the failed write').toBeUndefined()
   })
 })
 
@@ -104,6 +127,27 @@ describe('an existing key is never silently replaced', () => {
 
     // Assert: null means "present and unusable", undefined would mean "no key here".
     expect(observed).toBeNull()
+  })
+})
+
+describe('a key that could not be read is not a damaged key', () => {
+  it('reports a read failure with its code, and replaces nothing', () => {
+    // Arrange: a real read fault — the key path is a directory, so readFileSync fails with EISDIR.
+    mkdirSync(keyFile())
+
+    // Act
+    let thrown: unknown
+    try {
+      loadOrCreateE2EEKeypair(dir)
+    } catch (error) {
+      thrown = error
+    }
+
+    // Assert: the fault fired, it was named as unreadable, and it was never called damage.
+    expect(thrown).toBeInstanceOf(E2EEKeypairUnreadableError)
+    expect(thrown).not.toBeInstanceOf(E2EEKeypairUnusableError)
+    expect((thrown as { code: string }).code).toBe('EISDIR')
+    expect(statSync(keyFile()).isDirectory(), 'the unreadable key path was replaced').toBe(true)
   })
 })
 

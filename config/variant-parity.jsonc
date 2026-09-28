@@ -66,7 +66,13 @@
       "unknown"
     ],
     "evidenceRequiredFor": ["shared-already", "ported", "equivalent", "measured-open"],
-    "reasonRequiredFor": ["desktop-only", "not-applicable", "superseded", "blocked", "measured-open"],
+    "reasonRequiredFor": [
+      "desktop-only",
+      "not-applicable",
+      "superseded",
+      "blocked",
+      "measured-open"
+    ],
     "invariantRequiredFor": ["equivalent"],
     // The two kinds of debt. Summed for the unresolved total the gate prints on every run.
     "unresolvedDispositions": ["unknown", "measured-open"],
@@ -219,14 +225,13 @@
     {
       "id": "runtime.command-acts-on-the-window-that-owns-the-target",
       "title": "A remote command reaches the workspace it named, not a representative one",
-      "disposition": "measured-open",
-      "severity": "P1",
-      "severityReason": "It needs two or more windows AND a target no window has placed. Past that point the chosen window still has to find the tab at all, which bounds the blast radius -- and that bound is itself unmeasured, so this severity is the weakest of the four and the first to revisit.",
+      "disposition": "shared-already",
       "evidence": [
-        "src/main/runtime/runtime-notifier-router.ts",
-        "src/main/runtime/runtime-graph-owners.ts"
+        "src/main/runtime/runtime-notifier-router.test.ts",
+        "src/main/runtime/graph-window-ownership.test.ts",
+        "tests/e2e/two-window-unplaced-worktree-activation.spec.ts"
       ],
-      "reason": "Measured 2026-09-10, and the answer is a disagreement between two adjacent layers rather than a missing check. runtime-graph-owners resolves an unplaced worktree or tab to the SOLE window when there is exactly one, and to null when there are several -- its comment says refusing to guess is the safe direction, and it is right. orca-runtime notifiersFor then turns that null into every window, defended by its own comment on the grounds that dropping a command silently would be worse than delivering it widely. Both are reasonable; composed, the second inverts the first. For a notification the wide delivery is likely still correct. What makes this open is that four entries past that point do not notify, they ACT, and each takes the first window off that fallback list: revealTerminalSession, readMobileMarkdownTab, saveMobileMarkdownTab and closeTerminalTab. So with two or more windows and a target no window has placed, a mobile-initiated markdown save or terminal-tab close is performed by whichever window happens to be enumerated first. P1, not P0: it needs a second window plus an unplaced target, and the blast radius past that point is bounded by whether the chosen window can find the tab at all -- which is exactly what nobody has measured. What closes it: separate the no-op branch from the broadcast branch, so a verb that acts refuses an unplaceable target instead of inheriting a fallback designed for verbs that inform.",
+      "reason": "CLOSED 2026-09-28 on the host, so every client inherits it: each notifier method now declares an authority (global, notify, read, act, place) in an exhaustive table, and an unowned target with two or more windows is broadcast only for global/notify, placed in exactly one window (last focused) for place, and refused for read/act. The blast radius the entry below could not bound was measured on the way: 13 methods besides these four broadcast to every window, and a real two-window Electron run showed a CLI-created worktree with activate:true reaching BOTH windows before the fix (fails at 626a20148, passes at 48818fddc, Linux xvfb). History of the finding follows. Measured 2026-09-10, and the answer is a disagreement between two adjacent layers rather than a missing check. runtime-graph-owners resolves an unplaced worktree or tab to the SOLE window when there is exactly one, and to null when there are several -- its comment says refusing to guess is the safe direction, and it is right. orca-runtime notifiersFor then turns that null into every window, defended by its own comment on the grounds that dropping a command silently would be worse than delivering it widely. Both are reasonable; composed, the second inverts the first. For a notification the wide delivery is likely still correct. What makes this open is that four entries past that point do not notify, they ACT, and each takes the first window off that fallback list: revealTerminalSession, readMobileMarkdownTab, saveMobileMarkdownTab and closeTerminalTab. So with two or more windows and a target no window has placed, a mobile-initiated markdown save or terminal-tab close is performed by whichever window happens to be enumerated first. P1, not P0: it needs a second window plus an unplaced target, and the blast radius past that point is bounded by whether the chosen window can find the tab at all -- which is exactly what nobody has measured. What closes it: separate the no-op branch from the broadcast branch, so a verb that acts refuses an unplaceable target instead of inheriting a fallback designed for verbs that inform.",
       "notes": "The general shape is the one in scoped-side-effect-authority: composing two safety inputs requires writing down each gate's no-op branch, because a gate that only fires in one state switches OFF rather than tightening when the state changes. Here the graph-owner layer's safe answer is null, and null is precisely the value the next layer reads as 'everyone'."
     },
     {
