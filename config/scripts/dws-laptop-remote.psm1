@@ -196,7 +196,12 @@ function Get-DwsArtifact {
     Write-Output "PREVIOUS_OUT_MOVED_TO=$movedAside"
   }
   New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-  & tar.exe -xzf $localArtifact -C $outDir
+  # Why the full path, not a bare `tar.exe`: MSYS2's GNU tar (C:\msys64\usr\bin\tar.exe) is earlier
+  # on this host's PATH than Windows' own bsdtar, and GNU tar's remote-archive heuristic treats a
+  # Windows path's drive letter + colon as a "host:path" spec -- "cannot connect to C: name
+  # resolution failed" -- rather than a local file. The Windows-native bsdtar at this fixed path
+  # (present since Windows 10 1803) has no such heuristic.
+  & 'C:\Windows\System32\tar.exe' -xzf $localArtifact -C $outDir
   if ($LASTEXITCODE -ne 0) { throw 'Get-DwsArtifact: tar extraction failed' }
   Write-Output "ARTIFACT_EXTRACTED=$outDir"
 }
