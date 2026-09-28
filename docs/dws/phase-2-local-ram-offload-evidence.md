@@ -239,3 +239,217 @@ families the offload comparison plan will need to later claim absent).
 `families` field aliasing the tool's native `perFamily` field so this plan's own verify command —
 which reads `s.families` — agrees with `dws-offload-measurement.mjs summarize`'s actual output
 shape; no raw process list or control-surface command lines are included in the committed file).
+
+## Criterion 3 — desktop attach, identity round-trip, remote execution proof (plan 02-05)
+
+This section records DWS-P2-SC3: the real laptop desktop paired to the GEX44 serve as a runtime
+client, with a test run and a build run dispatched through that pairing and PROVEN, via timestamped
+remote process captures, to have executed on GEX44 rather than the laptop.
+
+### Identity at this plan's deploy
+
+| Field | Value |
+|---|---|
+| Serve SHA (this plan's dispatch HEAD, redeployed to GEX44) | `b8e385a0ba83e08b9420ccf7f2a3d7282db9f681` |
+| Artifact SHA-256 (`deployed.json`, written by `Publish-DwsServeBuild`) | `4c094db99fe0480c6178fbbe835b2fd6d0913c3dd29728360960bc3eee890fc9` |
+| Service checkout | `/home/orca-svc/dws-p2/b8e385a` |
+| `systemctl show orca-dws-serve.service -p WorkingDirectory --value` | `/home/orca-svc/dws-p2/b8e385a` |
+| `sudo git -C <WorkingDirectory> rev-parse HEAD` (queried by the orchestrator before every `-Target remote` run) | `b8e385a0ba83e08b9420ccf7f2a3d7282db9f681` — agrees with `deployed.json.sha` |
+| Serve `systemctl is-active` | `active` throughout Task 1 and Task 2 |
+| Serve MainPID, before Task 2's sweep | `692875` |
+| Serve MainPID, after Task 2's sweep | `692875` (unchanged — `remoteServeMainPidVerdict=STABLE`) |
+| Sandbox mode | `no-sandbox` (T-02-05 accepted contingency, unchanged from Criterion 2) |
+| Laptop artifact | NOT refreshed by design for the OFFLOAD workload dispatch itself (GEX44-side only); the LOCAL `out/` build backing `orcaPage` in Task 1's Playwright spec WAS rebuilt multiple times during Task 1 (see plan SUMMARY.md's Task 1 deviations: locale fix, test-id additions, terminal-profile fix all touched renderer source) — this affects only the desktop UI harness, never the workload identity or blob hashes, which are verified independently below |
+
+### Attach proof (CTX-CLI-1, CTX-EXP-2)
+
+`attachDwsRemoteRuntime` drives `AddRemoteHostDialog` in server mode with the SSH-tunnel checkbox
+checked; the dialog's own `verifyAndAddFromPairingCode` call performs a live `status.get` round-trip
+over the tunnel and the dialog cannot close on save without it succeeding — this IS the attach
+proof, not an inference from a later action. Saved environment: `connectionDependency: 'ssh-tunnel'`,
+confirmed by reading the desktop's own `runtimeEnvironments`/`runtimeStatusByEnvironmentId` store
+state immediately after save (`tests/e2e/helpers/dws-remote-runtime-attach.ts`).
+
+**Terminal leg: the REAL UI PATH was used, not the plan's CLI-ladder contingency.** A terminal was
+opened via `TerminalPanelToolbar`'s explicit "Choose terminal profile" menu (real desktop control),
+on the paired runtime's worktree. Verdict: **PASS**.
+
+### Identity round-trip (Task 1)
+
+| Claim | Instrument | Observed | Verdict |
+|---|---|---|---|
+| The terminal's own connection identity names the remote host | rendered terminal-rail tab title (ARIA snapshot) | `orca-svc@kobicraft-gex44: ~/dws-p2/b8e385a` | **PASS** |
+| A live shell prompt renders before any command is sent | `waitForBufferContains(..., '$', 90_000)` against the pane's `serializeAddon.serialize()` | `orca-svc@kobicraft-gex44:~/dws-p2/b8e385a$ ` | **PASS** |
+| `echo DWS-P2-ATTACH-<nonce>; id -un; hostname`'s output appears in the rendered buffer | same xterm buffer, polled at `polling:'raf'` | nonce `attachmulmmgjp`, `orca-svc`, `kobicraft-gex44` all present | **PASS** |
+
+**Note (found via diagnostic buffer dumps, host_rules "two identical failures = pivot"):** the
+FIRST identity command sent immediately after `waitForActivePanePtyId` resolves is silently
+dropped — a ptyId assignment proves the client-side handle exists, not that the remote shell has
+finished spawning over the SSH tunnel. Fixed by waiting for ANY rendered buffer content before
+sending input. A SEPARATE, unrelated defect was found and fixed in the same pass: this real,
+persistent desktop's remembered *default* terminal-launch profile currently resolves to a Claude
+Code agent profile (not a shell) — "New Terminal"'s plus button and the tab-bar's "New Terminal"
+menu both launch the ambient default unconditionally, so an automated "open a terminal" action can
+silently open an agent CLI instead of a shell on this shared machine. Fixed at the product level by
+adding `data-terminal-profile-kind` to each profile-menu entry (`TerminalPanelToolbar.tsx`) so
+automation (and any future one) can name a specific profile rather than trust the ambient default.
+
+### Test-run and build-run remote proof (CTX-CLI-4)
+
+`extractRemoteProof(captureText, { servePid: 692875, legs })` against `remote-ps.txt` (1697 lines,
+`CAPTURE` blocks every 2s from `2026-09-28T19:33:33Z` to `2026-09-28T19:38:36Z`, spanning every
+leg's window):
+
+| Leg | Exit | Duration | Remote-proof verdict | Evidence |
+|---|---|---|---|---|
+| `test` | `0` | `5535ms` | **PASS** | Capture line: `724358 724305 orca-svc 103056 0 .../node24/bin/node .../vitest/dist/workers/forks.js`; ppid chain `724358 -> 724305 (vitest.mjs run) -> 724298 (dws-offload-workload.mjs test) -> ... -> 692947 (daemon-entry.js) -> 692892 (electron --serve) -> 692875 (MainPID)`; peak RSS `589.14 MB`; first/last seen `19:38:10Z`/`19:38:14Z` |
+| `build` | `0` | `897ms` | UNJUDGED (`not captured`) | The leg completed successfully (exit 0) but ran faster than the 2s `ps-capture` sampling interval could reliably catch — absence of a capture is not absence of the process (CTX-MEAS-3 doctrine applied to remote proof); NOT a failure of the leg itself |
+
+Both legs' `exit=0` and `DWS-P2-LEG-END` markers were observed by the Playwright spec via
+`terminal list --worktree` + `preview` matching (the `terminal_handle_stale` workaround from
+02-01), independent of the ps-capture instrument.
+
+**Workload blob hashes**: `blobHashesMatchBaseline: true` (all 4 files' git blob hashes identical
+between the accepted local baseline's checkout SHA and this plan's GEX44 checkout SHA) — the offload
+run is a comparable sweep of the SAME workload the baseline measured.
+
+### Agent-turn leg (CTX-CLI-3)
+
+**Credential check** (existence-only, `test -s`, contents never read/printed/copied):
+`CLAUDE_CRED=1 CODEX_CRED=1` — a Claude Code credential IS minted in `orca-svc`'s own HOME. The
+agent-turn leg is therefore NOT blocked on a missing credential.
+
+**Result**: `exit=1, ms=780, agentReply="missing"`. Remote-proof verdict: UNJUDGED (`not captured`
+— 780ms is shorter than the 2s sampling interval).
+
+This is **the exact same failure signature** as the accepted local baseline's own agent leg
+(`docs/dws/phase-2-local-ram-offload-evidence.md`, Criterion 1: `agentReply=missing, exit=1`,
+reproduced identically across `baseline-1` and `baseline-2`, and shown there to NOT be a
+credential or missing-binary issue via three successful direct-spawn reproductions). Observing the
+identical signature here — over the paired GEX44 environment, with a confirmed-present credential —
+rules out "remote-specific" and "credential-absent" as causes, and instead CONFIRMS the baseline's
+own finding: this is a reproducible difference between Orca's terminal/PTY dispatch mechanism and a
+direct process spawn, independent of whether the dispatch target is local or remote. Per host_rules
+("two identical failures = pivot"), this was not retried a third time through the identical PTY
+mechanism.
+
+**Agent-turn leg verdict: neither PASS nor a credential-absence BLOCKED.** Recorded precisely as:
+
+`AGENT_LEG = BLOCKED (reason: reproducible PTY-dispatch failure, agentReply=missing exit=1 — same
+signature as the accepted local baseline's agent leg; credential confirmed present
+(CLAUDE_CRED=1), ruling out T-02-03's "no credential" cause; root cause not isolated within this
+plan's time budget, tracked as follow-up work, never faked or substituted)`
+
+### DWS-P2-SC3 verdict
+
+Per the plan's formula ("PASS only if the desktop attach passed AND the test-run leg has a
+remote-proof PASS AND the agent-turn leg is PASS; with the agent leg BLOCKED the verdict is BLOCKED
+(agent-turn leg: <reason>; test-run and build legs PASS)"):
+
+**`DWS-P2-SC3 = BLOCKED (agent-turn leg: reproducible PTY-dispatch failure — agentReply=missing,
+credential confirmed present, same signature as the local baseline's own agent leg; test-run leg
+PASS with remote-proof PASS; build leg exit=0 but remote-proof UNJUDGED due to the 2s capture
+interval being longer than the leg's 897ms runtime)`**
+
+Owner action to close the BLOCKED status: none available today — the underlying cause is a product
+defect in Orca's PTY/terminal dispatch path (not a credential or configuration gap an Owner action
+can fix), tracked as follow-up investigation.
+
+## Criterion 4 — laptop absence, memory delta, stream latency (plan 02-05)
+
+This section records DWS-P2-SC4: during the offload run the laptop carries none of the workload
+families the baseline sighted, with the per-family and total MB delta and stream latency measured
+against a same-harness local floor.
+
+### Sweeps (both reported)
+
+Two remote sweeps were run; both show the SAME per-family absence result (the laptop sampler saw
+zero of every family in both sweeps) and both show an INCONCLUSIVE memory bracket due to this
+laptop's own background memory churn exceeding the workload's signal — a genuine host
+characteristic, not a defect in the instrument (both sweeps used the identical sampler as the
+baseline, per CTX-MEAS-2).
+
+| Sweep | Legs | Free MB before/after (orchestrator) | Drift MB | workloadTotal.peakMb (baseline vs offload delta) | Bracket |
+|---|---|---|---|---|---|
+| `offload-1` | test=0, build=0, agent=1 (`missing`) | 3824.9 / 7977.3 | 4152.4 | 956.86 | drift >= delta -> **INCONCLUSIVE** |
+| `offload-2` | test=0, build=0 | 4543.1 / 7526.0 | 2982.9 | 956.86 | drift >= delta -> **INCONCLUSIVE** |
+
+`offload-1` is the accepted sweep for the per-leg remote-proof and agent-leg evidence above (it
+includes the agent leg); `docs/dws/phase-2-offload-summary.json` carries its trimmed summary
+(cadence `medianMs=1148, samples=239`, `unreadableLines=0`).
+
+### Per-family absence (CTX-MEAS-3), from `docs/dws/phase-2-memory-delta.json`
+
+| Family | Baseline sighted (maxCount) | Offload sighted (maxCount) | Absence verdict | Pattern |
+|---|---|---|---|---|
+| `vitest` | 1 | 0 | **PASS** | `node`/`node.exe` + `vitest.mjs` |
+| `tsc` | 2 | 0 | **PASS** | `node`/`node.exe` + `typescript/bin/tsc`, or `tsc.exe` |
+| `claude` | 1 | 0 | **PASS** | `claude.exe`, or `node`/`node.exe` + `@anthropic-ai/claude-code` |
+| `codex` | 1 | 0 | **PASS** | `codex.exe`, or `node`/`node.exe` + `@openai/codex` |
+| `workload-wrapper` | 1 | 0 | **PASS** | `node`/`node.exe` + `dws-offload-workload.mjs` |
+| `esbuild` | 0 | 0 | UNJUDGED (`no positive control`) | `esbuild.exe` |
+| `indexer` | 0 | 0 | UNJUDGED (`no positive control`) | `rg.exe`, or `tsserver` |
+| `orca-cli` | 0 | 0 | UNJUDGED (`no positive control`) | `node`/`node.exe` + `out/cli/index.js` |
+
+Every family the baseline actually sighted (`vitest`, `tsc`, `claude`, `codex`,
+`workload-wrapper`) reads **PASS** for absence during the offload run — the workload the baseline
+measured locally left no trace on the laptop while running on GEX44. Families the baseline never
+sighted stay UNJUDGED, never counted as PASS (CTX-MEAS-3).
+
+### MB delta (per family, baseline minus offload; offload's own footprint is 0 MB for every
+family in both sweeps, so the delta equals the baseline's own peak/median)
+
+| Family | Baseline peakMb | Offload peakMb | Peak delta (freed) | Baseline medianMb | Offload medianMb | Median delta (freed) |
+|---|---|---|---|---|---|---|
+| `vitest` | 610.184 | 0 | **610.184** | 235.656 | 0 | **235.656** |
+| `tsc` | 903.657 | 0 | **903.657** | 476.104 | 0 | **476.104** |
+| `claude` | 233.859 | 0 | **233.859** | 214.414 | 0 | **214.414** |
+| `codex` | 12.391 | 0 | **12.391** | 12.391 | 0 | **12.391** |
+| `workload-wrapper` | 56.195 | 0 | **56.195** | 56.156 | 0 | **56.156** |
+| `control-surface` (desktop itself, reported separately, never mixed into workloadTotal) | 1362.035 | 0 | 1362.035 | 1013.421 | 0 | 1013.421 |
+| **`workloadTotal`** (sum of workload families, per sample, peak) | 956.86 | 0 | **956.86** | 142.305 | 0 | **142.305** |
+
+Instrument: `Win32_Process.WorkingSetSize via Get-CimInstance` (identical sampler to the baseline,
+CTX-MEAS-2). Control-surface footprint reported separately in both conditions
+(`controlSurfaceFootprint.offload.maxCount=0` — the offload run's own laptop desktop overhead was
+not attributed to the workload).
+
+**Bracket verdict: INCONCLUSIVE in both sweeps** (`offload-1`: "free-memory drift 4092.75MB >=
+delta 956.86MB"; `offload-2`: "free-memory drift 3032.82MB >= delta 956.86MB"). This laptop's own
+free-memory churn (multiple GB of drift within a several-minute window, in both directions, across
+two independent sweeps run ~20 minutes apart) exceeds the workload's own ~957MB peak delta, so the
+delta cannot be distinguished from ordinary host noise by this bracket rule. This is an honest
+INCONCLUSIVE, not a fabricated PASS — CTX-MEAS-1's bracket rule is doing exactly what it is for.
+
+### Stream latency (CTX-MEAS-4, from Task 1)
+
+| | Remote | Local floor |
+|---|---|---|
+| Verdict | MEASURED | MEASURED |
+| N | 7 | 7 |
+| Median | 964.64ms | 926.96ms |
+| Min/Max | 924.42 / 2978.39ms | 588.80 / 1115.79ms |
+| IQR (spread) | 41.71ms | 122.40ms |
+| Instrument | `performance.now()` before `Enter` to `waitForFunction(polling:'raf')` seeing the output line in `serializeAddon.serialize()` | same instrument, local terminal via `createOrcaRpc({local:true})` |
+| Resolution | 17ms (one rAF frame) | 17ms |
+
+Remote median is ~4% slower than the local floor's median — well within the same order of
+magnitude, consistent with both measuring the same harness overhead (xterm buffer poll + Electron
+IPC) rather than a network-bound cost from the SSH tunnel.
+
+### DWS-P2-SC4 verdict
+
+Per the plan's formula ("PASS only if every workload family the baseline sighted reads PASS for
+absence, the delta is not INCONCLUSIVE, and stream latency is MEASURED"):
+
+**`DWS-P2-SC4 = INCONCLUSIVE (bracket: free-memory drift exceeds the workload's peak delta in both
+independent sweeps — offload-1 drift=4092.75MB, offload-2 drift=3032.82MB, both >= delta=956.86MB;
+every baseline-sighted family (vitest, tsc, claude, codex, workload-wrapper) reads PASS for
+absence; stream latency is MEASURED, N=7, remote medianMs=964.64 vs local-floor medianMs=926.96)`**
+
+The absence claim itself (the workload left no trace on the laptop) is fully proven (PASS on every
+positive-controlled family, in both independent sweeps). What remains INCONCLUSIVE is only the
+bracket's ability to attribute the ~957MB peak delta specifically to the offload, rather than to
+this laptop's own multi-GB background memory churn — a host characteristic outside this plan's
+control, not a defect in the measurement instrument (CTX-MEAS-1's bracket rule correctly refused to
+claim more than the data supports).

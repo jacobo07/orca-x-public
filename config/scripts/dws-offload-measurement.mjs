@@ -1,6 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { extractRemoteProof } from './dws-remote-ps-capture-proof.mjs'
+// Re-exported so `dws-offload-measurement.mjs` stays this instrument's one public entry point.
+export { extractRemoteProof }
 
 /**
  * Pure analysis functions for the DWS-P2 local RAM offload measurement instrument (CTX-MEAS-1..4).
@@ -467,17 +470,38 @@ export function computeDelta(baselineSummary, offloadSummary) {
     ...Object.keys(offloadSummary.perFamily ?? {})
   ])
   const perFamily = {}
+  // CTX-MEAS-2/CTX-MEAS-3: per family, the absence verdict (PASS only with a baseline positive
+  // control -- see judgeAbsence) travels beside the delta, with the exact match pattern printed so
+  // "0 processes for family X" is never a bare claim. Kept in a SEPARATE top-level field, not
+  // merged into perFamily[family] itself, so 02-03's own `toEqual({peakDeltaMb, medianDeltaMb})`
+  // assertions on that exact shape stay green.
+  const absenceByFamily = {}
+  const patternByFamily = new Map(FAMILY_PATTERNS.map((def) => [def.family, def.rules]))
   for (const family of families) {
     const b = baselineSummary.perFamily?.[family] ?? { peakMb: 0, medianMb: 0 }
     const o = offloadSummary.perFamily?.[family] ?? { peakMb: 0, medianMb: 0 }
     perFamily[family] = { peakDeltaMb: b.peakMb - o.peakMb, medianDeltaMb: b.medianMb - o.medianMb }
+    if (family === 'control-surface' || family === 'nonce') {
+      continue
+    }
+    const verdict = judgeAbsence(baselineSummary, offloadSummary, family)
+    absenceByFamily[family] = { ...verdict, pattern: patternByFamily.get(family) ?? null }
   }
   const controlSurfaceDelta = perFamily['control-surface'] ?? { peakDeltaMb: 0, medianDeltaMb: 0 }
+  const controlSurfaceFootprint = {
+    baseline: baselineSummary.perFamily?.['control-surface'] ?? null,
+    offload: offloadSummary.perFamily?.['control-surface'] ?? null
+  }
   const workloadTotalDelta = {
     peakDeltaMb: (baselineSummary.workloadTotal?.peakMb ?? 0) - (offloadSummary.workloadTotal?.peakMb ?? 0),
     medianDeltaMb: (baselineSummary.workloadTotal?.medianMb ?? 0) - (offloadSummary.workloadTotal?.medianMb ?? 0)
   }
-  return { perFamily, workloadTotalDelta, controlSurfaceDelta }
+  // offloadSummary may be a caller-constructed fixture/partial summary carrying no freeMb -- an
+  // absent bracket precondition is UNJUDGED, never a thrown TypeError (instrument-before-claim.md).
+  const bracket = offloadSummary.freeMb
+    ? judgeBracket(offloadSummary, workloadTotalDelta.peakDeltaMb)
+    : { verdict: 'UNJUDGED', reason: 'offload summary carries no freeMb data' }
+  return { perFamily, workloadTotalDelta, controlSurfaceDelta, absenceByFamily, controlSurfaceFootprint, bracket }
 }
 
 /**
@@ -518,7 +542,7 @@ export function summarizeLatencies(values, { instrument, resolutionMs } = {}) {
   }
 }
 
-// --- CLI (summarize / compare / latency) -----------------------------------------------------
+// --- CLI (summarize / compare / latency / remote-proof) -------------------------------------
 // Guarded by an import.meta.url check so `import`ing this module for its pure functions (as the
 // test file does) never triggers CLI side effects.
 
@@ -615,6 +639,30 @@ function runLatencyCommand(options) {
   process.stdout.write(`LATENCY verdict=${result.verdict} medianMs=${result.medianMs ?? 'null'} iqrMs=${result.iqrMs ?? 'null'}\n`)
 }
 
+function runRemoteProofCommand(options) {
+  const captureText = readTextFileOrExit(options.capture, 'remote ps-capture transcript')
+  const manifest = readJsonFileOrExit(options.manifest, 'workload manifest file')
+  const servePid = Number(options['serve-pid'])
+  if (!Number.isFinite(servePid) || servePid <= 0) {
+    process.stderr.write(`UNREADABLE INPUT: --serve-pid must be a positive integer (got ${options['serve-pid']})\n`)
+    process.exit(2)
+  }
+  const legs = Array.isArray(manifest.legs) ? manifest.legs.map((entry) => entry.leg) : []
+  if (legs.length === 0) {
+    process.stderr.write(`UNREADABLE INPUT: manifest file (${options.manifest}) carries no legs[] array\n`)
+    process.exit(2)
+  }
+  const proofs = extractRemoteProof(captureText, { servePid, legs })
+  writeJsonOutputIfRequested(options.out, proofs)
+  for (const proof of proofs) {
+    process.stdout.write(
+      `REMOTE-PROOF leg=${proof.leg} verdict=${proof.verdict}${proof.reason ? ` reason="${proof.reason}"` : ''}${
+        proof.peakRssMb !== undefined ? ` peakRssMb=${proof.peakRssMb}` : ''
+      }\n`
+    )
+  }
+}
+
 async function runCli(argv) {
   const [command, ...rest] = argv
   const options = parseCliArgs(rest)
@@ -627,7 +675,10 @@ async function runCli(argv) {
   if (command === 'latency') {
     return runLatencyCommand(options)
   }
-  process.stderr.write(`Unknown command: ${command}. Expected one of: summarize, compare, latency\n`)
+  if (command === 'remote-proof') {
+    return runRemoteProofCommand(options)
+  }
+  process.stderr.write(`Unknown command: ${command}. Expected one of: summarize, compare, latency, remote-proof\n`)
   process.exit(2)
 }
 

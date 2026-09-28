@@ -1,0 +1,211 @@
+{
+  "perFamily": {
+    "vitest": {
+      "peakDeltaMb": 610.184,
+      "medianDeltaMb": 235.656
+    },
+    "tsc": {
+      "peakDeltaMb": 903.6569999999999,
+      "medianDeltaMb": 476.1039999999999
+    },
+    "esbuild": {
+      "peakDeltaMb": 0,
+      "medianDeltaMb": 0
+    },
+    "claude": {
+      "peakDeltaMb": 233.859,
+      "medianDeltaMb": 214.414
+    },
+    "codex": {
+      "peakDeltaMb": 12.391,
+      "medianDeltaMb": 12.391
+    },
+    "indexer": {
+      "peakDeltaMb": 0,
+      "medianDeltaMb": 0
+    },
+    "workload-wrapper": {
+      "peakDeltaMb": 56.195,
+      "medianDeltaMb": 56.156
+    },
+    "orca-cli": {
+      "peakDeltaMb": 0,
+      "medianDeltaMb": 0
+    },
+    "nonce": {
+      "peakDeltaMb": 0,
+      "medianDeltaMb": 0
+    },
+    "control-surface": {
+      "peakDeltaMb": 1362.0349999999996,
+      "medianDeltaMb": 1013.4209999999999
+    }
+  },
+  "workloadTotalDelta": {
+    "peakDeltaMb": 956.8599999999999,
+    "medianDeltaMb": 142.305
+  },
+  "controlSurfaceDelta": {
+    "peakDeltaMb": 1362.0349999999996,
+    "medianDeltaMb": 1013.4209999999999
+  },
+  "absenceByFamily": {
+    "vitest": {
+      "verdict": "PASS",
+      "reason": "baseline saw vitest (max concurrent count 1); offload saw none",
+      "pattern": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "vitest.mjs"
+          ]
+        }
+      ]
+    },
+    "tsc": {
+      "verdict": "PASS",
+      "reason": "baseline saw tsc (max concurrent count 2); offload saw none",
+      "pattern": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "typescript/bin/tsc",
+            "typescript\\bin\\tsc"
+          ]
+        },
+        {
+          "nameEquals": [
+            "tsc.exe"
+          ]
+        }
+      ]
+    },
+    "esbuild": {
+      "verdict": "UNJUDGED",
+      "reason": "no positive control",
+      "pattern": [
+        {
+          "nameEquals": [
+            "esbuild.exe"
+          ]
+        }
+      ]
+    },
+    "claude": {
+      "verdict": "PASS",
+      "reason": "baseline saw claude (max concurrent count 1); offload saw none",
+      "pattern": [
+        {
+          "nameEquals": [
+            "claude.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "@anthropic-ai/claude-code"
+          ]
+        }
+      ]
+    },
+    "codex": {
+      "verdict": "PASS",
+      "reason": "baseline saw codex (max concurrent count 1); offload saw none",
+      "pattern": [
+        {
+          "nameEquals": [
+            "codex.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "@openai/codex"
+          ]
+        }
+      ]
+    },
+    "indexer": {
+      "verdict": "UNJUDGED",
+      "reason": "no positive control",
+      "pattern": [
+        {
+          "nameEquals": [
+            "rg.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "tsserver"
+          ]
+        }
+      ]
+    },
+    "workload-wrapper": {
+      "verdict": "PASS",
+      "reason": "baseline saw workload-wrapper (max concurrent count 1); offload saw none",
+      "pattern": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "dws-offload-workload.mjs"
+          ]
+        }
+      ]
+    },
+    "orca-cli": {
+      "verdict": "UNJUDGED",
+      "reason": "no positive control",
+      "pattern": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "out/cli/index.js",
+            "out\\cli\\index.js"
+          ]
+        }
+      ]
+    }
+  },
+  "controlSurfaceFootprint": {
+    "baseline": {
+      "maxCount": 19,
+      "peakMb": 1362.0349999999996,
+      "medianMb": 1013.4209999999999,
+      "rules": null
+    },
+    "offload": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    }
+  },
+  "bracket": {
+    "verdict": "INCONCLUSIVE",
+    "reason": "free-memory drift 4092.75MB >= delta 956.8599999999999MB"
+  }
+}

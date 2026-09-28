@@ -3,6 +3,7 @@ import {
   FAMILY_PATTERNS,
   classifyRun,
   computeDelta,
+  extractRemoteProof,
   judgeAbsence,
   judgeBracket,
   parseSamples,
@@ -409,5 +410,96 @@ describe('FAMILY_PATTERNS', () => {
     expect(families).toEqual(
       ['claude', 'codex', 'esbuild', 'indexer', 'orca-cli', 'tsc', 'vitest', 'workload-wrapper'].sort()
     )
+  })
+})
+
+// Why a synthetic `ps --forest` transcript, not a real captured one: a drill pinned to a real
+// GEX44 capture has an interest in that exact process tree staying unchanged (instrument-before-
+// claim.md / monetary-quantity-integrity.md doctrine on synthetic fixtures). The column layout
+// (`ps -o pid,ppid,user,rss,etimes,args --forest`) is confirmed against a real capture from GEX44
+// (dws-gex44-serve-provision.sh's ps-capture subcommand) before writing this fixture.
+function psForestBlock(utc, rows) {
+  const header = '    PID    PPID USER       RSS ELAPSED COMMAND'
+  return [`CAPTURE ${utc}`, header, ...rows].join('\n')
+}
+
+const SERVE_TREE_ROWS = [
+  '     100       1 orca-svc  2000     10 /bin/sh /usr/bin/xvfb-run -a electron --serve',
+  '     101     100 orca-svc  5000     10  \\_ Xvfb :100',
+  '     102     100 orca-svc 20000     10  \\_ electron --serve',
+  '     103     102 orca-svc 15000     10      \\_ electron out/main/daemon-entry.js',
+  '     104     103 orca-svc  3000      9          \\_ /bin/bash --rcfile',
+  '     105     104 orca-svc  8000      5              \\_ node config/scripts/dws-offload-workload.mjs test --nonce abc'
+]
+
+describe('extractRemoteProof', () => {
+  it('PASS: a vitest.mjs row whose ppid chain reaches servePid under orca-svc', () => {
+    const capture = psForestBlock('2026-09-28T00:00:00Z', [
+      ...SERVE_TREE_ROWS,
+      '     106     105 orca-svc 40960      3                  \\_ node node_modules/vitest/vitest.mjs run'
+    ])
+    const result = extractRemoteProof(capture, { servePid: 100, legs: ['test'] })
+    expect(result).toEqual([
+      {
+        leg: 'test',
+        verdict: 'PASS',
+        firstSeenUtc: '2026-09-28T00:00:00Z',
+        lastSeenUtc: '2026-09-28T00:00:00Z',
+        peakRssMb: 40
+      }
+    ])
+  })
+
+  it('FAIL: a matching row whose chain does not reach servePid', () => {
+    const capture = psForestBlock('2026-09-28T00:00:00Z', [
+      ...SERVE_TREE_ROWS,
+      '     200       1 orca-svc  1000      3 /bin/bash -lc some-other-shell',
+      '     201     200 orca-svc 30000      2  \\_ node node_modules/vitest/vitest.mjs run'
+    ])
+    const result = extractRemoteProof(capture, { servePid: 100, legs: ['test'] })
+    expect(result).toEqual([{ leg: 'test', verdict: 'FAIL', reason: 'not under the serve tree' }])
+  })
+
+  it('UNJUDGED: no matching row in any block within the leg window (absence of a capture is not absence of the process)', () => {
+    const capture = psForestBlock('2026-09-28T00:00:00Z', SERVE_TREE_ROWS)
+    const result = extractRemoteProof(capture, { servePid: 100, legs: ['test'] })
+    expect(result).toEqual([{ leg: 'test', verdict: 'UNJUDGED', reason: 'not captured' }])
+  })
+
+  it('INCONCLUSIVE: a capture with zero CAPTURE blocks', () => {
+    const result = extractRemoteProof('no capture markers here at all', {
+      servePid: 100,
+      legs: ['test', 'build']
+    })
+    expect(result).toEqual([
+      { leg: 'test', verdict: 'INCONCLUSIVE', reason: 'unreadable capture' },
+      { leg: 'build', verdict: 'INCONCLUSIVE', reason: 'unreadable capture' }
+    ])
+  })
+})
+
+describe('computeDelta absence verdicts', () => {
+  it('attaches a per-family absence verdict (PASS only with a baseline positive control), pattern printed beside it', () => {
+    const baseline = {
+      perFamily: {
+        vitest: { peakMb: 320, medianMb: 300, maxCount: 1 },
+        esbuild: { peakMb: 0, medianMb: 0, maxCount: 0 },
+        'control-surface': { peakMb: 350, medianMb: 350, maxCount: 10 }
+      },
+      workloadTotal: { peakMb: 360, medianMb: 300 }
+    }
+    const offload = {
+      perFamily: {
+        vitest: { peakMb: 0, medianMb: 0, maxCount: 0 },
+        esbuild: { peakMb: 0, medianMb: 0, maxCount: 0 },
+        'control-surface': { peakMb: 350, medianMb: 350, maxCount: 10 }
+      },
+      workloadTotal: { peakMb: 0, medianMb: 0 }
+    }
+    const delta = computeDelta(baseline, offload)
+    expect(delta.absenceByFamily.vitest.verdict).toBe('PASS')
+    expect(delta.absenceByFamily.esbuild.verdict).toBe('UNJUDGED')
+    // Existing 02-03 shape is untouched by the addition.
+    expect(delta.perFamily.vitest).toEqual({ peakDeltaMb: 320, medianDeltaMb: 300 })
   })
 })
