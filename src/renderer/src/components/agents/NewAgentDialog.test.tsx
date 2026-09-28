@@ -19,7 +19,7 @@ function choice(projectId: string, displayName = projectId): AgentProjectChoice 
     projectId,
     displayName,
     badgeColor: '#000000',
-    hosts: [{ id: 'local', label: 'This computer', health: 'local' }],
+    hosts: [{ id: 'local', label: 'This computer', health: 'local', repoId: `repo-${projectId}` }],
     path: null,
     sharesName: false
   }

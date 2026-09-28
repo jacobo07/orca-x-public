@@ -59,7 +59,9 @@ describe('agent project choices', () => {
       [setup('p1', 'ssh:gone' as ExecutionHostId, '/x', 'ready'), setup('p1', 'local', '/y', 'error')],
       HOSTS
     )
-    expect(choice.hosts).toEqual([{ id: 'ssh:gone', label: 'ssh:gone', health: null }])
+    expect(choice.hosts).toEqual([
+      { id: 'ssh:gone', label: 'ssh:gone', health: null, repoId: 'repo-p1-ssh:gone' }
+    ])
     expect(choice.path).toBe('/x')
   })
 

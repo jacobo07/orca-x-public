@@ -7,6 +7,8 @@ export type AgentProjectHost = {
   id: ExecutionHostId
   label: string
   health: ExecutionHostHealth | null
+  /** The repo that is this project's checkout on this host — what "open it here" opens. */
+  repoId: string
 }
 
 export type AgentProjectChoice = {
@@ -21,7 +23,10 @@ export type AgentProjectChoice = {
   sharesName: boolean
 }
 
-type HostLookup = ReadonlyMap<ExecutionHostId, Omit<AgentProjectHost, 'id'>>
+type HostLookup = ReadonlyMap<
+  ExecutionHostId,
+  { label: string; health: ExecutionHostHealth | null }
+>
 
 /**
  * One row per canonical Project — the same estate the Terminals view reads — never per repo or per
@@ -53,7 +58,8 @@ export function buildAgentProjectChoices(
       projectHosts.push({
         id: setup.hostId,
         label: known?.label ?? setup.hostId,
-        health: known?.health ?? null
+        health: known?.health ?? null,
+        repoId: setup.repoId
       })
     }
     return {
