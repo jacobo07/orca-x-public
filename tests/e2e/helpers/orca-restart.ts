@@ -86,11 +86,25 @@ async function removeProfileDir(userDataDir: string): Promise<void> {
       return
     } catch (error) {
       if (attempt === 4) {
-        throw error
+        // Why not rethrown: a temp profile still locked by a dying helper must not turn a judged run red.
+        console.error(`[orca-restart] left ${userDataDir}: ${String(error)}`)
+        return
       }
       // Why: on Windows, taskkill can return before Electron/PTY handles are
       // fully released, making immediate temp-profile deletion flaky.
       await delay(250)
+    }
+  }
+}
+
+/** Kills a daemon the spec wants gone. Why ESRCH is fine: on Windows the daemon already exited with
+ *  the app; each spec proves the precondition itself (a row with no process). */
+export function killE2EDaemon(pid: number): void {
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      throw error
     }
   }
 }

@@ -13,12 +13,16 @@ import {
 } from './helpers/terminal'
 import {
   ensureTerminalVisible,
-  switchToOtherWorktree,
+  switchToOtherWorktreeAfterRefresh,
   switchToWorktree,
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import {
+  attachRepoAndOpenTerminal,
+  createRestartSession,
+  killE2EDaemon
+} from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
@@ -122,7 +126,7 @@ test('Resume Center open restores a slept workspace without starting any process
     await ensureTerminalVisible(page)
     await waitForActiveTerminalManager(page, 30_000)
 
-    const targetWorktreeId = await switchToOtherWorktree(page, homeWorktreeId)
+    const targetWorktreeId = await switchToOtherWorktreeAfterRefresh(page, homeWorktreeId)
     expect(targetWorktreeId, 'global setup left no second worktree to restore').toBeTruthy()
     const target = targetWorktreeId as string
     await expect
@@ -169,7 +173,7 @@ test('Resume Center open restores a slept workspace without starting any process
     await session.close(firstApp)
     firstApp = null
     stubPersistedResumeCommand(session.userDataDir)
-    process.kill(daemonPid, 'SIGKILL')
+    killE2EDaemon(daemonPid)
 
     const second = await session.launch()
     secondApp = second.app

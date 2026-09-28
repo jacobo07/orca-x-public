@@ -6,12 +6,16 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { waitForActiveTerminalManager } from './helpers/terminal'
 import {
   ensureTerminalVisible,
-  switchToOtherWorktree,
+  switchToOtherWorktreeAfterRefresh,
   switchToWorktree,
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import {
+  attachRepoAndOpenTerminal,
+  createRestartSession,
+  killE2EDaemon
+} from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 
 /**
@@ -104,7 +108,6 @@ test('Resume wakes exactly the chosen row, and Resume all stops at admission', a
     test.skip(true, 'Global setup did not produce a seeded test repo')
     return
   }
-  test.skip(process.platform === 'win32', 'Uses POSIX SIGKILL to simulate daemon death')
 
   const session = createRestartSession(testInfo, {
     ORCA_E2E_WAKE_AVAILABLE_BYTES: `${GB9},${GB9},100`
@@ -121,7 +124,7 @@ test('Resume wakes exactly the chosen row, and Resume all stops at admission', a
     await ensureTerminalVisible(page)
     await waitForActiveTerminalManager(page, 30_000)
 
-    const target = (await switchToOtherWorktree(page, home)) as string
+    const target = (await switchToOtherWorktreeAfterRefresh(page, home)) as string
     expect(target, 'no second worktree').toBeTruthy()
     await ensureTerminalVisible(page)
     await waitForActiveTerminalManager(page, 30_000)
@@ -144,7 +147,7 @@ test('Resume wakes exactly the chosen row, and Resume all stops at admission', a
     const daemonPid = readDaemonPid(session.userDataDir)
     await session.close(firstApp)
     firstApp = null
-    process.kill(daemonPid, 'SIGKILL')
+    killE2EDaemon(daemonPid)
 
     const second = await session.launch()
     secondApp = second.app
