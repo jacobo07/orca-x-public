@@ -16657,6 +16657,10 @@
       "back": "Back",
       "continue": "Continue"
     },
+    "tabResume": {
+      "resume": "Resume session",
+      "several": "Several sessions ended in this tab. Choose one in its pane."
+    },
     "paneResume": {
       "ended": "Session ended",
       "resume": "Resume this session",

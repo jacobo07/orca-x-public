@@ -35,7 +35,11 @@ describe('TerminalHost.inspectProcess prompt state', () => {
   let sub: MockSubprocess
   let platformDescriptor: PropertyDescriptor | undefined
 
-  async function start(shellPath: string | undefined, foreground = 'zsh'): Promise<void> {
+  async function start(
+    shellPath: string | undefined,
+    foreground = 'zsh',
+    command?: string
+  ): Promise<void> {
     host = new TerminalHost({
       spawnSubprocess: () => {
         sub = createMockSubprocess(shellPath, foreground)
@@ -46,9 +50,27 @@ describe('TerminalHost.inspectProcess prompt state', () => {
       sessionId: 's1',
       cols: 80,
       rows: 24,
+      ...(command ? { command } : {}),
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
   }
+
+  // cmd.exe has no pre-exec hook: the daemon typed the line, so the daemon says it is running.
+  it('holds a typed cmd.exe startup as running until its bracketing prompt reports the finish', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    await start('C:\\Windows\\System32\\cmd.exe', 'cmd.exe', 'claude "--resume" "abc"')
+    const tagged = (payload: string): string => `\x1b]133;${payload};orca\x1b\\`
+    expect(sub.write).toHaveBeenCalledWith(
+      'claude "--resume" "abc" & prompt $e]133;D;;orca$e\\%PROMPT%\r'
+    )
+    sub.emit(`${tagged('A')}C:\\repo>`)
+    expect(host.inspectProcess('s1').promptState).toBe('running')
+    sub.emit(`${tagged('D;')}${tagged('A')}C:\\repo>`)
+    expect(host.inspectProcess('s1')).toMatchObject({
+      promptState: 'prompt',
+      inputSincePrompt: 'clean'
+    })
+  })
 
   beforeEach(() => {
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')

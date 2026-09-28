@@ -15,6 +15,8 @@ const OVERLAY_ID = 'orca-reload-freeze-frame'
 /** Backstop: a failed or stalled hydration must not leave a still picture of the app on screen. */
 const MAX_VISIBLE_MS = 8_000
 const FADE_MS = 160
+/** The most the app mount waits on the frame; a cold start answers in one IPC round trip. */
+const RELOAD_FREEZE_FRAME_DECISION_BOUND_MS = 400
 
 let overlay: HTMLElement | null = null
 /** Set once the app declares itself ready, so a frame still decoding is never shown afterwards. */
@@ -122,6 +124,24 @@ export async function showReloadFreezeFrameIfPresent(): Promise<boolean> {
   return true
 }
 
+/**
+ * The decision the app mount waits for, so the new document's first contentful paint is the frozen
+ * frame rather than the empty shell (measured: the shell otherwise painted ~20 ms before the frame).
+ * Until that paint, Chromium keeps the old document's frame on screen. Bounded: a take or decode that
+ * hangs must cost the backdrop, never the app, so past the bound the mount goes ahead regardless.
+ */
+export function awaitReloadFreezeFrameDecision(
+  boundMs: number = RELOAD_FREEZE_FRAME_DECISION_BOUND_MS
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    showReloadFreezeFrameIfPresent(),
+    new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), boundMs)
+    })
+  ]).finally(() => clearTimeout(timer))
+}
+
 /** Called by the hydration chain; safe before, during or after the frame is shown. */
 export function reportAppReadyForFreezeFrame(): void {
   appReady = true
@@ -153,3 +173,4 @@ export function resetReloadFreezeFrameOverlayForTest(): void {
 
 export const RELOAD_FREEZE_FRAME_OVERLAY_ID = OVERLAY_ID
 export const RELOAD_FREEZE_FRAME_MAX_VISIBLE_MS = MAX_VISIBLE_MS
+export { RELOAD_FREEZE_FRAME_DECISION_BOUND_MS }

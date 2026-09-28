@@ -93,13 +93,12 @@ test('records which shells can report an unsent line', async ({ orcaPage }) => {
   expect(preferred.afterInput, 'the default shell must report a typed line').toBe('typed')
   expect(preferred.beforeInput).toBe('clean')
 
-  // cmd.exe: no OSC 133, so no answer at all — before or after typing.
+  // cmd.exe: Orca's PROMPT now draws a tagged 133;A, so the host sees the prompt and the line.
+  // It still emits no 133;C: a submitted command stays `typed` until its prompt returns.
   const cmd = await readShell(page, worktreeId, 'cmd.exe')
-  expect(cmd.beforeInput).toBeUndefined()
-  expect(
-    cmd.afterInput,
-    'cmd.exe has no markers, so a draft there is renderer-only'
-  ).toBeUndefined()
+  expect(cmd.promptState, 'cmd.exe reports its prompt through PROMPT').toBe('prompt')
+  expect(cmd.beforeInput).toBe('clean')
+  expect(cmd.afterInput, 'cmd.exe must report a typed line').toBe('typed')
 
   // Git Bash, where present: measured rather than assumed to match cmd.exe — Orca injects shell
   // integration per shell family, so bash could legitimately answer where cmd.exe cannot.

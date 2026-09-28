@@ -14818,6 +14818,10 @@
       "back": "Atrás",
       "continue": "Continuar"
     },
+    "tabResume": {
+      "resume": "Reanudar sesión",
+      "several": "Terminaron varias sesiones en esta pestaña. Elige una en su panel."
+    },
     "paneResume": {
       "ended": "Sesión finalizada",
       "resume": "Reanudar esta sesión",
