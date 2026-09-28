@@ -23,6 +23,12 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 import { judgeBackfill } from './dws-backfill-verdict.mjs'
+import { redactSecrets } from './dws-offload-measurement.mjs'
+
+// Why module-level: Playwright's timeout/navigation errors quote the navigated URL, whose fragment
+// carries the pairing credential, and the top-level catch has no other way to know what to scrub.
+let knownSecrets = []
+const redactError = (value) => redactSecrets(value, knownSecrets)
 
 const REATTACH_RESOLUTION_MS = 17 // one rAF frame at ~60Hz -- matches 02-05's stream-latency convention.
 
@@ -254,6 +260,7 @@ async function main() {
     console.error('ready file carries no pairing.webClientUrl')
     process.exit(2)
   }
+  knownSecrets = [webClientUrl, readyJson?.pairing?.pairingUrl].filter(Boolean)
 
   let browserUsed = 'msedge'
   let browser
@@ -354,7 +361,7 @@ async function main() {
       }
     } catch (probeError) {
       result.reattachRawValuesMs = rawValuesMs
-      result.reattachError = probeError?.message ?? String(probeError)
+      result.reattachError = redactError(probeError?.message ?? String(probeError))
       writeFileSync(outPath, JSON.stringify(result, null, 2))
       throw probeError
     }
@@ -373,6 +380,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error?.stack ?? String(error))
+  console.error(redactError(error?.stack ?? String(error)))
   process.exit(1)
 })

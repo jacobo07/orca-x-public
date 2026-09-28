@@ -117,12 +117,32 @@ function isElectronRenderer(proc) {
   return nameMatchesAny(proc, ['electron.exe', 'electron']) && (proc.commandLine ?? '').includes('--type=renderer')
 }
 
-/** Three pairing-credential shapes that must never reach a sampler file or this parser's output. */
+/**
+ * Pairing-credential shapes that must never reach a sampler file, this parser's output, or an error
+ * message. The last two cover the web-client form (`#pairing=orca%3A%2F%2Fpair%3Fcode%3D...`), whose
+ * URL-encoded scheme the first pattern does not match.
+ */
 const REDACTION_PATTERNS = Object.freeze([
   /orca:\/\/pair\?[^\s"']*/gi,
   /--pairing-code[= ]+\S+/gi,
-  /ORCA_PAIRING_CODE=\S+/gi
+  /ORCA_PAIRING_CODE=\S+/gi,
+  /pairing=[^\s"']+/gi,
+  /orca(?::|%3A)(?:\/\/|%2F%2F)pair[^\s"']*/gi
 ])
+
+/**
+ * Redacts a free-form message (a stack, a Playwright call log): the shape patterns above plus every
+ * exact known secret string, which also catches a bare URL whose shape no pattern anticipated.
+ */
+export function redactSecrets(text, secrets = []) {
+  let result = redactCommandLine(String(text ?? ''))
+  for (const secret of secrets) {
+    if (typeof secret === 'string' && secret.length > 0) {
+      result = result.split(secret).join('<redacted>')
+    }
+  }
+  return result
+}
 
 export function redactCommandLine(commandLine) {
   if (typeof commandLine !== 'string' || commandLine.length === 0) {

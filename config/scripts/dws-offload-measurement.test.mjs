@@ -10,6 +10,7 @@ import {
   observationDefects,
   parseSamples,
   redactCommandLine,
+  redactSecrets,
   subtreePids,
   summarizeLatencies,
   summarizeRun
@@ -151,6 +152,36 @@ describe('redactCommandLine', () => {
     const out = redactCommandLine('cmd /c set ORCA_PAIRING_CODE=abc && orca terminal create')
     expect(out).not.toContain('abc')
     expect(out).toContain('<redacted>')
+  })
+
+  it('redacts the URL-encoded web-client fragment form', () => {
+    const out = redactCommandLine(
+      'msedge http://127.0.0.1:6791/web-index.html#pairing=orca%3A%2F%2Fpair%3Fcode%3Dsecret123 --headless'
+    )
+    expect(out).not.toContain('secret123')
+    expect(out).toContain('--headless')
+  })
+})
+
+describe('redactSecrets', () => {
+  const webClientUrl = 'http://127.0.0.1:6791/#pairing=orca%3A%2F%2Fpair%3Fcode%3Dsecret123'
+
+  it('scrubs a Playwright timeout message and call log that quote the navigated URL', () => {
+    const message = `page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to "${webClientUrl}", waiting until "domcontentloaded"`
+    const out = redactSecrets(message, [webClientUrl])
+    expect(out).not.toContain('secret123')
+    expect(out).not.toContain('orca%3A')
+    expect(out).toContain('Timeout 30000ms exceeded')
+  })
+
+  it('scrubs an exact known secret whose shape no pattern anticipates', () => {
+    const out = redactSecrets('failed for https://host/x?blob=UNPATTERNED-SECRET', ['https://host/x?blob=UNPATTERNED-SECRET'])
+    expect(out).not.toContain('UNPATTERNED-SECRET')
+  })
+
+  it('leaves an ordinary error message intact (green control)', () => {
+    expect(redactSecrets('tick-loop terminal tab not found', [webClientUrl])).toBe('tick-loop terminal tab not found')
+    expect(redactSecrets(undefined)).toBe('')
   })
 })
 
