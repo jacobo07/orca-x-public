@@ -12,8 +12,11 @@
 #   dws-gex44-serve-provision.sh ps-capture <count> <interval-seconds>
 set -u
 
-CLONE_DIR="${DWS_CLONE_DIR:-$HOME/dws-0104-clone}"
-RUNS_DIR="${DWS_RUNS_DIR:-$HOME/dws-runs}"
+# Why hardcoded, not $HOME/...: this script runs as kobii (build) AND root via sudo (install),
+# and root's $HOME is /root -- a $HOME-relative default silently resolved to a nonexistent path
+# under sudo (DWS-P2, found via a real install run against GEX44).
+CLONE_DIR="${DWS_CLONE_DIR:-/home/kobii/dws-0104-clone}"
+RUNS_DIR="${DWS_RUNS_DIR:-/home/kobii/dws-runs}"
 SVC_USER="orca-svc"
 SVC_HOME="/home/$SVC_USER"
 SVC_ROOT="$SVC_HOME/.orca-dws"
