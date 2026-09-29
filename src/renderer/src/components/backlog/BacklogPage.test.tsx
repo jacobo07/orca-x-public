@@ -256,3 +256,48 @@ describe('BacklogPage', () => {
     expect(mocks.closeBacklogPage).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('BacklogRow labels', () => {
+  function chip(id: string, name: string): string | null {
+    return (
+      container
+        .querySelector(`[data-backlog-item-id="${id}"] [data-backlog-chip="${name}"]`)
+        ?.textContent?.trim() ?? null
+    )
+  }
+
+  it('labels source, state and priority from one presenter; normal priority has no chip', async () => {
+    listAnswer = {
+      items: [
+        item('bli_manual', {
+          priority: 'urgent',
+          sourceLinks: [{ kind: 'manual', ref: 'm1', capturedAt: 1, candidateId: null }]
+        }),
+        item('bli_plain', { state: 'ready' })
+      ]
+    }
+    await renderPage()
+    expect(chip('bli_manual', 'source')).toBe('Manual')
+    expect(chip('bli_manual', 'state')).toBe('Needs triage')
+    expect(chip('bli_manual', 'priority')).toBe('Urgent')
+    expect(chip('bli_plain', 'source')).toBeNull()
+    expect(chip('bli_plain', 'state')).toBe('Ready')
+    expect(chip('bli_plain', 'priority')).toBeNull()
+  })
+
+  it('falls back to the kind label for a single-line text, and manual reads Manual task', async () => {
+    listAnswer = {
+      items: [
+        item('bli_one_line', { kind: 'manual', originalText: 'only line' }),
+        item('bli_two_lines', { kind: 'manual', originalText: 'first\nsecond line' })
+      ]
+    }
+    await renderPage()
+    const secondary = (id: string) =>
+      container
+        .querySelector(`[data-backlog-item-id="${id}"] [data-backlog-row-secondary]`)
+        ?.textContent?.trim()
+    expect(secondary('bli_one_line')).toBe('Manual task')
+    expect(secondary('bli_two_lines')).toBe('second line')
+  })
+})
