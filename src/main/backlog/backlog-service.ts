@@ -4,11 +4,18 @@ import type { BacklogLoadResult, BacklogWriteOutcome } from '../../shared/backlo
 import { BACKLOG_NORMALIZED_INTENT_MAX } from '../../shared/backlog-rpc-limits'
 import {
   BACKLOG_SCHEMA_VERSION,
+  type BacklogCandidate,
   type BacklogItem,
   type BacklogItemKind,
   type BacklogPriority,
   type BacklogProjectRef
 } from '../../shared/backlog-types'
+import {
+  ingestBacklogCandidates,
+  type BacklogCandidateIngestEntry,
+  type BacklogIngestEntryResult
+} from './backlog-candidate-operations'
+import { BACKLOG_CANDIDATE_CODEC } from './backlog-candidate-validation'
 import { mintBacklogEvidenceId, mintBacklogItemId } from './backlog-identity-mint'
 import {
   applyBacklogItemPatch,
@@ -28,7 +35,10 @@ export type BacklogCaptureInput = {
   initialState?: 'needs-triage' | 'ready'
 }
 
-type StoreSet = { items: BacklogRecordStore<BacklogItem> }
+type StoreSet = {
+  items: BacklogRecordStore<BacklogItem>
+  candidates: BacklogRecordStore<BacklogCandidate>
+}
 
 export class BacklogService {
   private readonly storesByRoot = new Map<string, StoreSet>()
@@ -46,7 +56,14 @@ export class BacklogService {
     const root = this.rootDirectory()
     let entry = this.storesByRoot.get(root)
     if (!entry) {
-      entry = { items: new BacklogRecordStore(join(root, 'items'), BACKLOG_ITEM_CODEC, this.now) }
+      entry = {
+        items: new BacklogRecordStore(join(root, 'items'), BACKLOG_ITEM_CODEC, this.now),
+        candidates: new BacklogRecordStore(
+          join(root, 'candidates'),
+          BACKLOG_CANDIDATE_CODEC,
+          this.now
+        )
+      }
       this.storesByRoot.set(root, entry)
     }
     return entry
@@ -100,5 +117,11 @@ export class BacklogService {
     return this.stores().items.mutate(id, (current, ctx) =>
       applyBacklogItemTransition(current, input, ctx)
     )
+  }
+
+  ingestCandidates(
+    entries: readonly BacklogCandidateIngestEntry[]
+  ): Promise<BacklogIngestEntryResult[]> {
+    return ingestBacklogCandidates(this.stores().candidates, entries)
   }
 }
