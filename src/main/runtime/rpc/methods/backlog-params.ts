@@ -14,6 +14,7 @@ import {
   BACKLOG_SHORT_TEXT_MAX,
   BACKLOG_TEXT_MAX
 } from '../../../../shared/backlog-rpc-limits'
+import { BACKLOG_LIST_VIEWS } from '../../../../shared/backlog-summary'
 import {
   BACKLOG_EVIDENCE_CLASSES,
   BACKLOG_EVIDENCE_ORIGINS,
@@ -103,7 +104,8 @@ export const BacklogListParams = z
     projectId: z.string().min(1).max(BACKLOG_PROJECT_ID_MAX).optional(),
     unassigned: z.boolean().optional(),
     limit: BacklogListLimitParam.optional(),
-    cursor: BacklogListCursorParam.optional()
+    cursor: BacklogListCursorParam.optional(),
+    view: z.enum(BACKLOG_LIST_VIEWS).optional()
   })
   .refine(
     (query) => !(query.projectId !== undefined && query.unassigned === true),

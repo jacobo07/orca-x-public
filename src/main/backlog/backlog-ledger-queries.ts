@@ -6,6 +6,7 @@ import type {
   BacklogListResult
 } from '../../shared/backlog-outcomes'
 import { BACKLOG_LIST_LIMIT_DEFAULT } from '../../shared/backlog-rpc-limits'
+import { toBacklogItemSummary } from '../../shared/backlog-summary'
 import {
   BACKLOG_CANDIDATE_STATUSES,
   BACKLOG_ITEM_STATES,
@@ -64,13 +65,11 @@ export function queryBacklogItems(
     .filter((item) => matchesItem(item, query))
     .sort((a, b) => newestFirst({ at: a.createdAt, id: a.id }, { at: b.createdAt, id: b.id }))
   const { page, total, nextCursor } = paginate(matches, query.limit, query.cursor)
-  return {
-    outcome: 'listed',
-    items: page,
-    total,
-    nextCursor,
-    quarantinedCount: quarantinedCount(snapshot, 'item')
-  }
+  const rest = { total, nextCursor, quarantinedCount: quarantinedCount(snapshot, 'item') }
+  // Projected after paging so the host never copies the whole ledger.
+  return query.view === 'summary'
+    ? { outcome: 'listed', view: 'summary', items: page.map((item) => toBacklogItemSummary(item)), ...rest }
+    : { outcome: 'listed', view: 'full', items: page, ...rest }
 }
 
 export function queryBacklogCandidates(

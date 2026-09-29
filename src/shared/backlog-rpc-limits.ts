@@ -17,5 +17,7 @@ export const BACKLOG_SOURCE_LINKS_PER_ITEM_MAX = 32
 export const BACKLOG_RECORD_STATE_HEADROOM_BYTES = 32_768
 export const BACKLOG_LIST_LIMIT_DEFAULT = 100
 export const BACKLOG_LIST_LIMIT_MAX = 500
+// A summary list row carries a bounded text prefix; backlog.get returns the full text.
+export const BACKLOG_SUMMARY_TEXT_MAX = 2_000
 export const BACKLOG_RECORD_MAX_BYTES = 1_048_576
 export const BACKLOG_OPEN_CONCURRENCY = 16

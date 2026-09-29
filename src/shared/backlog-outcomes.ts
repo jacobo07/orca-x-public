@@ -5,6 +5,7 @@ import type {
   BacklogItemKind,
   BacklogItemState
 } from './backlog-types'
+import type { BacklogItemSummary, BacklogListView } from './backlog-summary'
 
 export type BacklogStorageStage = 'prepare' | 'scan' | 'write' | 'barrier' | 'publish'
 
@@ -72,16 +73,15 @@ export type BacklogListQuery = {
   unassigned?: boolean
   limit?: number
   cursor?: string
+  view?: BacklogListView
 }
 
+type BacklogListPage = { total: number; nextCursor: string | null; quarantinedCount: number }
+
+// This host always echoes view; a wire reader must still treat it as optional (older hosts).
 export type BacklogListResult =
-  | {
-      outcome: 'listed'
-      items: BacklogItem[]
-      total: number
-      nextCursor: string | null
-      quarantinedCount: number
-    }
+  | ({ outcome: 'listed'; view: 'summary'; items: BacklogItemSummary[] } & BacklogListPage)
+  | ({ outcome: 'listed'; view: 'full'; items: BacklogItem[] } & BacklogListPage)
   | BacklogStorageFailure
 
 export type BacklogCandidateListQuery = {
