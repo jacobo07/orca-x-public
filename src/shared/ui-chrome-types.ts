@@ -140,3 +140,5 @@ export type TopLevelView =
   | 'agents'
   /** The previous desk, reconstructed from durable state (continuity-resume-center.md). */
   | 'resumeCenter'
+  /** The Universal Backlog (universal-backlog.md). An older build falls back to 'terminal'. */
+  | 'backlog'
