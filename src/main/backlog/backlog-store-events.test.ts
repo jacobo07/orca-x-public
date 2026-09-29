@@ -248,4 +248,20 @@ describe('update', () => {
     expect(outcome).toMatchObject({ outcome: 'refused', code })
     expect(sha(item.id)).toBe(before)
   })
+
+  it.each([
+    ['an execution link', { addExecutionLinks: [{ kind: 'github-issue', ref: '#9' }] }],
+    ['evidence', { addEvidence: [{ class: 'OBSERVED', origin: 'tool', subject: 'gate', source: 'ci', ref: null }] }],
+    ['a field', { priority: 'urgent' }]
+  ] as const)('refuses %s on a superseded item, naming the survivor', async (_label, patch) => {
+    const item = seed('superseded')
+    const before = sha(item.id)
+    const outcome = await service.update(item.id, patch as never)
+    expect(outcome).toEqual({
+      outcome: 'refused',
+      code: 'merge-target-superseded',
+      detail: item.mergedInto
+    })
+    expect(sha(item.id)).toBe(before)
+  })
 })
