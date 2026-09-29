@@ -20,6 +20,7 @@
 
 **Next actions:**
 5. APPROVED by Owner 2026-09-29 ("it should have awareness of all of the files"). Design (nothing written yet):
+   - DONE `ef789d5e6`: `project-md-record.ts` + `ProjectMdRecord` type + 4 tests + drill 3/3. Real files carry core value in TWO shapes — inline `**Core value:**` (brand001) AND a `## Core Value` heading (gsd-long-smoke, io-ql); parser reads both. NEXT = `listPlanningFiles` + readings/deps wiring.
    - main: new `src/main/mission-brief/project-md-record.ts` (`parseProjectMdRecord` / `readProjectMdRecord`, mirror `state-md-record.ts`; export its `section` helper as `markdownSection` and reuse): `{ whatThisIs: first paragraph under "What this is" | null, coreValue: "**Core value:**" line | null }`. PROJECT.md = `.planning/workstreams/<ws>/PROJECT.md` if present else `.planning/PROJECT.md`.
    - `mission-brief-host-io.ts`: `listPlanningFiles(planningDir)` → `{kind:'listed', files: string[] (workspace-relative, '/'), truncated}` | `{kind:'unreadable'}`, same depth-4 / 4000-entry bounds as `planningFingerprint`.
    - `MissionReadings` += `projectFile`, `projectRecord`, `recordFiles` (raw); deps += `readProjectRecord`, `listRecordFiles` (update `mission-brief-read.test.ts` deps at line ~36 and `src/main/ipc/mission-brief.ts` wiring).
