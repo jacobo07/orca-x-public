@@ -190,10 +190,22 @@ if ($Target -eq 'remote') {
     # Existence-only credential check (never reads contents) -- host_rules: the agent-turn leg may
     # use ONLY a credential minted inside orca-svc's own HOME; if absent, record BLOCKED, never
     # fake/substitute it locally.
-    $credCheck = Invoke-DwsSsh -RemoteBody 'test -s ~/.claude/.credentials.json && echo CLAUDE_CRED=1 || echo CLAUDE_CRED=0; test -s ~/.codex/auth.json && echo CODEX_CRED=1 || echo CODEX_CRED=0'
+    # Why sudo -u, not ~: the ssh login is kobii, so ~ was kobii's home and his credential passed.
+    # sudo -n fails instead of prompting, which reads as no credential (fail closed).
+    $credCheck = Invoke-DwsSsh -RemoteBody 'sudo -n -u orca-svc test -s /home/orca-svc/.claude/.credentials.json && echo CLAUDE_CRED=1 || echo CLAUDE_CRED=0; sudo -n -u orca-svc test -s /home/orca-svc/.codex/auth.json && echo CODEX_CRED=1 || echo CODEX_CRED=0'
     Write-Output "DWS-P2-RUN agentCredentialCheck=$($credCheck.Output -replace "`n", ' ')"
-    if ($credCheck.Output -notmatch 'CLAUDE_CRED=1' -and $credCheck.Output -notmatch 'CODEX_CRED=1') {
-      Write-Output "DWS-P2-RUN agentLeg=BLOCKED reason=no_credential_in_orca-svc_home (never copying kobii's/laptop's credential per host_rules)"
+    $agentCredKey = if ($AgentKind -eq 'codex') { 'CODEX_CRED=1' } else { 'CLAUDE_CRED=1' }
+    if ($credCheck.ExitCode -ne 0 -or $credCheck.Output -notmatch [regex]::Escape($agentCredKey)) {
+      Write-Output "DWS-P2-RUN agentLeg=BLOCKED reason=no_credential_in_orca-svc_home need=$agentCredKey (never copying kobii's/laptop's credential per host_rules)"
+      $Legs = @($Legs | Where-Object { $_ -ne 'agent' })
+      if ($Legs.Count -eq 0) {
+        New-Item -ItemType File -Path $stopFile -Force | Out-Null
+        if (-not $remotePsProc.HasExited) {
+          Stop-Process -Id $remotePsProc.Id -Force -ErrorAction SilentlyContinue
+        }
+        throw "dws-offload-run.ps1: the agent leg is BLOCKED (no $agentCredKey in orca-svc's home) and no other leg remains"
+      }
+      Write-Output "DWS-P2-RUN legsAfterAgentBlock=$($Legs -join ',')"
     }
   }
 }
