@@ -162,18 +162,20 @@
       "lostIf": "Accepted intent is the only copy. The chats it was harvested from rotate or vanish, which is the product's reason to exist, so a lost record cannot be reconstructed from its sources and the intent is simply gone.",
       "provenBy": [
         "src/main/backlog/backlog-store-syscall-proof.test.ts",
-        "src/main/backlog/backlog-store-durability.test.ts"
+        "src/main/backlog/backlog-store-durability.test.ts",
+        "src/main/backlog/backlog-record-directory-sync.test.ts"
       ],
       "onFailure": "Every publish returns a closed storage-failed outcome naming the stage and the OS error code instead of rejecting. The prior record is kept because the rename follows the fsync, so a failed write leaves the last published bytes in place.",
       "knownGaps": [
         "No backup ring or repair tool: a record that fails to parse is quarantined with its bytes untouched, but nothing rotates a known-good copy forward.",
         "Orphan temp files from a death between write and rename are not swept; removeStaleDurableWriteTempFiles works per final path.",
         "Never exercised against a real power loss, and no real-app run: the syscall-order proof counts the barrier at the module boundary under vitest.",
-        "Directory fsync is skipped where the platform cannot open a directory for it (Windows), so the rename-recorded-but-not-persisted window is not closed there.",
+        "Directory fsync is skipped where the platform cannot open a directory for it (Windows), so the rename-recorded-but-not-persisted window is not closed there; the same applies to the backlog/ and items/ or candidates/ entries a first capture creates, which are fsynced in their parents elsewhere.",
         "The cross-process fence is narrowed, not eliminated: the revision is re-read synchronously before the rename, not held under a lock.",
         "A Windows rename blocked by another handle surfaces as storage-failed at the publish stage with no retry.",
         "A new record publishes by hard link so a taken name fails EEXIST instead of being replaced; a profile on a filesystem without hard links (FAT, exFAT, some network shares) fails every create as storage-failed at the publish stage.",
         "Records are plaintext at rest in the profile directory.",
+        "Evidence and link counts are capped per item with a 32 KiB state headroom, but the event log itself is unbounded: an item whose events alone fill the byte cap refuses every further write as record-too-large.",
         "Reachable only through runtime RPC until the Phase 2 surface lands."
       ]
     },

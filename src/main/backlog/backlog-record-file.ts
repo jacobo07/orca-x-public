@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { mkdir, readFile, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 import type { BacklogRefusal, BacklogStorageFailure } from '../../shared/backlog-outcomes'
 import { BACKLOG_RECORD_MAX_BYTES } from '../../shared/backlog-rpc-limits'
 import {
   DurablePublishError,
   durableWriteTempPath,
+  syncDirectory,
   writeFileDurableExclusive,
   writeFileDurableIfCurrent
 } from '../durable-file-write'
@@ -56,13 +57,35 @@ export function serializeBacklogRecord(
   return { payload }
 }
 
+/** fsyncs the parent of each level mkdir created, outermost first, so the new entries are durable. */
+async function syncCreatedDirectories(directory: string, firstCreated: string): Promise<void> {
+  // Windows reports the created path in the \\?\ namespace; strip it so it compares to `directory`.
+  const stop = resolve(firstCreated.replace(/^\\\\\?\\UNC\\/, '\\\\').replace(/^\\\\\?\\/, ''))
+  const parents: string[] = []
+  let level = resolve(directory)
+  for (;;) {
+    parents.unshift(dirname(level))
+    if (level === stop || dirname(level) === level) {
+      break
+    }
+    level = dirname(level)
+  }
+  for (const parent of parents) {
+    await syncDirectory(parent)
+  }
+}
+
 /** Publishes a record that must not already exist; 'exists' means another writer got there first. */
 export async function publishNewBacklogRecord(
   finalPath: string,
   payload: string
 ): Promise<'published' | 'exists' | BacklogStorageFailure> {
+  const directory = dirname(finalPath)
   try {
-    await mkdir(dirname(finalPath), { recursive: true })
+    const firstCreated = await mkdir(directory, { recursive: true })
+    if (firstCreated !== undefined) {
+      await syncCreatedDirectories(directory, firstCreated)
+    }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     return { outcome: 'storage-failed', stage: 'prepare', code: typeof code === 'string' ? code : null }
