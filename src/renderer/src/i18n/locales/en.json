@@ -16844,6 +16844,9 @@
       "none": "No autonomous run recorded as running",
       "run": "Autonomous run {{id}}"
     },
+    "dialog": {
+      "description": "Mission records of {{name}}"
+    },
     "freshness": {
       "current": "Planning state matches the current commit",
       "gitUnreadable": "Current commit could not be read",
@@ -16867,11 +16870,12 @@
       "human": "Human action",
       "notVerified": "Not verified",
       "read": "Read {{when}}",
+      "recordsListed": "Listed in the full path",
       "verified": "Verified"
     },
     "needsMe": {
-      "nothing": "Nothing is recorded as waiting on you",
       "notOpened": "The workspace could not be opened",
+      "nothing": "Nothing is recorded as waiting on you",
       "opened": "Opened where this waits for you. Guided help is not available yet."
     },
     "nextAction": {
@@ -16879,8 +16883,17 @@
       "unknown": "Next step unknown"
     },
     "objective": {
+      "fromCoreValue": "PROJECT.md · Core value",
+      "fromMilestone": "Milestone · {{gap}}",
+      "fromWhatThisIs": "PROJECT.md · What this is",
+      "gap": {
+        "absent": "no PROJECT.md",
+        "noGoal": "PROJECT.md states no goal",
+        "unreadable": "PROJECT.md could not be read"
+      },
+      "milestone": "Milestone: {{name}}",
       "partial": "(partially read)",
-      "unknown": "No milestone named in the planning state"
+      "unknown": "No goal recorded: {{gap}}, no milestone named"
     },
     "openFull": "Open full brief",
     "path": {
@@ -16888,6 +16901,8 @@
       "dependsOn": "Depends on: {{list}}",
       "description": "Every phase from the workspace’s own roadmap, with GSD’s verification verdict for each.",
       "noDirectory": "No phase directory yet",
+      "recordReadByOrca": "{{role}} · read by Orca",
+      "records": "Mission records · {{summary}}",
       "title": "Full mission path",
       "verification": "Verification: {{status}}"
     },
@@ -16896,6 +16911,21 @@
       "named": "Phase {{id}} · {{name}}"
     },
     "readAt": "Read {{when}}",
+    "records": {
+      "atLeast": "At least {{count}} files",
+      "count": "{{count}} files",
+      "role": {
+        "config": "Config",
+        "other": "Other",
+        "phase": "Phase",
+        "project": "Project",
+        "requirements": "Requirements",
+        "research": "Research",
+        "roadmap": "Roadmap",
+        "state": "State"
+      },
+      "unreadable": "Planning files could not be listed"
+    },
     "refresh": "Re-read mission records",
     "row": {
       "blockers": "Risks / blockers",
@@ -16906,6 +16936,7 @@
       "lastVerified": "Last verified result",
       "nextAction": "Next best action",
       "objective": "Objective",
+      "records": "Mission records",
       "unlocks": "Unlocks"
     },
     "signal": {
@@ -16941,9 +16972,6 @@
     "title": "Mission Brief",
     "unlocks": {
       "none": "Nothing becomes reachable from this phase alone"
-    },
-    "dialog": {
-      "description": "Mission records of {{name}}"
     }
   }
 }

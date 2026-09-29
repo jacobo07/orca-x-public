@@ -9,6 +9,7 @@ import {
   Database,
   FileText,
   Flag,
+  FolderOpen,
   Link2,
   Play,
   User,
@@ -26,6 +27,7 @@ import {
   describeLastVerified,
   describePhase
 } from './mission-brief-presentation'
+import { describeObjective, describeRecordCount } from './mission-objective-presentation'
 import { MISSION_TONE_CLASS } from './mission-tone-class'
 
 function BriefRow({
@@ -92,6 +94,7 @@ export function MissionBriefRows({
   compact: boolean
 }): React.JSX.Element {
   const freshness = describeFreshness(brief)
+  const objective = describeObjective(brief)
   const blockerLines = [
     ...(brief.blockers.kind === 'recorded' ? brief.blockers.lines : []),
     ...(brief.haltedRun
@@ -109,22 +112,18 @@ export function MissionBriefRows({
       <BriefRow
         icon={Crosshair}
         label={translate('missionBrief.row.objective', 'Objective')}
-        meta={translate('missionBrief.meta.goal', 'Project goal')}
+        meta={objective.source}
         metaIcon={Flag}
         compact={compact}
       >
-        <ClaimValue testId="mission-brief-objective">
-          {brief.objective.kind === 'known'
-            ? brief.objective.text
-            : translate(
-                'missionBrief.objective.unknown',
-                'No milestone named in the planning state'
-              )}
-        </ClaimValue>
-        {brief.objective.kind === 'known' && brief.objective.partial ? (
+        <ClaimValue testId="mission-brief-objective">{objective.text}</ClaimValue>
+        {objective.partial ? (
           <span className="ml-2 text-[12px] text-muted-foreground">
             {translate('missionBrief.objective.partial', '(partially read)')}
           </span>
+        ) : null}
+        {objective.milestone ? (
+          <span className="block text-[12px] text-muted-foreground">{objective.milestone}</span>
         ) : null}
       </BriefRow>
 
@@ -283,6 +282,19 @@ export function MissionBriefRows({
           {freshness.text}
         </ClaimValue>
       </BriefRow>
+
+      {compact ? null : (
+        <BriefRow
+          icon={FolderOpen}
+          label={translate('missionBrief.row.records', 'Mission records')}
+          meta={translate('missionBrief.meta.recordsListed', 'Listed in the full path')}
+          compact={compact}
+        >
+          <ClaimValue testId="mission-brief-records">
+            {describeRecordCount(brief.records)}
+          </ClaimValue>
+        </BriefRow>
+      )}
     </div>
   )
 }

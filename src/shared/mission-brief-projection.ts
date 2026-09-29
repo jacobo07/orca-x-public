@@ -12,9 +12,12 @@ import type {
   HumanAttentionItem,
   MissionBrief,
   MissionFreshness,
+  MissionMilestone,
   MissionReadings,
+  MissionRecordRole,
   MissionSignal,
   MissionStage,
+  ProjectGoalGap,
   StateMdRecord
 } from './mission-brief-types'
 import { normalizePhaseId } from './mission-phase-dependencies'
@@ -22,7 +25,7 @@ import { normalizePhaseId } from './mission-phase-dependencies'
 /** A running mission whose heartbeat is older than this is not reported as progressing. */
 export const LIVE_HEARTBEAT_MS = 10 * 60_000
 
-function objectiveOf(inspect: GsdInspect | null): MissionBrief['objective'] {
+function milestoneOf(inspect: GsdInspect | null): MissionMilestone {
   const milestone = inspect?.milestone
   if (!milestone || milestone.scope === 'unscoped') {
     return { kind: 'unknown' }
@@ -32,6 +35,71 @@ function objectiveOf(inspect: GsdInspect | null): MissionBrief['objective'] {
   return text
     ? { kind: 'known', text, partial: milestone.scope !== 'complete' }
     : { kind: 'unknown' }
+}
+
+function objectiveOf(
+  readings: MissionReadings,
+  milestone: MissionMilestone
+): MissionBrief['objective'] {
+  const { projectFile, projectRecord } = readings
+  if (projectFile && projectRecord?.whatThisIs) {
+    const text = projectRecord.whatThisIs
+    return { kind: 'known', source: 'project-md', section: 'what-this-is', text, file: projectFile }
+  }
+  if (projectFile && projectRecord?.coreValue) {
+    const text = projectRecord.coreValue
+    return { kind: 'known', source: 'project-md', section: 'core-value', text, file: projectFile }
+  }
+  const projectGap: ProjectGoalGap = !projectFile
+    ? 'absent'
+    : projectRecord
+      ? 'no-goal-section'
+      : 'unreadable'
+  return milestone.kind === 'known'
+    ? {
+        kind: 'known',
+        source: 'milestone',
+        text: milestone.text,
+        partial: milestone.partial,
+        projectGap
+      }
+    : { kind: 'unknown', projectGap }
+}
+
+const ROLE_BY_NAME: Record<string, MissionRecordRole> = {
+  'PROJECT.md': 'project',
+  'STATE.md': 'state',
+  'ROADMAP.md': 'roadmap',
+  'REQUIREMENTS.md': 'requirements',
+  'config.json': 'config'
+}
+
+function recordRole(file: string): MissionRecordRole {
+  const segments = file.split('/')
+  const byName = ROLE_BY_NAME[segments.at(-1) ?? '']
+  if (byName) {
+    return byName
+  }
+  if (segments.includes('phases')) {
+    return 'phase'
+  }
+  return segments.includes('research') ? 'research' : 'other'
+}
+
+function recordsOf(readings: MissionReadings): MissionBrief['records'] {
+  if (readings.recordFiles.kind === 'unreadable') {
+    return { kind: 'unreadable' }
+  }
+  const read = new Set([readings.stateFile, readings.projectFile])
+  return {
+    kind: 'listed',
+    files: readings.recordFiles.files.map((file) => ({
+      path: file,
+      role: recordRole(file),
+      readByOrca: read.has(file)
+    })),
+    truncated: readings.recordFiles.truncated
+  }
 }
 
 function nextActionOf(smart: GsdSmartEntry | null): MissionBrief['nextAction'] {
@@ -151,11 +219,14 @@ export function projectMissionBrief(readings: MissionReadings, now: number): Mis
       : []
   const nextAction = nextActionOf(smart)
   const blockers = readings.stateRecord?.blockers
+  const milestone = milestoneOf(inspect)
 
   return {
     workstream: readings.workstream,
     stateFile: readings.stateFile,
-    objective: objectiveOf(inspect),
+    objective: objectiveOf(readings, milestone),
+    milestone,
+    records: recordsOf(readings),
     stages,
     frontier: activeId
       ? {

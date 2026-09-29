@@ -65,10 +65,17 @@ function ubInspectWithVerification(phaseId: string, status: string, nextAction: 
 describe('projectMissionBrief — real GSD output', () => {
   it('reads the objective, frontier and next step a real workstream records', () => {
     const brief = projectMissionBrief(readings(), NOW)
-    expect(brief.objective).toEqual({
+    expect(brief.milestone).toEqual({
       kind: 'known',
       text: 'Orca X Universal Backlog / Intent Ledger',
       partial: false
+    })
+    expect(brief.objective).toEqual({
+      kind: 'known',
+      source: 'milestone',
+      text: 'Orca X Universal Backlog / Intent Ledger',
+      partial: false,
+      projectGap: 'absent'
     })
     expect(brief.frontier).toMatchObject({ kind: 'known', stageId: '1' })
     expect(brief.stages.map((stage) => stage.id)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8'])
@@ -131,7 +138,7 @@ describe('projectMissionBrief — real GSD output', () => {
       }),
       NOW
     )
-    expect(brief.objective).toEqual({
+    expect(brief.milestone).toEqual({
       kind: 'known',
       text: 'v1 GSD Smoke compaction canary',
       partial: true
@@ -258,7 +265,8 @@ describe('projectMissionBrief — absence stays absence', () => {
       }),
       NOW
     )
-    expect(brief.objective).toEqual({ kind: 'unknown' })
+    expect(brief.objective).toEqual({ kind: 'unknown', projectGap: 'absent' })
+    expect(brief.milestone).toEqual({ kind: 'unknown' })
     expect(brief.frontier).toEqual({ kind: 'unknown' })
     expect(brief.stages).toEqual([])
     expect(brief.nextAction).toEqual({ kind: 'unknown' })
@@ -267,9 +275,9 @@ describe('projectMissionBrief — absence stays absence', () => {
     expect(brief.signal).toBe('unknown')
   })
 
-  it('treats a milestone GSD could not scope as an unknown objective, whatever it carries', () => {
+  it('treats a milestone GSD could not scope as unknown, whatever it carries', () => {
     const inspect = { ...ubInspect, milestone: { version: 'v1', name: 'Guess', scope: 'unscoped' } }
-    expect(projectMissionBrief(readings({ inspect }), NOW).objective).toEqual({ kind: 'unknown' })
+    expect(projectMissionBrief(readings({ inspect }), NOW).milestone).toEqual({ kind: 'unknown' })
   })
 
   it('distinguishes an empty blockers section from a missing one', () => {

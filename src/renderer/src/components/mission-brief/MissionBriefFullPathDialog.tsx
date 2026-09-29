@@ -14,6 +14,7 @@ import {
   describePhase,
   describeStageState
 } from './mission-brief-presentation'
+import { describeRecordCount, describeRecordRole } from './mission-objective-presentation'
 
 /** Every phase of the same projection the brief shows; no second roadmap is kept. */
 export function MissionBriefFullPathDialog({
@@ -78,6 +79,40 @@ export function MissionBriefFullPathDialog({
             </li>
           ))}
         </ol>
+        <section
+          className="mt-2 flex flex-col gap-1 text-[13px]"
+          data-testid="mission-brief-path-records"
+        >
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            {translate('missionBrief.path.records', 'Mission records · {{summary}}', {
+              summary: describeRecordCount(brief.records)
+            })}
+          </h3>
+          {brief.records.kind === 'listed' ? (
+            <ul className="flex flex-col">
+              {brief.records.files.map((file) => (
+                <li
+                  key={file.path}
+                  className="grid grid-cols-[1fr_auto] gap-x-4 border-t border-border py-1.5"
+                >
+                  <code className="min-w-0 truncate text-[12px]" title={file.path}>
+                    {file.path}
+                  </code>
+                  <ClaimValue
+                    testId="mission-brief-path-record-role"
+                    className="text-[12px] text-muted-foreground"
+                  >
+                    {file.readByOrca
+                      ? translate('missionBrief.path.recordReadByOrca', '{{role}} · read by Orca', {
+                          role: describeRecordRole(file.role)
+                        })
+                      : describeRecordRole(file.role)}
+                  </ClaimValue>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
         {brief.contradictions.length > 0 ? (
           <section className="mt-2 flex flex-col gap-1 text-[13px]">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

@@ -109,10 +109,54 @@ export type AutonomousWork = {
 
 export type MissionSignal = 'needs-you' | 'autonomous' | 'next' | 'unknown'
 
+/** Why PROJECT.md gave no goal: no file, a file without a goal section, or a file main could not read. */
+export type ProjectGoalGap = 'absent' | 'no-goal-section' | 'unreadable'
+
+export type MissionMilestone =
+  | { kind: 'known'; text: string; partial: boolean }
+  | { kind: 'unknown' }
+
+export type MissionRecordRole =
+  | 'project'
+  | 'state'
+  | 'roadmap'
+  | 'requirements'
+  | 'config'
+  | 'phase'
+  | 'research'
+  | 'other'
+
+export type MissionRecordFile = {
+  path: string
+  role: MissionRecordRole
+  /** Orca itself parses this file. Whether GSD reads a file is not known here, so it is never claimed. */
+  readByOrca: boolean
+}
+
 export type MissionBrief = {
   workstream: string | null
   stateFile: string
-  objective: { kind: 'known'; text: string; partial: boolean } | { kind: 'unknown' }
+  /** PROJECT.md's goal first; the milestone only when PROJECT.md states none. */
+  objective:
+    | {
+        kind: 'known'
+        source: 'project-md'
+        section: 'what-this-is' | 'core-value'
+        text: string
+        file: string
+      }
+    | {
+        kind: 'known'
+        source: 'milestone'
+        text: string
+        partial: boolean
+        projectGap: ProjectGoalGap
+      }
+    | { kind: 'unknown'; projectGap: ProjectGoalGap }
+  milestone: MissionMilestone
+  records:
+    | { kind: 'listed'; files: MissionRecordFile[]; truncated: boolean }
+    | { kind: 'unreadable' }
   stages: MissionStage[]
   frontier:
     | { kind: 'known'; stageId: string; name: string | null; status: string | null }

@@ -218,9 +218,19 @@
       "why": "Words for the signal main's projection derived from records; the header is not drawn until a brief is read."
     },
     "mission-brief-objective": {
-      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
-      "absent": "missionBrief.objective.unknown",
-      "why": "The milestone planning inspect names, quoted; PROJECT.md is not read, so a missing milestone says exactly that, never that no goal exists."
+      "producer": "src/renderer/src/components/mission-brief/mission-objective-presentation.ts#describeObjective",
+      "absent": "omitted",
+      "why": "PROJECT.md's goal quoted, else the milestone; the source is named, and an unknown says why PROJECT.md gave none."
+    },
+    "mission-brief-records": {
+      "producer": "src/renderer/src/components/mission-brief/mission-objective-presentation.ts#describeRecordCount",
+      "absent": "omitted",
+      "why": "Files main listed under .planning; a listing cut by a bound says 'at least', and an unreadable one says so."
+    },
+    "mission-brief-path-record-role": {
+      "producer": "src/renderer/src/components/mission-brief/mission-objective-presentation.ts#describeRecordRole",
+      "absent": "omitted",
+      "why": "A role derived from the file's path; 'read by Orca' marks only files main parses, never what GSD reads."
     },
     "mission-brief-frontier": {
       "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
