@@ -37,6 +37,7 @@ export type BacklogRefusalCode =
   | 'self-dependency'
   | 'merge-target-superseded'
   | 'candidate-already-resolved'
+  | 'use-merge'
 
 export type BacklogRefusal = {
   outcome: 'refused'

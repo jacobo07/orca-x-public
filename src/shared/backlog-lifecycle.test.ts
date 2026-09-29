@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   BACKLOG_TRANSITIONS,
+  canBacklogItemLoseMerge,
   checkBacklogCompletion,
   countsAsCompletionEvidence,
   isBacklogTransitionLegal
@@ -67,6 +68,13 @@ describe('BACKLOG_TRANSITIONS', () => {
     expect(isBacklogTransitionLegal('superseded', 'ready')).toBe(false)
     expect(isBacklogTransitionLegal('unknown', 'ready')).toBe(false)
     expect(isBacklogTransitionLegal('ready', 'ready')).toBe(false)
+  })
+
+  it('lets merge supersede exactly the states with a table edge into superseded', () => {
+    const losers = BACKLOG_ITEM_STATES.filter((state) => canBacklogItemLoseMerge(state))
+    expect(losers.sort()).toEqual(
+      ['blocked', 'needs-triage', 'preparing', 'ready', 'review', 'stale', 'waiting-for-executor'].sort()
+    )
   })
 })
 

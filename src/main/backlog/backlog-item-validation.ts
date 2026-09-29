@@ -78,6 +78,9 @@ export function describeBacklogItemDefect(value: unknown): string | null {
   ) {
     return 'kind, state or priority is unknown'
   }
+  if ((item.state === 'superseded') !== (item.mergedInto !== null)) {
+    return 'superseded and mergedInto disagree'
+  }
   const prefixed = (label: string, defect: string | null): string | null =>
     defect === null ? null : `${label}: ${defect}`
   return (

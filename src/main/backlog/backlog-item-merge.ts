@@ -1,4 +1,4 @@
-import { isBacklogTransitionLegal } from '../../shared/backlog-lifecycle'
+import { canBacklogItemLoseMerge } from '../../shared/backlog-lifecycle'
 import { unionBacklogExecutionLinks, unionBacklogSourceLinks } from '../../shared/backlog-merge'
 import type { BacklogRefusal, BacklogWriteOutcome } from '../../shared/backlog-outcomes'
 import type { BacklogItem } from '../../shared/backlog-types'
@@ -24,7 +24,7 @@ const isSupersededInto = (item: BacklogItem, survivorId: string): boolean =>
 
 // Phase-1 decision: only an item with a legal edge to superseded can lose a merge.
 function loserRefusal(loser: BacklogItem, survivorId: string): BacklogRefusal | null {
-  if (isSupersededInto(loser, survivorId) || isBacklogTransitionLegal(loser.state, 'superseded')) {
+  if (isSupersededInto(loser, survivorId) || canBacklogItemLoseMerge(loser.state)) {
     return null
   }
   return refuse('illegal-transition', `${loser.state}->superseded`)

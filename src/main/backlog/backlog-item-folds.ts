@@ -113,6 +113,9 @@ export function applyBacklogItemTransition(
   if (!isBacklogTransitionLegal(item.state, to)) {
     return refuse('illegal-transition', `${item.state}->${to}`)
   }
+  if (to === 'superseded') {
+    return refuse('use-merge', 'superseded is set by merge, which names the survivor')
+  }
   if (to === 'done') {
     const completion = checkBacklogCompletion(item)
     if (!completion.ok) {

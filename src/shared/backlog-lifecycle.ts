@@ -7,7 +7,7 @@ import type {
 } from './backlog-types'
 
 // Edges into `done` are further guarded by checkBacklogCompletion. Same-state is never an edge: the
-// fold answers it as `unchanged` without an event.
+// fold answers it as `unchanged` without an event. Edges into `superseded` are merge-only.
 export const BACKLOG_TRANSITIONS: Readonly<Record<BacklogItemState, readonly BacklogItemState[]>> =
   {
     'needs-triage': ['ready', 'blocked', 'dismissed', 'superseded', 'unknown', 'stale'],
@@ -44,6 +44,11 @@ export const BACKLOG_TRANSITIONS: Readonly<Record<BacklogItemState, readonly Bac
 
 export function isBacklogTransitionLegal(from: BacklogItemState, to: BacklogItemState): boolean {
   return BACKLOG_TRANSITIONS[from].includes(to)
+}
+
+/** Edges into `superseded` belong to merge alone: it is the only path that sets `mergedInto`. */
+export function canBacklogItemLoseMerge(state: BacklogItemState): boolean {
+  return isBacklogTransitionLegal(state, 'superseded')
 }
 
 /** Model-origin rows never count, and neither do retracted, stale or merely inferred ones. */
