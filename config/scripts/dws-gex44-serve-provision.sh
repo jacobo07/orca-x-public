@@ -315,13 +315,18 @@ KillMode=mixed
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
+ExecStartPre=/usr/bin/truncate -s 0 $SVC_ROOT/serve-ready.jsonl
+ExecStopPost=/usr/bin/truncate -s 0 $SVC_ROOT/serve-ready.jsonl
 ExecStart=/usr/bin/xvfb-run -a $svc_checkout/node_modules/electron/dist/electron $svc_checkout --serve --serve-bind-host 127.0.0.1 --serve-port $SERVE_PORT --serve-pairing-address 127.0.0.1 --serve-json${no_sandbox_flag}
 
 [Install]
 WantedBy=multi-user.target
 UNIT
   # Why: this file precedes the systemd unit's user, so StandardOutput=append: cannot create it.
+  # Emptied here and by ExecStartPre/ExecStopPost: a previous run's ready line must never read as
+  # READY, and each line carries a bearer pairing URL that must not accumulate across restarts.
   touch "$SVC_ROOT/serve-ready.jsonl"
+  truncate -s 0 "$SVC_ROOT/serve-ready.jsonl"
   chown "$SVC_USER:$SVC_USER" "$SVC_ROOT/serve-ready.jsonl"
   chmod 600 "$SVC_ROOT/serve-ready.jsonl"
 
