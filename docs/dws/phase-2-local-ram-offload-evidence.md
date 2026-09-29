@@ -227,6 +227,8 @@ rather than papered over. Per the plan's own explicit escape hatch (CTX-MEAS-1 /
 text): `agentReply=missing` records the agent baseline **UNMEASURED** with this reason. The agent
 leg was never faked or substituted.
 
+**Note (2026-09-30, 02-07):** The remote cause found on 2026-09-29 (an absent provider login in the orca-svc service HOME, Criterion 3) does not apply to this local case: the laptop CLI is logged in and a direct spawn answered 3/3, so this local failure remains unexplained.
+
 ### DWS-P2-SC1 verdict
 
 The plan's own success bar: "PASS only when at least the test and build legs completed with the
@@ -315,30 +317,47 @@ run is a comparable sweep of the SAME workload the baseline measured.
 
 ### Agent-turn leg (CTX-CLI-3)
 
-**Credential check** (existence-only, `test -s`, contents never read/printed/copied):
-`CLAUDE_CRED=1 CODEX_CRED=1` — a Claude Code credential IS minted in `orca-svc`'s own HOME. The
-agent-turn leg is therefore NOT blocked on a missing credential.
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> **Credential check** (existence-only, `test -s`, contents never read/printed/copied):
+> `CLAUDE_CRED=1 CODEX_CRED=1` — a Claude Code credential IS minted in `orca-svc`'s own HOME. The
+> agent-turn leg is therefore NOT blocked on a missing credential.
+
+**Correction (2026-09-30, 02-07):** That existence check ran as the ssh login user, whose home is kobii's, so it observed kobii's credential and not the service account's. WR-09 (commit 4f6cfa330) now checks `/home/orca-svc/.claude/.credentials.json` through `sudo -n -u orca-svc`, and a run whose service HOME lacks it records the agent leg as BLOCKED instead of running it.
+
 
 **Result**: `exit=1, ms=780, agentReply="missing"`. Remote-proof verdict: UNJUDGED (`not captured`
 — 780ms is shorter than the 2s sampling interval).
 
-This is **the exact same failure signature** as the accepted local baseline's own agent leg
-(`docs/dws/phase-2-local-ram-offload-evidence.md`, Criterion 1: `agentReply=missing, exit=1`,
-reproduced identically across `baseline-1` and `baseline-2`, and shown there to NOT be a
-credential or missing-binary issue via three successful direct-spawn reproductions). Observing the
-identical signature here — over the paired GEX44 environment, with a confirmed-present credential —
-rules out "remote-specific" and "credential-absent" as causes, and instead CONFIRMS the baseline's
-own finding: this is a reproducible difference between Orca's terminal/PTY dispatch mechanism and a
-direct process spawn, independent of whether the dispatch target is local or remote. Per host_rules
-("two identical failures = pivot"), this was not retried a third time through the identical PTY
-mechanism.
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> This is **the exact same failure signature** as the accepted local baseline's own agent leg
+> (`docs/dws/phase-2-local-ram-offload-evidence.md`, Criterion 1: `agentReply=missing, exit=1`,
+> reproduced identically across `baseline-1` and `baseline-2`, and shown there to NOT be a
+> credential or missing-binary issue via three successful direct-spawn reproductions). Observing the
+> identical signature here — over the paired GEX44 environment, with a confirmed-present credential —
+> rules out "remote-specific" and "credential-absent" as causes, and instead CONFIRMS the baseline's
+> own finding: this is a reproducible difference between Orca's terminal/PTY dispatch mechanism and a
+> direct process spawn, independent of whether the dispatch target is local or remote. Per host_rules
+> ("two identical failures = pivot"), this was not retried a third time through the identical PTY
+> mechanism.
 
-**Agent-turn leg verdict: neither PASS nor a credential-absence BLOCKED.** Recorded precisely as:
+**Correction (2026-09-30, 02-07):** The same signature does not share a cause. The laptop-local agent-leg failure recorded in Criterion 1 is a separate case: the laptop CLI is logged in and a direct spawn answered 3/3, so that failure stays unexplained. The remote one is an absent provider login in the orca-svc service HOME (next correction). The wrapper printed `missing` because its classifier had no login outcome; 02-07 added `not-logged-in` and `spawn-failed`.
 
-`AGENT_LEG = BLOCKED (reason: reproducible PTY-dispatch failure, agentReply=missing exit=1 — same
-signature as the accepted local baseline's agent leg; credential confirmed present
-(CLAUDE_CRED=1), ruling out T-02-03's "no credential" cause; root cause not isolated within this
-plan's time budget, tracked as follow-up work, never faked or substituted)`
+
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> **Agent-turn leg verdict: neither PASS nor a credential-absence BLOCKED.** Recorded precisely as:
+>
+> `AGENT_LEG = BLOCKED (reason: reproducible PTY-dispatch failure, agentReply=missing exit=1 — same
+> signature as the accepted local baseline's agent leg; credential confirmed present
+> (CLAUDE_CRED=1), ruling out T-02-03's "no credential" cause; root cause not isolated within this
+> plan's time budget, tracked as follow-up work, never faked or substituted)`
+
+**Correction (2026-09-30, 02-07):** Measured 2026-09-29 by a direct probe as orca-svc in the serve's WorkingDirectory: the agent leg prints `Not logged in · Please run /login`, exit=1, ~0.75 s, both plain and under a real PTY (`script -qec`); the service HOME holds no `.credentials.json` and no auth environment variable. This is recorded in the phase verification (a planning record, not committed). Not claimed: which of the two exit-1 causes (a missing login or an unstartable binary) produced 02-05's own 780 ms run, because its text was not captured; either way the service HOME had no login, so the leg could not have succeeded.
+
+`AGENT_LEG = BLOCKED (reason: no provider login in the orca-svc service HOME; the CLI prints "Not logged in", exit=1; never faked or substituted)`
+
 
 ### DWS-P2-SC3 verdict
 
@@ -346,14 +365,23 @@ Per the plan's formula ("PASS only if the desktop attach passed AND the test-run
 remote-proof PASS AND the agent-turn leg is PASS; with the agent leg BLOCKED the verdict is BLOCKED
 (agent-turn leg: <reason>; test-run and build legs PASS)"):
 
-**`DWS-P2-SC3 = BLOCKED (agent-turn leg: reproducible PTY-dispatch failure — agentReply=missing,
-credential confirmed present, same signature as the local baseline's own agent leg; test-run leg
-PASS with remote-proof PASS; build leg exit=0 but remote-proof UNJUDGED due to the 2s capture
-interval being longer than the leg's 897ms runtime)`**
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> **`DWS-P2-SC3 = BLOCKED (agent-turn leg: reproducible PTY-dispatch failure — agentReply=missing,
+> credential confirmed present, same signature as the local baseline's own agent leg; test-run leg
+> PASS with remote-proof PASS; build leg exit=0 but remote-proof UNJUDGED due to the 2s capture
+> interval being longer than the leg's 897ms runtime)`**
+>
+> Owner action to close the BLOCKED status: none available today — the underlying cause is a product
+> defect in Orca's PTY/terminal dispatch path (not a credential or configuration gap an Owner action
+> can fix), tracked as follow-up investigation.
 
-Owner action to close the BLOCKED status: none available today — the underlying cause is a product
-defect in Orca's PTY/terminal dispatch path (not a credential or configuration gap an Owner action
-can fix), tracked as follow-up investigation.
+**Correction (2026-09-30, 02-07):** Corrected verdict:
+
+`DWS-P2-SC3 = BLOCKED (agent-turn leg: no provider login in the orca-svc service HOME; test-run leg PASS with remote-proof PASS; build leg exit=0, remote-proof UNJUDGED at the 2 s capture interval)`
+
+Owner action: open a terminal on the paired `gex44-svc` host in Orca (a child of the serve, so the agent-binary bind exists), run `/home/orca-svc/.orca-dws/agent-bin/claude`, type `/login` and finish the browser flow. Never copy a credential file from another HOME. Plan 02-08 carries the checkpoint.
+
 
 ## Criterion 4 — laptop absence, memory delta, stream latency (plan 02-05)
 
@@ -363,11 +391,16 @@ against a same-harness local floor.
 
 ### Sweeps (both reported)
 
-Two remote sweeps were run; both show the SAME per-family absence result (the laptop sampler saw
-zero of every family in both sweeps) and both show an INCONCLUSIVE memory bracket due to this
-laptop's own background memory churn exceeding the workload's signal — a genuine host
-characteristic, not a defect in the instrument (both sweeps used the identical sampler as the
-baseline, per CTX-MEAS-2).
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> Two remote sweeps were run; both show the SAME per-family absence result (the laptop sampler saw
+> zero of every family in both sweeps) and both show an INCONCLUSIVE memory bracket due to this
+> laptop's own background memory churn exceeding the workload's signal — a genuine host
+> characteristic, not a defect in the instrument (both sweeps used the identical sampler as the
+> baseline, per CTX-MEAS-2).
+
+**Correction (2026-09-30, 02-07):** Absence in both offload sweeps was attributed by run nonce only. The remote manifest carried no `desktopRootPid`, so the desktop subtree resolved to size 1: the committed `docs/dws/phase-2-offload-summary.json` records `desktopSubtreeSize=1` and `harnessSubtreeSize=0` (the baseline sighted 251 and 285). No family was looked for inside the desktop's own subtree, where the baseline sighted them. Measured in 02-07: `observationDefects` over that committed summary returns `["no observation record (summary predates the validity checks, or was hand-built)"]`, so the post-review instrument (CR-02) cannot judge it as an observed run. The spec now records `desktopRootPid` (02-07); plan 02-08 re-measures.
+
 
 | Sweep | Legs | Free MB before/after (orchestrator) | Drift MB | workloadTotal.peakMb (baseline vs offload delta) | Bracket |
 |---|---|---|---|---|---|
@@ -391,10 +424,15 @@ includes the agent leg); `docs/dws/phase-2-offload-summary.json` carries its tri
 | `indexer` | 0 | 0 | UNJUDGED (`no positive control`) | `rg.exe`, or `tsserver` |
 | `orca-cli` | 0 | 0 | UNJUDGED (`no positive control`) | `node`/`node.exe` + `out/cli/index.js` |
 
-Every family the baseline actually sighted (`vitest`, `tsc`, `claude`, `codex`,
-`workload-wrapper`) reads **PASS** for absence during the offload run — the workload the baseline
-measured locally left no trace on the laptop while running on GEX44. Families the baseline never
-sighted stay UNJUDGED, never counted as PASS (CTX-MEAS-3).
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> Every family the baseline actually sighted (`vitest`, `tsc`, `claude`, `codex`,
+> `workload-wrapper`) reads **PASS** for absence during the offload run — the workload the baseline
+> measured locally left no trace on the laptop while running on GEX44. Families the baseline never
+> sighted stay UNJUDGED, never counted as PASS (CTX-MEAS-3).
+
+**Correction (2026-09-30, 02-07):** The per-family PASS above means only that no process carrying the run's nonce was seen outside the desktop subtree. Nothing was sought inside the desktop's own subtree, so it does not show that the workload left no trace on the laptop. It is an attribution result, not an observed absence; the UNJUDGED rows are unchanged.
+
 
 ### MB delta (per family, baseline minus offload; offload's own footprint is 0 MB for every
 family in both sweeps, so the delta equals the baseline's own peak/median)
@@ -406,13 +444,18 @@ family in both sweeps, so the delta equals the baseline's own peak/median)
 | `claude` | 233.859 | 0 | **233.859** | 214.414 | 0 | **214.414** |
 | `codex` | 12.391 | 0 | **12.391** | 12.391 | 0 | **12.391** |
 | `workload-wrapper` | 56.195 | 0 | **56.195** | 56.156 | 0 | **56.156** |
-| `control-surface` (desktop itself, reported separately, never mixed into workloadTotal) | 1362.035 | 0 | 1362.035 | 1013.421 | 0 | 1013.421 |
+| `control-surface` (desktop itself, reported separately, never mixed into workloadTotal) (offload side unmeasured — see correction) | 1362.035 | 0 | 1362.035 | 1013.421 | 0 | 1013.421 |
 | **`workloadTotal`** (sum of workload families, per sample, peak) | 956.86 | 0 | **956.86** | 142.305 | 0 | **142.305** |
 
-Instrument: `Win32_Process.WorkingSetSize via Get-CimInstance` (identical sampler to the baseline,
-CTX-MEAS-2). Control-surface footprint reported separately in both conditions
-(`controlSurfaceFootprint.offload.maxCount=0` — the offload run's own laptop desktop overhead was
-not attributed to the workload).
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> Instrument: `Win32_Process.WorkingSetSize via Get-CimInstance` (identical sampler to the baseline,
+> CTX-MEAS-2). Control-surface footprint reported separately in both conditions
+> (`controlSurfaceFootprint.offload.maxCount=0` — the offload run's own laptop desktop overhead was
+> not attributed to the workload).
+
+**Correction (2026-09-30, 02-07):** The control-surface offload values of 0 are there because the desktop root was unresolved, not because the running desktop used 0 MB, so the 1362.035 / 1013.421 figures are withdrawn as a freed amount. The per-family deltas equal the baseline's own values because the offload side attributed nothing; they are not measured reductions while the bracket is INCONCLUSIVE.
+
 
 **Bracket verdict: INCONCLUSIVE in both sweeps** (`offload-1`: "free-memory drift 4092.75MB >=
 delta 956.86MB"; `offload-2`: "free-memory drift 3032.82MB >= delta 956.86MB"). This laptop's own
@@ -442,17 +485,26 @@ IPC) rather than a network-bound cost from the SSH tunnel.
 Per the plan's formula ("PASS only if every workload family the baseline sighted reads PASS for
 absence, the delta is not INCONCLUSIVE, and stream latency is MEASURED"):
 
-**`DWS-P2-SC4 = INCONCLUSIVE (bracket: free-memory drift exceeds the workload's peak delta in both
-independent sweeps — offload-1 drift=4092.75MB, offload-2 drift=3032.82MB, both >= delta=956.86MB;
-every baseline-sighted family (vitest, tsc, claude, codex, workload-wrapper) reads PASS for
-absence; stream latency is MEASURED, N=7, remote medianMs=964.64 vs local-floor medianMs=926.96)`**
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> **`DWS-P2-SC4 = INCONCLUSIVE (bracket: free-memory drift exceeds the workload's peak delta in both
+> independent sweeps — offload-1 drift=4092.75MB, offload-2 drift=3032.82MB, both >= delta=956.86MB;
+> every baseline-sighted family (vitest, tsc, claude, codex, workload-wrapper) reads PASS for
+> absence; stream latency is MEASURED, N=7, remote medianMs=964.64 vs local-floor medianMs=926.96)`**
+>
+> The absence claim itself (the workload left no trace on the laptop) is fully proven (PASS on every
+> positive-controlled family, in both independent sweeps). What remains INCONCLUSIVE is only the
+> bracket's ability to attribute the ~957MB peak delta specifically to the offload, rather than to
+> this laptop's own multi-GB background memory churn — a host characteristic outside this plan's
+> control, not a defect in the measurement instrument (CTX-MEAS-1's bracket rule correctly refused to
+> claim more than the data supports).
 
-The absence claim itself (the workload left no trace on the laptop) is fully proven (PASS on every
-positive-controlled family, in both independent sweeps). What remains INCONCLUSIVE is only the
-bracket's ability to attribute the ~957MB peak delta specifically to the offload, rather than to
-this laptop's own multi-GB background memory churn — a host characteristic outside this plan's
-control, not a defect in the measurement instrument (CTX-MEAS-1's bracket rule correctly refused to
-claim more than the data supports).
+**Correction (2026-09-30, 02-07):** Corrected verdict:
+
+`DWS-P2-SC4 = INCONCLUSIVE (bracket drift 4092.75 / 3032.82 MB >= 956.86 MB in both sweeps; absence PASS by run nonce only — desktop subtree unresolved in both sweeps; stream latency MEASURED N=7)`
+
+Absence is PASS by run nonce only, and the quantitative bracket is INCONCLUSIVE.
+
 
 ## Criterion 5 — quit continuity, reader rung, backfill, reattach latency, device count (plan 02-06)
 
@@ -536,15 +588,25 @@ BACKFILL PASS with a live-reader control; reattach latency MEASURED, N=6, median
 |---|---|---|---|---|
 | SC1 (local baseline) | **PASS** (baseline sweep `baseline-2`; agent leg UNMEASURED, reason recorded in Criterion 1) | `dws-offload-workload.mjs` + laptop process sampler, ~1s cadence | `docs/dws/phase-2-baseline-summary.json` | `883138dcf` |
 | SC2 (loopback-only serve, no public port) | **PASS** (all four legs (a)-(d)) | `Test-DwsNoPublicPort -Port 6791`, `ss`/`curl`/`TcpClient` from inside and outside the host | `docs/dws/phase-2-local-ram-offload-evidence.md` Criterion 2 | `b8e385a0b` |
-| SC3 (desktop attach + remote execution proof) | **BLOCKED** (agent-turn leg: reproducible PTY-dispatch failure, `agentReply=missing exit=1`, same signature as the accepted local baseline's own agent leg, credential confirmed present; test-run and build legs PASS) | `extractRemoteProof` against timestamped `ps --forest` captures under the serve MainPID | `docs/dws/phase-2-offload-summary.json`, `tests/e2e/dws-offload-workload.spec.ts` | `0b805a9b2` |
-| SC4 (laptop absence + memory delta + stream latency) | **INCONCLUSIVE** (absence PASS on every baseline-sighted family with positive controls, both sweeps; the quantitative MB bracket is INCONCLUSIVE — free-memory drift exceeds the workload's peak delta in both sweeps; stream latency MEASURED N=7) | laptop process sampler + `dws-offload-measurement.mjs compare`/`latency` | `docs/dws/phase-2-memory-delta.json`, `docs/dws/phase-2-stream-latency-remote.json` | `77314485a` / `d1a0ca38f` |
+| SC3 (desktop attach + remote execution proof) | **BLOCKED** (agent-turn leg: no provider login in the orca-svc service HOME; test-run leg PASS with remote-proof PASS; build leg exit=0, remote-proof UNJUDGED at the 2 s capture interval) (corrected 2026-09-30, 02-07) | `extractRemoteProof` against timestamped `ps --forest` captures under the serve MainPID | `docs/dws/phase-2-offload-summary.json`, `tests/e2e/dws-offload-workload.spec.ts` | `0b805a9b2` |
+| SC4 (laptop absence + memory delta + stream latency) | **INCONCLUSIVE** (bracket drift 4092.75 / 3032.82 MB >= 956.86 MB in both sweeps; absence PASS by run nonce only — desktop subtree unresolved in both sweeps; stream latency MEASURED N=7) (corrected 2026-09-30, 02-07) | laptop process sampler + `dws-offload-measurement.mjs compare`/`latency` | `docs/dws/phase-2-memory-delta.json`, `docs/dws/phase-2-stream-latency-remote.json` | `77314485a` / `d1a0ca38f` |
 | SC5 (quit continuity + web-client reattach + backfill) | **PASS** (real clean quit, 95 new remote ticks unattended under the unchanged serve MainPID; BACKFILL PASS with a live-reader control; reattach latency MEASURED N=6) | `electronApp.evaluate(app.quit())` raced against the process `exit` event; `window.__paneManagers...serializeAddon.serialize()` via a headless msedge second client | `tests/e2e/dws-remote-continuity.spec.ts`, `config/scripts/dws-web-client-reattach.mjs`, `docs/dws/phase-2-reattach-latency.json` | `84ca86e8c` |
 
-Only SC1, SC2 and SC5 are unqualified PASS. SC3 is BLOCKED on a product defect (not a credential or
-configuration gap). SC4's decisive half (absence) is proven; its quantitative bracket is
-INCONCLUSIVE on this specific laptop's own background memory churn. Neither BLOCKED nor
-INCONCLUSIVE is upgraded to PASS by this plan — both are carried forward honestly, per host_rules
-("never upgrade SC3/SC4 without new evidence").
+> **Superseded row text (2026-09-30, 02-07):**
+>
+> | SC3 (desktop attach + remote execution proof) | **BLOCKED** (agent-turn leg: reproducible PTY-dispatch failure, `agentReply=missing exit=1`, same signature as the accepted local baseline's own agent leg, credential confirmed present; test-run and build legs PASS) | `extractRemoteProof` against timestamped `ps --forest` captures under the serve MainPID | `docs/dws/phase-2-offload-summary.json`, `tests/e2e/dws-offload-workload.spec.ts` | `0b805a9b2` |
+> | SC4 (laptop absence + memory delta + stream latency) | **INCONCLUSIVE** (absence PASS on every baseline-sighted family with positive controls, both sweeps; the quantitative MB bracket is INCONCLUSIVE — free-memory drift exceeds the workload's peak delta in both sweeps; stream latency MEASURED N=7) | laptop process sampler + `dws-offload-measurement.mjs compare`/`latency` | `docs/dws/phase-2-memory-delta.json`, `docs/dws/phase-2-stream-latency-remote.json` | `77314485a` / `d1a0ca38f` |
+
+> **Superseded 2026-09-30 (02-07) — kept as recorded, conclusion disproven:**
+>
+> Only SC1, SC2 and SC5 are unqualified PASS. SC3 is BLOCKED on a product defect (not a credential or
+> configuration gap). SC4's decisive half (absence) is proven; its quantitative bracket is
+> INCONCLUSIVE on this specific laptop's own background memory churn. Neither BLOCKED nor
+> INCONCLUSIVE is upgraded to PASS by this plan — both are carried forward honestly, per host_rules
+> ("never upgrade SC3/SC4 without new evidence").
+
+**Correction (2026-09-30, 02-07):** Only SC1, SC2 and SC5 are unqualified PASS. SC3 is BLOCKED on an Owner login in the orca-svc service HOME. SC4 is INCONCLUSIVE, with absence judged by run nonce only. Neither is upgraded to PASS without new evidence.
+
 
 ## Named debt
 
@@ -557,12 +619,18 @@ INCONCLUSIVE is upgraded to PASS by this plan — both are carried forward hones
 
 | Item | State | Reason | Owner action to close |
 |---|---|---|---|
-| SC3 agent-turn leg | BLOCKED | Reproducible PTY-dispatch failure (`agentReply=missing exit=1`), same signature as the accepted local baseline's own agent leg; credential confirmed present in the service HOME, ruling out a missing-credential cause | None available today — this is a product defect in Orca's terminal/PTY dispatch path, tracked as follow-up investigation; root cause not isolated within this plan's time budget |
+| SC3 agent-turn leg | BLOCKED | No provider login in the orca-svc service HOME: the CLI prints `Not logged in · Please run /login`, exit=1 (measured 2026-09-29) (corrected 2026-09-30, 02-07) | Open a terminal on the paired `gex44-svc` host in Orca, run `/home/orca-svc/.orca-dws/agent-bin/claude`, type `/login` and finish the browser flow; never copy a credential file from another HOME (02-08 carries the checkpoint) |
 | SC3 build leg remote-proof | UNJUDGED | The leg completed successfully (`exit=0`, `897ms`) but ran faster than the 2s `ps-capture` sampling interval could reliably catch | None — not a failure of the leg itself; a tighter capture interval (< 897ms) would close this, at the cost of larger capture files |
 | SC4 quantitative MB bracket | INCONCLUSIVE | Free-memory drift on this laptop (4092.75MB / 3032.82MB across two independent sweeps) exceeds the workload's own peak delta (956.86MB), swamping the signal | None available from this plan — would require running the same comparison on a laptop with materially less background memory churn, or a longer/heavier workload whose delta exceeds typical drift |
-| Row 46 agent-turn leg (GEX44 heavy execution) | BLOCKED | Same PTY-dispatch defect as the SC3 agent-turn leg, reproduced again on GEX44 | Same as SC3 agent-turn leg — one underlying product defect, two matrix rows |
+| Row 46 agent-turn leg (GEX44 heavy execution) | BLOCKED | Same cause as the SC3 agent-turn leg: no provider login in the orca-svc service HOME (corrected 2026-09-30, 02-07) | Same login as the SC3 agent-turn leg — one cause, two matrix rows |
+| SC4 absence attribution | nonce-only | remote manifest carried no desktopRootPid (fixed in the spec by 02-07) | none — re-measured by 02-08 |
 | ND-2 (ssh -L tunnel) | Named debt | The laptop reaches GEX44 through an Owner-key `ssh -L` forward, not a dispatcher-owned tunnel | Retires when UWCP S5's dispatcher-owned tunnel carries one paired-client session to `orca serve` on GEX44 |
 | Row 49 (Security), 52 (Knowledge Vault), 53 (UKDL), 54 (Constitutive Baseline Ratchet) | ABSENT | `reason: program` — out of this plan's scope, owned by later phases/programs | None — tracked at the program level, not this plan |
+
+> **Superseded row text (2026-09-30, 02-07):**
+>
+> | SC3 agent-turn leg | BLOCKED | Reproducible PTY-dispatch failure (`agentReply=missing exit=1`), same signature as the accepted local baseline's own agent leg; credential confirmed present in the service HOME, ruling out a missing-credential cause | None available today — this is a product defect in Orca's terminal/PTY dispatch path, tracked as follow-up investigation; root cause not isolated within this plan's time budget |
+> | Row 46 agent-turn leg (GEX44 heavy execution) | BLOCKED | Same PTY-dispatch defect as the SC3 agent-turn leg, reproduced again on GEX44 | Same as SC3 agent-turn leg — one underlying product defect, two matrix rows |
 
 ## State left in place
 

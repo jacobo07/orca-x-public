@@ -954,10 +954,10 @@
         {
           "kind": "file",
           "path": "docs/dws/phase-2-memory-delta.json",
-          "note": "02-05: absence PASS for every baseline-sighted family (vitest, tsc, claude, codex, workload-wrapper) with a positive control across TWO independent sweeps; the peak-delta BRACKET is INCONCLUSIVE both times (free-memory drift 4092.75MB / 3032.82MB >= workloadTotal peakDeltaMb 956.86MB) -- this laptop's own background memory churn exceeds the workload's signal"
+          "note": "02-05: absence was judged by run nonce only in both sweeps, because the remote manifest carried no desktopRootPid (desktop subtree size 1); the peak-delta BRACKET is INCONCLUSIVE both times (free-memory drift 4092.75MB / 3032.82MB >= workloadTotal peakDeltaMb 956.86MB) -- this laptop's own background memory churn exceeds the workload's signal (corrected 2026-09-30, 02-07)"
         }
       ],
-      "reason": "measured 2026-09-28: the more decisive half (absence of local claude/codex/vitest/build/indexer processes during offload) is PASS with a positive control on two independent sweeps; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
+      "reason": "measured 2026-09-28, corrected 2026-09-30 (02-07): absence of local claude/codex/vitest/build/indexer processes during offload was judged by run nonce only, because the remote manifest carried no desktopRootPid (desktop subtree size 1), so the desktop's own subtree was never searched; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
     },
     {
       "id": 46,
@@ -989,7 +989,7 @@
           "note": "02-06: independent confirmation the GEX44 runtime executes and reports real host facts under the same runtimeId"
         }
       ],
-      "reason": "measured 2026-09-28: the test-run leg's remote process tree proof is PASS (real vitest process captured under the serve's PID tree, peakRssMb=589.14); the agent-turn leg is BLOCKED (reproducible exit=1/agentReply=missing when dispatched via terminal-create PTY, credential confirmed present in the service HOME, same signature as the pre-existing local PTY-dispatch defect from 02-04) -- a product defect requiring PTY-environment investigation, no Owner action available to close it"
+      "reason": "measured 2026-09-28: the test-run leg's remote process tree proof is PASS (real vitest process captured under the serve's PID tree, peakRssMb=589.14); the agent-turn leg is BLOCKED, no provider login in the orca-svc service HOME (measured 2026-09-29: the CLI prints 'Not logged in', exit=1); Owner action = interactive login as orca-svc on GEX44, never a copied credential (cause corrected 2026-09-30, 02-07)"
     },
     {
       "id": 47,
