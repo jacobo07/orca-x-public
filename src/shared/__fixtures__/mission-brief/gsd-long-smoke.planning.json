@@ -1,0 +1,216 @@
+﻿{
+  "schema_version": 1,
+  "generated_from": {
+    "cwd": "C:/Users/User/Desktop/Cursor Projects/gsd-long-smoke",
+    "planning_root": "C:/Users/User/Desktop/Cursor Projects/gsd-long-smoke/.planning"
+  },
+  "milestone": {
+    "version": "\"\\\"'v1 GSD Smoke compaction canary'\\\"\"",
+    "name": null,
+    "scope": "truncated"
+  },
+  "active": {
+    "phase": {
+      "value": "1",
+      "scope": "complete"
+    },
+    "plan": {
+      "value": "1 of 1",
+      "scope": "complete"
+    },
+    "status": {
+      "value": "executing",
+      "scope": "complete"
+    }
+  },
+  "phases": [
+    {
+      "dir": "01-scaffold",
+      "phase_id": "01",
+      "complete": false,
+      "goal": {
+        "value": null,
+        "scope": "complete"
+      },
+      "dependencies": {
+        "value": [],
+        "scope": "complete"
+      },
+      "verification": {
+        "status": "stale",
+        "next_action": "Verification is stale. Re-run verify-work before transition."
+      },
+      "roadmap_acceptance": {
+        "checkbox": false,
+        "authoritative": false
+      },
+      "uat": {
+        "unresolved": [],
+        "scope": "complete"
+      },
+      "plan_count": 1,
+      "summary_count": 1,
+      "plans": [
+        {
+          "id": "01-01",
+          "file": "01-01-PLAN.md",
+          "superseded": false,
+          "objective": "Stand up the `smoketext` package and a pytest harness whose passing result is earned (REQ-01). Phase goal from ROADMAP: \"`smoketext/` package exists and `python -m pytest` passes.\"",
+          "wave": 1,
+          "dependsOn": [],
+          "autonomous": true,
+          "agentHint": null,
+          "plannedFiles": [
+            "smoketext/__init__.py",
+            "tests/test_scaffold.py",
+            ".gitignore"
+          ],
+          "changedFiles": [
+            ".gitignore",
+            "smoketext/__init__.py",
+            "tests/test_scaffold.py"
+          ],
+          "hasSummary": true,
+          "tasks": [
+            {
+              "index": 1,
+              "kind": "auto",
+              "type": "tracer",
+              "name": "Task 1: End-to-end scaffold path: pinned interpreter, pytest collection, import smoketext, assertion",
+              "plannedFiles": [
+                "smoketext/__init__.py",
+                "tests/test_scaffold.py"
+              ],
+              "acceptanceCriteria": [
+                "`smoketext/__init__.py` exists and its only statement is a module docstring (one string literal, no other code).",
+                "`smoketext/` contains exactly one `.py` file. In PowerShell, `(Get-ChildItem smoketext -Filter *.py).Name` prints only `__init__.py`.",
+                "`tests/test_scaffold.py` contains `def test_package_is_importable` and the identity comparison against `REPO_ROOT / \"smoketext\" / \"__init__.py\"`.",
+                "The verify command exits 0 and its last line contains `1 passed`.",
+                "The repo root has no `conftest.py`, `pytest.ini`, `pyproject.toml`, `setup.py` or `tests/__init__.py`."
+              ],
+              "done": "The pinned interpreter imports this checkout's smoketext through pytest, and the one path from invocation to assertion is green and committed. Commit only the two new files, scoped by pathspec.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            },
+            {
+              "index": 2,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 2: Make the green attributable: two-sided child-process import probe, and a clean tree after test runs",
+              "plannedFiles": [
+                "tests/test_scaffold.py",
+                ".gitignore"
+              ],
+              "acceptanceCriteria": [
+                "The phase-gate command (the first verify command, run from the repo root) exits 0, and its last line contains `3 passed` with no `skipped`, `xfailed`, `xpassed`, `failed` or `error`.",
+                "`tests/test_scaffold.py` defines exactly three test functions: `test_package_is_importable`, `test_smoketext_is_not_installed_in_interpreter` and `test_probe_resolves_checkout_when_on_path`.",
+                "`tests/test_scaffold.py` contains `sys.executable`, `timeout=60`, and `REPO_ROOT / \"tests\"` as the probe cwd. It does not use the `tmp_path` or `tmpdir` fixtures.",
+                "`.gitignore` contains the lines `.planning/.smoke-launched`, `__pycache__/` and `.pytest_cache/`, each exactly once.",
+                "Right after the gate run, `git status --porcelain --untracked-files=all` shows no path containing `__pycache__` or `.pytest_cache`.",
+                "No install command ran during this plan, and the interpreter's installed set is unchanged. This is proven in-suite by `test_smoketext_is_not_installed_in_interpreter` passing."
+              ],
+              "done": "The suite reports 3 passed. Its green is attributable to this checkout: a two-sided probe shows the package resolves only from the repo and is absent from the shared interpreter. A test run leaves no untracked cache paths. Commit the test file and .gitignore, scoped by pathspec.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            }
+          ],
+          "scope": "complete"
+        }
+      ],
+      "scope": "complete"
+    },
+    {
+      "dir": "09-word-count-add-smoketext-wordcount-py-with-count-words-text",
+      "phase_id": "09",
+      "complete": false,
+      "goal": {
+        "value": null,
+        "scope": "complete"
+      },
+      "dependencies": {
+        "value": [
+          "8"
+        ],
+        "scope": "complete"
+      },
+      "verification": {
+        "status": "missing",
+        "next_action": "No verification report found — the verify step never completed. Running execute-phase is safe here: it resumes at the verification gates and does not re-run plans that already have a SUMMARY.md (see #2868)."
+      },
+      "roadmap_acceptance": {
+        "checkbox": false,
+        "authoritative": false
+      },
+      "uat": {
+        "unresolved": [],
+        "scope": "complete"
+      },
+      "plan_count": 0,
+      "summary_count": 0,
+      "plans": [],
+      "scope": "complete"
+    }
+  ],
+  "orphan_phase_dirs": [],
+  "requirements": [],
+  "progress": {
+    "accepted_phases": {
+      "completed": 0,
+      "total": 2,
+      "percent": null,
+      "scope": "unscoped"
+    },
+    "completed_plans": {
+      "completed": 1,
+      "total": 1,
+      "percent": null,
+      "scope": "unscoped"
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "roadmap_unscoped",
+      "subject": "C:/Users/User/Desktop/Cursor Projects/gsd-long-smoke/.planning/ROADMAP.md",
+      "detail": "Milestone identity scope is \"truncated\"; no version is invented to stand in for it."
+    },
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-01-PLAN.md#1",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-01-PLAN.md#2",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "uat_absent",
+      "subject": "01-scaffold",
+      "detail": "No UAT document for this phase. This does not affect phase acceptance."
+    },
+    {
+      "code": "uat_absent",
+      "subject": "09-word-count-add-smoketext-wordcount-py-with-count-words-text",
+      "detail": "No UAT document for this phase. This does not affect phase acceptance."
+    },
+    {
+      "code": "requirements_absent",
+      "subject": "C:/Users/User/Desktop/Cursor Projects/gsd-long-smoke/.planning/REQUIREMENTS.md",
+      "detail": "REQUIREMENTS.md does not exist; no requirement rows are available."
+    },
+    {
+      "code": "percent_withheld",
+      "subject": "progress.accepted_phases",
+      "detail": "Scope is \"unscoped\"; a percentage derived from an incomplete read would be a confident wrong answer."
+    },
+    {
+      "code": "percent_withheld",
+      "subject": "progress.completed_plans",
+      "detail": "Scope is \"unscoped\"; a percentage derived from an incomplete read would be a confident wrong answer."
+    }
+  ]
+}

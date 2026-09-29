@@ -1,0 +1,607 @@
+﻿{
+  "schema_version": 1,
+  "generated_from": {
+    "cwd": "C:/Users/User/Apps/orca-backlog-wt",
+    "planning_root": "C:/Users/User/Apps/orca-backlog-wt/.planning/workstreams/ub"
+  },
+  "milestone": {
+    "version": "Orca X Universal Backlog / Intent Ledger",
+    "name": "(workstream `ub`)",
+    "scope": "complete"
+  },
+  "active": {
+    "phase": {
+      "value": "1",
+      "scope": "complete"
+    },
+    "plan": {
+      "value": null,
+      "scope": "unscoped"
+    },
+    "status": {
+      "value": "executing",
+      "scope": "truncated"
+    }
+  },
+  "phases": [
+    {
+      "dir": "01-intent-ledger-foundation",
+      "phase_id": "01",
+      "complete": false,
+      "goal": {
+        "value": null,
+        "scope": "complete"
+      },
+      "dependencies": {
+        "value": [],
+        "scope": "complete"
+      },
+      "verification": {
+        "status": "missing",
+        "next_action": "No verification report found — the verify step never completed. Running execute-phase is safe here: it resumes at the verification gates and does not re-run plans that already have a SUMMARY.md (see #2868)."
+      },
+      "roadmap_acceptance": {
+        "checkbox": false,
+        "authoritative": false
+      },
+      "uat": {
+        "unresolved": [],
+        "scope": "complete"
+      },
+      "plan_count": 4,
+      "summary_count": 2,
+      "plans": [
+        {
+          "id": "01-01",
+          "file": "01-01-PLAN.md",
+          "superseded": false,
+          "objective": "Tracer slice for the Universal Backlog intent ledger (workstream `ub`, Phase 1): one item captured over",
+          "wave": 1,
+          "dependsOn": [],
+          "autonomous": true,
+          "agentHint": null,
+          "plannedFiles": [
+            "src/shared/backlog-types.ts",
+            "src/shared/backlog-outcomes.ts",
+            "src/shared/backlog-identity.ts",
+            "src/shared/backlog-rpc-limits.ts",
+            "src/shared/protocol-version.ts",
+            "src/main/backlog/backlog-identity-mint.ts",
+            "src/main/backlog/backlog-record-queue.ts",
+            "src/main/backlog/backlog-record-file.ts",
+            "src/main/backlog/backlog-record-envelope.ts",
+            "src/main/backlog/backlog-record-field-validation.ts",
+            "src/main/backlog/backlog-item-validation.ts",
+            "src/main/backlog/backlog-record-store.ts",
+            "src/main/backlog/backlog-service.ts",
+            "src/main/backlog/backlog-host.ts",
+            "src/main/backlog/backlog-store-syscall-proof.test.ts",
+            "src/main/runtime/orca-runtime.ts",
+            "src/main/runtime/rpc/methods/backlog-params.ts",
+            "src/main/runtime/rpc/methods/backlog.ts",
+            "src/main/runtime/rpc/methods/index.ts",
+            "src/main/runtime/rpc/methods/backlog.test.ts",
+            "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts",
+            "src/main/runtime/backlog-capability.test.ts",
+            "src/main/orca-profiles/profile-storage-paths.ts",
+            "src/main/orca-profiles/backlog-directory-profile-isolation.test.ts",
+            "src/main/ipc/backlog-host-wiring.ts",
+            "src/main/index.ts",
+            "config/durability-contracts.jsonc",
+            "config/mobile-capability-aperture-baseline.txt"
+          ],
+          "changedFiles": [],
+          "hasSummary": true,
+          "tasks": [
+            {
+              "index": 1,
+              "kind": "auto",
+              "type": "tracer",
+              "name": "Task 1a (tracer 1/2): capture persists one item through the fsync barrier; a fresh instance reads it back",
+              "plannedFiles": [
+                "src/shared/backlog-types.ts",
+                "src/shared/backlog-outcomes.ts",
+                "src/shared/backlog-identity.ts",
+                "src/shared/backlog-rpc-limits.ts",
+                "src/main/backlog/backlog-identity-mint.ts",
+                "src/main/backlog/backlog-record-queue.ts",
+                "src/main/backlog/backlog-record-file.ts",
+                "src/main/backlog/backlog-record-envelope.ts",
+                "src/main/backlog/backlog-record-field-validation.ts",
+                "src/main/backlog/backlog-item-validation.ts",
+                "src/main/backlog/backlog-record-store.ts",
+                "src/main/backlog/backlog-service.ts",
+                "src/main/backlog/backlog-store-syscall-proof.test.ts",
+                "config/durability-contracts.jsonc"
+              ],
+              "acceptanceCriteria": [
+                "The syscall proof asserts the exact ordered array, with the directory entry conditional on the probe, and its fresh-instance case reads outcome `loaded` with a record deep-equal to the published one.",
+                "Grep for the regex `from ['\"][^'\"]*durable-file-write['\"]` over non-test `.ts` files under `src/main/backlog` matches exactly one file: `backlog-record-file.ts`.",
+                "`config/durability-contracts.jsonc` contains `backlog.intent-ledger-record` with writer `src/main/backlog/backlog-record-file.ts` and tier `crash-durable`, in the same commit as `backlog-record-file.ts`.",
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "`git show --stat HEAD` lists exactly this task's `<files>`."
+              ],
+              "done": "A captured item crosses fsync before rename and a fresh instance reads it back; the durability gate is green at this commit; committed.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            },
+            {
+              "index": 2,
+              "kind": "auto",
+              "type": "tracer",
+              "name": "Task 1b (tracer 2/2): capture and read the same item over runtime RPC through the real RpcDispatcher",
+              "plannedFiles": [
+                "src/main/backlog/backlog-host.ts",
+                "src/shared/protocol-version.ts",
+                "src/main/runtime/orca-runtime.ts",
+                "src/main/runtime/rpc/methods/backlog-params.ts",
+                "src/main/runtime/rpc/methods/backlog.ts",
+                "src/main/runtime/rpc/methods/index.ts",
+                "config/mobile-capability-aperture-baseline.txt",
+                "src/main/runtime/rpc/methods/backlog.test.ts",
+                "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts"
+              ],
+              "acceptanceCriteria": [
+                "The roundtrip test's fresh-instance `backlog.get` returns outcome `loaded` with a record deep-equal to the one `backlog.capture` published, and the stored record has revision 1, `projectRefs` equal to `[]`, exactly one event of type `created`, and an id different from the forged `bli_forged`.",
+                "Grep finds `name: 'backlog.capture'` and `name: 'backlog.get'` in `src/main/runtime/rpc/methods/backlog.ts`, and `...BACKLOG_METHODS` in `src/main/runtime/rpc/methods/index.ts`.",
+                "Grep finds `setBacklogHost` and `getBacklogHost` in `src/main/runtime/orca-runtime.ts`.",
+                "`src/shared/protocol-version.ts` still declares the same `RUNTIME_PROTOCOL_VERSION` value as before the task (diff shows only the added capability constant and its comment).",
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each new one).",
+                "`git show --stat HEAD` lists exactly this task's `<files>`, including `src/main/runtime/orca-runtime.ts` and `src/main/runtime/rpc/methods/index.ts`."
+              ],
+              "done": "A real RpcDispatcher capture persists one item through the fsync barrier and a fresh instance reads it back over RPC; aperture and durability gates green; committed.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            },
+            {
+              "index": 3,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 2: wire the ledger into the process for desktop and headless serve, profile-scoped",
+              "plannedFiles": [
+                "src/main/orca-profiles/profile-storage-paths.ts",
+                "src/main/ipc/backlog-host-wiring.ts",
+                "src/main/index.ts",
+                "src/main/orca-profiles/backlog-directory-profile-isolation.test.ts",
+                "src/main/runtime/backlog-capability.test.ts"
+              ],
+              "acceptanceCriteria": [
+                "Grep finds `setBacklogHost(getBacklogHost())` in `src/main/index.ts` and it appears after `setConversationHost(` in the file.",
+                "Grep finds `export function getOrcaBacklogDirectory` in `src/main/orca-profiles/profile-storage-paths.ts`.",
+                "Grep for `from 'electron'` or `from \"electron\"` across `src/main/backlog` returns no match in non-test files, and `src/main/ipc/backlog-host-wiring.ts` imports `getOrcaBacklogDirectory` and `ensureActiveOrcaProfile`.",
+                "Glob finds no `src/main/ipc/backlog-host.ts`.",
+                "The isolation test asserts the positive control (`loaded` in A) before the absence assertion in B.",
+                "The capability test asserts presence AND absence of `backlog.v1`."
+              ],
+              "done": "Desktop and headless serve both expose the profile-scoped ledger through the runtime; capability advertised only with a host; committed.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            }
+          ],
+          "scope": "complete"
+        },
+        {
+          "id": "01-02",
+          "file": "01-02-PLAN.md",
+          "superseded": false,
+          "objective": "Expand the tracer's persistence slice into a governed item lifecycle: pure ledger rules (transition",
+          "wave": 2,
+          "dependsOn": [
+            "01-01"
+          ],
+          "autonomous": true,
+          "agentHint": null,
+          "plannedFiles": [
+            "src/shared/backlog-lifecycle.ts",
+            "src/shared/backlog-lifecycle.test.ts",
+            "src/shared/backlog-event-log.ts",
+            "src/shared/backlog-event-log.test.ts",
+            "src/shared/backlog-merge.ts",
+            "src/shared/backlog-merge.test.ts",
+            "src/main/backlog/backlog-record-file.ts",
+            "src/main/backlog/backlog-record-store.ts",
+            "src/main/backlog/backlog-store-fence.test.ts",
+            "src/main/backlog/backlog-store-durability.test.ts",
+            "src/main/backlog/backlog-store-syscall-proof.test.ts",
+            "src/main/backlog/backlog-identity-mint.ts",
+            "src/main/backlog/backlog-item-folds.ts",
+            "src/main/backlog/backlog-service.ts",
+            "src/main/backlog/backlog-host.ts",
+            "src/main/backlog/backlog-store-events.test.ts",
+            "src/main/runtime/rpc/methods/backlog-params.ts",
+            "src/main/runtime/rpc/methods/backlog.ts",
+            "src/main/runtime/rpc/methods/backlog.test.ts",
+            "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts",
+            "config/durability-contracts.jsonc",
+            "config/mobile-capability-aperture-baseline.txt"
+          ],
+          "changedFiles": [],
+          "hasSummary": true,
+          "tasks": [
+            {
+              "index": 1,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 1: pure ledger rules - lifecycle table, completion contracts, append-only events, link union",
+              "plannedFiles": [
+                "src/shared/backlog-lifecycle.ts",
+                "src/shared/backlog-lifecycle.test.ts",
+                "src/shared/backlog-event-log.ts",
+                "src/shared/backlog-event-log.test.ts",
+                "src/shared/backlog-merge.ts",
+                "src/shared/backlog-merge.test.ts"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "The lifecycle test asserts the total edge count is 52 and that `superseded` maps to an empty list.",
+                "The lifecycle test has at least one case per kind for `checkBacklogCompletion`, including a model-origin row that does not count.",
+                "The event-log test has one case per defect shape (drop, reorder, edited body with same id, duplicate id, zero appended, two appended) plus the valid single-append case.",
+                "The merge test asserts, for every generated pair, that the result length equals the count of distinct input identities and every input link identity is present.",
+                "Grep finds no `from 'node:` import in the three new shared modules.",
+                "Git log shows the RED test commit before the GREEN commit."
+              ],
+              "done": "Lifecycle, event-log and link-union rules are pure, tested and committed RED then GREEN.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            },
+            {
+              "index": 2,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 2: fenced read-modify-write that refuses any event-log rewrite",
+              "plannedFiles": [
+                "src/main/backlog/backlog-record-file.ts",
+                "src/main/backlog/backlog-record-store.ts",
+                "src/main/backlog/backlog-store-fence.test.ts",
+                "src/main/backlog/backlog-store-durability.test.ts",
+                "src/main/backlog/backlog-store-syscall-proof.test.ts",
+                "config/durability-contracts.jsonc"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "The fence test asserts `{ outcome: 'superseded', expectedRevision: 1, actualRevision: 2 }` for the positioned competing write and reads the competitor's revision back from disk.",
+                "The fence test asserts the SHA-256 of the file is identical before and after each refused, unchanged, unreadable and schema-too-new case.",
+                "The fence test asserts `{ outcome: 'storage-failed', stage: 'publish', code: 'EPERM' }` for the rename failure, with a promise that resolves rather than rejects.",
+                "The syscall proof has a case whose expected log is exactly the single entry fsync:file.",
+                "Grep for the regex `from ['\"][^'\"]*durable-file-write['\"]` over non-test `.ts` under `src/main/backlog` still matches exactly one file.",
+                "`config/durability-contracts.jsonc` backlog entry `provenBy` lists both the syscall proof and the durability test."
+              ],
+              "done": "Mutate is fenced, append-only by construction, closed on every failure, proven at the syscall boundary; committed.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            },
+            {
+              "index": 3,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 3: update and transition an item over runtime RPC, one event per change",
+              "plannedFiles": [
+                "src/main/backlog/backlog-identity-mint.ts",
+                "src/main/backlog/backlog-item-folds.ts",
+                "src/main/backlog/backlog-service.ts",
+                "src/main/backlog/backlog-host.ts",
+                "src/main/backlog/backlog-store-events.test.ts",
+                "src/main/runtime/rpc/methods/backlog-params.ts",
+                "src/main/runtime/rpc/methods/backlog.ts",
+                "src/main/runtime/rpc/methods/backlog.test.ts",
+                "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts",
+                "config/mobile-capability-aperture-baseline.txt"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "The events test iterates `BACKLOG_TRANSITIONS` itself (not a hand-copied list) and asserts it executed 52 legal cases and 80 illegal ordered pairs (12 x 11 = 132 distinct pairs minus 52).",
+                "Each legal case asserts exactly one appended event and revision + 1; each illegal case asserts the file SHA-256 is unchanged.",
+                "The round-trip test's fresh instance reads state `done` and 4 events (created, updated, transitioned, transitioned).",
+                "Grep finds `name: 'backlog.update'` and `name: 'backlog.transition'` in `src/main/runtime/rpc/methods/backlog.ts` and both names in `config/mobile-capability-aperture-baseline.txt`.",
+                "The RPC name-set test lists exactly four names."
+              ],
+              "done": "Items can be updated and moved through the governed lifecycle over runtime RPC with exactly one event per change; committed.",
+              "changedFiles": null,
+              "provenance": "plan_scoped",
+              "agreement": "unknown",
+              "status": "unknown"
+            }
+          ],
+          "scope": "complete"
+        },
+        {
+          "id": "01-03",
+          "file": "01-03-PLAN.md",
+          "superseded": false,
+          "objective": "Candidate intent and merges: idempotent candidate ingestion keyed by source fingerprint, the candidate",
+          "wave": 3,
+          "dependsOn": [
+            "01-02"
+          ],
+          "autonomous": true,
+          "agentHint": null,
+          "plannedFiles": [
+            "src/main/backlog/backlog-identity-mint.ts",
+            "src/main/backlog/backlog-candidate-validation.ts",
+            "src/main/backlog/backlog-candidate-operations.ts",
+            "src/main/backlog/backlog-candidate-resolution.ts",
+            "src/main/backlog/backlog-record-store.ts",
+            "src/main/backlog/backlog-item-merge.ts",
+            "src/main/backlog/backlog-service.ts",
+            "src/main/backlog/backlog-host.ts",
+            "src/main/backlog/backlog-candidate-ingest.test.ts",
+            "src/main/backlog/backlog-candidate-resolve.test.ts",
+            "src/main/backlog/backlog-item-merge.test.ts",
+            "src/main/backlog/backlog-store-syscall-proof.test.ts",
+            "src/main/runtime/rpc/methods/backlog-params.ts",
+            "src/main/runtime/rpc/methods/backlog-candidate-params.ts",
+            "src/main/runtime/rpc/methods/backlog.ts",
+            "src/main/runtime/rpc/methods/backlog.test.ts",
+            "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts",
+            "config/mobile-capability-aperture-baseline.txt"
+          ],
+          "changedFiles": null,
+          "hasSummary": false,
+          "tasks": [
+            {
+              "index": 1,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 1: idempotent candidate ingestion keyed by source fingerprint",
+              "plannedFiles": [
+                "src/main/backlog/backlog-identity-mint.ts",
+                "src/main/backlog/backlog-candidate-validation.ts",
+                "src/main/backlog/backlog-candidate-operations.ts",
+                "src/main/backlog/backlog-service.ts",
+                "src/main/backlog/backlog-candidate-ingest.test.ts",
+                "src/main/backlog/backlog-store-syscall-proof.test.ts"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "The ingest test counts `.json` files in the candidates directory after the double ingest and after the 20-way concurrent ingest, and asserts 1 both times.",
+                "The concurrent test asserts the published count is exactly 1 and the unchanged count exactly 19.",
+                "Grep finds `createHash('sha256')` (or `createHash(\"sha256\")`) in `src/main/backlog/backlog-identity-mint.ts`.",
+                "Grep for the regex `from ['\"][^'\"]*durable-file-write['\"]` over non-test `.ts` under `src/main/backlog` still matches exactly one file."
+              ],
+              "done": "Same source fingerprint always resolves to one candidate file, under repetition and concurrency; committed.",
+              "changedFiles": null,
+              "provenance": "absent",
+              "agreement": "unknown",
+              "status": "pending"
+            },
+            {
+              "index": 2,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 2: candidate resolution and provenance-preserving item merge",
+              "plannedFiles": [
+                "src/main/backlog/backlog-record-store.ts",
+                "src/main/backlog/backlog-candidate-resolution.ts",
+                "src/main/backlog/backlog-item-merge.ts",
+                "src/main/backlog/backlog-service.ts",
+                "src/main/backlog/backlog-candidate-resolve.test.ts",
+                "src/main/backlog/backlog-item-merge.test.ts",
+                "src/main/backlog/backlog-candidate-ingest.test.ts"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "The merge test includes a loser in state `done` and asserts refused `illegal-transition` with both files' SHA-256 unchanged.",
+                "The merge test asserts, after a successful merge, that every source-link identity and every execution-link identity from both inputs is present in the survivor exactly once.",
+                "The loser-failure test reads both files from disk and asserts the survivor holds the union while the loser's state is not superseded.",
+                "The accept-retry test asserts exactly one `.json` file in the items directory.",
+                "The accept-after-dismiss test asserts the items directory has no file for `mintItemIdForCandidate(candidateId)`.",
+                "The opposite-merge test uses `Promise.allSettled` with both calls and asserts both fulfilled."
+              ],
+              "done": "Candidates resolve idempotently item-first; merges keep every link, survivor first; committed.",
+              "changedFiles": null,
+              "provenance": "absent",
+              "agreement": "unknown",
+              "status": "pending"
+            },
+            {
+              "index": 3,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 3: ingest, resolve and merge over runtime RPC",
+              "plannedFiles": [
+                "src/main/backlog/backlog-host.ts",
+                "src/main/runtime/rpc/methods/backlog-params.ts",
+                "src/main/runtime/rpc/methods/backlog-candidate-params.ts",
+                "src/main/runtime/rpc/methods/backlog.ts",
+                "src/main/runtime/rpc/methods/backlog.test.ts",
+                "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts",
+                "config/mobile-capability-aperture-baseline.txt"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "Grep finds `name: 'backlog.candidates.ingest'`, `name: 'backlog.candidates.resolve'` and `name: 'backlog.merge'` in `src/main/runtime/rpc/methods/backlog.ts`, and all three names in the aperture baseline.",
+                "The RPC name-set test lists exactly seven names.",
+                "The fresh-instance assertion in the candidate round trip checks both source links carry the two candidate ids and the project ref mapping equals `inferred`."
+              ],
+              "done": "Candidate ingest, resolution and item merge are reachable by desktop, CLI and paired runtime clients; committed.",
+              "changedFiles": null,
+              "provenance": "absent",
+              "agreement": "unknown",
+              "status": "pending"
+            }
+          ],
+          "scope": "complete"
+        },
+        {
+          "id": "01-04",
+          "file": "01-04-PLAN.md",
+          "superseded": false,
+          "objective": "Close Phase 1: open the whole ledger with per-record salvage, expose the read side (`backlog.list`,",
+          "wave": 4,
+          "dependsOn": [
+            "01-03"
+          ],
+          "autonomous": true,
+          "agentHint": null,
+          "plannedFiles": [
+            "src/shared/backlog-outcomes.ts",
+            "src/main/backlog/backlog-ledger-open.ts",
+            "src/main/backlog/backlog-ledger-queries.ts",
+            "src/main/backlog/backlog-service.ts",
+            "src/main/backlog/backlog-store-salvage.test.ts",
+            "src/main/backlog/backlog-ledger-queries.test.ts",
+            "src/main/backlog/backlog-host.ts",
+            "src/main/runtime/rpc/methods/backlog-params.ts",
+            "src/main/runtime/rpc/methods/backlog-candidate-params.ts",
+            "src/main/runtime/rpc/methods/backlog.ts",
+            "src/main/runtime/rpc/methods/backlog.test.ts",
+            "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts",
+            "src/main/orca-profiles/backlog-directory-profile-isolation.test.ts",
+            "config/mobile-capability-aperture-baseline.txt",
+            ".planning/workstreams/ub/phases/01-intent-ledger-foundation/01-VALIDATION.md"
+          ],
+          "changedFiles": null,
+          "hasSummary": false,
+          "tasks": [
+            {
+              "index": 1,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 1: open the ledger with per-record salvage and project list / health from it",
+              "plannedFiles": [
+                "src/shared/backlog-outcomes.ts",
+                "src/main/backlog/backlog-ledger-open.ts",
+                "src/main/backlog/backlog-ledger-queries.ts",
+                "src/main/backlog/backlog-service.ts",
+                "src/main/backlog/backlog-store-salvage.test.ts",
+                "src/main/backlog/backlog-ledger-queries.test.ts"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "The salvage test asserts the set of quarantine codes equals exactly {not-json, id-mismatch, schema-too-new, invalid-name} and that quarantined length is 4.",
+                "The salvage test compares SHA-256 of every bad file before and after `openBacklogLedger` and after the refused update.",
+                "The salvage test asserts `{ outcome: 'storage-failed', stage: 'scan' }` for the file-in-place-of-directory case.",
+                "Grep finds `mapSettledWithConcurrency(` in `src/main/backlog/backlog-ledger-open.ts`.",
+                "The only `node:fs` or `node:fs/promises` import in `src/main/backlog/backlog-ledger-open.ts` names `readdir` alone (record bytes are read through `readBacklogRecordText`), and the module imports nothing from `durable-file-write`."
+              ],
+              "done": "The ledger opens with per-record salvage and bounded reads; list, candidate list and health are real scans; committed.",
+              "changedFiles": null,
+              "provenance": "absent",
+              "agreement": "unknown",
+              "status": "pending"
+            },
+            {
+              "index": 2,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 2: list, candidate list and health over runtime RPC - the full ten-method surface",
+              "plannedFiles": [
+                "src/main/backlog/backlog-host.ts",
+                "src/main/runtime/rpc/methods/backlog-params.ts",
+                "src/main/runtime/rpc/methods/backlog-candidate-params.ts",
+                "src/main/runtime/rpc/methods/backlog.ts",
+                "src/main/runtime/rpc/methods/backlog.test.ts",
+                "src/main/runtime/rpc/methods/backlog-rpc-roundtrip.test.ts",
+                "src/main/orca-profiles/backlog-directory-profile-isolation.test.ts",
+                "config/mobile-capability-aperture-baseline.txt"
+              ],
+              "acceptanceCriteria": [
+                "No non-test `.ts` file in this task's `<files>` exceeds 300 counted lines (the oxlint max-lines rule passes over each).",
+                "Grep for `name: 'backlog\\.` in `src/main/runtime/rpc/methods/backlog.ts` counts exactly 10 matches.",
+                "Grep for `^backlog\\.` in `config/mobile-capability-aperture-baseline.txt` counts exactly 10 lines.",
+                "The name-set test lists exactly ten names and compares sorted arrays for equality.",
+                "The round trip reads through a FRESH service, runtime and dispatcher, not the one that wrote."
+              ],
+              "done": "The full ten-method ledger surface is reachable and fail-closed; committed.",
+              "changedFiles": null,
+              "provenance": "absent",
+              "agreement": "unknown",
+              "status": "pending"
+            },
+            {
+              "index": 3,
+              "kind": "auto",
+              "type": "auto",
+              "name": "Task 3: mutation drills M1-M6 and the phase gates, bracketed by the dirty-path set",
+              "plannedFiles": [
+                ".planning/workstreams/ub/phases/01-intent-ledger-foundation/01-VALIDATION.md"
+              ],
+              "acceptanceCriteria": [
+                "`01-04-SUMMARY.md` contains a drill table with six rows M1..M6, each with a pre-plant and a post-restore SHA-256 that are equal, and each recorded CAUGHT (any SURVIVED row must be followed by a test-only strengthening commit and a CAUGHT re-run row).",
+                "The M1 row records the exit code of `pnpm run check:durability-contracts` observed while the plant was in place; the M6 row names both ingest cases that turned red.",
+                "`01-04-SUMMARY.md` contains a gate table with the exit code and log path of every command in step C.2 and the before/after dirty-set comparison, and lists T-01-12 as open for Phase 7.",
+                "No commit made by this task touches a non-test file under `src/` (strengthening commits touch test files only); the porcelain check over the five drilled files prints nothing at the end.",
+                "`01-VALIDATION.md` rows are marked green only where the SUMMARY's gate table shows exit 0."
+              ],
+              "done": "Every drill bit and was restored byte-for-byte; the phase gates are recorded with their exit codes and tree-movement bracket; Phase 1 closes at the stated rung.",
+              "changedFiles": null,
+              "provenance": "absent",
+              "agreement": "unknown",
+              "status": "pending"
+            }
+          ],
+          "scope": "complete"
+        }
+      ],
+      "scope": "complete"
+    }
+  ],
+  "orphan_phase_dirs": [],
+  "requirements": [],
+  "progress": {
+    "accepted_phases": {
+      "completed": 0,
+      "total": 1,
+      "percent": 0,
+      "scope": "complete"
+    },
+    "completed_plans": {
+      "completed": 2,
+      "total": 4,
+      "percent": 50,
+      "scope": "complete"
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-01-PLAN.md#1",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-01-PLAN.md#2",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-01-PLAN.md#3",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-02-PLAN.md#1",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-02-PLAN.md#2",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "task_changed_files_plan_scoped",
+      "subject": "01-02-PLAN.md#3",
+      "detail": "SUMMARY carries only a plan-level file list; task-scoped changed files are unknown."
+    },
+    {
+      "code": "uat_absent",
+      "subject": "01-intent-ledger-foundation",
+      "detail": "No UAT document for this phase. This does not affect phase acceptance."
+    },
+    {
+      "code": "requirements_absent",
+      "subject": "C:/Users/User/Apps/orca-backlog-wt/.planning/workstreams/ub/REQUIREMENTS.md",
+      "detail": "REQUIREMENTS.md does not exist; no requirement rows are available."
+    }
+  ]
+}
