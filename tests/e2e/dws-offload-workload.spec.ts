@@ -24,6 +24,22 @@ async function loadCreateOrcaRpc(): Promise<CreateOrcaRpcFn> {
   return mod.createOrcaRpc
 }
 
+// WR-06: a leg that exited non-zero (or an agent with no matched reply) is FAILED, never a green leg.
+async function stampLegVerdicts(markers: LegMarker[]): Promise<void> {
+  const { judgeLegMarker } = await import('../../config/scripts/dws-offload-measurement.mjs')
+  for (const marker of markers) {
+    const outcome = judgeLegMarker(marker) as { verdict: string; reason?: string }
+    marker.verdict = outcome.verdict
+    marker.reason = outcome.reason
+  }
+}
+
+function expectLegsSucceeded(markers: LegMarker[], where: string): void {
+  for (const marker of markers) {
+    expect(marker.verdict, `leg ${marker.leg} ${where}: ${marker.reason ?? ''}`).toBe('OK')
+  }
+}
+
 // Why: later runs put a live pairing code on screen; this harness never needs a trace/screenshot
 // and must not risk capturing one (T-02-04c). Why seedTestRepo:false — this harness adds its OWN
 // repo/checkout via the CLI (`repo add --path <checkout>`) and never touches the shared fixture
@@ -48,6 +64,8 @@ type LegMarker = {
   exit?: string
   ms?: string
   agentReply?: string
+  verdict?: string
+  reason?: string
 }
 
 const LEG_START_RE = /DWS-P2-LEG-START nonce=(\S+) leg=(\S+) childPid=(\S+) utc=(\S+)/
@@ -229,6 +247,7 @@ test.describe('DWS-P2 offload workload harness', () => {
       blobHashes[blobPath] = gitRevParse(['rev-parse', `${sha}:${blobPath}`], checkout)
     }
 
+    await stampLegVerdicts(legMarkers)
     const manifest = {
       desktopRootPid,
       nonce,
@@ -240,11 +259,7 @@ test.describe('DWS-P2 offload workload harness', () => {
     mkdirSync(runDir, { recursive: true })
     writeFileSync(path.join(runDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 
-    for (const marker of legMarkers) {
-      expect(marker.exit, `leg ${marker.leg} did not produce a LEG-END marker in time`).not.toBe(
-        'TIMEOUT'
-      )
-    }
+    expectLegsSucceeded(legMarkers, 'did not succeed')
   })
 
   test('remote workload', async ({ orcaPage, electronApp }) => {
@@ -387,6 +402,7 @@ test.describe('DWS-P2 offload workload harness', () => {
       )
     }
 
+    await stampLegVerdicts(legMarkers)
     const manifest = {
       nonce,
       checkoutSha: svcSha,
@@ -405,11 +421,6 @@ test.describe('DWS-P2 offload workload harness', () => {
         'remote workload blob hashes do not match docs/dws baseline manifest -- refusing to treat this as a comparable sweep'
       )
     }
-    for (const marker of legMarkers) {
-      expect(
-        marker.exit,
-        `leg ${marker.leg} did not produce a LEG-END marker in time (remote)`
-      ).not.toBe('TIMEOUT')
-    }
+    expectLegsSucceeded(legMarkers, 'did not succeed (remote)')
   })
 })

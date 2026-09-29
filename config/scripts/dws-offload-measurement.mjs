@@ -366,7 +366,41 @@ export function legWindowFromManifest(manifest) {
   return starts.length > 0 ? { startMs: Math.min(...starts), endMs: Math.max(...ends) } : null
 }
 
-function buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow }) {
+/**
+ * A leg counts only if its workload actually succeeded: exit 0, and for `agent` a matched reply. A
+ * crashed leg frees RAM too, so its tiny delta would otherwise read as an absence PASS (WR-06).
+ */
+export function judgeLegMarker(marker) {
+  const leg = marker?.leg ?? 'unknown'
+  if (marker?.exit !== '0') {
+    return { leg, verdict: 'FAILED', reason: `exit=${marker?.exit ?? 'missing'}` }
+  }
+  if (leg === 'agent' && marker.agentReply !== 'matched') {
+    return { leg, verdict: 'FAILED', reason: `agentReply=${marker.agentReply ?? 'missing'}` }
+  }
+  return { leg, verdict: 'OK' }
+}
+
+/** The manifest's legs that did not succeed; `null` when the manifest carries no legs[] at all. */
+export function failedLegsFromManifest(manifest) {
+  if (!Array.isArray(manifest?.legs)) {
+    return null
+  }
+  return manifest.legs.map(judgeLegMarker).filter((v) => v.verdict === 'FAILED')
+}
+
+/** Remote proof may not PASS a leg whose workload failed: its presence under serve proves nothing. */
+export function applyLegOutcomes(proofs, manifestLegs) {
+  const byLeg = new Map((manifestLegs ?? []).map((marker) => [marker?.leg, judgeLegMarker(marker)]))
+  return proofs.map((proof) => {
+    const outcome = byLeg.get(proof.leg) ?? judgeLegMarker({ leg: proof.leg })
+    return outcome.verdict === 'FAILED'
+      ? { ...proof, verdict: 'FAIL', reason: `leg workload FAILED (${outcome.reason})` }
+      : proof
+  })
+}
+
+function buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow, failedLegs = null }) {
   const utcMs = samples.map((s) => Date.parse(s.utc ?? '')).filter(Number.isFinite)
   const monoMs = samples.map((s) => s.monoMs).filter((v) => typeof v === 'number')
   const firstMs = utcMs.length > 0 ? Math.min(...utcMs) : null
@@ -385,7 +419,8 @@ function buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindo
     sawStop,
     spanMs: monoMs.length > 1 ? Math.max(...monoMs) - Math.min(...monoMs) : 0,
     desktopRootPidValid: Number.isInteger(desktopRootPid) && desktopRootPid > 0,
-    legWindowCovered
+    legWindowCovered,
+    failedLegs
   }
 }
 
@@ -413,6 +448,9 @@ export function observationDefects(summary, { ignoreDesktopPid = false } = {}) {
   }
   if (obs.legWindowCovered === false) {
     defects.push('sample stream does not cover the legs window (truncated)')
+  }
+  if (Array.isArray(obs.failedLegs) && obs.failedLegs.length > 0) {
+    defects.push(`workload leg(s) failed: ${obs.failedLegs.map((f) => `${f.leg} ${f.reason}`).join(', ')}`)
   }
   if (summary.freeMb?.before == null || summary.freeMb?.after == null) {
     defects.push('free-memory bracket missing')
@@ -442,7 +480,9 @@ export function summarizeRun(samples, opts = {}) {
     sawStart = null,
     sawStop = null,
     // {startMs, endMs} spanned by the manifest's legs, or null when no leg carries both stamps.
-    legWindow = null
+    legWindow = null,
+    // failedLegsFromManifest(): legs whose workload did not succeed; null = manifest has no legs.
+    failedLegs = null
   } = opts
 
   // Why classify per (sample, proc) occurrence here, NOT via classifyRun's per-pid cache: a pid is
@@ -538,7 +578,7 @@ export function summarizeRun(samples, opts = {}) {
     },
     instrument,
     unreadableLines,
-    observation: buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow }),
+    observation: buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow, failedLegs }),
     patterns: FAMILY_PATTERNS,
     desktopSubtreeSize: desktopSubtreeUnionForReporting.size,
     harnessSubtreeSize: harnessSubtreeUnionForReporting.size
@@ -720,7 +760,8 @@ function runSummarizeCommand(options) {
     unreadableLines: parsed.unreadableLines,
     sawStart: parsed.start !== null,
     sawStop: parsed.stop !== null,
-    legWindow: legWindowFromManifest(manifest)
+    legWindow: legWindowFromManifest(manifest),
+    failedLegs: failedLegsFromManifest(manifest)
   })
   writeJsonOutputIfRequested(options.out, summary)
   process.stdout.write(
@@ -789,7 +830,7 @@ function runRemoteProofCommand(options) {
     process.stderr.write(`UNREADABLE INPUT: manifest file (${options.manifest}) carries no legs[] array\n`)
     process.exit(2)
   }
-  const proofs = extractRemoteProof(captureText, { servePid, legs })
+  const proofs = applyLegOutcomes(extractRemoteProof(captureText, { servePid, legs }), manifest.legs)
   writeJsonOutputIfRequested(options.out, proofs)
   for (const proof of proofs) {
     process.stdout.write(
@@ -797,6 +838,9 @@ function runRemoteProofCommand(options) {
         proof.peakRssMb !== undefined ? ` peakRssMb=${proof.peakRssMb}` : ''
       }\n`
     )
+  }
+  if (proofs.some((proof) => proof.verdict !== 'PASS')) {
+    process.exitCode = 3
   }
 }
 
