@@ -1,4 +1,4 @@
-import { isBacklogEvidenceId } from '../../shared/backlog-identity'
+import { isBacklogCandidateId, isBacklogEvidenceId } from '../../shared/backlog-identity'
 import {
   BACKLOG_PROJECT_ID_MAX,
   BACKLOG_PROJECT_REFS_MAX,
@@ -59,8 +59,9 @@ export function describeBacklogSourceLinkDefect(link: unknown): string | null {
   if (typeof link.capturedAt !== 'number' || !Number.isFinite(link.capturedAt)) {
     return 'source link capturedAt is not finite'
   }
-  if (link.candidateId !== null && typeof link.candidateId !== 'string') {
-    return 'source link candidateId is neither null nor a string'
+  // A candidate id has a fixed shape, which also bounds a full item's worst-case size.
+  if (link.candidateId !== null && !isBacklogCandidateId(link.candidateId)) {
+    return 'source link candidateId is neither null nor a candidate id'
   }
   return null
 }

@@ -1,4 +1,5 @@
 import { isBacklogItemId } from '../../shared/backlog-identity'
+import { describeBacklogItemCapacityExcess } from '../../shared/backlog-item-capacity'
 import type { BacklogLoadResult } from '../../shared/backlog-outcomes'
 import {
   BACKLOG_DEPENDENCIES_MAX,
@@ -88,7 +89,8 @@ export function describeBacklogItemDefect(value: unknown): string | null {
     describeBacklogProjectRefsDefect(item.projectRefs) ??
     prefixed('sourceLinks', firstDefect(item.sourceLinks, describeBacklogSourceLinkDefect)) ??
     prefixed('executionLinks', firstDefect(item.executionLinks, describeBacklogExecutionLinkDefect)) ??
-    prefixed('evidence', firstDefect(item.evidence, describeBacklogEvidenceDefect))
+    prefixed('evidence', firstDefect(item.evidence, describeBacklogEvidenceDefect)) ??
+    describeBacklogItemCapacityExcess(item)
   )
 }
 

@@ -1,3 +1,4 @@
+import { backlogItemCapacityRefusal } from '../../shared/backlog-item-capacity'
 import { checkBacklogCompletion, isBacklogTransitionLegal } from '../../shared/backlog-lifecycle'
 import type { BacklogRefusal } from '../../shared/backlog-outcomes'
 import type {
@@ -89,6 +90,10 @@ export function applyBacklogItemPatch(
   }
   if (fields.length === 0) {
     return item
+  }
+  const overCapacity = backlogItemCapacityRefusal({ ...item, ...changes })
+  if (overCapacity !== null) {
+    return overCapacity
   }
   return {
     ...item,

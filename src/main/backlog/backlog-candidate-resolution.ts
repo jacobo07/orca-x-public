@@ -1,3 +1,4 @@
+import { backlogItemCapacityRefusal } from '../../shared/backlog-item-capacity'
 import { backlogSourceLinkFromCandidate } from '../../shared/backlog-merge'
 import type { BacklogRefusal, BacklogWriteOutcome } from '../../shared/backlog-outcomes'
 import {
@@ -168,9 +169,14 @@ function linkCandidateToItem(
     if (item.sourceLinks.some((link) => link.candidateId === candidate.id)) {
       return item
     }
+    const sourceLinks = [...item.sourceLinks, backlogSourceLinkFromCandidate(candidate)]
+    const overCapacity = backlogItemCapacityRefusal({ ...item, sourceLinks })
+    if (overCapacity !== null) {
+      return overCapacity
+    }
     return {
       ...item,
-      sourceLinks: [...item.sourceLinks, backlogSourceLinkFromCandidate(candidate)],
+      sourceLinks,
       updatedAt: ctx.now,
       events: [
         ...item.events,

@@ -3,7 +3,9 @@ import { z } from 'zod'
 import { isBacklogItemId } from '../../../../shared/backlog-identity'
 import {
   BACKLOG_DEPENDENCIES_MAX,
+  BACKLOG_EVIDENCE_PER_ITEM_MAX,
   BACKLOG_EVIDENCE_PER_UPDATE_MAX,
+  BACKLOG_EXECUTION_LINKS_PER_ITEM_MAX,
   BACKLOG_LIST_LIMIT_MAX,
   BACKLOG_NORMALIZED_INTENT_MAX,
   BACKLOG_PROJECT_ID_MAX,
@@ -75,10 +77,14 @@ const BacklogPatchParam = z
       .object({ preferred: z.enum(BACKLOG_LANES), fallback: z.enum(BACKLOG_LANES).nullable() })
       .nullable()
       .optional(),
-    addEvidence: z.array(BacklogEvidenceParam).max(BACKLOG_EVIDENCE_PER_UPDATE_MAX).optional(),
+    // Per-call bounds never exceed the per-item caps; the fold refuses growth past those.
+    addEvidence: z
+      .array(BacklogEvidenceParam)
+      .max(Math.min(BACKLOG_EVIDENCE_PER_UPDATE_MAX, BACKLOG_EVIDENCE_PER_ITEM_MAX))
+      .optional(),
     addExecutionLinks: z
       .array(BacklogExecutionLinkParam)
-      .max(BACKLOG_EVIDENCE_PER_UPDATE_MAX)
+      .max(BACKLOG_EXECUTION_LINKS_PER_ITEM_MAX)
       .optional()
   })
   .refine((patch) => Object.keys(patch).length > 0, 'A patch needs at least one field')

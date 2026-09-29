@@ -98,6 +98,15 @@ const pathOf = (id: string): string => join(root, 'items', `${id}.json`)
 const sha = (id: string): string =>
   createHash('sha256').update(readFileSync(pathOf(id))).digest('hex')
 
+// An otherwise empty survivor whose one source link no loser shares, so a union really grows.
+function emptySurvivor(): BacklogItem {
+  const base = worstItem('ready', { evidence: 0, executionLinks: 0, sourceLinks: 0 })
+  return {
+    ...base,
+    sourceLinks: [{ kind: 'manual', ref: base.id, capturedAt: 1, candidateId: null }]
+  }
+}
+
 function seed(item: BacklogItem): BacklogItem {
   writeFileSync(pathOf(item.id), `${JSON.stringify(item, null, 2)}\n`)
   return item
@@ -153,7 +162,7 @@ describe('per-item capacity', () => {
   })
 
   it('a full loser still takes its merge leg', async () => {
-    const survivor = seed({ ...worstItem('ready', { evidence: 0, executionLinks: 0, sourceLinks: 1 }) })
+    const survivor = seed(emptySurvivor())
     const loser = seed(
       worstItem('needs-triage', { ...FULL, sourceLinks: BACKLOG_SOURCE_LINKS_PER_ITEM_MAX - 1 })
     )
@@ -161,6 +170,9 @@ describe('per-item capacity', () => {
     const result = await service.mergeItems({ survivorId: survivor.id, loserId: loser.id })
 
     expect(result.survivor).toMatchObject({ outcome: 'published' })
+    // The union filled the survivor exactly to the cap.
+    const merged = (result.survivor as { record: BacklogItem }).record
+    expect(merged.sourceLinks).toHaveLength(BACKLOG_SOURCE_LINKS_PER_ITEM_MAX)
     expect(result.loser).toMatchObject({
       outcome: 'published',
       record: { state: 'superseded', mergedInto: survivor.id }
@@ -168,7 +180,7 @@ describe('per-item capacity', () => {
   })
 
   it('refuses a merge whose union would overflow the survivor, with both files untouched', async () => {
-    const survivor = seed(worstItem('ready', { evidence: 0, executionLinks: 0, sourceLinks: 1 }))
+    const survivor = seed(emptySurvivor())
     const loser = seed(worstItem('needs-triage'))
     const before = [sha(survivor.id), sha(loser.id)]
 

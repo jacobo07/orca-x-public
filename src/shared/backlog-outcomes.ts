@@ -38,6 +38,7 @@ export type BacklogRefusalCode =
   | 'merge-target-superseded'
   | 'candidate-already-resolved'
   | 'use-merge'
+  | 'item-capacity-exceeded'
 
 export type BacklogRefusal = {
   outcome: 'refused'

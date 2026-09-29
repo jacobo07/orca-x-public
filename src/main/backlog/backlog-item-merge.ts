@@ -1,3 +1,4 @@
+import { backlogItemCapacityRefusal } from '../../shared/backlog-item-capacity'
 import { canBacklogItemLoseMerge } from '../../shared/backlog-lifecycle'
 import { unionBacklogExecutionLinks, unionBacklogSourceLinks } from '../../shared/backlog-merge'
 import type { BacklogRefusal, BacklogWriteOutcome } from '../../shared/backlog-outcomes'
@@ -47,6 +48,10 @@ function survivorFold(loserId: string, loser: BacklogItem): BacklogFold<BacklogI
       executionLinks.length === current.executionLinks.length
     ) {
       return current
+    }
+    const overCapacity = backlogItemCapacityRefusal({ ...current, sourceLinks, executionLinks })
+    if (overCapacity !== null) {
+      return overCapacity
     }
     return {
       ...current,
