@@ -121,6 +121,7 @@ export function MissionBriefPanel({
     <section
       data-testid={compact ? 'mission-brief-compact' : 'mission-brief-full'}
       data-workspace-key={workspaceKey}
+      data-brief-status={reading && !result ? 'reading' : (result?.status ?? 'failed')}
       aria-label={translate('missionBrief.title', 'Mission Brief')}
       aria-busy={reading}
       className={cn(
