@@ -6,14 +6,29 @@
 Thesis: a cross-project, provenance-aware, evidence-reconciled system of record for unfinished intent,
 sitting ABOVE Tasks and linking to execution owners.
 
-**State.** Approved 2026-09-29. W0 sealed (this file, spec, contract, roadmap). Phase 1 (ledger
-foundation) not started. Coherence anchor: `git log -1` on this branch names the W0 docs commit.
+**State.** Approved 2026-09-29. W0 sealed. Phase 1 (ledger foundation) PLANNED and executing:
+`phases/01-intent-ledger-foundation/` holds CONTEXT, RESEARCH, VALIDATION (with the pre-execution
+gate baseline), 4 plans in 4 sequential waves (checker PASSED after revision 1). Executors run
+sequentially on this tree (HEAD is not on origin/HEAD, so worktree isolation degrades). Coherence
+anchor: `git log --oneline e1ad065c6..HEAD` lists only `backlog` commits; the newest
+`*-SUMMARY.md` in the phase dir names the last sealed plan.
+
+**Host rules that bit.** GSD specialist agents have no PowerShell, so they cannot run pnpm/git here —
+dispatch executors as `general-purpose` following `~/.claude/agents/gsd-executor.md`. In PowerShell
+call `$pn='pnpm'; & $pn …` and `& 'C:\Program Files\Git\cmd\git.exe'`. `check:mobile-aperture` is
+red at HEAD for 4 non-backlog names (pre-existing; never baseline them).
 
 **Active decisions.** See STATE.md Decisions. Never write in `Apps\io-chatgpt-plugin`. Never
 `pnpm install` (node_modules is a junction). Push is Owner-only.
 
-**Next 3 actions.** 1) Phase 1: read `src/main/runtime/orchestration/db.ts` migrate pattern and
-`src/main/durable-file-write.ts`, choose the store, write the durability contract. 2) Ledger RPC in
-`src/main/runtime/rpc/methods/`. 3) Unit + kill-durability proofs, then commit.
+**Sealed so far.** Plan 01-01 Task 1a = `8bf108be7` (store, record-file engine, contract
+`backlog.intent-ledger-record`, syscall proof 2/2; check:durability-contracts 19 contracts exit 0 —
+re-verified by the orchestrator). No `01-01-SUMMARY.md` yet: plan 01-01 is PARTIAL on purpose.
+
+**Next 3 actions.** 1) Resume plan 01-01 at **Task 1b step 1** (`src/main/backlog/backlog-host.ts`;
+read `backlog-service.ts` first: `new BacklogService(rootFn,{now?})`, `capture`, `get`), then Task 2,
+then write `01-01-SUMMARY.md` recording Task 1a as `8bf108be7` — do NOT redo Task 1a; then plans
+02–04 (`/gsd-execute-phase 1 --ws ub`). 2) Verify Phase 1 (gates vs the VALIDATION.md
+baseline, drills M1–M6). 3) Phase 2 (Backlog surface): discuss → plan → execute, real-app proof.
 
 **Start.** Run `/gsd-autonomous --ws ub` from the worktree root; update this file after every sealed unit.
