@@ -43,8 +43,12 @@ FIXED (wsrel P1 `4a300eaba`): `agent-chat-project-location` + `cognitive-workspa
 
 ## 4. Next 3 actions
 1. W-S and wsrel are verified; the Owner decides push/merge of this branch (now ahead by the wsrel commits).
-2. Open, adjacent: e2e home isolation does not restrict `CLAUDE_CONFIG_DIR`/`ANTHROPIC_API_KEY`.
-3. No repo tsconfig includes `tests/e2e`; type-check e2e edits with a scratch config.
+2. CLOSED `e6abe77a8`: e2e home isolation now strips provider credentials (`ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, ...).
+3. No repo tsconfig includes `tests/e2e`; type-check e2e edits with a scratch config. Measured 2026-09-29
+   at `e6abe77a8` (scratch config: electron-toolkit node base + DOM lib, no web path aliases): 416 errors
+   in `tests/e2e`, 746 with the renderer import closure — mostly specs using `AppStore.setState`/`subscribe`
+   and undeclared `window.__*E2E` globals. Pre-existing debt, too large for an adjacent fix; a gate would
+   need a frozen per-error baseline. Upper bound: the config is uncalibrated for renderer aliases.
 wsrel state of record: `.planning/workstreams/wsrel/` (git-excluded, worktree-local).
 GEX44 run dirs: cw-shell-e2e-run{,2,3,4,5}; base A/B worktree `/home/kobii/cw-shell-base`.
 
