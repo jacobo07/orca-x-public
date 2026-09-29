@@ -4,7 +4,7 @@
 // text match. A store that imported the helper and then wrote with its own writeFile+rename would
 // pass it. This counts the syscalls a real capture makes.
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { open as actualOpen } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -102,4 +102,51 @@ it('reads the captured item back through a fresh service instance', async () => 
   expect(published.record.revision).toBe(1)
   expect(published.record.projectRefs).toEqual([])
   expect(published.record.events.map((event) => event.type)).toEqual(['created'])
+})
+
+async function seededStore() {
+  const { BacklogService } = await import('./backlog-service')
+  const { BacklogRecordStore } = await import('./backlog-record-store')
+  const { BACKLOG_ITEM_CODEC } = await import('./backlog-item-validation')
+  const captured = await new BacklogService(() => root).capture({ text: 'seed', kind: 'idea' })
+  if (captured.outcome !== 'published') {
+    throw new Error(`precondition: capture returned ${captured.outcome}`)
+  }
+  const store = new BacklogRecordStore(join(root, 'items'), BACKLOG_ITEM_CODEC, () => 1)
+  return { store, item: captured.record }
+}
+
+it('fsyncs a fenced mutate before publishing it', async () => {
+  const { store, item } = await seededStore()
+  const supported = await directoryFsyncSupported(root)
+  syscalls.length = 0
+
+  const outcome = await store.mutate(item.id, (current, ctx) => ({
+    ...current,
+    priority: 'low',
+    events: [...current.events, { id: ctx.mintEventId(), type: 'updated', at: ctx.now, data: {} }]
+  }))
+
+  expect(outcome.outcome).toBe('published')
+  expect(syscalls).toEqual(
+    supported ? ['fsync:file', 'rename', 'fsync:directory'] : ['fsync:file', 'rename']
+  )
+})
+
+it('never renames a vetoed mutate', async () => {
+  const { store, item } = await seededStore()
+  const finalPath = join(root, 'items', `${item.id}.json`)
+  syscalls.length = 0
+
+  const outcome = await store.mutate(item.id, (current, ctx) => {
+    // Sync fs, so the competitor's own write is not in the log.
+    writeFileSync(finalPath, `${JSON.stringify({ ...current, revision: current.revision + 1 })}\n`)
+    return {
+      ...current,
+      events: [...current.events, { id: ctx.mintEventId(), type: 'updated', at: ctx.now, data: {} }]
+    }
+  })
+
+  expect(outcome).toEqual({ outcome: 'superseded', expectedRevision: 1, actualRevision: 2 })
+  expect(syscalls).toEqual(['fsync:file'])
 })
