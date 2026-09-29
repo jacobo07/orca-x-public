@@ -582,6 +582,58 @@ BACKFILL PASS with a live-reader control; reattach latency MEASURED, N=6, median
 `docs/dws/phase-2-reattach-latency.json`, `tests/e2e/dws-remote-continuity.spec.ts`,
 `config/scripts/dws-web-client-reattach.mjs`)
 
+## Gap closure re-measurement (plans 02-07, 02-08)
+
+### Identity (pre-flight)
+
+Measured 2026-09-29T23:51Z to 23:52Z (laptop UTC clock), 02-08 Task 1.
+
+- Laptop HEAD `f03565ee99588dd25c5b9b6d400033718aaa59af` on `orca-x/distributed-workstation`; `git status --porcelain -- src` empty.
+- Desktop artifact sha256: `out/main/index.js` `F62A45CACCEE0140C44C9FCBC9155107C8A259EF9CDEB022FF27812F8D6E2ECA`; `out/cli/index.js` `591FDCBD285D2CCC8B7E4D2490E83C775015A0980A4B40F9FFFBD0C93FA05A3C`. `out/renderer` carries the 02-05 hook (`add-remote-server-save` in `AddRemoteHostDialog-DNcEArg_.js`).
+- Laptop free memory 5492 MB at the start of the task.
+- Serve (`deployed.json`): SHA `b8e385a0ba83e08b9420ccf7f2a3d7282db9f681`, artifact sha256 `4c094db99fe0480c6178fbbe835b2fd6d0913c3dd29728360960bc3eee890fc9`, service checkout `/home/orca-svc/dws-p2/b8e385a`.
+- Unit `orca-dws-serve.service`: `ActiveState=active`, `WorkingDirectory=/home/orca-svc/dws-p2/b8e385a` (equals `deployed.json` svcCheckout), `MainPID=1181474` (elapsed ~9 min at first read, so the serve was restarted after the 02-06 record of MainPID 692875; the checkout and artifact are unchanged, MainPID is a fresh value for this plan). Bound `--serve-bind-host 127.0.0.1 --serve-port 6791 --no-sandbox`.
+- GEX44 `df -h /home`: `/dev/md2 1.8T size, 1.6T used, 33G avail, 99%` (the `/home` path sits on `/`).
+- `out/web` disclosure: the build clone's `out/web` was hot-swapped by 02-06 with a `VITE_EXPOSE_STORE` bundle; irrelevant to the test/build workload legs.
+- Workload-family processes already under `orca-svc` at the read: none (only the serve's own electron tree, Xvfb, its daemon and crashpad handler; no vitest, tsc, claude or codex).
+- Tree bracket: `git status --porcelain` path set at task start equals the set at task end (`.claude/`, `.pp-capabilities`, `.pp-pending-spec.json`, `LEARNINGS_PENDING.md`, all untracked and pre-existing); no path moved.
+
+### Comparability (pre-flight)
+
+| path | baseline `8c069f7c6` | deployed `b8e385a` | laptop HEAD |
+|---|---|---|---|
+| `config/scripts/check-dws-completeness.test.mjs` | `3a0758c0554c` | `3a0758c0554c` (equal) | `3a0758c0554c` |
+| `src/main/runtime/runtime-rpc-websocket-bind-host.test.ts` | `7aeb1e74b9cf` | `7aeb1e74b9cf` (equal) | `724ae6019595` (differs: WR-01/WR-02, not deployed) |
+| `config/tsconfig.cli.json` | `1f4e6c71269d` | `1f4e6c71269d` (equal) | `1f4e6c71269d` |
+| `config/scripts/dws-offload-workload.mjs` | `48d599b4c0e7` | `48d599b4c0e7` (equal) | `e8e24ec604bd` (differs: 02-07 classifier) |
+
+This table is a disclosure only; the machine verdict comes from the run manifest (Task 2).
+
+Transitive-input disclosure: `git diff --stat 8c069f7c6 b8e385a -- src/main src/cli src/shared config/tsconfig.cli.json config/vitest.config.ts` printed nothing (empty).
+
+`BASELINE_MANIFEST=USED` path `%LOCALAPPDATA%\orca-dws-p2\runs\baseline-2\manifest.json`, `checkoutSha` 8c069f7c6033a658be9b69903b448f981530256d, sha256 `8AC435804215DE948145FCB8315875CA444A15DBD42EDC0368E815ACA54DB61B`.
+
+### Classifier real-CLI control
+
+Credential existence check (`sudo -n -u orca-svc test -s`, existence only, contents never read), 2026-09-29T23:52:11Z:
+
+```
+CLAUDE_CRED=0
+CODEX_CRED=0
+```
+
+In words: no Claude and no Codex login exists in the orca-svc service HOME. Agent-binary reachability (2026-09-29T23:52:12Z): `AGENT_BIN_OUTSIDE=0` (the `agent-bin/claude` path is not executable by `orca-svc` outside the serve namespace or not present); node `v18.19.1`.
+
+Control run (login absent, so no paid turn is possible):
+
+- Wrapper blob id `e8e24ec604bdeb2df7feb17af9cbf17072b97451` (`git hash-object --no-filters` of the LF/no-BOM temp copy equals `git rev-parse HEAD:config/scripts/dws-offload-workload.mjs`).
+- sha256 local `9226f96715acf5c0c4800f6178a77fdf4fa0e7529e7569de2fdc0639f9a47618`, remote `9226f96715acf5c0c4800f6178a77fdf4fa0e7529e7569de2fdc0639f9a47618` (equal), placed at `/home/orca-svc/.orca-dws/dws-agent-control-e8e24ec.mjs` (0644, orca-svc).
+- cwd `/home/orca-svc/dws-p2/b8e385a`, node v18.19.1, form run: `agent --nonce ctl1a2b3c4d` with no `--agent-bin` (AGENT_BIN_OUTSIDE=0).
+- CLI's own line: `Not logged in · Please run /login`.
+- LEG-END: `DWS-P2-LEG-END nonce=ctl1a2b3c4d leg=agent exit=1 ms=1811 utc=2026-09-29T23:52:49.517Z agentReply=not-logged-in`.
+
+`CLASSIFIER_CONTROL=PASS` (the 02-07 classifier returns `not-logged-in` against the real CLI as orca-svc).
+
 ## Phase 2 verdict table
 
 | Criterion | Verdict | Instrument | Evidence file | SHA |
