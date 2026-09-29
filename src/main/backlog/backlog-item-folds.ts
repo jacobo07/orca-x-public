@@ -53,6 +53,10 @@ export function applyBacklogItemPatch(
   ctx: BacklogFoldContext,
   mintEvidenceId: () => string
 ): BacklogItem | BacklogRefusal {
+  // A write to a merged-away item would strand it off the survivor; the detail lets a caller re-target.
+  if (item.state === 'superseded') {
+    return refuse('merge-target-superseded', item.mergedInto)
+  }
   if (patch.kind !== undefined && patch.kind !== item.kind && item.state === 'done') {
     return refuse('kind-change-while-done')
   }
