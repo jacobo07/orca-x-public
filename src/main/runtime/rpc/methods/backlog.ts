@@ -2,12 +2,14 @@ import { BACKLOG_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { BacklogHost } from '../../../backlog/backlog-host'
 import { defineMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
+  BacklogCandidateListParams,
   BacklogCandidatesIngestParams,
   BacklogCandidatesResolveParams
 } from './backlog-candidate-params'
 import {
   BacklogCaptureParams,
   BacklogGetParams,
+  BacklogListParams,
   BacklogMergeParams,
   BacklogTransitionParams,
   BacklogUpdateParams
@@ -26,6 +28,11 @@ function requireBacklogHost(runtime: RpcContext['runtime']): BacklogHost {
 }
 
 export const BACKLOG_METHODS: RpcAnyMethod[] = [
+  defineMethod({
+    name: 'backlog.list',
+    params: BacklogListParams,
+    handler: async (params, { runtime }) => requireBacklogHost(runtime).list(params)
+  }),
   defineMethod({
     name: 'backlog.capture',
     params: BacklogCaptureParams,
@@ -52,6 +59,11 @@ export const BACKLOG_METHODS: RpcAnyMethod[] = [
       })
   }),
   defineMethod({
+    name: 'backlog.candidates.list',
+    params: BacklogCandidateListParams,
+    handler: async (params, { runtime }) => requireBacklogHost(runtime).listCandidates(params)
+  }),
+  defineMethod({
     name: 'backlog.candidates.ingest',
     params: BacklogCandidatesIngestParams,
     handler: async (params, { runtime }) =>
@@ -66,5 +78,10 @@ export const BACKLOG_METHODS: RpcAnyMethod[] = [
     name: 'backlog.merge',
     params: BacklogMergeParams,
     handler: async (params, { runtime }) => requireBacklogHost(runtime).merge(params)
+  }),
+  defineMethod({
+    name: 'backlog.health',
+    params: null,
+    handler: async (_params, { runtime }) => requireBacklogHost(runtime).health()
   })
 ]

@@ -12,13 +12,19 @@ import {
   BACKLOG_TEXT_MAX
 } from '../../../../shared/backlog-rpc-limits'
 import {
+  BACKLOG_CANDIDATE_STATUSES,
   BACKLOG_CANDIDATE_UNCERTAINTIES,
   BACKLOG_ITEM_KINDS,
   BACKLOG_PRIORITIES,
   BACKLOG_SOURCE_CAPABILITY_LEVELS,
   BACKLOG_SOURCE_KINDS
 } from '../../../../shared/backlog-types'
-import { BacklogItemIdParam, BacklogProjectRefParam } from './backlog-params'
+import {
+  BacklogItemIdParam,
+  BacklogListCursorParam,
+  BacklogListLimitParam,
+  BacklogProjectRefParam
+} from './backlog-params'
 
 // Identity components are hashed NUL-joined; refused here and again in the operation.
 const nulFree = (max: number) =>
@@ -51,6 +57,12 @@ const BacklogCandidateEntryParam = z.object({
 
 export const BacklogCandidatesIngestParams = z.object({
   candidates: z.array(BacklogCandidateEntryParam).min(1).max(BACKLOG_INGEST_BATCH_MAX)
+})
+
+export const BacklogCandidateListParams = z.object({
+  status: z.enum(BACKLOG_CANDIDATE_STATUSES).optional(),
+  limit: BacklogListLimitParam.optional(),
+  cursor: BacklogListCursorParam.optional()
 })
 
 const note = z.string().max(BACKLOG_SHORT_TEXT_MAX).optional()

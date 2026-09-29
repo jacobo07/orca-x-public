@@ -4,6 +4,7 @@ import { isBacklogItemId } from '../../../../shared/backlog-identity'
 import {
   BACKLOG_DEPENDENCIES_MAX,
   BACKLOG_EVIDENCE_PER_UPDATE_MAX,
+  BACKLOG_LIST_LIMIT_MAX,
   BACKLOG_NORMALIZED_INTENT_MAX,
   BACKLOG_PROJECT_ID_MAX,
   BACKLOG_PROJECT_REFS_MAX,
@@ -83,6 +84,25 @@ const BacklogPatchParam = z
   .refine((patch) => Object.keys(patch).length > 0, 'A patch needs at least one field')
 
 export const BacklogUpdateParams = z.object({ id: BacklogItemIdParam, patch: BacklogPatchParam })
+
+// The cursor is a decimal offset minted by the list itself.
+export const BacklogListCursorParam = z.string().regex(/^\d{1,9}$/, 'Not a list cursor')
+
+export const BacklogListLimitParam = z.number().int().min(1).max(BACKLOG_LIST_LIMIT_MAX)
+
+export const BacklogListParams = z
+  .object({
+    state: z.enum(BACKLOG_ITEM_STATES).optional(),
+    kind: z.enum(BACKLOG_ITEM_KINDS).optional(),
+    projectId: z.string().min(1).max(BACKLOG_PROJECT_ID_MAX).optional(),
+    unassigned: z.boolean().optional(),
+    limit: BacklogListLimitParam.optional(),
+    cursor: BacklogListCursorParam.optional()
+  })
+  .refine(
+    (query) => !(query.projectId !== undefined && query.unassigned === true),
+    'A project filter and Unassigned cannot both be set'
+  )
 
 export const BacklogTransitionParams = z.object({
   id: BacklogItemIdParam,
