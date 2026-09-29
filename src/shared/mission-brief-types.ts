@@ -45,6 +45,11 @@ export type GitHeadReading =
   | { kind: 'read'; head: string; commitsSinceRecorded: number | null }
   | { kind: 'unreadable' }
 
+/** Every file under `.planning`, workspace-relative and `/`-separated. */
+export type PlanningFilesReading =
+  /** `truncated`: a bound was hit or a subdirectory was unreadable, so the list is not complete. */
+  { kind: 'listed'; files: string[]; truncated: boolean } | { kind: 'unreadable' }
+
 /** Everything main read for one workspace. The GSD outputs stay `unknown` until validated. */
 export type MissionReadings = {
   workstream: string | null
@@ -54,6 +59,11 @@ export type MissionReadings = {
   roadmap: unknown
   smartEntry: unknown
   stateRecord: StateMdRecord | null
+  /** PROJECT.md relative to the workspace root; the workstream's if it has one. `null` = neither exists. */
+  projectFile: string | null
+  /** `null` when there is no PROJECT.md or it could not be read. */
+  projectRecord: ProjectMdRecord | null
+  recordFiles: PlanningFilesReading
   git: GitHeadReading
   /** Latest record first; only records whose cwd is this workspace. */
   missions: RalphMissionRecord[]

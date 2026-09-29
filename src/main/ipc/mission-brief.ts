@@ -5,11 +5,13 @@ import { createGsdRunner, gsdToolsAvailable } from '../mission-brief/gsd-tools-r
 import {
   fileExists,
   listDirs,
+  listPlanningFiles,
   planningFingerprint,
   readGitHead
 } from '../mission-brief/mission-brief-host-io'
 import { createMissionBriefReader } from '../mission-brief/mission-brief-read'
 import { locateMissionWorkspace } from '../mission-brief/mission-workspace-location'
+import { readProjectMdRecord } from '../mission-brief/project-md-record'
 import { readRalphMissionsFor } from '../mission-brief/ralph-mission-records'
 import { readStateMdRecord } from '../mission-brief/state-md-record'
 
@@ -21,6 +23,8 @@ export function registerMissionBriefHandlers(store: Store): void {
     listDirs,
     fileExists,
     readStateRecord: readStateMdRecord,
+    readProjectRecord: readProjectMdRecord,
+    listRecordFiles: listPlanningFiles,
     readMissions: (workspacePath) => readRalphMissionsFor(workspacePath),
     readGitHead,
     fingerprint: planningFingerprint,

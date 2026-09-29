@@ -39,6 +39,8 @@ function deps(overrides: Partial<MissionBriefReadDeps> = {}): MissionBriefReadDe
       blockers: null,
       ownerDecisions: []
     }),
+    readProjectRecord: async () => null,
+    listRecordFiles: async () => ({ kind: 'listed', files: [], truncated: false }),
     readMissions: async () => [],
     readGitHead: async () => ({ kind: 'read', head: HEAD, commitsSinceRecorded: 0 }),
     fingerprint: async () => 'fp-1',
@@ -140,6 +142,37 @@ describe('readMissionBrief — which workstream', () => {
   it('refuses a workstream name main did not list', async () => {
     const result = await createMissionBriefReader(deps())({ ...REQUEST, workstream: 'other' })
     expect(result).toEqual({ status: 'unavailable', reason: 'invalid-request' })
+  })
+})
+
+describe('readMissionBrief — which PROJECT.md', () => {
+  const WS_PROJECT = path.join(PLANNING, 'workstreams', 'ub', 'PROJECT.md')
+  const ROOT_PROJECT = path.join(PLANNING, 'PROJECT.md')
+
+  it.each([
+    ['the workstream’s own', [WS_PROJECT, ROOT_PROJECT], WS_PROJECT],
+    ['the repo’s when the workstream has none', [ROOT_PROJECT], ROOT_PROJECT]
+  ])('reads %s', async (_label, existing, expected) => {
+    const readProjectRecord = vi.fn(async () => null)
+    const d = deps({ fileExists: async (file) => existing.includes(file), readProjectRecord })
+    await createMissionBriefReader(d)(REQUEST)
+    expect(readProjectRecord.mock.calls).toEqual([[expected]])
+  })
+
+  it('reads no PROJECT.md when neither exists', async () => {
+    const readProjectRecord = vi.fn(async () => null)
+    await createMissionBriefReader(deps({ readProjectRecord }))(REQUEST)
+    expect(readProjectRecord).not.toHaveBeenCalled()
+  })
+
+  it('lists the records of the workspace it read', async () => {
+    const listRecordFiles = vi.fn(async () => ({
+      kind: 'listed' as const,
+      files: [],
+      truncated: false
+    }))
+    await createMissionBriefReader(deps({ listRecordFiles }))(REQUEST)
+    expect(listRecordFiles.mock.calls).toEqual([[PLANNING, WS_PATH]])
   })
 })
 

@@ -5,6 +5,8 @@ import type {
   GitHeadReading,
   MissionBriefResult,
   MissionReadings,
+  PlanningFilesReading,
+  ProjectMdRecord,
   RalphMissionRecord,
   StateMdRecord
 } from '../../shared/mission-brief-types'
@@ -19,6 +21,8 @@ export type MissionBriefReadDeps = {
   listDirs: (dir: string) => Promise<string[] | null>
   fileExists: (file: string) => Promise<boolean>
   readStateRecord: (statePath: string) => Promise<StateMdRecord | null>
+  readProjectRecord: (projectPath: string) => Promise<ProjectMdRecord | null>
+  listRecordFiles: (planningDir: string, workspacePath: string) => Promise<PlanningFilesReading>
   readMissions: (workspacePath: string) => Promise<RalphMissionRecord[]>
   readGitHead: (workspacePath: string, recordedHead: string | null) => Promise<GitHeadReading>
   /** Changes whenever the planning files or HEAD change; `null` = could not tell, so never cached. */
@@ -97,6 +101,24 @@ async function chooseWorkstream(
   return workstreams.length > 1 ? { kind: 'choose', workstreams } : { kind: 'none' }
 }
 
+/** The workstream's PROJECT.md if it has one, else the repo's; `/`-separated, workspace-relative. */
+async function findProjectFile(
+  deps: MissionBriefReadDeps,
+  workspacePath: string,
+  workstream: string | null
+): Promise<string | null> {
+  const candidates = [
+    ...(workstream ? [`.planning/workstreams/${workstream}/PROJECT.md`] : []),
+    '.planning/PROJECT.md'
+  ]
+  for (const candidate of candidates) {
+    if (await deps.fileExists(path.join(workspacePath, ...candidate.split('/')))) {
+      return candidate
+    }
+  }
+  return null
+}
+
 export function createMissionBriefReader(deps: MissionBriefReadDeps) {
   const inFlight = new Map<string, Promise<MissionBriefResult>>()
   const cache = new Map<string, { fingerprint: string; readings: MissionReadings }>()
@@ -165,6 +187,7 @@ export function createMissionBriefReader(deps: MissionBriefReadDeps) {
     const stateRecord = await deps.readStateRecord(
       path.join(location.path, ...stateFile.split('/'))
     )
+    const projectFile = await findProjectFile(deps, location.path, choice.workstream)
     const readings: MissionReadings = {
       workstream: choice.workstream,
       stateFile,
@@ -172,6 +195,11 @@ export function createMissionBriefReader(deps: MissionBriefReadDeps) {
       roadmap: roadmap.kind === 'ok' ? roadmap.json : null,
       smartEntry: smartEntry.kind === 'ok' ? smartEntry.json : null,
       stateRecord,
+      projectFile,
+      projectRecord: projectFile
+        ? await deps.readProjectRecord(path.join(location.path, ...projectFile.split('/')))
+        : null,
+      recordFiles: await deps.listRecordFiles(planningDir, location.path),
       git: await deps.readGitHead(location.path, stateRecord?.recordedHead ?? null),
       missions,
       readAt: deps.now()
