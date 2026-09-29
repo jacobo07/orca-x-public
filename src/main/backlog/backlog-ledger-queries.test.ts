@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BacklogQuarantineEntry } from '../../shared/backlog-outcomes'
+import { BACKLOG_OPEN_STATES } from '../../shared/backlog-summary'
 import {
   BACKLOG_CANDIDATE_STATUSES,
   BACKLOG_ITEM_STATES,
@@ -189,5 +190,38 @@ describe('ledger candidate queries and health', () => {
     expect(health.items).toMatchObject({ total: 5, byState: { ready: 3, done: 1, running: 0 } })
     expect(health.candidates).toMatchObject({ total: 3, byStatus: { open: 2, dismissed: 1, merged: 0 } })
     expect(health.quarantined).toEqual([QUARANTINED])
+  })
+
+  it('counts every item by kind and open items by kind, zero included', () => {
+    const snapshot: BacklogLedgerSnapshot = {
+      ...SNAPSHOT,
+      items: [
+        item(1, { kind: 'idea', state: 'needs-triage' }),
+        item(2, { kind: 'idea', state: 'dismissed' }),
+        item(3, { kind: 'engineering', state: 'ready' }),
+        item(4, { kind: 'decision', state: 'done' })
+      ]
+    }
+    const health = summarizeBacklogHealth(snapshot)
+    expect(health.items.byKind).toEqual({
+      idea: 2,
+      engineering: 1,
+      decision: 1,
+      research: 0,
+      manual: 0
+    })
+    expect(health.items.openByKind).toEqual({
+      idea: 1,
+      engineering: 1,
+      decision: 0,
+      research: 0,
+      manual: 0
+    })
+    const sum = (counts: Record<string, number>) =>
+      Object.values(counts).reduce((total, count) => total + count, 0)
+    expect(sum(health.items.byKind!)).toBe(health.items.total)
+    expect(sum(health.items.openByKind!)).toBe(
+      BACKLOG_OPEN_STATES.reduce((total, state) => total + health.items.byState[state], 0)
+    )
   })
 })

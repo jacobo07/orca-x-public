@@ -262,6 +262,12 @@ describe('backlog runtime RPC round trip', () => {
       expect.objectContaining({ recordKind: 'item', code: 'not-json' })
     ])
     expect(Object.values(health.items.byState).reduce((sum, count) => sum + count, 0)).toBe(3)
+    const byKind = health.items as unknown as {
+      byKind: Record<string, number>
+      openByKind: Record<string, number>
+    }
+    expect(byKind.byKind).toEqual({ engineering: 1, research: 0, decision: 0, manual: 0, idea: 2 })
+    expect(byKind.openByKind).toEqual(byKind.byKind)
     const open = (await resultOf(reader, 'backlog.candidates.list', {
       status: 'open'
     })) as unknown as { total: number; candidates: { id: string }[] }
