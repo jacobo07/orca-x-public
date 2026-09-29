@@ -4,7 +4,7 @@
 // text match. A store that imported the helper and then wrote with its own writeFile+rename would
 // pass it. This counts the syscalls a real capture makes.
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { open as actualOpen } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,7 +14,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { isBacklogItemId } from '../../shared/backlog-identity'
 
 /** The rename is recorded too: an fsync moved after the rename still fsyncs a file. */
-const syscalls: ('fsync:file' | 'fsync:directory' | 'rename')[] = []
+const syscalls: ('fsync:file' | 'fsync:directory' | 'rename' | 'link')[] = []
+
+// When set, a competing writer lands its bytes on the final name just before the publish call.
+const competitor = { bytes: null as string | null }
+
+async function plantCompetitor(finalPath: unknown): Promise<void> {
+  if (competitor.bytes !== null) {
+    const { writeFile } = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
+    await writeFile(String(finalPath), competitor.bytes)
+  }
+}
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
@@ -38,8 +48,15 @@ vi.mock('node:fs/promises', async () => {
       })
     },
     rename: async (...args: Parameters<typeof NodeFsPromises.rename>) => {
+      await plantCompetitor(args[1])
       const result = await actual.rename(...args)
       syscalls.push('rename')
+      return result
+    },
+    link: async (...args: Parameters<typeof NodeFsPromises.link>) => {
+      await plantCompetitor(args[1])
+      const result = await actual.link(...args)
+      syscalls.push('link')
       return result
     }
   }
@@ -62,6 +79,7 @@ async function directoryFsyncSupported(directory: string): Promise<boolean> {
 let root: string
 
 beforeEach(() => {
+  competitor.bytes = null
   root = mkdtempSync(join(tmpdir(), 'orca-backlog-fsync-'))
 })
 
@@ -69,6 +87,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
+// A new record publishes by link, which refuses an existing name where rename would replace it.
 it('fsyncs the item before publishing its name', async () => {
   const { BacklogService } = await import('./backlog-service')
   const supported = await directoryFsyncSupported(root)
@@ -81,8 +100,24 @@ it('fsyncs the item before publishing its name', async () => {
 
   expect(outcome.outcome).toBe('published')
   expect(syscalls).toEqual(
-    supported ? ['fsync:file', 'rename', 'fsync:directory'] : ['fsync:file', 'rename']
+    supported ? ['fsync:file', 'link', 'fsync:directory'] : ['fsync:file', 'link']
   )
+})
+
+it('never replaces a record that lands on the name after the existence check', async () => {
+  const { BacklogService } = await import('./backlog-service')
+  const planted = `${JSON.stringify({ revision: 7 })}\n`
+  competitor.bytes = planted
+
+  const outcome = await new BacklogService(() => root).capture({
+    text: 'Racing a second process',
+    kind: 'engineering'
+  })
+
+  expect(outcome).toEqual({ outcome: 'superseded', expectedRevision: 0, actualRevision: 7 })
+  const names = readdirSync(join(root, 'items'))
+  expect(names).toHaveLength(1)
+  expect(readFileSync(join(root, 'items', names[0]), 'utf-8')).toBe(planted)
 })
 
 it('reads the captured item back through a fresh service instance', async () => {
@@ -126,7 +161,7 @@ it('fsyncs an ingested candidate before publishing its name', async () => {
 
   expect(result.outcome).toBe('published')
   expect(syscalls).toEqual(
-    supported ? ['fsync:file', 'rename', 'fsync:directory'] : ['fsync:file', 'rename']
+    supported ? ['fsync:file', 'link', 'fsync:directory'] : ['fsync:file', 'link']
   )
 })
 
