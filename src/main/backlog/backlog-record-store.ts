@@ -26,6 +26,12 @@ export type BacklogFoldContext = { now: number; mintEventId: () => string }
 /** Returns the next record, the same object for "no change", or a refusal. */
 export type BacklogFold<R> = (current: R, context: BacklogFoldContext) => R | BacklogRefusal
 
+/** Both keys are already held; only the two paired ids are accepted. */
+export type BacklogHeldPair<R> = {
+  load: (id: string) => Promise<BacklogLoadResult<R>>
+  mutate: (id: string, fold: BacklogFold<R>) => Promise<BacklogWriteOutcome<R>>
+}
+
 type Fenced = { id: string; revision: number; events: readonly { id: string }[] }
 
 function isRefusal(value: unknown): value is BacklogRefusal {
@@ -114,6 +120,37 @@ export class BacklogRecordStore<R extends Fenced> {
   mutate(id: string, fold: BacklogFold<R>): Promise<BacklogWriteOutcome<R>> {
     this.pathFor(id)
     return this.queue.run(id, () => this.applyFold(id, fold))
+  }
+
+  /** Holds both record keys in sorted order, so two opposite pair operations cannot deadlock. */
+  withPair<T>(
+    firstId: string,
+    secondId: string,
+    work: (held: BacklogHeldPair<R>) => Promise<T>
+  ): Promise<T> {
+    if (firstId === secondId) {
+      throw new Error('Backlog withPair needs two distinct ids')
+    }
+    this.pathFor(firstId)
+    this.pathFor(secondId)
+    const [lower, higher] = firstId < secondId ? [firstId, secondId] : [secondId, firstId]
+    const assertHeld = (id: string): void => {
+      if (id !== lower && id !== higher) {
+        throw new Error('Backlog withPair handle used for an id outside the pair')
+      }
+    }
+    // The handle calls applyFold directly: re-entering the queue for a held key would wait forever.
+    const held: BacklogHeldPair<R> = {
+      load: (id) => {
+        assertHeld(id)
+        return this.load(id)
+      },
+      mutate: (id, fold) => {
+        assertHeld(id)
+        return this.applyFold(id, fold)
+      }
+    }
+    return this.queue.run(lower, () => this.queue.run(higher, () => work(held)))
   }
 
   // Caller holds the queue key for `id` and has already validated it through pathFor.

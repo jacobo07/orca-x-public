@@ -15,6 +15,11 @@ import {
   type BacklogCandidateIngestEntry,
   type BacklogIngestEntryResult
 } from './backlog-candidate-operations'
+import {
+  resolveBacklogCandidate,
+  type BacklogCandidateResolution,
+  type BacklogResolveResult
+} from './backlog-candidate-resolution'
 import { BACKLOG_CANDIDATE_CODEC } from './backlog-candidate-validation'
 import { mintBacklogEvidenceId, mintBacklogItemId } from './backlog-identity-mint'
 import {
@@ -23,6 +28,11 @@ import {
   type BacklogItemPatch,
   type BacklogTransitionInput
 } from './backlog-item-folds'
+import {
+  mergeBacklogItems,
+  type BacklogItemMergeInput,
+  type BacklogItemMergeResult
+} from './backlog-item-merge'
 import { BACKLOG_ITEM_CODEC } from './backlog-item-validation'
 import { BacklogRecordStore } from './backlog-record-store'
 
@@ -123,5 +133,13 @@ export class BacklogService {
     entries: readonly BacklogCandidateIngestEntry[]
   ): Promise<BacklogIngestEntryResult[]> {
     return ingestBacklogCandidates(this.stores().candidates, entries)
+  }
+
+  resolveCandidate(resolution: BacklogCandidateResolution): Promise<BacklogResolveResult> {
+    return resolveBacklogCandidate(this.stores(), resolution)
+  }
+
+  mergeItems(input: BacklogItemMergeInput): Promise<BacklogItemMergeResult> {
+    return mergeBacklogItems(this.stores().items, input)
   }
 }
