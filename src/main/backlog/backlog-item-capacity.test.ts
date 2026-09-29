@@ -207,7 +207,9 @@ describe('per-item capacity', () => {
     expect(
       BacklogUpdateParams.safeParse({
         id,
-        patch: { addEvidence: Array(BACKLOG_EVIDENCE_PER_ITEM_MAX + 1).fill(evidenceRow) }
+        patch: {
+          addEvidence: Array.from({ length: BACKLOG_EVIDENCE_PER_ITEM_MAX + 1 }, () => ({ ...evidenceRow }))
+        }
       }).success
     ).toBe(false)
     // Control: a call at the cap is admitted by the params.
