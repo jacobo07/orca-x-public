@@ -32,9 +32,17 @@ Plan 01-02 COMPLETE (`01-02-SUMMARY.md`, head `7216b228e`): pure lifecycle table
 completion contracts + append-only event rule + link union; fenced `BacklogRecordStore.mutate`
 (revision re-read in the commit veto, `applyFold(id, fold)` for plan 03's pair lock);
 `backlog.update` / `backlog.transition` over RPC. Suite 11 files 72/72; gates as above.
+Plan 01-03 COMPLETE (head `544712205`): fingerprint-keyed candidate ingest, item-first resolution,
+survivor-first item merge, three RPC methods. Plan 01-04 COMPLETE (head `0348b4e06`): ledger open with
+per-record quarantine, list / candidates.list / health (ten methods), drills M1–M6 all CAUGHT and
+restored by SHA-256. `ab79e3fb6` pins the open-concurrency cap (the M4 gap). Scoped suite 16 files 115/115, plus that test 1/1 (run separately).
+`pnpm lint` and `check:mobile-aperture` are red only on pre-existing non-phase files (01-04-SUMMARY).
+ChatGPT write-back is PROVEN on the Owner's Pro/EEA account (`03a24aaba`, docs + contract C2).
 
-**Next 3 actions.** 1) Plan 01-03 Task 1 (candidates, merge; see its PLAN), then 01-04
-(`/gsd-execute-phase 1 --ws ub`). 2) Verify Phase 1 (gates vs the VALIDATION.md baseline, drills
-M1–M6). 3) Phase 2 (Backlog surface): discuss → plan → execute, real-app proof.
+**Next 3 actions.** 1) Phase 1 verification (`01-VERIFICATION.md`); close any gap. 2) Phase 2
+(Backlog surface): `02-CONTEXT.md` → UI-SPEC → plan → execute, real-app Playwright CDP proof with
+restart. 3) Phase 3 (candidate inbox + harvesters). Tests run as
+`node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts <files>` (RTK breaks
+`pnpm exec vitest`); `pnpm run` scripts via `cmd /c`.
 
 **Start.** Run `/gsd-autonomous --ws ub` from the worktree root; update this file after every sealed unit.
