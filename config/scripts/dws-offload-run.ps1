@@ -303,9 +303,11 @@ if ($Target -eq 'remote') {
     Write-Output "DWS-P2-RUN remoteServeMainPidVerdict=STABLE pid=$servePidBefore"
   }
 
+  $remoteProofExit = $null
   if ((Test-Path $manifestPath) -and (Test-Path $remotePsPath) -and $servePidBefore) {
     & node (Join-Path $repoRoot 'config/scripts/dws-offload-measurement.mjs') remote-proof `
       --capture $remotePsPath --manifest $manifestPath --serve-pid $servePidBefore --out $remoteProofPath
+    $remoteProofExit = $LASTEXITCODE
     if (Test-Path $remoteProofPath) {
       $remoteProofSummary = Get-Content $remoteProofPath -Raw | ConvertFrom-Json
     }
@@ -317,11 +319,27 @@ if ($Target -eq 'remote') {
 $freeAfterMb = Get-FreeMb
 
 # --- Summarize -------------------------------------------------------------------------------
+$summarizeExit = $null
 if (Test-Path $manifestPath) {
   & node (Join-Path $repoRoot 'config/scripts/dws-offload-measurement.mjs') summarize `
     --samples $ndjsonPath --manifest $manifestPath --out $summaryPath
+  $summarizeExit = $LASTEXITCODE
 } else {
   Write-Output "DWS-P2-RUN warning=manifest_missing path=$manifestPath (spec did not reach the manifest-write step)"
 }
 
-Write-Output "RUN=$RunId TARGET=$Target PLAYWRIGHT_EXIT=$pwExit FREE_BEFORE_MB=$freeBeforeMb FREE_AFTER_MB=$freeAfterMb SUMMARY=$summaryPath"
+# Why: automation reads $LASTEXITCODE, so a failed spec or an unjudgeable run must not exit 0.
+$runExit = 0
+$runExitReason = 'ok'
+if ($pwExit -ne 0) {
+  $runExit = $pwExit; $runExitReason = 'playwright_failed'
+} elseif ($summarizeExit -ne 0 -or -not (Test-Path $summaryPath)) {
+  $runExit = 3; $runExitReason = "summary_unjudgeable exit=$summarizeExit"
+} elseif ($Target -eq 'remote' -and -not $servePidStable) {
+  $runExit = 4; $runExitReason = 'serve_restarted_mid_run'
+} elseif ($Target -eq 'remote' -and ($remoteProofExit -ne 0 -or -not $remoteProofSummary)) {
+  $runExit = 5; $runExitReason = "remote_proof_not_pass exit=$remoteProofExit"
+}
+
+Write-Output "RUN=$RunId TARGET=$Target PLAYWRIGHT_EXIT=$pwExit FREE_BEFORE_MB=$freeBeforeMb FREE_AFTER_MB=$freeAfterMb SUMMARY=$summaryPath RUN_EXIT=$runExit REASON=$runExitReason"
+exit $runExit
