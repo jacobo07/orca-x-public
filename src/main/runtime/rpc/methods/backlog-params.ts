@@ -24,11 +24,16 @@ import {
 } from '../../../../shared/backlog-types'
 
 // Plain z.object strips unknown keys: a caller cannot send id, revision or events.
-const BacklogItemIdParam = z.string().refine(isBacklogItemId, 'Not a backlog item id')
+export const BacklogItemIdParam = z.string().refine(isBacklogItemId, 'Not a backlog item id')
 
 export const BacklogGetParams = z.object({ id: BacklogItemIdParam })
 
-const BacklogProjectRefParam = z.object({
+export const BacklogMergeParams = z.object({
+  survivorId: BacklogItemIdParam,
+  loserId: BacklogItemIdParam
+})
+
+export const BacklogProjectRefParam = z.object({
   projectId: z.string().min(1).max(BACKLOG_PROJECT_ID_MAX),
   mapping: z.enum(BACKLOG_PROJECT_MAPPINGS),
   evidence: z.string().max(BACKLOG_SHORT_TEXT_MAX)

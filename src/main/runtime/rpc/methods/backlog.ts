@@ -2,8 +2,13 @@ import { BACKLOG_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { BacklogHost } from '../../../backlog/backlog-host'
 import { defineMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
+  BacklogCandidatesIngestParams,
+  BacklogCandidatesResolveParams
+} from './backlog-candidate-params'
+import {
   BacklogCaptureParams,
   BacklogGetParams,
+  BacklogMergeParams,
   BacklogTransitionParams,
   BacklogUpdateParams
 } from './backlog-params'
@@ -45,5 +50,21 @@ export const BACKLOG_METHODS: RpcAnyMethod[] = [
         to: params.to,
         reason: params.reason ?? null
       })
+  }),
+  defineMethod({
+    name: 'backlog.candidates.ingest',
+    params: BacklogCandidatesIngestParams,
+    handler: async (params, { runtime }) =>
+      requireBacklogHost(runtime).ingestCandidates(params.candidates)
+  }),
+  defineMethod({
+    name: 'backlog.candidates.resolve',
+    params: BacklogCandidatesResolveParams,
+    handler: async (params, { runtime }) => requireBacklogHost(runtime).resolveCandidate(params)
+  }),
+  defineMethod({
+    name: 'backlog.merge',
+    params: BacklogMergeParams,
+    handler: async (params, { runtime }) => requireBacklogHost(runtime).merge(params)
   })
 ]
