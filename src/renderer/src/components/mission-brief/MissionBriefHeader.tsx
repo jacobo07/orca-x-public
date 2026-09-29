@@ -15,7 +15,11 @@ import { MISSION_TONE_CLASS } from './mission-tone-class'
 // Why five: the reference shows four stages; one more keeps the frontier's predecessor in view.
 const STRIP_WINDOW = 5
 
-function stripWindow(stages: MissionStage[]): { shown: MissionStage[]; before: number; after: number } {
+function stripWindow(stages: MissionStage[]): {
+  shown: MissionStage[]
+  before: number
+  after: number
+} {
   if (stages.length <= STRIP_WINDOW) {
     return { shown: stages, before: 0, after: 0 }
   }
@@ -64,7 +68,10 @@ export function MissionStageStrip({ stages }: { stages: MissionStage[] }): React
       {before > 0 ? (
         <span className="mt-1 text-[11px] text-muted-foreground">+{before}</span>
       ) : null}
-      <ol className="flex items-start" aria-label={translate('missionBrief.stage.label', 'Mission phases')}>
+      <ol
+        className="flex items-start"
+        aria-label={translate('missionBrief.stage.label', 'Mission phases')}
+      >
         {shown.map((stage, index) => (
           <li
             key={stage.id}
@@ -78,7 +85,9 @@ export function MissionStageStrip({ stages }: { stages: MissionStage[] }): React
               <span
                 className={cn(
                   'line-clamp-2 text-[12px] leading-tight',
-                  stage.state === 'current' ? 'font-medium text-foreground' : 'text-muted-foreground'
+                  stage.state === 'current'
+                    ? 'font-medium text-foreground'
+                    : 'text-muted-foreground'
                 )}
                 title={stage.name}
               >
@@ -123,7 +132,10 @@ export function MissionBriefHeader({
             </span>
             <span
               data-testid="mission-brief-signal"
-              className={cn('inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1', MISSION_TONE_CLASS[tone])}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1',
+                MISSION_TONE_CLASS[tone]
+              )}
             >
               <span
                 className={cn(
@@ -132,7 +144,9 @@ export function MissionBriefHeader({
                 )}
                 aria-hidden
               />
-              <ClaimValue testId="mission-brief-signal-label">{describeSignal(brief.signal)}</ClaimValue>
+              <ClaimValue testId="mission-brief-signal-label">
+                {describeSignal(brief.signal)}
+              </ClaimValue>
             </span>
             {brief.workstream ? (
               <span className="rounded-md border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground">

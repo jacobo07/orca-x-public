@@ -162,7 +162,9 @@ export function createMissionBriefReader(deps: MissionBriefReadDeps) {
     const stateFile = choice.workstream
       ? `.planning/workstreams/${choice.workstream}/STATE.md`
       : '.planning/STATE.md'
-    const stateRecord = await deps.readStateRecord(path.join(location.path, ...stateFile.split('/')))
+    const stateRecord = await deps.readStateRecord(
+      path.join(location.path, ...stateFile.split('/'))
+    )
     const readings: MissionReadings = {
       workstream: choice.workstream,
       stateFile,

@@ -61,7 +61,10 @@ export function planNeedsMe(brief: MissionBrief, row: WorkspaceRowModel): NeedsM
   return { kind: 'open-workspace' }
 }
 
-export async function runContinue(plan: ContinuePlan, row: WorkspaceRowModel): Promise<WakePhase | null> {
+export async function runContinue(
+  plan: ContinuePlan,
+  row: WorkspaceRowModel
+): Promise<WakePhase | null> {
   switch (plan.kind) {
     case 'resume-tab':
       return resumeDeskTab(row, plan.tabId, 'selected')

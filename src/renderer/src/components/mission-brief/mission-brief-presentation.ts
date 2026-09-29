@@ -69,10 +69,14 @@ export function describeLastVerified(brief: MissionBrief): string {
     return describePhase(last.stageId, last.name)
   }
   return last.nearest
-    ? translate('missionBrief.lastVerified.noneWithNearest', 'No phase verified yet. Phase {{id}} verification: {{status}}', {
-        id: last.nearest.stageId,
-        status: last.nearest.verification
-      })
+    ? translate(
+        'missionBrief.lastVerified.noneWithNearest',
+        'No phase verified yet. Phase {{id}} verification: {{status}}',
+        {
+          id: last.nearest.stageId,
+          status: last.nearest.verification
+        }
+      )
     : translate('missionBrief.lastVerified.none', 'No phase verified yet')
 }
 
@@ -120,7 +124,10 @@ export function describeFreshness(brief: MissionBrief): { text: string; tone: Mi
   switch (freshness.kind) {
     case 'current':
       return {
-        text: translate('missionBrief.freshness.current', 'Planning state matches the current commit'),
+        text: translate(
+          'missionBrief.freshness.current',
+          'Planning state matches the current commit'
+        ),
         tone: 'next'
       }
     case 'stale':
@@ -128,9 +135,13 @@ export function describeFreshness(brief: MissionBrief): { text: string; tone: Mi
         text:
           freshness.commitsSince === null
             ? translate('missionBrief.freshness.staleUncounted', 'Recorded at an older commit')
-            : translate('missionBrief.freshness.stale', '{{count}} commits since the planning state was recorded', {
-                count: freshness.commitsSince
-              }),
+            : translate(
+                'missionBrief.freshness.stale',
+                '{{count}} commits since the planning state was recorded',
+                {
+                  count: freshness.commitsSince
+                }
+              ),
         tone: 'stale'
       }
     case 'unknown':
@@ -150,20 +161,32 @@ export function describeUnavailable(result: MissionBriefResult): string | null {
     case 'choose-workstream':
       return null
     case 'no-mission':
-      return translate('missionBrief.state.noMission', 'This workspace keeps no mission records (.planning).')
+      return translate(
+        'missionBrief.state.noMission',
+        'This workspace keeps no mission records (.planning).'
+      )
     case 'failed':
       return translate('missionBrief.state.failed', 'The mission records could not be read.')
     case 'unavailable':
       switch (result.reason) {
         case 'remote-host':
-          return translate('missionBrief.state.remote', 'Mission records on another host are not read yet.')
+          return translate(
+            'missionBrief.state.remote',
+            'Mission records on another host are not read yet.'
+          )
         case 'gsd-tools-absent':
-          return translate('missionBrief.state.noGsd', 'GSD is not installed on this machine, so mission records cannot be read.')
+          return translate(
+            'missionBrief.state.noGsd',
+            'GSD is not installed on this machine, so mission records cannot be read.'
+          )
         case 'client-unsupported':
           return translate('missionBrief.state.client', 'This client cannot read mission records.')
         case 'workspace-unknown':
         case 'invalid-request':
-          return translate('missionBrief.state.unknownWorkspace', 'This workspace could not be located.')
+          return translate(
+            'missionBrief.state.unknownWorkspace',
+            'This workspace could not be located.'
+          )
       }
   }
 }

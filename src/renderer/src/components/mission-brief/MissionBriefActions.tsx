@@ -12,14 +12,23 @@ import { getMissionBriefEntry, readMissionBriefInto } from './use-mission-brief'
 
 function continueDisabledReason(brief: MissionBrief, row: WorkspaceRowModel | null): string | null {
   if (!row) {
-    return translate('missionBrief.continue.noDesk', 'Open this brief from the Resume Center to continue')
+    return translate(
+      'missionBrief.continue.noDesk',
+      'Open this brief from the Resume Center to continue'
+    )
   }
   const plan = planContinue(brief, row)
   if (plan.kind === 'autonomous') {
-    return translate('missionBrief.continue.autonomous', 'Progressing autonomously — nothing to start')
+    return translate(
+      'missionBrief.continue.autonomous',
+      'Progressing autonomously — nothing to start'
+    )
   }
   if (plan.kind === 'no-agent') {
-    return translate('missionBrief.continue.noAgent', 'No agent session in this workspace to resume')
+    return translate(
+      'missionBrief.continue.noAgent',
+      'No agent session in this workspace to resume'
+    )
   }
   return null
 }
@@ -29,7 +38,10 @@ function describeWake(phase: WakePhase): string {
     case 'running':
       return translate('missionBrief.continue.running', 'Agent session is running')
     case 'refused':
-      return translate('missionBrief.continue.refused', 'Not started: the host refused another session now')
+      return translate(
+        'missionBrief.continue.refused',
+        'Not started: the host refused another session now'
+      )
     default:
       return translate('missionBrief.continue.notStarted', 'The agent session did not start')
   }
@@ -68,7 +80,10 @@ export function MissionBriefActions({
         latest?.status === 'loaded' && latest.result.status === 'read' ? latest.result.brief : null
       if (!fresh) {
         setOutcome(
-          translate('missionBrief.continue.rereadFailed', 'The mission could not be re-read, so nothing was started')
+          translate(
+            'missionBrief.continue.rereadFailed',
+            'The mission could not be re-read, so nothing was started'
+          )
         )
         return
       }
@@ -88,7 +103,10 @@ export function MissionBriefActions({
       const opened = await runNeedsMe(needsMe, row)
       setOutcome(
         opened
-          ? translate('missionBrief.needsMe.opened', 'Opened where this waits for you. Guided help is not available yet.')
+          ? translate(
+              'missionBrief.needsMe.opened',
+              'Opened where this waits for you. Guided help is not available yet.'
+            )
           : translate('missionBrief.needsMe.notOpened', 'The workspace could not be opened')
       )
     } finally {
@@ -130,14 +148,20 @@ export function MissionBriefActions({
         </Button>
       </div>
       {/* Why visible text, not a tooltip: a disabled button cannot be hovered or focused to read it. */}
-      {continueBlocked ? <p className="text-[12px] text-muted-foreground">{continueBlocked}</p> : null}
+      {continueBlocked ? (
+        <p className="text-[12px] text-muted-foreground">{continueBlocked}</p>
+      ) : null}
       {needsMe.kind === 'nothing-recorded' ? (
         <p className="text-[12px] text-muted-foreground">
           {translate('missionBrief.needsMe.nothing', 'Nothing is recorded as waiting on you')}
         </p>
       ) : null}
       {outcome ? (
-        <p role="status" className="text-[12px] text-muted-foreground" data-testid="mission-brief-action-outcome">
+        <p
+          role="status"
+          className="text-[12px] text-muted-foreground"
+          data-testid="mission-brief-action-outcome"
+        >
           {outcome}
         </p>
       ) : null}

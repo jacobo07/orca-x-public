@@ -9,7 +9,11 @@ import {
 } from '@/components/ui/dialog'
 import type { MissionBrief } from '../../../../shared/mission-brief-types'
 import { ClaimValue } from '../resume-center/ClaimValue'
-import { describeContradiction, describePhase, describeStageState } from './mission-brief-presentation'
+import {
+  describeContradiction,
+  describePhase,
+  describeStageState
+} from './mission-brief-presentation'
 
 /** Every phase of the same projection the brief shows; no second roadmap is kept. */
 export function MissionBriefFullPathDialog({
@@ -23,7 +27,10 @@ export function MissionBriefFullPathDialog({
 }): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto scrollbar-sleek" data-testid="mission-brief-full-path">
+      <DialogContent
+        className="max-h-[85vh] max-w-3xl overflow-y-auto scrollbar-sleek"
+        data-testid="mission-brief-full-path"
+      >
         <DialogHeader>
           <DialogTitle>{translate('missionBrief.path.title', 'Full mission path')}</DialogTitle>
           <DialogDescription>
@@ -44,13 +51,18 @@ export function MissionBriefFullPathDialog({
               )}
             >
               <span className="font-medium">{describePhase(stage.id, stage.name)}</span>
-              <ClaimValue testId="mission-brief-path-stage-state" className="text-[12px] text-muted-foreground">
+              <ClaimValue
+                testId="mission-brief-path-stage-state"
+                className="text-[12px] text-muted-foreground"
+              >
                 {describeStageState(stage.state)}
               </ClaimValue>
               {stage.goal ? <span className="text-muted-foreground">{stage.goal}</span> : <span />}
               <span className="text-[12px] text-muted-foreground">
                 {stage.verification
-                  ? translate('missionBrief.path.verification', 'Verification: {{status}}', { status: stage.verification })
+                  ? translate('missionBrief.path.verification', 'Verification: {{status}}', {
+                      status: stage.verification
+                    })
                   : translate('missionBrief.path.noDirectory', 'No phase directory yet')}
               </span>
               {stage.dependsOn.length > 0 || stage.externalDependency ? (

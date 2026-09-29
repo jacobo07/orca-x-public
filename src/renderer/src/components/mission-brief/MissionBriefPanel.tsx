@@ -41,7 +41,12 @@ export function MissionBriefPanel({
   const toolbar = (
     <div className="flex items-center justify-end gap-2">
       {compact && onOpenFull && result?.status === 'read' ? (
-        <Button size="sm" variant="ghost" data-testid="mission-brief-open-full" onClick={onOpenFull}>
+        <Button
+          size="sm"
+          variant="ghost"
+          data-testid="mission-brief-open-full"
+          onClick={onOpenFull}
+        >
           <Maximize2 className="size-3.5" aria-hidden />
           {translate('missionBrief.openFull', 'Open full brief')}
         </Button>
@@ -72,11 +77,19 @@ export function MissionBriefPanel({
     body = (
       <div className="flex flex-col gap-2 text-sm">
         <p className="text-muted-foreground">
-          {translate('missionBrief.state.chooseWorkstream', 'This workspace runs several missions. Which one?')}
+          {translate(
+            'missionBrief.state.chooseWorkstream',
+            'This workspace runs several missions. Which one?'
+          )}
         </p>
         <div className="flex flex-wrap gap-2">
           {result.workstreams.map((workstream) => (
-            <Button key={workstream} size="sm" variant="outline" onClick={() => chooseWorkstream(workstream)}>
+            <Button
+              key={workstream}
+              size="sm"
+              variant="outline"
+              onClick={() => chooseWorkstream(workstream)}
+            >
               {workstream}
             </Button>
           ))}
