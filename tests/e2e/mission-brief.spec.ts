@@ -25,12 +25,19 @@ const REPOS = (process.env.MISSION_BRIEF_REPOS ?? '')
   .map((entry) => entry.trim())
   .filter(Boolean)
 // Why the test process's home: the app's HOME is the harness's isolated one, which has no GSD.
-const REAL_GSD_CORE = path.join(os.homedir(), '.claude', 'gsd-core')
+const REAL_CLAUDE_DIR = path.join(os.homedir(), '.claude')
+const REAL_GSD_CORE = path.join(REAL_CLAUDE_DIR, 'gsd-core')
+// Why more than gsd-core: its read commands require ../../../scripts and ../../../package.json.
+const GSD_INSTALL_ENTRIES = ['gsd-core', 'scripts', 'package.json']
 
 async function provisionGsdTools(electronApp: ElectronApplication): Promise<void> {
   const home = await electronApp.evaluate(({ app }) => app.getPath('home'))
-  // Why a copy, not a link: nothing the app runs may write into the real installation.
-  cpSync(REAL_GSD_CORE, path.join(home, '.claude', 'gsd-core'), { recursive: true })
+  for (const entry of GSD_INSTALL_ENTRIES) {
+    const source = path.join(REAL_CLAUDE_DIR, entry)
+    expect(existsSync(source), `GSD install is missing ${source}`).toBe(true)
+    // Why a copy, not a link: nothing the app runs may write into the real installation.
+    cpSync(source, path.join(home, '.claude', entry), { recursive: true })
+  }
 }
 
 async function openResumeCenter(page: Page): Promise<void> {
