@@ -35,13 +35,23 @@ function survivorFold(loserId: string, loser: BacklogItem): BacklogFold<BacklogI
     if (current.state === 'superseded') {
       return refuse('merge-target-superseded', current.mergedInto)
     }
-    if (current.events.some((event) => event.type === 'merged-in' && event.data.from === loserId)) {
+    const sourceLinks = unionBacklogSourceLinks(current.sourceLinks, loser.sourceLinks)
+    const executionLinks = unionBacklogExecutionLinks(current.executionLinks, loser.executionLinks)
+    const alreadyMerged = current.events.some(
+      (event) => event.type === 'merged-in' && event.data.from === loserId
+    )
+    // A retry is a no-op only if the loser gained no link since the first leg (G1).
+    if (
+      alreadyMerged &&
+      sourceLinks.length === current.sourceLinks.length &&
+      executionLinks.length === current.executionLinks.length
+    ) {
       return current
     }
     return {
       ...current,
-      sourceLinks: unionBacklogSourceLinks(current.sourceLinks, loser.sourceLinks),
-      executionLinks: unionBacklogExecutionLinks(current.executionLinks, loser.executionLinks),
+      sourceLinks,
+      executionLinks,
       updatedAt: ctx.now,
       events: [
         ...current.events,
