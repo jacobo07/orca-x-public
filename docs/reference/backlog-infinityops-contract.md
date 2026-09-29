@@ -37,8 +37,13 @@ Orca project identity travels as opaque metadata; InfinityOps never has to model
   `pulled_at` (null until Orca acknowledges).
 - It creates **candidates only**. Nothing captured here is pending work until Orca's reconciliation and
   the user's accept.
-- Honest limit: on a Pro account in developer mode, write tools are expected to fail (OpenAI docs,
-  2026-09-29). The tool must return an explicit, product-language refusal, never a silent success.
+- Write-back on Pro is PROVEN, not expected to fail: on 2026-09-29 16:57 the Owner's ChatGPT Pro/EEA
+  account ran the write tool `submit_founder_result`, and `/dashboard/founder` rendered the persisted
+  row after a re-read (ChatGPT conversation `6abbedec-b9dc-83eb-b7ec-46c0c93a5176`; prod row id not
+  read). This contradicts the OpenAI help-center claim that Pro developer mode is read/fetch only, so
+  `capture_intent` is viable on Pro. It stays an interactive lane; Codex remains the unattended one.
+- If a write is refused anyway (plan change, workspace policy), the tool returns an explicit,
+  product-language refusal, never a silent success.
 
 ## C3 — Orca sync client (authenticated, least privilege)
 

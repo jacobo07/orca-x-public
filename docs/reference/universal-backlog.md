@@ -104,7 +104,7 @@ proposal and never closes or opens an item alone.
 | Human | `decision_gates` / explicit resolution | never auto-executed or reinterpreted |
 | Claude (high trust) | orchestration `taskCreate` → admission | gated on `ProviderQuotaObservations` |
 | ChatGPT unattended | **Codex CLI signed in with ChatGPT** (official; live-observed 2026-09-20, `auth_mode: chatgpt`, no API key) | preparation artifacts; code only as a candidate in an isolated worktree |
-| ChatGPT interactive | InfinityOps FounderTask (`source_kind=orca_backlog`), user invokes `@InfinityOps` | Pro developer mode = read/fetch only (OpenAI docs, 2026-09-29); write-back requires a published app or Business/Enterprise/Edu — UNVERIFIED for the Owner's EEA Pro account |
+| ChatGPT interactive | InfinityOps FounderTask (`source_kind=orca_backlog`), user invokes `@InfinityOps` | write-back PROVEN on the Owner's Pro/EEA account (2026-09-29 16:57: `submit_founder_result` persisted and rendered on `/dashboard/founder`), contradicting the help-center claim that Pro developer mode is read/fetch only; `capture_intent` is therefore viable on Pro. Interactive only — Codex stays the unattended lane |
 | Deterministic | scripts / checks | — |
 
 **Run when Claude is available** reacts to a quota-owner change, never a poll, and re-validates at the
