@@ -152,6 +152,32 @@ need_row() {
   printf '%-9s %-28s %-9s %s\n' "$([ "$3" = 1 ] && echo OK || echo MISSING)" "$2" "$1" "$4"
 }
 
+# Why by pid owner, not process name: another user's electron on the port is not "already ours".
+# A listener whose pid is not visible counts as foreign (fail closed).
+port_held_by_other_user() {
+  local line pid owner
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    pid=$(echo "$line" | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
+    [ -n "$pid" ] || return 0
+    for pid in $(echo "$line" | grep -o 'pid=[0-9]*' | cut -d= -f2); do
+      owner=$(ps -o user= -p "$pid" 2>/dev/null | tr -d ' ')
+      [ "$owner" = "$SVC_USER" ] || return 0
+    done
+  done <<EOF
+$(ss -Hltnp "sport = :$SERVE_PORT" 2>/dev/null)
+EOF
+  return 1
+}
+
+# Every listener on the serve port must be 127.0.0.1; none at all is also a failure.
+listener_is_loopback_only() {
+  local addrs
+  addrs=$(ss -Hltn "sport = :$SERVE_PORT" 2>/dev/null | awk '{print $4}')
+  [ -n "$addrs" ] || return 1
+  ! echo "$addrs" | grep -qvx "127\.0\.0\.1:$SERVE_PORT"
+}
+
 cmd_install() {
   local sha="${1:-}" artifact="${2:-}" expected_sha256="${3:-}"
   [ -n "$sha" ] && [ -n "$artifact" ] && [ -n "$expected_sha256" ] || {
@@ -190,9 +216,7 @@ cmd_install() {
   need_row REQUIRED electron-binary "$electron_ok" "$electron_bin"
 
   local port_ok=1
-  local port_holder
-  port_holder=$(ss -Hltnp "sport = :$SERVE_PORT" 2>/dev/null | grep -v "users:((\"electron\"" || true)
-  [ -n "$port_holder" ] && port_ok=0
+  port_held_by_other_user && port_ok=0
   need_row REQUIRED "port-${SERVE_PORT}-not-held-by-another-user" "$port_ok" "port must be free or already ours"
 
   local ufw_state="unknown"
@@ -358,8 +382,13 @@ p = d.get("pairing") or {}
 url = p.get("url")
 print(hashlib.sha256(url.encode()).hexdigest()[:12] if url else "none")
 ')
-  echo "READY boundEndpoint=$bound_endpoint pairingSha12=$pairing_sha12"
   ss -Hltnp "sport = :$SERVE_PORT"
+  if ! listener_is_loopback_only; then
+    echo "EXPOSURE_REFUSED: port $SERVE_PORT is not bound to 127.0.0.1 only; stopping $UNIT_NAME"
+    systemctl stop "$UNIT_NAME"
+    exit 8
+  fi
+  echo "READY boundEndpoint=$bound_endpoint pairingSha12=$pairing_sha12"
 }
 
 # --- ready-json / status / ps-capture ---------------------------------------
