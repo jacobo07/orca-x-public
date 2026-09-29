@@ -266,6 +266,11 @@
       "producer": "src/renderer/src/components/mission-brief/mission-brief-presentation.ts#describeStageState",
       "absent": "omitted",
       "why": "Proven needs a passed verification; a phase marked done without one reads as claimed."
+    },
+    "resume-center-workspace-mission-signal": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useCachedMissionSignal",
+      "absent": "omitted",
+      "why": "The signal of a brief already read for that row; a row never selected shows no chip, and the list never reads one."
     }
   }
 }

@@ -3,7 +3,11 @@ import { ChevronDown, ChevronUp, FolderGit2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { describeSignalShort, signalTone } from '../mission-brief/mission-brief-presentation'
+import { MISSION_TONE_CLASS } from '../mission-brief/mission-tone-class'
+import { useCachedMissionSignal } from '../mission-brief/use-mission-brief'
 import type { WorkspaceRowModel } from './resume-center-model'
 import { describeWindow, describeWorkspaceName } from './resume-center-presentation'
 import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
@@ -13,11 +17,16 @@ import { ResumeCenterTabRow } from './ResumeCenterTabRow'
 import { ResumeCenterOrphanRow } from './ResumeCenterOrphanRow'
 
 export function ResumeCenterWorkspaceSection({
-  row
+  row,
+  selected,
+  onSelect
 }: {
   row: WorkspaceRowModel
+  selected: boolean
+  onSelect: () => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(true)
+  const missionSignal = useCachedMissionSignal(row.hostId, row.key)
   const firstTab = row.tabs[0]
   const firstPane = firstTab?.panes[0]
   const name = describeWorkspaceName(row.identity, row.key)
@@ -26,13 +35,25 @@ export function ResumeCenterWorkspaceSection({
     <section
       data-testid="resume-center-workspace"
       data-workspace-key={row.key}
+      data-selected={selected ? 'true' : undefined}
       aria-label={name}
-      className="rounded-lg border border-border bg-card/40"
+      className={cn('rounded-lg border bg-card/40', selected ? 'border-ring' : 'border-border')}
     >
       <header className="flex items-start gap-3 px-4 py-3">
         <FolderGit2 className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-medium">{name}</h3>
+          <h3 className="truncate text-sm font-medium">
+            {/* Why a button: selecting a row opens its Mission Brief, reachable from the keyboard. */}
+            <button
+              type="button"
+              data-testid="resume-center-workspace-select"
+              aria-pressed={selected}
+              onClick={onSelect}
+              className="max-w-full truncate rounded-sm text-left hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {name}
+            </button>
+          </h3>
           {path ? (
             <p className="truncate font-mono text-[11px] text-muted-foreground">{path}</p>
           ) : null}
@@ -43,6 +64,19 @@ export function ResumeCenterWorkspaceSection({
             {row.hostId !== 'local' ? (
               <span className="rounded-full border border-border px-2 py-0.5">
                 {getExecutionHostLabel(row.hostId)}
+              </span>
+            ) : null}
+            {missionSignal ? (
+              <span
+                className={cn(
+                  'rounded-full border px-2 py-0.5',
+                  MISSION_TONE_CLASS[signalTone(missionSignal.signal)]
+                )}
+                title={missionSignal.action ?? undefined}
+              >
+                <ClaimValue testId="resume-center-workspace-mission-signal">
+                  {describeSignalShort(missionSignal.signal)}
+                </ClaimValue>
               </span>
             ) : null}
           </div>

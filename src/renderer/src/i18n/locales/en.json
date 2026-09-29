@@ -16941,6 +16941,9 @@
     "title": "Mission Brief",
     "unlocks": {
       "none": "Nothing becomes reachable from this phase alone"
+    },
+    "dialog": {
+      "description": "Mission records of {{name}}"
     }
   }
 }

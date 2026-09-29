@@ -4,8 +4,10 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MissionBriefDialog } from '../mission-brief/MissionBriefDialog'
+import { MissionBriefPanel } from '../mission-brief/MissionBriefPanel'
 import { buildResumeCenterModel, type ResumeCenterSort } from './resume-center-model'
-import { describeGreeting } from './resume-center-presentation'
+import { describeGreeting, describeWorkspaceName } from './resume-center-presentation'
 import { useDeskContinuity } from './use-desk-continuity'
 import { clearPanePreviewCache } from './use-pane-preview'
 import { ClaimValue } from './ClaimValue'
@@ -37,6 +39,15 @@ export default function ResumeCenterPage(): React.JSX.Element {
         : [],
     [state]
   )
+  // Why identity by host + key: two hosts can hold a workspace with the same key.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [fullBriefOpen, setFullBriefOpen] = useState(false)
+  const rowId = (row: { hostId: string; key: string }): string => `${row.hostId}\u0000${row.key}`
+  // Why the unfiltered rows: a search that hides the selected row does not close its brief.
+  const selectedRow = deskRows.find((row) => rowId(row) === selectedId) ?? null
+  const selectedName = selectedRow
+    ? describeWorkspaceName(selectedRow.identity, selectedRow.key)
+    : ''
 
   return (
     <div data-testid="resume-center-page" className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -134,12 +145,49 @@ export default function ResumeCenterPage(): React.JSX.Element {
             </p>
           ) : (
             model?.workspaces.map((row) => (
-              <ResumeCenterWorkspaceSection key={`${row.hostId}\u0000${row.key}`} row={row} />
+              <ResumeCenterWorkspaceSection
+                key={rowId(row)}
+                row={row}
+                selected={rowId(row) === selectedId}
+                onSelect={() =>
+                  setSelectedId((current) => (current === rowId(row) ? null : rowId(row)))
+                }
+              />
             ))
           )}
         </div>
-        {model ? <ResumeCenterSummaryPanel model={model} /> : null}
+        {model ? (
+          <div
+            data-testid="resume-center-aside"
+            className={
+              selectedRow ? 'flex w-[26rem] shrink-0 flex-col gap-3' : 'flex shrink-0 flex-col'
+            }
+          >
+            {selectedRow ? (
+              <MissionBriefPanel
+                hostId={selectedRow.hostId}
+                workspaceKey={selectedRow.key}
+                projectName={selectedName}
+                row={selectedRow}
+                variant="compact"
+                onOpenFull={() => setFullBriefOpen(true)}
+              />
+            ) : null}
+            <ResumeCenterSummaryPanel
+              model={model}
+              className={selectedRow ? 'w-full' : undefined}
+            />
+          </div>
+        ) : null}
       </div>
+      {selectedRow ? (
+        <MissionBriefDialog
+          row={selectedRow}
+          projectName={selectedName}
+          open={fullBriefOpen}
+          onOpenChange={setFullBriefOpen}
+        />
+      ) : null}
     </div>
   )
 }

@@ -13,8 +13,10 @@
 
 - Action 2 DONE: surface + `MissionTone` presenter + 11 claims registered (`check:workspace-surface-claims` 46 sites / 7 tone maps green); `check:status-semantics` green (it reads 2 consumers only — it does NOT judge `mission-tone-class.ts`). en.json: 86 `missionBrief.*` keys added by a scoped script; NOT `--fix`, which would also sweep 162 keys main is already missing (agents/workspace/activity-rail — base debt, not ours). es/ja/ko/zh deliberately NOT added: the catalog script states feature PRs own English and targets fall back until a localization PR.
 
+- Action 3 CODE DONE, NOT yet seen in the real app: workspace name is a select button (`resume-center-workspace-select`, aria-pressed; click again deselects); selection keyed host+key and looked up in UNFILTERED rows; aside `resume-center-aside` shows the compact brief ABOVE the Desk Summary (kept, not replaced — no summary capability lost); `MissionBriefDialog` (`mission-brief-dialog`, sm:max-w-[1180px]) for the full brief; cached row signal chip `resume-center-workspace-mission-signal` (claimed, 47 sites). `mission-brief-actions.test.ts` 11 tests; 2 mutations (live-run-first, folder guard) each red on its own test, source restored by hash. tc:web, oxlint, oxfmt, claims, max-lines ratchet green (ratchet needs `C:\Program Files\Git\cmd` on PATH).
+
 **Next actions:**
-3. Resume Center integration: row selection in `ResumeCenterPage` → aside shows `<MissionBriefPanel variant="compact">` instead of the Desk Summary; "Open full brief" → Dialog (max-w ~1180px) with `variant="full"`; row signal via `useCachedMissionSignal` in `ResumeCenterWorkspaceSection`. Then unit tests for `planContinue`/`planNeedsMe`, real-app Product Reality (Brand 001 `_wt-b001-exec`, `orca-backlog-wt` ub, `gsd-long-smoke`, a repo without .planning), screenshot vs `Downloads\Imagen de ChatGPT 29 sept 2026, 20_11_45.png`, mutations, knowledge/UKDL.
+4. Real-app Product Reality (Brand 001 `_wt-b001-exec`, `orca-backlog-wt` ub, `gsd-long-smoke`, a repo without .planning), screenshot vs `Downloads\Imagen de ChatGPT 29 sept 2026, 20_11_45.png`, mutations, knowledge/UKDL.
 
 **Decisions:** unlocks = phases the frontier makes reachable (last unproven dep, no external); proven only on verification `passed`; GSD percents never read; `blockers: []` from GSD is not "none"; remote hosts refused.
 
