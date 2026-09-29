@@ -1,6 +1,14 @@
 import { join } from 'node:path'
 
-import type { BacklogLoadResult, BacklogWriteOutcome } from '../../shared/backlog-outcomes'
+import type {
+  BacklogCandidateListQuery,
+  BacklogCandidateListResult,
+  BacklogHealth,
+  BacklogListQuery,
+  BacklogListResult,
+  BacklogLoadResult,
+  BacklogWriteOutcome
+} from '../../shared/backlog-outcomes'
 import { BACKLOG_NORMALIZED_INTENT_MAX } from '../../shared/backlog-rpc-limits'
 import {
   BACKLOG_SCHEMA_VERSION,
@@ -34,6 +42,12 @@ import {
   type BacklogItemMergeResult
 } from './backlog-item-merge'
 import { BACKLOG_ITEM_CODEC } from './backlog-item-validation'
+import { openBacklogLedger } from './backlog-ledger-open'
+import {
+  queryBacklogCandidates,
+  queryBacklogItems,
+  summarizeBacklogHealth
+} from './backlog-ledger-queries'
 import { BacklogRecordStore } from './backlog-record-store'
 
 export type BacklogCaptureInput = {
@@ -141,5 +155,21 @@ export class BacklogService {
 
   mergeItems(input: BacklogItemMergeInput): Promise<BacklogItemMergeResult> {
     return mergeBacklogItems(this.stores().items, input)
+  }
+
+  // Each read side call is a fresh scan of the current root: no in-memory index to go stale.
+  async list(query: BacklogListQuery): Promise<BacklogListResult> {
+    const ledger = await openBacklogLedger(this.rootDirectory())
+    return ledger.outcome === 'opened' ? queryBacklogItems(ledger, query) : ledger
+  }
+
+  async listCandidates(query: BacklogCandidateListQuery): Promise<BacklogCandidateListResult> {
+    const ledger = await openBacklogLedger(this.rootDirectory())
+    return ledger.outcome === 'opened' ? queryBacklogCandidates(ledger, query) : ledger
+  }
+
+  async health(): Promise<BacklogHealth> {
+    const ledger = await openBacklogLedger(this.rootDirectory())
+    return ledger.outcome === 'opened' ? summarizeBacklogHealth(ledger) : ledger
   }
 }

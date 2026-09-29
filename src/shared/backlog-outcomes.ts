@@ -1,3 +1,11 @@
+import type {
+  BacklogCandidate,
+  BacklogCandidateStatus,
+  BacklogItem,
+  BacklogItemKind,
+  BacklogItemState
+} from './backlog-types'
+
 export type BacklogStorageStage = 'prepare' | 'scan' | 'write' | 'barrier' | 'publish'
 
 export type BacklogUnreadableCode =
@@ -41,6 +49,63 @@ export type BacklogStorageFailure = {
   stage: BacklogStorageStage
   code: string | null
 }
+
+export type BacklogRecordKind = 'item' | 'candidate'
+
+export type BacklogQuarantineCode = BacklogUnreadableCode | 'schema-too-new' | 'invalid-name'
+
+/** A file the ledger could not load; it is reported and left byte-for-byte on disk. */
+export type BacklogQuarantineEntry = {
+  recordKind: BacklogRecordKind
+  fileName: string
+  id: string | null
+  code: BacklogQuarantineCode
+  reason: string
+}
+
+export type BacklogListQuery = {
+  state?: BacklogItemState
+  kind?: BacklogItemKind
+  projectId?: string
+  unassigned?: boolean
+  limit?: number
+  cursor?: string
+}
+
+export type BacklogListResult =
+  | {
+      outcome: 'listed'
+      items: BacklogItem[]
+      total: number
+      nextCursor: string | null
+      quarantinedCount: number
+    }
+  | BacklogStorageFailure
+
+export type BacklogCandidateListQuery = {
+  status?: BacklogCandidateStatus
+  limit?: number
+  cursor?: string
+}
+
+export type BacklogCandidateListResult =
+  | {
+      outcome: 'listed'
+      candidates: BacklogCandidate[]
+      total: number
+      nextCursor: string | null
+      quarantinedCount: number
+    }
+  | BacklogStorageFailure
+
+export type BacklogHealthReport = {
+  outcome: 'opened'
+  items: { total: number; byState: Record<BacklogItemState, number> }
+  candidates: { total: number; byStatus: Record<BacklogCandidateStatus, number> }
+  quarantined: BacklogQuarantineEntry[]
+}
+
+export type BacklogHealth = BacklogHealthReport | BacklogStorageFailure
 
 export type BacklogWriteOutcome<R> =
   | { outcome: 'published'; record: R }
