@@ -16817,6 +16817,15 @@
   "backlog": {
     "rail": {
       "label": "Backlog"
+    },
+    "settings": {
+      "showButton": {
+        "title": "Show Backlog Button",
+        "description": "Show the Backlog button in the activity rail.",
+        "keywordBacklog": "backlog",
+        "keywordIntent": "intent",
+        "keywordIdeas": "ideas"
+      }
     }
   }
 }

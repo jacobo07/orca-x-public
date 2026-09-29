@@ -202,6 +202,25 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getShowBacklogButtonEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate('backlog.settings.showButton.title', 'Show Backlog Button'),
+    description: translate(
+      'backlog.settings.showButton.description',
+      'Show the Backlog button in the activity rail.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('backlog.settings.showButton.keywordBacklog', 'backlog'),
+      ...translateSearchKeyword('backlog.settings.showButton.keywordIntent', 'intent'),
+      ...translateSearchKeyword('backlog.settings.showButton.keywordIdeas', 'ideas'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show')
+    ]
+  })
+)
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -270,5 +289,7 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   getLeftSidebarAppearanceEntry(),
   getSidePanelDockEntry(),
   getFloatingWorkspaceDockEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  // Last, so the rows that read the entries above by index keep theirs.
+  getShowBacklogButtonEntry()
 ])
