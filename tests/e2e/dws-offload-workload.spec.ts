@@ -24,6 +24,11 @@ async function loadCreateOrcaRpc(): Promise<CreateOrcaRpcFn> {
   return mod.createOrcaRpc
 }
 
+type WorkloadManifestModule = typeof import('../../config/scripts/dws-workload-manifest.mjs')
+async function loadWorkloadManifest(): Promise<WorkloadManifestModule> {
+  return import('../../config/scripts/dws-workload-manifest.mjs')
+}
+
 // WR-06: a leg that exited non-zero (or an agent with no matched reply) is FAILED, never a green leg.
 async function stampLegVerdicts(markers: LegMarker[]): Promise<void> {
   const { judgeLegMarker } = await import('../../config/scripts/dws-offload-measurement.mjs')
@@ -236,26 +241,21 @@ test.describe('DWS-P2 offload workload harness', () => {
     }
 
     const sha = gitRevParse(['rev-parse', 'HEAD'], checkout)
-    const blobHashPaths = [
-      'config/scripts/check-dws-completeness.test.mjs',
-      'src/main/runtime/runtime-rpc-websocket-bind-host.test.ts',
-      'config/tsconfig.cli.json',
-      'config/scripts/dws-offload-workload.mjs'
-    ]
+    const { WORKLOAD_BLOB_PATHS, buildWorkloadManifest } = await loadWorkloadManifest()
     const blobHashes: Record<string, string> = {}
-    for (const blobPath of blobHashPaths) {
+    for (const blobPath of WORKLOAD_BLOB_PATHS) {
       blobHashes[blobPath] = gitRevParse(['rev-parse', `${sha}:${blobPath}`], checkout)
     }
 
     await stampLegVerdicts(legMarkers)
-    const manifest = {
+    const manifest = buildWorkloadManifest({
       desktopRootPid,
       nonce,
       harnessRootPids,
       checkoutSha: sha,
       blobHashes,
       legs: legMarkers
-    }
+    })
     mkdirSync(runDir, { recursive: true })
     writeFileSync(path.join(runDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 
@@ -300,6 +300,11 @@ test.describe('DWS-P2 offload workload harness', () => {
     expect(attachResult.environmentId).toBeTruthy()
 
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    // Why: `summarize` resolves the desktop subtree from this pid; without it absence is judged by nonce only.
+    const desktopRootPid = electronApp.process().pid
+    const harnessRootPids = [process.pid, process.ppid].filter(
+      (pid): pid is number => typeof pid === 'number'
+    )
     const nonce = randomUUID().replace(/-/g, '').slice(0, 16)
 
     const createOrcaRpc = await loadCreateOrcaRpc()
@@ -380,45 +385,43 @@ test.describe('DWS-P2 offload workload harness', () => {
       legMarkers.push(marker)
     }
 
-    // CTX-SVC-2 / acceptance criteria: workload blob hashes must equal the baseline's, or this
-    // sweep is refused rather than silently compared against a differently-shaped workload.
-    const blobHashPaths = [
-      'config/scripts/check-dws-completeness.test.mjs',
-      'src/main/runtime/runtime-rpc-websocket-bind-host.test.ts',
-      'config/tsconfig.cli.json',
-      'config/scripts/dws-offload-workload.mjs'
-    ]
+    // CTX-SVC-2: comparability is judged over the child-executed inputs of the legs that ran.
+    const { WORKLOAD_BLOB_PATHS, buildWorkloadManifest, judgeWorkloadComparability } =
+      await loadWorkloadManifest()
     const blobHashes: Record<string, string> = {}
-    for (const blobPath of blobHashPaths) {
+    for (const blobPath of WORKLOAD_BLOB_PATHS) {
       blobHashes[blobPath] = gitRevParse(['rev-parse', `${svcSha}:${blobPath}`], REPO_ROOT)
     }
-    let blobHashesMatchBaseline: boolean | 'no-baseline-manifest' = 'no-baseline-manifest'
-    if (baselineManifestPath) {
-      const baselineManifest = JSON.parse(readFileSync(baselineManifestPath, 'utf8')) as {
-        blobHashes?: Record<string, string>
-      }
-      blobHashesMatchBaseline = blobHashPaths.every(
-        (blobPath) => baselineManifest.blobHashes?.[blobPath] === blobHashes[blobPath]
-      )
-    }
+    const baselineBlobHashes = baselineManifestPath
+      ? (JSON.parse(readFileSync(baselineManifestPath, 'utf8')) as {
+          blobHashes?: Record<string, string>
+        }).blobHashes ?? null
+      : null
+    const comparability = judgeWorkloadComparability({
+      legs,
+      baselineBlobHashes,
+      offloadBlobHashes: blobHashes
+    })
 
     await stampLegVerdicts(legMarkers)
-    const manifest = {
+    const manifest = buildWorkloadManifest({
+      desktopRootPid,
+      harnessRootPids,
       nonce,
       checkoutSha: svcSha,
       checkout,
       envName,
       environmentId: attachResult.environmentId,
       blobHashes,
-      blobHashesMatchBaseline,
+      comparability,
       legs: legMarkers
-    }
+    })
     mkdirSync(runDir, { recursive: true })
     writeFileSync(path.join(runDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
 
-    if (blobHashesMatchBaseline === false) {
+    if (comparability.verdict === 'NOT_COMPARABLE') {
       throw new Error(
-        'remote workload blob hashes do not match docs/dws baseline manifest -- refusing to treat this as a comparable sweep'
+        `remote workload is not comparable to the docs/dws baseline manifest: ${comparability.reason}`
       )
     }
     expectLegsSucceeded(legMarkers, 'did not succeed (remote)')

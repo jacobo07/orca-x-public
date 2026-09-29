@@ -32,8 +32,8 @@
   (remote only) The git SHA of the GEX44 service checkout the workload legs actually run against.
 
 .PARAMETER BaselineManifest
-  (remote only) Path to the accepted LOCAL baseline's manifest.json, for the blob-hash comparability
-  refusal. Optional — if omitted, blobHashesMatchBaseline is recorded as 'no-baseline-manifest'.
+  (remote only) Path to the accepted LOCAL baseline's manifest.json, for the per-leg comparability
+  judgement. Optional — if omitted, the manifest records comparability as UNJUDGED (no baseline).
 
 .PARAMETER AgentKind / AgentBin
   (remote only) Forwarded to the agent leg's dispatch when 'agent' is in -Legs.
@@ -41,6 +41,11 @@
 .PARAMETER CaptureCount / CaptureIntervalSec
   (remote only) `ps-capture <count> <interval>` on GEX44 — one CAPTURE block per interval. Default
   600 x 3s = 30 minutes of coverage; raise for a longer expected sweep (agent leg especially).
+  Fractional seconds are accepted (0 < interval <= 60), e.g. 0.2 to catch a sub-second build leg.
+
+.PARAMETER PlanOnly
+  Prints the normalized legs and the remote ps-capture body, then exits 0 before creating any state,
+  reading the pairing file, importing a module or contacting a host.
 #>
 param(
   [string]$Target = 'local',
@@ -54,10 +59,41 @@ param(
   [string]$AgentKind,
   [string]$AgentBin,
   [int]$CaptureCount = 600,
-  [int]$CaptureIntervalSec = 3
+  [double]$CaptureIntervalSec = 3,
+  [switch]$PlanOnly
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Why: `powershell -File ... -Legs test,build,agent` binds ONE string, so the list must be split here.
+$Legs = @($Legs | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+foreach ($legName in $Legs) {
+  if ($legName -notin @('test', 'build', 'agent')) {
+    throw "unknown leg '$legName' (expected test|build|agent)"
+  }
+}
+if ($Legs.Count -eq 0) {
+  throw 'no legs requested (expected test|build|agent)'
+}
+if (-not ($CaptureIntervalSec -gt 0 -and $CaptureIntervalSec -le 60)) {
+  throw "-CaptureIntervalSec must be > 0 and <= 60 (got $CaptureIntervalSec)"
+}
+if ($CaptureCount -lt 1) {
+  throw "-CaptureCount must be >= 1 (got $CaptureCount)"
+}
+
+# Why hardcoded, not a getter from dws-laptop-remote.psm1: $script:DwsSshHost and $script:DwsRemoteClone
+# are module-PRIVATE and the module exports no accessor. Values must match that module's constants.
+$dwsRemoteSshHost = 'gex44'
+$dwsRemoteClone = '/home/kobii/dws-0104-clone'
+# Why invariant: an es-ES host would otherwise format 0.2 as "0,2" and break the remote `sleep` argument.
+$captureIntervalText = $CaptureIntervalSec.ToString('0.###', [System.Globalization.CultureInfo]::InvariantCulture)
+$psCaptureBody = "bash $dwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh ps-capture $CaptureCount $captureIntervalText"
+
+if ($PlanOnly) {
+  Write-Output "DWS-P2-RUN plan target=$Target legs=$($Legs -join ',') psCapture=$psCaptureBody"
+  exit 0
+}
 
 $repoRoot = Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent
 $stateDir = Join-Path $env:LOCALAPPDATA "orca-dws-p2\runs\$RunId"
@@ -158,11 +194,6 @@ Write-Output "DWS-P2-RUN samplerPid=$($samplerProc.Id) samplerStarted=true"
 
 # --- Remote target: bracket a `ps --forest` capture on GEX44 around the sweep, and pre/post the
 # serve unit's own MainPID so a restart mid-run is INCONCLUSIVE, never silently accepted -------
-# Why a hardcoded remote path/host, not a getter from dws-laptop-remote.psm1: $script:DwsSshHost
-# and $script:DwsRemoteClone are module-PRIVATE ($script: scope), and the module exports no
-# accessor for either. Duplicated here (values must match dws-laptop-remote.psm1's own constants).
-$dwsRemoteSshHost = 'gex44'
-$dwsRemoteClone = '/home/kobii/dws-0104-clone'
 $remotePsProc = $null
 $servePidBefore = $null
 if ($Target -eq 'remote') {
@@ -182,9 +213,9 @@ if ($Target -eq 'remote') {
   # Start-Process's own array instead of through the (synchronous) Invoke-DwsSsh helper.
   $remotePsProc = Start-Process -FilePath 'ssh' -ArgumentList @(
     '-o', 'ConnectTimeout=20', '-o', 'BatchMode=yes', $dwsRemoteSshHost,
-    "bash $dwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh ps-capture $CaptureCount $CaptureIntervalSec"
+    $psCaptureBody
   ) -RedirectStandardOutput $remotePsPath -PassThru -WindowStyle Hidden
-  Write-Output "DWS-P2-RUN remotePsCapturePid=$($remotePsProc.Id) count=$CaptureCount intervalSec=$CaptureIntervalSec"
+  Write-Output "DWS-P2-RUN remotePsCapturePid=$($remotePsProc.Id) count=$CaptureCount intervalSec=$captureIntervalText"
 
   if ('agent' -in $Legs) {
     # Existence-only credential check (never reads contents) -- host_rules: the agent-turn leg may
