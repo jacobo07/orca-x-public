@@ -104,6 +104,32 @@ it('reads the captured item back through a fresh service instance', async () => 
   expect(published.record.events.map((event) => event.type)).toEqual(['created'])
 })
 
+it('fsyncs an ingested candidate before publishing its name', async () => {
+  const { BacklogService } = await import('./backlog-service')
+  const supported = await directoryFsyncSupported(root)
+  syscalls.length = 0
+
+  const [result] = await new BacklogService(() => root).ingestCandidates([
+    {
+      source: {
+        kind: 'orca-conversation',
+        ref: 'conv_1',
+        capturedAt: 1,
+        adapter: 'orca-conversations',
+        capabilityLevel: 'full'
+      },
+      fingerprint: 'fp',
+      text: 'Harvested intent',
+      uncertainty: 'unknown'
+    }
+  ])
+
+  expect(result.outcome).toBe('published')
+  expect(syscalls).toEqual(
+    supported ? ['fsync:file', 'rename', 'fsync:directory'] : ['fsync:file', 'rename']
+  )
+})
+
 async function seededStore() {
   const { BacklogService } = await import('./backlog-service')
   const { BacklogRecordStore } = await import('./backlog-record-store')
