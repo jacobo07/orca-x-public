@@ -14,6 +14,7 @@ import {
   type BacklogProjectRef
 } from '../../shared/backlog-types'
 import { mintItemIdForCandidate } from './backlog-identity-mint'
+import type { BacklogRecordQueue } from './backlog-record-queue'
 import type { BacklogFold, BacklogRecordStore } from './backlog-record-store'
 
 export type BacklogCandidateResolution =
@@ -38,6 +39,8 @@ export type BacklogResolveResult = {
 type Stores = {
   items: BacklogRecordStore<BacklogItem>
   candidates: BacklogRecordStore<BacklogCandidate>
+  /** Keyed by candidate id; separate from the candidate store's own queue, which the fold re-enters. */
+  resolutions: BacklogRecordQueue
 }
 
 const TARGET_STATUS: Record<BacklogCandidateResolution['action'], BacklogCandidateStatus> = {
@@ -186,7 +189,15 @@ function linkCandidateToItem(
  * Item first: a candidate marked accepted or merged with no item behind it would be lost intent,
  * while an item with a still-open candidate is repaired by retrying the same resolution.
  */
-export async function resolveBacklogCandidate(
+export function resolveBacklogCandidate(
+  stores: Stores,
+  resolution: BacklogCandidateResolution
+): Promise<BacklogResolveResult> {
+  // Serialized per candidate so the status check below is fresh when the item leg commits.
+  return stores.resolutions.run(resolution.candidateId, () => resolveHeld(stores, resolution))
+}
+
+async function resolveHeld(
   stores: Stores,
   resolution: BacklogCandidateResolution
 ): Promise<BacklogResolveResult> {

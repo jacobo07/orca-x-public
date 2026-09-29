@@ -48,6 +48,7 @@ import {
   queryBacklogItems,
   summarizeBacklogHealth
 } from './backlog-ledger-queries'
+import { BacklogRecordQueue } from './backlog-record-queue'
 import { BacklogRecordStore } from './backlog-record-store'
 
 export type BacklogCaptureInput = {
@@ -62,6 +63,7 @@ export type BacklogCaptureInput = {
 type StoreSet = {
   items: BacklogRecordStore<BacklogItem>
   candidates: BacklogRecordStore<BacklogCandidate>
+  resolutions: BacklogRecordQueue
 }
 
 export class BacklogService {
@@ -86,7 +88,8 @@ export class BacklogService {
           join(root, 'candidates'),
           BACKLOG_CANDIDATE_CODEC,
           this.now
-        )
+        ),
+        resolutions: new BacklogRecordQueue()
       }
       this.storesByRoot.set(root, entry)
     }
