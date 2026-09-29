@@ -89,6 +89,9 @@ describe('backlog.* runtime methods', () => {
     expect(list({ cursor: 'abc' })).toBe(false)
     expect(list({ cursor: '-1' })).toBe(false)
     expect(list({ state: 'archived' })).toBe(false)
+    expect(BacklogListParams.safeParse({ view: 'summary' }).data).toEqual({ view: 'summary' })
+    expect(BacklogListParams.safeParse({ view: 'full' }).data).toEqual({ view: 'full' })
+    expect(list({ view: 'compact' })).toBe(false)
     const candidates = (params: unknown) => BacklogCandidateListParams.safeParse(params).success
     expect(candidates({ status: 'open', limit: 5, cursor: '5' })).toBe(true)
     expect(candidates({ status: 'archived' })).toBe(false)

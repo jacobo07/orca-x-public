@@ -268,4 +268,38 @@ describe('backlog runtime RPC round trip', () => {
     expect(open.total).toBe(1)
     expect(open.candidates.map((row) => row.id)).toEqual([rows[0].id])
   })
+
+  it('serves summary rows with an echo to a fresh runtime; full stays the default', async () => {
+    const writer = dispatcherOn(root)
+    for (const text of ['short one', 'L'.repeat(2_500)]) {
+      expect((await resultOf(writer, 'backlog.capture', { text, kind: 'idea' })).outcome).toBe(
+        'published'
+      )
+    }
+
+    type Row = Record<string, unknown> & { originalText: string }
+    type Listed = { outcome: string; view: string; items: Row[] }
+    const summary = (await resultOf(dispatcherOn(root), 'backlog.list', {
+      view: 'summary'
+    })) as unknown as Listed
+    expect(summary).toMatchObject({ outcome: 'listed', view: 'summary' })
+    expect(summary.items).toHaveLength(2)
+    for (const row of summary.items) {
+      expect(Object.hasOwn(row, 'events')).toBe(false)
+      expect(Object.hasOwn(row, 'evidence')).toBe(false)
+    }
+    const long = summary.items.find((row) => row.originalText.startsWith('L'))!
+    expect(long.originalText).toBe('L'.repeat(2_000))
+    expect(long.textTruncated).toBe(true)
+    const short = summary.items.find((row) => row.originalText === 'short one')!
+    expect(Object.hasOwn(short, 'textTruncated')).toBe(false)
+
+    const full = (await resultOf(dispatcherOn(root), 'backlog.list', {})) as unknown as Listed
+    expect(full).toMatchObject({ outcome: 'listed', view: 'full' })
+    expect(full.items.every((row) => Array.isArray(row.events))).toBe(true)
+
+    const refused = await dispatcherOn(root).dispatch(request('backlog.list', { view: 'compact' }))
+    expect(refused.ok).toBe(false)
+    expect(!refused.ok && refused.error.code).toBe('invalid_argument')
+  })
 })

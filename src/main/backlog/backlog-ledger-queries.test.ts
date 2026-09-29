@@ -137,6 +137,37 @@ describe('ledger item queries', () => {
     expect(third).toMatchObject({ total: 5, nextCursor: null })
     expect(third.outcome === 'listed' && ids(third.items)).toEqual([itemId(5)])
   })
+
+  it('echoes view full by default and returns the records unchanged', () => {
+    const listed = queryBacklogItems(SNAPSHOT, {})
+    expect(listed).toMatchObject({ outcome: 'listed', view: 'full' })
+    expect(listed.outcome === 'listed' && listed.items).toEqual([
+      SNAPSHOT.items[1],
+      SNAPSHOT.items[3],
+      SNAPSHOT.items[2],
+      SNAPSHOT.items[0],
+      SNAPSHOT.items[4]
+    ])
+  })
+
+  it('projects summary rows after paging with identical filters, pages and total', () => {
+    for (const query of [{}, { state: 'ready' as const }, { limit: 2, cursor: '2' }]) {
+      const full = queryBacklogItems(SNAPSHOT, query)
+      const summary = queryBacklogItems(SNAPSHOT, { ...query, view: 'summary' })
+      if (full.outcome !== 'listed' || summary.outcome !== 'listed') {
+        throw new Error('not listed')
+      }
+      expect(summary.view).toBe('summary')
+      expect(summary.total).toBe(full.total)
+      expect(summary.nextCursor).toBe(full.nextCursor)
+      expect(summary.quarantinedCount).toBe(full.quarantinedCount)
+      expect(ids(summary.items)).toEqual(ids(full.items))
+      for (const row of summary.items) {
+        expect(Object.hasOwn(row, 'events')).toBe(false)
+        expect(Object.hasOwn(row, 'evidence')).toBe(false)
+      }
+    }
+  })
 })
 
 describe('ledger candidate queries and health', () => {
