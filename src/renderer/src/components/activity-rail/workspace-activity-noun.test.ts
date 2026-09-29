@@ -47,6 +47,7 @@ describe('the Agents product noun', () => {
     expect([...WORKSPACE_ACTIVITY_ORDER]).toEqual([
       'agent-workspace',
       'workspace',
+      'backlog',
       'tasks',
       'automations',
       'activity',
