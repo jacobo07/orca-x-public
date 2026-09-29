@@ -38,10 +38,15 @@ per-record quarantine, list / candidates.list / health (ten methods), drills M1�
 restored by SHA-256. `ab79e3fb6` pins the open-concurrency cap (the M4 gap). Scoped suite 16 files 115/115, plus that test 1/1 (run separately).
 `pnpm lint` and `check:mobile-aperture` are red only on pre-existing non-phase files (01-04-SUMMARY).
 ChatGPT write-back is PROVEN on the Owner's Pro/EEA account (`03a24aaba`, docs + contract C2).
+**Phase 1 VERIFIED** (`01-VERIFICATION.md` passed 5/5): gap G1 (merge retry dropped late links) fixed
+`727dd73db`; code review WR-01..03 + IN-01..03 fixed TDD `71a6a2b75`..`1b021312b`. Phase 1 suite 19
+files 133/133; durability green; aperture red only on its 4 pre-existing names. Open for Phase 7:
+T-01-12, unbounded event log, hard-link requirement, Windows dir-fsync no-op, no power-loss run.
 
-**Next 3 actions.** 1) Phase 1 verification (`01-VERIFICATION.md`); close any gap. 2) Phase 2
-(Backlog surface): `02-CONTEXT.md` → UI-SPEC → plan → execute, real-app Playwright CDP proof with
-restart. 3) Phase 3 (candidate inbox + harvesters). Tests run as
+**Next 3 actions.** 1) Phase 2 (Backlog surface): CONTEXT (D-01..D-26 + R-01..R-09), UI-SPEC,
+RESEARCH, VALIDATION written under `.planning/…/02-backlog-surface-and-manual-capture/`; plans →
+plan-check → execute, real-app Playwright CDP proof with restart. 2) Phase 3 (candidate inbox +
+harvesters). 3) Phase 4 (reconciliation). Tests run as
 `node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts <files>` (RTK breaks
 `pnpm exec vitest`); `pnpm run` scripts via `cmd /c`.
 
