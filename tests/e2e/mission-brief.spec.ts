@@ -1,7 +1,8 @@
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { parseProjectMdRecord } from '../../src/main/mission-brief/project-md-record'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal } from './helpers/orca-restart'
 
@@ -50,6 +51,19 @@ function workspaceRow(page: Page, repoPath: string) {
   return page.getByTestId('resume-center-workspace').filter({ hasText: repoPath })
 }
 
+/** The goal the repo's PROJECT.md states; `undefined` when a workstream's PROJECT.md may be read instead. */
+function goalOnDisk(repoPath: string): string | null | undefined {
+  if (existsSync(path.join(repoPath, '.planning', 'workstreams'))) {
+    return undefined
+  }
+  const file = path.join(repoPath, '.planning', 'PROJECT.md')
+  if (!existsSync(file)) {
+    return null
+  }
+  const record = parseProjectMdRecord(readFileSync(file, 'utf8'))
+  return record.whatThisIs ?? record.coreValue
+}
+
 test.describe('@mission-brief', () => {
   test.skip(REPOS.length === 0, 'MISSION_BRIEF_REPOS lists no repos on this host')
 
@@ -66,6 +80,7 @@ test.describe('@mission-brief', () => {
     mkdirSync('pr-evidence', { recursive: true })
 
     const seen: Record<string, unknown>[] = []
+    let goalsChecked = 0
     for (const repoPath of REPOS) {
       const name = path.basename(repoPath)
       // The expectation comes from the repo on disk, so a brief that reads nothing cannot pass.
@@ -113,6 +128,8 @@ test.describe('@mission-brief', () => {
         freshness: await text('mission-brief-freshness'),
         body: status === 'read' ? null : ((await brief.textContent()) ?? '').trim()
       }
+      const goal = goalOnDisk(repoPath)
+      record.goalOnDisk = goal ?? null
       seen.push(record)
       // Written before asserting, so a failing run still leaves what each brief said.
       writeFileSync('pr-evidence/mission-brief-seen.json', `${JSON.stringify(seen, null, 2)}\n`)
@@ -124,6 +141,11 @@ test.describe('@mission-brief', () => {
         expect(record.signal, `${name}: a read brief with no signal`).toBeTruthy()
         expect(record.frontier, `${name}: a read brief with no frontier row`).not.toBeNull()
         await expect(row.getByTestId('resume-center-workspace-mission-signal')).toBeVisible()
+        // A goal written in PROJECT.md is the objective, never "not recorded" (the GEX44 false absence).
+        if (goal) {
+          expect(record.objective, `${name}: objective is not the PROJECT.md goal`).toBe(goal)
+          goalsChecked++
+        }
 
         await brief.getByTestId('mission-brief-open-full').click()
         const dialog = orcaPage.getByTestId('mission-brief-dialog')
@@ -138,7 +160,25 @@ test.describe('@mission-brief', () => {
         await expect(dialog.getByTestId('mission-brief-signal-label')).toHaveText(
           String(record.signal)
         )
+        record.records = (
+          (await dialog.getByTestId('mission-brief-records').textContent()) ?? ''
+        ).trim()
         await orcaPage.screenshot({ path: `pr-evidence/mission-brief-${name}-full.png` })
+
+        await dialog.getByTestId('mission-brief-view-path').click()
+        const listed = orcaPage.getByTestId('mission-brief-path-records').locator('li')
+        await expect(listed.first()).toBeVisible()
+        record.recordsListed = await listed.count()
+        if (goal !== undefined && goal !== null) {
+          await expect(listed.filter({ hasText: '.planning/PROJECT.md' })).toContainText(
+            'read by Orca'
+          )
+        }
+        writeFileSync('pr-evidence/mission-brief-seen.json', `${JSON.stringify(seen, null, 2)}\n`)
+        await orcaPage.screenshot({ path: `pr-evidence/mission-brief-${name}-path.png` })
+        // One Escape per dialog layer: the path dialog sits over the full brief.
+        await orcaPage.keyboard.press('Escape')
+        await expect(orcaPage.getByTestId('mission-brief-full-path')).toBeHidden()
         await orcaPage.keyboard.press('Escape')
         await expect(dialog).toBeHidden()
       }
@@ -151,6 +191,10 @@ test.describe('@mission-brief', () => {
       'fewer than two briefs were read, so rows cannot be told apart'
     ).toBeGreaterThan(1)
     expect(new Set(read.map((entry) => entry.workspaceKey)).size).toBe(read.length)
+    expect(goalsChecked, 'no repo had a PROJECT.md goal, so the objective was never tested').toBe(
+      read.filter((entry) => typeof entry.goalOnDisk === 'string').length
+    )
+    expect(goalsChecked).toBeGreaterThan(0)
     expect(
       new Set(read.map((entry) => `${entry.objective}|${entry.frontier}|${entry.nextAction}`)).size
     ).toBe(read.length)
