@@ -154,6 +154,7 @@ export function projectMissionBrief(readings: MissionReadings, now: number): Mis
 
   return {
     workstream: readings.workstream,
+    stateFile: readings.stateFile,
     objective: objectiveOf(inspect),
     stages,
     frontier: activeId

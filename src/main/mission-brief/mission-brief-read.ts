@@ -159,12 +159,13 @@ export function createMissionBriefReader(deps: MissionBriefReadDeps) {
     }
     const roadmap = await deps.runGsd('roadmap-analyze', location.path, choice.workstream)
     const smartEntry = await deps.runGsd('smart-entry', location.path, choice.workstream)
-    const statePath = choice.workstream
-      ? path.join(planningDir, 'workstreams', choice.workstream, 'STATE.md')
-      : path.join(planningDir, 'STATE.md')
-    const stateRecord = await deps.readStateRecord(statePath)
+    const stateFile = choice.workstream
+      ? `.planning/workstreams/${choice.workstream}/STATE.md`
+      : '.planning/STATE.md'
+    const stateRecord = await deps.readStateRecord(path.join(location.path, ...stateFile.split('/')))
     const readings: MissionReadings = {
       workstream: choice.workstream,
+      stateFile,
       inspect: inspect.json,
       roadmap: roadmap.kind === 'ok' ? roadmap.json : null,
       smartEntry: smartEntry.kind === 'ok' ? smartEntry.json : null,

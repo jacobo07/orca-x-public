@@ -14,6 +14,7 @@ const HEAD = 'd7fe79299aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 function readings(overrides: Partial<MissionReadings> = {}): MissionReadings {
   return {
     workstream: 'ub',
+    stateFile: '.planning/workstreams/ub/STATE.md',
     inspect: ubInspect,
     roadmap: ubRoadmap,
     smartEntry: ubSmart,

@@ -40,6 +40,8 @@ export type GitHeadReading =
 /** Everything main read for one workspace. The GSD outputs stay `unknown` until validated. */
 export type MissionReadings = {
   workstream: string | null
+  /** STATE.md relative to the workspace root, `/`-separated. */
+  stateFile: string
   inspect: unknown
   roadmap: unknown
   smartEntry: unknown
@@ -91,6 +93,7 @@ export type MissionSignal = 'needs-you' | 'autonomous' | 'next' | 'unknown'
 
 export type MissionBrief = {
   workstream: string | null
+  stateFile: string
   objective: { kind: 'known'; text: string; partial: boolean } | { kind: 'unknown' }
   stages: MissionStage[]
   frontier:
