@@ -16810,5 +16810,137 @@
       "finished": "Done. Started:",
       "leftAsleep": "left asleep:"
     }
+  },
+  "missionBrief": {
+    "action": {
+      "continue": "Continue mission",
+      "needsMe": "Do what needs me",
+      "viewPath": "View full path"
+    },
+    "attention": {
+      "mission": "Autonomous run is blocked: {{reason}}",
+      "verification": "Phase {{id}}: {{action}}"
+    },
+    "blockers": {
+      "halted": "Autonomous run stopped: {{reason}}",
+      "noneRecorded": "None recorded in STATE.md",
+      "notRecorded": "Blockers not recorded"
+    },
+    "continue": {
+      "autonomous": "Progressing autonomously — nothing to start",
+      "noAgent": "No agent session in this workspace to resume",
+      "noDesk": "Open this brief from the Resume Center to continue",
+      "notStarted": "The agent session did not start",
+      "refused": "Not started: the host refused another session now",
+      "rereadFailed": "The mission could not be re-read, so nothing was started",
+      "running": "Agent session is running"
+    },
+    "contradiction": {
+      "claimed": "Phase {{id}} is marked done without a passed verification",
+      "frontier": "STATE.md says phase {{recorded}}, planning says phase {{active}}",
+      "openDependency": "Phase {{id}} is marked done while phase {{dependency}} is open"
+    },
+    "delegable": {
+      "none": "No autonomous run recorded as running",
+      "run": "Autonomous run {{id}}"
+    },
+    "freshness": {
+      "current": "Planning state matches the current commit",
+      "gitUnreadable": "Current commit could not be read",
+      "noRecordedHead": "Planning state records no commit",
+      "stale": "{{count}} commits since the planning state was recorded",
+      "staleUncounted": "Recorded at an older commit"
+    },
+    "frontier": {
+      "unknown": "Frontier unknown"
+    },
+    "intervention": {
+      "none": "Nothing recorded as waiting on you"
+    },
+    "kicker": "Sidecar brief",
+    "lastVerified": {
+      "none": "No phase verified yet",
+      "noneWithNearest": "No phase verified yet. Phase {{id}} verification: {{status}}"
+    },
+    "meta": {
+      "goal": "Project goal",
+      "human": "Human action",
+      "notVerified": "Not verified",
+      "read": "Read {{when}}",
+      "verified": "Verified"
+    },
+    "needsMe": {
+      "nothing": "Nothing is recorded as waiting on you",
+      "notOpened": "The workspace could not be opened",
+      "opened": "Opened where this waits for you. Guided help is not available yet."
+    },
+    "nextAction": {
+      "copy": "Copy command",
+      "unknown": "Next step unknown"
+    },
+    "objective": {
+      "partial": "(partially read)",
+      "unknown": "Not recorded in the mission records"
+    },
+    "openFull": "Open full brief",
+    "path": {
+      "contradictions": "Records that disagree",
+      "dependsOn": "Depends on: {{list}}",
+      "description": "Every phase from the workspace’s own roadmap, with GSD’s verification verdict for each.",
+      "noDirectory": "No phase directory yet",
+      "title": "Full mission path",
+      "verification": "Verification: {{status}}"
+    },
+    "phase": {
+      "bare": "Phase {{id}}",
+      "named": "Phase {{id}} · {{name}}"
+    },
+    "readAt": "Read {{when}}",
+    "refresh": "Re-read mission records",
+    "row": {
+      "blockers": "Risks / blockers",
+      "delegable": "Delegable work already running",
+      "freshness": "Evidence freshness",
+      "frontier": "Current frontier",
+      "intervention": "Your intervention",
+      "lastVerified": "Last verified result",
+      "nextAction": "Next best action",
+      "objective": "Objective",
+      "unlocks": "Unlocks"
+    },
+    "signal": {
+      "autonomous": "Progressing on its own",
+      "needsYou": "Needs your attention",
+      "next": "Next step ready",
+      "unknown": "Next step unknown"
+    },
+    "signalShort": {
+      "autonomous": "Autonomous",
+      "needsYou": "Need you",
+      "next": "Next",
+      "unknown": "Unknown"
+    },
+    "stage": {
+      "claimed": "Marked done, not verified",
+      "current": "Current",
+      "future": "Not started",
+      "label": "Mission phases",
+      "noneRecorded": "No phases recorded",
+      "proven": "Verified"
+    },
+    "state": {
+      "chooseWorkstream": "This workspace runs several missions. Which one?",
+      "client": "This client cannot read mission records.",
+      "failed": "The mission records could not be read.",
+      "noGsd": "GSD is not installed on this machine, so mission records cannot be read.",
+      "noMission": "This workspace keeps no mission records (.planning).",
+      "reading": "Reading mission records…",
+      "remote": "Mission records on another host are not read yet.",
+      "unknownWorkspace": "This workspace could not be located."
+    },
+    "title": "Mission Brief",
+    "unlocks": {
+      "none": "Nothing becomes reachable from this phase alone"
+    }
   }
 }

@@ -17,7 +17,8 @@
     "src/renderer/src/components/conversations",
     "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx",
     "mobile/src/workspace",
-    "src/renderer/src/components/resume-center"
+    "src/renderer/src/components/resume-center",
+    "src/renderer/src/components/mission-brief"
   ],
   "presenters": [
     {
@@ -39,6 +40,10 @@
     {
       "module": "src/renderer/src/components/resume-center/resume-center-presentation.ts",
       "toneType": "ContinuityTone"
+    },
+    {
+      "module": "src/renderer/src/components/mission-brief/mission-brief-presentation.ts",
+      "toneType": "MissionTone"
     }
   ],
   "claims": {
@@ -206,6 +211,61 @@
       "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
       "absent": "omitted",
       "why": "Items not started in a finished run: unmeasured hosts, declined resumes, or no bind in time."
+    },
+    "mission-brief-signal-label": {
+      "producer": "src/renderer/src/components/mission-brief/mission-brief-presentation.ts#describeSignal",
+      "absent": "omitted",
+      "why": "Words for the signal main's projection derived from records; the header is not drawn until a brief is read."
+    },
+    "mission-brief-objective": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
+      "absent": "missionBrief.objective.unknown",
+      "why": "The goal as PROJECT.md or STATE.md states it, quoted by main; an unread goal says so rather than summarising the repo."
+    },
+    "mission-brief-frontier": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
+      "absent": "missionBrief.frontier.unknown",
+      "why": "The phase GSD's roadmap analysis names as active, never a percent read from the roadmap."
+    },
+    "mission-brief-last-verified": {
+      "producer": "src/renderer/src/components/mission-brief/mission-brief-presentation.ts#describeLastVerified",
+      "absent": "omitted",
+      "why": "Only a verification that passed counts; 'none verified yet' is an answer, drawn once the brief is read."
+    },
+    "mission-brief-next-action": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
+      "absent": "missionBrief.nextAction.unknown",
+      "why": "The command GSD's smart entry recommends for this workspace; without one the row says the step is unknown."
+    },
+    "mission-brief-unlocks": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
+      "absent": "omitted",
+      "why": "Phases whose last unproven dependency is the frontier, from the roadmap's own dependency lines."
+    },
+    "mission-brief-intervention": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
+      "absent": "omitted",
+      "why": "Only what a record says waits on a person: a halted run, a STATE.md todo, a verification needing human action."
+    },
+    "mission-brief-delegable": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
+      "absent": "omitted",
+      "why": "Ralph missions whose record is running with a recent heartbeat; an old heartbeat is not counted as running."
+    },
+    "mission-brief-blockers": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
+      "absent": "missionBrief.blockers.notRecorded",
+      "why": "STATE.md blockers plus contradictions main found between records; an empty GSD list is never shown as none."
+    },
+    "mission-brief-freshness": {
+      "producer": "src/renderer/src/components/mission-brief/mission-brief-presentation.ts#describeFreshness",
+      "absent": "omitted",
+      "why": "The commit the planning state recorded against git HEAD now; an unreadable HEAD is its own state, not current."
+    },
+    "mission-brief-path-stage-state": {
+      "producer": "src/renderer/src/components/mission-brief/mission-brief-presentation.ts#describeStageState",
+      "absent": "omitted",
+      "why": "Proven needs a passed verification; a phase marked done without one reads as claimed."
     }
   }
 }

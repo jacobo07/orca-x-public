@@ -11,8 +11,9 @@
 
 - Action 1 DONE (2026-09-29, session b2567fc8): tc:web + tc:node exit 0 (tc:web coverage of `components/mission-brief` proven by a seeded TS2322), oxlint clean (seeded-control proven), oxfmt applied to 8 files, 4 test files 50/50. UI still NOT wired or rendered. Run tools via `node_modules\.bin\*.cmd` / `node node_modules\vitest\vitest.mjs` under `cmd /c` — npx dies and RTK breaks `pnpm run` in PowerShell.
 
-**Next 3 actions:**
-2. Register the claims: add `src/renderer/src/components/mission-brief` to `surfaces` and a `MissionTone` presenter (module `mission-brief-presentation.ts`) in `config/workspace-surface-claims.jsonc`; classify testIds `mission-brief-{signal-label,objective,frontier,last-verified,next-action,unlocks,intervention,delegable,blockers,freshness,path-stage-state}` (signal-label absent = "omitted"); run `pnpm check:workspace-surface-claims` + `check:status-semantics`. Then `verify-localization-catalog --fix` for en, and add es/ja/ko/zh `missionBrief.*`.
+- Action 2 DONE: surface + `MissionTone` presenter + 11 claims registered (`check:workspace-surface-claims` 46 sites / 7 tone maps green); `check:status-semantics` green (it reads 2 consumers only — it does NOT judge `mission-tone-class.ts`). en.json: 86 `missionBrief.*` keys added by a scoped script; NOT `--fix`, which would also sweep 162 keys main is already missing (agents/workspace/activity-rail — base debt, not ours). es/ja/ko/zh deliberately NOT added: the catalog script states feature PRs own English and targets fall back until a localization PR.
+
+**Next actions:**
 3. Resume Center integration: row selection in `ResumeCenterPage` → aside shows `<MissionBriefPanel variant="compact">` instead of the Desk Summary; "Open full brief" → Dialog (max-w ~1180px) with `variant="full"`; row signal via `useCachedMissionSignal` in `ResumeCenterWorkspaceSection`. Then unit tests for `planContinue`/`planNeedsMe`, real-app Product Reality (Brand 001 `_wt-b001-exec`, `orca-backlog-wt` ub, `gsd-long-smoke`, a repo without .planning), screenshot vs `Downloads\Imagen de ChatGPT 29 sept 2026, 20_11_45.png`, mutations, knowledge/UKDL.
 
 **Decisions:** unlocks = phases the frontier makes reachable (last unproven dep, no external); proven only on verification `passed`; GSD percents never read; `blockers: []` from GSD is not "none"; remote hosts refused.
