@@ -120,6 +120,43 @@ describe('item -> item merge', () => {
     expect(readItem(loser.id).state).toBe('superseded')
   })
 
+  it('a retry after a failed loser leg carries links the loser gained in between (G1)', async () => {
+    const survivor = await capture('Survivor')
+    const loser = await capture('Loser')
+    fault.id = loser.id
+    await service.mergeItems({ survivorId: survivor.id, loserId: loser.id })
+    fault.id = null
+    const [ingested] = await service.ingestCandidates([
+      {
+        source: {
+          kind: 'claude-code-transcript',
+          ref: 'session-g1',
+          capturedAt: 3,
+          adapter: 'claude-transcripts',
+          capabilityLevel: 'best-effort'
+        },
+        fingerprint: 'g1',
+        text: 'Late intent',
+        uncertainty: 'low'
+      }
+    ])
+    const candidateId = ingested.id ?? ''
+    const linked = await service.resolveCandidate({ action: 'merge', candidateId, itemId: loser.id })
+    expect(linked.item).toMatchObject({ outcome: 'published' })
+
+    const retried = await service.mergeItems({ survivorId: survivor.id, loserId: loser.id })
+
+    expect(retried.survivor).toMatchObject({ outcome: 'published' })
+    expect(retried.loser).toMatchObject({ outcome: 'published' })
+    const kept = readItem(survivor.id)
+    expect(kept.sourceLinks.filter((link) => link.candidateId === candidateId)).toHaveLength(1)
+    for (const link of readItem(loser.id).sourceLinks) {
+      expect(kept.sourceLinks).toContainEqual(link)
+    }
+    const again = await service.mergeItems({ survivorId: survivor.id, loserId: loser.id })
+    expect(again.survivor).toMatchObject({ outcome: 'unchanged' })
+  })
+
   it('refuses a self-merge before any write', async () => {
     const item = await capture('Only one')
     const before = sha(item.id)
