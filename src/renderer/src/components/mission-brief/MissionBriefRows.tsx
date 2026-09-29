@@ -116,7 +116,10 @@ export function MissionBriefRows({
         <ClaimValue testId="mission-brief-objective">
           {brief.objective.kind === 'known'
             ? brief.objective.text
-            : translate('missionBrief.objective.unknown', 'Not recorded in the mission records')}
+            : translate(
+                'missionBrief.objective.unknown',
+                'No milestone named in the planning state'
+              )}
         </ClaimValue>
         {brief.objective.kind === 'known' && brief.objective.partial ? (
           <span className="ml-2 text-[12px] text-muted-foreground">

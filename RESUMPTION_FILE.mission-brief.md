@@ -15,8 +15,13 @@
 
 - Action 3 CODE DONE, NOT yet seen in the real app: workspace name is a select button (`resume-center-workspace-select`, aria-pressed; click again deselects); selection keyed host+key and looked up in UNFILTERED rows; aside `resume-center-aside` shows the compact brief ABOVE the Desk Summary (kept, not replaced — no summary capability lost); `MissionBriefDialog` (`mission-brief-dialog`, sm:max-w-[1180px]) for the full brief; cached row signal chip `resume-center-workspace-mission-signal` (claimed, 47 sites). `mission-brief-actions.test.ts` 11 tests; 2 mutations (live-run-first, folder guard) each red on its own test, source restored by hash. tc:web, oxlint, oxfmt, claims, max-lines ratchet green (ratchet needs `C:\Program Files\Git\cmd` on PATH).
 
-**Next actions:**
-4. Real-app Product Reality (Brand 001 `_wt-b001-exec`, `orca-backlog-wt` ub, `gsd-long-smoke`, a repo without .planning), screenshot vs `Downloads\Imagen de ChatGPT 29 sept 2026, 20_11_45.png`, mutations, knowledge/UKDL.
+- Action 4 real-app DONE on GEX44 (Linux, isolated worktree `/home/kobii/mission-brief-wt` fenced at 34283cea9; fixtures = fresh clones + `.planning` overlay in `/home/kobii/mb-fixtures`): `tests/e2e/mission-brief.spec.ts` 1 passed over gsd-long-smoke, brand001 wt-exec, cognitive-resource-os (all `read`) + a no-.planning repo (`no-mission`). Frontiers 1 / 03 / unknown match `planning inspect` run independently. Run 1 passed HOLLOW (isolated HOME had no GSD; spec compared only reads) → spec now derives expected status from disk + floor ≥2 reads; run 2 caught gsd-core needing `~/.claude/scripts` + `package.json`. Screenshots vs reference: structure matches; stage strip correctly shows claimed (dashed) not verified.
+- FOUND: "objective" is the planning-inspect MILESTONE, not the goal; wt-exec's PROJECT.md "What this is" states the goal but the brief said "Not recorded in the mission records" (false absence). Copy fixed to "No milestone named in the planning state" + claim text corrected. Not rerun after that copy change.
+
+**Next actions (Owner decisions first):**
+5. Read the project goal from PROJECT.md ("What this is"/"Core value") in main as the objective, milestone as fallback — new reader + projection + tests (Owner to approve scope).
+6. Surface main's failure `detail` somewhere a person can act on (a partial GSD install currently reads only "could not be read"); frontier meta shows GSD's raw status token (`planning`) untranslated.
+7. Dark-theme screenshot pass; knowledge/UKDL.
 
 **Decisions:** unlocks = phases the frontier makes reachable (last unproven dep, no external); proven only on verification `passed`; GSD percents never read; `blockers: []` from GSD is not "none"; remote hosts refused.
 

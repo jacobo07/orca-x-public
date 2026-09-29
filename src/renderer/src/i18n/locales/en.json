@@ -16880,7 +16880,7 @@
     },
     "objective": {
       "partial": "(partially read)",
-      "unknown": "Not recorded in the mission records"
+      "unknown": "No milestone named in the planning state"
     },
     "openFull": "Open full brief",
     "path": {

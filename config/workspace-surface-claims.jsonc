@@ -220,12 +220,12 @@
     "mission-brief-objective": {
       "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
       "absent": "missionBrief.objective.unknown",
-      "why": "The goal as PROJECT.md or STATE.md states it, quoted by main; an unread goal says so rather than summarising the repo."
+      "why": "The milestone planning inspect names, quoted; PROJECT.md is not read, so a missing milestone says exactly that, never that no goal exists."
     },
     "mission-brief-frontier": {
       "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useMissionBrief",
       "absent": "missionBrief.frontier.unknown",
-      "why": "The phase GSD's roadmap analysis names as active, never a percent read from the roadmap."
+      "why": "The active phase GSD's planning inspect reports, never a percent read from the roadmap."
     },
     "mission-brief-last-verified": {
       "producer": "src/renderer/src/components/mission-brief/mission-brief-presentation.ts#describeLastVerified",
