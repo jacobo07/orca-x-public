@@ -39,6 +39,23 @@ describe('backlog directory profile isolation', () => {
     expect(await serviceFor(PROFILE_B).get(captured.record.id)).toEqual({ outcome: 'absent' })
   })
 
+  it('lists only the active profile’s items', async () => {
+    const captured = await serviceFor(PROFILE_A).capture({ text: 'alpha intent', kind: 'idea' })
+    if (captured.outcome !== 'published') {
+      throw new Error(`capture did not publish: ${captured.outcome}`)
+    }
+
+    // Positive control FIRST: a list that reads nothing would satisfy the empty list below.
+    const own = await serviceFor(PROFILE_A).list({})
+    expect(own).toMatchObject({ outcome: 'listed', total: 1 })
+    expect(own.outcome === 'listed' && own.items.map((item) => item.id)).toEqual([captured.record.id])
+    expect(await serviceFor(PROFILE_B).list({})).toMatchObject({
+      outcome: 'listed',
+      total: 0,
+      items: []
+    })
+  })
+
   it('nests the backlog directory inside the profile it belongs to', () => {
     expect(getOrcaBacklogDirectory(PROFILE_A, userDataPath)).toContain(
       getOrcaProfileDirectory(PROFILE_A, userDataPath)

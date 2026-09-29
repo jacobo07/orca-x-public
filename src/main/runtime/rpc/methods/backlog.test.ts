@@ -1,28 +1,37 @@
 import { describe, expect, it } from 'vitest'
 
-import { BACKLOG_INGEST_BATCH_MAX, BACKLOG_TEXT_MAX } from '../../../../shared/backlog-rpc-limits'
+import {
+  BACKLOG_INGEST_BATCH_MAX,
+  BACKLOG_LIST_LIMIT_MAX,
+  BACKLOG_TEXT_MAX
+} from '../../../../shared/backlog-rpc-limits'
 import type { RpcContext } from '../core'
 import { BACKLOG_METHODS } from './backlog'
 import {
+  BacklogCandidateListParams,
   BacklogCandidatesIngestParams,
   BacklogCandidatesResolveParams
 } from './backlog-candidate-params'
 import {
   BacklogCaptureParams,
+  BacklogListParams,
   BacklogMergeParams,
   BacklogTransitionParams,
   BacklogUpdateParams
 } from './backlog-params'
 
-// Ratchet: later plans extend this list when they add methods.
+// The complete Phase 1 surface: a new method must be added here deliberately.
 const NAMES = [
-  'backlog.capture',
+  'backlog.list',
   'backlog.get',
+  'backlog.capture',
   'backlog.update',
   'backlog.transition',
+  'backlog.merge',
+  'backlog.candidates.list',
   'backlog.candidates.ingest',
   'backlog.candidates.resolve',
-  'backlog.merge'
+  'backlog.health'
 ]
 
 const ITEM_ID = 'bli_00000000-0000-4000-8000-000000000000'
@@ -49,7 +58,10 @@ const VALID_PARAMS: Record<string, unknown> = {
   'backlog.transition': { id: ITEM_ID, to: 'ready' },
   'backlog.candidates.ingest': { candidates: [CANDIDATE] },
   'backlog.candidates.resolve': { action: 'dismiss', candidateId: CANDIDATE_ID },
-  'backlog.merge': { survivorId: ITEM_ID, loserId: OTHER_ITEM_ID }
+  'backlog.merge': { survivorId: ITEM_ID, loserId: OTHER_ITEM_ID },
+  'backlog.list': { state: 'ready' },
+  'backlog.candidates.list': { status: 'open' },
+  'backlog.health': undefined
 }
 
 function ctxWithoutHost(): RpcContext {
@@ -63,7 +75,24 @@ function ctxWithoutHost(): RpcContext {
 describe('backlog.* runtime methods', () => {
   it('registers exactly the ledger method set', () => {
     expect(BACKLOG_METHODS.map((entry) => entry.name).sort()).toEqual([...NAMES].sort())
-    expect(NAMES).toHaveLength(7)
+    expect(NAMES).toHaveLength(10)
+  })
+
+  it('bounds list params and refuses a project filter combined with Unassigned', () => {
+    const list = (params: unknown) => BacklogListParams.safeParse(params).success
+    expect(list({})).toBe(true)
+    expect(list({ projectId: 'P', limit: BACKLOG_LIST_LIMIT_MAX, cursor: '200' })).toBe(true)
+    expect(list({ unassigned: true, state: 'ready', kind: 'idea' })).toBe(true)
+    expect(list({ projectId: 'P', unassigned: true })).toBe(false)
+    expect(list({ limit: BACKLOG_LIST_LIMIT_MAX + 1 })).toBe(false)
+    expect(list({ limit: 0 })).toBe(false)
+    expect(list({ cursor: 'abc' })).toBe(false)
+    expect(list({ cursor: '-1' })).toBe(false)
+    expect(list({ state: 'archived' })).toBe(false)
+    const candidates = (params: unknown) => BacklogCandidateListParams.safeParse(params).success
+    expect(candidates({ status: 'open', limit: 5, cursor: '5' })).toBe(true)
+    expect(candidates({ status: 'archived' })).toBe(false)
+    expect(candidates({ cursor: '1.5' })).toBe(false)
   })
 
   it('answers capability_unsupported on a host with no backlog host (fails closed)', async () => {

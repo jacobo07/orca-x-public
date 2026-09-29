@@ -1,7 +1,7 @@
 // Tracer proof: a capture over the real RpcDispatcher (default method list, so registration in
 // index.ts is exercised) publishes a file that a fresh runtime reads back over RPC.
 
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -210,5 +210,62 @@ describe('backlog runtime RPC round trip', () => {
       expect.objectContaining({ kind: 'manual', ref: survivor.id }),
       expect.objectContaining({ kind: 'manual', ref: loser.id })
     ])
+  })
+
+  it('lists, pages and reports health over RPC from a fresh runtime', async () => {
+    const writer = dispatcherOn(root)
+    const inP = { projectId: 'P', mapping: 'explicit', evidence: 'test' }
+    for (const params of [
+      { text: 'one', kind: 'engineering', projectRefs: [inP] },
+      { text: 'two', kind: 'idea', projectRefs: [inP] },
+      { text: 'three', kind: 'idea' }
+    ]) {
+      expect((await resultOf(writer, 'backlog.capture', params)).outcome).toBe('published')
+    }
+    const source = (ref: string) => ({
+      kind: 'orca-conversation',
+      ref,
+      capturedAt: 3,
+      adapter: 'orca-conversations',
+      capabilityLevel: 'full'
+    })
+    const rows = (await resultOf(writer, 'backlog.candidates.ingest', {
+      candidates: [
+        { source: source('a'), fingerprint: 'fa', text: 'keep open', uncertainty: 'low' },
+        { source: source('b'), fingerprint: 'fb', text: 'dismiss me', uncertainty: 'low' }
+      ]
+    })) as unknown as { id: string }[]
+    await resultOf(writer, 'backlog.candidates.resolve', {
+      action: 'dismiss',
+      candidateId: rows[1].id
+    })
+    writeFileSync(join(root, 'items', 'bli_00000000-0000-4000-8000-0000000000ff.json'), '{"trunc')
+
+    type Listed = { total: number; items: { id: string }[]; nextCursor: string | null }
+    const reader = dispatcherOn(root)
+    const list = (params: unknown) =>
+      resultOf(reader, 'backlog.list', params) as unknown as Promise<Listed & { quarantinedCount: number }>
+    expect(await list({ unassigned: true })).toMatchObject({ total: 1, quarantinedCount: 1 })
+    expect(await list({ projectId: 'P' })).toMatchObject({ total: 2 })
+    const first = await list({ limit: 2 })
+    expect(first.items).toHaveLength(2)
+    expect(first.nextCursor).not.toBeNull()
+    const rest = await list({ limit: 2, cursor: first.nextCursor })
+    expect(rest).toMatchObject({ total: 3, nextCursor: null })
+    expect(new Set([...first.items, ...rest.items].map((item) => item.id)).size).toBe(3)
+
+    const health = (await resultOf(reader, 'backlog.health', undefined)) as unknown as {
+      items: { byState: Record<string, number> }
+      quarantined: { code: string; recordKind: string }[]
+    }
+    expect(health.quarantined).toEqual([
+      expect.objectContaining({ recordKind: 'item', code: 'not-json' })
+    ])
+    expect(Object.values(health.items.byState).reduce((sum, count) => sum + count, 0)).toBe(3)
+    const open = (await resultOf(reader, 'backlog.candidates.list', {
+      status: 'open'
+    })) as unknown as { total: number; candidates: { id: string }[] }
+    expect(open.total).toBe(1)
+    expect(open.candidates.map((row) => row.id)).toEqual([rows[0].id])
   })
 })
