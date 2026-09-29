@@ -16826,6 +16826,54 @@
         "keywordIntent": "intent",
         "keywordIdeas": "ideas"
       }
+    },
+    "page": {
+      "title": "Backlog",
+      "close": "Close backlog",
+      "closeTooltip": "Close · Esc",
+      "listLabel": "Backlog items"
+    },
+    "status": {
+      "loading": "Loading backlog…",
+      "retry": "Retry loading",
+      "empty": {
+        "heading": "Your backlog is empty",
+        "body": "Capture an idea, a task or a decision, with or without a project."
+      },
+      "filterEmpty": {
+        "heading": "No items match these filters",
+        "body": "{{hidden}} items are hidden by the current filters.",
+        "closedOnly": "No open items. {{closed}} closed items are hidden."
+      },
+      "storageFailed": {
+        "heading": "Backlog could not be read",
+        "body": "Reading the ledger on this host failed, and nothing was changed. Retry, and if it keeps failing, restart Orca."
+      },
+      "capabilityUnsupported": {
+        "heading": "This Orca host does not provide a Backlog",
+        "body": "The active host runs an older Orca. Update Orca on that host, or switch to a host that has Backlog."
+      },
+      "forbidden": {
+        "heading": "Backlog is not available on this connection",
+        "body": "This connection's access does not include the Backlog. Open it from the desktop app."
+      },
+      "unreachable": {
+        "heading": "This Orca host could not be reached",
+        "body": "The Backlog lives on the active host. Check the connection, then retry."
+      }
+    },
+    "group": {
+      "unassigned": "Unassigned",
+      "unknown": "Unknown project",
+      "items_one": "{{count}} item",
+      "items_other": "{{count}} items",
+      "label": "{{project}}, {{items}}"
+    },
+    "row": {
+      "textShortened": "(text shortened)",
+      "inferred": "inferred",
+      "moreProjects_one": "+{{count}} project",
+      "moreProjects_other": "+{{count}} projects"
     }
   }
 }
