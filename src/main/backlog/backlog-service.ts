@@ -9,7 +9,13 @@ import {
   type BacklogPriority,
   type BacklogProjectRef
 } from '../../shared/backlog-types'
-import { mintBacklogItemId } from './backlog-identity-mint'
+import { mintBacklogEvidenceId, mintBacklogItemId } from './backlog-identity-mint'
+import {
+  applyBacklogItemPatch,
+  applyBacklogItemTransition,
+  type BacklogItemPatch,
+  type BacklogTransitionInput
+} from './backlog-item-folds'
 import { BACKLOG_ITEM_CODEC } from './backlog-item-validation'
 import { BacklogRecordStore } from './backlog-record-store'
 
@@ -79,5 +85,20 @@ export class BacklogService {
 
   get(id: string): Promise<BacklogLoadResult<BacklogItem>> {
     return this.stores().items.load(id)
+  }
+
+  update(id: string, patch: BacklogItemPatch): Promise<BacklogWriteOutcome<BacklogItem>> {
+    return this.stores().items.mutate(id, (current, ctx) =>
+      applyBacklogItemPatch(current, patch, ctx, mintBacklogEvidenceId)
+    )
+  }
+
+  transition(
+    id: string,
+    input: BacklogTransitionInput
+  ): Promise<BacklogWriteOutcome<BacklogItem>> {
+    return this.stores().items.mutate(id, (current, ctx) =>
+      applyBacklogItemTransition(current, input, ctx)
+    )
   }
 }
