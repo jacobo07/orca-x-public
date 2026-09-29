@@ -1,23 +1,55 @@
 import { describe, expect, it } from 'vitest'
 
-import { BACKLOG_TEXT_MAX } from '../../../../shared/backlog-rpc-limits'
+import { BACKLOG_INGEST_BATCH_MAX, BACKLOG_TEXT_MAX } from '../../../../shared/backlog-rpc-limits'
 import type { RpcContext } from '../core'
 import { BACKLOG_METHODS } from './backlog'
 import {
+  BacklogCandidatesIngestParams,
+  BacklogCandidatesResolveParams
+} from './backlog-candidate-params'
+import {
   BacklogCaptureParams,
+  BacklogMergeParams,
   BacklogTransitionParams,
   BacklogUpdateParams
 } from './backlog-params'
 
 // Ratchet: later plans extend this list when they add methods.
-const NAMES = ['backlog.capture', 'backlog.get', 'backlog.update', 'backlog.transition']
+const NAMES = [
+  'backlog.capture',
+  'backlog.get',
+  'backlog.update',
+  'backlog.transition',
+  'backlog.candidates.ingest',
+  'backlog.candidates.resolve',
+  'backlog.merge'
+]
 
 const ITEM_ID = 'bli_00000000-0000-4000-8000-000000000000'
+const OTHER_ITEM_ID = 'bli_00000000-0000-4000-8000-000000000001'
+const CANDIDATE_ID = `blc_${'a'.repeat(32)}`
+
+const CANDIDATE = {
+  source: {
+    kind: 'orca-conversation',
+    ref: 'conv_1',
+    capturedAt: 1,
+    adapter: 'orca-conversations',
+    capabilityLevel: 'full'
+  },
+  fingerprint: 'fp',
+  text: 'Harvested intent',
+  uncertainty: 'unknown'
+}
+
 const VALID_PARAMS: Record<string, unknown> = {
   'backlog.capture': { text: 'Ship it', kind: 'engineering' },
   'backlog.get': { id: ITEM_ID },
   'backlog.update': { id: ITEM_ID, patch: { priority: 'high' } },
-  'backlog.transition': { id: ITEM_ID, to: 'ready' }
+  'backlog.transition': { id: ITEM_ID, to: 'ready' },
+  'backlog.candidates.ingest': { candidates: [CANDIDATE] },
+  'backlog.candidates.resolve': { action: 'dismiss', candidateId: CANDIDATE_ID },
+  'backlog.merge': { survivorId: ITEM_ID, loserId: OTHER_ITEM_ID }
 }
 
 function ctxWithoutHost(): RpcContext {
@@ -31,6 +63,7 @@ function ctxWithoutHost(): RpcContext {
 describe('backlog.* runtime methods', () => {
   it('registers exactly the ledger method set', () => {
     expect(BACKLOG_METHODS.map((entry) => entry.name).sort()).toEqual([...NAMES].sort())
+    expect(NAMES).toHaveLength(7)
   })
 
   it('answers capability_unsupported on a host with no backlog host (fails closed)', async () => {
@@ -77,5 +110,33 @@ describe('backlog.* runtime methods', () => {
     })
     expect(stripped.success).toBe(true)
     expect(stripped.data).toEqual({ id: ITEM_ID, patch: { priority: 'low' } })
+  })
+
+  it('bounds the ingest batch and refuses NUL identity components and unknown kinds', () => {
+    const ingest = (candidates: unknown[]) =>
+      BacklogCandidatesIngestParams.safeParse({ candidates }).success
+    expect(ingest([CANDIDATE])).toBe(true)
+    expect(ingest(Array.from({ length: BACKLOG_INGEST_BATCH_MAX }, () => CANDIDATE))).toBe(true)
+    expect(ingest(Array.from({ length: BACKLOG_INGEST_BATCH_MAX + 1 }, () => CANDIDATE))).toBe(
+      false
+    )
+    expect(ingest([])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, fingerprint: 'f\0p' }])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, source: { ...CANDIDATE.source, ref: 'c\0nv' } }])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, source: { ...CANDIDATE.source, kind: 'email' } }])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, uncertainty: 0.4 }])).toBe(false)
+  })
+
+  it('validates resolve actions and merge ids', () => {
+    const resolve = (params: unknown) => BacklogCandidatesResolveParams.safeParse(params).success
+    expect(resolve({ action: 'accept', candidateId: CANDIDATE_ID })).toBe(true)
+    expect(resolve({ action: 'merge', candidateId: CANDIDATE_ID, itemId: ITEM_ID })).toBe(true)
+    expect(resolve({ action: 'merge', candidateId: CANDIDATE_ID })).toBe(false)
+    expect(resolve({ action: 'archive', candidateId: CANDIDATE_ID })).toBe(false)
+    expect(resolve({ action: 'dismiss', candidateId: 'blc_short' })).toBe(false)
+    expect(BacklogMergeParams.safeParse(VALID_PARAMS['backlog.merge']).success).toBe(true)
+    expect(BacklogMergeParams.safeParse({ survivorId: ITEM_ID, loserId: CANDIDATE_ID }).success).toBe(
+      false
+    )
   })
 })

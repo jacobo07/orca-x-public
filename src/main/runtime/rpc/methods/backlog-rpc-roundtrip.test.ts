@@ -122,4 +122,93 @@ describe('backlog runtime RPC round trip', () => {
 
     expect(refused).toMatchObject({ outcome: 'refused', code: 'model-evidence-proven' })
   })
+
+  it('ingests, accepts and merges candidates; a fresh runtime reads the provenance', async () => {
+    const dispatcher = dispatcherOn(root)
+    const source = (ref: string) => ({
+      kind: 'codex-transcript',
+      ref,
+      capturedAt: 9,
+      adapter: 'codex-transcripts',
+      capabilityLevel: 'bounded'
+    })
+    const hinted = {
+      source: source('run-1'),
+      fingerprint: 'fp-1',
+      text: 'Add a backlog rail',
+      uncertainty: 'medium',
+      projectHint: { projectId: 'orca', evidence: 'cwd' }
+    }
+    const plain = { source: source('run-2'), fingerprint: 'fp-2', text: 'Same idea', uncertainty: 'high' }
+    const rows = (await resultOf(dispatcher, 'backlog.candidates.ingest', {
+      candidates: [hinted, plain]
+    })) as unknown as { id: string; outcome: string }[]
+    expect(rows.map((row) => row.outcome)).toEqual(['published', 'published'])
+    const [hintedId, plainId] = rows.map((row) => row.id)
+
+    const again = (await resultOf(dispatcher, 'backlog.candidates.ingest', {
+      candidates: [hinted]
+    })) as unknown as { outcome: string }[]
+    expect(again[0].outcome).toBe('unchanged')
+
+    const accepted = (await resultOf(dispatcher, 'backlog.candidates.resolve', {
+      action: 'accept',
+      candidateId: hintedId
+    })) as unknown as { item: { outcome: string; record: { id: string } } }
+    expect(accepted.item.outcome).toBe('published')
+    const itemId = accepted.item.record.id
+    const merged = (await resultOf(dispatcher, 'backlog.candidates.resolve', {
+      action: 'merge',
+      candidateId: plainId,
+      itemId
+    })) as unknown as { candidate: { outcome: string }; item: { outcome: string } }
+    expect([merged.item.outcome, merged.candidate.outcome]).toEqual(['published', 'published'])
+
+    const fresh = new BacklogService(() => root)
+    const reloaded = await fresh.get(itemId)
+    if (reloaded.outcome !== 'loaded') {
+      throw new Error(`fresh read returned ${reloaded.outcome}`)
+    }
+    expect(reloaded.record.sourceLinks.map((link) => link.candidateId)).toEqual([hintedId, plainId])
+    expect(reloaded.record.projectRefs).toEqual([
+      { projectId: 'orca', mapping: 'inferred', evidence: 'cwd' }
+    ])
+    const settled = (await resultOf(dispatcherOn(root), 'backlog.candidates.resolve', {
+      action: 'merge',
+      candidateId: plainId,
+      itemId
+    })) as unknown as { candidate: { outcome: string; record: { status: string } } }
+    expect(settled.candidate).toMatchObject({ outcome: 'unchanged', record: { status: 'merged' } })
+    const hintedAgain = (await resultOf(dispatcherOn(root), 'backlog.candidates.resolve', {
+      action: 'accept',
+      candidateId: hintedId
+    })) as unknown as { candidate: { outcome: string; record: { status: string } } }
+    expect(hintedAgain.candidate).toMatchObject({
+      outcome: 'unchanged',
+      record: { status: 'accepted' }
+    })
+  })
+
+  it('merges two items over RPC; a fresh runtime reads the loser superseded', async () => {
+    const dispatcher = dispatcherOn(root)
+    const survivor = (await resultOf(dispatcher, 'backlog.capture', { text: 'Keep', kind: 'idea' }))
+      .record!
+    const loser = (await resultOf(dispatcher, 'backlog.capture', { text: 'Fold', kind: 'idea' }))
+      .record!
+
+    const result = (await resultOf(dispatcher, 'backlog.merge', {
+      survivorId: survivor.id,
+      loserId: loser.id
+    })) as unknown as { survivor: { outcome: string }; loser: { outcome: string } }
+    expect([result.survivor.outcome, result.loser.outcome]).toEqual(['published', 'published'])
+
+    const fresh = dispatcherOn(root)
+    const gone = await resultOf(fresh, 'backlog.get', { id: loser.id })
+    expect(gone.record).toMatchObject({ state: 'superseded', mergedInto: survivor.id })
+    const kept = await resultOf(fresh, 'backlog.get', { id: survivor.id })
+    expect((kept.record!.sourceLinks as { kind: string; ref: string }[])).toEqual([
+      expect.objectContaining({ kind: 'manual', ref: survivor.id }),
+      expect.objectContaining({ kind: 'manual', ref: loser.id })
+    ])
+  })
 })
