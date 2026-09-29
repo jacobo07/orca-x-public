@@ -37,6 +37,9 @@ automation.runNow
 automation.runs
 automation.show
 automation.update
+# Added 2026-09-29, Universal Backlog: host-owned ledger for desktop, CLI and paired runtime clients; deliberately off the mobile allowlist until a mobile surface exists.
+backlog.capture
+backlog.get
 browser.capture.start
 browser.capture.stop
 browser.certificate.proceed

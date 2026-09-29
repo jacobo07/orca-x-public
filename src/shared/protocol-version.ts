@@ -69,6 +69,8 @@ export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as cons
 // methods). Runtime-conditional, like browser.headless.v1: advertised only once the host has wired
 // its conversation service, so a client never offers a Workspace the host cannot answer.
 export const CONVERSATIONS_RUNTIME_CAPABILITY = 'conversations.v1' as const
+// Why: runtime-conditional; advertised only when the host wired the intent ledger (backlog.*).
+export const BACKLOG_RUNTIME_CAPABILITY = 'backlog.v1' as const
 export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: older hosts discard browser.tabCreate's page field, so clients may only
