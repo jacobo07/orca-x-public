@@ -38,7 +38,11 @@ function codeOf(outcome: BacklogWriteOutcome<BacklogCandidate>): string | null {
       return outcome.code
     case 'storage-failed':
       return `${outcome.stage}:${outcome.code ?? 'unknown'}`
-    default:
+    case 'published':
+    case 'unchanged':
+    case 'superseded':
+    case 'absent':
+    case 'schema-too-new':
       return null
   }
 }
