@@ -28,8 +28,12 @@ over the real RpcDispatcher, `backlog.v1`, aperture baseline), 2 RED `063a181ef`
 Scoped suite 5 files 10/10; durability and typecheck green; aperture red only for the 4 pre-existing
 names. Rung: real files + real runtime/dispatcher under vitest, no app run. Per-commit log:
 `phases/01-intent-ledger-foundation/EXECUTION-LOG.md`.
+Plan 01-02 COMPLETE (`01-02-SUMMARY.md`, head `7216b228e`): pure lifecycle table (52 edges) +
+completion contracts + append-only event rule + link union; fenced `BacklogRecordStore.mutate`
+(revision re-read in the commit veto, `applyFold(id, fold)` for plan 03's pair lock);
+`backlog.update` / `backlog.transition` over RPC. Suite 11 files 72/72; gates as above.
 
-**Next 3 actions.** 1) Plan 01-02 (pure ledger rules; see its PLAN), then 01-03, 01-04
+**Next 3 actions.** 1) Plan 01-03 Task 1 (candidates, merge; see its PLAN), then 01-04
 (`/gsd-execute-phase 1 --ws ub`). 2) Verify Phase 1 (gates vs the VALIDATION.md baseline, drills
 M1–M6). 3) Phase 2 (Backlog surface): discuss → plan → execute, real-app proof.
 
