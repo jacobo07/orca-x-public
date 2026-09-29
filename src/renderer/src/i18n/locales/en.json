@@ -16810,5 +16810,13 @@
       "finished": "Done. Started:",
       "leftAsleep": "left asleep:"
     }
+  },
+  "activity": {
+    "railLabel": "Activity"
+  },
+  "backlog": {
+    "rail": {
+      "label": "Backlog"
+    }
   }
 }
