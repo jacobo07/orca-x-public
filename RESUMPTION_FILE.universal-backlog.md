@@ -21,14 +21,16 @@ red at HEAD for 4 non-backlog names (pre-existing; never baseline them).
 **Active decisions.** See STATE.md Decisions. Never write in `Apps\io-chatgpt-plugin`. Never
 `pnpm install` (node_modules is a junction). Push is Owner-only.
 
-**Sealed so far.** Plan 01-01 Task 1a = `8bf108be7` (store, record-file engine, contract
-`backlog.intent-ledger-record`, syscall proof 2/2; check:durability-contracts 19 contracts exit 0 —
-re-verified by the orchestrator). No `01-01-SUMMARY.md` yet: plan 01-01 is PARTIAL on purpose.
+**Sealed so far.** Plan 01-01 COMPLETE (`01-01-SUMMARY.md`): 1a `8bf108be7` (store, record-file
+engine, contract `backlog.intent-ledger-record`, syscall proof), 1b `593f4d966` (backlog.capture/get
+over the real RpcDispatcher, `backlog.v1`, aperture baseline), 2 RED `063a181ef` + GREEN `ef9eb16c7`
+(profile-scoped `getOrcaBacklogDirectory`, `src/main/ipc/backlog-host-wiring.ts`, index.ts wiring).
+Scoped suite 5 files 10/10; durability and typecheck green; aperture red only for the 4 pre-existing
+names. Rung: real files + real runtime/dispatcher under vitest, no app run. Per-commit log:
+`phases/01-intent-ledger-foundation/EXECUTION-LOG.md`.
 
-**Next 3 actions.** 1) Resume plan 01-01 at **Task 1b step 1** (`src/main/backlog/backlog-host.ts`;
-read `backlog-service.ts` first: `new BacklogService(rootFn,{now?})`, `capture`, `get`), then Task 2,
-then write `01-01-SUMMARY.md` recording Task 1a as `8bf108be7` — do NOT redo Task 1a; then plans
-02–04 (`/gsd-execute-phase 1 --ws ub`). 2) Verify Phase 1 (gates vs the VALIDATION.md
-baseline, drills M1–M6). 3) Phase 2 (Backlog surface): discuss → plan → execute, real-app proof.
+**Next 3 actions.** 1) Plan 01-02 (pure ledger rules; see its PLAN), then 01-03, 01-04
+(`/gsd-execute-phase 1 --ws ub`). 2) Verify Phase 1 (gates vs the VALIDATION.md baseline, drills
+M1–M6). 3) Phase 2 (Backlog surface): discuss → plan → execute, real-app proof.
 
 **Start.** Run `/gsd-autonomous --ws ub` from the worktree root; update this file after every sealed unit.
