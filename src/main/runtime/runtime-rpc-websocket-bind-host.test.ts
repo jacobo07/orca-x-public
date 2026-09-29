@@ -566,10 +566,19 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       // Why: the same call that widens an unpinned server (STA-2370 sibling test above) must be a
       // permanent no-op here -- same transport instance, same host, same port.
       const offer = await server.createMobilePairingOffer({
-        address: '100.64.1.20',
+        address: '127.0.0.1',
         connectionMode: 'local-only'
       })
       expect(offer.available).toBe(true)
+      // WR-02: a LAN address the pinned loopback listener cannot serve is refused, not minted.
+      const lanOffer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(lanOffer).toMatchObject({ available: false, reason: 'network_exposure_pinned' })
+      expect(server.createPairingOffer({ address: '100.64.1.20', scope: 'runtime' })).toMatchObject(
+        { available: false, reason: 'network_exposure_pinned' }
+      )
       expect(wsTransportOf(server)).toBe(transportBefore)
       expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
       expect(wsTransportOf(server)?.resolvedPort).toBe(portBefore)

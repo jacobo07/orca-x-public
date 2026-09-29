@@ -57,6 +57,36 @@ export function resolveAdvertisedPairingHostname(
   return parseHostOverride(override)?.hostname ?? null
 }
 
+/**
+ * DWS-P2 WR-02: whether a listener pinned to `pinnedHost` can answer a client dialing the
+ * advertised address. An IP literal must be the pinned host itself; a DNS name (tunnel, proxy)
+ * cannot be judged locally and is left to the operator.
+ */
+export function isAdvertisedHostServedByPin(
+  pinnedHost: string,
+  advertisedAddress: string | null | undefined
+): boolean {
+  const advertised = resolveAdvertisedPairingHostname(advertisedAddress)?.toLowerCase()
+  if (!advertised) {
+    return true
+  }
+  const pin = resolveAdvertisedPairingHostname(unbracketIpv6(pinnedHost))?.toLowerCase() ?? ''
+  if (isPairingWildcardHostname(pin) || advertised === pin) {
+    return true
+  }
+  if (advertised === 'localhost') {
+    return pin === 'localhost' || isLoopbackLiteral(pin)
+  }
+  if (isIP(advertised) === 0) {
+    return true
+  }
+  return pin === 'localhost' && isLoopbackLiteral(advertised)
+}
+
+function isLoopbackLiteral(host: string): boolean {
+  return host === '::1' || (isIP(host) === 4 && host.startsWith('127.'))
+}
+
 function resolveFullUrl(value: string): PairingEndpointResolution {
   const endpoint = normalizePairingUrl(value)
   return endpoint ? valid(endpoint) : invalid()

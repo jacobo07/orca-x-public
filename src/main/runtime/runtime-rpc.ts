@@ -49,7 +49,7 @@ import type {
 } from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE } from '../../shared/protocol-version'
-import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
+import { isAdvertisedHostServedByPin, resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
@@ -92,6 +92,7 @@ export type PairingOfferUnavailableReason =
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
   | 'network_exposure_failed'
+  | 'network_exposure_pinned'
 
 export type PairingOfferUnavailable = {
   available: false
@@ -748,6 +749,16 @@ export class OrcaRuntimeRpcServer {
     const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
     if (!advertised.ok) {
       return pairingUnavailable(advertised.reason, advertised.guidance)
+    }
+    // Why: a pinned listener never widens, so an offer for an address it does not serve can never connect.
+    if (
+      this.pinnedBindHost !== null &&
+      !isAdvertisedHostServedByPin(this.pinnedBindHost, args.address)
+    ) {
+      return pairingUnavailable(
+        'network_exposure_pinned',
+        `The listener is pinned to ${this.pinnedBindHost} (--bind-host), so it cannot serve the advertised address. Advertise ${this.pinnedBindHost} or a tunnel that forwards to it.`
+      )
     }
     const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
