@@ -74,6 +74,19 @@ if (Test-Path $stopFile) {
   Remove-Item $stopFile -Force
 }
 
+# Why: a rerun under the same RunId must never summarize or judge the previous run's manifest,
+# proof or capture (and the sampler appends, so old samples would merge in). Moved, not deleted.
+$priorArtifacts = @($ndjsonPath, $manifestPath, $summaryPath, $remotePsPath, $remoteProofPath) |
+  Where-Object { Test-Path -LiteralPath $_ }
+if ($priorArtifacts) {
+  $supersededDir = Join-Path $stateDir ('superseded-' + (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssfffZ'))
+  New-Item -ItemType Directory -Path $supersededDir -Force | Out-Null
+  foreach ($priorArtifact in $priorArtifacts) {
+    Move-Item -LiteralPath $priorArtifact -Destination $supersededDir
+  }
+  Write-Output "DWS-P2-RUN supersededPriorArtifacts=$supersededDir count=$(@($priorArtifacts).Count)"
+}
+
 if ($Target -eq 'local' -and -not $Checkout) {
   throw "dws-offload-run.ps1 -Target local requires -Checkout"
 }
