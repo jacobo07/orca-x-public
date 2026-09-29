@@ -198,6 +198,24 @@ describe('getTerminalPaneSearchEntries', () => {
     ).toBe(true)
   })
 
+  it('keeps the Backlog rail entry restorable from the Appearance search index', () => {
+    const entries = getSidebarEntries()
+    const backlogEntry = entries.find((entry) => entry.title === 'Show Backlog Button')
+
+    expect(backlogEntry).toBeDefined()
+    expect(backlogEntry?.keywords).toEqual(
+      expect.arrayContaining(['backlog', 'intent', 'ideas', 'sidebar', 'hide', 'show'])
+    )
+    // Appended last, so the rows that read the first three entries by index keep their entries.
+    expect(entries.map((entry) => entry.title).slice(0, 3)).toEqual([
+      'Show Tasks Button',
+      'Show Automations Button',
+      'Show Orca Mobile Button'
+    ])
+    expect(entries.at(-1)).toEqual(backlogEntry)
+    expect(matchesSettingsSearch('backlog', getAppearancePaneSearchEntries())).toBe(true)
+  })
+
   it('includes workspace card layout guidance in the sidebar and Appearance catalogs', () => {
     const entry = getWorkspaceCardLayoutEntry()
 
