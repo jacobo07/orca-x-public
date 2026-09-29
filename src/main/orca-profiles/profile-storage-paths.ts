@@ -8,6 +8,7 @@ const PROFILE_DATA_FILE_NAME = 'orca-data.json'
 const PROFILE_BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
 const PROFILE_DIRECTORY_NAME = 'profiles'
 const PROFILE_CONVERSATIONS_DIRECTORY_NAME = 'conversations'
+const PROFILE_BACKLOG_DIRECTORY_NAME = 'backlog'
 
 export const LEGACY_BACKUP_COUNT = 5
 
@@ -56,6 +57,14 @@ export function getOrcaConversationsDirectory(
     getOrcaProfileDirectory(profileId, userDataPath),
     PROFILE_CONVERSATIONS_DIRECTORY_NAME
   )
+}
+
+/** A profile's intent ledger; isolation is this owner's property, callers never compose the path. */
+export function getOrcaBacklogDirectory(
+  profileId: string,
+  userDataPath = getProfileUserDataPath()
+): string {
+  return join(getOrcaProfileDirectory(profileId, userDataPath), PROFILE_BACKLOG_DIRECTORY_NAME)
 }
 
 export function getOrcaProfileDataFile(
