@@ -41,7 +41,9 @@ function mission(overrides: Partial<RalphMissionRecord>): RalphMissionRecord {
 function ubRoadmapWith(number: string, patch: Record<string, unknown>): unknown {
   return {
     ...ubRoadmap,
-    phases: ubRoadmap.phases.map((phase) => (phase.number === number ? { ...phase, ...patch } : phase))
+    phases: ubRoadmap.phases.map((phase) =>
+      phase.number === number ? { ...phase, ...patch } : phase
+    )
   }
 }
 
@@ -98,7 +100,11 @@ describe('projectMissionBrief — real GSD output', () => {
       ...ubInspect,
       phases: [
         ...ubInspect.phases,
-        { ...ubInspect.phases[0], phase_id: '02', verification: { status: 'passed', next_action: '' } }
+        {
+          ...ubInspect.phases[0],
+          phase_id: '02',
+          verification: { status: 'passed', next_action: '' }
+        }
       ]
     }
     const unlocks = projectMissionBrief(readings({ inspect }), NOW).unlocks
@@ -113,11 +119,27 @@ describe('projectMissionBrief — real GSD output', () => {
 
   it('marks a truncated milestone read as partial and expands a phase range', () => {
     const brief = projectMissionBrief(
-      readings({ inspect: smokeInspect, roadmap: smokeRoadmap, smartEntry: smokeSmart, workstream: null }),
+      readings({
+        inspect: smokeInspect,
+        roadmap: smokeRoadmap,
+        smartEntry: smokeSmart,
+        workstream: null
+      }),
       NOW
     )
-    expect(brief.objective).toEqual({ kind: 'known', text: 'v1 GSD Smoke compaction canary', partial: true })
-    expect(brief.stages.find((stage) => stage.id === '8')?.dependsOn).toEqual(['2', '3', '4', '5', '6', '7'])
+    expect(brief.objective).toEqual({
+      kind: 'known',
+      text: 'v1 GSD Smoke compaction canary',
+      partial: true
+    })
+    expect(brief.stages.find((stage) => stage.id === '8')?.dependsOn).toEqual([
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7'
+    ])
   })
 })
 
@@ -143,7 +165,9 @@ describe('projectMissionBrief — claims need evidence', () => {
 
   it('reports a passed verification as the last verified result', () => {
     const brief = projectMissionBrief(
-      readings({ inspect: ubInspectWithVerification('01', 'passed', 'Verification passed — continue.') }),
+      readings({
+        inspect: ubInspectWithVerification('01', 'passed', 'Verification passed — continue.')
+      }),
       NOW
     )
     expect(brief.stages[0].state).toBe('proven')
@@ -157,14 +181,20 @@ describe('projectMissionBrief — claims need evidence', () => {
       }),
       NOW
     )
-    expect(brief.contradictions[0]).toEqual({ kind: 'frontier-disagrees', recorded: '2', active: '1' })
+    expect(brief.contradictions[0]).toEqual({
+      kind: 'frontier-disagrees',
+      recorded: '2',
+      active: '1'
+    })
   })
 })
 
 describe('projectMissionBrief — who is needed', () => {
   it('raises a blocked mission as needing the human, with its reason verbatim', () => {
     const brief = projectMissionBrief(
-      readings({ missions: [mission({ state: 'BLOCKED', reason: 'host: waiting for permission prompt' })] }),
+      readings({
+        missions: [mission({ state: 'BLOCKED', reason: 'host: waiting for permission prompt' })]
+      }),
       NOW
     )
     expect(brief.humanAttention).toEqual([
@@ -189,7 +219,9 @@ describe('projectMissionBrief — who is needed', () => {
 
   it('raises a human verification GSD asked for', () => {
     const brief = projectMissionBrief(
-      readings({ inspect: ubInspectWithVerification('01', 'human_needed', 'Complete the manual tests.') }),
+      readings({
+        inspect: ubInspectWithVerification('01', 'human_needed', 'Complete the manual tests.')
+      }),
       NOW
     )
     expect(brief.humanAttention).toContainEqual({
@@ -214,7 +246,12 @@ describe('projectMissionBrief — who is needed', () => {
 describe('projectMissionBrief — absence stays absence', () => {
   it('invents nothing when every producer failed', () => {
     const brief = projectMissionBrief(
-      readings({ inspect: null, roadmap: { error: 'x' }, smartEntry: 'garbage', stateRecord: null }),
+      readings({
+        inspect: null,
+        roadmap: { error: 'x' },
+        smartEntry: 'garbage',
+        stateRecord: null
+      }),
       NOW
     )
     expect(brief.objective).toEqual({ kind: 'unknown' })
@@ -233,7 +270,9 @@ describe('projectMissionBrief — absence stays absence', () => {
 
   it('distinguishes an empty blockers section from a missing one', () => {
     const empty = projectMissionBrief(
-      readings({ stateRecord: { recordedHead: HEAD, positionPhase: null, blockers: [], ownerDecisions: [] } }),
+      readings({
+        stateRecord: { recordedHead: HEAD, positionPhase: null, blockers: [], ownerDecisions: [] }
+      }),
       NOW
     )
     expect(empty.blockers).toEqual({ kind: 'recorded', lines: [] })
@@ -244,7 +283,12 @@ describe('projectMissionBrief — absence stays absence', () => {
       readings({ git: { kind: 'read', head: 'b'.repeat(40), commitsSinceRecorded: 3 } }),
       NOW
     )
-    expect(stale.freshness).toEqual({ kind: 'stale', recordedHead: HEAD, head: 'b'.repeat(40), commitsSince: 3 })
+    expect(stale.freshness).toEqual({
+      kind: 'stale',
+      recordedHead: HEAD,
+      head: 'b'.repeat(40),
+      commitsSince: 3
+    })
     const unreadable = projectMissionBrief(readings({ git: { kind: 'unreadable' } }), NOW)
     expect(unreadable.freshness).toEqual({ kind: 'unknown', reason: 'git-unreadable' })
   })

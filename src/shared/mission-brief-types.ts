@@ -93,7 +93,9 @@ export type MissionBrief = {
   workstream: string | null
   objective: { kind: 'known'; text: string; partial: boolean } | { kind: 'unknown' }
   stages: MissionStage[]
-  frontier: { kind: 'known'; stageId: string; name: string | null; status: string | null } | { kind: 'unknown' }
+  frontier:
+    | { kind: 'known'; stageId: string; name: string | null; status: string | null }
+    | { kind: 'unknown' }
   lastVerified:
     | { kind: 'verified'; stageId: string; name: string | null }
     | { kind: 'none'; nearest: { stageId: string; verification: string } | null }
@@ -117,6 +119,11 @@ export type MissionBriefResult =
   | { status: 'choose-workstream'; workstreams: string[] }
   | {
       status: 'unavailable'
-      reason: 'remote-host' | 'workspace-unknown' | 'gsd-tools-absent' | 'invalid-request'
+      reason:
+        | 'remote-host'
+        | 'workspace-unknown'
+        | 'gsd-tools-absent'
+        | 'invalid-request'
+        | 'client-unsupported'
     }
   | { status: 'failed'; stage: 'gsd' | 'read'; detail: string }

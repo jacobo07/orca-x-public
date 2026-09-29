@@ -29,7 +29,9 @@ function objectiveOf(inspect: GsdInspect | null): MissionBrief['objective'] {
   }
   // Why strip: a truncated read can carry the frontmatter's own quoting.
   const text = (milestone.version ?? milestone.name ?? '').replace(/^[\s"'\\]+|[\s"'\\]+$/g, '')
-  return text ? { kind: 'known', text, partial: milestone.scope !== 'complete' } : { kind: 'unknown' }
+  return text
+    ? { kind: 'known', text, partial: milestone.scope !== 'complete' }
+    : { kind: 'unknown' }
 }
 
 function nextActionOf(smart: GsdSmartEntry | null): MissionBrief['nextAction'] {
@@ -45,16 +47,18 @@ function nextActionOf(smart: GsdSmartEntry | null): MissionBrief['nextAction'] {
 }
 
 function lastVerifiedOf(stages: MissionStage[]): MissionBrief['lastVerified'] {
-  const proven = stages.filter((stage) => stage.state === 'proven').at(-1)
+  const proven = stages.findLast((stage) => stage.state === 'proven')
   if (proven) {
     return { kind: 'verified', stageId: proven.id, name: proven.name }
   }
-  const nearest = stages
-    .filter((stage) => stage.verification !== null && stage.verification !== 'missing')
-    .at(-1)
+  const nearest = stages.findLast(
+    (stage) => stage.verification !== null && stage.verification !== 'missing'
+  )
   return {
     kind: 'none',
-    nearest: nearest?.verification ? { stageId: nearest.id, verification: nearest.verification } : null
+    nearest: nearest?.verification
+      ? { stageId: nearest.id, verification: nearest.verification }
+      : null
   }
 }
 
@@ -63,7 +67,9 @@ function unlocksOf(stages: MissionStage[], frontierId: string | null): MissionBr
   if (!frontierId) {
     return []
   }
-  const proven = new Set(stages.filter((stage) => stage.state === 'proven').map((stage) => stage.id))
+  const proven = new Set(
+    stages.filter((stage) => stage.state === 'proven').map((stage) => stage.id)
+  )
   return stages
     .filter(
       (stage) =>
@@ -137,7 +143,8 @@ export function projectMissionBrief(readings: MissionReadings, now: number): Mis
           {
             missionId: latest.missionId,
             reason: latest.reason,
-            heartbeatAgeMs: latest.heartbeatAtMs === null ? null : Math.max(0, now - latest.heartbeatAtMs),
+            heartbeatAgeMs:
+              latest.heartbeatAtMs === null ? null : Math.max(0, now - latest.heartbeatAtMs),
             live: latest.heartbeatAtMs !== null && now - latest.heartbeatAtMs < LIVE_HEARTBEAT_MS
           }
         ]

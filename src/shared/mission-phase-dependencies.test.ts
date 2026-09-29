@@ -22,7 +22,11 @@ describe('parseDependsOn — strings measured in real roadmaps', () => {
     ['Phase 1, 2', ['1', '2'], null],
     ['Phases 2-7', ['2', '3', '4', '5', '6', '7'], null],
     ['Phase 1–6', ['1', '2', '3', '4', '5', '6'], null],
-    ['Phase 5 and the provider pane shipping the contract', ['5'], 'the provider pane shipping the contract']
+    [
+      'Phase 5 and the provider pane shipping the contract',
+      ['5'],
+      'the provider pane shipping the contract'
+    ]
   ])('%s', (text, ids, external) => {
     expect(parseDependsOn(text)).toEqual({ ids, external })
   })

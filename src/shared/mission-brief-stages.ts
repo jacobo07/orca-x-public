@@ -37,23 +37,34 @@ export function projectStages(
   activeId: string | null
 ): StageProjection {
   const evidence = evidenceById(inspect)
-  const rows: { id: string; name: string; goal: string | null; dependsOn: string | null; ticked: boolean }[] =
-    roadmap
-      ? roadmap.phases.flatMap((phase) => {
-          const id = normalizePhaseId(phase.number)
-          return id
-            ? [
-                {
-                  id,
-                  name: phase.name,
-                  goal: phase.goal ?? null,
-                  dependsOn: phase.depends_on ?? null,
-                  ticked: phase.roadmap_complete === true
-                }
-              ]
-            : []
-        })
-      : [...evidence.keys()].map((id) => ({ id, name: id, goal: null, dependsOn: null, ticked: false }))
+  const rows: {
+    id: string
+    name: string
+    goal: string | null
+    dependsOn: string | null
+    ticked: boolean
+  }[] = roadmap
+    ? roadmap.phases.flatMap((phase) => {
+        const id = normalizePhaseId(phase.number)
+        return id
+          ? [
+              {
+                id,
+                name: phase.name,
+                goal: phase.goal ?? null,
+                dependsOn: phase.depends_on ?? null,
+                ticked: phase.roadmap_complete === true
+              }
+            ]
+          : []
+      })
+    : [...evidence.keys()].map((id) => ({
+        id,
+        name: id,
+        goal: null,
+        dependsOn: null,
+        ticked: false
+      }))
 
   const stages: MissionStage[] = rows.map((row) => {
     const phase = evidence.get(row.id)
@@ -92,7 +103,11 @@ export function projectStages(
     for (const dependencyId of stage.dependsOn) {
       const dependency = byId.get(dependencyId)
       if (dependency && dependency.state !== 'proven' && dependency.state !== 'claimed') {
-        contradictions.push({ kind: 'claimed-with-open-dependency', stageId: stage.id, dependencyId })
+        contradictions.push({
+          kind: 'claimed-with-open-dependency',
+          stageId: stage.id,
+          dependencyId
+        })
       }
     }
   }
