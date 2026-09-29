@@ -70,4 +70,56 @@ describe('backlog runtime RPC round trip', () => {
     })
     expect(loaded).toEqual({ outcome: 'absent' })
   })
+
+  it('updates and transitions to done over RPC; a fresh runtime reads 4 events', async () => {
+    const dispatcher = dispatcherOn(root)
+    const captured = await resultOf(dispatcher, 'backlog.capture', {
+      text: 'Land the fence',
+      kind: 'engineering'
+    })
+    const id = captured.record!.id
+    const evidence = (subject: string) => ({
+      class: 'OBSERVED',
+      origin: 'tool',
+      subject,
+      source: 'ci',
+      ref: 'abc123'
+    })
+
+    const updated = await resultOf(dispatcher, 'backlog.update', {
+      id,
+      patch: { addEvidence: [evidence('revision'), evidence('gate')] }
+    })
+    expect(updated.outcome).toBe('published')
+    expect((await resultOf(dispatcher, 'backlog.transition', { id, to: 'ready' })).outcome).toBe(
+      'published'
+    )
+    const done = await resultOf(dispatcher, 'backlog.transition', { id, to: 'done' })
+    expect(done.outcome).toBe('published')
+
+    const reloaded = await resultOf(dispatcherOn(root), 'backlog.get', { id })
+    expect(reloaded.outcome).toBe('loaded')
+    expect(reloaded.record!.state).toBe('done')
+    expect((reloaded.record!.events as { type: string }[]).map((event) => event.type)).toEqual([
+      'created',
+      'updated',
+      'transitioned',
+      'transitioned'
+    ])
+    expect(reloaded).toEqual({ outcome: 'loaded', record: done.record })
+  })
+
+  it('surfaces the store’s refusal of model-origin PROVEN evidence through the dispatcher', async () => {
+    const dispatcher = dispatcherOn(root)
+    const captured = await resultOf(dispatcher, 'backlog.capture', { text: 'x', kind: 'research' })
+
+    const refused = await resultOf(dispatcher, 'backlog.update', {
+      id: captured.record!.id,
+      patch: {
+        addEvidence: [{ class: 'PROVEN', origin: 'model', subject: 'artifact', source: 'llm', ref: null }]
+      }
+    })
+
+    expect(refused).toMatchObject({ outcome: 'refused', code: 'model-evidence-proven' })
+  })
 })
