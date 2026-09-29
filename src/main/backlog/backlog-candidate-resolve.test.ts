@@ -188,6 +188,67 @@ describe('merge into an item', () => {
   })
 })
 
+describe('concurrent resolutions of one candidate', () => {
+  function settledValues<T>(results: PromiseSettledResult<T>[]): T[] {
+    return results.map((result) => {
+      if (result.status !== 'fulfilled') {
+        throw new Error(`resolution rejected: ${String(result.reason)}`)
+      }
+      return result.value
+    })
+  }
+
+  it('accept racing merge: one wins, the loser is refused and writes no item leg', async () => {
+    const target = await capture('Existing intent')
+    const candidateId = await ingest('fp-race-m')
+
+    const [accepted, merged] = settledValues(
+      await Promise.allSettled([
+        service.resolveCandidate({ action: 'accept', candidateId }),
+        service.resolveCandidate({ action: 'merge', candidateId, itemId: target.id })
+      ])
+    )
+
+    const winners = [accepted, merged].filter((r) => r.candidate?.outcome === 'published')
+    const losers = [accepted, merged].filter((r) => r.candidate?.outcome === 'refused')
+    expect(winners).toHaveLength(1)
+    expect(losers).toEqual([
+      { candidate: { outcome: 'refused', code: 'candidate-already-resolved', detail: null }, item: null }
+    ])
+    const acceptedItemExists = existsSync(
+      join(root, 'items', `${mintItemIdForCandidate(candidateId)}.json`)
+    )
+    const linked = readJson<BacklogItem>('items', target.id).sourceLinks.some(
+      (link) => link.candidateId === candidateId
+    )
+    // Exactly one item carries the candidate's intent.
+    expect([acceptedItemExists, linked].filter(Boolean)).toHaveLength(1)
+    const status = readJson<BacklogCandidate>('candidates', candidateId).status
+    expect(status).toBe(acceptedItemExists ? 'accepted' : 'merged')
+  })
+
+  it('accept racing dismiss: one wins, and a dismissed candidate has no item', async () => {
+    const candidateId = await ingest('fp-race-d')
+
+    const results = settledValues(
+      await Promise.allSettled([
+        service.resolveCandidate({ action: 'dismiss', candidateId }),
+        service.resolveCandidate({ action: 'accept', candidateId })
+      ])
+    )
+
+    expect(results.filter((r) => r.candidate?.outcome === 'published')).toHaveLength(1)
+    expect(results.filter((r) => r.candidate?.outcome === 'refused')).toEqual([
+      { candidate: { outcome: 'refused', code: 'candidate-already-resolved', detail: null }, item: null }
+    ])
+    const status = readJson<BacklogCandidate>('candidates', candidateId).status
+    const acceptedItemExists = existsSync(
+      join(root, 'items', `${mintItemIdForCandidate(candidateId)}.json`)
+    )
+    expect(acceptedItemExists).toBe(status === 'accepted')
+  })
+})
+
 describe('terminal resolutions', () => {
   it('dismiss, then accept is refused and creates no item', async () => {
     const candidateId = await ingest('fp-x')
