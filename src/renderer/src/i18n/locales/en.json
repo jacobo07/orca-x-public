@@ -16874,6 +16874,41 @@
       "inferred": "inferred",
       "moreProjects_one": "+{{count}} project",
       "moreProjects_other": "+{{count}} projects"
+    },
+    "state": {
+      "needsTriage": "Needs triage",
+      "ready": "Ready",
+      "waitingForExecutor": "Waiting for executor",
+      "preparing": "Preparing",
+      "running": "Running",
+      "review": "In review",
+      "done": "Done",
+      "blocked": "Blocked",
+      "stale": "Stale",
+      "superseded": "Superseded",
+      "dismissed": "Dismissed",
+      "unknown": "Unknown"
+    },
+    "kind": {
+      "engineering": "Engineering",
+      "research": "Research",
+      "decision": "Decision",
+      "manual": "Manual task",
+      "idea": "Idea"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "normal": "Normal",
+      "low": "Low"
+    },
+    "source": {
+      "manual": "Manual",
+      "orcaConversation": "Orca conversation",
+      "claudeCodeTranscript": "Claude Code",
+      "codexTranscript": "Codex",
+      "chatgptExport": "ChatGPT",
+      "infinityops": "InfinityOps"
     }
   }
 }
