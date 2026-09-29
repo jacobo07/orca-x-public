@@ -133,6 +133,21 @@ describe('idempotent candidate ingest', () => {
     expect(candidateFiles()).toHaveLength(1)
   })
 
+  it('re-ingest after dismiss stays dismissed with one file', async () => {
+    const service = new BacklogService(() => root)
+    const [first] = await service.ingestCandidates([entry()])
+    await service.resolveCandidate({ action: 'dismiss', candidateId: first.id! })
+
+    const [again] = await service.ingestCandidates([entry()])
+
+    expect(again).toMatchObject({ outcome: 'unchanged', id: first.id })
+    const stored = JSON.parse(
+      readFileSync(join(root, 'candidates', `${first.id}.json`), 'utf-8')
+    ) as BacklogCandidate
+    expect(stored.status).toBe('dismissed')
+    expect(candidateFiles()).toHaveLength(1)
+  })
+
   it('never echoes candidate text in a result row', async () => {
     const service = new BacklogService(() => root)
     const results = await service.ingestCandidates([entry()])
