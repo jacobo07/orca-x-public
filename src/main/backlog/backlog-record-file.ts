@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
@@ -7,6 +7,7 @@ import { BACKLOG_RECORD_MAX_BYTES } from '../../shared/backlog-rpc-limits'
 import {
   DurablePublishError,
   durableWriteTempPath,
+  writeFileDurableExclusive,
   writeFileDurableIfCurrent
 } from '../durable-file-write'
 
@@ -67,15 +68,14 @@ export async function publishNewBacklogRecord(
     return { outcome: 'storage-failed', stage: 'prepare', code: typeof code === 'string' ? code : null }
   }
   try {
-    const published = await writeFileDurableIfCurrent(
-      durableWriteTempPath(finalPath),
-      finalPath,
-      payload,
-      () => !existsSync(finalPath)
-    )
-    return published ? 'published' : 'exists'
+    // Link, not rename: a name another process took in the meantime fails EEXIST instead of being replaced.
+    await writeFileDurableExclusive(durableWriteTempPath(finalPath), finalPath, payload)
+    return 'published'
   } catch (error) {
     if (error instanceof DurablePublishError) {
+      if (error.stage === 'publish' && error.code === 'EEXIST') {
+        return 'exists'
+      }
       return { outcome: 'storage-failed', stage: error.stage, code: error.code }
     }
     throw error

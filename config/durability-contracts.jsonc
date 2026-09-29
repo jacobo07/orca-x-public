@@ -172,6 +172,7 @@
         "Directory fsync is skipped where the platform cannot open a directory for it (Windows), so the rename-recorded-but-not-persisted window is not closed there.",
         "The cross-process fence is narrowed, not eliminated: the revision is re-read synchronously before the rename, not held under a lock.",
         "A Windows rename blocked by another handle surfaces as storage-failed at the publish stage with no retry.",
+        "A new record publishes by hard link so a taken name fails EEXIST instead of being replaced; a profile on a filesystem without hard links (FAT, exFAT, some network shares) fails every create as storage-failed at the publish stage.",
         "Records are plaintext at rest in the profile directory.",
         "Reachable only through runtime RPC until the Phase 2 surface lands."
       ]
