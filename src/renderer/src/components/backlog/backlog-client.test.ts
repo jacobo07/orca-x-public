@@ -6,14 +6,12 @@ import { RUNTIME_COMPAT_BLOCK_CODE } from '../../runtime/runtime-protocol-compat
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import type { BacklogItem } from '../../../../shared/backlog-types'
 import { toBacklogItemSummary } from '../../../../shared/backlog-summary'
+import { getBacklogItem, listBacklogPage, readBacklogHealth } from './backlog-client'
 import {
   captureBacklogItem,
-  getBacklogItem,
-  listBacklogPage,
-  readBacklogHealth,
   transitionBacklogItem,
   updateBacklogItem
-} from './backlog-client'
+} from './backlog-mutation-client'
 
 const localCall = vi.fn()
 const environmentCall = vi.fn()
@@ -60,11 +58,19 @@ const fail = (code: string) => ({
 
 function statusWith(backlog: boolean) {
   const response = createCompatibleRuntimeStatusResponse()
-  const capabilities = RUNTIME_CAPABILITIES.filter((entry) => entry !== BACKLOG_RUNTIME_CAPABILITY)
-  response.result.capabilities = backlog
-    ? [...capabilities, BACKLOG_RUNTIME_CAPABILITY]
-    : capabilities
-  return response
+  if (!response.ok) {
+    throw new Error('fixture status is not ok')
+  }
+  // backlog.v1 is runtime-conditional, so the static list never carries it.
+  const capabilities: string[] = [...RUNTIME_CAPABILITIES]
+  expect(capabilities).not.toContain(BACKLOG_RUNTIME_CAPABILITY)
+  return {
+    ...response,
+    result: {
+      ...response.result,
+      capabilities: backlog ? [...capabilities, BACKLOG_RUNTIME_CAPABILITY] : capabilities
+    }
+  }
 }
 
 function remoteHost(backlog: boolean, answer: (method: string) => unknown) {
