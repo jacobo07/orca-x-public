@@ -286,6 +286,7 @@ function Start-DwsTunnel {
   )
   $proc = Start-Process -FilePath ssh -ArgumentList $sshArgs -PassThru -WindowStyle Hidden
   $proc.Id | Set-Content -Encoding ascii $pidPath
+  $proc.StartTime.ToUniversalTime().Ticks | Set-Content -Encoding ascii (Join-Path $state 'tunnel.start')
   Write-Output "TUNNEL_STARTED pid=$($proc.Id) port=$Port"
 
   $deadline = (Get-Date).AddSeconds(15)
@@ -304,14 +305,36 @@ function Start-DwsTunnel {
   Write-Output "TUNNEL_READY port=$Port"
 }
 
+# Why: tunnel.pid outlives reboots and crashes, so a recorded pid may now name an unrelated process.
+# Ours = ssh.exe with a loopback -L forward, and (when recorded) the same start time.
+function Test-DwsTunnelProcess {
+  param([Parameter(Mandatory)][int]$TunnelPid, [string]$RecordedStartTicks)
+
+  $proc = Get-Process -Id $TunnelPid -ErrorAction SilentlyContinue
+  if (-not $proc -or $proc.ProcessName -ne 'ssh') { return $false }
+  $cim = Get-CimInstance Win32_Process -Filter "ProcessId = $TunnelPid" -ErrorAction SilentlyContinue
+  if (-not $cim -or $cim.CommandLine -notmatch '-L\s+"?127\.0\.0\.1:\d+:127\.0\.0\.1:\d+') { return $false }
+  if ($RecordedStartTicks) {
+    return ([string]$proc.StartTime.ToUniversalTime().Ticks) -eq $RecordedStartTicks.Trim()
+  }
+  return $true
+}
+
 function Stop-DwsTunnel {
   $state = Get-DwsStateDir
   $pidPath = Join-Path $state 'tunnel.pid'
+  $startPath = Join-Path $state 'tunnel.start'
   if (-not (Test-Path $pidPath)) { Write-Output 'TUNNEL_NOT_RUNNING'; return }
-  $tunnelPid = Get-Content $pidPath
-  Stop-Process -Id $tunnelPid -Force -ErrorAction SilentlyContinue
+  $tunnelPid = [int](Get-Content $pidPath -TotalCount 1)
+  $recordedStart = if (Test-Path $startPath) { Get-Content $startPath -TotalCount 1 } else { $null }
+  if (Test-DwsTunnelProcess -TunnelPid $tunnelPid -RecordedStartTicks $recordedStart) {
+    Stop-Process -Id $tunnelPid -Force -ErrorAction SilentlyContinue
+    Write-Output "TUNNEL_STOPPED pid=$tunnelPid"
+  } else {
+    Write-Output "TUNNEL_STALE_PID pid=$tunnelPid (not our ssh tunnel; pid file cleared, nothing killed)"
+  }
   Remove-Item $pidPath -Force -ErrorAction SilentlyContinue
-  Write-Output "TUNNEL_STOPPED pid=$tunnelPid"
+  Remove-Item $startPath -Force -ErrorAction SilentlyContinue
 }
 
 <#
