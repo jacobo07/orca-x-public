@@ -1,6 +1,7 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal } from './helpers/orca-restart'
 
@@ -23,6 +24,14 @@ const REPOS = (process.env.MISSION_BRIEF_REPOS ?? '')
   .split(path.delimiter)
   .map((entry) => entry.trim())
   .filter(Boolean)
+// Why the test process's home: the app's HOME is the harness's isolated one, which has no GSD.
+const REAL_GSD_CORE = path.join(os.homedir(), '.claude', 'gsd-core')
+
+async function provisionGsdTools(electronApp: ElectronApplication): Promise<void> {
+  const home = await electronApp.evaluate(({ app }) => app.getPath('home'))
+  // Why a copy, not a link: nothing the app runs may write into the real installation.
+  cpSync(REAL_GSD_CORE, path.join(home, '.claude', 'gsd-core'), { recursive: true })
+}
 
 async function openResumeCenter(page: Page): Promise<void> {
   await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
@@ -38,8 +47,11 @@ test.describe('@mission-brief', () => {
   test.skip(REPOS.length === 0, 'MISSION_BRIEF_REPOS lists no repos on this host')
 
   test('each Resume Center row opens the brief of its own mission records', async ({
+    electronApp,
     orcaPage
   }) => {
+    expect(existsSync(REAL_GSD_CORE), `GSD tools are not installed at ${REAL_GSD_CORE}`).toBe(true)
+    await provisionGsdTools(electronApp)
     for (const repoPath of REPOS) {
       await attachRepoAndOpenTerminal(orcaPage, repoPath)
     }
@@ -49,6 +61,8 @@ test.describe('@mission-brief', () => {
     const seen: Record<string, unknown>[] = []
     for (const repoPath of REPOS) {
       const name = path.basename(repoPath)
+      // The expectation comes from the repo on disk, so a brief that reads nothing cannot pass.
+      const expected = existsSync(path.join(repoPath, '.planning')) ? 'read' : 'no-mission'
       const row = workspaceRow(orcaPage, repoPath)
       await expect
         .poll(
@@ -81,22 +95,28 @@ test.describe('@mission-brief', () => {
       const record: Record<string, unknown> = {
         repo: repoPath,
         workspaceKey,
+        expected,
         status,
         signal: await text('mission-brief-signal-label'),
         objective: await text('mission-brief-objective'),
         frontier: await text('mission-brief-frontier'),
         lastVerified: await text('mission-brief-last-verified'),
         nextAction: await text('mission-brief-next-action'),
+        blockers: await text('mission-brief-blockers'),
         freshness: await text('mission-brief-freshness'),
         body: status === 'read' ? null : ((await brief.textContent()) ?? '').trim()
       }
+      seen.push(record)
+      // Written before asserting, so a failing run still leaves what each brief said.
+      writeFileSync('pr-evidence/mission-brief-seen.json', `${JSON.stringify(seen, null, 2)}\n`)
+      await orcaPage.screenshot({ path: `pr-evidence/mission-brief-${name}-compact.png` })
+      expect(status, `${name}: ${String(record.body)}`).toBe(expected)
 
       if (status === 'read') {
         // A read brief states its signal and frontier, and the row now carries the same signal.
         expect(record.signal, `${name}: a read brief with no signal`).toBeTruthy()
         expect(record.frontier, `${name}: a read brief with no frontier row`).not.toBeNull()
         await expect(row.getByTestId('resume-center-workspace-mission-signal')).toBeVisible()
-        await orcaPage.screenshot({ path: `pr-evidence/mission-brief-${name}-compact.png` })
 
         await brief.getByTestId('mission-brief-open-full').click()
         const dialog = orcaPage.getByTestId('mission-brief-dialog')
@@ -104,24 +124,28 @@ test.describe('@mission-brief', () => {
           'data-workspace-key',
           workspaceKey ?? ''
         )
+        await expect(dialog.getByTestId('mission-brief-full')).not.toHaveAttribute(
+          'data-brief-status',
+          'reading'
+        )
         await expect(dialog.getByTestId('mission-brief-signal-label')).toHaveText(
           String(record.signal)
         )
         await orcaPage.screenshot({ path: `pr-evidence/mission-brief-${name}-full.png` })
         await orcaPage.keyboard.press('Escape')
         await expect(dialog).toBeHidden()
-      } else {
-        await orcaPage.screenshot({ path: `pr-evidence/mission-brief-${name}-compact.png` })
       }
-      seen.push(record)
     }
 
-    writeFileSync('pr-evidence/mission-brief-seen.json', `${JSON.stringify(seen, null, 2)}\n`)
     // Distinct records must yield distinct briefs: one brief repeated under every row fails here.
     const read = seen.filter((entry) => entry.status === 'read')
+    expect(
+      read.length,
+      'fewer than two briefs were read, so rows cannot be told apart'
+    ).toBeGreaterThan(1)
     expect(new Set(read.map((entry) => entry.workspaceKey)).size).toBe(read.length)
-    expect(new Set(read.map((entry) => `${entry.objective}|${entry.frontier}`)).size).toBe(
-      read.length
-    )
+    expect(
+      new Set(read.map((entry) => `${entry.objective}|${entry.frontier}|${entry.nextAction}`)).size
+    ).toBe(read.length)
   })
 })
