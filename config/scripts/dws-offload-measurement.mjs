@@ -830,7 +830,10 @@ function runRemoteProofCommand(options) {
     process.stderr.write(`UNREADABLE INPUT: manifest file (${options.manifest}) carries no legs[] array\n`)
     process.exit(2)
   }
-  const proofs = applyLegOutcomes(extractRemoteProof(captureText, { servePid, legs }), manifest.legs)
+  const proofs = applyLegOutcomes(
+    extractRemoteProof(captureText, { servePid, legs, markers: manifest.legs }),
+    manifest.legs
+  )
   writeJsonOutputIfRequested(options.out, proofs)
   for (const proof of proofs) {
     process.stdout.write(
