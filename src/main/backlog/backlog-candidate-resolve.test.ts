@@ -177,7 +177,8 @@ describe('merge into an item', () => {
 
   it('refuses a superseded target and leaves the candidate open', async () => {
     const item = await capture('Old intent')
-    await service.transition(item.id, { to: 'superseded' })
+    const survivor = await capture('Newer intent')
+    await service.mergeItems({ survivorId: survivor.id, loserId: item.id })
     const candidateId = await ingest('fp-s')
 
     const result = await service.resolveCandidate({ action: 'merge', candidateId, itemId: item.id })

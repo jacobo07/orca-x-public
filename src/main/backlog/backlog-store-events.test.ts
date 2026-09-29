@@ -52,7 +52,8 @@ function seed(
     executionLinks: [],
     evidence,
     events: [{ id: mintBacklogEventId(), type: 'created', at: 1, data: { origin: 'manual' } }],
-    mergedInto: null,
+    // Only a merge produces superseded, and it always names the survivor.
+    mergedInto: state === 'superseded' ? mintBacklogItemId() : null,
     revision: 1,
     createdAt: 1,
     updatedAt: 1
@@ -76,10 +77,14 @@ afterEach(() => {
 })
 
 describe('transition', () => {
+  // 52 table edges minus the 7 into `superseded`, which only a merge may take (WR-02).
   it('appends exactly one transitioned event on every legal edge', async () => {
     let legal = 0
     for (const from of BACKLOG_ITEM_STATES) {
       for (const to of BACKLOG_TRANSITIONS[from]) {
+        if (to === 'superseded') {
+          continue
+        }
         const item = seed(from)
         const outcome = await service.transition(item.id, { to })
         if (outcome.outcome !== 'published') {
@@ -96,7 +101,43 @@ describe('transition', () => {
         legal += 1
       }
     }
-    expect(legal).toBe(52)
+    expect(legal).toBe(45)
+  })
+
+  it('refuses every table edge into superseded as use-merge with the bytes unchanged', async () => {
+    let refused = 0
+    for (const from of BACKLOG_ITEM_STATES) {
+      if (!BACKLOG_TRANSITIONS[from].includes('superseded')) {
+        continue
+      }
+      const item = seed(from)
+      const before = sha(item.id)
+      const outcome = await service.transition(item.id, { to: 'superseded' })
+      expect(outcome, from).toMatchObject({ outcome: 'refused', code: 'use-merge' })
+      expect(sha(item.id)).toBe(before)
+      refused += 1
+    }
+    expect(refused).toBe(7)
+  })
+
+  it('reads superseded without mergedInto, or mergedInto without superseded, as invalid', async () => {
+    const orphan = seed('superseded')
+    writeFileSync(
+      pathOf(orphan.id),
+      `${JSON.stringify({ ...orphan, mergedInto: null }, null, 2)}\n`
+    )
+    expect(await service.get(orphan.id)).toMatchObject({ outcome: 'unreadable', code: 'invalid-field' })
+    const pointing = seed('ready')
+    writeFileSync(
+      pathOf(pointing.id),
+      `${JSON.stringify({ ...pointing, mergedInto: mintBacklogItemId() }, null, 2)}\n`
+    )
+    expect(await service.get(pointing.id)).toMatchObject({
+      outcome: 'unreadable',
+      code: 'invalid-field'
+    })
+    // Control: the well-formed superseded shape still loads.
+    expect(await service.get(seed('superseded').id)).toMatchObject({ outcome: 'loaded' })
   })
 
   it('refuses every illegal ordered pair with the bytes unchanged', async () => {
