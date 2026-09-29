@@ -1,7 +1,13 @@
-import type { BacklogLoadResult, BacklogWriteOutcome } from '../../shared/backlog-outcomes'
+import { describeBacklogEventLogDefect } from '../../shared/backlog-event-log'
+import type {
+  BacklogLoadResult,
+  BacklogRefusal,
+  BacklogWriteOutcome
+} from '../../shared/backlog-outcomes'
 import { mintBacklogEventId } from './backlog-identity-mint'
 import {
   backlogRecordPath,
+  publishBacklogRevision,
   publishNewBacklogRecord,
   readBacklogRecordText,
   readOnDiskBacklogRevision,
@@ -17,7 +23,14 @@ export type BacklogRecordCodec<R> = {
 
 export type BacklogFoldContext = { now: number; mintEventId: () => string }
 
-type Fenced = { id: string; revision: number; events: readonly unknown[] }
+/** Returns the next record, the same object for "no change", or a refusal. */
+export type BacklogFold<R> = (current: R, context: BacklogFoldContext) => R | BacklogRefusal
+
+type Fenced = { id: string; revision: number; events: readonly { id: string }[] }
+
+function isRefusal(value: unknown): value is BacklogRefusal {
+  return (value as { outcome?: unknown }).outcome === 'refused'
+}
 
 export class BacklogRecordStore<R extends Fenced> {
   private readonly queue = new BacklogRecordQueue()
@@ -31,6 +44,10 @@ export class BacklogRecordStore<R extends Fenced> {
   /** Resolved outside the queue and any try so a malformed id is loud, not a "corrupt record". */
   private pathFor(id: string): string {
     return backlogRecordPath(this.directory, id, this.codec.isId)
+  }
+
+  private context(): BacklogFoldContext {
+    return { now: this.clock(), mintEventId: mintBacklogEventId }
   }
 
   async load(id: string): Promise<BacklogLoadResult<R>> {
@@ -53,12 +70,16 @@ export class BacklogRecordStore<R extends Fenced> {
   ): Promise<BacklogWriteOutcome<R>> {
     const finalPath = this.pathFor(id)
     return this.queue.run(id, async () => {
-      const record = build({ now: this.clock(), mintEventId: mintBacklogEventId })
+      const record = build(this.context())
       if (record.id !== id) {
         throw new Error('Backlog create built a record whose id differs from the requested id')
       }
       if (record.revision !== 1 || record.events.length !== 1) {
-        return { outcome: 'refused', code: 'event-count', detail: 'a new record has revision 1 and one event' }
+        return {
+          outcome: 'refused',
+          code: 'event-count',
+          detail: 'a new record has revision 1 and one event'
+        }
       }
       const defect = this.codec.describeDefect(record)
       if (defect !== null) {
@@ -87,5 +108,45 @@ export class BacklogRecordStore<R extends Fenced> {
         ? { outcome: 'unchanged', record: existing.record }
         : existing
     })
+  }
+
+  /** Fenced read-modify-write: one appended event, revision + 1, never over a newer file. */
+  mutate(id: string, fold: BacklogFold<R>): Promise<BacklogWriteOutcome<R>> {
+    this.pathFor(id)
+    return this.queue.run(id, () => this.applyFold(id, fold))
+  }
+
+  // Caller holds the queue key for `id` and has already validated it through pathFor.
+  private async applyFold(id: string, fold: BacklogFold<R>): Promise<BacklogWriteOutcome<R>> {
+    const finalPath = this.pathFor(id)
+    const loaded = await this.load(id)
+    if (loaded.outcome !== 'loaded') {
+      return loaded
+    }
+    const current = loaded.record
+    const expectedRevision = current.revision
+    const next = fold(current, this.context())
+    if (isRefusal(next)) {
+      return next
+    }
+    if (next === current) {
+      return { outcome: 'unchanged', record: current }
+    }
+    const eventDefect = describeBacklogEventLogDefect(current.events, next.events)
+    if (eventDefect !== null) {
+      return { outcome: 'refused', code: eventDefect, detail: null }
+    }
+    // The store owns the revision; whatever the fold or a caller put there is overwritten.
+    const record = { ...next, revision: expectedRevision + 1 }
+    const defect = this.codec.describeDefect(record)
+    if (defect !== null) {
+      return { outcome: 'refused', code: 'invalid-record', detail: defect }
+    }
+    const serialized = serializeBacklogRecord(record)
+    if (serialized.payload === undefined) {
+      return serialized
+    }
+    const published = await publishBacklogRevision(finalPath, serialized.payload, expectedRevision)
+    return published === 'published' ? { outcome: 'published', record } : published
   }
 }

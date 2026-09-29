@@ -82,6 +82,42 @@ export async function publishNewBacklogRecord(
   }
 }
 
+/**
+ * Publishes a new revision only if the file on disk still holds `expectedRevision`, checked inside
+ * the commit veto (after the fsync, before the rename) so a competing writer is never overwritten.
+ */
+export async function publishBacklogRevision(
+  finalPath: string,
+  payload: string,
+  expectedRevision: number
+): Promise<
+  | 'published'
+  | { outcome: 'superseded'; expectedRevision: number; actualRevision: number }
+  | BacklogStorageFailure
+> {
+  try {
+    const published = await writeFileDurableIfCurrent(
+      durableWriteTempPath(finalPath),
+      finalPath,
+      payload,
+      () => readOnDiskBacklogRevision(finalPath) === expectedRevision
+    )
+    if (published) {
+      return 'published'
+    }
+    return {
+      outcome: 'superseded',
+      expectedRevision,
+      actualRevision: readOnDiskBacklogRevision(finalPath) ?? -1
+    }
+  } catch (error) {
+    if (error instanceof DurablePublishError) {
+      return { outcome: 'storage-failed', stage: error.stage, code: error.code }
+    }
+    throw error
+  }
+}
+
 /** Null matches no expectation, so an unreadable file refuses a publish rather than permitting it. */
 export function readOnDiskBacklogRevision(finalPath: string): number | null {
   try {

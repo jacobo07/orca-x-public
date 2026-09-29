@@ -126,7 +126,11 @@ describe('BacklogRecordStore.mutate', () => {
   })
 
   it.each([
-    ['drops an event', 'event-log-not-extended', (c: BacklogItem, ctx: BacklogFoldContext) => [appended(ctx)]],
+    [
+      'drops an event',
+      'event-log-not-extended',
+      (_c: BacklogItem, ctx: BacklogFoldContext) => [appended(ctx)]
+    ],
     [
       'edits a stored event',
       'event-log-not-extended',

@@ -160,7 +160,10 @@
       "writer": "src/main/backlog/backlog-record-file.ts",
       "tier": "crash-durable",
       "lostIf": "Accepted intent is the only copy. The chats it was harvested from rotate or vanish, which is the product's reason to exist, so a lost record cannot be reconstructed from its sources and the intent is simply gone.",
-      "provenBy": ["src/main/backlog/backlog-store-syscall-proof.test.ts"],
+      "provenBy": [
+        "src/main/backlog/backlog-store-syscall-proof.test.ts",
+        "src/main/backlog/backlog-store-durability.test.ts"
+      ],
       "onFailure": "Every publish returns a closed storage-failed outcome naming the stage and the OS error code instead of rejecting. The prior record is kept because the rename follows the fsync, so a failed write leaves the last published bytes in place.",
       "knownGaps": [
         "No backup ring or repair tool: a record that fails to parse is quarantined with its bytes untouched, but nothing rotates a known-good copy forward.",
