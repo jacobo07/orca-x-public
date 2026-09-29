@@ -232,10 +232,13 @@ cmd_install() {
     exit 1
   fi
 
+  # Why explicit checks: the script is `set -u` without `-e`, so an unchecked failure here would
+  # otherwise surface only later as a misleading READY_TIMEOUT.
   if ! id "$SVC_USER" >/dev/null 2>&1; then
-    useradd --system --create-home --home-dir "$SVC_HOME" --shell /bin/bash --user-group "$SVC_USER"
+    useradd --system --create-home --home-dir "$SVC_HOME" --shell /bin/bash --user-group "$SVC_USER" \
+      || { echo "INSTALL_FAILED step=useradd" >&2; exit 9; }
   fi
-  chmod 700 "$SVC_HOME"
+  chmod 700 "$SVC_HOME" || { echo "INSTALL_FAILED step=chmod-home" >&2; exit 9; }
   local groups
   groups=$(id -nG "$SVC_USER")
   if echo "$groups" | grep -qE '(^|[[:space:]])(sudo|adm|kobii)([[:space:]]|$)'; then
@@ -243,18 +246,23 @@ cmd_install() {
     exit 2
   fi
 
-  mkdir -p "$SVC_ROOT/node24" "$SVC_ROOT/agent-bin" "$SVC_ROOT/writable-vite"
-  chown -R "$SVC_USER:$SVC_USER" "$SVC_ROOT"
+  mkdir -p "$SVC_ROOT/node24" "$SVC_ROOT/agent-bin" "$SVC_ROOT/writable-vite" \
+    && chown -R "$SVC_USER:$SVC_USER" "$SVC_ROOT" \
+    || { echo "INSTALL_FAILED step=svc-root" >&2; exit 9; }
 
   local short="${sha:0:7}"
   local svc_checkout="$SVC_CHECKOUT_ROOT/$short"
-  mkdir -p "$SVC_CHECKOUT_ROOT"
+  mkdir -p "$SVC_CHECKOUT_ROOT" || { echo "INSTALL_FAILED step=checkout-root" >&2; exit 9; }
   if [ ! -d "$svc_checkout" ]; then
     git -c safe.directory='*' clone --depth 1 --branch "dws-p2-$short" "file://$CLONE_DIR" "$svc_checkout" 2>/dev/null \
-      || git -c safe.directory='*' clone --depth 1 "file://$CLONE_DIR" "$svc_checkout"
+      || git -c safe.directory='*' clone --depth 1 "file://$CLONE_DIR" "$svc_checkout" \
+      || { echo "INSTALL_FAILED step=clone" >&2; exit 9; }
   fi
-  git -C "$svc_checkout" checkout --detach "$sha" 2>/dev/null || git -C "$svc_checkout" fetch "file://$CLONE_DIR" "$sha" && git -C "$svc_checkout" checkout --detach "$sha"
-  chown -R "$SVC_USER:$SVC_USER" "$svc_checkout"
+  if ! git -C "$svc_checkout" checkout --detach "$sha" 2>/dev/null; then
+    { git -C "$svc_checkout" fetch "file://$CLONE_DIR" "$sha" && git -C "$svc_checkout" checkout --detach "$sha"; } \
+      || { echo "INSTALL_FAILED step=checkout" >&2; exit 9; }
+  fi
+  chown -R "$SVC_USER:$SVC_USER" "$svc_checkout" || { echo "INSTALL_FAILED step=chown-checkout" >&2; exit 9; }
 
   local svc_head
   svc_head=$(runuser -u "$SVC_USER" -- git -C "$svc_checkout" rev-parse HEAD)
@@ -266,10 +274,12 @@ cmd_install() {
   fi
 
   local artifact_dest="$SVC_ROOT/$(basename "$artifact")"
-  install -o "$SVC_USER" -g "$SVC_USER" -m 600 "$artifact" "$artifact_dest"
-  runuser -u "$SVC_USER" -- tar -xzf "$artifact_dest" -C "$svc_checkout"
+  install -o "$SVC_USER" -g "$SVC_USER" -m 600 "$artifact" "$artifact_dest" \
+    || { echo "INSTALL_FAILED step=install-artifact" >&2; exit 9; }
+  runuser -u "$SVC_USER" -- tar -xzf "$artifact_dest" -C "$svc_checkout" \
+    || { echo "INSTALL_FAILED step=extract-artifact" >&2; exit 9; }
 
-  mkdir -p "$svc_checkout/node_modules"
+  mkdir -p "$svc_checkout/node_modules" || { echo "INSTALL_FAILED step=node-modules-dir" >&2; exit 9; }
 
   # Agent CLIs (CTX-CLI-3, later plans): bind a resolved binary/package read-only; never a path
   # under kobii's real ~/.claude or ~/.codex -- binaries may be shared, credentials never.
@@ -409,8 +419,10 @@ cmd_ps_capture() {
     echo "CAPTURE $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     ps -o pid,ppid,user,rss,etimes,args --forest -u "$SVC_USER"
     i=$((i + 1))
-    [ "$i" -lt "$count" ] && sleep "$interval"
+    # Why if, not &&: a false test on the last iteration made the function (and script) exit 1.
+    if [ "$i" -lt "$count" ]; then sleep "$interval"; fi
   done
+  return 0
 }
 
 case "$cmd" in
