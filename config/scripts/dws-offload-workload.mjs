@@ -12,6 +12,7 @@
  * `agentReply` is decided by the reply MARKER text, never by the child's exit code — "a settled
  * turn is not an answered turn" (memory: trap-a-settled-turn-is-not-an-answered-turn.md). A CLI can
  * exit 0 after printing a usage-limit message instead of ever answering the prompt.
+ * Outcomes: matched | not-logged-in | usage-limit | spawn-failed | missing.
  */
 
 import { spawn, spawnSync } from 'node:child_process'
@@ -26,6 +27,8 @@ const USAGE_LIMIT_PATTERNS = [
   /quota/i,
   /try again (later|in)/i
 ]
+
+const NOT_LOGGED_IN_PATTERNS = [/not logged in/i, /please run \/login/i]
 
 function nowIso() {
   return new Date().toISOString()
@@ -89,10 +92,18 @@ export function classifyAgentReply(capturedOutput, nonce) {
   if (scrubbed.includes(expectedAgentAnswer(nonce))) {
     return 'matched'
   }
+  if (NOT_LOGGED_IN_PATTERNS.some((pattern) => pattern.test(capturedOutput))) {
+    return 'not-logged-in'
+  }
   if (USAGE_LIMIT_PATTERNS.some((pattern) => pattern.test(capturedOutput))) {
     return 'usage-limit'
   }
   return 'missing'
+}
+
+/** A child that never started prints nothing, so it must not read as a CLI that ran and failed. */
+export function agentReplyFor({ captured, nonce, spawnError }) {
+  return spawnError ? 'spawn-failed' : classifyAgentReply(captured, nonce)
 }
 
 function buildChildSpec(opts) {
@@ -164,7 +175,7 @@ async function main() {
       `DWS-P2-LEG-START nonce=${opts.nonce} leg=${opts.leg} childPid=none utc=${nowIso()}\n`
     )
     process.stdout.write(
-      `DWS-P2-LEG-END nonce=${opts.nonce} leg=${opts.leg} exit=127 ms=0 utc=${nowIso()} agentReply=missing resolvedVia=${spec.resolvedVia}\n`
+      `DWS-P2-LEG-END nonce=${opts.nonce} leg=${opts.leg} exit=127 ms=0 utc=${nowIso()} agentReply=spawn-failed resolvedVia=${spec.resolvedVia}\n`
     )
     process.exit(127)
   }
@@ -179,6 +190,7 @@ async function main() {
     `DWS-P2-LEG-START nonce=${opts.nonce} leg=${opts.leg} childPid=${child.pid} utc=${nowIso()}\n`
   )
 
+  let spawnError = null
   let captured = ''
   const MAX_CAPTURE_BYTES = 2 * 1024 * 1024
   const forward = (chunk, sink) => {
@@ -193,13 +205,17 @@ async function main() {
   const exitCode = await new Promise((resolve) => {
     child.on('close', (code, signal) => resolve(code ?? (signal ? 1 : 1)))
     child.on('error', (error) => {
+      spawnError = error
       process.stderr.write(`dws-offload-workload: child failed to start: ${String(error)}\n`)
       resolve(1)
     })
   })
 
   const ms = Date.now() - startedAt
-  const suffix = opts.leg === 'agent' ? ` agentReply=${classifyAgentReply(captured, opts.nonce)}` : ''
+  const suffix =
+    opts.leg === 'agent'
+      ? ` agentReply=${agentReplyFor({ captured, nonce: opts.nonce, spawnError })}`
+      : ''
   process.stdout.write(
     `DWS-P2-LEG-END nonce=${opts.nonce} leg=${opts.leg} exit=${exitCode} ms=${ms} utc=${nowIso()}${suffix}\n`
   )

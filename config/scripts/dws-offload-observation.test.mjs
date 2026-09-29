@@ -48,7 +48,10 @@ describe('leg outcomes', () => {
     [{ leg: 'test', exit: '1' }, 'exit=1'],
     [{ leg: 'build', exit: 'TIMEOUT' }, 'exit=TIMEOUT'],
     [{ leg: 'test' }, 'exit=missing'],
-    [{ leg: 'agent', exit: '127', agentReply: 'missing' }, 'exit=127'],
+    [{ leg: 'agent', exit: '127', agentReply: 'missing' }, 'exit=127 agentReply=missing'],
+    [{ leg: 'agent', exit: '1', agentReply: 'not-logged-in' }, 'exit=1 agentReply=not-logged-in'],
+    [{ leg: 'agent', exit: 'TIMEOUT' }, 'exit=TIMEOUT'],
+    [{ leg: 'test', exit: '1', agentReply: 'x' }, 'exit=1'],
     [{ leg: 'agent', exit: '0', agentReply: 'usage-limit' }, 'agentReply=usage-limit'],
     [{ leg: 'agent', exit: '0' }, 'agentReply=missing']
   ])('judgeLegMarker FAILS %j', (marker, reason) => {

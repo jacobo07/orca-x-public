@@ -34,7 +34,8 @@ export function legWindowFromManifest(manifest) {
 export function judgeLegMarker(marker) {
   const leg = marker?.leg ?? 'unknown'
   if (marker?.exit !== '0') {
-    return { leg, verdict: 'FAILED', reason: `exit=${marker?.exit ?? 'missing'}` }
+    const cause = leg === 'agent' && marker?.agentReply ? ` agentReply=${marker.agentReply}` : ''
+    return { leg, verdict: 'FAILED', reason: `exit=${marker?.exit ?? 'missing'}${cause}` }
   }
   if (leg === 'agent' && marker.agentReply !== 'matched') {
     return { leg, verdict: 'FAILED', reason: `agentReply=${marker.agentReply ?? 'missing'}` }
