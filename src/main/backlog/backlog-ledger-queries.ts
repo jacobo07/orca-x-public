@@ -6,9 +6,10 @@ import type {
   BacklogListResult
 } from '../../shared/backlog-outcomes'
 import { BACKLOG_LIST_LIMIT_DEFAULT } from '../../shared/backlog-rpc-limits'
-import { toBacklogItemSummary } from '../../shared/backlog-summary'
+import { isBacklogStateOpen, toBacklogItemSummary } from '../../shared/backlog-summary'
 import {
   BACKLOG_CANDIDATE_STATUSES,
+  BACKLOG_ITEM_KINDS,
   BACKLOG_ITEM_STATES,
   type BacklogCandidate,
   type BacklogItem
@@ -99,6 +100,11 @@ function countBy<K extends string>(keys: readonly K[], values: K[]): Record<K, n
 }
 
 export function summarizeBacklogHealth(snapshot: BacklogLedgerSnapshot): BacklogHealthReport {
+  const kinds = (items: BacklogItem[]) =>
+    countBy(
+      BACKLOG_ITEM_KINDS,
+      items.map((item) => item.kind)
+    )
   return {
     outcome: 'opened',
     items: {
@@ -106,7 +112,9 @@ export function summarizeBacklogHealth(snapshot: BacklogLedgerSnapshot): Backlog
       byState: countBy(
         BACKLOG_ITEM_STATES,
         snapshot.items.map((item) => item.state)
-      )
+      ),
+      byKind: kinds(snapshot.items),
+      openByKind: kinds(snapshot.items.filter((item) => isBacklogStateOpen(item.state)))
     },
     candidates: {
       total: snapshot.candidates.length,

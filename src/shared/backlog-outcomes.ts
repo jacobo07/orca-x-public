@@ -102,7 +102,13 @@ export type BacklogCandidateListResult =
 
 export type BacklogHealthReport = {
   outcome: 'opened'
-  items: { total: number; byState: Record<BacklogItemState, number> }
+  items: {
+    total: number
+    byState: Record<BacklogItemState, number>
+    // Optional on the type: an older host omits them, and readers render "not recorded", never 0.
+    byKind?: Record<BacklogItemKind, number>
+    openByKind?: Record<BacklogItemKind, number>
+  }
   candidates: { total: number; byStatus: Record<BacklogCandidateStatus, number> }
   quarantined: BacklogQuarantineEntry[]
 }
