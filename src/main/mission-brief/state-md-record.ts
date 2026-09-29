@@ -24,7 +24,7 @@ function frontmatterField(text: string, field: string): string | null {
 }
 
 /** Lines under the first heading matching `title`, up to the next heading of the same or higher level. */
-function section(lines: string[], title: RegExp): string[] | null {
+export function markdownSection(lines: string[], title: RegExp): string[] | null {
   const start = lines.findIndex((line) => {
     const heading = HEADING.exec(line)
     return heading !== null && title.test(heading[2])
@@ -50,9 +50,9 @@ function bulletText(line: string): string {
 
 export function parseStateMdRecord(text: string): StateMdRecord {
   const lines = text.split(/\r?\n/)
-  const position = section(lines, /^current position$/i)
+  const position = markdownSection(lines, /^current position$/i)
   const phaseLine = position?.find((line) => /^\s*Phase:\s*/i.test(line))
-  const blockers = section(lines, /^blockers\b/i)
+  const blockers = markdownSection(lines, /^blockers\b/i)
   return {
     recordedHead: frontmatterField(text, 'state_head'),
     positionPhase: phaseLine ? (/Phase:\s*([\d.]+)/i.exec(phaseLine)?.[1] ?? null) : null,

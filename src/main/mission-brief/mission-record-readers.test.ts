@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { parseProjectMdRecord, readProjectMdRecord } from './project-md-record'
 import { parseRalphRecord, samePath } from './ralph-mission-records'
 import { parseStateMdRecord } from './state-md-record'
 
@@ -44,6 +47,61 @@ describe('parseStateMdRecord', () => {
   it('keeps a missing blockers section apart from an empty one', () => {
     expect(parseStateMdRecord('# State\n').blockers).toBeNull()
     expect(parseStateMdRecord('## Blockers\n\nNone.\n').blockers).toEqual([])
+  })
+})
+
+// The three shapes real GSD PROJECT.md files use (content invented).
+describe('parseProjectMdRecord', () => {
+  it('reads the first paragraph of What this is and an inline core value line', () => {
+    const text = [
+      '# Program',
+      '',
+      '## What this is',
+      '',
+      'Take the brand from provisioned',
+      'to a profitable loop.',
+      '',
+      'Mission terms: not part of the goal.',
+      '',
+      '**Core value:** real economics, not declared completeness.',
+      '',
+      '## Boundaries'
+    ].join('\r\n')
+    expect(parseProjectMdRecord(text)).toEqual({
+      whatThisIs: 'Take the brand from provisioned to a profitable loop.',
+      coreValue: 'real economics, not declared completeness.'
+    })
+  })
+
+  it('reads a Core Value heading, with or without a blank line under either heading', () => {
+    const text = [
+      '## What This Is',
+      'A disposable canary project.',
+      '## Core Value',
+      '',
+      'The ledger reads PROVEN.',
+      '',
+      '## Constraints'
+    ].join('\n')
+    expect(parseProjectMdRecord(text)).toEqual({
+      whatThisIs: 'A disposable canary project.',
+      coreValue: 'The ledger reads PROVEN.'
+    })
+  })
+
+  it('keeps an absent or empty goal section null rather than borrowing the next one', () => {
+    expect(parseProjectMdRecord('# Project\n\nSome prose.\n')).toEqual({
+      whatThisIs: null,
+      coreValue: null
+    })
+    expect(
+      parseProjectMdRecord('## What this is\n\n### Details\n\nNot the goal.\n').whatThisIs
+    ).toBeNull()
+  })
+
+  it('reads null for a file that does not exist', async () => {
+    const missing = join(tmpdir(), `orca-mission-brief-absent-${process.pid}`, 'PROJECT.md')
+    await expect(readProjectMdRecord(missing)).resolves.toBeNull()
   })
 })
 

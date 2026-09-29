@@ -33,6 +33,14 @@ export type StateMdRecord = {
   ownerDecisions: string[]
 }
 
+/** The goal `.planning/PROJECT.md` states in prose; each field `null` when the file does not say it. */
+export type ProjectMdRecord = {
+  /** First paragraph under "What this is". */
+  whatThisIs: string | null
+  /** A `**Core value:**` line, or the first paragraph under a "Core value" heading. */
+  coreValue: string | null
+}
+
 export type GitHeadReading =
   | { kind: 'read'; head: string; commitsSinceRecorded: number | null }
   | { kind: 'unreadable' }
