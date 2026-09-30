@@ -16833,6 +16833,32 @@
       "closeTooltip": "Close",
       "listLabel": "Backlog items"
     },
+    "header": {
+      "openItems_one": "open item",
+      "openItems_other": "open items",
+      "across": "across",
+      "projects_one": "project",
+      "projects_other": "projects"
+    },
+    "filters": {
+      "scopeLabel": "Filter by project",
+      "all": "All",
+      "state": "State",
+      "stateOpen": "Open",
+      "stateAll": "All states",
+      "kind": "Kind",
+      "kindAll": "All kinds",
+      "search": "Search backlog",
+      "searchHint": "Search text…",
+      "shown_one": "{{count}} item shown",
+      "shown_other": "{{count}} items shown"
+    },
+    "sort": {
+      "label": "Sort",
+      "updatedDesc": "Most recently updated",
+      "updatedAsc": "Oldest first",
+      "priority": "Priority"
+    },
     "status": {
       "loading": "Loading backlog…",
       "retry": "Retry loading",
@@ -16842,8 +16868,11 @@
       },
       "filterEmpty": {
         "heading": "No items match these filters",
-        "body": "{{hidden}} items are hidden by the current filters.",
-        "closedOnly": "No open items. {{closed}} closed items are hidden."
+        "hiddenByFilters": "items are hidden by the current filters.",
+        "noOpen": "No open items.",
+        "closedHidden": "closed items are hidden.",
+        "clear": "Clear filters",
+        "showAllStates": "Show all states"
       },
       "storageFailed": {
         "heading": "Backlog could not be read",
@@ -16867,6 +16896,8 @@
       "unknown": "Unknown project",
       "items_one": "{{count}} item",
       "items_other": "{{count}} items",
+      "noun_one": "item",
+      "noun_other": "items",
       "label": "{{project}}, {{items}}"
     },
     "row": {

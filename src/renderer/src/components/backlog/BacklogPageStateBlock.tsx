@@ -2,6 +2,7 @@ import { CircleHelp, Inbox, Loader2, Lock, Plus, TriangleAlert, Unplug } from 'l
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { ClaimValue } from './ClaimValue'
 
 export type BacklogBlockStatus =
   | 'loading'
@@ -16,20 +17,43 @@ export type BacklogFilterEmpty =
   | { reason: 'closed-only'; closedCount: number }
   | { reason: 'filters'; hiddenCount: number }
 
-type BlockCopy = { heading: string; body: string }
+type BlockCopy = { heading: string; body: React.ReactNode }
 
-function filterEmptyBody(filterEmpty: BacklogFilterEmpty | null): string {
+function filterEmptyBody(filterEmpty: BacklogFilterEmpty | null): React.ReactNode {
   if (filterEmpty?.reason === 'closed-only') {
-    return translate(
-      'backlog.status.filterEmpty.closedOnly',
-      'No open items. {{closed}} closed items are hidden.',
-      { closed: filterEmpty.closedCount }
+    return (
+      <>
+        {translate('backlog.status.filterEmpty.noOpen', 'No open items.')}{' '}
+        <ClaimValue testId="backlog-filter-empty-hidden-count" value={filterEmpty.closedCount} />{' '}
+        {translate('backlog.status.filterEmpty.closedHidden', 'closed items are hidden.')}
+      </>
     )
   }
-  return translate(
-    'backlog.status.filterEmpty.body',
-    '{{hidden}} items are hidden by the current filters.',
-    { hidden: filterEmpty?.hiddenCount ?? 0 }
+  return filterEmpty ? (
+    <>
+      <ClaimValue testId="backlog-filter-empty-hidden-count" value={filterEmpty.hiddenCount} />{' '}
+      {translate('backlog.status.filterEmpty.hiddenByFilters', 'items are hidden by the current filters.')}
+    </>
+  ) : null
+}
+
+function FilterEmptyAction({
+  filterEmpty,
+  onClearFilters,
+  onShowAllStates
+}: {
+  filterEmpty: BacklogFilterEmpty | null
+  onClearFilters: () => void
+  onShowAllStates: () => void
+}): React.JSX.Element {
+  return filterEmpty?.reason === 'closed-only' ? (
+    <Button variant="outline" size="sm" data-backlog-action="show-all-states" onClick={onShowAllStates}>
+      {translate('backlog.status.filterEmpty.showAllStates', 'Show all states')}
+    </Button>
+  ) : (
+    <Button variant="outline" size="sm" data-backlog-action="clear-filters" onClick={onClearFilters}>
+      {translate('backlog.status.filterEmpty.clear', 'Clear filters')}
+    </Button>
   )
 }
 
@@ -116,12 +140,16 @@ export function BacklogPageStateBlock({
   status,
   filterEmpty = null,
   onRetry,
-  onCapture
+  onCapture,
+  onClearFilters,
+  onShowAllStates
 }: {
   status: BacklogBlockStatus
   filterEmpty?: BacklogFilterEmpty | null
   onRetry: () => void
   onCapture: () => void
+  onClearFilters: () => void
+  onShowAllStates: () => void
 }): React.JSX.Element {
   if (status === 'loading') {
     return (
@@ -137,6 +165,7 @@ export function BacklogPageStateBlock({
   return (
     <div
       role={critical ? 'alert' : undefined}
+      data-backlog-notice={status === 'filter-empty' ? 'filter-empty' : undefined}
       className={cn(
         'mx-auto my-16 flex max-w-md flex-col items-center gap-2 text-center',
         critical && 'rounded-md border border-destructive/40 bg-destructive/10 px-4 py-4'
@@ -156,6 +185,13 @@ export function BacklogPageStateBlock({
         <Button variant="outline" size="sm" data-backlog-action="retry" onClick={onRetry}>
           {translate('backlog.status.retry', 'Retry loading')}
         </Button>
+      ) : null}
+      {status === 'filter-empty' ? (
+        <FilterEmptyAction
+          filterEmpty={filterEmpty}
+          onClearFilters={onClearFilters}
+          onShowAllStates={onShowAllStates}
+        />
       ) : null}
       {status === 'empty' ? (
         <Button size="sm" data-backlog-action="capture-empty" onClick={onCapture}>

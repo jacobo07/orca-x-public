@@ -8,8 +8,10 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { BacklogViewGroup } from '../../../../shared/backlog-view-selector'
 import type { Project } from '../../../../shared/project-types'
 import { BacklogRow } from './BacklogRow'
+import { ClaimValue } from './ClaimValue'
 
-function itemCount(count: number): string {
+/** "{{count}} item(s)" for accessible names; the visible count is a ClaimValue plus the noun. */
+export function backlogItemCountLabel(count: number): string {
   return count === 1
     ? translate('backlog.group.items_one', '{{count}} item', { count })
     : translate('backlog.group.items_other', '{{count}} items', { count })
@@ -50,7 +52,7 @@ export function BacklogGroupCard({
 }): React.JSX.Element {
   const [open, setOpen] = useState(true)
   const name = groupName(group, project)
-  const count = itemCount(group.count)
+  const count = backlogItemCountLabel(group.count)
   return (
     <Collapsible
       open={open}
@@ -85,7 +87,12 @@ export function BacklogGroupCard({
         <span className="shrink-0 text-xs text-muted-foreground">
           {formatUiRelativeTime(group.latestUpdatedAt - Date.now())}
         </span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          <ClaimValue testId="backlog-group-count" value={group.count} />{' '}
+          {group.count === 1
+            ? translate('backlog.group.noun_one', 'item')
+            : translate('backlog.group.noun_other', 'items')}
+        </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         {group.rows.map((row) => (
