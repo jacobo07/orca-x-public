@@ -202,3 +202,109 @@ test.describe('@mission-brief', () => {
     ).toBe(read.length)
   })
 })
+
+// The r02 reference is a dark, Spanish card at 1.25 DPR; this renders the real one under the same
+// conditions and records its geometry so the delta is measured, not eyeballed.
+const VISUAL_SCALE = 1.25
+
+test.describe('@mission-brief-visual', () => {
+  test.skip(
+    REPOS.length === 0 || process.env.MISSION_BRIEF_VISUAL !== '1',
+    'needs MISSION_BRIEF_VISUAL=1 and MISSION_BRIEF_REPOS'
+  )
+  test.use({ orcaAppExtraArgs: [`--force-device-scale-factor=${VISUAL_SCALE}`] })
+
+  test('the full brief renders dark and in Spanish at the reference scale', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    await provisionGsdTools(electronApp)
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1400, 1100)
+    })
+    await orcaPage.evaluate(async () => {
+      await window.__store?.getState().updateSettings({ theme: 'dark', uiLanguage: 'es' })
+    })
+    await expect(orcaPage.locator('html')).toHaveClass(/dark/)
+    const es = JSON.parse(
+      readFileSync(path.join(process.cwd(), 'src/renderer/src/i18n/locales/es.json'), 'utf8')
+    )
+    const viewPathEs: string = es.missionBrief.action.viewPath
+    for (const repoPath of REPOS) {
+      await attachRepoAndOpenTerminal(orcaPage, repoPath)
+    }
+    await openResumeCenter(orcaPage)
+    mkdirSync('pr-evidence/visual', { recursive: true })
+    expect(await orcaPage.evaluate(() => window.devicePixelRatio)).toBe(VISUAL_SCALE)
+
+    let captured = 0
+    for (const repoPath of REPOS) {
+      if (!existsSync(path.join(repoPath, '.planning'))) {
+        continue
+      }
+      const name = path.basename(repoPath)
+      const row = workspaceRow(orcaPage, repoPath)
+      await expect
+        .poll(
+          async () => {
+            await orcaPage.getByTestId('resume-center-refresh').click()
+            return row.count()
+          },
+          { timeout: 60_000, intervals: [2_000] }
+        )
+        .toBe(1)
+      await row.getByTestId('resume-center-workspace-select').click()
+      const brief = orcaPage.getByTestId('mission-brief-compact')
+      await expect(brief).not.toHaveAttribute('data-brief-status', 'reading', { timeout: 90_000 })
+      if ((await brief.getAttribute('data-brief-status')) !== 'read') {
+        continue
+      }
+      await brief.getByTestId('mission-brief-open-full').click()
+      const card = orcaPage.getByTestId('mission-brief-dialog').getByTestId('mission-brief-full')
+      await expect(card).not.toHaveAttribute('data-brief-status', 'reading')
+      await expect(
+        orcaPage.getByTestId('mission-brief-dialog').getByTestId('mission-brief-view-path')
+      ).toHaveText(viewPathEs)
+      // Radix animates the dialog in; a capture before it settles is the previous frame.
+      await orcaPage.waitForFunction(() =>
+        document.getAnimations().every((animation) => animation.playState !== 'running')
+      )
+      await orcaPage.evaluate(() => document.fonts.ready)
+      await card.screenshot({ path: `pr-evidence/visual/mission-brief-${name}-full.es.dark.png` })
+      const geometry = await card.evaluate((root) => {
+        const base = root.getBoundingClientRect()
+        const style = getComputedStyle(root)
+        const box = (el: Element) => {
+          const r = el.getBoundingClientRect()
+          return [r.left - base.left, r.top - base.top, r.width, r.height].map(
+            (v) => Math.round(v * 10) / 10
+          )
+        }
+        return {
+          card: [base.width, base.height],
+          padding: style.padding,
+          background: style.backgroundColor,
+          border: style.borderColor,
+          children: [...root.children].map((child) => ({
+            tag: child.tagName.toLowerCase(),
+            box: box(child)
+          })),
+          testids: [...root.querySelectorAll('[data-testid]')].map((el) => ({
+            id: el.getAttribute('data-testid'),
+            box: box(el),
+            font: `${getComputedStyle(el).fontSize}/${getComputedStyle(el).fontWeight}`,
+            text: (el.textContent ?? '').trim().slice(0, 120)
+          }))
+        }
+      })
+      writeFileSync(
+        `pr-evidence/visual/mission-brief-${name}-full.geometry.json`,
+        `${JSON.stringify(geometry, null, 2)}\n`
+      )
+      captured++
+      await orcaPage.keyboard.press('Escape')
+      await expect(orcaPage.getByTestId('mission-brief-dialog')).toBeHidden()
+    }
+    expect(captured, 'no repo produced a read brief to capture').toBeGreaterThan(0)
+  })
+})
