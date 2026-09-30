@@ -177,6 +177,46 @@ describe('SshConnection host key pinning', () => {
     await conn.disconnect()
   })
 
+  it('V-SSH-NO-FALLBACK: a key that changes during the agent-to-key retry is refused, not prompted', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-pin-retry-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    vi.mocked(utils.parseKey).mockReturnValue(
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given') as never
+    )
+    const authFailure = new Error('All configured authentication methods failed')
+    const passphraseFailure = new Error('Encrypted private OpenSSH key detected, but no passphrase')
+    try {
+      // Positive control: with a stable key this route reaches the passphrase prompt.
+      ssh2Mock.connectSequence = [authFailure, passphraseFailure, 'ready']
+      const controlPrompt = vi.fn(async () => 'passphrase-1')
+      const control = new SshConnection(
+        createTarget({ identityFile: keyPath, hostKeyPin: pinFor(GOOD_KEY) }),
+        createCallbacks({ onCredentialRequest: controlPrompt })
+      )
+      await control.connect()
+      expect(controlPrompt).toHaveBeenCalledTimes(1)
+      await control.disconnect()
+
+      ssh2Mock.connectSequence = [authFailure]
+      ssh2Mock.hostKeySequence = [GOOD_KEY, OTHER_KEY]
+      const onCredentialRequest = vi.fn(async () => 'passphrase-2')
+      const conn = new SshConnection(
+        createTarget({ identityFile: keyPath, hostKeyPin: pinFor(GOOD_KEY) }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      const refusal = await captureRefusal(conn.connect({ interactive: true }))
+
+      expect(refusal.reason).toBe('host_key_changed')
+      expect(onCredentialRequest).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(utils.parseKey).mockReset()
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('V-SSH-TOFU-CONFIRM: an interactive first contact asks once, adopts the confirmed pin and retries once', async () => {
     const onHostKeyTrustRequest = vi.fn(async () => pinFor(GOOD_KEY))
     const conn = new SshConnection(createTarget(), createCallbacks({ onHostKeyTrustRequest }))

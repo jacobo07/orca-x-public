@@ -61,7 +61,9 @@ export const ssh2Mock = {
   sftpBehavior: 'callback' as 'callback' | 'pending',
   notifyClientCreated: undefined as (() => void) | undefined,
   // Offered wire key blob; tests reassign it to simulate a changed host key.
-  hostKey: Buffer.from('mock-ssh-host-key')
+  hostKey: Buffer.from('mock-ssh-host-key'),
+  // Per-handshake keys consumed before falling back to hostKey (a key that changes mid-connect).
+  hostKeySequence: [] as Buffer[]
 }
 
 export const findSystemSshMock = vi.fn<() => string | null>()
@@ -140,7 +142,7 @@ export function createSsh2Module(): Ssh2ModuleMock {
       this.lastConnectConfig = config
       const hostVerifier = (config as { hostVerifier?: (key: Buffer) => boolean } | undefined)
         ?.hostVerifier
-      const accepted = hostVerifier?.(ssh2Mock.hostKey) ?? true
+      const accepted = hostVerifier?.(ssh2Mock.hostKeySequence.shift() ?? ssh2Mock.hostKey) ?? true
       if (!accepted) {
         // Why: real ssh2 aborts the handshake with this error when hostVerifier returns false.
         setTimeout(() => emitSshEvent('error', new Error('Host denied (verification failed)')), 0)
@@ -250,6 +252,7 @@ export function resetSshConnectionMocks(): void {
   pendingSftpCallback = null
   ssh2Mock.notifyClientCreated = undefined
   ssh2Mock.hostKey = Buffer.from('mock-ssh-host-key')
+  ssh2Mock.hostKeySequence = []
   getOrcaControlSocketPathMock.mockReset()
   getOrcaControlSocketPathMock.mockReturnValue(null)
   removeControlSocketPathMock.mockReset()
