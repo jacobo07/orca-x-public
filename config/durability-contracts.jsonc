@@ -45,8 +45,19 @@
       "provenBy": ["src/main/runtime/e2ee-keypair.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see the comment in shared/secure-file.ts), so on Windows the barrier proves the file's contents reached disk before the rename, not that the rename itself survives a power loss.",
-        "<userData>/orca-devices.json, the paired-device registry keyed to this identity, is still published by the non-durable writeSecureJsonFile and carries no contract of its own. It is downstream of this key rather than the root, and is not fixed here.",
         "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind."
+      ]
+    },
+    {
+      "id": "runtime.device-registry",
+      "state": "<userData>/orca-devices.json — every paired device token, scope, reach, relay binding and (from 14-02) revocation tombstone",
+      "writer": "src/main/runtime/device-registry.ts",
+      "tier": "crash-durable",
+      "lostIf": "Every pairing at once, and every revocation: the file was published by a rename with no fsync, so a power loss could leave it empty or torn, and the loader then treated an unreadable file as no devices. Losing a revocation resurrects a device the owner removed. The writer now fsyncs before the rename, and an unreadable file is preserved as orca-devices.json.corrupt-<ms> while the registry fails closed.",
+      "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
+      "knownGaps": [
+        "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts), so on Windows the proven claim is that the contents reached disk before the rename, not that the rename itself survives a power loss.",
+        "The forget-identity cleanup is deferred (see runtime.e2ee-host-identity)."
       ]
     },
     {
