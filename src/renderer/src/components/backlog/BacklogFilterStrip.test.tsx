@@ -200,6 +200,60 @@ describe('Backlog filter strip and header counts', () => {
     expectCountsMatchText()
   })
 
+  // Layout classes only (happy-dom has no layout); the rendered proof is
+  // tests/e2e/backlog-north-star-screens.spec.ts.
+  it('unknown-project chips whose ids share a long prefix keep the tail that tells them apart', async () => {
+    const one = 'ghost-project-with-a-long-shared-prefix-0001'
+    const two = 'ghost-project-with-a-long-shared-prefix-0002'
+    listAnswer = [
+      ...STANDARD,
+      item('g1', { projectRefs: [ref(one)], updatedAt: 5 }),
+      item('g2', { projectRefs: [ref(two)], updatedAt: 4 })
+    ]
+    await renderPage()
+    const chip = (id: string) => q(`[data-backlog-scope="project:${id}"]`)
+    expect(chipCount(`project:${one}`)).toBe('1')
+    expect(chipCount(`project:${two}`)).toBe('1')
+    expect(chip('P9')).not.toBeNull()
+
+    for (const id of [one, two, 'P9']) {
+      const scope = chip(id)!
+      const end = id.slice(-4)
+      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT)
+      let node = walker.nextNode()
+      while (node && !node.textContent?.includes(end)) {
+        node = walker.nextNode()
+      }
+      expect(node, `no text node carries the end of ${id}`).not.toBeNull()
+      let element: HTMLElement | null = node!.parentElement
+      const clipping: string[] = []
+      while (element) {
+        if (element.classList.contains('truncate')) {
+          clipping.push(element.tagName)
+        }
+        if (element === scope) {
+          break
+        }
+        element = element.parentElement
+      }
+      expect(clipping, `the end of ${id} sits inside a truncating element`).toEqual([])
+    }
+
+    const tails = [one, two, 'P9'].map((id) => {
+      const found = chip(id)!.querySelectorAll('[data-backlog-scope-id-tail]')
+      expect(found, `tail of ${id}`).toHaveLength(1)
+      expect(found[0].classList.contains('shrink-0')).toBe(true)
+      expect(found[0].classList.contains('font-mono')).toBe(true)
+      return found[0].textContent
+    })
+    expect(tails).toEqual(['…prefix-0001', '…prefix-0002', 'P9'])
+    expect(chip(one)?.getAttribute('aria-label')).toBe(`Unknown project ${one}, 1 item`)
+    expect(chip(one)?.getAttribute('title')).toBe(one)
+
+    expect(chip('P1')?.querySelector('[data-backlog-scope-id-tail]')).toBeNull()
+    expect(chip('P1')?.textContent).toContain('Project One')
+  })
+
   it('a scope chip shows only that scope', async () => {
     await renderPage()
     const user = userEvent.setup()
