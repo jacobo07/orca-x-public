@@ -1,0 +1,52 @@
+{
+  "verdict": "BLOCKED",
+  "rung": "none",
+  "rungReached": "preflight",
+  "blockedReason": "deploy-failed: ...lready ours POSTURE ufw-state POSTURE Status: inactive POSTURE sandbox-mode POSTURE no-sandbox (accepted contingency, T-02-05) fatal: detected dubious ownership in repository at '/home/orca-svc/dws-p2/e625d3f' To add an exception for this directory, call: System.Management.Automation.RemoteException git config --global --add safe.directory /home/orca-svc/dws-p2/e625d3f INSTALL_FAILED step=checkout",
+  "headSha": "e625d3f42cd44fa89de32b5f5ee5bea5f9211511",
+  "runtimeIdMatchesServe": null,
+  "deployed": null,
+  "utc": {
+    "start": "2026-09-30T04:46:53.7703839Z",
+    "end": "2026-09-30T04:47:22.6377636Z"
+  },
+  "product": null,
+  "control": null,
+  "comparison": {
+    "memory": {
+      "verdict": "UNJUDGED",
+      "reason": "blocked"
+    },
+    "vram": {
+      "verdict": "UNJUDGED",
+      "reason": "blocked"
+    },
+    "disk": {
+      "verdict": "UNJUDGED",
+      "reason": "blocked"
+    },
+    "resident_model": {
+      "verdict": "UNJUDGED",
+      "reason": "blocked"
+    }
+  },
+  "planeTags": {},
+  "notes": [],
+  "probePort": null,
+  "fanOut": null,
+  "teardown": {
+    "tunnelSshProcesses": 0,
+    "tunnelPortListeners": 0,
+    "laptopLocalRuntimePid": null,
+    "serveActive": "failed",
+    "notes": [
+      "TUNNEL_NOT_RUNNING"
+    ]
+  },
+  "serveMainPid": {
+    "before": "0",
+    "after": "0"
+  },
+  "laptopFreeMbAtStart": 5633.9,
+  "diskFact": null
+}
