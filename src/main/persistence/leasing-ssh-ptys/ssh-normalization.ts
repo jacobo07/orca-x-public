@@ -50,6 +50,10 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   } else {
     normalized.hostKeyPin = parseHostKeyPin(target.hostKeyPin) ?? target.hostKeyPin
   }
+  // Why: the reset marker only means something while there is no pin; a stray value must not persist.
+  if (target.hostKeyPinReset !== true || normalized.hostKeyPin !== undefined) {
+    delete normalized.hostKeyPinReset
+  }
   return normalized
 }
 

@@ -28,7 +28,11 @@ export function getSshTarget(state: PersistedState, id: string): SshTarget | und
 export function addSshTarget(operations: SshTargetStateOperations, target: SshTarget): void {
   operations.state.sshTargets ??= []
   // Why: a pin is trust, so it enters only through setSshTargetHostKeyPin, never through a generic add.
-  const { hostKeyPin: _untrusted, ...unpinned } = normalizeSshTarget(target)
+  const {
+    hostKeyPin: _untrusted,
+    hostKeyPinReset: _untrustedReset,
+    ...unpinned
+  } = normalizeSshTarget(target)
   operations.state.sshTargets.push(unpinned)
   operations.scheduleSave()
 }
@@ -43,14 +47,16 @@ export function updateSshTarget(
     return null
   }
   // Why: a pin is trust and moves only through setSshTargetHostKeyPin; re-pointing the target at another host or port drops it.
-  const { hostKeyPin: _untrusted, ...safeUpdates } = updates
+  const { hostKeyPin: _untrusted, hostKeyPinReset: _untrustedReset, ...safeUpdates } = updates
   const repointed =
     (safeUpdates.host !== undefined && safeUpdates.host !== target.host) ||
     (safeUpdates.port !== undefined && safeUpdates.port !== target.port)
   const normalized = normalizeSshTarget({
     ...target,
     ...safeUpdates,
-    ...(repointed ? { hostKeyPin: undefined } : {})
+    ...(repointed ? { hostKeyPin: undefined } : {}),
+    // Why: dropping a pin that existed must not return the target to the legacy grace.
+    ...(repointed && target.hostKeyPin !== undefined ? { hostKeyPinReset: true as const } : {})
   })
   // Why: Object.assign only adds keys, so anything normalization stripped (retired sync fields, implicit defaults) must be deleted off the live target.
   const mutableTarget = target as Record<string, unknown>
@@ -75,9 +81,14 @@ export function setSshTargetHostKeyPin(
     return null
   }
   if (pin === null) {
+    // Why: removing a pin that existed leaves the weakest state, so record it for the verifier.
+    if (target.hostKeyPin !== undefined) {
+      target.hostKeyPinReset = true
+    }
     delete target.hostKeyPin
   } else {
     target.hostKeyPin = pin
+    delete target.hostKeyPinReset
   }
   operations.flush()
   return { ...target }

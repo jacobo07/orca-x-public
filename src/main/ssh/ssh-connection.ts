@@ -1247,7 +1247,7 @@ export class SshConnection {
       if (!adopted) {
         throw err
       }
-      this.target = { ...this.target, hostKeyPin: adopted }
+      this.target = { ...this.target, hostKeyPin: adopted, hostKeyPinReset: undefined }
       this.respawnProxy(config, proxy)
       await this.doSsh2Connect(config, connectGeneration)
     }
@@ -1275,7 +1275,11 @@ export class SshConnection {
         }
         const verdict = verifyHostKeyAgainstPin(this.target.hostKeyPin, offered)
         if (
-          !hostKeyVerdictAllowsConnect(verdict, this.interactiveGeneration === connectGeneration)
+          !hostKeyVerdictAllowsConnect(
+            verdict,
+            this.interactiveGeneration === connectGeneration,
+            this.target.hostKeyPinReset === true
+          )
         ) {
           hostKeyRefusal = refusalFromVerdict(verdict, offered)
           if (current) {

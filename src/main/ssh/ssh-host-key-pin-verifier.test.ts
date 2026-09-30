@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { SshHostKeyPin, SshTarget } from '../../shared/ssh-types'
+import { resolveSshHostIdentityStatus } from '../../shared/ssh-host-key-pin-shape'
 import { SSH_HOST_KEY_REFUSED_CODE } from '../../shared/ssh-types'
 import { normalizeSshTarget } from '../persistence/leasing-ssh-ptys/ssh-normalization'
 import {
@@ -176,6 +177,57 @@ describe('persisted pin', () => {
     expect(updateSshTarget(repointed, 't1', { host: 'other.example' })).not.toHaveProperty(
       'hostKeyPin'
     )
+  })
+
+  it('V-SSH-PIN-RESET-MARKER: removing a pin that existed, by replace or by re-point, persists the marker', () => {
+    const replaced = fakeOperations([target({ hostKeyPin: pin() })])
+    setSshTargetHostKeyPin(replaced, 't1', null)
+    expect(replaced.state.sshTargets?.[0]).toMatchObject({ hostKeyPinReset: true })
+    expect(replaced.state.sshTargets?.[0]).not.toHaveProperty('hostKeyPin')
+
+    const repointed = fakeOperations([target({ hostKeyPin: pin() })])
+    expect(updateSshTarget(repointed, 't1', { port: 2222 })).toMatchObject({ hostKeyPinReset: true })
+    // the marker survives an unrelated edit and a reload through normalization
+    expect(updateSshTarget(repointed, 't1', { label: 'Renamed' })).toMatchObject({
+      hostKeyPinReset: true
+    })
+    expect(normalizeSshTarget(repointed.state.sshTargets![0]!)).toMatchObject({
+      hostKeyPinReset: true
+    })
+  })
+
+  it('V-SSH-PIN-RESET-LEGACY: a never-pinned target keeps no marker through clear, re-point or add', () => {
+    const ops = fakeOperations([target()])
+    setSshTargetHostKeyPin(ops, 't1', null)
+    expect(updateSshTarget(ops, 't1', { port: 2222 })).not.toHaveProperty('hostKeyPinReset')
+    expect(ops.state.sshTargets?.[0]).not.toHaveProperty('hostKeyPinReset')
+  })
+
+  it('V-SSH-PIN-RESET-CLEARED-BY-PIN: writing a pin clears the marker, and callers cannot forge or clear it', () => {
+    const ops = fakeOperations([target({ hostKeyPinReset: true })])
+    expect(updateSshTarget(ops, 't1', { hostKeyPinReset: undefined })).toMatchObject({
+      hostKeyPinReset: true
+    })
+    const cleared = setSshTargetHostKeyPin(ops, 't1', pin())
+    expect(cleared?.hostKeyPin).toEqual(pin())
+    expect(cleared).not.toHaveProperty('hostKeyPinReset')
+
+    const added = fakeOperations([])
+    addSshTarget(added, target({ hostKeyPinReset: true }))
+    expect(added.state.sshTargets?.[0]).not.toHaveProperty('hostKeyPinReset')
+    expect(normalizeSshTarget(target({ hostKeyPin: pin(), hostKeyPinReset: true }))).not.toHaveProperty(
+      'hostKeyPinReset'
+    )
+  })
+
+  it('V-SSH-PIN-RESET-VERDICT: a reset target refuses unpinned automatically, prompts interactively, and never reads verified', () => {
+    expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, false, true)).toBe(false)
+    expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, true, true)).toBe(false)
+    expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, false, false)).toBe(true)
+    expect(hostKeyVerdictAllowsConnect({ kind: 'pinned-match' }, false, true)).toBe(true)
+    const resetTarget = target({ hostKeyPinReset: true })
+    expect(resolveSshHostIdentityStatus(resetTarget, undefined)).not.toBe('pinned')
+    expect(resolveSshHostIdentityStatus(resetTarget, 'refused-unpinned')).toBe('refused-unpinned')
   })
 
   it('a generic add never persists a pin', () => {

@@ -282,6 +282,35 @@ describe('SshConnection host key pinning', () => {
     expect(warnings).toHaveLength(1)
   })
 
+  it('V-SSH-PIN-RESET-AUTOMATIC-REFUSED: a target whose pin was removed refuses an automatic connect', async () => {
+    const onHostKeyTrustRequest = vi.fn(async () => pinFor(GOOD_KEY))
+    const conn = new SshConnection(
+      createTarget({ hostKeyPinReset: true }),
+      createCallbacks({ onHostKeyTrustRequest })
+    )
+
+    const refusal = await captureRefusal(conn.connect())
+
+    expect(refusal.reason).toBe('host_key_unpinned')
+    expect(conn.getState()).toMatchObject({ status: 'error', hostIdentity: 'refused-unpinned' })
+    expect(onHostKeyTrustRequest).not.toHaveBeenCalled()
+    expect(getUnpinnedAutomaticConnectCount('target-1')).toBe(0)
+  })
+
+  it('V-SSH-PIN-RESET-INTERACTIVE-PROMPTS: an interactive connect still asks, and the confirmed pin clears the marker', async () => {
+    const onHostKeyTrustRequest = vi.fn(async () => pinFor(GOOD_KEY))
+    const conn = new SshConnection(
+      createTarget({ hostKeyPinReset: true }),
+      createCallbacks({ onHostKeyTrustRequest })
+    )
+
+    await conn.connect({ interactive: true })
+
+    expect(onHostKeyTrustRequest).toHaveBeenCalledTimes(1)
+    expect(conn.getState()).toMatchObject({ status: 'connected', hostIdentity: 'pinned' })
+    expect(conn.getTarget().hostKeyPinReset).toBeUndefined()
+  })
+
   it('a pin for a different host or port reads unpinned, not changed', async () => {
     const conn = new SshConnection(
       createTarget({ hostKeyPin: pinFor(OTHER_KEY, { port: 2222 }) }),

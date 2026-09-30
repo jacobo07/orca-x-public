@@ -56,6 +56,8 @@ export type SshTarget = {
   /** Pinned ssh2 host key for (host, port). Absent means never trusted. The
    *  system OpenSSH transport ignores it (known_hosts owns identity there). */
   hostKeyPin?: SshHostKeyPin
+  /** A pin existed and was removed (replace, or re-point at another endpoint). Automatic connects refuse until a person re-trusts; never-pinned legacy targets keep the grace. */
+  hostKeyPinReset?: true
 }
 
 export type SshHostKeyPinSource = 'tofu-confirmed' | 'imported-known-hosts' | 'manual'
