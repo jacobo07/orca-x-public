@@ -53,7 +53,10 @@ function useShownAnnouncement(filters: BacklogViewFilters, visibleCount: number 
     if (filters === initial.current || visibleCount === null) {
       return undefined
     }
-    const timer = window.setTimeout(() => setAnnouncement(shownLabel(visibleCount)), LIVE_REGION_DELAY_MS)
+    const timer = window.setTimeout(
+      () => setAnnouncement(shownLabel(visibleCount)),
+      LIVE_REGION_DELAY_MS
+    )
     return () => window.clearTimeout(timer)
   }, [filters, visibleCount])
   return announcement
@@ -93,55 +96,55 @@ export default function BacklogPage(): React.JSX.Element {
     >
       {/* Layout ownership: the aside owns its width (lg:w-72); the main column takes the rest. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 px-4 pt-2 pb-4 md:px-8 md:pb-8 lg:flex-row">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <BacklogHeader
-          counts={listed ? view : null}
-          onClose={closeBacklogPage}
-          onCapture={() => setCaptureOpen(true)}
-        />
-        {listed && load?.status === 'ready' ? (
-          <BacklogFilterStrip
-            filters={filters}
-            onChange={setFilters}
-            scopeCounts={view.scopeCounts}
-            projectsById={projectsById}
-            rows={load.rows}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <BacklogHeader
+            counts={listed ? view : null}
+            onClose={closeBacklogPage}
+            onCapture={() => setCaptureOpen(true)}
           />
-        ) : null}
-        {load !== null ? (
-          <BacklogNotices
-            load={load.status === 'ready' ? load : null}
-            health={health}
-            refreshFailed={refreshFailed}
-            onRetry={refetch}
-          />
-        ) : null}
-        <section
-          aria-label={translate('backlog.page.listLabel', 'Backlog items')}
-          className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto"
-        >
-          {status === 'ready' ? (
-            <BacklogGroupList groups={view?.groups ?? []} projectsById={projectsById} />
-          ) : (
-            <BacklogPageStateBlock
-              status={status}
-              filterEmpty={view?.filterEmpty ?? null}
-              onRetry={refetch}
-              onCapture={() => setCaptureOpen(true)}
-              onClearFilters={() =>
-                setFilters((current) => ({ ...BACKLOG_DEFAULT_VIEW_FILTERS, sort: current.sort }))
-              }
-              onShowAllStates={() => setFilters((current) => ({ ...current, state: 'all' }))}
+          {listed && load?.status === 'ready' ? (
+            <BacklogFilterStrip
+              filters={filters}
+              onChange={setFilters}
+              scopeCounts={view.scopeCounts}
+              projectsById={projectsById}
+              rows={load.rows}
             />
-          )}
-        </section>
-        <div data-backlog-live-region="" aria-live="polite" className="sr-only">
-          {announcement}
+          ) : null}
+          {load !== null ? (
+            <BacklogNotices
+              load={load.status === 'ready' ? load : null}
+              health={health}
+              refreshFailed={refreshFailed}
+              onRetry={refetch}
+            />
+          ) : null}
+          <section
+            aria-label={translate('backlog.page.listLabel', 'Backlog items')}
+            className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto"
+          >
+            {status === 'ready' ? (
+              <BacklogGroupList groups={view?.groups ?? []} projectsById={projectsById} />
+            ) : (
+              <BacklogPageStateBlock
+                status={status}
+                filterEmpty={view?.filterEmpty ?? null}
+                onRetry={refetch}
+                onCapture={() => setCaptureOpen(true)}
+                onClearFilters={() =>
+                  setFilters((current) => ({ ...BACKLOG_DEFAULT_VIEW_FILTERS, sort: current.sort }))
+                }
+                onShowAllStates={() => setFilters((current) => ({ ...current, state: 'all' }))}
+              />
+            )}
+          </section>
+          <div data-backlog-live-region="" aria-live="polite" className="sr-only">
+            {announcement}
+          </div>
         </div>
-      </div>
-      {status === 'loading' || status === 'empty' || listed ? (
-        <BacklogSummaryPanel health={health} onRetry={() => void refreshHealth()} />
-      ) : null}
+        {status === 'loading' || status === 'empty' || listed ? (
+          <BacklogSummaryPanel health={health} onRetry={() => void refreshHealth()} />
+        ) : null}
       </div>
       <BacklogCaptureDialog
         open={captureOpen}

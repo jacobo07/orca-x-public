@@ -79,7 +79,10 @@ export function BacklogGroupCard({
         <GroupMark group={group} project={project} />
         <span className="min-w-0 truncate text-sm font-medium">{name}</span>
         {group.kind === 'unknown' && group.projectId ? (
-          <span className="min-w-0 truncate font-mono text-xs text-muted-foreground" title={group.projectId}>
+          <span
+            className="min-w-0 truncate font-mono text-xs text-muted-foreground"
+            title={group.projectId}
+          >
             {group.projectId}
           </span>
         ) : null}

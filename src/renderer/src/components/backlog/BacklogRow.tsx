@@ -1,11 +1,4 @@
-import {
-  FlaskConical,
-  Lightbulb,
-  ListChecks,
-  Scale,
-  Wrench,
-  type LucideIcon
-} from 'lucide-react'
+import { FlaskConical, Lightbulb, ListChecks, Scale, Wrench, type LucideIcon } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { backlogSourceLabel } from '@/lib/backlog-source-labels'
@@ -85,7 +78,9 @@ export function BacklogRow({ row }: { row: BacklogItemSummary }): React.JSX.Elem
         {row.priority !== 'normal' ? (
           <Chip name="priority">{backlogPriorityLabel(row.priority)}</Chip>
         ) : null}
-        {inferred ? <Chip name="inferred">{translate('backlog.row.inferred', 'inferred')}</Chip> : null}
+        {inferred ? (
+          <Chip name="inferred">{translate('backlog.row.inferred', 'inferred')}</Chip>
+        ) : null}
         {projectCount > 1 ? (
           <Chip name="projects">
             {projectCount - 1 === 1

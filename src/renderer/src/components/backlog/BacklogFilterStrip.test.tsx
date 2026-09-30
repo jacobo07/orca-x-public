@@ -4,7 +4,11 @@ import { cleanup, render, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { BacklogItem, BacklogProjectRef, BacklogSourceLink } from '../../../../shared/backlog-types'
+import type {
+  BacklogItem,
+  BacklogProjectRef,
+  BacklogSourceLink
+} from '../../../../shared/backlog-types'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
@@ -54,7 +58,12 @@ function envelope(result: Record<string, unknown>) {
 
 // P1 {a, b}, cross-project c (P1+P2), Unassigned {d, e dismissed}, f in a project the store lacks.
 const STANDARD: BacklogItem[] = [
-  item('a', { projectRefs: [ref('P1')], normalizedIntent: 'cafe list', sourceLinks: [manual], updatedAt: 60 }),
+  item('a', {
+    projectRefs: [ref('P1')],
+    normalizedIntent: 'cafe list',
+    sourceLinks: [manual],
+    updatedAt: 60
+  }),
   item('b', { projectRefs: [ref('P1')], state: 'ready', kind: 'engineering', updatedAt: 50 }),
   item('c', { projectRefs: [ref('P1'), ref('P2')], updatedAt: 40 }),
   item('d', { sourceLinks: [manual], updatedAt: 30 }),
@@ -113,9 +122,9 @@ async function renderPage(): Promise<void> {
     </TooltipProvider>
   )
   await waitFor(() =>
-    expect(document.querySelector('[data-backlog-page]')?.getAttribute('data-backlog-status')).not.toBe(
-      'loading'
-    )
+    expect(
+      document.querySelector('[data-backlog-page]')?.getAttribute('data-backlog-status')
+    ).not.toBe('loading')
   )
 }
 
@@ -199,9 +208,7 @@ describe('Backlog filter strip and header counts', () => {
     await user.click(q('[data-backlog-scope="project:P2"]')!)
     expect(groupKeys()).toEqual(['project:P2'])
     expect(rowIds('project:P2')).toEqual(['c'])
-    await waitFor(() =>
-      expect(q('[data-backlog-live-region]')?.textContent).toBe('1 item shown')
-    )
+    await waitFor(() => expect(q('[data-backlog-live-region]')?.textContent).toBe('1 item shown'))
   })
 
   it('state and kind filters narrow the rows and the chip counts follow', async () => {

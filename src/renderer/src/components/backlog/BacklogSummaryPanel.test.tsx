@@ -85,7 +85,11 @@ function healthCalls(): number {
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   runtimeCall.mockReset()
-  items = [item('bli_a'), item('bli_blocked', { state: 'blocked' }), item('bli_ready', { state: 'ready' })]
+  items = [
+    item('bli_a'),
+    item('bli_blocked', { state: 'blocked' }),
+    item('bli_ready', { state: 'ready' })
+  ]
   healthAnswer = () => health()
   runtimeCall.mockImplementation(async ({ method }: { method: string }) => {
     if (method === 'backlog.health') {
@@ -194,10 +198,14 @@ describe('BacklogSummaryPanel', () => {
   it('a failed health read says the summary is unavailable while the list stays; Retry summary reads health once', async () => {
     healthAnswer = () => envelope({ outcome: 'something-else' })
     const aside = await renderPage('unavailable')
-    expect(aside.textContent).toContain('Summary unavailable. The item list above is still current.')
+    expect(aside.textContent).toContain(
+      'Summary unavailable. The item list above is still current.'
+    )
     expect(q('[data-backlog-page]')?.getAttribute('data-backlog-status')).toBe('ready')
     expect(q('[data-backlog-item-id="bli_a"]')).not.toBeNull()
-    const listCalls = runtimeCall.mock.calls.filter(([args]) => args.method === 'backlog.list').length
+    const listCalls = runtimeCall.mock.calls.filter(
+      ([args]) => args.method === 'backlog.list'
+    ).length
     const before = healthCalls()
     healthAnswer = () => health()
     await userEvent.setup().click(q('[data-backlog-action="retry-summary"]')!)

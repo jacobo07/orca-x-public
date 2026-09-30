@@ -260,7 +260,11 @@ describe('BacklogPage', () => {
 
   it('gives capability-unsupported, forbidden and unreachable their own status', async () => {
     const cases: [Record<string, unknown>, string, boolean][] = [
-      [{ id: 'r', ok: false, error: { code: 'method_not_found', message: 'x' } }, 'capability-unsupported', false],
+      [
+        { id: 'r', ok: false, error: { code: 'method_not_found', message: 'x' } },
+        'capability-unsupported',
+        false
+      ],
       [{ id: 'r', ok: false, error: { code: 'forbidden', message: 'x' } }, 'forbidden', false],
       [envelope({ outcome: 'something-else' }), 'unreachable', true]
     ]
@@ -399,13 +403,14 @@ describe('BacklogPage capture', () => {
       document.body.querySelector<HTMLTextAreaElement>('[data-backlog-capture-field="text"]')!.value
     ).toBe('maybe saved')
     expect(listCalls()).toBe(before + 1)
-    expect(runtimeCall.mock.calls.filter(([args]) => args.method === 'backlog.capture')).toHaveLength(
-      1
-    )
+    expect(
+      runtimeCall.mock.calls.filter(([args]) => args.method === 'backlog.capture')
+    ).toHaveLength(1)
 
     act(() => root.unmount())
     root = createRoot(container)
-    captureAnswer = async () => envelope({ outcome: 'storage-failed', stage: 'publish', code: null })
+    captureAnswer = async () =>
+      envelope({ outcome: 'storage-failed', stage: 'publish', code: null })
     await renderPage()
     before = listCalls()
     await captureText('not saved')
@@ -565,8 +570,8 @@ describe('BacklogPage refresh model and notices', () => {
     expect(
       mismatch?.querySelector('[data-testid="backlog-notice-snapshot-count"]')?.textContent
     ).toBe('4')
-    expect(mismatch?.querySelector('[data-testid="backlog-notice-ledger-total"]')?.textContent).toBe(
-      '5'
-    )
+    expect(
+      mismatch?.querySelector('[data-testid="backlog-notice-ledger-total"]')?.textContent
+    ).toBe('5')
   })
 })

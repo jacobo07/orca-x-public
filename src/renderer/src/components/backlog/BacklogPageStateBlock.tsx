@@ -56,7 +56,10 @@ function filterEmptyBody(filterEmpty: BacklogFilterEmpty | null): React.ReactNod
   return filterEmpty ? (
     <>
       <ClaimValue testId="backlog-filter-empty-hidden-count" value={filterEmpty.hiddenCount} />{' '}
-      {translate('backlog.status.filterEmpty.hiddenByFilters', 'items are hidden by the current filters.')}
+      {translate(
+        'backlog.status.filterEmpty.hiddenByFilters',
+        'items are hidden by the current filters.'
+      )}
     </>
   ) : null
 }
@@ -71,11 +74,21 @@ function FilterEmptyAction({
   onShowAllStates: () => void
 }): React.JSX.Element {
   return filterEmpty?.reason === 'closed-only' ? (
-    <Button variant="outline" size="sm" data-backlog-action="show-all-states" onClick={onShowAllStates}>
+    <Button
+      variant="outline"
+      size="sm"
+      data-backlog-action="show-all-states"
+      onClick={onShowAllStates}
+    >
       {translate('backlog.status.filterEmpty.showAllStates', 'Show all states')}
     </Button>
   ) : (
-    <Button variant="outline" size="sm" data-backlog-action="clear-filters" onClick={onClearFilters}>
+    <Button
+      variant="outline"
+      size="sm"
+      data-backlog-action="clear-filters"
+      onClick={onClearFilters}
+    >
       {translate('backlog.status.filterEmpty.clear', 'Clear filters')}
     </Button>
   )
@@ -143,7 +156,11 @@ function copyFor(
   }
 }
 
-function BlockIcon({ status }: { status: Exclude<BacklogBlockStatus, 'loading'> }): React.JSX.Element {
+function BlockIcon({
+  status
+}: {
+  status: Exclude<BacklogBlockStatus, 'loading'>
+}): React.JSX.Element {
   switch (status) {
     case 'empty':
     case 'filter-empty':

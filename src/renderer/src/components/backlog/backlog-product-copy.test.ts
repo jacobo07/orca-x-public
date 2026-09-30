@@ -33,7 +33,9 @@ describe('backlog product copy', () => {
     const copy = strings((en as Record<string, unknown>).backlog, 'backlog', [])
     // Floor: a walk that found nothing would pass vacuously.
     expect(copy.length).toBeGreaterThan(80)
-    const hits = copy.filter(([, text]) => offending(text)).map(([path, text]) => `${path}: ${text}`)
+    const hits = copy
+      .filter(([, text]) => offending(text))
+      .map(([path, text]) => `${path}: ${text}`)
     expect(hits).toEqual([])
   })
 

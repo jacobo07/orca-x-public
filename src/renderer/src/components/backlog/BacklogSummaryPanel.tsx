@@ -28,14 +28,24 @@ function OpenByKind({ report }: { report: HealthReport }): React.JSX.Element {
       <dl data-backlog-summary-kinds="">
         {BACKLOG_ITEM_KINDS.map((kind) =>
           openByKind ? (
-            <div key={kind} className={ROW} data-backlog-summary-kind={kind} data-count={openByKind[kind]}>
+            <div
+              key={kind}
+              className={ROW}
+              data-backlog-summary-kind={kind}
+              data-count={openByKind[kind]}
+            >
               <dt className={LABEL}>{backlogKindLabel(kind)}</dt>
               <dd className={VALUE}>
                 <ClaimValue testId="backlog-summary-kind-count" value={openByKind[kind]} />
               </dd>
             </div>
           ) : (
-            <div key={kind} className={ROW} data-backlog-summary-kind={kind} data-count-status="unknown">
+            <div
+              key={kind}
+              className={ROW}
+              data-backlog-summary-kind={kind}
+              data-count-status="unknown"
+            >
               <dt className={LABEL}>{backlogKindLabel(kind)}</dt>
               <dd className={`${VALUE} text-muted-foreground`}>
                 <BacklogStateMark tone="unknown" />
@@ -67,7 +77,10 @@ function ByState({ report }: { report: HealthReport }): React.JSX.Element {
               {backlogStateLabel(state)}
             </dt>
             <dd className={VALUE}>
-              <ClaimValue testId="backlog-summary-state-count" value={report.items.byState[state]} />
+              <ClaimValue
+                testId="backlog-summary-state-count"
+                value={report.items.byState[state]}
+              />
             </dd>
           </div>
         ))}
@@ -138,13 +151,21 @@ export function BacklogSummaryPanel({
             className="flex flex-col items-start gap-2 pt-4 text-[12px] text-muted-foreground"
           >
             <p className="flex items-start gap-1.5">
-              <CircleHelp className="mt-0.5 size-3.5 shrink-0 text-[var(--status-unknown)]" aria-hidden />
+              <CircleHelp
+                className="mt-0.5 size-3.5 shrink-0 text-[var(--status-unknown)]"
+                aria-hidden
+              />
               {translate(
                 'backlog.summary.unavailable',
                 'Summary unavailable. The item list above is still current.'
               )}
             </p>
-            <Button variant="outline" size="sm" data-backlog-action="retry-summary" onClick={onRetry}>
+            <Button
+              variant="outline"
+              size="sm"
+              data-backlog-action="retry-summary"
+              onClick={onRetry}
+            >
               {translate('backlog.summary.retry', 'Retry summary')}
             </Button>
           </div>

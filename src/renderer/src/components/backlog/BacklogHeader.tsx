@@ -64,8 +64,7 @@ export function BacklogHeader({
       <p className="order-last w-full min-w-0 truncate text-[12px] text-muted-foreground md:order-none md:w-auto md:flex-1">
         {counts ? (
           <>
-            <OpenTotal value={counts.openTotal} />{' '}
-            {translate('backlog.header.across', 'across')}{' '}
+            <OpenTotal value={counts.openTotal} /> {translate('backlog.header.across', 'across')}{' '}
             <ProjectTotal value={counts.openProjectCount} />
           </>
         ) : null}
