@@ -15,6 +15,7 @@ Startup:
 Diagnostics:
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals
   fleet placement           Propose which host has room for new work (reads only)
+  fleet manifest            Show each node's measured resources with their age (reads only)
 
 Agent Discovery:
   agent-context             Print the machine-readable command schema for agents
