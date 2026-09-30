@@ -634,6 +634,40 @@ Control run (login absent, so no paid turn is possible):
 
 `CLASSIFIER_CONTROL=PASS` (the 02-07 classifier returns `not-logged-in` against the real CLI as orca-svc).
 
+### Sweep identity and comparability (offload-3)
+
+The offload-3 sweep did NOT run. Three launches (RunIds `offload-3`, `offload-3b`, `offload-3c`) each failed before the workload, so no run wrote a manifest, no leg produced a LEG-START, and no summary, delta or remote-proof exists. Nothing below is a measurement of the workload.
+
+Sweep-time identity (same at all three launches): laptop HEAD `f03565ee99588dd25c5b9b6d400033718aaa59af`; `deployed.json` sha `b8e385a0ba83e08b9420ccf7f2a3d7282db9f681`; unit `WorkingDirectory=/home/orca-svc/dws-p2/b8e385a`, `ActiveState=active`, `MainPID=1181474` before and after each launch (no serve restart); `-BaselineManifest` passed (Task 1 recorded `BASELINE_MANIFEST=USED`).
+
+| launch | UTC start | quiescence gate | what stopped it | workload reached |
+|---|---|---|---|---|
+| `offload-3` | 2026-09-30T00:00:35Z | fired at reading 33, spread 37.3 MB (< 300 MB) | launcher defect: the launcher ran the orchestrator with `$ErrorActionPreference='Stop'` and `& powershell ... *> log`; under Windows PowerShell 5.1 the first stderr line Playwright wrote (`[e2e] SKIP_BUILD set ...`) became a terminating NativeCommandError that killed the orchestrator | no (orchestrator log ends at `playwrightResolvedVia`; no manifest) |
+| `offload-3b` | 2026-09-30T00:42:48Z | fired at reading 41, spread 200.9 MB | Playwright global-setup `execSync('git init')` failed: `git` is not on the PATH of the non-interactive PowerShell host (`RUN=offload-3b ... PLAYWRIGHT_EXIT=1 RUN_EXIT=1 REASON=playwright_failed`) | no (no manifest) |
+| `offload-3c` | 2026-09-30T00:53:14Z | cap: 54 readings reached (free memory 3959 MB, host busy; the declared rule allows the cap) | transient `ssh.exe : kex_exchange_identification: read: Connection timed out` on the orchestrator's first remote call (the serve status probe), raised as a terminating error before the remote ps-capture started | no (orchestrator log ends at `samplerStarted=true`; no ps-capture, no manifest) |
+
+Deviation from the plan's bound: the plan allows exactly one infrastructure retry (`offload-3b`). `offload-3c` was a second retry, taken because neither earlier launch reached the workload (nothing to re-roll, no verdict existed) and both causes were the launcher's environment. It failed before the workload too, so no fourth launch was made.
+
+Achieved capture cadence: not measured (offload-3's remote-ps.txt was written by a run whose orchestrator was killed and holds no leg; it is not used). Serve MainPID before/after each launch: 1181474 / 1181474.
+
+`COMPARABILITY_VERDICT=UNJUDGED` (no run manifest exists, so the machine verdict `comparability.verdict` was never produced; UNJUDGED is assigned here as the honest absence of that verdict, and the blob table in Task 1 is a disclosure that does not substitute for it).
+
+### Remote proof (offload-3)
+
+UNJUDGED for both legs: no leg started, so there is no leg window and no childPid to bind a capture to. No `docs/dws/phase-2-offload-3-remote-proof.json` exists.
+
+### Absence (offload-3)
+
+UNJUDGED for vitest, tsc and workload-wrapper: no summary was produced, `desktopSubtreeSize` was never measured, and there is no offload-side positive control. The earlier verdicts (02-05, nonce-only) stand as recorded there and are not upgraded.
+
+### MB delta and control surface (offload-3)
+
+Not measured. No `docs/dws/phase-2-offload-3-memory-delta.json` exists.
+
+### Bracket (offload-3)
+
+Not judged. The quiescence readings of each launch are in the table above (readings every 10 s; declared threshold 300 MB over the last 6 readings, or 54 readings). No counted sweep ran, so no drift and no bracket verdict exist.
+
 ## Phase 2 verdict table
 
 | Criterion | Verdict | Instrument | Evidence file | SHA |
