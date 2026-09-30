@@ -8,7 +8,7 @@ export const BACKLOG_HARVEST_UNITS = [
 export type BacklogHarvestUnit = (typeof BACKLOG_HARVEST_UNITS)[number]
 
 // Units a runtime RPC caller may run; the export needs a desktop dialog, so it never is (R-05).
-export const BACKLOG_HARVEST_RPC_UNITS = ['orca-conversations'] as const
+export const BACKLOG_HARVEST_RPC_UNITS = ['orca-conversations', 'agent-transcripts'] as const
 export type BacklogHarvestRpcUnit = (typeof BACKLOG_HARVEST_RPC_UNITS)[number]
 
 export const BACKLOG_HARVEST_SKIP_REASONS = [

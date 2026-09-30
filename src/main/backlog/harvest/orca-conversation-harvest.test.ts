@@ -8,6 +8,7 @@ import { ConversationStore } from '../../conversation/conversation-store'
 import type { BacklogIngestEntryResult } from '../backlog-candidate-operations'
 import type * as RecordFile from '../backlog-record-file'
 import { BacklogService } from '../backlog-service'
+import type { BacklogTranscriptSource } from './ai-vault-transcript-harvest'
 import { createBacklogHarvestRunner } from './backlog-harvest-runner'
 import type { HarvestIngestPort } from './harvest-ingest-pipeline'
 import {
@@ -119,8 +120,17 @@ function publishingPort() {
   return { port, chunks }
 }
 
+const noTranscripts: BacklogTranscriptSource = {
+  list: async () => ({ sessions: [], issues: [], scannedAt: '' }),
+  statBytes: async () => 0,
+  readTranscript: async () => ({ messages: [] })
+}
+
 function runnerOver(source: BacklogConversationSource, service: HarvestIngestPort) {
-  return createBacklogHarvestRunner({ service, sources: { conversations: () => source } })
+  return createBacklogHarvestRunner({
+    service,
+    sources: { conversations: () => source, transcripts: () => noTranscripts }
+  })
 }
 
 describe('Orca conversation harvest outcomes', () => {

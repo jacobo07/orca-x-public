@@ -32,7 +32,12 @@ describe('backlog.v1 runtime capability', () => {
       service,
       sources: {
         conversations: () =>
-          conversationSourceFromStore(new ConversationStore(join(root, 'conversations')))
+          conversationSourceFromStore(new ConversationStore(join(root, 'conversations'))),
+        transcripts: () => ({
+          list: async () => ({ sessions: [], issues: [], scannedAt: '' }),
+          statBytes: async () => 0,
+          readTranscript: async () => ({ messages: [] })
+        })
       }
     })
     runtime.setBacklogHost(createBacklogHost(service, harvester))

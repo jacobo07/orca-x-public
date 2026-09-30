@@ -32,7 +32,12 @@ function dispatcherOn(root: string): RpcDispatcher {
     service,
     sources: {
       conversations: () =>
-        conversationSourceFromStore(new ConversationStore(conversationsDirOf(root)))
+        conversationSourceFromStore(new ConversationStore(conversationsDirOf(root))),
+      transcripts: () => ({
+        list: async () => ({ sessions: [], issues: [], scannedAt: '' }),
+        statBytes: async () => 0,
+        readTranscript: async () => ({ messages: [] })
+      })
     }
   })
   runtime.setBacklogHost(createBacklogHost(service, harvester))

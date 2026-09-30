@@ -34,6 +34,8 @@ export type HarvestUnitResult =
       seen: number
       read: number
       skipped: BacklogHarvestSkipCounts
+      /** Rows of a source this unit cannot read (another agent); never ingested, never silent. */
+      unsupported?: number
       cap: BacklogHarvestCapHit | null
       tally: HarvestIngestTally
     }

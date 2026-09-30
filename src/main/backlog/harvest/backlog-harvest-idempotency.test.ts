@@ -55,7 +55,12 @@ describe('Orca conversation harvest idempotency', () => {
     return createBacklogHarvestRunner({
       service,
       sources: {
-        conversations: () => conversationSourceFromStore(new ConversationStore(conversations))
+        conversations: () => conversationSourceFromStore(new ConversationStore(conversations)),
+        transcripts: () => ({
+          list: async () => ({ sessions: [], issues: [], scannedAt: '' }),
+          statBytes: async () => 0,
+          readTranscript: async () => ({ messages: [] })
+        })
       }
     })
   }

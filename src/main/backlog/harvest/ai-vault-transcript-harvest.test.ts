@@ -25,7 +25,10 @@ function claudeLines(sessionTag: string): string {
       type: 'assistant',
       uuid: `a-${sessionTag}`,
       timestamp: '2026-06-01T10:00:30.000Z',
-      message: { role: 'assistant', content: [{ type: 'text', text: '- [ ] wire the sources card' }] }
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: '- [ ] wire the sources card' }]
+      }
     }
   ]
     .map((record) => JSON.stringify(record))
@@ -41,7 +44,11 @@ const CODEX_LINES = [
   {
     type: 'response_item',
     timestamp: '2026-06-01T10:00:01.000Z',
-    payload: { type: 'message', role: 'user', content: [{ type: 'text', text: 'Next: seed the export' }] }
+    payload: {
+      type: 'message',
+      role: 'user',
+      content: [{ type: 'text', text: 'Next: seed the export' }]
+    }
   },
   {
     type: 'response_item',
@@ -106,8 +113,8 @@ function portOver(
   let inFlight = 0
   let maxInFlight = 0
   const read: Read =
-    options.read ?? ((agent, sessionId, filePath) =>
-      readNativeChatTranscript(agent, sessionId, { filePath }))
+    options.read ??
+    ((agent, sessionId, filePath) => readNativeChatTranscript(agent, sessionId, { filePath }))
   const source: BacklogTranscriptSource = {
     list: async () => ({ sessions: rows, issues: options.issues ?? [], scannedAt: isoAt(0) }),
     statBytes: options.statBytes ?? (async (filePath) => statSync(filePath).size),

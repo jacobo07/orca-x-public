@@ -1,3 +1,4 @@
+import { listAiVaultSessions } from '../ai-vault/cached-session-list'
 import { createBacklogHost, type BacklogHost } from '../backlog/backlog-host'
 import { BacklogService } from '../backlog/backlog-service'
 import {
@@ -6,6 +7,8 @@ import {
 } from '../backlog/harvest/backlog-harvest-runner'
 import { conversationSourceFromStore } from '../backlog/harvest/orca-conversation-harvest'
 import { ConversationStore } from '../conversation/conversation-store'
+import { readNativeChatTranscript } from '../native-chat/transcript-reader'
+import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   getOrcaBacklogDirectory,
@@ -35,7 +38,14 @@ function getBacklogHarvester(): BacklogHarvestRunner {
       conversations: () =>
         conversationSourceFromStore(
           new ConversationStore(getOrcaConversationsDirectory(ensureActiveOrcaProfile().profile.id))
-        )
+        ),
+      transcripts: () => ({
+        // unlimited: the harvester caps after its agent filter; force: include a just-written transcript.
+        list: () => listAiVaultSessions({ unlimited: true, force: true }),
+        statBytes: (filePath) => wslGatedStat(filePath, 'scan').then((stats) => stats.size),
+        readTranscript: (provider, sessionId, filePath) =>
+          readNativeChatTranscript(provider, sessionId, { filePath })
+      })
     }
   })
   return backlogHarvester

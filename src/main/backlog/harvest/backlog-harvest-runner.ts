@@ -3,6 +3,10 @@ import type {
   BacklogHarvestRunReport,
   BacklogHarvestUnit
 } from '../../../shared/backlog-harvest-report'
+import {
+  harvestAiVaultTranscripts,
+  type BacklogTranscriptSource
+} from './ai-vault-transcript-harvest'
 import type { HarvestIngestPort, HarvestUnitResult } from './harvest-ingest-pipeline'
 import {
   harvestOrcaConversations,
@@ -12,6 +16,20 @@ import {
 /** Resolved per run, so a profile switch applies to the next run. */
 export type BacklogHarvestSources = {
   conversations: () => BacklogConversationSource
+  transcripts: () => BacklogTranscriptSource
+}
+
+function harvestUnit(
+  unit: BacklogHarvestRpcUnit,
+  sources: BacklogHarvestSources,
+  service: HarvestIngestPort
+): Promise<HarvestUnitResult> {
+  switch (unit) {
+    case 'orca-conversations':
+      return harvestOrcaConversations(sources.conversations(), service)
+    case 'agent-transcripts':
+      return harvestAiVaultTranscripts(sources.transcripts(), service)
+  }
 }
 
 export type BacklogHarvestRunner = {
@@ -54,6 +72,7 @@ function reportOf(
     candidatesDuplicate: tally.candidatesDuplicate,
     candidatesFailed: tally.candidatesFailed,
     skipped,
+    ...(result.unsupported === undefined ? {} : { unsupported: result.unsupported }),
     cap: result.cap
   }
 }
@@ -68,10 +87,7 @@ export function createBacklogHarvestRunner(options: {
   return {
     run: async (unit) => {
       const startedAt = now()
-      const result = await harvestOrcaConversations(
-        options.sources.conversations(),
-        options.service
-      )
+      const result = await harvestUnit(unit, options.sources, options.service)
       return reportOf(unit, result, startedAt, now())
     }
   }

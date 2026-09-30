@@ -107,7 +107,9 @@ describe('backlog.* runtime methods', () => {
       connectionId: 'conn-1',
       clientKind: 'runtime'
     } as RpcContext
-    const method = BACKLOG_METHODS.find((entry) => entry.name === 'backlog.harvest.run') as unknown as {
+    const method = BACKLOG_METHODS.find(
+      (entry) => entry.name === 'backlog.harvest.run'
+    ) as unknown as {
       handler: (params: unknown, ctx: RpcContext) => Promise<unknown>
     }
     await method.handler({ unit: 'agent-transcripts' }, ctx)
