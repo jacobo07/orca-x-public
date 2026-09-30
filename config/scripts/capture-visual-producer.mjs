@@ -111,7 +111,8 @@ export async function main({ argv = [], log = console.log, error = console.error
         width: Number(options.width ?? 1440),
         height: Number(options.height ?? 900)
       },
-      deviceScaleFactor: 2,
+      // Why overridable: to compare pixel-for-pixel with a reference captured at another DPR.
+      deviceScaleFactor: Number(options.scale ?? 2),
       colorScheme: 'dark'
     })
 
