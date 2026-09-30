@@ -46,7 +46,11 @@ function failureCopy(failure: CaptureFailure): string {
         'backlog.capture.failed.unreachable',
         'Not captured. This host could not be reached. Your text is kept here; try again.'
       )
-    default:
+    case 'refused':
+    case 'forbidden':
+    case 'stale':
+    case 'absent':
+    case 'schema-too-new':
       return translate(
         'backlog.capture.failed.other',
         'Not captured. Your text is kept here; try again.'
