@@ -12,6 +12,8 @@ import {
   type FleetEnvironmentCall,
   type FleetObservationDeps
 } from './fleet-observation-service'
+import { NODE_RESOURCES_SCHEMA } from './node-resources-measure'
+import { NODE_RESOURCES_REPLY_SCHEMA } from '../../shared/node-resources-observation'
 
 const GB = 1024 ** 3
 const newKey = () => Buffer.from(nacl.box.keyPair().publicKey).toString('base64')
@@ -96,7 +98,8 @@ describe('fleet observation', () => {
     )
     expect(calls).toEqual([
       { method: 'status.get', pairingRevision: 42 },
-      { method: 'diagnostics.memory', pairingRevision: 42 }
+      { method: 'diagnostics.memory', pairingRevision: 42 },
+      { method: 'fleet.nodeResources', pairingRevision: 42 }
     ])
     expect(
       view.members.map((m) => [m.address, m.identity, m.sample.outcome, m.facts.protocol])
@@ -208,5 +211,150 @@ describe('fleet observation', () => {
       evidenceAddress: LOCAL_EXECUTION_HOST_ID,
       availableMemory: 2 * GB
     })
+  })
+})
+
+const resourcesReply = () => ({
+  schema: NODE_RESOURCES_SCHEMA,
+  disk: {
+    outcome: 'measured',
+    filesystems: [{ path: '/', totalBytes: 100 * GB, availableBytes: 40 * GB }]
+  },
+  gpu: { outcome: 'unknown', reason: 'no-gpu-tool' },
+  models: { outcome: 'measured', endpoints: [{ port: 8081, modelIds: ['m'] }], unansweredPorts: [] }
+})
+
+type CallArgs = Parameters<FleetEnvironmentCall>[0]
+
+const threeStepHost =
+  (onResources: (args: CallArgs) => Promise<RuntimeRpcResponse<unknown>>) =>
+  async (args: CallArgs) => {
+    if (args.method === 'status.get') {
+      return ok('rt-h', statusOf('rt-h'))
+    }
+    return args.method === 'diagnostics.memory' ? ok('rt-h', memoryOf(9 * GB)) : onResources(args)
+  }
+
+describe('fleet observation node resources', () => {
+  it('pins the reply schema literal to the measurer', () => {
+    expect(NODE_RESOURCES_REPLY_SCHEMA).toBe(NODE_RESOURCES_SCHEMA)
+  })
+
+  it('takes a third step and passes the probe ports as params, or none', async () => {
+    const seen: { method: string; params: unknown; hasParams: boolean }[] = []
+    const run = (options?: { modelProbePorts?: number[] }) =>
+      observeFleet(
+        deps({
+          listEnvironments: () => [environment('h', newKey())],
+          callEnvironment: threeStepHost(async (args) => {
+            seen.push({ method: args.method, params: args.params, hasParams: 'params' in args })
+            return ok('rt-h', resourcesReply())
+          })
+        }),
+        options
+      )
+    const withPorts = await run({ modelProbePorts: [8081] })
+    await run()
+    expect(withPorts.members[1].nodeResources).toMatchObject({
+      runtimeId: 'rt-h',
+      disk: { outcome: 'measured' },
+      gpu: { outcome: 'unknown', reason: 'no-gpu-tool' },
+      models: { outcome: 'measured' }
+    })
+    expect(seen).toEqual([
+      { method: 'fleet.nodeResources', params: { modelProbePorts: [8081] }, hasParams: true },
+      { method: 'fleet.nodeResources', params: undefined, hasParams: false }
+    ])
+  })
+
+  it('reads an old host as unsupported for the new families and leaves memory measured', async () => {
+    const view = await observeFleet(
+      deps({
+        listEnvironments: () => [environment('h', newKey())],
+        callEnvironment: threeStepHost(async () => ({
+          id: 'r',
+          ok: false,
+          error: { code: 'method_not_found', message: 'no such method' },
+          _meta: { runtimeId: 'rt-h' }
+        }))
+      })
+    )
+    const member = view.members[1]
+    expect(member.sample.outcome).toBe('measured')
+    for (const family of ['disk', 'gpu', 'models'] as const) {
+      expect(member.nodeResources?.[family]).toMatchObject({
+        outcome: 'unknown',
+        reason: 'unsupported'
+      })
+    }
+  })
+
+  it('bounds a third step that never answers without touching the memory reading', async () => {
+    const started = Date.now()
+    const view = await observeFleet(
+      deps({
+        listEnvironments: () => [environment('h', newKey())],
+        callEnvironment: threeStepHost(() => new Promise(() => {}))
+      })
+    )
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(view.members[1].sample.outcome).toBe('measured')
+    expect(view.members[1].nodeResources?.disk).toMatchObject({
+      outcome: 'unknown',
+      reason: 'unreachable'
+    })
+  })
+
+  it('stamps the families with the observer clock, not the real one, for remote and local', async () => {
+    const FAKE = 5_000_000
+    const view = await observeFleet(
+      deps({
+        now: () => FAKE,
+        listEnvironments: () => [environment('h', newKey())],
+        collectLocalNodeResources: async () => resourcesReply(),
+        callEnvironment: threeStepHost(async () => ok('rt-h', resourcesReply()))
+      })
+    )
+    expect(Math.abs(Date.now() - FAKE)).toBeGreaterThan(1_000_000)
+    expect(view.members[0].nodeResources?.startedAt).toBe(FAKE)
+    expect(view.members[1].nodeResources?.startedAt).toBe(FAKE)
+  })
+
+  it('takes the local families from the collector and degrades a throw or an absent collector', async () => {
+    const collect = async (impl?: () => Promise<unknown>) =>
+      (
+        await observeFleet(
+          deps({
+            ...(impl ? { collectLocalNodeResources: impl } : {}),
+            callEnvironment: async () => ok('rt', {})
+          })
+        )
+      ).members[0].nodeResources
+    expect((await collect(async () => resourcesReply()))?.disk).toMatchObject({
+      outcome: 'measured'
+    })
+    expect((await collect(async () => Promise.reject(new Error('boom'))))?.disk).toMatchObject({
+      outcome: 'unknown',
+      reason: 'unreachable'
+    })
+    expect((await collect())?.disk).toMatchObject({
+      outcome: 'unknown',
+      reason: 'not-attempted'
+    })
+  })
+
+  it('does not take the third step for a protocol-blocked host', async () => {
+    const methods: string[] = []
+    const view = await observeFleet(
+      deps({
+        listEnvironments: () => [environment('old', newKey())],
+        callEnvironment: async ({ method }) => {
+          methods.push(method)
+          return ok('rt-old', statusOf('rt-old', 0))
+        }
+      })
+    )
+    expect(methods).toEqual(['status.get'])
+    expect(view.members[1].nodeResources?.gpu).toMatchObject({ reason: 'not-attempted' })
   })
 })

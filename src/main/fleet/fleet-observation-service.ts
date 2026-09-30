@@ -12,6 +12,12 @@ import {
   fleetSampleFromSnapshot,
   type FleetRpcStep
 } from '../../shared/fleet-resource-observation'
+import type { FleetNodeResourcesObservation } from '../../shared/node-resources'
+import {
+  classifyNodeResourcesStep,
+  notAttemptedNodeResources,
+  parseNodeResourcesReply
+} from '../../shared/node-resources-observation'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
@@ -22,9 +28,12 @@ import { fingerprintHostPublicKey } from '../runtime/host-key-fingerprint'
 export const FLEET_STEP_DEADLINE_MS = 5_000
 export const FLEET_OBSERVATION_CONCURRENCY = 4
 
+export type FleetObservationOptions = { modelProbePorts?: readonly number[] }
+
 export type FleetEnvironmentCall = (args: {
   environmentId: string
-  method: 'status.get' | 'diagnostics.memory'
+  method: 'status.get' | 'diagnostics.memory' | 'fleet.nodeResources'
+  params?: unknown
   /** Refuses the call if the environment was re-paired since its key was read. */
   pairingRevision: number | undefined
   timeoutMs: number
@@ -37,6 +46,8 @@ export type FleetObservationDeps = {
   readLocalPublicKey: () => string | null | undefined
   getLocalStatus: () => { runtimeId: string }
   collectLocalSnapshot: () => Promise<unknown>
+  /** Absent leaves the local node's resource families not-attempted. */
+  collectLocalNodeResources?: (options: FleetObservationOptions) => Promise<unknown>
   listEnvironments: () => readonly KnownRuntimeEnvironment[]
   callEnvironment: FleetEnvironmentCall
   stepDeadlineMs?: number
@@ -91,16 +102,21 @@ async function boundedStep(
 async function observeEnvironment(
   environment: KnownRuntimeEnvironment,
   deps: FleetObservationDeps,
-  deadlineMs: number
+  deadlineMs: number,
+  options: FleetObservationOptions
 ): Promise<FleetPlacementMember> {
   const identity = identityFromKeyFingerprint(environmentFingerprint(environment))
   const startedAt = deps.now()
-  const call = (method: 'status.get' | 'diagnostics.memory') =>
+  const call = (
+    method: 'status.get' | 'diagnostics.memory' | 'fleet.nodeResources',
+    params?: unknown
+  ) =>
     boundedStep(
       (signal) =>
         deps.callEnvironment({
           environmentId: environment.id,
           method,
+          ...(params === undefined ? {} : { params }),
           pairingRevision: environment.pairingRevision,
           timeoutMs: deadlineMs,
           signal
@@ -112,16 +128,59 @@ async function observeEnvironment(
     status.kind === 'ok' && fleetHostFactsFromStatus(status.value, null).protocol === 'blocked'
   const memory = status.kind === 'ok' && !blocked ? await call('diagnostics.memory') : null
   const { sample, facts } = classifyRemoteFleetObservation({ startedAt, status, memory })
+  let nodeResources: FleetNodeResourcesObservation
+  if (status.kind === 'ok' && !blocked) {
+    // Why: the observer's clock before the call, never a time the node reports.
+    const resourcesStartedAt = deps.now()
+    const step = await call(
+      'fleet.nodeResources',
+      options.modelProbePorts ? { modelProbePorts: [...options.modelProbePorts] } : undefined
+    )
+    nodeResources = classifyNodeResourcesStep({
+      startedAt: resourcesStartedAt,
+      statusRuntimeId: status.runtimeId,
+      step
+    })
+  } else {
+    nodeResources = notAttemptedNodeResources(
+      startedAt,
+      status.kind === 'ok' ? status.runtimeId : null,
+      blocked ? 'protocol blocked' : 'status failed'
+    )
+  }
   return {
     address: toRuntimeExecutionHostId(environment.id),
     label: environment.name,
     identity,
     facts,
-    sample
+    sample,
+    nodeResources
   }
 }
 
-async function observeLocal(deps: FleetObservationDeps): Promise<FleetPlacementMember> {
+async function observeLocalResources(
+  deps: FleetObservationDeps,
+  runtimeId: string,
+  options: FleetObservationOptions
+): Promise<FleetNodeResourcesObservation> {
+  if (!deps.collectLocalNodeResources) {
+    return notAttemptedNodeResources(deps.now(), runtimeId, 'no local collector')
+  }
+  const startedAt = deps.now()
+  try {
+    const reply = await deps.collectLocalNodeResources(options)
+    return { startedAt, runtimeId, ...parseNodeResourcesReply(reply) }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    const unknown = { outcome: 'unknown', reason: 'unreachable', detail } as const
+    return { startedAt, runtimeId, disk: unknown, gpu: unknown, models: unknown }
+  }
+}
+
+async function observeLocal(
+  deps: FleetObservationDeps,
+  options: FleetObservationOptions
+): Promise<FleetPlacementMember> {
   const identity = identityFromKeyFingerprint(fingerprintOf(deps.readLocalPublicKey()))
   const startedAt = deps.now()
   const status = deps.getLocalStatus()
@@ -132,12 +191,16 @@ async function observeLocal(deps: FleetObservationDeps): Promise<FleetPlacementM
     identity,
     // Why: this process is the host, so protocol negotiation does not apply to it.
     facts: { ...fleetHostFactsFromStatus(status, status.runtimeId), protocol: 'not-applicable' },
-    sample: fleetSampleFromSnapshot(snapshot, status.runtimeId, startedAt)
+    sample: fleetSampleFromSnapshot(snapshot, status.runtimeId, startedAt),
+    nodeResources: await observeLocalResources(deps, status.runtimeId, options)
   }
 }
 
 /** One bounded pass over this host and its paired runtimes. Reads only; arms no timer beyond it. */
-export async function observeFleet(deps: FleetObservationDeps): Promise<FleetObservation> {
+export async function observeFleet(
+  deps: FleetObservationDeps,
+  options: FleetObservationOptions = {}
+): Promise<FleetObservation> {
   const deadlineMs = deps.stepDeadlineMs ?? FLEET_STEP_DEADLINE_MS
   const observedAt = deps.now()
   const environments = [...deps.listEnvironments()]
@@ -146,14 +209,14 @@ export async function observeFleet(deps: FleetObservationDeps): Promise<FleetObs
   const worker = async (): Promise<void> => {
     while (next < environments.length) {
       const environment = environments[next++]
-      remote.push(await observeEnvironment(environment, deps, deadlineMs))
+      remote.push(await observeEnvironment(environment, deps, deadlineMs, options))
     }
   }
   const workers = Array.from(
     { length: Math.min(FLEET_OBSERVATION_CONCURRENCY, environments.length) },
     worker
   )
-  const [local] = await Promise.all([observeLocal(deps), Promise.all(workers)])
+  const [local] = await Promise.all([observeLocal(deps, options), Promise.all(workers)])
   return {
     observedAt,
     completedAt: deps.now(),
