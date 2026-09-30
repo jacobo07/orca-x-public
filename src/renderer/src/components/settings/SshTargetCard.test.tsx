@@ -105,6 +105,7 @@ describe('SshTargetCard host identity badge', () => {
 
   it('never reads pinned for a pin recorded for another endpoint', async () => {
     await renderCard({ ...TARGET, port: 2222, hostKeyPin: PIN }, 'pinned')
-    expect(badge().dataset.sshHostIdentity).toBe('unpinned-legacy')
+    // Why: a pin for another endpoint refuses automatic connects (0fff3967b), so it is not legacy grace either.
+    expect(badge().dataset.sshHostIdentity).toBe('refused-unpinned')
   })
 })
