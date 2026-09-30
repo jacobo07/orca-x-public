@@ -196,7 +196,7 @@ describe('revoked device whose socket survived the kill (row 58; characterizatio
       session.ws.close()
       await server.stop()
     }
-  }, 30_000)
+  })
 
   it('V-REV-WIRE-CODE: the code stays the one old clients fail closed on; the reason rides only in data', async () => {
     const { server, session, responses } = await openRevokedRuntimeSession()
@@ -213,7 +213,7 @@ describe('revoked device whose socket survived the kill (row 58; characterizatio
       session.ws.close()
       await server.stop()
     }
-  }, 30_000)
+  })
 
   it('V-REV-BINARY-REFUSED: a terminal input frame on the open stream is NOT delivered and the socket closes 4001 Unauthorized', async () => {
     const { server, session, writes } = await openRevokedRuntimeSession()
@@ -236,18 +236,20 @@ describe('revoked device whose socket survived the kill (row 58; characterizatio
       session.ws.close()
       await server.stop()
     }
-  }, 30_000)
+  })
 
   it('control: a still-authorized device input frame on the same stream IS delivered', async () => {
     const { server, session, writes } = await openRevokedRuntimeSession()
     try {
       sendInputFrame(session, 'still authorized\r')
-      await vi.waitFor(() =>
-        expect(writes).toContainEqual({ terminal: 'revoked-effect-pty', text: 'still authorized\r' })
+      await vi.waitFor(
+        () =>
+          expect(writes).toContainEqual({ terminal: 'revoked-effect-pty', text: 'still authorized\r' }),
+        { timeout: 60_000, interval: 25 }
       )
     } finally {
       session.ws.close()
       await server.stop()
     }
-  }, 30_000)
+  })
 })
