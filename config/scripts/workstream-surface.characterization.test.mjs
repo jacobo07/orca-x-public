@@ -25,24 +25,53 @@ export const MIN_SCANNED_FILES = 5750
 // Frozen: path + exact literal text -> a one-line reason a reader can disagree with. Holds only the
 // dws Phase 3 Cancel Workstream refusal (a command that lists no Workstream); the stale-entry clause
 // (case 2) keeps it from becoming a permanent excuse if a hit is exempted here without cause.
-const CANCEL_REFUSAL_REASON =
-  'Cancel Workstream refusal (dws Phase 3): names the authority it defers to, lists no Workstream; remove when Phase 4 inverts this file'
+const PHASE_4 = 'remove when Phase 4 inverts this file'
 export const NOT_A_WORKSTREAM_SURFACE = Object.freeze({
   'src/shared/execution-effect-refusals.ts': [
-    { text: 'WORKSTREAM_AUTHORITY_UNAVAILABLE', reason: CANCEL_REFUSAL_REASON },
-    { text: 'CANCEL_WORKSTREAM_REFUSAL_CODES', reason: CANCEL_REFUSAL_REASON },
-    { text: 'CancelWorkstreamRefusalCode', reason: CANCEL_REFUSAL_REASON },
-    { text: 'workstream_authority_unavailable', reason: CANCEL_REFUSAL_REASON }
+    {
+      text: 'WORKSTREAM_AUTHORITY_UNAVAILABLE',
+      reason: `refusal-code constant for Cancel Workstream; a string, lists no Workstream; ${PHASE_4}`
+    },
+    {
+      text: 'CANCEL_WORKSTREAM_REFUSAL_CODES',
+      reason: `frozen set of Cancel refusal codes; lists no Workstream; ${PHASE_4}`
+    },
+    {
+      text: 'CancelWorkstreamRefusalCode',
+      reason: `type alias over the Cancel refusal codes; lists no Workstream; ${PHASE_4}`
+    },
+    {
+      text: 'workstream_authority_unavailable',
+      reason: `wire string of the Cancel refusal code; lists no Workstream; ${PHASE_4}`
+    }
   ],
   'src/main/runtime/rpc/methods/index.ts': [
-    { text: 'WORKSTREAM_CANCEL_METHODS', reason: CANCEL_REFUSAL_REASON },
-    { text: './workstream-cancel', reason: CANCEL_REFUSAL_REASON }
+    {
+      text: 'WORKSTREAM_CANCEL_METHODS',
+      reason: `registration spread of the refusing Cancel method; lists no Workstream; ${PHASE_4}`
+    },
+    {
+      text: './workstream-cancel',
+      reason: `import path of the Cancel method module; lists no Workstream; ${PHASE_4}`
+    }
   ],
   'src/main/runtime/rpc/methods/workstream-cancel.ts': [
-    { text: 'WORKSTREAM_AUTHORITY_UNAVAILABLE', reason: CANCEL_REFUSAL_REASON },
-    { text: 'WorkstreamCancelParams', reason: CANCEL_REFUSAL_REASON },
-    { text: 'WORKSTREAM_CANCEL_METHODS', reason: CANCEL_REFUSAL_REASON },
-    { text: 'workstream.cancel', reason: CANCEL_REFUSAL_REASON }
+    {
+      text: 'WORKSTREAM_AUTHORITY_UNAVAILABLE',
+      reason: `the handler's refusal code, which names uwcp.control/1 as the authority; lists no Workstream; ${PHASE_4}`
+    },
+    {
+      text: 'WorkstreamCancelParams',
+      reason: `params schema type; carries one workstreamId, lists none; ${PHASE_4}`
+    },
+    {
+      text: 'WORKSTREAM_CANCEL_METHODS',
+      reason: `export of the single refusing method definition; lists no Workstream; ${PHASE_4}`
+    },
+    {
+      text: 'workstream.cancel',
+      reason: `the RPC method name; a command that refuses and lists no Workstream; ${PHASE_4}`
+    }
   ]
 })
 
