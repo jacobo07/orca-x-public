@@ -1,6 +1,7 @@
 import type {
   BacklogHarvestRpcUnit,
-  BacklogHarvestRunReport
+  BacklogHarvestRunReport,
+  BacklogHarvestStatusReport
 } from '../../shared/backlog-harvest-report'
 import type {
   BacklogCandidateListQuery,
@@ -43,6 +44,7 @@ export type BacklogHost = {
   merge: (input: BacklogItemMergeInput) => Promise<BacklogItemMergeResult>
   health: () => Promise<BacklogHealth>
   harvest: (unit: BacklogHarvestRpcUnit) => Promise<BacklogHarvestRunReport>
+  harvestStatus: () => Promise<BacklogHarvestStatusReport>
 }
 
 // The runner is required: a host without harvest would answer every run as an empty success.
@@ -52,6 +54,7 @@ export function createBacklogHost(
 ): BacklogHost {
   return {
     harvest: (unit) => harvester.run(unit),
+    harvestStatus: () => harvester.status(),
     list: (query) => service.list(query),
     capture: (input) => service.capture(input),
     get: (id) => service.get(id),

@@ -153,7 +153,8 @@ function runnerOver(source: BacklogTranscriptSource, service: HarvestIngestPort)
     sources: {
       conversations: () => ({ listIds: async () => [], read: async () => ({ outcome: 'absent' }) }),
       transcripts: () => source
-    }
+    },
+    ledgerRoot: () => 'ai-vault-transcript-harvest-test'
   })
 }
 

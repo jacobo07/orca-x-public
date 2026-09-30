@@ -92,3 +92,33 @@ export type BacklogHarvestRunReport =
       candidatesDuplicate: number
       skipped: BacklogHarvestSkipCounts
     }
+  // The harvester threw before it could count anything, so this arm carries no counts.
+  | {
+      outcome: 'failed'
+      unit: BacklogHarvestUnit
+      stage: 'harvest'
+      code: 'unexpected'
+      startedAt: number
+      finishedAt: number
+    }
+
+export const BACKLOG_HARVEST_RUN_STATUSES = [
+  'not-run',
+  'running',
+  'connected',
+  'refused',
+  'failed'
+] as const
+export type BacklogHarvestRunStatus = (typeof BACKLOG_HARVEST_RUN_STATUSES)[number]
+
+/**
+ * One unit's status on the ledger host. Lives in main memory only and is regenerable (D-19), so it
+ * owes no durability contract: a restart reads 'not-run' until a unit runs again.
+ */
+export type BacklogHarvestUnitStatus = {
+  unit: BacklogHarvestUnit
+  status: BacklogHarvestRunStatus
+  lastReport: BacklogHarvestRunReport | null
+}
+
+export type BacklogHarvestStatusReport = { units: BacklogHarvestUnitStatus[] }

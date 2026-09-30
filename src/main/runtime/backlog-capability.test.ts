@@ -38,7 +38,8 @@ describe('backlog.v1 runtime capability', () => {
           statBytes: async () => 0,
           readTranscript: async () => ({ messages: [] })
         })
-      }
+      },
+      ledgerRoot: () => join(root, 'backlog')
     })
     runtime.setBacklogHost(createBacklogHost(service, harvester))
     expect(runtime.getStatus().capabilities).toContain('backlog.v1')

@@ -61,7 +61,8 @@ describe('Orca conversation harvest idempotency', () => {
           statBytes: async () => 0,
           readTranscript: async () => ({ messages: [] })
         })
-      }
+      },
+      ledgerRoot: () => ledger
     })
   }
   const listed = async () =>

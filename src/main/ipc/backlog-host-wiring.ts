@@ -21,12 +21,14 @@ import {
 let backlogService: BacklogService | null = null
 let backlogHarvester: BacklogHarvestRunner | null = null
 
+// The profile is resolved per operation (a switch applies immediately), never at module load:
+// ensureActiveOrcaProfile has side effects.
+function backlogLedgerRoot(): string {
+  return getOrcaBacklogDirectory(ensureActiveOrcaProfile().profile.id)
+}
+
 export function getBacklogService(): BacklogService {
-  // The profile is resolved per operation (a switch applies immediately), never at module load:
-  // ensureActiveOrcaProfile has side effects.
-  backlogService ??= new BacklogService(() =>
-    getOrcaBacklogDirectory(ensureActiveOrcaProfile().profile.id)
-  )
+  backlogService ??= new BacklogService(backlogLedgerRoot)
   return backlogService
 }
 
@@ -34,6 +36,7 @@ function getBacklogHarvester(): BacklogHarvestRunner {
   // A store per run: its constructor has no side effects, and the harvest only lists and loads.
   backlogHarvester ??= createBacklogHarvestRunner({
     service: getBacklogService(),
+    ledgerRoot: backlogLedgerRoot,
     sources: {
       conversations: () =>
         conversationSourceFromStore(

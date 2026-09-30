@@ -89,5 +89,10 @@ export const BACKLOG_METHODS: RpcAnyMethod[] = [
     name: 'backlog.harvest.run',
     params: BacklogHarvestRunParams,
     handler: async (params, { runtime }) => requireBacklogHost(runtime).harvest(params.unit)
+  }),
+  defineMethod({
+    name: 'backlog.harvest.status',
+    params: null,
+    handler: async (_params, { runtime }) => requireBacklogHost(runtime).harvestStatus()
   })
 ]

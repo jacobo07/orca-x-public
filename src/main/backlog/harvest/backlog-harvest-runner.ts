@@ -1,6 +1,7 @@
 import type {
   BacklogHarvestRpcUnit,
   BacklogHarvestRunReport,
+  BacklogHarvestStatusReport,
   BacklogHarvestUnit
 } from '../../../shared/backlog-harvest-report'
 import {
@@ -8,6 +9,7 @@ import {
   type BacklogTranscriptSource
 } from './ai-vault-transcript-harvest'
 import type { HarvestIngestPort, HarvestUnitResult } from './harvest-ingest-pipeline'
+import { HarvestRunRegistry } from './harvest-run-registry'
 import {
   harvestOrcaConversations,
   type BacklogConversationSource
@@ -34,6 +36,9 @@ function harvestUnit(
 
 export type BacklogHarvestRunner = {
   run: (unit: BacklogHarvestRpcUnit) => Promise<BacklogHarvestRunReport>
+  /** The export import (03-05): its reader is the caller's, the single flight and status are ours. */
+  runImport: (work: () => Promise<HarvestUnitResult>) => Promise<BacklogHarvestRunReport>
+  status: () => Promise<BacklogHarvestStatusReport>
 }
 
 function reportOf(
@@ -81,14 +86,43 @@ function reportOf(
 export function createBacklogHarvestRunner(options: {
   service: HarvestIngestPort
   sources: BacklogHarvestSources
+  /** The same resolver the ledger uses, so status follows a profile switch. */
+  ledgerRoot: () => string
   now?: () => number
 }): BacklogHarvestRunner {
   const now = options.now ?? Date.now
-  return {
-    run: async (unit) => {
-      const startedAt = now()
-      const result = await harvestUnit(unit, options.sources, options.service)
-      return reportOf(unit, result, startedAt, now())
+  const registry = new HarvestRunRegistry()
+
+  const track = async (
+    unit: BacklogHarvestUnit,
+    work: () => Promise<HarvestUnitResult>
+  ): Promise<BacklogHarvestRunReport> => {
+    const root = options.ledgerRoot()
+    if (!registry.begin(root, unit)) {
+      return { outcome: 'refused', unit, code: 'already-running', finishedAt: now() }
     }
+    const startedAt = now()
+    let report: BacklogHarvestRunReport
+    try {
+      report = reportOf(unit, await work(), startedAt, now())
+    } catch {
+      // Every throw lands here, so the finish below always runs and a unit never sticks at running.
+      report = {
+        outcome: 'failed',
+        unit,
+        stage: 'harvest',
+        code: 'unexpected',
+        startedAt,
+        finishedAt: now()
+      }
+    }
+    registry.finish(root, unit, report)
+    return report
+  }
+
+  return {
+    run: (unit) => track(unit, () => harvestUnit(unit, options.sources, options.service)),
+    runImport: (work) => track('chatgpt-export', work),
+    status: async () => registry.statusFor(options.ledgerRoot())
   }
 }

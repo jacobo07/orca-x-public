@@ -129,7 +129,8 @@ const noTranscripts: BacklogTranscriptSource = {
 function runnerOver(source: BacklogConversationSource, service: HarvestIngestPort) {
   return createBacklogHarvestRunner({
     service,
-    sources: { conversations: () => source, transcripts: () => noTranscripts }
+    sources: { conversations: () => source, transcripts: () => noTranscripts },
+    ledgerRoot: () => 'orca-conversation-harvest-test'
   })
 }
 
