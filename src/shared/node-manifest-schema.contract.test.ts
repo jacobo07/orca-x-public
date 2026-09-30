@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { FleetObservation } from './fleet-placement-view'
 import type { FleetPlacementMember } from './fleet-placement'
 import { buildNodeManifests, DEFAULT_NODE_MAX_AGE_MS, type NodeManifest } from './node-manifest'
+import { judgeNodeEligibility } from './node-manifest-eligibility'
 import type { FleetNodeResourcesObservation } from './node-resources'
 import { RUNTIME_PROTOCOL_VERSION } from './protocol-version'
 import type { KnownRuntimeEnvironment } from './runtime-environments'
@@ -75,7 +76,8 @@ const memoryOf = (available: number) => ({
 
 type FleetEnvironmentCall = (call: {
   environmentId: string
-  method: 'status.get' | 'diagnostics.memory'
+  method: 'status.get' | 'diagnostics.memory' | 'fleet.nodeResources'
+  params?: unknown
   pairingRevision: number | undefined
   signal: AbortSignal
 }) => Promise<RuntimeRpcResponse<unknown>>
@@ -107,8 +109,25 @@ async function observe(
   })
 }
 
-const healthyRemote: FleetEnvironmentCall = async ({ method }) =>
-  method === 'status.get' ? ok('rt-vps', statusOf('rt-vps')) : ok('rt-vps', memoryOf(9 * GB))
+const resourcesReply = () => ({
+  schema: 'orca.node-resources/1',
+  disk: fullResources.disk,
+  gpu: fullResources.gpu,
+  models: fullResources.models
+})
+
+const healthyRemote: FleetEnvironmentCall = async ({ method }) => {
+  if (method === 'status.get') {
+    return ok('rt-vps', statusOf('rt-vps'))
+  }
+  return method === 'diagnostics.memory'
+    ? ok('rt-vps', memoryOf(9 * GB))
+    : ok('rt-vps', resourcesReply())
+}
+
+// Why: a host that predates fleet.nodeResources answers method_not_found for it only.
+const oldHostRemote: FleetEnvironmentCall = async (call) =>
+  call.method === 'fleet.nodeResources' ? failed('method_not_found') : healthyRemote(call)
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
@@ -178,14 +197,59 @@ describe('node manifest schema contract', () => {
         source: 'proc-meminfo'
       })
       expect(member.sample.startedAt).toBe(NOW)
-      for (const family of ['disk', 'vram', 'resident_model'] as const) {
-        expect(manifest.measurements[family]).toMatchObject({
-          status: 'unknown',
-          reason: 'not-attempted'
-        })
-        expect(numbersIn(manifest.measurements[family])).toEqual([])
-      }
     }
+    // Why: no local collector is installed here, so this host's own families stay unmeasured.
+    for (const family of ['disk', 'vram', 'resident_model'] as const) {
+      expect(local.measurements[family]).toMatchObject({
+        status: 'unknown',
+        reason: 'not-attempted'
+      })
+      expect(numbersIn(local.measurements[family])).toEqual([])
+    }
+  })
+
+  it('measures disk, vram and resident_model from the real three-step producer on the observer clock', async () => {
+    const [, remote] = buildNodeManifests(await observe(healthyRemote))
+    expect(accepts(remote)).toBe(true)
+    for (const family of ['disk', 'vram', 'resident_model'] as const) {
+      expect(remote.measurements[family]).toMatchObject({ status: 'measured', measured_at: NOW })
+    }
+  })
+
+  it('an old host validates with disk, vram and resident_model unknown unsupported', async () => {
+    const [, remote] = buildNodeManifests(await observe(oldHostRemote))
+    expect(accepts(remote)).toBe(true)
+    expect(remote.measurements.memory).toMatchObject({ status: 'measured' })
+    for (const family of ['disk', 'vram', 'resident_model'] as const) {
+      expect(remote.measurements[family]).toMatchObject({
+        status: 'unknown',
+        reason: 'unsupported'
+      })
+      expect(numbersIn(remote.measurements[family])).toEqual([])
+    }
+  })
+
+  it('judges eligible when fresh, unknown stale once aged, unknown unmeasured on an old host', async () => {
+    const requirement = { disk: { minAvailableBytes: 10 * GB }, vram: { minFreeBytes: GB } }
+    const [, fresh] = buildNodeManifests(await observe(healthyRemote))
+    expect(judgeNodeEligibility(fresh, requirement, NOW).verdict).toBe('eligible')
+    const aged = judgeNodeEligibility(
+      fresh,
+      { disk: { minAvailableBytes: 10 * GB } },
+      NOW + DEFAULT_NODE_MAX_AGE_MS.disk + 1
+    )
+    expect(aged).toMatchObject({
+      verdict: 'unknown',
+      reasons: [{ family: 'disk', cause: 'stale' }]
+    })
+    const [, old] = buildNodeManifests(await observe(oldHostRemote))
+    expect(judgeNodeEligibility(old, requirement, NOW)).toMatchObject({
+      verdict: 'unknown',
+      reasons: [
+        { family: 'disk', cause: 'unmeasured' },
+        { family: 'vram', cause: 'unmeasured' }
+      ]
+    })
   })
 
   it.each([

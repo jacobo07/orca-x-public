@@ -63,13 +63,15 @@ export const FLEET_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'fleet.nodeManifests',
-    params: z.object({}).strict().optional(),
-    handler: async (_params, ctx): Promise<NodeManifestsResult> => {
+    params: NodeResourcesParams.optional(),
+    handler: async (params, ctx): Promise<NodeManifestsResult> => {
       // Why: answering would have this host query its own paired runtimes on another's behalf.
       if (!isLocalRpcCaller(ctx)) {
         return { status: 'refused', reason: 'remote-caller' }
       }
-      const pending = readFleetObservation()
+      const pending = readFleetObservation(
+        params?.modelProbePorts ? { modelProbePorts: params.modelProbePorts } : undefined
+      )
       if (!pending) {
         return { status: 'unavailable', reason: 'no-fleet-reader' }
       }

@@ -106,6 +106,8 @@ import {
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
 import { listEnvironments, resolveEnvironment } from '../shared/runtime-environment-store'
 import { installFleetObservation } from './fleet/fleet-observation-slot'
+import { measureNodeResources } from './fleet/node-resources-measure'
+import { installNodeResourcesMeasurer, readNodeResources } from './fleet/node-resources-slot'
 import { readE2EEPublicKey } from './runtime/e2ee-keypair'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
@@ -2831,19 +2833,27 @@ void app.whenReady().then(async () => {
     readLocalPublicKey: () => readE2EEPublicKey(getCanonicalUserDataPath()),
     getLocalStatus: () => runtimeService.getStatus(),
     collectLocalSnapshot: () => runtimeService.getMemorySnapshot(),
+    collectLocalNodeResources: (options) =>
+      readNodeResources({
+        ...(options.modelProbePorts ? { modelProbePorts: [...options.modelProbePorts] } : {})
+      }),
     listEnvironments: () => listEnvironments(app.getPath('userData')),
-    callEnvironment: ({ environmentId, method, pairingRevision, timeoutMs, signal }) =>
+    callEnvironment: ({ environmentId, method, params, pairingRevision, timeoutMs, signal }) =>
       callRuntimeEnvironment(
         app.getPath('userData'),
         environmentId,
         method,
-        undefined,
+        params,
         timeoutMs,
         pairingRevision,
         undefined,
         { signal }
       )
   })
+  // Why: the node's userData is where its work lands, so it is the disk the manifest describes.
+  installNodeResourcesMeasurer((params) =>
+    measureNodeResources({ ...params, dataPath: app.getPath('userData') })
+  )
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })

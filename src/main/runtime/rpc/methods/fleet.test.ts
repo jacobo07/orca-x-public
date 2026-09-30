@@ -168,6 +168,30 @@ describe('fleet.nodeManifests', () => {
     })
   })
 
+  it('threads modelProbePorts to the observation, and passes none when absent', async () => {
+    const seen: unknown[] = []
+    installFleetObservation({
+      now: () => 50_000,
+      readLocalPublicKey: () => Buffer.alloc(32, 3).toString('base64'),
+      getLocalStatus: () => ({ runtimeId: 'rt-local' }),
+      collectLocalSnapshot: async () => ({ processSweep: 'measured', host: {} }),
+      collectLocalNodeResources: async (options) => {
+        seen.push(options.modelProbePorts)
+        return {}
+      },
+      listEnvironments: () => [],
+      callEnvironment: () => Promise.reject(new Error('no remote in this test'))
+    })
+    await callManifests({ modelProbePorts: [8081] })
+    await callManifests(undefined)
+    expect(seen).toEqual([[8081], undefined])
+    const params = manifestMethod.params!
+    expect(params.safeParse({ modelProbePorts: [1, 2, 3, 4, 5] }).success).toBe(false)
+    expect(params.safeParse({ modelProbePorts: [0] }).success).toBe(false)
+    expect(params.safeParse({ modelProbePorts: [65536] }).success).toBe(false)
+    expect(params.safeParse({ modelProbePorts: [1.5] }).success).toBe(false)
+  })
+
   it('has strict params and never touches the runtime it could act through', async () => {
     const params = manifestMethod.params!
     expect(params.safeParse(undefined).success).toBe(true)
