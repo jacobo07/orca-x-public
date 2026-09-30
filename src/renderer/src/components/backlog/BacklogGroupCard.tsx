@@ -8,6 +8,7 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { BacklogViewGroup } from '../../../../shared/backlog-view-selector'
 import type { Project } from '../../../../shared/project-types'
 import { BacklogRow } from './BacklogRow'
+import type { BacklogLedgerChange } from './BacklogRowDetail'
 import { ClaimValue } from './ClaimValue'
 
 /** "{{count}} item(s)" for accessible names; the visible count is a ClaimValue plus the noun. */
@@ -45,10 +46,12 @@ function GroupMark({
 
 export function BacklogGroupCard({
   group,
-  project
+  project,
+  onLedgerChanged
 }: {
   group: BacklogViewGroup
   project: Project | undefined
+  onLedgerChanged: (change: BacklogLedgerChange) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(true)
   const name = groupName(group, project)
@@ -99,7 +102,12 @@ export function BacklogGroupCard({
       </CollapsibleTrigger>
       <CollapsibleContent>
         {group.rows.map((row) => (
-          <BacklogRow key={row.id} row={row} />
+          <BacklogRow
+            key={row.id}
+            row={row}
+            groupKey={group.key}
+            onLedgerChanged={onLedgerChanged}
+          />
         ))}
       </CollapsibleContent>
     </Collapsible>

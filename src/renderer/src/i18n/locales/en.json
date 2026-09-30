@@ -16924,7 +16924,41 @@
       "textShortened": "(text shortened)",
       "inferred": "inferred",
       "moreProjects_one": "+{{count}} project",
-      "moreProjects_other": "+{{count}} projects"
+      "moreProjects_other": "+{{count}} projects",
+      "moved": "Moved to {{state}}"
+    },
+    "detail": {
+      "loading": "Loading item…",
+      "absent": "This item is no longer in the backlog.",
+      "unreadable": "This item cannot be read right now.",
+      "schemaTooNew": "This item was saved by a newer version of Orca.",
+      "loadFailed": "This item could not be loaded. Collapse and expand the row to try again.",
+      "summary": "Summary",
+      "kind": "Kind",
+      "priority": "Priority",
+      "state": "State",
+      "created": "Created",
+      "updated": "Updated",
+      "projects": "Projects",
+      "sources": "Sources",
+      "history": "History",
+      "none": "None",
+      "explicit": "Explicit",
+      "inferred": "Inferred",
+      "changeState": "Change state",
+      "doneNeedsEvidence": "Needs completion evidence first",
+      "doneIdea": "An idea cannot be marked done; change its kind first",
+      "stale": "This item changed since it was loaded. It has been reloaded; try again.",
+      "transitionUnknown": "We could not confirm this change. The item has been reloaded.",
+      "mutationFailed": "Not changed. The ledger could not write this change. Try again."
+    },
+    "history": {
+      "created": "Created",
+      "updated": "Updated",
+      "transitioned": "State changed",
+      "sourceLinked": "Source linked",
+      "mergedIn": "Merged in",
+      "mergedInto": "Merged into"
     },
     "state": {
       "needsTriage": "Needs triage",

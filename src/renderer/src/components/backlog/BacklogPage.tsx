@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
@@ -8,6 +9,7 @@ import {
   type BacklogViewModel
 } from '../../../../shared/backlog-view-selector'
 import type { Project } from '../../../../shared/project-types'
+import { backlogStateLabel } from './backlog-presentation'
 import type { BacklogLoadOutcome } from './backlog-snapshot'
 import { BacklogCaptureDialog } from './BacklogCaptureDialog'
 import { BacklogFilterStrip } from './BacklogFilterStrip'
@@ -15,10 +17,51 @@ import { BacklogGroupList } from './BacklogGroupList'
 import { BacklogHeader } from './BacklogHeader'
 import { BacklogNotices } from './BacklogNotices'
 import { BacklogPageStateBlock, type BacklogBlockStatus } from './BacklogPageStateBlock'
+import type { BacklogLedgerChange } from './BacklogRowDetail'
 import { BacklogSummaryPanel } from './BacklogSummaryPanel'
 import { useBacklogSnapshot } from './use-backlog-snapshot'
 
 type BacklogPageStatus = BacklogBlockStatus | 'ready'
+type FocusRequest = { itemId: string; groupKey: string; order: readonly string[] }
+
+function byAttribute(scope: ParentNode | null, name: string, value: string): Element | null {
+  for (const element of scope?.querySelectorAll(`[${name}]`) ?? []) {
+    if (element.getAttribute(name) === value) {
+      return element
+    }
+  }
+  return null
+}
+
+function rowIdsIn(group: Element | null): string[] {
+  return Array.from(group?.querySelectorAll('[data-backlog-item-id]') ?? []).map(
+    (row) => row.getAttribute('data-backlog-item-id') ?? ''
+  )
+}
+
+/** After the refetch: a row that left the view hands focus to the next row, else the group toggle. */
+function useFocusAfterMove(
+  page: React.RefObject<HTMLDivElement | null>
+): (r: FocusRequest) => void {
+  const [request, setRequest] = useState<FocusRequest | null>(null)
+  useEffect(() => {
+    if (!request) {
+      return
+    }
+    const group = byAttribute(page.current, 'data-backlog-group', request.groupKey)
+    const toggleOf = (id: string): HTMLElement | null =>
+      byAttribute(group, 'data-backlog-item-id', id)?.querySelector<HTMLElement>(
+        '[data-backlog-row-toggle]'
+      ) ?? null
+    if (toggleOf(request.itemId)) {
+      return
+    }
+    const after = request.order.slice(request.order.indexOf(request.itemId) + 1)
+    const next = after.map(toggleOf).find((toggle) => toggle !== null)
+    ;(next ?? group?.querySelector<HTMLElement>('[data-backlog-group-toggle]'))?.focus()
+  }, [page, request])
+  return setRequest
+}
 
 const LIVE_REGION_DELAY_MS = 300
 
@@ -85,9 +128,29 @@ export default function BacklogPage(): React.JSX.Element {
   const [captureOpen, setCaptureOpen] = useState(false)
   // Rows appear only from a refetched snapshot: no optimistic insert (D-16).
   const refetch = (): void => void refresh()
+  const pageRef = useRef<HTMLDivElement>(null)
+  const [moved, setMoved] = useState('')
+  const requestFocus = useFocusAfterMove(pageRef)
+
+  // Confirmed by the ledger; the row itself moves only when the refetch answers.
+  const onLedgerChanged = (change: BacklogLedgerChange): void => {
+    const movedTo = change.movedTo
+    if (movedTo === null) {
+      refetch()
+      return
+    }
+    const text = translate('backlog.row.moved', 'Moved to {{state}}', {
+      state: backlogStateLabel(movedTo)
+    })
+    toast(text)
+    setMoved(text)
+    const order = rowIdsIn(byAttribute(pageRef.current, 'data-backlog-group', change.groupKey))
+    void refresh().then(() => requestFocus({ ...change, order }))
+  }
 
   return (
     <div
+      ref={pageRef}
       data-backlog-page=""
       data-backlog-status={status}
       data-backlog-failure-stage={failure?.stage}
@@ -124,7 +187,11 @@ export default function BacklogPage(): React.JSX.Element {
             className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto"
           >
             {status === 'ready' ? (
-              <BacklogGroupList groups={view?.groups ?? []} projectsById={projectsById} />
+              <BacklogGroupList
+                groups={view?.groups ?? []}
+                projectsById={projectsById}
+                onLedgerChanged={onLedgerChanged}
+              />
             ) : (
               <BacklogPageStateBlock
                 status={status}
@@ -140,6 +207,9 @@ export default function BacklogPage(): React.JSX.Element {
           </section>
           <div data-backlog-live-region="" aria-live="polite" className="sr-only">
             {announcement}
+          </div>
+          <div data-backlog-moved-region="" aria-live="polite" className="sr-only">
+            {moved}
           </div>
         </div>
         {status === 'loading' || status === 'empty' || listed ? (
