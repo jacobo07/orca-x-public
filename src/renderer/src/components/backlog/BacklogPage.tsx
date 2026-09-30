@@ -177,9 +177,11 @@ export default function BacklogPage(): React.JSX.Element {
       data-backlog-failure-code={failure?.code ?? undefined}
       className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground"
     >
-      {/* Layout ownership: the aside owns its width (lg:w-72); the main column takes the rest. */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 px-4 pt-2 pb-4 md:px-8 md:pb-8 lg:flex-row">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* Layout ownership: the aside owns its width (lg:w-72); the main column takes the rest.
+          Below lg the page scrolls and the list keeps half the viewport, so wrapped chips and the
+          stacked summary cannot squeeze it to zero. */}
+      <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pt-2 pb-4 md:px-8 md:pb-8 lg:flex-row lg:overflow-visible">
+        <div className="flex min-h-min min-w-0 flex-1 flex-col lg:min-h-0">
           <BacklogHeader
             counts={listed ? view : null}
             onClose={closeBacklogPage}
@@ -205,7 +207,7 @@ export default function BacklogPage(): React.JSX.Element {
           ) : null}
           <section
             aria-label={translate('backlog.page.listLabel', 'Backlog items')}
-            className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto"
+            className="scrollbar-sleek min-h-[50vh] flex-1 overflow-y-auto lg:min-h-0"
           >
             {status === 'ready' ? (
               <BacklogGroupList

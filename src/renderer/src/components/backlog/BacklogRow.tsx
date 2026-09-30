@@ -87,10 +87,11 @@ export function BacklogRow({
         aria-expanded={expanded}
         aria-controls={detailId}
         onClick={() => setExpanded((current) => !current)}
-        className="flex min-h-12 w-full flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:flex-nowrap"
+        className="flex min-h-12 w-full flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="block min-w-0 flex-1">
+        {/* Why: the column, not the viewport, decides the wrap; chips drop below a title under 12rem. */}
+        <span className="block min-w-48 flex-1">
           <span className="block truncate text-sm font-medium leading-5" title={row.originalText}>
             {title}
           </span>
