@@ -219,6 +219,29 @@ describe('BacklogRow expand and detail', () => {
     expect(inP1).not.toBe(inP2)
   })
 
+  // Layout classes only (happy-dom has no layout); the rendered proof is
+  // tests/e2e/backlog-north-star-screens.spec.ts, where both failed at a 900px window.
+  it('narrow: the title keeps a minimum width and the chips wrap below it; the list keeps a height', async () => {
+    await renderPage()
+    const toggle = toggleIn('project:P1', 'a')
+    expect(toggle.classList.contains('flex-wrap')).toBe(true)
+    // md:flex-nowrap keyed on the viewport squeezed the title to ~12px beside the file explorer.
+    expect(toggle.classList.contains('md:flex-nowrap')).toBe(false)
+    expect(toggle.querySelector('[title]')!.parentElement!.classList.contains('min-w-48')).toBe(
+      true
+    )
+
+    const list = q('[data-backlog-page] section[aria-label]')!
+    expect(list.classList.contains('min-h-[50vh]')).toBe(true)
+    expect(list.classList.contains('lg:min-h-0')).toBe(true)
+    const column = list.parentElement!
+    expect(column.classList.contains('min-h-min')).toBe(true)
+    const wrapper = column.parentElement!
+    // Below lg the page scrolls, so chips and the stacked summary cannot squeeze the list to zero.
+    expect(wrapper.classList.contains('overflow-y-auto')).toBe(true)
+    expect(wrapper.classList.contains('lg:overflow-visible')).toBe(true)
+  })
+
   it('shows the full record: text, summary, fields, projects, sources and history newest first, no raw payload', async () => {
     const text = 'first line\n\n    indented second line\nthird'
     ledger.set(
