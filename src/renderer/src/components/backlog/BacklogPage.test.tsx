@@ -22,7 +22,42 @@ type ListAnswer = { items: BacklogItem[] } | { failure: Record<string, unknown> 
 
 const runtimeCall = vi.fn()
 let listAnswer: ListAnswer = { items: [] }
+// When set, the next backlog.list calls are answered by it instead of listAnswer.
+let listOverride: (() => Promise<unknown>) | null = null
+let healthResult: Record<string, unknown> = {}
 let captureAnswer: () => Promise<unknown> = async () => ({})
+
+const ZERO_BY_KIND = { engineering: 0, research: 0, decision: 0, manual: 0, idea: 0 }
+
+function openedHealth(quarantined: Record<string, unknown>[] = []): Record<string, unknown> {
+  return {
+    outcome: 'opened',
+    items: { total: 0, byState: {}, byKind: ZERO_BY_KIND, openByKind: ZERO_BY_KIND },
+    candidates: { total: 0, byStatus: {} },
+    quarantined
+  }
+}
+
+type Deferred = { promise: Promise<unknown>; resolve: (value: unknown) => void }
+
+function deferred(): Deferred {
+  let resolve: (value: unknown) => void = () => {}
+  const promise = new Promise<unknown>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+function listed(items: BacklogItem[], total = items.length) {
+  return envelope({
+    outcome: 'listed',
+    view: 'summary',
+    items,
+    total,
+    nextCursor: null,
+    quarantinedCount: 0
+  })
+}
 let container: HTMLDivElement
 let root: Root
 
@@ -95,12 +130,17 @@ beforeEach(() => {
   runtimeCall.mockReset()
   mocks.closeBacklogPage.mockReset()
   listAnswer = { items: [] }
+  listOverride = null
+  healthResult = openedHealth()
   runtimeCall.mockImplementation(async ({ method }: { method: string }) => {
     if (method === 'backlog.health') {
-      return envelope({ outcome: 'opened', quarantined: [] })
+      return envelope(healthResult)
     }
     if (method === 'backlog.capture') {
       return captureAnswer()
+    }
+    if (listOverride) {
+      return listOverride()
     }
     if (listAnswer === 'pending') {
       return new Promise(() => {})
@@ -108,14 +148,7 @@ beforeEach(() => {
     if ('failure' in listAnswer) {
       return listAnswer.failure
     }
-    return envelope({
-      outcome: 'listed',
-      view: 'summary',
-      items: listAnswer.items,
-      total: listAnswer.items.length,
-      nextCursor: null,
-      quarantinedCount: 0
-    })
+    return listed(listAnswer.items)
   })
   Object.assign(window, {
     api: { runtime: { call: runtimeCall }, runtimeEnvironments: { call: vi.fn() } }
@@ -378,5 +411,159 @@ describe('BacklogPage capture', () => {
     await captureText('not saved')
     expect(captureDialog()?.getAttribute('data-backlog-capture-failure')).toBe('storage-failed')
     expect(listCalls()).toBe(before)
+  })
+})
+
+describe('BacklogPage refresh model and notices', () => {
+  function healthCalls(): number {
+    return runtimeCall.mock.calls.filter(([args]) => args.method === 'backlog.health').length
+  }
+
+  function focusWindow(): void {
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+  }
+
+  function notice(name: string): HTMLElement | null {
+    return container.querySelector<HTMLElement>(`[data-backlog-notice="${name}"]`)
+  }
+
+  async function click(selector: string): Promise<void> {
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(selector)!.click()
+    })
+    await flush()
+  }
+
+  it('mount lists once; focus refetches, but not while a sequence is in flight or after unmount', async () => {
+    listAnswer = { items: [item('bli_a')] }
+    await renderPage()
+    expect(listCalls()).toBe(1)
+    expect(healthCalls()).toBe(1)
+    const pending = deferred()
+    listOverride = () => pending.promise
+    focusWindow()
+    expect(listCalls()).toBe(2)
+    focusWindow()
+    expect(listCalls()).toBe(2)
+    await act(async () => {
+      pending.resolve(listed([item('bli_a')]))
+    })
+    await flush()
+    act(() => root.unmount())
+    root = createRoot(container)
+    focusWindow()
+    expect(listCalls()).toBe(2)
+  })
+
+  it('an older sequence resolving late never replaces the newer rows', async () => {
+    // Four rows for a ledger total of five: the count-mismatch notice offers an explicit refresh.
+    listAnswer = { items: [item('bli_v1'), item('bli_x'), item('bli_y'), item('bli_z')] }
+    listOverride = async () =>
+      listed([item('bli_v1'), item('bli_x'), item('bli_y'), item('bli_z')], 5)
+    await renderPage()
+    const older = deferred()
+    const newer = deferred()
+    const queue = [older, newer]
+    listOverride = () => queue.shift()!.promise
+    focusWindow()
+    await click('[data-backlog-action="reconcile"]')
+    expect(listCalls()).toBe(3)
+    await act(async () => {
+      newer.resolve(listed([item('bli_newer')]))
+    })
+    await flush()
+    await act(async () => {
+      older.resolve(listed([item('bli_older')]))
+    })
+    await flush()
+    expect(rowsIn('unassigned')).toEqual(['bli_newer'])
+  })
+
+  it('a failed refetch keeps the rows and says so without the stage or code; Retry refetches once', async () => {
+    listAnswer = { items: [item('bli_kept')] }
+    await renderPage()
+    listOverride = async () => envelope({ outcome: 'storage-failed', stage: 'scan', code: 'EIO' })
+    focusWindow()
+    await flush()
+    expect(page().getAttribute('data-backlog-status')).toBe('ready')
+    expect(rowsIn('unassigned')).toEqual(['bli_kept'])
+    const failed = notice('refresh-failed')
+    expect(failed).not.toBeNull()
+    expect(failed?.textContent).not.toContain('scan')
+    expect(failed?.textContent).not.toContain('EIO')
+    const before = listCalls()
+    await click('[data-backlog-action="retry"]')
+    expect(listCalls()).toBe(before + 1)
+  })
+
+  it('renders the first-load loader only after 200 ms', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      listAnswer = 'pending'
+      act(() => {
+        root.render(
+          <TooltipProvider>
+            <BacklogPage />
+          </TooltipProvider>
+        )
+      })
+      act(() => {
+        vi.advanceTimersByTime(150)
+      })
+      expect(page().getAttribute('data-backlog-status')).toBe('loading')
+      expect(container.querySelector('[data-backlog-loading]')).toBeNull()
+      act(() => {
+        vi.advanceTimersByTime(100)
+      })
+      expect(container.querySelector('[data-backlog-loading]')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('states quarantined records across items and candidates; the report is copied only on click', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    healthResult = openedHealth([
+      { recordKind: 'item', fileName: 'bli_bad.json', id: 'bli_bad', code: 'parse', reason: 'x' },
+      { recordKind: 'candidate', fileName: 'blc_bad.json', id: null, code: 'schema', reason: 'y' }
+    ])
+    listAnswer = { items: [item('bli_ok')] }
+    await renderPage()
+    const quarantined = notice('quarantined')
+    expect(quarantined).not.toBeNull()
+    expect(
+      quarantined?.querySelector('[data-testid="backlog-notice-quarantined-count"]')?.textContent
+    ).toBe('2')
+    expect(quarantined?.textContent).toContain('items and candidates')
+    expect(writeText).not.toHaveBeenCalled()
+    await click('[data-backlog-action="copy-quarantine"]')
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText).toHaveBeenCalledWith(
+      JSON.stringify(
+        [
+          { recordKind: 'item', fileName: 'bli_bad.json', id: 'bli_bad', code: 'parse' },
+          { recordKind: 'candidate', fileName: 'blc_bad.json', id: null, code: 'schema' }
+        ],
+        null,
+        2
+      )
+    )
+  })
+
+  it('shows both numbers when the deduped rows differ from the ledger total', async () => {
+    listOverride = async () =>
+      listed([item('bli_1'), item('bli_1'), item('bli_2'), item('bli_3'), item('bli_4')], 5)
+    await renderPage()
+    const mismatch = notice('count-mismatch')
+    expect(mismatch).not.toBeNull()
+    expect(
+      mismatch?.querySelector('[data-testid="backlog-notice-snapshot-count"]')?.textContent
+    ).toBe('4')
+    expect(mismatch?.querySelector('[data-testid="backlog-notice-ledger-total"]')?.textContent).toBe(
+      '5'
+    )
   })
 })
