@@ -122,7 +122,7 @@ class FakeWebSocket extends EventEmitter {
   readyState = this.OPEN
 }
 
-async function cancelOverTheWire(scope: 'runtime' | 'mobile') {
+async function cancelOverTheWire(scope: 'runtime' | 'mobile', method = 'workstream.cancel') {
   const { runtime } = makeRuntime()
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-workstream-cancel-'))
   const server = new OrcaRuntimeRpcServer({
@@ -140,7 +140,7 @@ async function cancelOverTheWire(scope: 'runtime' | 'mobile') {
     await server['handleWebSocketMessage'](
       JSON.stringify({
         id: 'req_cancel',
-        method: 'workstream.cancel',
+        method,
         deviceToken: entry.token,
         params: { workstreamId: 'ws-1' }
       }),
@@ -168,12 +168,22 @@ describe('workstream.cancel over the websocket', () => {
   })
 
   it('a mobile-scope device is refused forbidden (not on the mobile allowlist)', async () => {
+    // Why: the allowlist gate runs before the registry lookup, so an unregistered method is also 'forbidden'; pin registration separately.
+    expect(ALL_RPC_METHODS.some((m) => m.name === 'workstream.cancel')).toBe(true)
+    // Positive control: an allowlisted method is not refused as forbidden for a mobile device.
+    const control = await cancelOverTheWire('mobile', 'status.get')
+    expect(control).toHaveLength(1)
+    expect(control[0]).not.toMatchObject({ error: { code: 'forbidden' } })
+
     const replies = await cancelOverTheWire('mobile')
     expect(replies).toContainEqual(
       expect.objectContaining({
         id: 'req_cancel',
         ok: false,
-        error: expect.objectContaining({ code: 'forbidden' })
+        error: expect.objectContaining({
+          code: 'forbidden',
+          message: expect.stringContaining("'workstream.cancel'")
+        })
       })
     )
   })
