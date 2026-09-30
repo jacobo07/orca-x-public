@@ -599,4 +599,4 @@ function Test-DwsNoPublicPort {
 Export-ModuleMember -Function `
   Publish-DwsServeBuild, Get-DwsArtifact, Get-DwsServeReady, Start-DwsTunnel, Stop-DwsTunnel, `
   Invoke-DwsCli, Invoke-DwsRemoteRoundTrip, Test-DwsNoPublicPort, Test-DwsTcpConnect, `
-  Get-DwsStateDir, Get-DwsWorktreeRoot, Invoke-DwsSsh
+  Get-DwsStateDir, Get-DwsWorktreeRoot, Invoke-DwsSsh, Invoke-DwsScpTo
