@@ -3,7 +3,7 @@
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
 import { randomBytes, randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeDurableSecureJsonFile } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
@@ -27,6 +27,8 @@ export type DeviceEntry = {
   // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
   pairingReach?: RuntimePairingReach
 }
+
+export type DeviceRegistryAvailability = { available: true } | { available: false; reason: string }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
   if (!value || typeof value !== 'object') {
@@ -55,10 +57,24 @@ export class DeviceRegistry {
   private readonly registryPath: string
   private devices: DeviceEntry[] = []
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
+  private unavailableReason: string | null = null
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
     this.load()
+  }
+
+  getAvailability(): DeviceRegistryAvailability {
+    return this.unavailableReason === null
+      ? { available: true }
+      : { available: false, reason: this.unavailableReason }
+  }
+
+  // Why: an unreadable registry is "unknown", not "empty"; publishing over it would erase every pairing.
+  private assertAvailable(): void {
+    if (this.unavailableReason !== null) {
+      throw new Error(`device_registry_unavailable: ${this.unavailableReason}`)
+    }
   }
 
   addDevice(
@@ -66,6 +82,7 @@ export class DeviceRegistry {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network'
   ): DeviceEntry {
+    this.assertAvailable()
     return this.createAndPersistDevice(this.devices, name, scope, pairingReach)
   }
 
@@ -102,6 +119,7 @@ export class DeviceRegistry {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network'
   ): DeviceEntry {
+    this.assertAvailable()
     const existing = this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
     if (existing) {
       // Why: the same pending token can be re-advertised at a broader reach; widen it but never narrow it,
@@ -136,11 +154,13 @@ export class DeviceRegistry {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network'
   ): DeviceEntry {
+    this.assertAvailable()
     const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
     return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach)
   }
 
   removeDevice(deviceId: string): boolean {
+    this.assertAvailable()
     const nextDevices = this.devices.filter((d) => d.deviceId !== deviceId)
     if (nextDevices.length === this.devices.length) {
       return false
@@ -161,6 +181,7 @@ export class DeviceRegistry {
   }
 
   setRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
+    this.assertAvailable()
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
     if (index === -1 || binding.relayDeviceId !== deviceId) {
       return false
@@ -174,6 +195,7 @@ export class DeviceRegistry {
   }
 
   setMobilePairingConnectionMode(deviceId: string, mode: MobilePairingConnectionMode): boolean {
+    this.assertAvailable()
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
     if (index === -1 || this.devices[index]?.scope !== 'mobile') {
       return false
@@ -203,10 +225,14 @@ export class DeviceRegistry {
   }
 
   validateToken(token: string): DeviceEntry | null {
+    if (this.unavailableReason !== null) {
+      return null
+    }
     return this.devices.find((d) => d.token === token) ?? null
   }
 
   updateLastSeen(deviceId: string): void {
+    this.assertAvailable()
     const index = this.devices.findIndex((d) => d.deviceId === deviceId)
     if (index === -1) {
       return
@@ -229,6 +255,10 @@ export class DeviceRegistry {
    * never scanned, so only that 0 -> non-zero transition is load-bearing.
    */
   updateLastSeenDeferred(deviceId: string): void {
+    // Why: runs on the E2EE handshake, which must not crash; an unavailable registry has nothing to mark.
+    if (this.unavailableReason !== null) {
+      return
+    }
     const index = this.devices.findIndex((d) => d.deviceId === deviceId)
     if (index === -1) {
       return
@@ -254,7 +284,7 @@ export class DeviceRegistry {
 
   /** Persists a deferred lastSeen refresh now; no-op when nothing is pending. */
   flushPendingLastSeen(): void {
-    if (!this.pendingLastSeenFlush) {
+    if (!this.pendingLastSeenFlush || this.unavailableReason !== null) {
       return
     }
     this.cancelPendingLastSeenFlush()
@@ -280,8 +310,11 @@ export class DeviceRegistry {
     }
     try {
       hardenExistingSecureFile(this.registryPath)
-      const parsed = JSON.parse(readFileSync(this.registryPath, 'utf-8')) as DeviceEntry[]
-      this.devices = parsed.map((device) => ({
+      const parsed: unknown = JSON.parse(readFileSync(this.registryPath, 'utf-8'))
+      if (!Array.isArray(parsed)) {
+        throw new Error('registry is not a JSON array')
+      }
+      this.devices = (parsed as DeviceEntry[]).map((device) => ({
         ...device,
         // Why: older registries only existed for phone pairing. Treat missing
         // scope as mobile so legacy device tokens do not gain new CLI powers.
@@ -293,8 +326,15 @@ export class DeviceRegistry {
         // LAN links), so a missing value must keep binding every interface on reconnect.
         pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network'
       }))
-    } catch {
+    } catch (error) {
       this.devices = []
+      this.unavailableReason = error instanceof Error ? error.message : String(error)
+      // Why: keep the unreadable bytes for recovery; the next save would otherwise overwrite them.
+      try {
+        renameSync(this.registryPath, `${this.registryPath}.corrupt-${Date.now()}`)
+      } catch {
+        // Why: the registry stays unavailable either way, so a failed rename only costs the recovery copy.
+      }
     }
   }
 
