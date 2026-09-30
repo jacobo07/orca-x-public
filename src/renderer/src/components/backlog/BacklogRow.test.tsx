@@ -308,6 +308,81 @@ describe('BacklogRow expand and detail', () => {
   }
 })
 
+describe('BacklogRow title and secondary line (R-11)', () => {
+  function stationed(id: string): { title: HTMLElement; secondary: HTMLElement } {
+    const row = rowIn('project:P1', id)
+    expect(row, `row ${id}`).not.toBeNull()
+    const title = row!.querySelector<HTMLElement>('[data-backlog-row-toggle] [title]')
+    const secondary = row!.querySelector<HTMLElement>('[data-backlog-row-secondary]')
+    expect(title?.textContent?.trim(), `title of ${id}`).toBeTruthy()
+    expect(secondary?.textContent?.trim(), `secondary of ${id}`).toBeTruthy()
+    return { title: title!, secondary: secondary! }
+  }
+
+  it('a two-line capture is titled by its first line and its secondary is the kind label', async () => {
+    const text = 'Profile the row expand\nMeasure first'
+    ledger = new Map([
+      [
+        'multi',
+        item('multi', {
+          kind: 'research',
+          originalText: text,
+          normalizedIntent: text,
+          projectRefs: [ref('P1')]
+        })
+      ]
+    ])
+    await renderPage()
+    const { title, secondary } = stationed('multi')
+    expect(secondary.textContent).toBe('Research')
+    expect(title.textContent).toBe('Profile the row expand')
+    expect(title.textContent).not.toContain('Measure first')
+    expect(title.getAttribute('title')).toBe(text)
+    const detail = await expand('project:P1', 'multi')
+    expect(detail.getAttribute('aria-label')).toBe('Profile the row expand')
+  })
+
+  it('a leading blank line, an edited intent and an empty intent each title by a first line, never repeating line 2', async () => {
+    const blankFirst = '\n   Real first line\nsecond'
+    ledger = new Map(
+      [
+        item('blank', {
+          kind: 'decision',
+          originalText: blankFirst,
+          normalizedIntent: blankFirst,
+          projectRefs: [ref('P1')],
+          updatedAt: 30
+        }),
+        item('edited', {
+          kind: 'engineering',
+          originalText: 'first line\nsecond line',
+          normalizedIntent: 'tidy summary',
+          projectRefs: [ref('P1')],
+          updatedAt: 20
+        }),
+        item('control', {
+          kind: 'manual',
+          originalText: 'only line',
+          projectRefs: [ref('P1')],
+          updatedAt: 10
+        })
+      ].map((row) => [row.id, row])
+    )
+    await renderPage()
+    const rows = {
+      blank: stationed('blank'),
+      edited: stationed('edited'),
+      control: stationed('control')
+    }
+    expect(rows.blank.secondary.textContent).toBe('Decision')
+    expect(rows.edited.secondary.textContent).toBe('Engineering')
+    expect(rows.control.secondary.textContent).toBe('Manual task')
+    expect(rows.blank.title.textContent).toBe('Real first line')
+    expect(rows.edited.title.textContent).toBe('tidy summary')
+    expect(rows.control.title.textContent).toBe('only line')
+  })
+})
+
 describe('BacklogStateMenu', () => {
   it('lists exactly the legal targets for every state, never superseded', async () => {
     for (const state of BACKLOG_ITEM_STATES) {

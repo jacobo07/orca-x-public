@@ -326,7 +326,7 @@ describe('BacklogRow labels', () => {
     expect(chip('bli_plain', 'priority')).toBeNull()
   })
 
-  it('falls back to the kind label for a single-line text, and manual reads Manual task', async () => {
+  it('the secondary line is always the kind label, never a second text line (R-11), and manual reads Manual task', async () => {
     listAnswer = {
       items: [
         item('bli_one_line', { kind: 'manual', originalText: 'only line' }),
@@ -339,7 +339,7 @@ describe('BacklogRow labels', () => {
         .querySelector(`[data-backlog-item-id="${id}"] [data-backlog-row-secondary]`)
         ?.textContent?.trim()
     expect(secondary('bli_one_line')).toBe('Manual task')
-    expect(secondary('bli_two_lines')).toBe('second line')
+    expect(secondary('bli_two_lines')).toBe('Manual task')
   })
 })
 
