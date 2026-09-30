@@ -116,12 +116,12 @@ describe('BacklogRecordStore.mutate', () => {
 
   it('answers schema-too-new without writing', async () => {
     const raw = JSON.parse(readFileSync(itemPath(), 'utf-8')) as Record<string, unknown>
-    writeFileSync(itemPath(), `${JSON.stringify({ ...raw, schemaVersion: 2 }, null, 2)}\n`)
+    writeFileSync(itemPath(), `${JSON.stringify({ ...raw, schemaVersion: 3 }, null, 2)}\n`)
     const before = sha(itemPath())
 
     const outcome = await store.mutate(seed.id, bump)
 
-    expect(outcome).toEqual({ outcome: 'schema-too-new', storedVersion: 2 })
+    expect(outcome).toEqual({ outcome: 'schema-too-new', storedVersion: 3 })
     expect(sha(itemPath())).toBe(before)
   })
 

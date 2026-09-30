@@ -63,7 +63,7 @@ describe('ledger open with per-record salvage', () => {
     }
     writeFileSync(bad.truncated, '{"schemaVersion": 1, "id": "bli_')
     writeFileSync(bad.mismatch, readFileSync(join(items, `${first.id}.json`)))
-    writeFileSync(bad.tooNew, JSON.stringify({ ...second, id: TOO_NEW_ID, schemaVersion: 2 }))
+    writeFileSync(bad.tooNew, JSON.stringify({ ...second, id: TOO_NEW_ID, schemaVersion: 3 }))
     writeFileSync(bad.garbage, 'not a record')
     const orphan = join(items, `${ORPHAN_ID}.json.1.2.ab.tmp`)
     writeFileSync(orphan, '{"half":')
