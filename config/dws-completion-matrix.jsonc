@@ -960,9 +960,19 @@
           "kind": "file",
           "path": "docs/dws/phase-2-agent-leg.json",
           "note": "02-08: agent-turn leg BLOCKED (no provider login in the orca-svc service HOME), so claude/codex absence stays vacuous; classifier control against the real CLI returned not-logged-in"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-memory-delta.json",
+          "note": "02-08 counted sweep offload-3d: COMPARABLE; absence PASS for vitest, tsc, workload-wrapper (desktopSubtreeSize 40); bracket OK (drift 201.35MB < peak delta 954.505MB); workload peak delta 954.505MB, median 142.305MB; control surface 982.336MB peak"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-summary.json",
+          "note": "02-08 offload-3d summary: desktopRootPidValid true, legWindowCovered true, 110 samples, no failed legs"
         }
       ],
-      "reason": "re-measured 2026-09-30 (02-08): PARTIAL, SC4 INCONCLUSIVE at rung 2 (offload-3 machine comparability verdict UNJUDGED: three launches failed before the workload, so no run manifest, no summary and no bracket exist; nothing re-measured, nothing upgraded); the desktop subtree stayed unresolved (desktopRootPid not exercised end to end) and claude/codex absence is vacuous while the agent-turn leg is BLOCKED. Earlier text: measured 2026-09-28, corrected 2026-09-30 (02-07): absence of local claude/codex/vitest/build/indexer processes during offload was judged by run nonce only, because the remote manifest carried no desktopRootPid (desktop subtree size 1), so the desktop's own subtree was never searched; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
+      "reason": "re-measured 2026-09-30 (02-08 continuation, counted sweep offload-3d): PARTIAL, SC4 BLOCKED at rung 4 (rung 1 no FAIL on vitest, tsc, workload-wrapper; rung 2 machine comparability verdict COMPARABLE; rung 3 bracket OK, free-memory drift 201.35MB < workload peak delta 954.505MB; no agent sweep ran because the agent-turn leg is BLOCKED, so claude/codex absence is vacuous); desktop subtree resolved (desktopSubtreeSize 40); esbuild, indexer and orca-cli UNJUDGED (never sighted by the baseline); a codex.exe app-server (pid 29228, the desktop Codex app, one sample of 110) was seen on the laptop and is disclosed, not judged against the offload. Superseded earlier 02-08 text: PARTIAL at rung 2 with comparability UNJUDGED because three launches failed before the workload. Earlier text: measured 2026-09-28, corrected 2026-09-30 (02-07): absence of local claude/codex/vitest/build/indexer processes during offload was judged by run nonce only, because the remote manifest carried no desktopRootPid (desktop subtree size 1), so the desktop's own subtree was never searched; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
     },
     {
       "id": 46,
@@ -997,9 +1007,19 @@
           "kind": "file",
           "path": "docs/dws/phase-2-agent-leg.json",
           "note": "02-08: agent-turn leg BLOCKED: credential existence check printed no login for Claude or Codex in the orca-svc service HOME (2026-09-30T00:55:20Z); classifier control not-logged-in"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-remote-proof.json",
+          "note": "02-08 counted sweep offload-3d: test leg UNJUDGED (no LEG-START childPid/startUtc to bind the capture to); build leg PASS, peakRssMb=696.41"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-summary.json",
+          "note": "02-08 offload-3d summary: 110 samples, desktopRootPidValid true, legWindowCovered true"
         }
       ],
-      "reason": "re-measured 2026-09-30 (02-08): PARTIAL because the agent-turn leg is not PASS (BLOCKED) and the test-run leg was not re-measured; agent-turn leg BLOCKED (no provider login in the orca-svc service HOME, existence check 2026-09-30T00:55:20Z; the real CLI reports not-logged-in; Owner action = interactive login as orca-svc on GEX44, never a copied credential); test-run leg remote proof not re-measured in 02-08 because the offload-3 sweep never reached the workload (the 02-05 PASS stands as recorded); build leg remote proof UNJUDGED (does not gate SC3, not re-captured at 0.2 s). Earlier text: measured 2026-09-28: the test-run leg's remote process tree proof is PASS (real vitest process captured under the serve's PID tree, peakRssMb=589.14); the agent-turn leg is BLOCKED, no provider login in the orca-svc service HOME (measured 2026-09-29: the CLI prints 'Not logged in', exit=1); Owner action = interactive login as orca-svc on GEX44, never a copied credential (cause corrected 2026-09-30, 02-07)"
+      "reason": "re-measured 2026-09-30 (02-08): PARTIAL because the agent-turn leg is BLOCKED and the test-run leg remote proof is UNJUDGED; agent-turn leg BLOCKED (no provider login in the orca-svc service HOME, existence check 2026-09-30T00:55:20Z; the real CLI reports not-logged-in; Owner action = interactive login as orca-svc on GEX44, never a copied credential); test-run leg remote proof UNJUDGED (counted sweep offload-3d: no LEG-START childPid/startUtc reached the manifest for the test leg, so the capture cannot be bound; the ps capture does hold a vitest tree under the serve MainPID at 01:05:24Z-01:05:30Z, peak 592.4MB, which is unbound evidence and is not counted as PASS); build leg remote proof PASS (does not gate SC3; tsc pid 1399288 bound by LEG-START, peakRssMb=696.41 at the 0.2 s capture). Superseded earlier 02-08 text: test-run leg not re-measured because no sweep reached the workload. Earlier text: measured 2026-09-28: the test-run leg's remote process tree proof is PASS (real vitest process captured under the serve's PID tree, peakRssMb=589.14); the agent-turn leg is BLOCKED, no provider login in the orca-svc service HOME (measured 2026-09-29: the CLI prints 'Not logged in', exit=1); Owner action = interactive login as orca-svc on GEX44, never a copied credential (cause corrected 2026-09-30, 02-07)"
     },
     {
       "id": 47,

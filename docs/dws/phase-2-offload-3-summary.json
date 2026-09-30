@@ -1,0 +1,506 @@
+{
+  "perFamily": {
+    "vitest": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "tsc": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "esbuild": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "claude": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "codex": {
+      "peakMb": 2.355,
+      "medianMb": 2.355,
+      "maxCount": 1,
+      "samplesPresent": 1,
+      "observed": [
+        {
+          "pid": 29228,
+          "commandLine": "C:\\Users\\User\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin\\codex.exe app-server"
+        }
+      ]
+    },
+    "indexer": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "workload-wrapper": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "orca-cli": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "nonce": {
+      "peakMb": 0,
+      "medianMb": 0,
+      "maxCount": 0,
+      "samplesPresent": 0,
+      "observed": []
+    },
+    "control-surface": {
+      "peakMb": 982.3359999999998,
+      "medianMb": 770.829,
+      "maxCount": 17,
+      "samplesPresent": 47,
+      "observed": [
+        {
+          "pid": 39176,
+          "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /d /s /c \"\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" \"-r\" \"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\playwright-core@1.59.1\\node_modules\\playwright-core\\lib\\server\\electron\\loader.js\" \"--inspect=0\" \"--remote-debugging-port=0\" \"C:\\Users\\User\\Apps\\orca-dws-wt\"\""
+        },
+        {
+          "pid": 1912,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\"  \"-r\" \"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\playwright-core@1.59.1\\node_modules\\playwright-core\\lib\\server\\electron\\loader.js\" \"--inspect=0\" \"--remote-debugging-port=0\" \"C:\\Users\\User\\Apps\\orca-dws-wt\""
+        },
+        {
+          "pid": 32708,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" --type=crashpad-handler --user-data-dir=C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R /prefetch:4 --no-rate-limit --no-upload-gzip --monitor-self-annotation=ptype=crashpad-handler --database=C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\Crashpad --annotation=_productName=orca --annotation=_version=1.4.178-rc.2 --annotation=plat=Win64 --annotation=prod=Electron --annotation=ver=43.1.0 --initial-client-data=0x6cc,0x6d0,0x6d4,0x6a0,0x6d8,0x7ff774f705e0,0x7ff774f705f0,0x7ff774f70600"
+        },
+        {
+          "pid": 17936,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" --type=gpu-process --disable-breakpad --user-data-dir=\"C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\" --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAOAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAABgAAAAAAAAAGAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --field-trial-handle=2116,i,3928858939286539068,8706607271828479468,262144 --enable-features=CDPScreenshotNewSurface,EarlyEstablishGpuChannel,EstablishGpuChannelAsync,PdfUseShowSaveFilePicker --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,DropInputEventsWhilePaintHolding,FedCm,GlobalMediaControls,HttpsUpgrades,IntensiveWakeUpThrottling,LensOverlay,LocalNetworkAccessChecks,MediaRouter,NetworkServiceSandbox,OptimizationHints,PaintHolding,RenderDocument,ScreenAIOCREnabled,SpareRendererForSitePerProcess,ThirdPartyStoragePartitioning,TraceSiteInstanceGetProcessCreation,Translate --variations-seed-version --pseudonymization-salt-handle=2124,i,6036865781473525270,10821537872608617164,4 --trace-process-track-uuid=3190708988185955192 --mojo-platform-channel-handle=2108 /prefetch:2"
+        },
+        {
+          "pid": 30792,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=es --service-sandbox-type=none --user-data-dir=\"C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\" --field-trial-handle=2116,i,3928858939286539068,8706607271828479468,262144 --enable-features=CDPScreenshotNewSurface,EarlyEstablishGpuChannel,EstablishGpuChannelAsync,PdfUseShowSaveFilePicker --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,DropInputEventsWhilePaintHolding,FedCm,GlobalMediaControls,HttpsUpgrades,IntensiveWakeUpThrottling,LensOverlay,LocalNetworkAccessChecks,MediaRouter,NetworkServiceSandbox,OptimizationHints,PaintHolding,RenderDocument,ScreenAIOCREnabled,SpareRendererForSitePerProcess,ThirdPartyStoragePartitioning,TraceSiteInstanceGetProcessCreation,Translate --variations-seed-version --pseudonymization-salt-handle=2124,i,6036865781473525270,10821537872608617164,4 --trace-process-track-uuid=3190708989122997041 --mojo-platform-channel-handle=2316 /prefetch:11"
+        },
+        {
+          "pid": 43716,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" --type=renderer --user-data-dir=\"C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\" --app-path=\"C:\\Users\\User\\Apps\\orca-dws-wt\" --enable-sandbox --disable-back-forward-cache --disable-background-timer-throttling --disable-breakpad --enable-automation --force-color-profile=srgb --max-active-webgl-contexts=128 --remote-debugging-port=0 --allow-pre-commit-input --js-flags=--max-old-space-size=4096 --video-capture-use-gpu-memory-buffer --lang=es --device-scale-factor=1.25 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=4 --time-ticks-at-unix-epoch=-1790655536956301 --launch-time-ticks=74755866429 --field-trial-handle=2116,i,3928858939286539068,8706607271828479468,262144 --enable-features=CDPScreenshotNewSurface,EarlyEstablishGpuChannel,EstablishGpuChannelAsync,PdfUseShowSaveFilePicker --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,DropInputEventsWhilePaintHolding,FedCm,GlobalMediaControls,HttpsUpgrades,IntensiveWakeUpThrottling,LensOverlay,LocalNetworkAccessChecks,MediaRouter,NetworkServiceSandbox,OptimizationHints,PaintHolding,RenderDocument,ScreenAIOCREnabled,SpareRendererForSitePerProcess,ThirdPartyStoragePartitioning,TraceSiteInstanceGetProcessCreation,Translate --variations-seed-version --pseudonymization-salt-handle=2124,i,6036865781473525270,10821537872608617164,4 --trace-process-track-uuid=3190708990060038890 --mojo-platform-channel-handle=3624 /prefetch:1"
+        },
+        {
+          "pid": 48944,
+          "commandLine": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ErrorActionPreference = 'Stop'\n$path = $args[0]\n$currentUserSid = $args[1]\n$isDirectory = $args[2] -eq '1'\n$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')\n$allowedSids = @{}\nforeach ($sidText in $allowedSidTexts) {\n  $allowedSids[$sidText] = $true\n}\n$acl = Get-Acl -LiteralPath $path\n$acl.SetAccessRuleProtection($true, $false)\nforeach ($rule in @($acl.Access)) {\n  [void]$acl.RemoveAccessRuleSpecific($rule)\n}\n$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None\nif ($isDirectory) {\n  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit\n}\nforeach ($sidText in $allowedSidTexts) {\n  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)\n  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(\n    $sid,\n    [System.Security.AccessControl.FileSystemRights]::FullControl,\n    $inheritanceFlags,\n    [System.Security.AccessControl.PropagationFlags]::None,\n    [System.Security.AccessControl.AccessControlType]::Allow\n  )\n  [void]$acl.AddAccessRule($rule)\n}\nSet-Acl -LiteralPath $path -AclObject $acl\n$verifiedAcl = Get-Acl -LiteralPath $path\nif (-not $verifiedAcl.AreAccessRulesProtected) {\n  throw 'ACL inheritance is still enabled'\n}\n$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl\nforeach ($rule in @($verifiedAcl.Access)) {\n  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value\n  if (-not $allowedSids.ContainsKey($sid)) {\n    throw \\\"Unexpected ACL entry $sid\\\"\n  }\n  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {\n    throw \\\"Unexpected ACL deny entry $sid\\\"\n  }\n  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {\n    throw \\\"ACL entry $sid does not grant FullControl\\\"\n  }\n}\" C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R S-1-5-21-1389573045-3927492660-747651709-1000 1"
+        },
+        {
+          "pid": 17632,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 16620,
+          "commandLine": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ErrorActionPreference = 'Stop'\n$path = $args[0]\n$currentUserSid = $args[1]\n$isDirectory = $args[2] -eq '1'\n$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')\n$allowedSids = @{}\nforeach ($sidText in $allowedSidTexts) {\n  $allowedSids[$sidText] = $true\n}\n$acl = Get-Acl -LiteralPath $path\n$acl.SetAccessRuleProtection($true, $false)\nforeach ($rule in @($acl.Access)) {\n  [void]$acl.RemoveAccessRuleSpecific($rule)\n}\n$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None\nif ($isDirectory) {\n  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit\n}\nforeach ($sidText in $allowedSidTexts) {\n  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)\n  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(\n    $sid,\n    [System.Security.AccessControl.FileSystemRights]::FullControl,\n    $inheritanceFlags,\n    [System.Security.AccessControl.PropagationFlags]::None,\n    [System.Security.AccessControl.AccessControlType]::Allow\n  )\n  [void]$acl.AddAccessRule($rule)\n}\nSet-Acl -LiteralPath $path -AclObject $acl\n$verifiedAcl = Get-Acl -LiteralPath $path\nif (-not $verifiedAcl.AreAccessRulesProtected) {\n  throw 'ACL inheritance is still enabled'\n}\n$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl\nforeach ($rule in @($verifiedAcl.Access)) {\n  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value\n  if (-not $allowedSids.ContainsKey($sid)) {\n    throw \\\"Unexpected ACL entry $sid\\\"\n  }\n  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {\n    throw \\\"Unexpected ACL deny entry $sid\\\"\n  }\n  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {\n    throw \\\"ACL entry $sid does not grant FullControl\\\"\n  }\n}\" C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\orca-e2ee-keypair.json.1912.1790730292951.9f0506d1.tmp S-1-5-21-1389573045-3927492660-747651709-1000 0"
+        },
+        {
+          "pid": 24156,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 46788,
+          "commandLine": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ErrorActionPreference = 'Stop'\n$path = $args[0]\n$currentUserSid = $args[1]\n$isDirectory = $args[2] -eq '1'\n$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')\n$allowedSids = @{}\nforeach ($sidText in $allowedSidTexts) {\n  $allowedSids[$sidText] = $true\n}\n$acl = Get-Acl -LiteralPath $path\n$acl.SetAccessRuleProtection($true, $false)\nforeach ($rule in @($acl.Access)) {\n  [void]$acl.RemoveAccessRuleSpecific($rule)\n}\n$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None\nif ($isDirectory) {\n  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit\n}\nforeach ($sidText in $allowedSidTexts) {\n  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)\n  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(\n    $sid,\n    [System.Security.AccessControl.FileSystemRights]::FullControl,\n    $inheritanceFlags,\n    [System.Security.AccessControl.PropagationFlags]::None,\n    [System.Security.AccessControl.AccessControlType]::Allow\n  )\n  [void]$acl.AddAccessRule($rule)\n}\nSet-Acl -LiteralPath $path -AclObject $acl\n$verifiedAcl = Get-Acl -LiteralPath $path\nif (-not $verifiedAcl.AreAccessRulesProtected) {\n  throw 'ACL inheritance is still enabled'\n}\n$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl\nforeach ($rule in @($verifiedAcl.Access)) {\n  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value\n  if (-not $allowedSids.ContainsKey($sid)) {\n    throw \\\"Unexpected ACL entry $sid\\\"\n  }\n  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {\n    throw \\\"Unexpected ACL deny entry $sid\\\"\n  }\n  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {\n    throw \\\"ACL entry $sid does not grant FullControl\\\"\n  }\n}\" C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\orca-runtime.json.1912.1790730293820.367ee60a.tmp S-1-5-21-1389573045-3927492660-747651709-1000 0"
+        },
+        {
+          "pid": 15624,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 436,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" C:\\Users\\User\\Apps\\orca-dws-wt\\out\\main\\daemon-entry.js --socket \\\\?\\pipe\\orca-terminal-host-v36-1943337b8e2f --token C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\daemon\\daemon-v36.token --pid-record C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\daemon\\daemon-v36.pid --launch-nonce 4a03143a-0a06-4af5-9ee6-d3ee7b2024d9 --entry-path C:\\Users\\User\\Apps\\orca-dws-wt\\out\\main\\daemon-entry.js --app-version 1.4.178-rc.2 --spawner-exec-path \"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" --log-file C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\logs\\daemon.log"
+        },
+        {
+          "pid": 36624,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\_0fb73617c3a010dc75f69e2dff4aad3e\\node_modules\\node-pty\\prebuilds\\win32-x64\\conpty\\OpenConsole.exe\" --headless --width 2 --height 1 --signal 0x2f0 --server 0x2e4"
+        },
+        {
+          "pid": 46972,
+          "commandLine": "C:\\WINDOWS\\system32\\cmd.exe /c exit"
+        },
+        {
+          "pid": 39692,
+          "commandLine": "\"C:\\Users\\User\\Desktop\\Cursor Projects\\Vibe Coding Projects\\Orca X\\node_modules\\.pnpm\\electron@43.1.0\\node_modules\\electron\\dist\\electron.exe\" C:\\Users\\User\\Apps\\orca-dws-wt\\out\\main\\codex\\codex-app-server-grant-entry.js"
+        },
+        {
+          "pid": 50148,
+          "commandLine": "gh --version"
+        },
+        {
+          "pid": 28796,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 26072,
+          "commandLine": "\"C:\\Users\\User\\scoop\\apps\\gh\\current\\bin\\gh.exe\"  --version"
+        },
+        {
+          "pid": 45680,
+          "commandLine": "gh api --include user/starred/stablyai/orca"
+        },
+        {
+          "pid": 41732,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 36244,
+          "commandLine": "gh auth status"
+        },
+        {
+          "pid": 47096,
+          "commandLine": ""
+        },
+        {
+          "pid": 31460,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 35768,
+          "commandLine": "\"C:\\Users\\User\\scoop\\apps\\gh\\current\\bin\\gh.exe\"  api --include user/starred/stablyai/orca"
+        },
+        {
+          "pid": 3816,
+          "commandLine": ""
+        },
+        {
+          "pid": 47360,
+          "commandLine": "\"C:\\Users\\User\\scoop\\apps\\gh\\current\\bin\\gh.exe\"  auth status"
+        },
+        {
+          "pid": 45636,
+          "commandLine": "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize,KernelModeTime,UserModeTime,CreationDate | ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks)) } catch {} }\""
+        },
+        {
+          "pid": 43564,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 5628,
+          "commandLine": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ErrorActionPreference = 'Stop'\n$path = $args[0]\n$currentUserSid = $args[1]\n$isDirectory = $args[2] -eq '1'\n$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')\n$allowedSids = @{}\nforeach ($sidText in $allowedSidTexts) {\n  $allowedSids[$sidText] = $true\n}\n$acl = Get-Acl -LiteralPath $path\n$acl.SetAccessRuleProtection($true, $false)\nforeach ($rule in @($acl.Access)) {\n  [void]$acl.RemoveAccessRuleSpecific($rule)\n}\n$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None\nif ($isDirectory) {\n  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit\n}\nforeach ($sidText in $allowedSidTexts) {\n  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)\n  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(\n    $sid,\n    [System.Security.AccessControl.FileSystemRights]::FullControl,\n    $inheritanceFlags,\n    [System.Security.AccessControl.PropagationFlags]::None,\n    [System.Security.AccessControl.AccessControlType]::Allow\n  )\n  [void]$acl.AddAccessRule($rule)\n}\nSet-Acl -LiteralPath $path -AclObject $acl\n$verifiedAcl = Get-Acl -LiteralPath $path\nif (-not $verifiedAcl.AreAccessRulesProtected) {\n  throw 'ACL inheritance is still enabled'\n}\n$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl\nforeach ($rule in @($verifiedAcl.Access)) {\n  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value\n  if (-not $allowedSids.ContainsKey($sid)) {\n    throw \\\"Unexpected ACL entry $sid\\\"\n  }\n  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {\n    throw \\\"Unexpected ACL deny entry $sid\\\"\n  }\n  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {\n    throw \\\"ACL entry $sid does not grant FullControl\\\"\n  }\n}\" C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\orca-environments.json S-1-5-21-1389573045-3927492660-747651709-1000 0"
+        },
+        {
+          "pid": 39652,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 22908,
+          "commandLine": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ErrorActionPreference = 'Stop'\n$path = $args[0]\n$currentUserSid = $args[1]\n$isDirectory = $args[2] -eq '1'\n$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')\n$allowedSids = @{}\nforeach ($sidText in $allowedSidTexts) {\n  $allowedSids[$sidText] = $true\n}\n$acl = Get-Acl -LiteralPath $path\n$acl.SetAccessRuleProtection($true, $false)\nforeach ($rule in @($acl.Access)) {\n  [void]$acl.RemoveAccessRuleSpecific($rule)\n}\n$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None\nif ($isDirectory) {\n  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit\n}\nforeach ($sidText in $allowedSidTexts) {\n  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)\n  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(\n    $sid,\n    [System.Security.AccessControl.FileSystemRights]::FullControl,\n    $inheritanceFlags,\n    [System.Security.AccessControl.PropagationFlags]::None,\n    [System.Security.AccessControl.AccessControlType]::Allow\n  )\n  [void]$acl.AddAccessRule($rule)\n}\nSet-Acl -LiteralPath $path -AclObject $acl\n$verifiedAcl = Get-Acl -LiteralPath $path\nif (-not $verifiedAcl.AreAccessRulesProtected) {\n  throw 'ACL inheritance is still enabled'\n}\n$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl\nforeach ($rule in @($verifiedAcl.Access)) {\n  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value\n  if (-not $allowedSids.ContainsKey($sid)) {\n    throw \\\"Unexpected ACL entry $sid\\\"\n  }\n  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {\n    throw \\\"Unexpected ACL deny entry $sid\\\"\n  }\n  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {\n    throw \\\"ACL entry $sid does not grant FullControl\\\"\n  }\n}\" C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\orca-environments.json.1912.1790730316442.b19db227.tmp S-1-5-21-1389573045-3927492660-747651709-1000 0"
+        },
+        {
+          "pid": 49908,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 31052,
+          "commandLine": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ErrorActionPreference = 'Stop'\n$path = $args[0]\n$currentUserSid = $args[1]\n$isDirectory = $args[2] -eq '1'\n$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')\n$allowedSids = @{}\nforeach ($sidText in $allowedSidTexts) {\n  $allowedSids[$sidText] = $true\n}\n$acl = Get-Acl -LiteralPath $path\n$acl.SetAccessRuleProtection($true, $false)\nforeach ($rule in @($acl.Access)) {\n  [void]$acl.RemoveAccessRuleSpecific($rule)\n}\n$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None\nif ($isDirectory) {\n  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit\n}\nforeach ($sidText in $allowedSidTexts) {\n  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)\n  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(\n    $sid,\n    [System.Security.AccessControl.FileSystemRights]::FullControl,\n    $inheritanceFlags,\n    [System.Security.AccessControl.PropagationFlags]::None,\n    [System.Security.AccessControl.AccessControlType]::Allow\n  )\n  [void]$acl.AddAccessRule($rule)\n}\nSet-Acl -LiteralPath $path -AclObject $acl\n$verifiedAcl = Get-Acl -LiteralPath $path\nif (-not $verifiedAcl.AreAccessRulesProtected) {\n  throw 'ACL inheritance is still enabled'\n}\n$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl\nforeach ($rule in @($verifiedAcl.Access)) {\n  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value\n  if (-not $allowedSids.ContainsKey($sid)) {\n    throw \\\"Unexpected ACL entry $sid\\\"\n  }\n  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {\n    throw \\\"Unexpected ACL deny entry $sid\\\"\n  }\n  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {\n    throw \\\"ACL entry $sid does not grant FullControl\\\"\n  }\n}\" C:\\Users\\User\\AppData\\Local\\Temp\\orca-e2e-userdata-oZdq6R\\orca-environments.json S-1-5-21-1389573045-3927492660-747651709-1000 0"
+        },
+        {
+          "pid": 13960,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 13536,
+          "commandLine": ""
+        },
+        {
+          "pid": 17056,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        },
+        {
+          "pid": 39840,
+          "commandLine": "powershell.exe -NoProfile -Command \"Get-CimInstance Win32_Process -Filter \\\"ProcessId=1860 OR ProcessId=4 OR ProcessId=10624 OR ProcessId=21012 OR ProcessId=1792 OR ProcessId=1632 OR ProcessId=2476 OR ProcessId=3556 OR ProcessId=4828 OR ProcessId=1708 OR ProcessId=1912 OR ProcessId=44980 OR ProcessId=3092 OR ProcessId=15364 OR ProcessId=29408 OR ProcessId=19140 OR ProcessId=38848 OR ProcessId=16904 OR ProcessId=25928 OR ProcessId=14444 OR ProcessId=4888 OR ProcessId=22768 OR ProcessId=13716 OR ProcessId=16548\\\" | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress\""
+        },
+        {
+          "pid": 44148,
+          "commandLine": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0x4"
+        }
+      ]
+    }
+  },
+  "workloadTotalPerSampleMb": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    2.355,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "workloadTotal": {
+    "peakMb": 2.355,
+    "medianMb": 0
+  },
+  "cadence": {
+    "medianMs": 1008,
+    "samples": 110
+  },
+  "freeMb": {
+    "before": 4461.06,
+    "after": 4662.41,
+    "min": 3046.3
+  },
+  "instrument": "Win32_Process.WorkingSetSize via Get-CimInstance",
+  "unreadableLines": 0,
+  "observation": {
+    "samples": 110,
+    "sawStart": true,
+    "sawStop": true,
+    "spanMs": 110447,
+    "desktopRootPidValid": true,
+    "legWindowCovered": true,
+    "failedLegs": []
+  },
+  "patterns": [
+    {
+      "family": "vitest",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "vitest.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "tsc",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "typescript/bin/tsc",
+            "typescript\\bin\\tsc"
+          ]
+        },
+        {
+          "nameEquals": [
+            "tsc.exe"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "esbuild",
+      "rules": [
+        {
+          "nameEquals": [
+            "esbuild.exe"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "claude",
+      "rules": [
+        {
+          "nameEquals": [
+            "claude.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "@anthropic-ai/claude-code"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "codex",
+      "rules": [
+        {
+          "nameEquals": [
+            "codex.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "@openai/codex"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "indexer",
+      "rules": [
+        {
+          "nameEquals": [
+            "rg.exe"
+          ]
+        },
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "tsserver"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "workload-wrapper",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "dws-offload-workload.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "orca-cli",
+      "rules": [
+        {
+          "nameEquals": [
+            "node.exe",
+            "node"
+          ],
+          "commandLineIncludes": [
+            "out/cli/index.js",
+            "out\\cli\\index.js"
+          ]
+        }
+      ]
+    }
+  ],
+  "desktopSubtreeSize": 40,
+  "harnessSubtreeSize": 64
+}
