@@ -75,6 +75,13 @@ Treat these as wire changes even though nothing in the codec moves:
 If old clients cannot interpret the new projection correctly, gate it behind a
 runtime capability the same way Rule 2 gates an opcode.
 
+A second worked example is dws Phase 3. The host stopped aborting launch RPCs on socket close with no
+frame change; no old client can have depended on the old abort (it never received that reply), but the
+Detach guarantee holds only against hosts that include the change. The Stop refusal codes now arrive with
+their own `error.code` while `message` is unchanged. `workstream.cancel` is a new method name, so an old
+host fails closed with `method_not_found`, which a client must never turn into a Stop. See
+[`detach-stop-cancel-effects.md`](./detach-stop-cancel-effects.md).
+
 ## Enforcement
 
 `tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts` runs the real

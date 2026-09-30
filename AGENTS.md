@@ -120,6 +120,10 @@ Node delivers an IPC message a tick after reading it and checks the channel only
 
 `fork()` always creates an IPC channel, so a site is exposed even with no `'ipc'` in its `stdio`. The teardown that arms the crash — dropping the last `'message'` listener, then disconnecting or killing — usually lives in a different function from the fork, which is why this is a gate rather than a code-review note. `removeAllListeners()` on a child is the sharpest form: it takes node's own internal handlers with it.
 
+## Detach, Stop, Cancel
+
+Window close, client disconnect and app quit are Detach: they never stop an Execution or cancel a Workstream. Stop Execution is an explicit act (`terminal.stopExact` and its siblings). Cancel Workstream belongs to UWCP (`uwcp.control/1`) and is ABSENT (refuses): `workstream.cancel` answers `workstream_authority_unavailable` and never degrades into a Stop. An RPC that launches or mutates an Execution declares `effect: 'launch'`. See [`docs/reference/detach-stop-cancel-effects.md`](./docs/reference/detach-stop-cancel-effects.md).
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
