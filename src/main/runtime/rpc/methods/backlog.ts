@@ -6,6 +6,7 @@ import {
   BacklogCandidatesIngestParams,
   BacklogCandidatesResolveParams
 } from './backlog-candidate-params'
+import { BacklogHarvestRunParams } from './backlog-harvest-params'
 import {
   BacklogCaptureParams,
   BacklogGetParams,
@@ -83,5 +84,10 @@ export const BACKLOG_METHODS: RpcAnyMethod[] = [
     name: 'backlog.health',
     params: null,
     handler: async (_params, { runtime }) => requireBacklogHost(runtime).health()
+  }),
+  defineMethod({
+    name: 'backlog.harvest.run',
+    params: BacklogHarvestRunParams,
+    handler: async (params, { runtime }) => requireBacklogHost(runtime).harvest(params.unit)
   })
 ]

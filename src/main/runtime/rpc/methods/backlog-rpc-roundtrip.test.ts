@@ -132,7 +132,11 @@ describe('backlog runtime RPC round trip', () => {
     })
 
     type Listed = { total: number; candidates: Record<string, unknown>[] }
-    const listed = (await resultOf(dispatcherOn(root), 'backlog.candidates.list', {})) as unknown as Listed
+    const listed = (await resultOf(
+      dispatcherOn(root),
+      'backlog.candidates.list',
+      {}
+    )) as unknown as Listed
     expect(listed.total).toBe(1)
     expect(listed.candidates[0]).toMatchObject({
       text: 'ship the inbox',
@@ -151,7 +155,11 @@ describe('backlog runtime RPC round trip', () => {
       unit: 'orca-conversations'
     })) as unknown as Record<string, unknown>
     expect(again).toMatchObject({ outcome: 'completed', candidatesNew: 0, candidatesDuplicate: 1 })
-    const relisted = (await resultOf(dispatcherOn(root), 'backlog.candidates.list', {})) as unknown as Listed
+    const relisted = (await resultOf(
+      dispatcherOn(root),
+      'backlog.candidates.list',
+      {}
+    )) as unknown as Listed
     expect(relisted.total).toBe(1)
 
     // The report crosses the remote wire: counts and codes only, never text, title or path.

@@ -43,6 +43,7 @@ backlog.candidates.list
 backlog.candidates.resolve
 backlog.capture
 backlog.get
+backlog.harvest.run
 backlog.health
 backlog.list
 backlog.merge

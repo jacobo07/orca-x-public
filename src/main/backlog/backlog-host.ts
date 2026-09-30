@@ -1,4 +1,8 @@
 import type {
+  BacklogHarvestRpcUnit,
+  BacklogHarvestRunReport
+} from '../../shared/backlog-harvest-report'
+import type {
   BacklogCandidateListQuery,
   BacklogCandidateListResult,
   BacklogHealth,
@@ -19,6 +23,7 @@ import type {
 import type { BacklogItemPatch, BacklogTransitionInput } from './backlog-item-folds'
 import type { BacklogItemMergeInput, BacklogItemMergeResult } from './backlog-item-merge'
 import type { BacklogCaptureInput, BacklogService } from './backlog-service'
+import type { BacklogHarvestRunner } from './harvest/backlog-harvest-runner'
 
 /** What runtime RPC clients may ask of this host's intent ledger; one service behind every client. */
 export type BacklogHost = {
@@ -37,10 +42,16 @@ export type BacklogHost = {
   resolveCandidate: (resolution: BacklogCandidateResolution) => Promise<BacklogResolveResult>
   merge: (input: BacklogItemMergeInput) => Promise<BacklogItemMergeResult>
   health: () => Promise<BacklogHealth>
+  harvest: (unit: BacklogHarvestRpcUnit) => Promise<BacklogHarvestRunReport>
 }
 
-export function createBacklogHost(service: BacklogService): BacklogHost {
+// The runner is required: a host without harvest would answer every run as an empty success.
+export function createBacklogHost(
+  service: BacklogService,
+  harvester: BacklogHarvestRunner
+): BacklogHost {
   return {
+    harvest: (unit) => harvester.run(unit),
     list: (query) => service.list(query),
     capture: (input) => service.capture(input),
     get: (id) => service.get(id),
