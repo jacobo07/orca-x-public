@@ -124,6 +124,31 @@
       // #1a1d1f insets) that Orca's neutral dark palette does not carry; the producer maps
       // them to the nearest tokens rather than inventing new ones.
       "notes": "The Mission Brief north star the Owner approved. Content is illustrative (a Shopify OAuth mission); the ~6-10 min estimate and the Shopify glyph have no record behind them in Orca and are not reproduced as data."
+    },
+    {
+      "assetId": "mission-brief.full.desktop.needs-you.r02",
+      "surface": "mission-brief",
+      "subsurface": "full",
+      "device": "desktop",
+      "state": "needs-you",
+      "revision": 2,
+      "class": "north-star",
+      "truth": "target",
+      "targetLabel": true,
+      "producer": "html",
+      "status": "candidate",
+      "file": "mission-brief/mission-brief.full.desktop.needs-you.r02.png",
+      "sha256": "239732984a21a95961a05ce33fba71b39eb2650813b0fa49a79d57394105e417",
+      "date": "2026-09-30",
+      // r01 rebuilt in Geist and live tokens, then gated against r01's pixels: rendered at 1.25
+      // device scale with --selector .card, every measured box (card, tiles, chips, stage marks
+      // and connectors, action card, time chip, chevron, all tags, buttons) and all ten row rules
+      // land within 2 image px of r01's card crop (x122-1326, y52-1031). r01's image-model font is
+      // narrower than Geist and not self-consistent, so type sizes are fitted per run from
+      // measured widths rather than taken from a scale. Deviations kept on purpose: the
+      // Shopify glyph (drawn here as a bag; the app renders a terminal glyph), the card surface
+      // (--card, not r01's #111315), and the attention amber hue (--agent-question).
+      "notes": "Rendered from docs/visual/producers/mission-brief.full.desktop.needs-you.html at 1200x1000 CSS, 1.25x, clipped to .card (1205x980). Pixel gate vs r01: 0 boxes off at 2 px tolerance; rules worst 1 px. r01 remains the lineage; this is the implementer reference for the Panel/Header/Rows/Actions port."
     }
   ]
 }
