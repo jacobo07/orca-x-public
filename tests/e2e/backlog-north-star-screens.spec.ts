@@ -285,6 +285,42 @@ test('north-star screenshots', async ({ testRepoPath }, testInfo) => {
     ).toBeVisible()
     await shoot(page, testInfo, 'backlog-dark-wide.png')
 
+    // R-11: a multi-line row is titled by its first line and never repeats its second line. The
+    // expected text comes from the ledger; the same-kind one-line row is the locale-proof control.
+    const listed = await rpc<{ items: { id: string; kind: string; originalText: string }[] }>(
+      page,
+      'backlog.list',
+      { limit: 500 }
+    )
+    const multiLine = listed.items.filter((item) => item.originalText.includes('\n'))
+    expect(multiLine).toHaveLength(1)
+    const sameKind = listed.items.filter(
+      (item) => item.kind === multiLine[0].kind && item.id !== multiLine[0].id
+    )
+    expect(sameKind).toHaveLength(1)
+    expect(sameKind[0].originalText).not.toContain('\n')
+    const lines = multiLine[0].originalText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+    const multiRow = page.locator(`[data-backlog-item-id="${multiLine[0].id}"]`).first()
+    const singleRow = page.locator(`[data-backlog-item-id="${sameKind[0].id}"]`).first()
+    await expect(multiRow).toBeVisible()
+    await expect(singleRow).toBeVisible()
+    const multiSecondary = (
+      await multiRow.locator('[data-backlog-row-secondary]').innerText()
+    ).trim()
+    const singleSecondary = (
+      await singleRow.locator('[data-backlog-row-secondary]').innerText()
+    ).trim()
+    expect(multiSecondary).not.toBe('')
+    expect(singleSecondary).not.toBe('')
+    expect(multiSecondary, 'multi-line row repeats its second line').not.toBe(lines[1])
+    expect(multiSecondary).toBe(singleSecondary)
+    expect((await multiRow.locator('[data-backlog-row-toggle] [title]').innerText()).trim()).toBe(
+      lines[0]
+    )
+
     const groupA = page.locator(`[data-backlog-group="project:${a}"]`)
     const row = groupA.locator('[data-backlog-item-id]').first()
     await row.locator('[data-backlog-row-toggle]').click()
@@ -356,6 +392,50 @@ test('overflow backstops', async ({ testRepoPath }, testInfo) => {
     const chipHeight = (await page.locator('[data-backlog-scope="all"]').boundingBox())!.height
     expect((await strip.boundingBox())!.height).toBeGreaterThan(2 * chipHeight)
     await expect(page.locator('[data-backlog-scope]')).toHaveCount(15)
+
+    // G1: an unknown-project chip keeps the end of its id, which is what tells the chips apart.
+    const ghostChips = page.locator('[data-backlog-scope^="project:ghost-project-"]')
+    await expect(ghostChips).toHaveCount(12)
+    const clipped = await ghostChips.evaluateAll((chips) =>
+      chips.flatMap((chip) => {
+        const id = (chip.getAttribute('data-backlog-scope') ?? '').slice('project:'.length)
+        const end = id.slice(-10)
+        const walker = document.createTreeWalker(chip, NodeFilter.SHOW_TEXT)
+        let node = walker.nextNode()
+        while (node && !node.textContent?.includes(end)) {
+          node = walker.nextNode()
+        }
+        if (!node) {
+          return [`${id}: no text node carries ${end}`]
+        }
+        for (let element = node.parentElement; element; element = element.parentElement) {
+          const clips = getComputedStyle(element).overflowX !== 'visible'
+          if (clips && element.scrollWidth > element.clientWidth + 1) {
+            return [id]
+          }
+          if (element === chip) {
+            break
+          }
+        }
+        return []
+      })
+    )
+    expect(clipped, 'unknown-project chip clips its id tail').toEqual([])
+    const ghosts = await ghostChips.evaluateAll((chips) =>
+      chips.map((chip) => ({
+        id: (chip.getAttribute('data-backlog-scope') ?? '').slice('project:'.length),
+        tails: Array.from(chip.querySelectorAll('[data-backlog-scope-id-tail]')).map(
+          (tail) => tail.textContent ?? ''
+        ),
+        name: chip.getAttribute('aria-label') ?? ''
+      }))
+    )
+    expect(new Set(ghosts.map((ghost) => ghost.tails.join('|'))).size).toBe(12)
+    for (const ghost of ghosts) {
+      expect(ghost.tails, `tail of ${ghost.id}`).toHaveLength(1)
+      expect(ghost.tails[0].endsWith(ghost.id.slice(-10)), `tail of ${ghost.id}`).toBe(true)
+      expect(ghost.name).toContain(ghost.id)
+    }
     await shoot(page, testInfo, 'backlog-overflow-wide.png')
 
     const narrow = await resizeWindow(app, page, 900, 900)
