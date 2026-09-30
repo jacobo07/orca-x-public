@@ -11,7 +11,7 @@ import type {
 } from '../../shared/backlog-outcomes'
 import { BACKLOG_NORMALIZED_INTENT_MAX } from '../../shared/backlog-rpc-limits'
 import {
-  BACKLOG_SCHEMA_VERSION,
+  BACKLOG_SCHEMA_BASE_VERSION,
   type BacklogCandidate,
   type BacklogItem,
   type BacklogItemKind,
@@ -102,7 +102,7 @@ export class BacklogService {
     return this.stores().items.create(
       id,
       ({ now, mintEventId }) => ({
-        schemaVersion: BACKLOG_SCHEMA_VERSION,
+        schemaVersion: BACKLOG_SCHEMA_BASE_VERSION,
         id,
         kind: input.kind,
         originalText: text,
@@ -137,10 +137,7 @@ export class BacklogService {
     )
   }
 
-  transition(
-    id: string,
-    input: BacklogTransitionInput
-  ): Promise<BacklogWriteOutcome<BacklogItem>> {
+  transition(id: string, input: BacklogTransitionInput): Promise<BacklogWriteOutcome<BacklogItem>> {
     return this.stores().items.mutate(id, (current, ctx) =>
       applyBacklogItemTransition(current, input, ctx)
     )

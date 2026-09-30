@@ -47,7 +47,10 @@ function bump(current: BacklogItem, ctx: BacklogFoldContext): BacklogItem {
 beforeEach(async () => {
   renameFault.code = null
   root = mkdtempSync(join(tmpdir(), 'orca-backlog-fence-'))
-  const captured = await new BacklogService(() => root).capture({ text: 'seed', kind: 'engineering' })
+  const captured = await new BacklogService(() => root).capture({
+    text: 'seed',
+    kind: 'engineering'
+  })
   if (captured.outcome !== 'published') {
     throw new Error(`precondition: seed capture returned ${captured.outcome}`)
   }
@@ -67,7 +70,10 @@ describe('BacklogRecordStore.mutate', () => {
     const raw = JSON.parse(readFileSync(itemPath(), 'utf-8')) as Record<string, unknown>
     writeFileSync(itemPath(), `${JSON.stringify({ ...raw, futureField: 'kept' }, null, 2)}\n`)
 
-    const outcome = await store.mutate(seed.id, (current, ctx) => ({ ...bump(current, ctx), revision: 99 }))
+    const outcome = await store.mutate(seed.id, (current, ctx) => ({
+      ...bump(current, ctx),
+      revision: 99
+    }))
 
     expect(outcome.outcome).toBe('published')
     const onDisk = JSON.parse(readFileSync(itemPath(), 'utf-8')) as Record<string, unknown>
@@ -79,7 +85,11 @@ describe('BacklogRecordStore.mutate', () => {
 
   it('is superseded by a competing write positioned inside the fold; the newer bytes survive', async () => {
     const outcome = await store.mutate(seed.id, (current, ctx) => {
-      const competitor = { ...current, normalizedIntent: 'competitor', revision: current.revision + 1 }
+      const competitor = {
+        ...current,
+        normalizedIntent: 'competitor',
+        revision: current.revision + 1
+      }
       writeFileSync(itemPath(), `${JSON.stringify(competitor, null, 2)}\n`)
       return bump(current, ctx)
     })

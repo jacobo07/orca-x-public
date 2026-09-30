@@ -157,9 +157,7 @@ describe('per-record stamping', () => {
     }
     expect(ledger.quarantined).toEqual([])
     expect(ledger.items.map((item) => item.id)).toEqual([captured.record.id])
-    expect(
-      ledger.candidates.map((row) => [row.id, row.schemaVersion]).sort()
-    ).toEqual(
+    expect(ledger.candidates.map((row) => [row.id, row.schemaVersion]).sort()).toEqual(
       [
         [v1Id, 1],
         [v2Id, 2]

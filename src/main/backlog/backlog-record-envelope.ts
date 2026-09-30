@@ -1,4 +1,7 @@
-import { BACKLOG_SCHEMA_VERSION } from '../../shared/backlog-types'
+import {
+  BACKLOG_SCHEMA_MIN_READABLE_VERSION,
+  BACKLOG_SCHEMA_VERSION
+} from '../../shared/backlog-types'
 import { isBacklogEventId } from '../../shared/backlog-identity'
 import type { BacklogLoadResult } from '../../shared/backlog-outcomes'
 
@@ -46,17 +49,37 @@ export function parseBacklogEnvelope(
     return { outcome: 'unreadable', code: 'not-object', reason: 'record is not a JSON object' }
   }
   const version = parsed.schemaVersion
-  if (typeof version === 'number' && Number.isInteger(version) && version > BACKLOG_SCHEMA_VERSION) {
+  if (
+    typeof version === 'number' &&
+    Number.isInteger(version) &&
+    version > BACKLOG_SCHEMA_VERSION
+  ) {
     return { outcome: 'schema-too-new', storedVersion: version }
   }
-  if (typeof version !== 'number' || !Number.isInteger(version) || version < BACKLOG_SCHEMA_VERSION) {
-    return { outcome: 'unreadable', code: 'schema-too-old', reason: 'schemaVersion is not current' }
+  if (
+    typeof version !== 'number' ||
+    !Number.isInteger(version) ||
+    version < BACKLOG_SCHEMA_MIN_READABLE_VERSION
+  ) {
+    return {
+      outcome: 'unreadable',
+      code: 'schema-too-old',
+      reason: 'schemaVersion is below the readable range'
+    }
   }
   // The filename is not evidence about the contents.
   if (parsed.id !== expectedId) {
-    return { outcome: 'unreadable', code: 'id-mismatch', reason: 'stored id differs from file name' }
+    return {
+      outcome: 'unreadable',
+      code: 'id-mismatch',
+      reason: 'stored id differs from file name'
+    }
   }
-  if (typeof parsed.revision !== 'number' || !Number.isInteger(parsed.revision) || parsed.revision < 1) {
+  if (
+    typeof parsed.revision !== 'number' ||
+    !Number.isInteger(parsed.revision) ||
+    parsed.revision < 1
+  ) {
     return invalid('revision is not an integer of at least 1')
   }
   const defect = describeEventsDefect(parsed.events, allowedEventTypes)

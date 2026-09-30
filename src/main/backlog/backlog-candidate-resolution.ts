@@ -6,7 +6,7 @@ import {
   BACKLOG_SHORT_TEXT_MAX
 } from '../../shared/backlog-rpc-limits'
 import {
-  BACKLOG_SCHEMA_VERSION,
+  BACKLOG_SCHEMA_BASE_VERSION,
   type BacklogCandidate,
   type BacklogCandidateStatus,
   type BacklogItem,
@@ -66,7 +66,11 @@ function targetItemId(resolution: BacklogCandidateResolution): string | null {
 }
 
 // Open, or already exactly where this resolution would put it (a retry).
-function isResolvable(candidate: BacklogCandidate, status: BacklogCandidateStatus, itemId: string | null) {
+function isResolvable(
+  candidate: BacklogCandidate,
+  status: BacklogCandidateStatus,
+  itemId: string | null
+) {
   return (
     candidate.status === 'open' ||
     (candidate.status === status && candidate.resolvedItemId === itemId)
@@ -124,7 +128,7 @@ function acceptItem(
   return stores.items.create(
     id,
     ({ now, mintEventId }) => ({
-      schemaVersion: BACKLOG_SCHEMA_VERSION,
+      schemaVersion: BACKLOG_SCHEMA_BASE_VERSION,
       id,
       kind: resolution.kind ?? 'idea',
       originalText: candidate.text,

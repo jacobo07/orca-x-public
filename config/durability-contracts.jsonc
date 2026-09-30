@@ -156,7 +156,7 @@
     },
     {
       "id": "backlog.intent-ledger-record",
-      "state": "backlog/items/<itemId>.json and backlog/candidates/<candidateId>.json under the active profile directory — the Universal Backlog intent ledger: accepted intent, its source links, evidence, lifecycle state and append-only event log, one file per record",
+      "state": "backlog/items/<itemId>.json and backlog/candidates/<candidateId>.json under the active profile directory — the Universal Backlog intent ledger: accepted intent, its source links, evidence, lifecycle state and append-only event log, one file per record. Records carry schemaVersion 1 unless they hold a v2-only field (the candidate hint-assigned event), and this build reads the range 1..2, so older builds keep reading every record that needs nothing newer",
       "writer": "src/main/backlog/backlog-record-file.ts",
       "tier": "crash-durable",
       "lostIf": "Accepted intent is the only copy. The chats it was harvested from rotate or vanish, which is the product's reason to exist, so a lost record cannot be reconstructed from its sources and the intent is simply gone.",

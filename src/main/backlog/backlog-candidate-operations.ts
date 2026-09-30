@@ -1,6 +1,6 @@
 import type { BacklogWriteOutcome } from '../../shared/backlog-outcomes'
 import {
-  BACKLOG_SCHEMA_VERSION,
+  BACKLOG_SCHEMA_BASE_VERSION,
   type BacklogCandidate,
   type BacklogCandidateSource,
   type BacklogCandidateUncertainty,
@@ -60,7 +60,7 @@ async function ingestOne(
   const outcome = await store.create(
     id,
     ({ now, mintEventId }) => ({
-      schemaVersion: BACKLOG_SCHEMA_VERSION,
+      schemaVersion: BACKLOG_SCHEMA_BASE_VERSION,
       id,
       fingerprint: entry.fingerprint,
       source: { ...entry.source },

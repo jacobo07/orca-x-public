@@ -1,6 +1,9 @@
 // Why a schemaVersion bump for a new enum value: older builds quarantine values they do not know,
 // so widening any array below without bumping makes their reads refuse records a newer build wrote.
-export const BACKLOG_SCHEMA_VERSION = 1
+// Records carry the lowest version that describes them, so older builds keep reading everything else.
+export const BACKLOG_SCHEMA_VERSION = 2
+export const BACKLOG_SCHEMA_MIN_READABLE_VERSION = 1
+export const BACKLOG_SCHEMA_BASE_VERSION = 1
 
 export const BACKLOG_ITEM_KINDS = ['engineering', 'research', 'decision', 'manual', 'idea'] as const
 export type BacklogItemKind = (typeof BACKLOG_ITEM_KINDS)[number]
@@ -105,7 +108,7 @@ export type BacklogCandidateStatus = (typeof BACKLOG_CANDIDATE_STATUSES)[number]
 export const BACKLOG_CANDIDATE_UNCERTAINTIES = ['low', 'medium', 'high', 'unknown'] as const
 export type BacklogCandidateUncertainty = (typeof BACKLOG_CANDIDATE_UNCERTAINTIES)[number]
 
-export const BACKLOG_CANDIDATE_EVENT_TYPES = ['ingested', 'resolved'] as const
+export const BACKLOG_CANDIDATE_EVENT_TYPES = ['ingested', 'resolved', 'hint-assigned'] as const
 export type BacklogCandidateEventType = (typeof BACKLOG_CANDIDATE_EVENT_TYPES)[number]
 
 export type BacklogProjectRef = {
@@ -135,10 +138,7 @@ export type BacklogEvidence = {
 
 export type BacklogExecutorPolicy = { preferred: BacklogLane; fallback: BacklogLane | null }
 
-export type BacklogEventData = Record<
-  string,
-  string | number | boolean | null | readonly string[]
->
+export type BacklogEventData = Record<string, string | number | boolean | null | readonly string[]>
 
 export type BacklogItemEvent = {
   id: string
@@ -183,7 +183,12 @@ export type BacklogCandidateSource = {
   capabilityLevel: BacklogSourceCapabilityLevel
 }
 
-export type BacklogProjectHint = { projectId: string; evidence: string }
+/** An absent mapping reads as inferred: every hint written before assign existed was derived. */
+export type BacklogProjectHint = {
+  projectId: string
+  evidence: string
+  mapping?: BacklogProjectMapping
+}
 
 export type BacklogCandidate = {
   schemaVersion: number
