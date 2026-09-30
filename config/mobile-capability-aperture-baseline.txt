@@ -324,6 +324,9 @@ updater.getStatus
 updater.install
 workspacePorts.kill
 workspacePorts.scan
+# Added 2026-09-30, desktop-only by design: Cancel Workstream refuses (UWCP uwcp.control/1 unbuilt), and a
+# mobile client has no consent surface for cancelling a Workstream; revisit when UWCP control lands.
+workstream.cancel
 worktree.detectedList
 worktree.lineageList
 worktree.list
