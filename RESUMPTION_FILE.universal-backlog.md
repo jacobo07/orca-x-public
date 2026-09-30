@@ -6,48 +6,35 @@
 Thesis: a cross-project, provenance-aware, evidence-reconciled system of record for unfinished intent,
 sitting ABOVE Tasks and linking to execution owners.
 
-**State.** Approved 2026-09-29. W0 sealed. Phase 1 (ledger foundation) PLANNED and executing:
-`phases/01-intent-ledger-foundation/` holds CONTEXT, RESEARCH, VALIDATION (with the pre-execution
-gate baseline), 4 plans in 4 sequential waves (checker PASSED after revision 1). Executors run
-sequentially on this tree (HEAD is not on origin/HEAD, so worktree isolation degrades). Coherence
-anchor: `git log --oneline e1ad065c6..HEAD` lists only `backlog` commits; the newest
-`*-SUMMARY.md` in the phase dir names the last sealed plan.
+**State.** Phases 1 and 2 COMPLETE in ROADMAP. Phase 1 (ledger) verified 5/5, head `1b021312b`. Phase 2
+(Backlog surface + manual capture) verified 41/41, SC1-3 PASS, head `b057c2481`: 8 plans. It proves
+capture, restart, grouping, filters, search, state change and the SC2 count oracle in the REAL Windows
+Electron app (LOCAL_RENDER). 7 mutation drills were all caught. Gaps G1/G2 were closed by 02-08.
+Coherence anchor: `git log --oneline 14ca2070e..HEAD` lists only `backlog` commits;
+`phases/02-*/02-VERIFICATION.md` status is `passed`. Next: Phase 3 (candidate inbox + harvesters), which
+has no directory yet.
 
-**Host rules that bit.** GSD specialist agents have no PowerShell, so they cannot run pnpm/git here —
-dispatch executors as `general-purpose` following `~/.claude/agents/gsd-executor.md`. In PowerShell
-call `$pn='pnpm'; & $pn …` and `& 'C:\Program Files\Git\cmd\git.exe'`. `check:mobile-aperture` is
-red at HEAD for 4 non-backlog names (pre-existing; never baseline them).
+**Host rules that bit.**
+- GSD specialists have no PowerShell, so dispatch executors, checkers and verifiers as `general-purpose`
+  following the agent definition. Specialists without Write are refused by the agent-contract guard.
+- git is `& 'C:\Program Files\Git\cmd\git.exe'`. vitest is `node node_modules/vitest/vitest.mjs run
+  --config config/vitest.config.ts`. pnpm scripts go through `cmd /c`.
+- `.husky/_` is missing, so no pre-commit hook runs. Executors run `oxfmt --write`, oxlint and the
+  react-doctor oxlint on their files. `oxfmt --check` on the CRLF working copy is blind; check the LF
+  blobs instead.
+- Never run `sync:localization-catalog`.
+- Pre-existing reds (localization x3, mobile-aperture 4 names, type-aware audit 7/12) are baselined in
+  `phases/02-*/baselines/`.
+- Real-app runs: `--mode e2e` build + SKIP_BUILD=1, `orcaPage`, rebuild after the final commit, and
+  check that timestamps chain.
 
 **Active decisions.** See STATE.md Decisions. Never write in `Apps\io-chatgpt-plugin`. Never
-`pnpm install` (node_modules is a junction). Push is Owner-only.
+`pnpm install` (node_modules is a junction). Push is Owner-only. OWNER DECISION pending (non-blocking):
+regenerate husky hooks.
 
-**Sealed so far.** Plan 01-01 COMPLETE (`01-01-SUMMARY.md`): 1a `8bf108be7` (store, record-file
-engine, contract `backlog.intent-ledger-record`, syscall proof), 1b `593f4d966` (backlog.capture/get
-over the real RpcDispatcher, `backlog.v1`, aperture baseline), 2 RED `063a181ef` + GREEN `ef9eb16c7`
-(profile-scoped `getOrcaBacklogDirectory`, `src/main/ipc/backlog-host-wiring.ts`, index.ts wiring).
-Scoped suite 5 files 10/10; durability and typecheck green; aperture red only for the 4 pre-existing
-names. Rung: real files + real runtime/dispatcher under vitest, no app run. Per-commit log:
-`phases/01-intent-ledger-foundation/EXECUTION-LOG.md`.
-Plan 01-02 COMPLETE (`01-02-SUMMARY.md`, head `7216b228e`): pure lifecycle table (52 edges) +
-completion contracts + append-only event rule + link union; fenced `BacklogRecordStore.mutate`
-(revision re-read in the commit veto, `applyFold(id, fold)` for plan 03's pair lock);
-`backlog.update` / `backlog.transition` over RPC. Suite 11 files 72/72; gates as above.
-Plan 01-03 COMPLETE (head `544712205`): fingerprint-keyed candidate ingest, item-first resolution,
-survivor-first item merge, three RPC methods. Plan 01-04 COMPLETE (head `0348b4e06`): ledger open with
-per-record quarantine, list / candidates.list / health (ten methods), drills M1–M6 all CAUGHT and
-restored by SHA-256. `ab79e3fb6` pins the open-concurrency cap (the M4 gap). Scoped suite 16 files 115/115, plus that test 1/1 (run separately).
-`pnpm lint` and `check:mobile-aperture` are red only on pre-existing non-phase files (01-04-SUMMARY).
-ChatGPT write-back is PROVEN on the Owner's Pro/EEA account (`03a24aaba`, docs + contract C2).
-**Phase 1 VERIFIED** (`01-VERIFICATION.md` passed 5/5): gap G1 (merge retry dropped late links) fixed
-`727dd73db`; code review WR-01..03 + IN-01..03 fixed TDD `71a6a2b75`..`1b021312b`. Phase 1 suite 19
-files 133/133; durability green; aperture red only on its 4 pre-existing names. Open for Phase 7:
-T-01-12, unbounded event log, hard-link requirement, Windows dir-fsync no-op, no power-loss run.
+**Next 3 actions.** 1) Phase 3 discuss (smart discuss, unattended: take the recommended answers and
+record each), then research, plan, check and execute. 2) Phase 4 (reconciliation and merge).
+3) Phase 5 (executor lanes).
 
-**Next 3 actions.** 1) Phase 2 (Backlog surface): CONTEXT (D-01..D-26 + R-01..R-09), UI-SPEC,
-RESEARCH, VALIDATION written under `.planning/…/02-backlog-surface-and-manual-capture/`; plans →
-plan-check → execute, real-app Playwright CDP proof with restart. 2) Phase 3 (candidate inbox +
-harvesters). 3) Phase 4 (reconciliation). Tests run as
-`node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts <files>` (RTK breaks
-`pnpm exec vitest`); `pnpm run` scripts via `cmd /c`.
-
-**Start.** Run `/gsd-autonomous --ws ub` from the worktree root; update this file after every sealed unit.
+**Start.** Run `/gsd-autonomous --ws ub` from the worktree root (set the workstream first); update
+this file after every sealed unit.
