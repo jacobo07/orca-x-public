@@ -38,7 +38,8 @@ function dispatcherOn(root: string): RpcDispatcher {
         statBytes: async () => 0,
         readTranscript: async () => ({ messages: [] })
       })
-    }
+    },
+    ledgerRoot: () => root
   })
   runtime.setBacklogHost(createBacklogHost(service, harvester))
   return new RpcDispatcher({ runtime })
@@ -187,6 +188,36 @@ describe('backlog runtime RPC round trip', () => {
       request('backlog.harvest.run', { unit: 'orca-conversations' })
     )
     expect(control.ok).toBe(true)
+  })
+
+  it('reports harvest status from this process only; a restart reads not-run', async () => {
+    writeTracerConversation(root)
+    type Status = { units: { unit: string; status: string; lastReport: unknown }[] }
+    const statusRows = async (dispatcher: RpcDispatcher) =>
+      ((await resultOf(dispatcher, 'backlog.harvest.status', undefined)) as unknown as Status).units
+    const notRun = ['orca-conversations', 'agent-transcripts', 'chatgpt-export'].map((unit) => ({
+      unit,
+      status: 'not-run',
+      lastReport: null
+    }))
+
+    const live = dispatcherOn(root)
+    expect(await statusRows(live)).toEqual(notRun)
+    await resultOf(live, 'backlog.harvest.run', { unit: 'orca-conversations' })
+    const after = await statusRows(live)
+    expect(after.map((row) => [row.unit, row.status])).toEqual([
+      ['orca-conversations', 'connected'],
+      ['agent-transcripts', 'not-run'],
+      ['chatgpt-export', 'not-run']
+    ])
+    expect(after[0].lastReport).toMatchObject({ outcome: 'completed', candidatesNew: 1 })
+
+    const restarted = dispatcherOn(root)
+    expect(await statusRows(restarted)).toEqual(notRun)
+    const listed = (await resultOf(restarted, 'backlog.candidates.list', {})) as unknown as {
+      total: number
+    }
+    expect(listed.total).toBe(1)
   })
 
   it('answers capability_unsupported for harvest on a host with no backlog host', async () => {

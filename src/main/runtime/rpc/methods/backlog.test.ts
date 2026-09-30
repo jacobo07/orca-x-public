@@ -34,7 +34,9 @@ const NAMES = [
   'backlog.candidates.resolve',
   'backlog.health',
   // Phase 3: host-side harvest of this host's own stores (R-04).
-  'backlog.harvest.run'
+  'backlog.harvest.run',
+  // In-memory per-unit run status; connected only after a finished run (D-19).
+  'backlog.harvest.status'
 ]
 
 const ITEM_ID = 'bli_00000000-0000-4000-8000-000000000000'
@@ -65,7 +67,8 @@ const VALID_PARAMS: Record<string, unknown> = {
   'backlog.list': { state: 'ready' },
   'backlog.candidates.list': { status: 'open' },
   'backlog.health': undefined,
-  'backlog.harvest.run': { unit: 'orca-conversations' }
+  'backlog.harvest.run': { unit: 'orca-conversations' },
+  'backlog.harvest.status': undefined
 }
 
 function ctxWithoutHost(): RpcContext {
@@ -79,7 +82,7 @@ function ctxWithoutHost(): RpcContext {
 describe('backlog.* runtime methods', () => {
   it('registers exactly the ledger method set', () => {
     expect(BACKLOG_METHODS.map((entry) => entry.name).sort()).toEqual([...NAMES].sort())
-    expect(NAMES).toHaveLength(11)
+    expect(NAMES).toHaveLength(12)
   })
 
   it('accepts only the harvest units this build can run', () => {
