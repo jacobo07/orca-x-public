@@ -4874,7 +4874,38 @@ const api = {
     },
 
     submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
-      ipcRenderer.invoke('ssh:submitCredential', args)
+      ipcRenderer.invoke('ssh:submitCredential', args),
+
+    onHostKeyTrustRequest: (
+      callback: (data: {
+        requestId: string
+        targetId: string
+        label: string
+        host: string
+        port: number
+        offeredFingerprint: string
+        algorithm?: string
+        previousFingerprint?: string
+      }) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: Parameters<typeof callback>[0]) =>
+        callback(data)
+      ipcRenderer.on('ssh:host-key-trust-request', listener)
+      return () => ipcRenderer.removeListener('ssh:host-key-trust-request', listener)
+    },
+
+    onHostKeyTrustResolved: (callback: (data: { requestId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }) =>
+        callback(data)
+      ipcRenderer.on('ssh:host-key-trust-resolved', listener)
+      return () => ipcRenderer.removeListener('ssh:host-key-trust-resolved', listener)
+    },
+
+    submitHostKeyTrust: (args: { requestId: string; trust: boolean }): Promise<void> =>
+      ipcRenderer.invoke('ssh:submitHostKeyTrust', args),
+
+    replaceHostKeyPin: (args: { targetId: string; expectedPreviousFingerprint: string }) =>
+      ipcRenderer.invoke('ssh:replaceHostKeyPin', args)
   },
 
   automations: {
