@@ -59,10 +59,11 @@ describe('Orca conversation harvest idempotency', () => {
       }
     })
   }
-  const listed = async () => (await new BacklogService(() => ledger).listCandidates({})) as {
-    total: number
-    candidates: { id: string; status: string; text: string; projectHint: unknown }[]
-  }
+  const listed = async () =>
+    (await new BacklogService(() => ledger).listCandidates({})) as {
+      total: number
+      candidates: { id: string; status: string; text: string; projectHint: unknown }[]
+    }
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'orca-harvest-idem-'))
@@ -135,7 +136,9 @@ describe('Orca conversation harvest idempotency', () => {
       report.outcome === 'completed' ? report.candidatesNew + report.candidatesDuplicate : -1
     )
     expect(created).toEqual([3, 3])
-    expect(reports.reduce((sum, r) => sum + (r.outcome === 'completed' ? r.candidatesNew : 0), 0)).toBe(3)
+    expect(
+      reports.reduce((sum, r) => sum + (r.outcome === 'completed' ? r.candidatesNew : 0), 0)
+    ).toBe(3)
     expect((await listed()).total).toBe(3)
   })
 })

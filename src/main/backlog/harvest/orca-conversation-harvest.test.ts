@@ -10,7 +10,10 @@ import type * as RecordFile from '../backlog-record-file'
 import { BacklogService } from '../backlog-service'
 import { createBacklogHarvestRunner } from './backlog-harvest-runner'
 import type { HarvestIngestPort } from './harvest-ingest-pipeline'
-import { conversationSourceFromStore, type BacklogConversationSource } from './orca-conversation-harvest'
+import {
+  conversationSourceFromStore,
+  type BacklogConversationSource
+} from './orca-conversation-harvest'
 
 // Boundary fault: every new-record publish from call number `failFrom` on reports storage-failed.
 const fault = vi.hoisted(() => ({ failFrom: null as number | null, calls: 0 }))
@@ -136,7 +139,8 @@ describe('Orca conversation harvest outcomes', () => {
   it('names every non-loaded outcome instead of reporting an empty source', async () => {
     const conversations = join(dir, 'conversations')
     mkdirSync(conversations)
-    const write = (id: string, body: string) => writeFileSync(join(conversations, `${id}.json`), body)
+    const write = (id: string, body: string) =>
+      writeFileSync(join(conversations, `${id}.json`), body)
     write('conv_loaded', JSON.stringify(recordOf('conv_loaded', ['- [ ] keep me'])))
     write('conv_torn', '{"schemaVersion": 1, "id": "conv_to')
     write('conv_newer', JSON.stringify(recordOf('conv_newer', ['x'], { schemaVersion: 2 })))
@@ -198,9 +202,12 @@ describe('Orca conversation harvest outcomes', () => {
   })
 
   it('reads the first 2,000 conversations by id and names the cap; 2,000 exactly is no cap', async () => {
-    const ids = Array.from({ length: 2_001 }, (_, index) => `conv_${String(index).padStart(5, '0')}`)
+    const ids = Array.from(
+      { length: 2_001 },
+      (_, index) => `conv_${String(index).padStart(5, '0')}`
+    )
     const records = new Map(ids.map((id) => [id, recordOf(id, ['hello'])] as const))
-    const over = memorySource(records, [...ids].reverse())
+    const over = memorySource(records, ids.toReversed())
     const capped = await runnerOver(over.source, publishingPort().port).run('orca-conversations')
     expect(capped).toMatchObject({
       outcome: 'completed',
@@ -277,7 +284,10 @@ describe('Orca conversation harvest outcomes', () => {
 
   it('counts an unanswered last turn that is still working as turn-unsettled', async () => {
     const records = new Map([
-      ['conv_busy', recordOf('conv_busy', ['please ship it'], { turnState: 'working', answered: false })],
+      [
+        'conv_busy',
+        recordOf('conv_busy', ['please ship it'], { turnState: 'working', answered: false })
+      ],
       ['conv_done', recordOf('conv_done', ['please ship it'], { answered: false })]
     ])
     const report = await runnerOver(memorySource(records).source, publishingPort().port).run(

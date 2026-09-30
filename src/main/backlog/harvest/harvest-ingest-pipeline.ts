@@ -1,5 +1,7 @@
+import { BACKLOG_HARVEST_CANDIDATES_PER_RUN } from '../../../shared/backlog-harvest-limits'
 import type {
   BacklogHarvestCapHit,
+  BacklogHarvestKeptOrder,
   BacklogHarvestRefusalCode,
   BacklogHarvestSkipCounts
 } from '../../../shared/backlog-harvest-report'
@@ -21,6 +23,7 @@ export type HarvestIngestTally = {
   candidatesDuplicate: number
   candidatesFailed: Record<string, number>
   halted: { stage: BacklogStorageStage; code: string | null } | null
+  cap: BacklogHarvestCapHit | null
 }
 
 /** What one unit's harvester hands the runner; the runner stamps unit and times. */
@@ -53,21 +56,29 @@ function haltOf(code: string | null): HarvestIngestTally['halted'] {
   }
 }
 
-/** Sequential chunks of at most BACKLOG_INGEST_BATCH_MAX; a storage failure stops the run. */
+/**
+ * Sends at most BACKLOG_HARVEST_CANDIDATES_PER_RUN entries, in sequential chunks of at most
+ * BACKLOG_INGEST_BATCH_MAX (never empty); a storage failure stops the run. `kept` names the
+ * order the caller produced the entries in, so the cap says which ones survived.
+ */
 export async function ingestHarvestedCandidates(
   port: HarvestIngestPort,
-  entries: readonly BacklogCandidateIngestEntry[]
+  entries: readonly BacklogCandidateIngestEntry[],
+  kept: BacklogHarvestKeptOrder
 ): Promise<HarvestIngestTally> {
+  const sent = entries.slice(0, BACKLOG_HARVEST_CANDIDATES_PER_RUN)
   const tally: HarvestIngestTally = {
     candidatesNew: 0,
     candidatesDuplicate: 0,
     candidatesFailed: {},
-    halted: null
+    halted: null,
+    cap:
+      entries.length > sent.length
+        ? { code: 'candidates-per-run', notScanned: entries.length - sent.length, kept }
+        : null
   }
-  for (let start = 0; start < entries.length; start += BACKLOG_INGEST_BATCH_MAX) {
-    const results = await port.ingestCandidates(
-      entries.slice(start, start + BACKLOG_INGEST_BATCH_MAX)
-    )
+  for (let start = 0; start < sent.length; start += BACKLOG_INGEST_BATCH_MAX) {
+    const results = await port.ingestCandidates(sent.slice(start, start + BACKLOG_INGEST_BATCH_MAX))
     for (const result of results) {
       if (result.outcome === 'published') {
         tally.candidatesNew += 1
