@@ -4,14 +4,14 @@ import path from 'node:path'
 
 import { expect, test } from './helpers/orca-app'
 import { scanLaptopForContentNonces } from './helpers/hwf-two-host-absence-scan'
+import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
   connectHwfTargetWithTrust,
   disconnectHwfTarget,
   execOnOwningHost,
   hydrateHwfRemoteRepo,
   readHwfLocalPort,
-  readHwfRunFile,
-  startHwfCarrier
+  readHwfRunFile
 } from './helpers/hwf-two-host-ssh-target'
 import { waitForSessionReady } from './helpers/store'
 import {
