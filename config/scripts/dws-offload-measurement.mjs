@@ -9,7 +9,8 @@ import {
   failedLegsFromManifest,
   judgeLegMarker,
   legWindowFromManifest,
-  observationDefects
+  observationDefects,
+  unboundLegsFromManifest
 } from './dws-offload-observation.mjs'
 // Re-exported so `dws-offload-measurement.mjs` stays this instrument's one public entry point.
 export { extractRemoteProof }
@@ -381,7 +382,9 @@ export function summarizeRun(samples, opts = {}) {
     // {startMs, endMs} spanned by the manifest's legs, or null when no leg carries both stamps.
     legWindow = null,
     // failedLegsFromManifest(): legs whose workload did not succeed; null = manifest has no legs.
-    failedLegs = null
+    failedLegs = null,
+    // unboundLegsFromManifest(): legs that ended with no LEG-START (dropped from legWindow).
+    unboundLegs = []
   } = opts
 
   // Why classify per (sample, proc) occurrence here, NOT via classifyRun's per-pid cache: a pid is
@@ -477,7 +480,14 @@ export function summarizeRun(samples, opts = {}) {
     },
     instrument,
     unreadableLines,
-    observation: buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow, failedLegs }),
+    observation: buildObservation(samples, {
+      desktopRootPid,
+      sawStart,
+      sawStop,
+      legWindow,
+      failedLegs,
+      unboundLegs
+    }),
     patterns: FAMILY_PATTERNS,
     desktopSubtreeSize: desktopSubtreeUnionForReporting.size,
     harnessSubtreeSize: harnessSubtreeUnionForReporting.size
@@ -660,7 +670,8 @@ function runSummarizeCommand(options) {
     sawStart: parsed.start !== null,
     sawStop: parsed.stop !== null,
     legWindow: legWindowFromManifest(manifest),
-    failedLegs: failedLegsFromManifest(manifest)
+    failedLegs: failedLegsFromManifest(manifest),
+    unboundLegs: unboundLegsFromManifest(manifest)
   })
   writeJsonOutputIfRequested(options.out, summary)
   process.stdout.write(

@@ -27,6 +27,14 @@ export function legWindowFromManifest(manifest) {
   return starts.length > 0 ? { startMs: Math.min(...starts), endMs: Math.max(...ends) } : null
 }
 
+/** Legs that ended but whose LEG-START was never captured; legWindowFromManifest silently drops them. */
+export function unboundLegsFromManifest(manifest) {
+  const legs = Array.isArray(manifest?.legs) ? manifest.legs : []
+  return legs
+    .filter((leg) => Number.isFinite(Date.parse(leg?.endUtc ?? '')) && !Number.isFinite(Date.parse(leg?.startUtc ?? '')))
+    .map((leg) => leg.leg ?? 'unknown')
+}
+
 /**
  * A leg counts only if its workload actually succeeded: exit 0, and for `agent` a matched reply. A
  * crashed leg frees RAM too, so its tiny delta would otherwise read as an absence PASS (WR-06).
@@ -62,7 +70,10 @@ export function applyLegOutcomes(proofs, manifestLegs) {
   })
 }
 
-export function buildObservation(samples, { desktopRootPid, sawStart, sawStop, legWindow, failedLegs = null }) {
+export function buildObservation(
+  samples,
+  { desktopRootPid, sawStart, sawStop, legWindow, failedLegs = null, unboundLegs = [] }
+) {
   const utcMs = samples.map((s) => Date.parse(s.utc ?? '')).filter(Number.isFinite)
   const monoMs = samples.map((s) => s.monoMs).filter((v) => typeof v === 'number')
   const firstMs = utcMs.length > 0 ? Math.min(...utcMs) : null
@@ -75,6 +86,10 @@ export function buildObservation(samples, { desktopRootPid, sawStart, sawStop, l
       firstMs <= legWindow.startMs + LEG_WINDOW_TOLERANCE_MS &&
       lastMs >= legWindow.endMs - LEG_WINDOW_TOLERANCE_MS
   }
+  // A dropped leg leaves the window narrower than the run, so "covered" is unknown (null), never true.
+  if (unboundLegs.length > 0 && legWindowCovered === true) {
+    legWindowCovered = null
+  }
   return {
     samples: samples.length,
     sawStart,
@@ -82,7 +97,8 @@ export function buildObservation(samples, { desktopRootPid, sawStart, sawStop, l
     spanMs: monoMs.length > 1 ? Math.max(...monoMs) - Math.min(...monoMs) : 0,
     desktopRootPidValid: Number.isInteger(desktopRootPid) && desktopRootPid > 0,
     legWindowCovered,
-    failedLegs
+    failedLegs,
+    ...(unboundLegs.length > 0 ? { unboundLegs } : {})
   }
 }
 
@@ -110,6 +126,9 @@ export function observationDefects(summary, { ignoreDesktopPid = false } = {}) {
   }
   if (obs.legWindowCovered === false) {
     defects.push('sample stream does not cover the legs window (truncated)')
+  }
+  for (const leg of Array.isArray(obs.unboundLegs) ? obs.unboundLegs : []) {
+    defects.push(`leg ${leg}: LEG-START not observed (startUtc/childPid missing); leg window unbound`)
   }
   if (Array.isArray(obs.failedLegs) && obs.failedLegs.length > 0) {
     defects.push(`workload leg(s) failed: ${obs.failedLegs.map((f) => `${f.leg} ${f.reason}`).join(', ')}`)
