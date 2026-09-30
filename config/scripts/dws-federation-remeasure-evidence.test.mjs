@@ -182,6 +182,17 @@ describe('judgeRemeasure', () => {
     expect(judge(rec).rungReached).toBe('fetch')
   })
 
+  it('Test 5b (W-1): a MISSING_TEST_FILE on either fence is BLOCKED named-file-missing, never MEASURED', () => {
+    const missing = { summary: { extra: ['MISSING_TEST_FILE src/main/ipc/conversations.test.ts'] } }
+    const head = judge(headWith(missing))
+    expect(head).toMatchObject({ verdict: 'BLOCKED', rungReached: 'named-file-missing' })
+    expect(head.blockedReason).toContain('conversations.test.ts')
+    const attr = judge(record({ fences: { attribution: fence(ATTR, 'attribution', missing), head: fence(HEAD, 'head') } }))
+    expect(attr).toMatchObject({ verdict: 'BLOCKED', rungReached: 'named-file-missing' })
+    expect(buildEvidence(headWith(missing)).fences.head.missingTestFiles).toEqual(['src/main/ipc/conversations.test.ts'])
+    expect(judge(record()).verdict).toBe('MEASURED')
+  })
+
   it('Test 6: skipped is not passed and the reality files are required among the skipped', () => {
     const ev = buildEvidence(record())
     expect(ev.fences.head.vitest.passed).toBe(897)

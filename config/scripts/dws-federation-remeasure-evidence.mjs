@@ -113,6 +113,14 @@ function blockedBy(rung, reason) {
   return { verdict: 'BLOCKED', rungReached: rung, blockedReason: reason }
 }
 
+// Shared by the --record build path and the persisted-file validator: takes the fenceEvidence() shape.
+export function fenceCoherenceBlock(label, fe) {
+  if ((fe.missingTestFiles ?? []).length > 0) {
+    return blockedBy('named-file-missing', `${label}: named federation test file(s) absent: ${fe.missingTestFiles.join(', ')}`)
+  }
+  return null
+}
+
 function fenceBlock(label, fence, parsed, expectedRev) {
   if (parsed.blocked) {
     return blockedBy(parsed.blocked.rung, `${label}: ${parsed.blocked.reason}`)
@@ -148,7 +156,7 @@ function fenceBlock(label, fence, parsed, expectedRev) {
   if (!parsed.vitest || parsed.gates.migration === undefined || parsed.gates['tsc-node'] === undefined) {
     return blockedBy('gates-timeout', `${label}: gate lines missing from the summary`)
   }
-  return null
+  return fenceCoherenceBlock(label, fenceEvidence(fence))
 }
 
 export function judgeRemeasure({ headFence, attributionFence, localHead, containment, timeouts, blocked }) {
@@ -212,6 +220,7 @@ function fenceEvidence(fence) {
     diskFreeGbBefore: parsed.diskFreeGbBefore,
     diskFreeGbAfter: parsed.diskFreeGbAfter,
     treeClean: parsed.treeClean,
+    missingTestFiles: [...parsed.missingTestFiles].sort(),
     failedTests: [...(fence.failedTests ?? [])].sort(),
     tscErrors: [...(fence.tscErrors ?? [])].sort(),
     skippedFiles: [...(fence.skippedFiles ?? [])].sort(),
