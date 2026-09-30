@@ -231,13 +231,14 @@ describe('BacklogRow expand and detail', () => {
       true
     )
 
+    // Below lg the page is the one scroller; the list scrolls on its own only from lg up.
     const list = q('[data-backlog-page] section[aria-label]')!
-    expect(list.classList.contains('min-h-[50vh]')).toBe(true)
+    expect(list.classList.contains('overflow-y-auto')).toBe(false)
+    expect(list.classList.contains('lg:overflow-y-auto')).toBe(true)
     expect(list.classList.contains('lg:min-h-0')).toBe(true)
     const column = list.parentElement!
     expect(column.classList.contains('min-h-min')).toBe(true)
     const wrapper = column.parentElement!
-    // Below lg the page scrolls, so chips and the stacked summary cannot squeeze the list to zero.
     expect(wrapper.classList.contains('overflow-y-auto')).toBe(true)
     expect(wrapper.classList.contains('lg:overflow-visible')).toBe(true)
   })

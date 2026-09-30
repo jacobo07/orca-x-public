@@ -178,8 +178,8 @@ export default function BacklogPage(): React.JSX.Element {
       className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground"
     >
       {/* Layout ownership: the aside owns its width (lg:w-72); the main column takes the rest.
-          Below lg the page scrolls and the list keeps half the viewport, so wrapped chips and the
-          stacked summary cannot squeeze it to zero. */}
+          Below lg the page is the one scroller (list, then summary): as a flex child the list was
+          squeezed to 0px by wrapped chips and the stacked summary. */}
       <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pt-2 pb-4 md:px-8 md:pb-8 lg:flex-row lg:overflow-visible">
         <div className="flex min-h-min min-w-0 flex-1 flex-col lg:min-h-0">
           <BacklogHeader
@@ -207,7 +207,7 @@ export default function BacklogPage(): React.JSX.Element {
           ) : null}
           <section
             aria-label={translate('backlog.page.listLabel', 'Backlog items')}
-            className="scrollbar-sleek min-h-[50vh] flex-1 overflow-y-auto lg:min-h-0"
+            className="scrollbar-sleek flex-1 lg:min-h-0 lg:overflow-y-auto"
           >
             {status === 'ready' ? (
               <BacklogGroupList
