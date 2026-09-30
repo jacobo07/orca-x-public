@@ -16830,7 +16830,7 @@
     "page": {
       "title": "Backlog",
       "close": "Close backlog",
-      "closeTooltip": "Close · Esc",
+      "closeTooltip": "Close",
       "listLabel": "Backlog items"
     },
     "status": {
@@ -16909,6 +16909,24 @@
       "codexTranscript": "Codex",
       "chatgptExport": "ChatGPT",
       "infinityops": "InfinityOps"
+    },
+    "capture": {
+      "title": "Capture to backlog",
+      "description": "Write it the way you think it. Project, kind and priority can change later.",
+      "textLabel": "Item text",
+      "submit": "Capture item",
+      "submitting": "Capturing…",
+      "cancel": "Close without capturing",
+      "closeConfirmed": "Close capture",
+      "confirmed": "Captured to {{target}}",
+      "failed": {
+        "storageFailed": "Not captured. The ledger could not write this item. Your text is kept here; try again.",
+        "unreadable": "Not captured. The ledger on this host cannot be read right now. Your text is kept here; try again after reloading the backlog.",
+        "capability": "Not captured. This host does not provide a Backlog.",
+        "unknown": "We could not confirm this was saved. Check the list before capturing again.",
+        "unreachable": "Not captured. This host could not be reached. Your text is kept here; try again.",
+        "other": "Not captured. Your text is kept here; try again."
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/backlog-view-selector'
 import type { Project } from '../../../../shared/project-types'
 import type { BacklogLoadOutcome } from './backlog-snapshot'
+import { BacklogCaptureDialog } from './BacklogCaptureDialog'
 import { BacklogGroupList } from './BacklogGroupList'
 import { BacklogPageStateBlock, type BacklogBlockStatus } from './BacklogPageStateBlock'
 import { useBacklogSnapshot } from './use-backlog-snapshot'
@@ -53,6 +54,9 @@ export default function BacklogPage(): React.JSX.Element {
   )
   const status = pageStatus(load, view)
   const failure = load?.status === 'storage-failed' ? load : null
+  const [captureOpen, setCaptureOpen] = useState(false)
+  // Rows appear only from a refetched snapshot: no optimistic insert (D-16).
+  const refetch = (): void => void refresh()
 
   return (
     <div
@@ -78,13 +82,17 @@ export default function BacklogPage(): React.JSX.Element {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('backlog.page.closeTooltip', 'Close · Esc')}
+              {translate('backlog.page.closeTooltip', 'Close')}
             </TooltipContent>
           </Tooltip>
           <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
-          <h1 className="min-w-0 truncate text-lg font-medium leading-6">
+          <h1 className="min-w-0 flex-1 truncate text-lg font-medium leading-6">
             {translate('backlog.page.title', 'Backlog')}
           </h1>
+          <Button size="sm" data-backlog-action="capture" onClick={() => setCaptureOpen(true)}>
+            <Plus className="size-4" aria-hidden />
+            {translate('backlog.capture.submit', 'Capture item')}
+          </Button>
         </header>
         <section
           aria-label={translate('backlog.page.listLabel', 'Backlog items')}
@@ -96,11 +104,18 @@ export default function BacklogPage(): React.JSX.Element {
             <BacklogPageStateBlock
               status={status}
               filterEmpty={view?.filterEmpty ?? null}
-              onRetry={() => void refresh()}
+              onRetry={refetch}
+              onCapture={() => setCaptureOpen(true)}
             />
           )}
         </section>
       </div>
+      <BacklogCaptureDialog
+        open={captureOpen}
+        onOpenChange={setCaptureOpen}
+        onConfirmed={refetch}
+        onUncertain={refetch}
+      />
     </div>
   )
 }

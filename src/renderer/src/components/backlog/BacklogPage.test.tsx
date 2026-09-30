@@ -22,6 +22,7 @@ type ListAnswer = { items: BacklogItem[] } | { failure: Record<string, unknown> 
 
 const runtimeCall = vi.fn()
 let listAnswer: ListAnswer = { items: [] }
+let captureAnswer: () => Promise<unknown> = async () => ({})
 let container: HTMLDivElement
 let root: Root
 
@@ -97,6 +98,9 @@ beforeEach(() => {
   runtimeCall.mockImplementation(async ({ method }: { method: string }) => {
     if (method === 'backlog.health') {
       return envelope({ outcome: 'opened', quarantined: [] })
+    }
+    if (method === 'backlog.capture') {
+      return captureAnswer()
     }
     if (listAnswer === 'pending') {
       return new Promise(() => {})
@@ -299,5 +303,80 @@ describe('BacklogRow labels', () => {
         ?.textContent?.trim()
     expect(secondary('bli_one_line')).toBe('Manual task')
     expect(secondary('bli_two_lines')).toBe('second line')
+  })
+})
+
+describe('BacklogPage capture', () => {
+  function captureDialog(): HTMLElement | null {
+    return document.body.querySelector<HTMLElement>('[data-backlog-capture-dialog]')
+  }
+
+  async function click(selector: string): Promise<void> {
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(selector)!.click()
+    })
+    await flush()
+  }
+
+  async function captureText(text: string): Promise<void> {
+    await click('[data-backlog-action="capture"]')
+    const field = document.body.querySelector<HTMLTextAreaElement>(
+      '[data-backlog-capture-field="text"]'
+    )!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+    act(() => {
+      setter.call(field, text)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await click('[data-backlog-capture-submit]')
+  }
+
+  it('opens the dialog from the header and from the empty-state CTA', async () => {
+    await renderPage()
+    expect(page().getAttribute('data-backlog-status')).toBe('empty')
+    expect(captureDialog()).toBeNull()
+    await click('[data-backlog-action="capture-empty"]')
+    expect(captureDialog()).not.toBeNull()
+    act(() => root.unmount())
+    root = createRoot(container)
+    await renderPage()
+    expect(captureDialog()).toBeNull()
+    await click('[data-backlog-action="capture"]')
+    expect(captureDialog()).not.toBeNull()
+  })
+
+  it('a confirmed capture refetches the list exactly once', async () => {
+    captureAnswer = async () => envelope({ outcome: 'published', record: item('bli_new') })
+    await renderPage()
+    const before = listCalls()
+    await captureText('new idea')
+    expect(captureDialog()?.getAttribute('data-backlog-capture-status')).toBe('confirmed')
+    expect(listCalls()).toBe(before + 1)
+  })
+
+  it('an unknown capture refetches once and keeps the text; storage-failed refetches nothing', async () => {
+    captureAnswer = async () => {
+      throw new Error('reply lost')
+    }
+    await renderPage()
+    let before = listCalls()
+    await captureText('maybe saved')
+    expect(captureDialog()?.getAttribute('data-backlog-capture-failure')).toBe('unknown')
+    expect(
+      document.body.querySelector<HTMLTextAreaElement>('[data-backlog-capture-field="text"]')!.value
+    ).toBe('maybe saved')
+    expect(listCalls()).toBe(before + 1)
+    expect(runtimeCall.mock.calls.filter(([args]) => args.method === 'backlog.capture')).toHaveLength(
+      1
+    )
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    captureAnswer = async () => envelope({ outcome: 'storage-failed', stage: 'publish', code: null })
+    await renderPage()
+    before = listCalls()
+    await captureText('not saved')
+    expect(captureDialog()?.getAttribute('data-backlog-capture-failure')).toBe('storage-failed')
+    expect(listCalls()).toBe(before)
   })
 })

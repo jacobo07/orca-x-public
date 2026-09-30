@@ -1,4 +1,4 @@
-import { CircleHelp, Inbox, Loader2, Lock, TriangleAlert, Unplug } from 'lucide-react'
+import { CircleHelp, Inbox, Loader2, Lock, Plus, TriangleAlert, Unplug } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -115,11 +115,13 @@ function BlockIcon({ status }: { status: Exclude<BacklogBlockStatus, 'loading'> 
 export function BacklogPageStateBlock({
   status,
   filterEmpty = null,
-  onRetry
+  onRetry,
+  onCapture
 }: {
   status: BacklogBlockStatus
   filterEmpty?: BacklogFilterEmpty | null
   onRetry: () => void
+  onCapture: () => void
 }): React.JSX.Element {
   if (status === 'loading') {
     return (
@@ -153,6 +155,12 @@ export function BacklogPageStateBlock({
       {retryable ? (
         <Button variant="outline" size="sm" data-backlog-action="retry" onClick={onRetry}>
           {translate('backlog.status.retry', 'Retry loading')}
+        </Button>
+      ) : null}
+      {status === 'empty' ? (
+        <Button size="sm" data-backlog-action="capture-empty" onClick={onCapture}>
+          <Plus className="size-4" aria-hidden />
+          {translate('backlog.capture.submit', 'Capture item')}
         </Button>
       ) : null}
     </div>
