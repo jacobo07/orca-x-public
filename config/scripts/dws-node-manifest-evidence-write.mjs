@@ -106,6 +106,7 @@ if (rung !== 'none') {
       }
     }
   }
+  evidence.planeTags = ev.planeTagsFor(evidence.comparison, product)
   notes.push(`judged against control-before; product reading: ${rung}`)
 }
 evidence.probePort = rec.probePort

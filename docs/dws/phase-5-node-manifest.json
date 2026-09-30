@@ -63,8 +63,7 @@
   "planeTags": {
     "memory": "GEX44-PROVEN",
     "vram": "GEX44-PROVEN",
-    "disk": "GEX44-PROVEN",
-    "resident_model": "GEX44-PROVEN"
+    "disk": "GEX44-PROVEN"
   },
   "notes": [
     "judged against control-before; product reading: gex44-local-caller"

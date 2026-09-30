@@ -207,6 +207,16 @@ function requireText(value, name) {
   }
 }
 
+// Why: GEX44-PROVEN needs a measured product value AND a MATCH verdict; call it again after any downgrade.
+export function planeTagsFor(comparison, product) {
+  return Object.fromEntries(
+    FAMILIES.filter(
+      (family) =>
+        comparison[family]?.verdict === 'MATCH' && (product?.[FAMILY_FIELD[family]] ?? null) !== null
+    ).map((family) => [family, 'GEX44-PROVEN'])
+  )
+}
+
 export function buildEvidence(input) {
   requireText(input.headSha, 'headSha')
   const deployed = input.deployed ?? {}
@@ -232,14 +242,7 @@ export function buildEvidence(input) {
         FAMILIES.map((family) => [family, { verdict: 'UNJUDGED', reason: 'blocked' }])
       )
     : compareReadings(input.product, input.control)
-  // Why: GEX44-PROVEN is claimed only for values the product actually measured this run.
-  const planeTags = blocked
-    ? {}
-    : Object.fromEntries(
-        FAMILIES.filter((family) => (input.product?.[FAMILY_FIELD[family]] ?? null) !== null).map(
-          (family) => [family, 'GEX44-PROVEN']
-        )
-      )
+  const planeTags = blocked ? {} : planeTagsFor(comparison, input.product)
   const evidence = {
     verdict: blocked ? 'BLOCKED' : 'MEASURED',
     rung: input.rung,

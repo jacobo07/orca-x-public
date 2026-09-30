@@ -5,6 +5,7 @@ import {
   buildEvidence,
   compareReadings,
   parseControlOutput,
+  planeTagsFor,
   scanForSecrets
 } from './dws-node-manifest-evidence.mjs'
 
@@ -184,6 +185,27 @@ describe('buildEvidence', () => {
     expect(
       buildEvidence({ ...base, rung: 'fan-out', product: product(), control: control() }).rung
     ).toBe('fan-out')
+  })
+
+  it('tags only families judged MATCH: a measured but UNJUDGED family carries no tag', () => {
+    const noModels = parseControlOutput(CONTROL_TEXT.replace(/^\{"object".*$/m, ''))
+    const evidence = buildEvidence({ ...base, product: product(), control: noModels })
+    expect(evidence.comparison.resident_model.verdict).toBe('UNJUDGED')
+    expect(evidence.planeTags.resident_model).toBeUndefined()
+    expect(evidence.planeTags.memory).toBe('GEX44-PROVEN')
+    const diverged = buildEvidence({
+      ...base,
+      product: product({ memoryAvailableBytes: 1 }),
+      control: control()
+    })
+    expect(diverged.planeTags.memory).toBeUndefined()
+  })
+
+  it('planeTagsFor drops the tag of a family the glue later downgrades to UNJUDGED', () => {
+    const comparison = compareReadings(product(), control())
+    expect(planeTagsFor(comparison, product()).disk).toBe('GEX44-PROVEN')
+    comparison.disk = { verdict: 'UNJUDGED', reason: 'control-unstable' }
+    expect(planeTagsFor(comparison, product()).disk).toBeUndefined()
   })
 
   it('yields an honest BLOCKED with the rung reached and no plane tag on any value', () => {

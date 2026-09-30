@@ -8,7 +8,7 @@ Artifact sha256 (laptop == GEX44): 3c68024e33b83f6fd8e47ff37b4a995d0d974b356088e
 | memory | MATCH |  | 52938711040 | GEX44-PROVEN |
 | vram | MATCH |  | 3202351104 | GEX44-PROVEN |
 | disk | MATCH |  | 32911593472 | GEX44-PROVEN |
-| resident_model | UNJUDGED | control-missing | qwen3-coder-30b | GEX44-PROVEN |
+| resident_model | UNJUDGED | control-missing | qwen3-coder-30b | none |
 
 Each value was read by the product (`orca fleet manifest` run in a terminal on GEX44) and independently by an ssh control (free, nvidia-smi, df, curl /v1/models), judged with tolerances:
 - memoryAvailableFraction = 0.1: available memory drifts with page cache between two readings seconds apart
