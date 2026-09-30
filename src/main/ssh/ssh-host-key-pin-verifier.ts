@@ -1,18 +1,16 @@
 import { createHash } from 'node:crypto'
 import {
+  isWellFormedHostKeyFingerprint,
+  parseHostKeyPin
+} from '../../shared/ssh-host-key-pin-shape'
+import {
   SSH_HOST_KEY_REFUSED_CODE,
   type SshHostIdentityStatus,
   type SshHostKeyPin,
-  type SshHostKeyPinSource,
   type SshHostKeyRefusalReason
 } from '../../shared/ssh-types'
 
-const FINGERPRINT_PATTERN = /^SHA256:[A-Za-z0-9+/]{43}$/
-const PIN_SOURCES: ReadonlySet<string> = new Set<SshHostKeyPinSource>([
-  'tofu-confirmed',
-  'imported-known-hosts',
-  'manual'
-])
+export { isWellFormedHostKeyFingerprint, parseHostKeyPin }
 
 export type OfferedHostKey = {
   fingerprint: string
@@ -44,45 +42,6 @@ export function readHostKeyAlgorithm(key: Buffer): string | undefined {
   }
   const name = key.subarray(4, 4 + length).toString('latin1')
   return /^[\x21-\x7e]+$/.test(name) ? name : undefined
-}
-
-export function isWellFormedHostKeyFingerprint(value: unknown): value is string {
-  return typeof value === 'string' && FINGERPRINT_PATTERN.test(value)
-}
-
-export function parseHostKeyPin(value: unknown): SshHostKeyPin | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null
-  }
-  const raw = value as Record<string, unknown>
-  if (
-    !isWellFormedHostKeyFingerprint(raw.fingerprint) ||
-    typeof raw.host !== 'string' ||
-    raw.host.length === 0 ||
-    typeof raw.port !== 'number' ||
-    !Number.isInteger(raw.port) ||
-    raw.port < 1 ||
-    raw.port > 65535 ||
-    typeof raw.pinnedAt !== 'number' ||
-    !Number.isFinite(raw.pinnedAt) ||
-    typeof raw.source !== 'string' ||
-    !PIN_SOURCES.has(raw.source) ||
-    (raw.algorithm !== undefined && typeof raw.algorithm !== 'string') ||
-    (raw.publicKeyBase64 !== undefined && typeof raw.publicKeyBase64 !== 'string')
-  ) {
-    return null
-  }
-  return {
-    fingerprint: raw.fingerprint,
-    ...(raw.algorithm !== undefined ? { algorithm: raw.algorithm as string } : {}),
-    ...(raw.publicKeyBase64 !== undefined
-      ? { publicKeyBase64: raw.publicKeyBase64 as string }
-      : {}),
-    host: raw.host,
-    port: raw.port,
-    pinnedAt: raw.pinnedAt,
-    source: raw.source as SshHostKeyPinSource
-  }
 }
 
 // Why: `pin` is unknown because it comes off disk; a damaged record must read unverifiable, never unpinned.

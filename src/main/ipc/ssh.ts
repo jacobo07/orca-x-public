@@ -25,6 +25,7 @@ import type {
   SshRepoReadoption,
   SshTarget,
   SshHostKeyPin,
+  SshHostIdentityStatus,
   SshConnectionStatus,
   SshConnectionState,
   DirectSshAuthority
@@ -53,6 +54,7 @@ import {
 } from './ssh-host-key-trust-prompt'
 import { describeHostKeyRefusalForOwner } from './ssh-host-key-refusal-copy'
 import { hostIdentityForRefusal, isSshHostKeyRefusedError } from '../ssh/ssh-host-key-pin-verifier'
+import { resolveSshHostIdentityStatus } from '../../shared/ssh-host-key-pin-shape'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -112,6 +114,9 @@ const credentialRequestedForTarget = new Set<string>()
 // Why: replace-pin deletes the pin, so the next trust prompt can only show what it replaced if we remember it here.
 const replacedPinFingerprintByTarget = new Map<string, string>()
 
+// Why: a refused connection is dropped from the manager, so this is the only memory of its verdict for identity counts.
+const hostKeyRefusalByTarget = new Map<string, SshHostIdentityStatus>()
+
 function getCurrentMainWindow(): BrowserWindow | null {
   return currentGetMainWindow()
 }
@@ -130,6 +135,20 @@ export function getRegisteredSshState(targetId: string): SshConnectionState | un
 /** Public targets for runtime RPC clients — same list the desktop renderer gets. */
 export function listRegisteredSshTargets(): SshTarget[] {
   return sshStore?.listTargets() ?? []
+}
+
+/** Identity status per saved target, derived now: the live connection outranks the saved pin. */
+export function listSshHostIdentities(): { targetId: string; status: SshHostIdentityStatus }[] {
+  if (!sshStore) {
+    throw new Error('ssh_handlers_not_registered')
+  }
+  return sshStore.listTargets().map((target) => ({
+    targetId: target.id,
+    status: resolveSshHostIdentityStatus(
+      target,
+      connectionManager?.getState(target.id)?.hostIdentity ?? hostKeyRefusalByTarget.get(target.id)
+    )
+  }))
 }
 
 /** Removed-target id → last known label, for ghost-host display on paired clients. */
@@ -161,6 +180,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
       )
     }
     persistedStore?.removeSshRemotePtyLeases(targetId)
+    hostKeyRefusalByTarget.delete(targetId)
     store.removeTarget(targetId)
   })
 }
@@ -1099,6 +1119,7 @@ export function registerSshHandlers(
         return { replaced: false, reason: 'stale_pin' }
       }
       sshStore!.setHostKeyPin(args.targetId, null)
+      hostKeyRefusalByTarget.delete(args.targetId)
       replacedPinFingerprintByTarget.set(args.targetId, target.hostKeyPin.fingerprint)
       console.info(
         `[ssh-host-key] pin replaced for ${args.targetId}: previous ${target.hostKeyPin.fingerprint} at ${new Date().toISOString()}`
@@ -1311,6 +1332,11 @@ export function registerSshHandlers(
       await abandonFailedSshSession(targetId, session)
       clearRelayLostBackoff(targetId)
       clearRelayStateOverride(targetId)
+      if (isSshHostKeyRefusedError(err)) {
+        hostKeyRefusalByTarget.set(targetId, hostIdentityForRefusal(err.reason))
+      } else {
+        hostKeyRefusalByTarget.delete(targetId)
+      }
       // Why: the connection is dropped after a refusal, so this broadcast is the only place its host-identity verdict reaches the renderer.
       broadcastSshState(getCurrentMainWindow, targetId, {
         targetId,
@@ -1341,12 +1367,16 @@ export function registerSshHandlers(
 
       // Why: we manually pushed `deploying-relay`, so send `connected` straight to the renderer — routing through onStateChange would trigger reconnect logic.
       clearRelayStateOverride(targetId)
+      hostKeyRefusalByTarget.delete(targetId)
+      // Why: this broadcast replaces the transport's state, so without it the card cannot tell a delegated host from a pinned one.
+      const hostIdentity = connectionManager!.getState(targetId)?.hostIdentity
       broadcastSshState(getCurrentMainWindow, targetId, {
         targetId,
         status: 'connected',
         error: null,
         reconnectAttempt: 0,
-        supportsFolderDownload: conn.usesSystemSshTransport?.() !== true
+        supportsFolderDownload: conn.usesSystemSshTransport?.() !== true,
+        ...(hostIdentity ? { hostIdentity } : {})
       })
     } catch (err) {
       if (!ownsSession()) {

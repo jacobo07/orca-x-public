@@ -25,7 +25,7 @@ vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 import type { SshConnectionState, SshHostKeyPin, SshTarget } from '../../shared/ssh-types'
 import type { SshConnectionCallbacks } from '../ssh/ssh-connection-utils'
 import { SshHostKeyRefusedError } from '../ssh/ssh-host-key-pin-verifier'
-import { connectRegisteredSshTarget } from './ssh'
+import { connectRegisteredSshTarget, listSshHostIdentities } from './ssh'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
 const { mockSshStore, mockConnectionManager } = mocks
@@ -324,6 +324,67 @@ describe('SSH host key trust IPC', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('did not change the pin')
+    })
+  })
+
+  describe('host identity snapshot for fleet counts', () => {
+    const VALID_PIN: SshHostKeyPin = {
+      fingerprint: `SHA256:${'A'.repeat(43)}`,
+      host: '10.0.0.5',
+      port: 22,
+      pinnedAt: 1,
+      source: 'tofu-confirmed'
+    }
+    const identities = (): unknown[] => listSshHostIdentities().map((entry) => entry.status)
+
+    beforeEach(() => {
+      mockSshStore.listTargets.mockReturnValue([{ ...TARGET, hostKeyPin: VALID_PIN }])
+    })
+
+    it('V-FLEET-DELEGATED: a valid pin on a live system-transport connection is delegated, never pinned', () => {
+      mockConnectionManager.getState.mockReturnValue({
+        ...CONNECTED,
+        hostIdentity: 'delegated-to-openssh'
+      })
+      expect(identities()).toEqual(['delegated-to-openssh'])
+    })
+
+    it('reads pinned from the saved pin when nothing live speaks, and unpinned when there is none', () => {
+      mockConnectionManager.getState.mockReturnValue(undefined)
+      expect(identities()).toEqual(['pinned'])
+      mockSshStore.listTargets.mockReturnValue([TARGET])
+      expect(identities()).toEqual(['unpinned-legacy'])
+    })
+
+    it('remembers a changed-key refusal after the dropped connection stops reporting, until the pin is replaced', async () => {
+      mockConnectionManager.getState.mockReturnValue(undefined)
+      mockConnectionManager.connect.mockRejectedValue(
+        new SshHostKeyRefusedError('host_key_changed', OFFERED, VALID_PIN.fingerprint)
+      )
+      mockSshStore.getTarget.mockReturnValue({ ...TARGET, hostKeyPin: VALID_PIN })
+
+      await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).rejects.toThrow()
+      expect(identities()).toEqual(['refused-changed'])
+
+      handlers.get('ssh:replaceHostKeyPin')!(null, {
+        targetId: 'ssh-1',
+        expectedPreviousFingerprint: VALID_PIN.fingerprint
+      })
+      mockSshStore.listTargets.mockReturnValue([TARGET])
+      expect(identities()).toEqual(['unpinned-legacy'])
+    })
+
+    it('the connected broadcast carries the transport identity so the card can show delegation', async () => {
+      mockConnectionManager.getState.mockReturnValue({
+        ...CONNECTED,
+        hostIdentity: 'delegated-to-openssh'
+      })
+      mockConnectionManager.connect.mockResolvedValue({})
+
+      await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+      const connected = stateBroadcasts().filter((state) => state.status === 'connected')
+      expect(connected.at(-1)).toMatchObject({ hostIdentity: 'delegated-to-openssh' })
     })
   })
 })

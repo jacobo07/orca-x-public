@@ -5,7 +5,11 @@ import {
 } from '../../shared/execution-host'
 import { compareFleetAddresses, identityFromKeyFingerprint } from '../../shared/fleet-host-identity'
 import type { FleetPlacementMember } from '../../shared/fleet-placement'
-import type { FleetObservation } from '../../shared/fleet-placement-view'
+import type {
+  FleetObservation,
+  FleetSshHostIdentityCounts
+} from '../../shared/fleet-placement-view'
+import type { SshHostIdentityStatus } from '../../shared/ssh-types'
 import {
   classifyRemoteFleetObservation,
   fleetHostFactsFromStatus,
@@ -50,6 +54,8 @@ export type FleetObservationDeps = {
   collectLocalNodeResources?: (options: FleetObservationOptions) => Promise<unknown>
   listEnvironments: () => readonly KnownRuntimeEnvironment[]
   callEnvironment: FleetEnvironmentCall
+  /** Absent omits `coverage.sshHostIdentity`, so the reply is the old one byte for byte. */
+  listSshHostIdentities?: () => readonly { targetId: string; status: SshHostIdentityStatus }[]
   stepDeadlineMs?: number
 }
 
@@ -205,6 +211,49 @@ async function observeLocal(
   }
 }
 
+function countSshHostIdentities(
+  deps: FleetObservationDeps
+): FleetSshHostIdentityCounts | undefined {
+  if (!deps.listSshHostIdentities) {
+    return undefined
+  }
+  let identities: ReturnType<NonNullable<FleetObservationDeps['listSshHostIdentities']>>
+  try {
+    identities = deps.listSshHostIdentities()
+  } catch {
+    // Why: an unreadable snapshot is unknown, and zero counts would read as "no SSH hosts".
+    return undefined
+  }
+  const counts: FleetSshHostIdentityCounts = {
+    pinned: 0,
+    unpinnedLegacy: 0,
+    unverifiable: 0,
+    delegated: 0,
+    refusedChanged: 0
+  }
+  for (const { status } of identities) {
+    switch (status) {
+      case 'pinned':
+        counts.pinned++
+        break
+      case 'delegated-to-openssh':
+        counts.delegated++
+        break
+      case 'refused-changed':
+        counts.refusedChanged++
+        break
+      case 'unverifiable':
+        counts.unverifiable++
+        break
+      case 'unpinned-legacy':
+      case 'refused-unpinned':
+        counts.unpinnedLegacy++
+        break
+    }
+  }
+  return counts
+}
+
 /** One bounded pass over this host and its paired runtimes. Reads only; arms no timer beyond it. */
 export async function observeFleet(
   deps: FleetObservationDeps,
@@ -225,14 +274,16 @@ export async function observeFleet(
     { length: Math.min(FLEET_OBSERVATION_CONCURRENCY, environments.length) },
     worker
   )
-  const [local] = await Promise.all([
-    observeLocal(deps, options, deadlineMs),
-    Promise.all(workers)
-  ])
+  const [local] = await Promise.all([observeLocal(deps, options, deadlineMs), Promise.all(workers)])
+  const sshHostIdentity = countSshHostIdentities(deps)
   return {
     observedAt,
     completedAt: deps.now(),
     members: [local, ...remote.sort((a, b) => compareFleetAddresses(a.address, b.address))],
-    coverage: { runtimeEnvironments: environments.length, sshTargets: 'not-enumerated' }
+    coverage: {
+      runtimeEnvironments: environments.length,
+      sshTargets: 'not-enumerated',
+      ...(sshHostIdentity ? { sshHostIdentity } : {})
+    }
   }
 }

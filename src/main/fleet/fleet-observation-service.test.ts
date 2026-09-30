@@ -377,3 +377,70 @@ describe('fleet observation node resources', () => {
     expect(view.members[1].nodeResources?.gpu).toMatchObject({ reason: 'not-attempted' })
   })
 })
+
+describe('fleet observation SSH host identity coverage', () => {
+  const noRemote: FleetEnvironmentCall = async () => {
+    throw new Error('no remote in this test')
+  }
+
+  it('V-FLEET-OLD-SHAPE: with no identity dep the coverage is exactly the old literal', async () => {
+    const view = await observeFleet(deps({ callEnvironment: noRemote }))
+    expect(view.coverage).toEqual({ runtimeEnvironments: 0, sshTargets: 'not-enumerated' })
+    expect('sshHostIdentity' in view.coverage).toBe(false)
+  })
+
+  it('V-FLEET-COUNTS: counts each status once and keeps sshTargets not-enumerated', async () => {
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshHostIdentities: () => [
+          { targetId: 'a', status: 'pinned' },
+          { targetId: 'b', status: 'unpinned-legacy' },
+          { targetId: 'c', status: 'unverifiable' },
+          { targetId: 'd', status: 'delegated-to-openssh' },
+          { targetId: 'e', status: 'refused-changed' }
+        ]
+      })
+    )
+    expect(view.coverage.sshHostIdentity).toEqual({
+      pinned: 1,
+      unpinnedLegacy: 1,
+      unverifiable: 1,
+      delegated: 1,
+      refusedChanged: 1
+    })
+    expect(view.coverage.sshTargets).toBe('not-enumerated')
+  })
+
+  it('V-FLEET-DELEGATED: a delegated target is never counted as pinned', async () => {
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshHostIdentities: () => [{ targetId: 'a', status: 'delegated-to-openssh' }]
+      })
+    )
+    expect(view.coverage.sshHostIdentity).toMatchObject({ pinned: 0, delegated: 1 })
+  })
+
+  it('counts a refused first contact as unpinned, not as verified', async () => {
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshHostIdentities: () => [{ targetId: 'a', status: 'refused-unpinned' }]
+      })
+    )
+    expect(view.coverage.sshHostIdentity).toMatchObject({ pinned: 0, unpinnedLegacy: 1 })
+  })
+
+  it('omits the field when the snapshot throws, never reporting zero SSH hosts', async () => {
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshHostIdentities: () => {
+          throw new Error('store not ready')
+        }
+      })
+    )
+    expect('sshHostIdentity' in view.coverage).toBe(false)
+  })
+})

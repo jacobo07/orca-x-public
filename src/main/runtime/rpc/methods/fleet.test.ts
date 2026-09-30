@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { NodeManifestsResult } from '../../../../shared/node-manifest'
+import type { FleetObservationDeps } from '../../../fleet/fleet-observation-service'
 import { installFleetObservation } from '../../../fleet/fleet-observation-slot'
 import type { NodeResourcesReply } from '../../../fleet/node-resources-measure'
 import { installNodeResourcesMeasurer } from '../../../fleet/node-resources-slot'
@@ -18,8 +19,9 @@ const call = (params: unknown, ctx: Partial<RpcContext> = {}) =>
   }) as Promise<FleetPlacementViewResult>
 
 let reads = 0
-function installLocalOnly(): void {
+function installLocalOnly(extra: Partial<FleetObservationDeps> = {}): void {
   installFleetObservation({
+    ...extra,
     now: () => 50_000,
     readLocalPublicKey: () => Buffer.alloc(32, 3).toString('base64'),
     getLocalStatus: () => ({ runtimeId: 'rt-local' }),
@@ -85,6 +87,29 @@ describe('fleet.placementView', () => {
       evidenceAddress: 'local'
     })
     expect(result.observation.coverage.sshTargets).toBe('not-enumerated')
+  })
+
+  it('V-FLEET-NO-KEY-ON-WIRE: identity counts cross as numbers and no fingerprint appears', async () => {
+    installLocalOnly({
+      listSshHostIdentities: () => [
+        { targetId: 'a', status: 'pinned' },
+        { targetId: 'b', status: 'delegated-to-openssh' }
+      ]
+    })
+    const result = await call(undefined)
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') {
+      return
+    }
+    expect(result.observation.coverage.sshTargets).toBe('not-enumerated')
+    expect(result.observation.coverage.sshHostIdentity).toEqual({
+      pinned: 1,
+      unpinnedLegacy: 0,
+      unverifiable: 0,
+      delegated: 1,
+      refusedChanged: 0
+    })
+    expect(JSON.stringify(result)).not.toContain('SHA256:')
   })
 
   // Why: fleet-placement.ts says a proposal authorizes nothing. This makes that a check: the view

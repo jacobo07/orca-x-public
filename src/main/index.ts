@@ -337,7 +337,7 @@ import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { beginSshShutdown } from './ipc/ssh'
+import { beginSshShutdown, listSshHostIdentities } from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -2838,6 +2838,7 @@ void app.whenReady().then(async () => {
         ...(options.modelProbePorts ? { modelProbePorts: [...options.modelProbePorts] } : {})
       }),
     listEnvironments: () => listEnvironments(app.getPath('userData')),
+    listSshHostIdentities,
     callEnvironment: ({ environmentId, method, params, pairingRevision, timeoutMs, signal }) =>
       callRuntimeEnvironment(
         app.getPath('userData'),
