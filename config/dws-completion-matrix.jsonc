@@ -1283,16 +1283,18 @@
         { "kind": "commit", "sha": "bd0197278", "note": "pin SSH host keys, refuse a changed key, first contact explicit" },
         { "kind": "commit", "sha": "2e25fc8e8", "note": "trust prompt before a new host key; every other pin writer fenced" },
         { "kind": "commit", "sha": "afb96e5ff", "note": "host identity shown in host management" },
-        { "kind": "commit", "sha": "b10b72e37", "note": "real-sshd evidence" }
+        { "kind": "commit", "sha": "b10b72e37", "note": "real-sshd evidence" },
+        { "kind": "commit", "sha": "059af5e87", "note": "a removed or re-pointed pin refuses automatic connects until re-trusted" },
+        { "kind": "commit", "sha": "0fff3967b", "note": "a pin recorded for another endpoint refuses automatic connects" }
       ],
-      "reason": "measured 2026-09-30/10-01 (phase 14): PARTIAL. Proven: the ssh2 transport pins the host key; on a real sshd on GEX44 (disposable root, generated keys) first contact recorded exactly OpenSSH's own ssh-keygen fingerprint, a real key change was refused host_key_changed on interactive and automatic connects with the pin file unchanged, and the app's trust dialog passed 3/3 headless (REAL-APP, Leg D, after building the relay the e2e build omits). Open: system-OpenSSH transport parity is delegated (OD-3: its negotiated key is not portably observable below OpenSSH 8.5, research section 7), and an unpinned target on an automatic connect still connects with a loud diagnostic (OD-2 legacy grace) instead of being refused."
+      "reason": "measured 2026-09-30/10-01 (phase 14): PARTIAL. Proven: the ssh2 transport pins the host key; on a real sshd on GEX44 (disposable root, generated keys, at 43b869962) first contact recorded exactly OpenSSH's own ssh-keygen fingerprint, a real key change was refused host_key_changed on interactive and automatic connects with the pin file unchanged, and the app's trust dialog passed 3/3 headless (REAL-APP, Leg D, after building the relay the e2e build omits). After review (LOCAL-HOST only, real-sshd legs not re-run): a target whose pin was removed or re-pointed, or whose pin names another endpoint, is refused on automatic connects and prompts on interactive ones. Open: system-OpenSSH transport parity is delegated (OD-3: its negotiated key is not portably observable below OpenSSH 8.5, research section 7), and a never-pinned target on an automatic connect still connects with a loud diagnostic (OD-2 legacy grace) instead of being refused."
     },
     {
       "id": 57,
       "row": "HF Device registry durability",
       "owner": "secure-file + durability-contracts",
       "done": "orca-devices.json written with a barrier and carrying a durability contract",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
       "measuredIn": "phase-14",
       "measuredAt": "2026-10-01",
@@ -1302,13 +1304,17 @@
       ],
       "dependsOn": [],
       "evidence": [
-        { "kind": "file", "path": "src/main/runtime/device-registry.ts", "note": "save() publishes through writeDurableSecureJsonFile; an unreadable registry is preserved and fails closed" },
-        { "kind": "file", "path": "src/main/runtime/device-registry-durability.test.ts", "note": "fsync-before-rename order for every mutator; corrupt, truncated and non-array files preserved" },
-        { "kind": "file", "path": "config/durability-contracts.jsonc", "note": "contract runtime.device-registry, crash-durable" },
+        { "kind": "file", "path": "src/main/runtime/device-registry.ts", "note": "save() publishes through writeDurableSecureJsonFile; unparseable content is quarantined and fails closed; a read failure fails closed and leaves the file in place" },
+        { "kind": "file", "path": "src/main/runtime/device-registry-durability.test.ts", "note": "fsync-before-rename order for every mutator; corrupt, truncated and non-array files preserved; an I/O error leaves the file untouched; older-build readers see an array" },
+        { "kind": "file", "path": "config/durability-contracts.jsonc", "note": "contracts runtime.device-registry and runtime.device-revocations, crash-durable" },
+        { "kind": "file", "path": "config/scripts/check-durability-contracts.mjs", "note": "every durable-publisher caller needs a contract (floor 14 callers); the two device contracts are required by id" },
         { "kind": "commit", "sha": "da625caa9", "note": "durability barrier and contract" },
-        { "kind": "commit", "sha": "f43b913f5", "note": "a corrupt registry is preserved and fails closed" }
+        { "kind": "commit", "sha": "f43b913f5", "note": "a corrupt registry is preserved and fails closed" },
+        { "kind": "commit", "sha": "ffa5aa035", "note": "quarantine only unparseable content, never a read failure" },
+        { "kind": "commit", "sha": "205c0b7cf", "note": "devices file stays a bare array; tombstones in a sibling durable file" },
+        { "kind": "commit", "sha": "3000200d8", "note": "contract existence ratchet over durable publishers" }
       ],
-      "reason": "measured 2026-09-30 (phase 14, LOCAL-HOST, syscall-order test): PARTIAL. Proven: orca-devices.json is written with a barrier before the rename (drill: old writer -> 9 red), an unreadable file is renamed aside and the registry fails closed instead of collapsing to empty (drill: 3 red), and it carries the crash-durable contract runtime.device-registry. Open: deleting that contract leaves check-durability-contracts green, because a publisher that delegates to the durable secure-file writer is never required to have a contract; the contract exists but nothing keeps it existing (debt D14-01, a ratchet over durable publishers)."
+      "reason": "measured 2026-10-01 (phase 14, LOCAL-HOST, syscall-order test): orca-devices.json is written with a barrier before the rename (drill: old writer -> 9 red), stays a bare array that older builds read, and fails closed without collapsing to empty: unparseable content is renamed aside (drill: 3 red) and a read failure leaves the file in place (drill: red). It carries the crash-durable contract runtime.device-registry (revocation tombstones: runtime.device-revocations), and deleting either contract now turns check-durability-contracts red (drill on the real config: both exit 1, restored byte-exact). Not measured: a real power loss. Four other durable publishers are baselined without contracts (config/durability-contract-publisher-baseline.txt)."
     },
     {
       "id": 58,
@@ -1331,9 +1337,10 @@
         { "kind": "file", "path": "src/main/runtime/device-registry-durability.test.ts", "note": "tombstones survive a restart, are bounded, and a failed save leaves the device refused" },
         { "kind": "commit", "sha": "da02f0bea", "note": "characterization: measured a revoked device's terminal frame written to the pty" },
         { "kind": "commit", "sha": "1fb33afa5", "note": "refuse a revoked device's frames at the effect" },
-        { "kind": "commit", "sha": "90301bfe3", "note": "durable revocation tombstones, wire-compatible reason" }
+        { "kind": "commit", "sha": "90301bfe3", "note": "durable revocation tombstones, wire-compatible reason" },
+        { "kind": "commit", "sha": "205c0b7cf", "note": "tombstones moved to orca-device-revocations.json; damage there loses only the reason, never authorizes" }
       ],
-      "reason": "measured 2026-09-30/10-01 (phase 14, LOCAL-HOST: real RpcServer on a loopback WebSocket with E2EE and a live terminal stream). Before (da02f0bea): a revoked device whose socket survived still had its binary terminal frame written to the pty. Now every text, binary and mobile-socket request re-checks one authority; a binary refusal closes 4001 and drops the frame; the wire code stays `unauthorized` with data.reason device_revoked. All four drills went red then green (skip binary authority; ignore tombstones; wire code; save-then-swap on revoke), and the named tests are green at b10b72e37. Not measured on a paired phone or a remote host."
+      "reason": "measured 2026-09-30/10-01 (phase 14, LOCAL-HOST: real RpcServer on a loopback WebSocket with E2EE and a live terminal stream). Before (da02f0bea): a revoked device whose socket survived still had its binary terminal frame written to the pty. Now every text, binary and mobile-socket request re-checks one authority; a binary refusal closes 4001 and drops the frame; the wire code stays `unauthorized` with data.reason device_revoked. All four drills went red then green (skip binary authority; ignore tombstones; wire code; save-then-swap on revoke), plus the WR-02 drill on the sibling tombstone file; named tests green at f58915d8d. Residual: if the devices-file save throws during a revoke, the device is refused in this process and the error propagates, but a restart before the next successful save would read it back as paired. Not measured on a paired phone or a remote host."
     },
     {
       "id": 59,
