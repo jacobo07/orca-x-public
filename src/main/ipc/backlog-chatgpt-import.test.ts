@@ -4,7 +4,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 import type { BacklogChatGptImportAnswer } from '../../shared/backlog-harvest-report'
 import { BacklogService } from '../backlog/backlog-service'
@@ -12,6 +12,7 @@ import {
   createBacklogHarvestRunner,
   type BacklogHarvestRunner
 } from '../backlog/harvest/backlog-harvest-runner'
+import type { HarvestIngestPort } from '../backlog/harvest/harvest-ingest-pipeline'
 
 const { dialogMock, fromWebContentsMock, getFocusedWindowMock, handleMock, wiring } = vi.hoisted(
   () => ({
@@ -84,7 +85,7 @@ describe('backlog ChatGPT export import IPC', () => {
   let dir: string
   let exportPath: string
   let ledger: string
-  let ingest: ReturnType<typeof vi.fn>
+  let ingest: Mock<HarvestIngestPort['ingestCandidates']>
   let runner: BacklogHarvestRunner
   const event = { sender: {} } as Electron.IpcMainInvokeEvent
 

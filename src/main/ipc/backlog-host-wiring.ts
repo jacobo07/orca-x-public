@@ -32,7 +32,8 @@ export function getBacklogService(): BacklogService {
   return backlogService
 }
 
-function getBacklogHarvester(): BacklogHarvestRunner {
+/** The host's runner, shared with the desktop export import so single flight and status are one. */
+export function getBacklogHarvestRunner(): BacklogHarvestRunner {
   // A store per run: its constructor has no side effects, and the harvest only lists and loads.
   backlogHarvester ??= createBacklogHarvestRunner({
     service: getBacklogService(),
@@ -55,5 +56,5 @@ function getBacklogHarvester(): BacklogHarvestRunner {
 }
 
 export function getBacklogHost(): BacklogHost {
-  return createBacklogHost(getBacklogService(), getBacklogHarvester())
+  return createBacklogHost(getBacklogService(), getBacklogHarvestRunner())
 }

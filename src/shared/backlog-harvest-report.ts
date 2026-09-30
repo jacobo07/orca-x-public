@@ -102,6 +102,14 @@ export type BacklogHarvestRunReport =
       finishedAt: number
     }
 
+/**
+ * The desktop import's answer to the renderer. The picked file's path and name never appear in it:
+ * the path lives only in main (R-05).
+ */
+export type BacklogChatGptImportAnswer =
+  | { outcome: 'cancelled' }
+  | { outcome: 'imported' | 'refused' | 'failed'; report: BacklogHarvestRunReport }
+
 export const BACKLOG_HARVEST_RUN_STATUSES = [
   'not-run',
   'running',

@@ -22,6 +22,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock,
   registerShellHandlersMock,
   registerPetHandlersMock,
+  registerBacklogChatGptImportHandlerMock,
   registerSessionHandlersMock,
   registerProjectWorkingSetHandlersMock,
   registerDurableExitHandlersMock,
@@ -91,6 +92,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
+  registerBacklogChatGptImportHandlerMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerProjectWorkingSetHandlersMock: vi.fn(),
   registerDurableExitHandlersMock: vi.fn(),
@@ -264,6 +266,10 @@ vi.mock('./shell', () => ({
 
 vi.mock('./pet', () => ({
   registerPetHandlers: registerPetHandlersMock
+}))
+
+vi.mock('./backlog-chatgpt-import', () => ({
+  registerBacklogChatGptImportHandler: registerBacklogChatGptImportHandlerMock
 }))
 
 vi.mock('./session', () => ({
@@ -441,6 +447,7 @@ describe('registerCoreHandlers', () => {
     registerTerminalRenderDesyncEvidenceHandlerMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
+    registerBacklogChatGptImportHandlerMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerProjectWorkingSetHandlersMock.mockReset()
     registerWorkspaceWindowClaimHandlersMock.mockReset()
@@ -543,6 +550,7 @@ describe('registerCoreHandlers', () => {
       codexAccounts.runtimeHomeService
     )
     expect(registerPetHandlersMock).toHaveBeenCalled()
+    expect(registerBacklogChatGptImportHandlerMock).toHaveBeenCalledTimes(1)
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()

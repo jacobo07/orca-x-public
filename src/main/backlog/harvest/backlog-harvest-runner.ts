@@ -8,6 +8,7 @@ import {
   harvestAiVaultTranscripts,
   type BacklogTranscriptSource
 } from './ai-vault-transcript-harvest'
+import { importChatGptExportFile } from './chatgpt-export-import'
 import type { HarvestIngestPort, HarvestUnitResult } from './harvest-ingest-pipeline'
 import { HarvestRunRegistry } from './harvest-run-registry'
 import {
@@ -38,6 +39,8 @@ export type BacklogHarvestRunner = {
   run: (unit: BacklogHarvestRpcUnit) => Promise<BacklogHarvestRunReport>
   /** The export import (03-05): its reader is the caller's, the single flight and status are ours. */
   runImport: (work: () => Promise<HarvestUnitResult>) => Promise<BacklogHarvestRunReport>
+  /** One user-picked ChatGPT export, under the same single flight and status as every unit. */
+  importChatGptExport: (filePath: string) => Promise<BacklogHarvestRunReport>
   status: () => Promise<BacklogHarvestStatusReport>
 }
 
@@ -123,6 +126,10 @@ export function createBacklogHarvestRunner(options: {
   return {
     run: (unit) => track(unit, () => harvestUnit(unit, options.sources, options.service)),
     runImport: (work) => track('chatgpt-export', work),
+    importChatGptExport: (filePath) =>
+      track('chatgpt-export', () =>
+        importChatGptExportFile(filePath, { service: options.service, now })
+      ),
     status: async () => registry.statusFor(options.ledgerRoot())
   }
 }
