@@ -22,6 +22,12 @@ import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
+import {
+  assertDeviceStillAuthorized,
+  deviceRefusalDetail,
+  DEVICE_UNAUTHORIZED_CLOSE_CODE,
+  DEVICE_UNAUTHORIZED_CLOSE_REASON
+} from './device-authorization'
 import { E2EEKeypairUnusableError, loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from './rpc/unpaired-device-auth-throttle'
 import {
@@ -1086,9 +1092,17 @@ export class OrcaRuntimeRpcServer {
     }
   }
 
-  private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
-    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
-    if (!connectionId) {
+  private handleWebSocketBinaryMessage(
+    bytes: Uint8Array<ArrayBufferLike>,
+    socket: AuthenticatedMobileSocket
+  ): void {
+    const { ws, connectionId } = socket
+    // Why: terminal input rides this path with no per-request auth, so a revoked device must be refused per frame.
+    const authorization = this.deviceRegistry
+      ? assertDeviceStillAuthorized(this.deviceRegistry, socket.device.deviceToken)
+      : null
+    if (!authorization?.ok) {
+      ws.close(DEVICE_UNAUTHORIZED_CLOSE_CODE, DEVICE_UNAUTHORIZED_CLOSE_REASON)
       return
     }
     const frame = decodeTerminalStreamFrame(bytes)
@@ -1394,7 +1408,7 @@ export class OrcaRuntimeRpcServer {
           socket
         )
       },
-      onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+      onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket),
       onReady: () => {
         // Why: first authenticated mobile/remote client (direct WS and
         // cloud relay both attach here) starts path-candidate tracking.
@@ -1722,11 +1736,15 @@ export class OrcaRuntimeRpcServer {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
       return
     }
-    const device = this.deviceRegistry?.validateToken(token)
-    if (!device) {
-      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
+    const authorization = this.deviceRegistry
+      ? assertDeviceStillAuthorized(this.deviceRegistry, token)
+      : null
+    if (!authorization?.ok) {
+      const { message, data } = deviceRefusalDetail(authorization?.reason ?? 'unknown_token')
+      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', message, data)))
       return
     }
+    const device = authorization.device
     if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
       reply(
         JSON.stringify(
@@ -1819,8 +1837,8 @@ export class OrcaRuntimeRpcServer {
     }
   }
 
-  private buildError(id: string, code: string, message: string): RpcResponse {
-    return errorResponse(id, { runtimeId: this.runtime.getRuntimeId() }, code, message)
+  private buildError(id: string, code: string, message: string, data?: unknown): RpcResponse {
+    return errorResponse(id, { runtimeId: this.runtime.getRuntimeId() }, code, message, data)
   }
 
   private writeMetadata(): void {

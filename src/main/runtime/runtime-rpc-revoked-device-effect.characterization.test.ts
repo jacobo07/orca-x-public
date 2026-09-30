@@ -181,7 +181,7 @@ function sendInputFrame(
   )
 }
 
-describe('characterization (inverts in 14-02 Task 1): revoked device whose socket survived the kill (row 58)', () => {
+describe('revoked device whose socket survived the kill (row 58; characterization inverted in 14-02 Task 1)', () => {
   it('V-REV-TEXT-REFUSED: a JSON-RPC request on the surviving socket is refused as unauthorized', async () => {
     const { server, session, responses } = await openRevokedRuntimeSession()
     try {
@@ -198,20 +198,23 @@ describe('characterization (inverts in 14-02 Task 1): revoked device whose socke
     }
   }, 30_000)
 
-  it('V-REV-BINARY-TODAY: a terminal input frame on the open stream IS delivered to the terminal', async () => {
+  it('V-REV-BINARY-REFUSED: a terminal input frame on the open stream is NOT delivered and the socket closes 4001 Unauthorized', async () => {
     const { server, session, writes } = await openRevokedRuntimeSession()
     try {
+      const closeInfo = new Promise<{ code: number; reason: string }>((resolve) => {
+        session.ws.once('close', (code, reason) => resolve({ code, reason: reason.toString() }))
+      })
       const offer = server.getDeviceRegistry()!.listDevices()[0]!
       expect(server.revokeRuntimeAccess(offer.deviceId)).toBe(true)
       expect(session.ws.readyState).toBe(session.ws.OPEN)
 
       sendInputFrame(session, 'rm -rf everything\r')
-      await vi.waitFor(() =>
-        expect(writes).toContainEqual({
-          terminal: 'revoked-effect-pty',
-          text: 'rm -rf everything\r'
-        })
-      )
+      // Why: the close is the positive signal that the frame was judged; without it "not written" could mean "not yet".
+      await expect(closeInfo).resolves.toEqual({ code: 4001, reason: 'Unauthorized' })
+      expect(writes).not.toContainEqual({
+        terminal: 'revoked-effect-pty',
+        text: 'rm -rf everything\r'
+      })
     } finally {
       session.ws.close()
       await server.stop()
