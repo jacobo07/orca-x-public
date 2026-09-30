@@ -75,6 +75,7 @@ import {
 } from '../../orca-profiles/profile-project-session-state'
 import type {
   RemovedSshTargetTombstone,
+  SshHostKeyPin,
   SshPtyConsumerRecovery,
   SshRemotePtyLease,
   SshTarget
@@ -262,6 +263,7 @@ import {
   removeDeletedSshConfigAlias as removeDeletedSshConfigAliasOperation,
   removeRemovedSshTargetTombstone as removeRemovedSshTargetTombstoneOperation,
   removeSshTarget as removeSshTargetOperation,
+  setSshTargetHostKeyPin as setSshTargetHostKeyPinOperation,
   updateSshTarget as updateSshTargetOperation
 } from '../leasing-ssh-ptys/ssh-target-state'
 import {
@@ -3473,6 +3475,10 @@ export class Store {
 
   removeSshTarget(id: string): void {
     removeSshTargetOperation(this.getSshTargetStateOperations(), id)
+  }
+
+  setSshTargetHostKeyPin(id: string, pin: SshHostKeyPin | null): SshTarget | null {
+    return setSshTargetHostKeyPinOperation(this.getSshTargetStateOperations(), id, pin)
   }
 
   // ── Live Claude PTY sessions ───────────────────────────────────────

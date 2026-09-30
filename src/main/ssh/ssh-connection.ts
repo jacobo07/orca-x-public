@@ -1,10 +1,25 @@
 /* eslint-disable max-lines -- Why: SSH connection lifecycle, credential retries, reconnect policy, and transport fallback are intentionally co-located so state transitions stay auditable in one file. */
 import * as net from 'node:net'
-import { createHash } from 'node:crypto'
 import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'node:child_process'
 import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState,
+  SshConnectionStatus,
+  SshHostIdentityStatus
+} from '../../shared/ssh-types'
+import {
+  SshHostKeyRefusedError,
+  adoptableTrustedPin,
+  computeHostKeyFingerprint,
+  hostIdentityForRefusal,
+  hostKeyVerdictAllowsConnect,
+  noteUnpinnedAutomaticConnect,
+  readHostKeyAlgorithm,
+  refusalFromVerdict,
+  verifyHostKeyAgainstPin
+} from './ssh-host-key-pin-verifier'
 import {
   getOrcaControlSocketPath,
   spawnSystemSsh,
@@ -139,6 +154,9 @@ export class SshConnection {
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
   private hostKeyFingerprint: string | undefined
+  private hostIdentity: SshHostIdentityStatus | undefined
+  // Why: interactivity belongs to one attempt; a timer-driven reconnect must not inherit it.
+  private interactiveGeneration = -1
   private connectGeneration = 0
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
@@ -600,7 +618,8 @@ export class SshConnection {
     })
   }
 
-  async connect(): Promise<void> {
+  // Why: `interactive` is the caller's explicit claim that a person is present to confirm first contact; it is never inferred from callbacks.
+  async connect(options?: { interactive?: boolean }): Promise<void> {
     if (this.disposed) {
       throw new Error('Connection disposed')
     }
@@ -609,6 +628,9 @@ export class SshConnection {
 
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
       const connectGeneration = ++this.connectGeneration
+      if (options?.interactive) {
+        this.interactiveGeneration = connectGeneration
+      }
       try {
         await this.attemptConnect(connectGeneration)
         this.reconnectLadder.reset()
@@ -627,6 +649,12 @@ export class SshConnection {
           !this.isCurrentConnectAttempt(connectGeneration) ||
           isCancelledConnectAttemptError(lastError)
         ) {
+          throw lastError
+        }
+
+        // Why: first, so no classifier below (auth, transient) can reinterpret a refused host key into a retry.
+        if (lastError instanceof SshHostKeyRefusedError) {
+          this.setState('error', lastError.message)
           throw lastError
         }
 
@@ -653,6 +681,7 @@ export class SshConnection {
 
   // Why: callers claim the generation so their catch can tell their own failure from a superseded one.
   private async attemptConnect(connectGeneration = ++this.connectGeneration): Promise<void> {
+    this.hostIdentity = undefined
     this.setState('connecting')
     this.proxyProcess?.kill()
     this.proxyProcess = null
@@ -710,8 +739,14 @@ export class SshConnection {
     }
 
     try {
-      await this.doSsh2Connect(config, connectGeneration)
+      await this.doSsh2ConnectWithTrust(config, connectGeneration, effectiveProxy)
     } catch (err) {
+      // Why: a refused host key must be rethrown before every fallback below (system ssh, agent/key retry, credential prompts); any of them would route around the pin.
+      if (err instanceof SshHostKeyRefusedError) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        throw err
+      }
       if (!(err instanceof Error)) {
         this.proxyProcess?.kill()
         this.proxyProcess = null
@@ -758,6 +793,12 @@ export class SshConnection {
             await this.doSsh2Connect(keyConfig, connectGeneration)
             return
           } catch (keyErr) {
+            // Why: the key-retry handshake re-verifies the host; a refusal here must not fall into the credential prompts below.
+            if (keyErr instanceof SshHostKeyRefusedError) {
+              this.proxyProcess?.kill()
+              this.proxyProcess = null
+              throw keyErr
+            }
             if (!(keyErr instanceof Error)) {
               this.proxyProcess?.kill()
               this.proxyProcess = null
@@ -1174,17 +1215,79 @@ export class SshConnection {
     config.sock = p.sock
   }
 
+  // Why: an interactive first contact asks the owner once, then retries only with a pin naming exactly the offered key.
+  private async doSsh2ConnectWithTrust(
+    config: ConnectConfig,
+    connectGeneration: number,
+    proxy: ReturnType<typeof resolveEffectiveProxy> | null | undefined
+  ): Promise<void> {
+    try {
+      await this.doSsh2Connect(config, connectGeneration)
+    } catch (err) {
+      const request = this.callbacks.onHostKeyTrustRequest
+      if (
+        !(err instanceof SshHostKeyRefusedError) ||
+        err.reason !== 'host_key_unpinned' ||
+        this.interactiveGeneration !== connectGeneration ||
+        !request
+      ) {
+        throw err
+      }
+      const pin = await request(this.target.id, {
+        host: err.offered.host,
+        port: err.offered.port,
+        fingerprint: err.offered.fingerprint,
+        ...(err.offered.algorithm ? { algorithm: err.offered.algorithm } : {}),
+        ...(err.offered.publicKeyBase64 ? { publicKeyBase64: err.offered.publicKeyBase64 } : {})
+      })
+      if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
+        throw this.createCancelledConnectAttemptError()
+      }
+      const adopted = adoptableTrustedPin(pin, err.offered)
+      if (!adopted) {
+        throw err
+      }
+      this.target = { ...this.target, hostKeyPin: adopted }
+      this.respawnProxy(config, proxy)
+      await this.doSsh2Connect(config, connectGeneration)
+    }
+  }
+
   private doSsh2Connect(config: ConnectConfig, connectGeneration: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
+      let hostKeyRefusal: SshHostKeyRefusedError | null = null
 
-      // Why: the relay uses the negotiated server key to isolate shared-home
-      // install locks without comparing PIDs from an unrelated SSH host.
+      // Why: the relay locks on the negotiated key, and the pin gate decides here because ssh2 will not proceed past a false.
       config.hostVerifier = (key: Buffer): boolean => {
-        if (!this.disposed && connectGeneration === this.connectGeneration) {
-          const digest = createHash('sha256').update(key).digest('base64').replace(/=+$/, '')
-          this.hostKeyFingerprint = `SHA256:${digest}`
+        const current = !this.disposed && connectGeneration === this.connectGeneration
+        const fingerprint = computeHostKeyFingerprint(key)
+        if (current) {
+          this.hostKeyFingerprint = fingerprint
+        }
+        const offered = {
+          fingerprint,
+          host: config.host ?? this.target.host,
+          port: config.port ?? this.target.port,
+          algorithm: readHostKeyAlgorithm(key),
+          publicKeyBase64: key.toString('base64')
+        }
+        const verdict = verifyHostKeyAgainstPin(this.target.hostKeyPin, offered)
+        if (
+          !hostKeyVerdictAllowsConnect(verdict, this.interactiveGeneration === connectGeneration)
+        ) {
+          hostKeyRefusal = refusalFromVerdict(verdict, offered)
+          if (current) {
+            this.hostIdentity = hostIdentityForRefusal(hostKeyRefusal.reason)
+          }
+          return false
+        }
+        if (current) {
+          if (verdict.kind === 'unpinned') {
+            noteUnpinnedAutomaticConnect(this.target.id, offered)
+          }
+          this.hostIdentity = verdict.kind === 'unpinned' ? 'unpinned-legacy' : 'pinned'
         }
         return true
       }
@@ -1239,7 +1342,8 @@ export class SshConnection {
         cleanupStartupListeners()
         settled = true
         client.destroy()
-        reject(err)
+        // Why: ssh2 reports a false verifier as a generic handshake error; the typed refusal is the real cause.
+        reject(hostKeyRefusal ?? err)
       }
 
       client.on('ready', onReady)
@@ -1312,6 +1416,11 @@ export class SshConnection {
       if (isCancelledConnectAttemptError(error)) {
         return
       }
+      // Why: a refused host key is terminal; it must never look transient and re-enter the ladder.
+      if (error instanceof SshHostKeyRefusedError) {
+        this.setState('error', error.message)
+        return
+      }
       if (isAuthError(error) || isPassphraseError(error)) {
         this.setState('auth-failed', error.message)
         return
@@ -1357,6 +1466,7 @@ export class SshConnection {
       throw new Error('Connection disposed')
     }
     const connectGeneration = ++this.connectGeneration
+    this.hostIdentity = undefined
     this.systemSsh?.kill()
     this.systemSsh = null
     this.systemSshResolvedConfig = null
@@ -1437,11 +1547,15 @@ export class SshConnection {
   }
 
   private setState(status: SshConnectionStatus, error?: string): void {
+    // Why: system OpenSSH verifies against known_hosts itself; Orca never claims a pin it did not check.
+    const hostIdentity = this.useSystemSshTransport ? 'delegated-to-openssh' : this.hostIdentity
+    const { hostIdentity: _previous, ...rest } = this.state
     this.state = {
-      ...this.state,
+      ...rest,
       status,
       error: error ?? null,
-      supportsFolderDownload: status === 'connected' && !this.useSystemSshTransport
+      supportsFolderDownload: status === 'connected' && !this.useSystemSshTransport,
+      ...(hostIdentity ? { hostIdentity } : {})
     }
     this.callbacks.onStateChange(this.target.id, { ...this.state })
   }

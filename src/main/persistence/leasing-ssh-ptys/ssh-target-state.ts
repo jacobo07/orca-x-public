@@ -1,5 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
+import type { RemovedSshTargetTombstone, SshHostKeyPin, SshTarget } from '../../../shared/ssh-types'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
@@ -27,7 +27,9 @@ export function getSshTarget(state: PersistedState, id: string): SshTarget | und
 
 export function addSshTarget(operations: SshTargetStateOperations, target: SshTarget): void {
   operations.state.sshTargets ??= []
-  operations.state.sshTargets.push(normalizeSshTarget(target))
+  // Why: a pin is trust, so it enters only through setSshTargetHostKeyPin, never through a generic add.
+  const { hostKeyPin: _untrusted, ...unpinned } = normalizeSshTarget(target)
+  operations.state.sshTargets.push(unpinned)
   operations.scheduleSave()
 }
 
@@ -40,7 +42,16 @@ export function updateSshTarget(
   if (!target) {
     return null
   }
-  const normalized = normalizeSshTarget({ ...target, ...updates })
+  // Why: a pin is trust and moves only through setSshTargetHostKeyPin; re-pointing the target at another host or port drops it.
+  const { hostKeyPin: _untrusted, ...safeUpdates } = updates
+  const repointed =
+    (safeUpdates.host !== undefined && safeUpdates.host !== target.host) ||
+    (safeUpdates.port !== undefined && safeUpdates.port !== target.port)
+  const normalized = normalizeSshTarget({
+    ...target,
+    ...safeUpdates,
+    ...(repointed ? { hostKeyPin: undefined } : {})
+  })
   // Why: Object.assign only adds keys, so anything normalization stripped (retired sync fields, implicit defaults) must be deleted off the live target.
   const mutableTarget = target as Record<string, unknown>
   for (const key of Object.keys(mutableTarget)) {
@@ -50,6 +61,25 @@ export function updateSshTarget(
   }
   Object.assign(target, normalized)
   operations.scheduleSave()
+  return { ...target }
+}
+
+// Why: flush, not scheduleSave, so a connect that depends on the pin never outruns it to disk (D-08).
+export function setSshTargetHostKeyPin(
+  operations: SshTargetStateOperations,
+  id: string,
+  pin: SshHostKeyPin | null
+): SshTarget | null {
+  const target = operations.state.sshTargets?.find((entry) => entry.id === id)
+  if (!target) {
+    return null
+  }
+  if (pin === null) {
+    delete target.hostKeyPin
+  } else {
+    target.hostKeyPin = pin
+  }
+  operations.flush()
   return { ...target }
 }
 
