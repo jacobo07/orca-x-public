@@ -41,6 +41,8 @@ async function addSshdTarget(page: Page, label: string): Promise<string> {
           port,
           username: user,
           identityFile: key,
+          // Why: without a source the target reads as ssh-config-backed and the label is resolved as the host.
+          source: 'manual' as const,
           // Why: keep the relay short-lived if the app dies before cleanup.
           relayGracePeriodSeconds: 1
         }
