@@ -351,9 +351,19 @@ export class DeviceRegistry {
       this.devices = []
       return
     }
+    let raw: string
     try {
       hardenExistingSecureFile(this.registryPath)
-      const parsed: unknown = JSON.parse(readFileSync(this.registryPath, 'utf-8'))
+      raw = readFileSync(this.registryPath, 'utf-8')
+    } catch (error) {
+      // Why: an I/O failure (EBUSY, EPERM) says nothing about the bytes; leave them for the next launch.
+      this.devices = []
+      this.revoked = []
+      this.unavailableReason = `read failed: ${error instanceof Error ? error.message : String(error)}`
+      return
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw)
       // Why: v1 was a bare array (no tombstones); v2 is an envelope. Any other shape, including a newer
       // version, is unreadable to this build and must be preserved rather than reinterpreted.
       let stored: unknown

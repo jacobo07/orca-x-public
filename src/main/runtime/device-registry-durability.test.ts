@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const syscalls: { name: string; arg?: string }[] = []
 // Why: lets a test make the durable publish fail, to prove a revoke does not depend on the save landing.
-const publishFailure = { renameThrows: false }
+const publishFailure = { renameThrows: false, readThrows: false }
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -29,7 +29,13 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     default: actual,
     fsyncSync: record('fsyncSync', actual.fsyncSync),
-    renameSync: record('renameSync', actual.renameSync, 1)
+    renameSync: record('renameSync', actual.renameSync, 1),
+    readFileSync: ((...args: Parameters<typeof actual.readFileSync>) => {
+      if (publishFailure.readThrows) {
+        throw Object.assign(new Error('injected read failure'), { code: 'EBUSY' })
+      }
+      return actual.readFileSync(...args)
+    }) as typeof actual.readFileSync
   }
 })
 
@@ -172,6 +178,27 @@ describe('an unreadable registry is preserved and fails closed', () => {
     expect(registry.validateToken('anything')).toBeNull()
     expect(() => registry.addDevice('phone')).toThrow(/device_registry_unavailable/)
     expect(existsSync(registryFile()), 'a registry was published over the corrupt one').toBe(false)
+  })
+
+  it('V-REG-IO-ERROR-UNTOUCHED: a read failure leaves the original bytes in place and the registry unavailable', () => {
+    // Arrange
+    const bytes = JSON.stringify([{ deviceId: 'd1', name: 'p', token: 't1', pairedAt: 1, lastSeenAt: 2 }])
+    writeFileSync(registryFile(), bytes)
+    publishFailure.readThrows = true
+
+    // Act
+    let registry: InstanceType<typeof DeviceRegistry>
+    try {
+      registry = new DeviceRegistry(dir)
+    } finally {
+      publishFailure.readThrows = false
+    }
+
+    // Assert
+    expect(registry.getAvailability().available).toBe(false)
+    expect(corruptSiblings()).toHaveLength(0)
+    expect(readFileSync(registryFile(), 'utf-8')).toBe(bytes)
+    expect(new DeviceRegistry(dir).validateToken('t1')?.deviceId).toBe('d1')
   })
 
   it('V-REG-UNAVAILABLE-HANDSHAKE: the deferred lastSeen path returns instead of crashing', () => {
