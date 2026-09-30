@@ -843,14 +843,29 @@
       "owner": "federation + UWCP judge",
       "done": "policy-routed reviewer",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-7",
+      "measuredAt": "2026-09-30",
       "required": true,
       "phases": [
         7
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — policy-routed reviewer not yet evidenced"
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-request.ts", "note": "reviews.policy none/any/independent: feasibility judged before any turn runs" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/coordinator-agent-tasks.ts", "note": "policy independent excludes the producer's provider" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-settlement.ts", "note": "reviewer provider taken from the turn's recorded result, not from conversation provenance" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/subject-bound-gates.ts", "note": "approval re-checks the gate's review requirement against the exact subject" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/subject-bound-gates.test.ts", "note": "the subject-bound gate and its review requirement" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/approval-authority-aperture.test.ts", "note": "only the desktop IPC may import decide/rebind" },
+        { "kind": "file", "path": "src/main/ipc/agent-federation.test.ts", "note": "the P7 guard test" },
+        { "kind": "file", "path": "config/scripts/check-federation-ownership.mjs", "note": "ownership sweep: no federation-owned file edited on this branch" },
+        { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.json", "note": "phase-7 evidence: MEASURED at rung gates, both GEX44 fences 677 passed / 0 failed" },
+        { "kind": "commit", "sha": "5c14ecc24", "note": "a review records its policy and producer task (v32)" },
+        { "kind": "commit", "sha": "3f3bcf7ae", "note": "P5: a gate carries the exact commit it approves (v33)" },
+        { "kind": "commit", "sha": "205048aa5", "note": "P5: approval enforced where the task acts" }
+      ],
+      "reason": "measured 2026-09-30: the policy-routed reviewer exists as code (reviews.policy none/any/independent, producer-provider exclusion, reviewer provider taken from the routed result) and its gates re-ran on GEX44 at 997b4a55a with both fences at 677 passed / 0 failed (verdict MEASURED); a policy-routed reviewer across two live providers is unevidenced (no live spend in this phase); the UWCP judge half of this row belongs to another program."
     },
     {
       "id": 38,
