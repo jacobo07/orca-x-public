@@ -12,6 +12,7 @@ import {
   BacklogCandidatesIngestParams,
   BacklogCandidatesResolveParams
 } from './backlog-candidate-params'
+import { BacklogHarvestRunParams } from './backlog-harvest-params'
 import {
   BacklogCaptureParams,
   BacklogListParams,
@@ -31,7 +32,9 @@ const NAMES = [
   'backlog.candidates.list',
   'backlog.candidates.ingest',
   'backlog.candidates.resolve',
-  'backlog.health'
+  'backlog.health',
+  // Phase 3: host-side harvest of this host's own stores (R-04).
+  'backlog.harvest.run'
 ]
 
 const ITEM_ID = 'bli_00000000-0000-4000-8000-000000000000'
@@ -61,7 +64,8 @@ const VALID_PARAMS: Record<string, unknown> = {
   'backlog.merge': { survivorId: ITEM_ID, loserId: OTHER_ITEM_ID },
   'backlog.list': { state: 'ready' },
   'backlog.candidates.list': { status: 'open' },
-  'backlog.health': undefined
+  'backlog.health': undefined,
+  'backlog.harvest.run': { unit: 'orca-conversations' }
 }
 
 function ctxWithoutHost(): RpcContext {
@@ -75,7 +79,18 @@ function ctxWithoutHost(): RpcContext {
 describe('backlog.* runtime methods', () => {
   it('registers exactly the ledger method set', () => {
     expect(BACKLOG_METHODS.map((entry) => entry.name).sort()).toEqual([...NAMES].sort())
-    expect(NAMES).toHaveLength(10)
+    expect(NAMES).toHaveLength(11)
+  })
+
+  it('accepts only the harvest units this build can run', () => {
+    const run = (params: unknown) => BacklogHarvestRunParams.safeParse(params).success
+    expect(run({ unit: 'orca-conversations' })).toBe(true)
+    expect(run({ unit: 'agent-transcripts' })).toBe(false)
+    expect(run({ unit: 'chatgpt-export' })).toBe(false)
+    expect(run({ unit: 'nope' })).toBe(false)
+    expect(run({})).toBe(false)
+    const stripped = BacklogHarvestRunParams.safeParse({ unit: 'orca-conversations', path: '/x' })
+    expect(stripped.data).toEqual({ unit: 'orca-conversations' })
   })
 
   it('bounds list params and refuses a project filter combined with Unassigned', () => {

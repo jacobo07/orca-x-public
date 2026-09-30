@@ -1,7 +1,7 @@
 // Tracer proof: a capture over the real RpcDispatcher (default method list, so registration in
 // index.ts is exercised) publishes a file that a fresh runtime reads back over RPC.
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -9,6 +9,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { isBacklogItemId } from '../../../../shared/backlog-identity'
 import { createBacklogHost } from '../../../backlog/backlog-host'
 import { BacklogService } from '../../../backlog/backlog-service'
+import { createBacklogHarvestRunner } from '../../../backlog/harvest/backlog-harvest-runner'
+import { conversationSourceFromStore } from '../../../backlog/harvest/orca-conversation-harvest'
+import { ConversationStore } from '../../../conversation/conversation-store'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -17,9 +20,22 @@ function request(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
+// Conversations live beside the ledger root so one temp dir holds both stores.
+function conversationsDirOf(root: string): string {
+  return `${root}-conversations`
+}
+
 function dispatcherOn(root: string): RpcDispatcher {
   const runtime = new OrcaRuntimeService()
-  runtime.setBacklogHost(createBacklogHost(new BacklogService(() => root)))
+  const service = new BacklogService(() => root)
+  const harvester = createBacklogHarvestRunner({
+    service,
+    sources: {
+      conversations: () =>
+        conversationSourceFromStore(new ConversationStore(conversationsDirOf(root)))
+    }
+  })
+  runtime.setBacklogHost(createBacklogHost(service, harvester))
   return new RpcDispatcher({ runtime })
 }
 
@@ -31,6 +47,62 @@ async function resultOf(dispatcher: RpcDispatcher, method: string, params: unkno
   return response.result as { outcome: string; record?: Record<string, unknown> & { id: string } }
 }
 
+function stringsIn(value: unknown, into: string[] = []): string[] {
+  if (typeof value === 'string') {
+    into.push(value)
+  } else if (Array.isArray(value)) {
+    for (const entry of value) {
+      stringsIn(entry, into)
+    }
+  } else if (typeof value === 'object' && value !== null) {
+    for (const [key, entry] of Object.entries(value)) {
+      into.push(key)
+      stringsIn(entry, into)
+    }
+  }
+  return into
+}
+
+// Built as a literal, never through the store under test.
+function writeTracerConversation(root: string): { id: string; messageId: string } {
+  const id = 'conv_tracer000001'
+  const messageId = 'msg-user-1'
+  const record = {
+    schemaVersion: 1,
+    id,
+    title: 'Secret tracer title',
+    createdAt: 1_000,
+    updatedAt: 3_000,
+    status: 'active',
+    projectId: null,
+    provenance: [],
+    turns: [{ turnId: 't1', seq: 0, state: 'completed', startedAt: 1_000, endedAt: 2_500 }],
+    messages: [
+      {
+        id: messageId,
+        seq: 1,
+        role: 'user',
+        blocks: [{ type: 'text', text: '- [ ] ship the inbox' }],
+        timestamp: 1_500,
+        turnId: 't1'
+      },
+      {
+        id: 'msg-assistant-1',
+        seq: 2,
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'On it.' }],
+        timestamp: 2_000,
+        turnId: 't1'
+      }
+    ],
+    nextSeq: 3
+  }
+  const dir = conversationsDirOf(root)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, `${id}.json`), JSON.stringify(record))
+  return { id, messageId }
+}
+
 describe('backlog runtime RPC round trip', () => {
   let root: string
 
@@ -40,6 +112,77 @@ describe('backlog runtime RPC round trip', () => {
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
+    rmSync(conversationsDirOf(root), { recursive: true, force: true })
+  })
+
+  it('harvests one Orca conversation marker line; a fresh runtime lists the candidate', async () => {
+    const { id, messageId } = writeTracerConversation(root)
+
+    const report = (await resultOf(dispatcherOn(root), 'backlog.harvest.run', {
+      unit: 'orca-conversations'
+    })) as unknown as Record<string, unknown>
+    expect(report).toMatchObject({
+      outcome: 'completed',
+      unit: 'orca-conversations',
+      seen: 1,
+      read: 1,
+      candidatesNew: 1,
+      candidatesDuplicate: 0,
+      cap: null
+    })
+
+    type Listed = { total: number; candidates: Record<string, unknown>[] }
+    const listed = (await resultOf(dispatcherOn(root), 'backlog.candidates.list', {})) as unknown as Listed
+    expect(listed.total).toBe(1)
+    expect(listed.candidates[0]).toMatchObject({
+      text: 'ship the inbox',
+      status: 'open',
+      uncertainty: 'medium',
+      source: {
+        kind: 'orca-conversation',
+        ref: `${id}#${messageId}#L0`,
+        adapter: 'orca-conversation-harvest.v1',
+        capabilityLevel: 'full',
+        capturedAt: 1_500
+      }
+    })
+
+    const again = (await resultOf(dispatcherOn(root), 'backlog.harvest.run', {
+      unit: 'orca-conversations'
+    })) as unknown as Record<string, unknown>
+    expect(again).toMatchObject({ outcome: 'completed', candidatesNew: 0, candidatesDuplicate: 1 })
+    const relisted = (await resultOf(dispatcherOn(root), 'backlog.candidates.list', {})) as unknown as Listed
+    expect(relisted.total).toBe(1)
+
+    // The report crosses the remote wire: counts and codes only, never text, title or path.
+    const forbidden = ['ship the inbox', 'Secret tracer title', root, conversationsDirOf(root)]
+    const leaks = (value: unknown) =>
+      stringsIn(value).filter((text) => forbidden.some((needle) => text.includes(needle)))
+    expect(leaks(report)).toEqual([])
+    expect(leaks(again)).toEqual([])
+    const planted = { ...report, skipped: { planted: [{ deeper: 'ship the inbox' }] } }
+    expect(leaks(planted)).toEqual(['ship the inbox'])
+  })
+
+  it('refuses harvest units this build cannot run with invalid_argument', async () => {
+    for (const unit of ['chatgpt-export', 'agent-transcripts', 'nope']) {
+      const response = await dispatcherOn(root).dispatch(request('backlog.harvest.run', { unit }))
+      expect(response.ok, unit).toBe(false)
+      expect(!response.ok && response.error.code, unit).toBe('invalid_argument')
+    }
+    const control = await dispatcherOn(root).dispatch(
+      request('backlog.harvest.run', { unit: 'orca-conversations' })
+    )
+    expect(control.ok).toBe(true)
+  })
+
+  it('answers capability_unsupported for harvest on a host with no backlog host', async () => {
+    const dispatcher = new RpcDispatcher({ runtime: new OrcaRuntimeService() })
+    const response = await dispatcher.dispatch(
+      request('backlog.harvest.run', { unit: 'orca-conversations' })
+    )
+    expect(response.ok).toBe(false)
+    expect(!response.ok && response.error.code).toBe('capability_unsupported')
   })
 
   it('captures over RPC and a fresh runtime reads the same record back', async () => {
