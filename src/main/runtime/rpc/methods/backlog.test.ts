@@ -85,12 +85,33 @@ describe('backlog.* runtime methods', () => {
   it('accepts only the harvest units this build can run', () => {
     const run = (params: unknown) => BacklogHarvestRunParams.safeParse(params).success
     expect(run({ unit: 'orca-conversations' })).toBe(true)
-    expect(run({ unit: 'agent-transcripts' })).toBe(false)
+    expect(run({ unit: 'agent-transcripts' })).toBe(true)
     expect(run({ unit: 'chatgpt-export' })).toBe(false)
     expect(run({ unit: 'nope' })).toBe(false)
     expect(run({})).toBe(false)
     const stripped = BacklogHarvestRunParams.safeParse({ unit: 'orca-conversations', path: '/x' })
     expect(stripped.data).toEqual({ unit: 'orca-conversations' })
+  })
+
+  it('hands an agent-transcripts run to the host harvester', async () => {
+    const units: unknown[] = []
+    const ctx = {
+      runtime: {
+        getBacklogHost: () => ({
+          harvest: async (unit: unknown) => {
+            units.push(unit)
+            return { outcome: 'refused', unit, code: 'source-unreadable', finishedAt: 1 }
+          }
+        })
+      } as unknown as RpcContext['runtime'],
+      connectionId: 'conn-1',
+      clientKind: 'runtime'
+    } as RpcContext
+    const method = BACKLOG_METHODS.find((entry) => entry.name === 'backlog.harvest.run') as unknown as {
+      handler: (params: unknown, ctx: RpcContext) => Promise<unknown>
+    }
+    await method.handler({ unit: 'agent-transcripts' }, ctx)
+    expect(units).toEqual(['agent-transcripts'])
   })
 
   it('bounds list params and refuses a project filter combined with Unassigned', () => {

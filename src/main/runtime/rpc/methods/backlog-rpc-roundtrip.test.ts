@@ -173,7 +173,7 @@ describe('backlog runtime RPC round trip', () => {
   })
 
   it('refuses harvest units this build cannot run with invalid_argument', async () => {
-    for (const unit of ['chatgpt-export', 'agent-transcripts', 'nope']) {
+    for (const unit of ['chatgpt-export', 'nope']) {
       const response = await dispatcherOn(root).dispatch(request('backlog.harvest.run', { unit }))
       expect(response.ok, unit).toBe(false)
       expect(!response.ok && response.error.code, unit).toBe('invalid_argument')
