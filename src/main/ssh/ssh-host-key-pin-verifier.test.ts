@@ -102,6 +102,11 @@ describe('verifyHostKeyAgainstPin', () => {
     }
   })
 
+  it('CHARACTERIZATION: a pin for another endpoint reads unpinned and an automatic attempt may connect', () => {
+    const verdict = verifyHostKeyAgainstPin(pin({ host: 'elsewhere.example' }), offered)
+    expect(verdict).toEqual({ kind: 'unpinned' })
+    expect(hostKeyVerdictAllowsConnect(verdict, false)).toBe(true)
+  })
   it('parseHostKeyPin keeps optional fields and rejects wrong types', () => {
     expect(parseHostKeyPin(pin({ algorithm: 'ssh-ed25519', publicKeyBase64: 'AAAA' }))).toEqual(
       pin({ algorithm: 'ssh-ed25519', publicKeyBase64: 'AAAA' })

@@ -322,6 +322,19 @@ describe('SshConnection host key pinning', () => {
     expect(conn.getState().hostIdentity).toBe('unpinned-legacy')
   })
 
+  it('V-SSH-PIN-ENDPOINT-MISMATCH: CHARACTERIZATION - a pin for another endpoint still gets the legacy automatic grace', async () => {
+    const onHostKeyTrustRequest = vi.fn(async () => pinFor(OTHER_KEY))
+    const conn = new SshConnection(
+      createTarget({ hostKeyPin: pinFor(OTHER_KEY, { host: 'elsewhere.example' }) }),
+      createCallbacks({ onHostKeyTrustRequest })
+    )
+
+    await conn.connect()
+
+    expect(conn.getState()).toMatchObject({ status: 'connected', hostIdentity: 'unpinned-legacy' })
+    expect(getUnpinnedAutomaticConnectCount('target-1')).toBe(1)
+    expect(onHostKeyTrustRequest).not.toHaveBeenCalled()
+  })
   it.each([false, true])(
     'V-SSH-MALFORMED-REFUSED: a damaged pin refuses interactive=%s attempts',
     async (interactive) => {
