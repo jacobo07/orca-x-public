@@ -161,25 +161,34 @@ async function observeEnvironment(
 async function observeLocalResources(
   deps: FleetObservationDeps,
   runtimeId: string,
-  options: FleetObservationOptions
+  options: FleetObservationOptions,
+  deadlineMs: number
 ): Promise<FleetNodeResourcesObservation> {
   if (!deps.collectLocalNodeResources) {
     return notAttemptedNodeResources(deps.now(), runtimeId, 'no local collector')
   }
   const startedAt = deps.now()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`no answer within ${deadlineMs} ms`)), deadlineMs)
+  })
   try {
-    const reply = await deps.collectLocalNodeResources(options)
+    // Why: statfs on a hung mount or a trickling loopback body never settles by itself.
+    const reply = await Promise.race([deps.collectLocalNodeResources(options), deadline])
     return { startedAt, runtimeId, ...parseNodeResourcesReply(reply) }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     const unknown = { outcome: 'unknown', reason: 'unreachable', detail } as const
     return { startedAt, runtimeId, disk: unknown, gpu: unknown, models: unknown }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 async function observeLocal(
   deps: FleetObservationDeps,
-  options: FleetObservationOptions
+  options: FleetObservationOptions,
+  deadlineMs: number
 ): Promise<FleetPlacementMember> {
   const identity = identityFromKeyFingerprint(fingerprintOf(deps.readLocalPublicKey()))
   const startedAt = deps.now()
@@ -192,7 +201,7 @@ async function observeLocal(
     // Why: this process is the host, so protocol negotiation does not apply to it.
     facts: { ...fleetHostFactsFromStatus(status, status.runtimeId), protocol: 'not-applicable' },
     sample: fleetSampleFromSnapshot(snapshot, status.runtimeId, startedAt),
-    nodeResources: await observeLocalResources(deps, status.runtimeId, options)
+    nodeResources: await observeLocalResources(deps, status.runtimeId, options, deadlineMs)
   }
 }
 
@@ -216,7 +225,10 @@ export async function observeFleet(
     { length: Math.min(FLEET_OBSERVATION_CONCURRENCY, environments.length) },
     worker
   )
-  const [local] = await Promise.all([observeLocal(deps, options), Promise.all(workers)])
+  const [local] = await Promise.all([
+    observeLocal(deps, options, deadlineMs),
+    Promise.all(workers)
+  ])
   return {
     observedAt,
     completedAt: deps.now(),

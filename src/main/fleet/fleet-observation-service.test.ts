@@ -1,5 +1,5 @@
 import nacl from 'tweetnacl'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { planFleetPlacement } from '../../shared/fleet-placement'
 import { RUNTIME_PROTOCOL_VERSION } from '../../shared/protocol-version'
@@ -341,6 +341,30 @@ describe('fleet observation node resources', () => {
       outcome: 'unknown',
       reason: 'not-attempted'
     })
+  })
+
+  it('bounds a local collector that never resolves, leaving memory measured and no timer behind', async () => {
+    vi.useFakeTimers()
+    try {
+      const pending = observeFleet(
+        deps({
+          collectLocalNodeResources: () => new Promise(() => {}),
+          callEnvironment: async () => ok('rt', {})
+        })
+      )
+      await vi.advanceTimersByTimeAsync(200)
+      const local = (await pending).members[0]
+      expect(local.sample.outcome).toBe('measured')
+      for (const family of ['disk', 'gpu', 'models'] as const) {
+        expect(local.nodeResources?.[family]).toMatchObject({
+          outcome: 'unknown',
+          reason: 'unreachable'
+        })
+      }
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not take the third step for a protocol-blocked host', async () => {
