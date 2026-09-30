@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -239,12 +247,15 @@ describe('an unreadable registry is preserved and fails closed', () => {
 
 describe('revocation is a durable, distinct, bounded, fail-closed fact', () => {
   const registryFile = () => join(dir, 'orca-devices.json')
-  const readEnvelope = () =>
-    JSON.parse(readFileSync(registryFile(), 'utf-8')) as {
-      version: number
-      devices: { deviceId: string }[]
-      revoked: { deviceId: string; tokenHash: string; revokedAt: number }[]
-    }
+  const revocationsFile = () => join(dir, 'orca-device-revocations.json')
+  const readDevices = () =>
+    JSON.parse(readFileSync(registryFile(), 'utf-8')) as { deviceId: string }[]
+  const readRevoked = () =>
+    JSON.parse(readFileSync(revocationsFile(), 'utf-8')) as {
+      deviceId: string
+      tokenHash: string
+      revokedAt: number
+    }[]
   const tombstone = (n: number, revokedAt: number) => ({
     deviceId: `gone-${n}`,
     tokenHash: `hash-${n}`,
@@ -290,7 +301,8 @@ describe('revocation is a durable, distinct, bounded, fail-closed fact', () => {
       reason: 'device_revoked'
     })
     expect(readFileSync(registryFile(), 'utf-8')).not.toContain(device.token)
-    expect(readEnvelope().revoked[0]!.tokenHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(readFileSync(revocationsFile(), 'utf-8')).not.toContain(device.token)
+    expect(readRevoked()[0]!.tokenHash).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('V-REV-FUTURE-VERSION: an envelope this build does not know is preserved and fails closed, never reinterpreted', () => {
@@ -309,11 +321,30 @@ describe('revocation is a durable, distinct, bounded, fail-closed fact', () => {
     expect(() => registry.addDevice('phone')).toThrow(/device_registry_unavailable/)
   })
 
-  it('V-REV-V1-READ: a v1 bare array loads, and the next save writes the v2 envelope', () => {
+  it('V-REV-OLDER-BUILD-READ: an older build parsing orca-devices.json sees a bare array', () => {
+    // Arrange
+    const registry = new DeviceRegistry(dir)
+    const gone = registry.addDevice('gone')
+    registry.addDevice('kept')
+    registry.removeDevice(gone.deviceId)
+
+    // Act
+    const parsed: unknown = JSON.parse(readFileSync(registryFile(), 'utf-8'))
+
+    // Assert
+    expect(Array.isArray(parsed)).toBe(true)
+    expect((parsed as { name: string }[]).map((d) => d.name)).toEqual(['kept'])
+  })
+
+  it('V-REV-V2-MIGRATE: a v2 envelope loads, and the next save writes a bare array plus the tombstone file', () => {
     // Arrange
     writeFileSync(
       registryFile(),
-      JSON.stringify([{ deviceId: 'd1', name: 'old', token: 't1', pairedAt: 1, lastSeenAt: 2 }])
+      JSON.stringify({
+        version: 2,
+        devices: [{ deviceId: 'd1', name: 'old', token: 't1', pairedAt: 1, lastSeenAt: 2 }],
+        revoked: [tombstone(1, Date.now())]
+      })
     )
     const registry = new DeviceRegistry(dir)
 
@@ -321,10 +352,9 @@ describe('revocation is a durable, distinct, bounded, fail-closed fact', () => {
     registry.addDevice('new')
 
     // Assert
-    const envelope = readEnvelope()
-    expect(envelope.version).toBe(2)
-    expect(envelope.devices.map((d) => d.deviceId)).toContain('d1')
-    expect(envelope.revoked).toEqual([])
+    expect(readDevices().map((d) => d.deviceId)).toContain('d1')
+    expect(Array.isArray(readDevices())).toBe(true)
+    expect(readRevoked().map((e) => e.deviceId)).toEqual(['gone-1'])
   })
 
   it('V-REV-BOUND: tombstones are capped at 256 newest and none older than 90 days survives a write', () => {
@@ -336,21 +366,18 @@ describe('revocation is a durable, distinct, bounded, fail-closed fact', () => {
     const recent = Array.from({ length: 299 }, (_, n) => tombstone(n, now - day + n))
     writeFileSync(
       registryFile(),
-      JSON.stringify({
-        version: 2,
-        devices: [
-          { deviceId: 'live', name: 'p', token: 'live-token', pairedAt: 1, lastSeenAt: 2 }
-        ],
-        revoked: [tombstone(9000, now - 91 * day), ...recent]
-      })
+      JSON.stringify([
+        { deviceId: 'live', name: 'p', token: 'live-token', pairedAt: 1, lastSeenAt: 2 }
+      ])
     )
+    writeFileSync(revocationsFile(), JSON.stringify([tombstone(9000, now - 91 * day), ...recent]))
     const registry = new DeviceRegistry(dir)
 
     // Act
     registry.removeDevice('live')
 
     // Assert
-    const { revoked } = readEnvelope()
+    const revoked = readRevoked()
     expect(revoked).toHaveLength(256)
     expect(revoked.some((entry) => entry.deviceId === 'gone-9000')).toBe(false)
     expect(revoked.at(-1)!.deviceId).toBe('live')
@@ -371,6 +398,39 @@ describe('revocation is a durable, distinct, bounded, fail-closed fact', () => {
       reason: 'device_revoked'
     })
     expect(registry.getDevice(device.deviceId)).toBeNull()
+  })
+
+  it('V-REV-TOMBSTONE-DAMAGE: a garbage tombstone file never makes the registry unavailable or re-authorizes anyone', () => {
+    // Arrange
+    const device = new DeviceRegistry(dir).addDevice('phone')
+    writeFileSync(revocationsFile(), '{not json')
+
+    // Act
+    const registry = new DeviceRegistry(dir)
+
+    // Assert
+    expect(registry.getAvailability()).toEqual({ available: true })
+    expect(registry.validateToken(device.token)?.deviceId).toBe(device.deviceId)
+    expect(assertDeviceStillAuthorized(registry, 'never-issued')).toEqual({
+      ok: false,
+      reason: 'unknown_token'
+    })
+  })
+
+  it('V-REV-TOMBSTONE-SAVE-FAILURE: a failed tombstone write still propagates and the device stays refused', () => {
+    // Arrange
+    const registry = new DeviceRegistry(dir)
+    const device = registry.addDevice('phone')
+    mkdirSync(revocationsFile())
+
+    // Act / Assert
+    expect(() => registry.removeDevice(device.deviceId)).toThrow()
+    expect(registry.getDevice(device.deviceId)).toBeNull()
+    expect(assertDeviceStillAuthorized(registry, device.token)).toEqual({
+      ok: false,
+      reason: 'device_revoked'
+    })
+    expect(readDevices()).toEqual([])
   })
 
   it('V-REV-GRANT-ORDER: a grant whose save throws is NOT valid afterwards (control for save-then-swap)', () => {

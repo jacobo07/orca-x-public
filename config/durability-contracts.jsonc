@@ -50,14 +50,26 @@
     },
     {
       "id": "runtime.device-registry",
-      "state": "<userData>/orca-devices.json — every paired device token, scope, reach, relay binding and (from 14-02) revocation tombstone",
+      "state": "<userData>/orca-devices.json — every paired device token, scope, reach, relay binding. A bare JSON array, so an older build still reads it.",
       "writer": "src/main/runtime/device-registry.ts",
       "tier": "crash-durable",
-      "lostIf": "Every pairing at once, and every revocation: the file was published by a rename with no fsync, so a power loss could leave it empty or torn, and the loader then treated an unreadable file as no devices. Losing a revocation resurrects a device the owner removed. The writer now fsyncs before the rename, and an unreadable file is preserved as orca-devices.json.corrupt-<ms> while the registry fails closed.",
+      "lostIf": "Every pairing at once: the file was published by a rename with no fsync, so a power loss could leave it empty or torn, and the loader then treated an unreadable file as no devices. The writer now fsyncs before the rename, and an unparseable file is preserved as orca-devices.json.corrupt-<ms> while the registry fails closed; an I/O read failure leaves the file in place and the registry unavailable.",
       "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts), so on Windows the proven claim is that the contents reached disk before the rename, not that the rename itself survives a power loss.",
         "The forget-identity cleanup is deferred (see runtime.e2ee-host-identity)."
+      ]
+    },
+    {
+      "id": "runtime.device-revocations",
+      "state": "<userData>/orca-device-revocations.json — sha256 digests of the tokens of devices the owner removed, with the removal time",
+      "writer": "src/main/runtime/device-registry.ts",
+      "tier": "crash-durable",
+      "lostIf": "Only the refusal reason: a revoked token reads unknown_token instead of device_revoked, and is still refused because its device row is gone from orca-devices.json. A missing or unreadable file never makes the registry unavailable and never authorizes anyone. Devices are written first, so a failed write here can lose a reason but never resurrect a device.",
+      "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
+      "knownGaps": [
+        "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts).",
+        "The file is not in MOBILE_PAIRING_USERDATA_FILES: the userData migration needs every listed file to exist, and this one legitimately may not."
       ]
     },
     {

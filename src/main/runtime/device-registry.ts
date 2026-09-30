@@ -7,7 +7,7 @@ import { existsSync, readFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeDurableSecureJsonFile } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
-import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+import { DEVICE_REGISTRY_FILENAME, DEVICE_REVOCATIONS_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
@@ -85,14 +85,20 @@ const LAST_SEEN_FLUSH_DELAY_MS = 250
 
 export class DeviceRegistry {
   private readonly registryPath: string
+  private readonly revocationsPath: string
   private devices: DeviceEntry[] = []
   private revoked: RevocationTombstone[] = []
+  private tombstonesDirty = false
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
   private unavailableReason: string | null = null
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
+    this.revocationsPath = join(userDataPath, DEVICE_REVOCATIONS_FILENAME)
     this.load()
+    if (this.unavailableReason === null) {
+      this.loadTombstones()
+    }
   }
 
   getAvailability(): DeviceRegistryAvailability {
@@ -206,6 +212,7 @@ export class DeviceRegistry {
       ],
       Date.now()
     )
+    this.tombstonesDirty = true
     this.save(this.devices)
     return true
   }
@@ -376,9 +383,11 @@ export class DeviceRegistry {
         Array.isArray((parsed as { devices?: unknown }).devices)
       ) {
         stored = (parsed as { devices: unknown }).devices
+        // Why: a dev build wrote tombstones inside the devices file; carry them to the sibling file on the next save.
         this.revoked = validTombstones((parsed as { revoked?: unknown }).revoked)
+        this.tombstonesDirty = this.revoked.length > 0
       } else {
-        throw new Error('registry is neither a v1 array nor a v2 envelope')
+        throw new Error('registry is neither a bare array nor a v2 envelope')
       }
       this.devices = (stored as DeviceEntry[]).map((device) => ({
         ...device,
@@ -395,6 +404,7 @@ export class DeviceRegistry {
     } catch (error) {
       this.devices = []
       this.revoked = []
+      this.tombstonesDirty = false
       this.unavailableReason = error instanceof Error ? error.message : String(error)
       // Why: keep the unreadable bytes for recovery; the next save would otherwise overwrite them.
       try {
@@ -405,14 +415,31 @@ export class DeviceRegistry {
     }
   }
 
+  // Why: a missing or unreadable tombstone file only loses the refusal reason (a revoked token reads
+  // unknown_token, still refused); it must never make the registry unavailable or re-authorize anyone.
+  private loadTombstones(): void {
+    let stored: RevocationTombstone[] = []
+    try {
+      stored = validTombstones(JSON.parse(readFileSync(this.revocationsPath, 'utf-8')))
+    } catch {
+      // Why: see above — absence and damage degrade to "no reasons".
+    }
+    const known = new Set(this.revoked.map((entry) => entry.tokenHash))
+    this.revoked = pruneTombstones(
+      [...stored.filter((entry) => !known.has(entry.tokenHash)), ...this.revoked],
+      Date.now()
+    )
+  }
+
   private save(devices: DeviceEntry[]): void {
-    const revoked = pruneTombstones(this.revoked, Date.now())
-    writeDurableSecureJsonFile(this.registryPath, {
-      version: REGISTRY_FILE_VERSION,
-      devices,
-      revoked
-    })
-    this.revoked = revoked
+    // Why: devices first, so a failed tombstone write can only lose the reason, never resurrect a device.
+    writeDurableSecureJsonFile(this.registryPath, devices)
+    if (this.tombstonesDirty) {
+      const revoked = pruneTombstones(this.revoked, Date.now())
+      writeDurableSecureJsonFile(this.revocationsPath, revoked)
+      this.revoked = revoked
+      this.tombstonesDirty = false
+    }
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()
   }
