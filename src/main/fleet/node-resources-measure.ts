@@ -8,11 +8,10 @@ import type {
   ModelReading,
   NodeResourceUnknownReason
 } from '../../shared/node-resources'
-
-export const NODE_RESOURCES_SCHEMA = 'orca.node-resources/1' as const
+import { NODE_RESOURCES_REPLY_SCHEMA } from '../../shared/node-resources-observation'
 
 export type NodeResourcesReply = {
-  schema: typeof NODE_RESOURCES_SCHEMA
+  schema: typeof NODE_RESOURCES_REPLY_SCHEMA
   disk: DiskReading
   gpu: GpuReading
   models: ModelReading
@@ -221,7 +220,7 @@ export async function measureNodeResources(
     guarded(() => measureGpu(deps), unknown('tool-failed')),
     guarded(() => measureModels(params.modelProbePorts ?? [], deps), unknown('tool-failed'))
   ])
-  return { schema: NODE_RESOURCES_SCHEMA, disk, gpu, models } as NodeResourcesReply
+  return { schema: NODE_RESOURCES_REPLY_SCHEMA, disk, gpu, models } as NodeResourcesReply
 }
 
 function runNvidiaSmi(): Promise<string> {

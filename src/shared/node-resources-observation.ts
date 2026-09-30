@@ -7,7 +7,7 @@ import type {
   NodeResourceUnknownReason
 } from './node-resources'
 
-// Why a copy: this pure module cannot import the main-process measurer; the service test pins equality.
+// Why here: the measurer in main and this parser both import the one literal.
 export const NODE_RESOURCES_REPLY_SCHEMA = 'orca.node-resources/1'
 
 const UNKNOWN_REASONS: ReadonlySet<string> = new Set<NodeResourceUnknownReason>([

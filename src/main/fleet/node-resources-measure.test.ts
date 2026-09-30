@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   measureDisk,
@@ -21,6 +23,15 @@ const GEX44_MODELS_BODY = JSON.stringify({
       meta: { n_ctx: 32768, n_ctx_train: 262144, n_params: 30532122624, size: 18550716416 }
     }
   ]
+})
+
+describe('reply schema literal', () => {
+  it('is defined once in shared, never re-declared in main', () => {
+    for (const file of ['node-resources-measure.ts', 'node-resources-slot.ts']) {
+      const source = readFileSync(join(process.cwd(), 'src', 'main', 'fleet', file), 'utf8')
+      expect(source).not.toContain('orca.node-resources/1')
+    }
+  })
 })
 
 function expectNoNumbers(reading: object): void {

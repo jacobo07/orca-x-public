@@ -12,7 +12,6 @@ import {
   type FleetEnvironmentCall,
   type FleetObservationDeps
 } from './fleet-observation-service'
-import { NODE_RESOURCES_SCHEMA } from './node-resources-measure'
 import { NODE_RESOURCES_REPLY_SCHEMA } from '../../shared/node-resources-observation'
 
 const GB = 1024 ** 3
@@ -215,7 +214,7 @@ describe('fleet observation', () => {
 })
 
 const resourcesReply = () => ({
-  schema: NODE_RESOURCES_SCHEMA,
+  schema: NODE_RESOURCES_REPLY_SCHEMA,
   disk: {
     outcome: 'measured',
     filesystems: [{ path: '/', totalBytes: 100 * GB, availableBytes: 40 * GB }]
@@ -236,10 +235,6 @@ const threeStepHost =
   }
 
 describe('fleet observation node resources', () => {
-  it('pins the reply schema literal to the measurer', () => {
-    expect(NODE_RESOURCES_REPLY_SCHEMA).toBe(NODE_RESOURCES_SCHEMA)
-  })
-
   it('takes a third step and passes the probe ports as params, or none', async () => {
     const seen: { method: string; params: unknown; hasParams: boolean }[] = []
     const run = (options?: { modelProbePorts?: number[] }) =>

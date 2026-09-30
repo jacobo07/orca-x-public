@@ -1,5 +1,5 @@
+import { NODE_RESOURCES_REPLY_SCHEMA } from '../../shared/node-resources-observation'
 import {
-  NODE_RESOURCES_SCHEMA,
   type NodeResourcesParams,
   type NodeResourcesReply
 } from './node-resources-measure'
@@ -20,7 +20,7 @@ export function readNodeResources(params: NodeResourcesParams): Promise<NodeReso
   }
   const unknown = { outcome: 'unknown', reason: 'measurer-not-installed' } as const
   return Promise.resolve({
-    schema: NODE_RESOURCES_SCHEMA,
+    schema: NODE_RESOURCES_REPLY_SCHEMA,
     disk: unknown,
     gpu: unknown,
     models: unknown
