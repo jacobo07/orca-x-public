@@ -29,7 +29,9 @@ function answered(...users: string[]): IntentSourceMessage[] {
 }
 
 function texts(messages: IntentSourceMessage[], lastTurnState: LastTurnState = 'settled') {
-  return extractConversationIntents(messages, { lastTurnState }).intents.map((intent) => intent.text)
+  return extractConversationIntents(messages, { lastTurnState }).intents.map(
+    (intent) => intent.text
+  )
 }
 
 describe('conversation intent extraction: markers', () => {
@@ -60,7 +62,9 @@ describe('conversation intent extraction: markers', () => {
       'Falta: el test',
       'Queda pendiente: la guía'
     ]
-    expect(texts(answered(lines.join('\n')))).toEqual([
+    // Two messages: 24 leads in one would hit the per-message marker cap.
+    const messages = answered(lines.slice(0, 12).join('\n'), lines.slice(12).join('\n'))
+    expect(texts(messages)).toEqual([
       'wire the inbox',
       'add a rail',
       'first thing',
