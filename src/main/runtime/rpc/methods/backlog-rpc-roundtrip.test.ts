@@ -537,7 +537,7 @@ describe('backlog runtime RPC round trip', () => {
       'chatgpt-export': 0,
       infinityops: 0
     })
-    const open =(await resultOf(reader, 'backlog.candidates.list', {
+    const open = (await resultOf(reader, 'backlog.candidates.list', {
       status: 'open'
     })) as unknown as { total: number; candidates: { id: string }[] }
     expect(open.total).toBe(1)

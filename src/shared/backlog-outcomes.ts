@@ -3,7 +3,8 @@ import type {
   BacklogCandidateStatus,
   BacklogItem,
   BacklogItemKind,
-  BacklogItemState
+  BacklogItemState,
+  BacklogSourceKind
 } from './backlog-types'
 import type { BacklogItemSummary, BacklogListView } from './backlog-summary'
 
@@ -109,7 +110,12 @@ export type BacklogHealthReport = {
     byKind?: Record<BacklogItemKind, number>
     openByKind?: Record<BacklogItemKind, number>
   }
-  candidates: { total: number; byStatus: Record<BacklogCandidateStatus, number> }
+  candidates: {
+    total: number
+    byStatus: Record<BacklogCandidateStatus, number>
+    // Optional because older hosts omit it; absent is unknown, never 0.
+    bySourceKind?: Record<BacklogSourceKind, number>
+  }
   quarantined: BacklogQuarantineEntry[]
 }
 

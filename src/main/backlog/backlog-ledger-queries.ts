@@ -11,6 +11,7 @@ import {
   BACKLOG_CANDIDATE_STATUSES,
   BACKLOG_ITEM_KINDS,
   BACKLOG_ITEM_STATES,
+  BACKLOG_SOURCE_KINDS,
   type BacklogCandidate,
   type BacklogItem
 } from '../../shared/backlog-types'
@@ -126,6 +127,10 @@ export function summarizeBacklogHealth(snapshot: BacklogLedgerSnapshot): Backlog
       byStatus: countBy(
         BACKLOG_CANDIDATE_STATUSES,
         snapshot.candidates.map((row) => row.status)
+      ),
+      bySourceKind: countBy(
+        BACKLOG_SOURCE_KINDS,
+        snapshot.candidates.map((row) => row.source.kind)
       )
     },
     quarantined: snapshot.quarantined
