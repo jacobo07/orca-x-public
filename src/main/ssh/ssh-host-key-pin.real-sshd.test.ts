@@ -65,6 +65,8 @@ function manualTarget(id: string, label: string): SshTarget {
     port: PORT,
     username: USER,
     identityFile: KEY,
+    // Why: without a source, normalization sets configHost=label and the target reads as ssh-config-backed, so ssh -G resolves the label as the host.
+    source: 'manual',
     relayGracePeriodSeconds: 1
   }
 }
