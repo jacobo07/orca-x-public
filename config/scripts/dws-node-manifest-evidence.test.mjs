@@ -274,6 +274,19 @@ describe('dws-node-manifest-ssh-control.sh', () => {
     expect(commands.some((line) => line.startsWith('curl -s -m 3 http://127.0.0.1:'))).toBe(true)
   })
 
+  it('ends the unterminated /v1/models body before the next marker (measured on GEX44 2026-09-30)', () => {
+    const curlAt = commands.findIndex((line) => line.startsWith('curl -s -m 3 http://127.0.0.1:'))
+    expect(commands[curlAt + 1]).toBe('echo')
+    const glued = CONTROL_TEXT.replace(
+      /(CONTROL_MODELS\n[^\n]*)\nCONTROL_SS/,
+      (_, models) => `${models}CONTROL_SS`
+    )
+    expect(glued).not.toBe(CONTROL_TEXT)
+    // Control: the separated shape parses, the glued shape the real body produced does not.
+    expect(parseControlOutput(CONTROL_TEXT).modelIds).toEqual(['qwen3-coder-30b'])
+    expect(parseControlOutput(glued).modelIds).toBeNull()
+  })
+
   it('has no nested shell, no sudo, no delete, no redirect, no parameter expansion', () => {
     expect(script).not.toMatch(/sh -c/)
     expect(script).not.toMatch(/sudo/)

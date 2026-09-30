@@ -13,5 +13,7 @@ echo CONTROL_DF
 df -B1 /
 echo CONTROL_MODELS
 curl -s -m 3 http://127.0.0.1:$1/v1/models
+# The /v1/models body has no trailing newline; without this the next marker joins the JSON line.
+echo
 echo CONTROL_SS
 ss -Hltn
