@@ -115,7 +115,7 @@
         "Phases 2-11"
       ],
       "evidence": [],
-      "reason": "Orca side"
+      "reason": "Orca side. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged."
     },
     {
       "id": 5,
@@ -229,8 +229,8 @@
       "done": "client quit, remote work continues",
       "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "phase-2",
-      "measuredAt": "2026-09-28",
+      "measuredIn": "phase-3",
+      "measuredAt": "2026-09-30",
       "required": true,
       "phases": [
         2,
@@ -246,12 +246,12 @@
         {
           "kind": "file",
           "path": "src/main/runtime/runtime-rpc-client-disconnect.characterization.test.ts",
-          "note": "RED characterization: a client disconnect aborts an unspawned agent-session creation caller signal (agent-session.ts:239-257, orca-runtime.ts:26889-26891/27068-27070); a spawned PTY is not killed and conversations.sendTurn never receives the signal at all (conversations.ts:67-72); Phase 3 inverts in place"
+          "note": "Inverted in place in Phase 3 (cases A/B): a socket close no longer aborts a launch - the dispatcher hands a launch RPC waitSignal instead of signal and the runtime caller carries no signal; case E proves a disconnect-refusing runtime still completes the create; control D pins that observation (terminal.wait) still aborts on close"
         },
         {
           "kind": "file",
           "path": "src/main/quit-path-local-runtime-teardown.characterization.test.ts",
-          "note": "RED characterization: a committed desktop quit kills only in-process local PTYs (src/main/index.ts will-quit handler + pty.ts killAllPty); Phase 3 inverts in place"
+          "note": "Narrowed in Phase 3: local-only kill stays (in-process local PTYs); before-quit/will-quit call no remote runtime; src/main stop-literal sweep pins that no quit path sends a remote stop"
         },
         {
           "kind": "file",
@@ -262,9 +262,34 @@
           "kind": "file",
           "path": "docs/dws/phase-2-local-ram-offload-evidence.md",
           "note": "Criterion 5 section: post-quit ssh check ~97s after quit showed the SAME serve MainPID and 95 new ticks (>= elapsed-5=92 required)"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/orca-runtime-agent-session-detach.test.ts",
+          "note": "Phase 3: a disconnected caller does not stop createAgentSession; a same-id retry replays the completed create"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/effect-class-registry.test.ts",
+          "note": "Phase 3: exactly three launch RPCs are flagged; dispatch withholds the socket signal from them and keeps it for other methods; launch-signal ratchet"
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-detach-sends-no-stop.test.ts",
+          "note": "Phase 3: a remote pty transport sends no stop-class RPC on disconnect or destroy"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-3-detach-stop-cancel-evidence.md",
+          "note": "Phase 3: mutation drills M1-M11 each turned their named test red and restored byte-exact"
+        },
+        {
+          "kind": "file",
+          "path": "docs/reference/detach-stop-cancel-effects.md",
+          "note": "Phase 3: Detach, Stop Execution and Cancel Workstream named as distinct effects with distinct authorities"
         }
       ],
-      "reason": "measured 2026-09-28: the characterizations' unit-level finding is now confirmed at product level — a real desktop quit (app.quit(), exit=0) left the remote tick loop running under the unchanged serve MainPID, growing continuously for >90s unattended. Detach/Stop/Cancel as distinct, named EFFECTS (and the disconnect-triggered mutation itself) remain Phase 3 scope, per CTX-CONT-3 (observe, do not change quit semantics) — this row's own DONE condition (client quits, remote work continues) is satisfied without that."
+      "reason": "measured 2026-09-28: the characterizations' unit-level finding is now confirmed at product level — a real desktop quit (app.quit(), exit=0) left the remote tick loop running under the unchanged serve MainPID, growing continuously for >90s unattended. Re-measured in Phase 3 (2026-09-30): Detach is now a named effect, distinct from Stop Execution and Cancel Workstream. Launch RPCs no longer abort on client disconnect (server side, proven by the inverted characterization and the runtime detach test), pane teardown and quit send no Stop (client side), and Phase 2 SC5 product-level continuity stands. The drills M1-M11 caught every mutant (docs/dws/phase-3-detach-stop-cancel-evidence.md). Local-host tier only: the GEX44 serve was NOT redeployed at the Phase 3 SHA and the real-app continuity spec was not rerun."
     },
     {
       "id": 11,
@@ -813,7 +838,7 @@
         "UWCP control verbs (other pane)"
       ],
       "evidence": [],
-      "reason": "Stage Zero: PARTIAL — issued from Orca, consumed remotely not yet evidenced"
+      "reason": "Stage Zero: PARTIAL — issued from Orca, consumed remotely not yet evidenced. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged."
     },
     {
       "id": 39,
