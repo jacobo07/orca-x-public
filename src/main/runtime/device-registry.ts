@@ -2,7 +2,7 @@
 // (mobile) connections. Each paired device gets its own revocable token so
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeDurableSecureJsonFile } from '../../shared/secure-file'
@@ -30,6 +30,36 @@ export type DeviceEntry = {
 
 export type DeviceRegistryAvailability = { available: true } | { available: false; reason: string }
 
+// Why: the token is a live credential, so a revocation record keeps only its digest.
+export type RevocationTombstone = { deviceId: string; tokenHash: string; revokedAt: number }
+
+const REGISTRY_FILE_VERSION = 2
+// Why: tombstones only need to outlive a reconnecting client's retry horizon; unbounded growth is recurring-work debt.
+const MAX_TOMBSTONES = 256
+const TOMBSTONE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+function pruneTombstones(tombstones: RevocationTombstone[], now: number): RevocationTombstone[] {
+  return tombstones.filter((entry) => now - entry.revokedAt <= TOMBSTONE_MAX_AGE_MS).slice(-MAX_TOMBSTONES)
+}
+
+function validTombstones(value: unknown): RevocationTombstone[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter(
+    (entry): entry is RevocationTombstone =>
+      !!entry &&
+      typeof entry.deviceId === 'string' &&
+      typeof entry.tokenHash === 'string' &&
+      typeof entry.revokedAt === 'number' &&
+      Number.isFinite(entry.revokedAt)
+  )
+}
+
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
@@ -56,6 +86,7 @@ const LAST_SEEN_FLUSH_DELAY_MS = 250
 export class DeviceRegistry {
   private readonly registryPath: string
   private devices: DeviceEntry[] = []
+  private revoked: RevocationTombstone[] = []
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
   private unavailableReason: string | null = null
 
@@ -161,15 +192,27 @@ export class DeviceRegistry {
 
   removeDevice(deviceId: string): boolean {
     this.assertAvailable()
-    const nextDevices = this.devices.filter((d) => d.deviceId !== deviceId)
-    if (nextDevices.length === this.devices.length) {
+    const removed = this.devices.find((d) => d.deviceId === deviceId)
+    if (!removed) {
       return false
     }
-    // Why: persist before memory swap so a failed write does not drop a device
-    // only in-process while disk still lists it (and vice versa on reload).
-    this.save(nextDevices)
-    this.devices = nextDevices
+    // Why: a revoke inverts the grant ordering — memory first, so a failed write can never leave the device
+    // valid; the save error still propagates and the next successful save persists the revocation.
+    this.devices = this.devices.filter((d) => d.deviceId !== deviceId)
+    this.revoked = pruneTombstones(
+      [
+        ...this.revoked,
+        { deviceId, tokenHash: hashToken(removed.token), revokedAt: Date.now() }
+      ],
+      Date.now()
+    )
+    this.save(this.devices)
     return true
+  }
+
+  isRevokedToken(token: string): boolean {
+    const tokenHash = hashToken(token)
+    return this.revoked.some((entry) => entry.tokenHash === tokenHash)
   }
 
   getDevice(deviceId: string): DeviceEntry | null {
@@ -311,10 +354,23 @@ export class DeviceRegistry {
     try {
       hardenExistingSecureFile(this.registryPath)
       const parsed: unknown = JSON.parse(readFileSync(this.registryPath, 'utf-8'))
-      if (!Array.isArray(parsed)) {
-        throw new Error('registry is not a JSON array')
+      // Why: v1 was a bare array (no tombstones); v2 is an envelope. Any other shape, including a newer
+      // version, is unreadable to this build and must be preserved rather than reinterpreted.
+      let stored: unknown
+      if (Array.isArray(parsed)) {
+        stored = parsed
+      } else if (
+        parsed &&
+        typeof parsed === 'object' &&
+        (parsed as { version?: unknown }).version === REGISTRY_FILE_VERSION &&
+        Array.isArray((parsed as { devices?: unknown }).devices)
+      ) {
+        stored = (parsed as { devices: unknown }).devices
+        this.revoked = validTombstones((parsed as { revoked?: unknown }).revoked)
+      } else {
+        throw new Error('registry is neither a v1 array nor a v2 envelope')
       }
-      this.devices = (parsed as DeviceEntry[]).map((device) => ({
+      this.devices = (stored as DeviceEntry[]).map((device) => ({
         ...device,
         // Why: older registries only existed for phone pairing. Treat missing
         // scope as mobile so legacy device tokens do not gain new CLI powers.
@@ -328,6 +384,7 @@ export class DeviceRegistry {
       }))
     } catch (error) {
       this.devices = []
+      this.revoked = []
       this.unavailableReason = error instanceof Error ? error.message : String(error)
       // Why: keep the unreadable bytes for recovery; the next save would otherwise overwrite them.
       try {
@@ -339,7 +396,13 @@ export class DeviceRegistry {
   }
 
   private save(devices: DeviceEntry[]): void {
-    writeDurableSecureJsonFile(this.registryPath, devices)
+    const revoked = pruneTombstones(this.revoked, Date.now())
+    writeDurableSecureJsonFile(this.registryPath, {
+      version: REGISTRY_FILE_VERSION,
+      devices,
+      revoked
+    })
+    this.revoked = revoked
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()
   }

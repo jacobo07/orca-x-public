@@ -2,8 +2,12 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { assertDeviceStillAuthorized, deviceRefusalDetail } from './device-authorization'
-import { DeviceRegistry } from './device-registry'
+import {
+  assertDeviceStillAuthorized,
+  deviceRefusalDetail,
+  revokeDeviceAndTerminateConnections
+} from './device-authorization'
+import { DeviceRegistry, type DeviceEntry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
 function freshDir(): string {
@@ -38,6 +42,50 @@ describe('assertDeviceStillAuthorized', () => {
       ok: false,
       reason: 'registry_unavailable'
     })
+  })
+})
+
+describe('revocation reaches the authority', () => {
+  it('V-REV-AUTH-REVOKED: a removed device is device_revoked, distinct from unknown_token', () => {
+    const registry = new DeviceRegistry(freshDir())
+    const device = registry.addDevice('phone', 'runtime')
+
+    registry.removeDevice(device.deviceId)
+
+    expect(assertDeviceStillAuthorized(registry, device.token)).toEqual({
+      ok: false,
+      reason: 'device_revoked'
+    })
+  })
+
+  it('V-REV-TERMINATE-ON-SAVE-FAILURE: sockets are terminated even when the revoke throws, and the error propagates', () => {
+    const device = { deviceId: 'd', token: 'tok' } as DeviceEntry
+    const terminated: string[] = []
+    const registry = {
+      removeDevice: () => {
+        throw new Error('save failed')
+      },
+      getDevice: () => null
+    } as unknown as DeviceRegistry
+
+    expect(() =>
+      revokeDeviceAndTerminateConnections(registry, device, (token) => terminated.push(token))
+    ).toThrow('save failed')
+    expect(terminated).toEqual(['tok'])
+  })
+
+  it('V-REV-TERMINATE-CONTROL: a device that is still registered is not terminated', () => {
+    const device = { deviceId: 'd', token: 'tok' } as DeviceEntry
+    const terminated: string[] = []
+    const registry = {
+      removeDevice: () => false,
+      getDevice: () => device
+    } as unknown as DeviceRegistry
+
+    expect(revokeDeviceAndTerminateConnections(registry, device, (t) => terminated.push(t))).toBe(
+      false
+    )
+    expect(terminated).toEqual([])
   })
 })
 

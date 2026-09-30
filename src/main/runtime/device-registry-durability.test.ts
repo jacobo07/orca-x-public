@@ -11,12 +11,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 const syscalls: { name: string; arg?: string }[] = []
+// Why: lets a test make the durable publish fail, to prove a revoke does not depend on the save landing.
+const publishFailure = { renameThrows: false }
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const record = <A extends unknown[], R>(name: string, fn: (...args: A) => R, argAt?: number) => {
     return (...args: A): R => {
       syscalls.push({ name, arg: argAt === undefined ? undefined : String(args[argAt]) })
+      if (name === 'renameSync' && publishFailure.renameThrows) {
+        throw new Error('injected publish failure')
+      }
       return fn(...args)
     }
   }
@@ -29,6 +34,7 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 
 const { DeviceRegistry } = await import('./device-registry')
+const { assertDeviceStillAuthorized } = await import('./device-authorization')
 
 let dir: string
 
@@ -201,5 +207,152 @@ describe('an unreadable registry is preserved and fails closed', () => {
     // Assert
     expect(loaded?.scope).toBe('mobile')
     expect(loaded?.pairingReach).toBe('network')
+  })
+})
+
+describe('revocation is a durable, distinct, bounded, fail-closed fact', () => {
+  const registryFile = () => join(dir, 'orca-devices.json')
+  const readEnvelope = () =>
+    JSON.parse(readFileSync(registryFile(), 'utf-8')) as {
+      version: number
+      devices: { deviceId: string }[]
+      revoked: { deviceId: string; tokenHash: string; revokedAt: number }[]
+    }
+  const tombstone = (n: number, revokedAt: number) => ({
+    deviceId: `gone-${n}`,
+    tokenHash: `hash-${n}`,
+    revokedAt
+  })
+
+  afterEach(() => {
+    publishFailure.renameThrows = false
+    vi.useRealTimers()
+  })
+
+  it('V-REV-REASON: a revoked token is device_revoked, a never-issued one is unknown_token', () => {
+    // Arrange
+    const registry = new DeviceRegistry(dir)
+    const device = registry.addDevice('phone')
+
+    // Act
+    registry.removeDevice(device.deviceId)
+
+    // Assert
+    expect(assertDeviceStillAuthorized(registry, device.token)).toEqual({
+      ok: false,
+      reason: 'device_revoked'
+    })
+    expect(assertDeviceStillAuthorized(registry, 'never-issued')).toEqual({
+      ok: false,
+      reason: 'unknown_token'
+    })
+  })
+
+  it('V-REV-RESTART: the reason survives a restart and the file never holds the token', () => {
+    // Arrange
+    const first = new DeviceRegistry(dir)
+    const device = first.addDevice('phone')
+    first.removeDevice(device.deviceId)
+
+    // Act
+    const restarted = new DeviceRegistry(dir)
+
+    // Assert
+    expect(assertDeviceStillAuthorized(restarted, device.token)).toEqual({
+      ok: false,
+      reason: 'device_revoked'
+    })
+    expect(readFileSync(registryFile(), 'utf-8')).not.toContain(device.token)
+    expect(readEnvelope().revoked[0]!.tokenHash).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('V-REV-FUTURE-VERSION: an envelope this build does not know is preserved and fails closed, never reinterpreted', () => {
+    // Arrange
+    const bytes = JSON.stringify({ version: 3, devices: [], revoked: [] })
+    writeFileSync(registryFile(), bytes)
+
+    // Act
+    const registry = new DeviceRegistry(dir)
+
+    // Assert
+    const siblings = readdirSync(dir).filter((f) => /^orca-devices\.json\.corrupt-\d+$/.test(f))
+    expect(registry.getAvailability().available).toBe(false)
+    expect(siblings).toHaveLength(1)
+    expect(readFileSync(join(dir, siblings[0]!), 'utf-8')).toBe(bytes)
+    expect(() => registry.addDevice('phone')).toThrow(/device_registry_unavailable/)
+  })
+
+  it('V-REV-V1-READ: a v1 bare array loads, and the next save writes the v2 envelope', () => {
+    // Arrange
+    writeFileSync(
+      registryFile(),
+      JSON.stringify([{ deviceId: 'd1', name: 'old', token: 't1', pairedAt: 1, lastSeenAt: 2 }])
+    )
+    const registry = new DeviceRegistry(dir)
+
+    // Act
+    registry.addDevice('new')
+
+    // Assert
+    const envelope = readEnvelope()
+    expect(envelope.version).toBe(2)
+    expect(envelope.devices.map((d) => d.deviceId)).toContain('d1')
+    expect(envelope.revoked).toEqual([])
+  })
+
+  it('V-REV-BOUND: tombstones are capped at 256 newest and none older than 90 days survives a write', () => {
+    // Arrange
+    const now = Date.UTC(2026, 8, 30)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(now)
+    const day = 24 * 60 * 60 * 1000
+    const recent = Array.from({ length: 299 }, (_, n) => tombstone(n, now - day + n))
+    writeFileSync(
+      registryFile(),
+      JSON.stringify({
+        version: 2,
+        devices: [
+          { deviceId: 'live', name: 'p', token: 'live-token', pairedAt: 1, lastSeenAt: 2 }
+        ],
+        revoked: [tombstone(9000, now - 91 * day), ...recent]
+      })
+    )
+    const registry = new DeviceRegistry(dir)
+
+    // Act
+    registry.removeDevice('live')
+
+    // Assert
+    const { revoked } = readEnvelope()
+    expect(revoked).toHaveLength(256)
+    expect(revoked.some((entry) => entry.deviceId === 'gone-9000')).toBe(false)
+    expect(revoked.at(-1)!.deviceId).toBe('live')
+    expect(revoked[0]!.deviceId).toBe('gone-44')
+  })
+
+  it('V-REV-SAVE-FAILURE: when the durable save throws, the revoke propagates and the device stays refused', () => {
+    // Arrange
+    const registry = new DeviceRegistry(dir)
+    const device = registry.addDevice('phone')
+    publishFailure.renameThrows = true
+
+    // Act / Assert
+    expect(() => registry.removeDevice(device.deviceId)).toThrow(/injected publish failure/)
+    publishFailure.renameThrows = false
+    expect(assertDeviceStillAuthorized(registry, device.token)).toEqual({
+      ok: false,
+      reason: 'device_revoked'
+    })
+    expect(registry.getDevice(device.deviceId)).toBeNull()
+  })
+
+  it('V-REV-GRANT-ORDER: a grant whose save throws is NOT valid afterwards (control for save-then-swap)', () => {
+    // Arrange
+    const registry = new DeviceRegistry(dir)
+    publishFailure.renameThrows = true
+
+    // Act / Assert
+    expect(() => registry.addDevice('phone')).toThrow(/injected publish failure/)
+    expect(registry.listDevices()).toHaveLength(0)
   })
 })

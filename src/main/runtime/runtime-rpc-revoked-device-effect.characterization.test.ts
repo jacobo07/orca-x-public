@@ -192,6 +192,9 @@ describe('revoked device whose socket survived the kill (row 58; characterizatio
       sendEncryptedWsRequest(session, { id: 'after_revoke', method: 'status.get' })
       const reply = await responses.next('after_revoke')
       expect(reply).toMatchObject({ ok: false, error: { code: 'unauthorized' } })
+      // V-REV-WIRE-CODE: the code stays the one old clients fail closed on; the reason rides only in data.
+      expect((reply.error as { code: string }).code).toBe('unauthorized')
+      expect((reply.error as { data?: unknown }).data).toEqual({ reason: 'device_revoked' })
     } finally {
       session.ws.close()
       await server.stop()

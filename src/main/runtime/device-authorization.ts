@@ -25,7 +25,7 @@ export function assertDeviceStillAuthorized(
   if (device) {
     return { ok: true, device }
   }
-  return { ok: false, reason: 'unknown_token' }
+  return { ok: false, reason: registry.isRevokedToken(token) ? 'device_revoked' : 'unknown_token' }
 }
 
 // Why: only the revoked reason is new information for a client; the rest keep today's plain auth failure.
@@ -36,4 +36,22 @@ export function deviceRefusalDetail(reason: DeviceRefusalReason): {
   return reason === 'device_revoked'
     ? { message: 'Device access revoked', data: { reason } }
     : { message: 'Invalid device token' }
+}
+
+/**
+ * Removes a device and ends its live connections. The registry revokes in memory before it saves, so a
+ * save failure still leaves the device refused; its sockets must go either way, then the error propagates.
+ */
+export function revokeDeviceAndTerminateConnections(
+  registry: DeviceRegistry,
+  device: DeviceEntry,
+  terminateConnections: (deviceToken: string) => void
+): boolean {
+  try {
+    return registry.removeDevice(device.deviceId)
+  } finally {
+    if (registry.getDevice(device.deviceId) === null) {
+      terminateConnections(device.token)
+    }
+  }
 }

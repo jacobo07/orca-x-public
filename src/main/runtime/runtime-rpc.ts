@@ -25,6 +25,7 @@ import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-reg
 import {
   assertDeviceStillAuthorized,
   deviceRefusalDetail,
+  revokeDeviceAndTerminateConnections,
   DEVICE_UNAUTHORIZED_CLOSE_CODE,
   DEVICE_UNAUTHORIZED_CLOSE_REASON
 } from './device-authorization'
@@ -693,22 +694,29 @@ export class OrcaRuntimeRpcServer {
         return false
       }
     }
-    if (!this.deviceRegistry?.removeDevice(deviceId)) {
+    if (!this.revokeAndTerminate(device)) {
       return false
     }
     this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     this.runtime.forgetClientNavigationState(deviceId)
-    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
+  }
+
+  private revokeAndTerminate(device: DeviceEntry): boolean {
+    return (
+      this.deviceRegistry !== null &&
+      revokeDeviceAndTerminateConnections(this.deviceRegistry, device, (token) =>
+        this.mobileSocketWiring?.terminateDeviceConnections(token)
+      )
+    )
   }
 
   revokeRuntimeAccess(deviceId: string): boolean {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
+    if (device?.scope !== 'runtime' || !this.revokeAndTerminate(device)) {
       return false
     }
     this.runtime.forgetClientNavigationState(deviceId)
-    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
 
