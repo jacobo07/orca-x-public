@@ -64,10 +64,8 @@ export function BacklogRow({
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const Icon = KIND_ICON[row.kind] ?? Lightbulb
-  const lines = textLines(row.originalText)
-  const intent = row.normalizedIntent.trim()
-  const title = intent !== '' ? intent : (lines[0] ?? '')
-  const secondary = lines[1] ?? backlogKindLabel(row.kind)
+  const title = textLines(row.normalizedIntent)[0] ?? textLines(row.originalText)[0] ?? ''
+  const secondary = backlogKindLabel(row.kind)
   const source = row.sourceLinks[0]?.kind
   const projectCount = new Set(row.projectRefs.map((ref) => ref.projectId)).size
   const inferred = row.projectRefs.some((ref) => ref.mapping === 'inferred')
