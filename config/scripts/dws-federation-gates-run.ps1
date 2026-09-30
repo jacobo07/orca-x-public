@@ -228,7 +228,7 @@ function Invoke-Launch {
   $gateSha = $head
   $modeArg = ''
   if ($Label -eq 'attribution') { $gateSha = $attr; $modeArg = ' --checkout' }
-  $body = "mkdir -p $runDir; nohup bash $remoteGates $gateSha $Label $runDir$modeArg > $runDir.out 2>&1 < /dev/null & disown; echo LAUNCHED"
+  $body = "mkdir -p $runDir; find $runDir -maxdepth 1 -type f -delete; nohup bash $remoteGates $gateSha $Label $runDir$modeArg > $runDir.out 2>&1 < /dev/null & disown; echo LAUNCHED"
   $go = Invoke-BoundedDwsSsh -Body $body -WallSec 60
   if ($go.TimedOut) { Add-Timeout $record 'launch-detach'; Save-Blocked $record $recordPath 'ssh' 'wall-clock-timeout' }
   if ($go.Output -notmatch 'LAUNCHED') { Save-Blocked $record $recordPath 'ssh' 'detached launch did not answer LAUNCHED' }

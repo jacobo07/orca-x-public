@@ -14,12 +14,15 @@ CLONE_DIR="/home/kobii/dws-0104-clone"
 RUN_ROOT="/home/kobii/dws-0104-clone/.dws-p7-runs"
 
 case "$RUN_DIR" in
-  /home/kobii/dws-0104-clone/.dws-p7-runs/*) ;;
+  *..*) echo "run-dir must not contain .." >&2; exit 2 ;;
+  /home/kobii/dws-0104-clone/.dws-p7-runs/?*) ;;
   *) echo "usage: <sha> <label> <run-dir under $RUN_ROOT> [--checkout]" >&2; exit 2 ;;
 esac
 [ -n "$SHA" ] && [ -n "$LABEL" ] || { echo "usage: <sha> <label> <run-dir> [--checkout]" >&2; exit 2; }
 
 mkdir -p "$RUN_DIR"
+# A reused run dir must not leak a stale DONE marker or vitest.json into this run's verdict.
+find "${RUN_DIR:?}" -maxdepth 1 -type f -delete
 exec > "$RUN_DIR/summary.txt" 2>&1
 printf 'P7_BEGIN label=%s sha=%s\n' "$LABEL" "$SHA"
 
@@ -60,16 +63,16 @@ VITEST="node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts
 
 PROBE_FILE="src/main/runtime/orchestration/orchestration-reset-db.test.ts"
 [ -f "$PROBE_FILE" ] || blocked db-probe "probe test $PROBE_FILE is absent"
-$VITEST "$PROBE_FILE" > "$RUN_DIR/db-probe.log" 2>&1
+timeout -k 30 300 $VITEST "$PROBE_FILE" > "$RUN_DIR/db-probe.log" 2>&1
 RC=$?
 printf 'GATE db-probe rc=%s\n' "$RC"
 [ "$RC" -eq 0 ] || blocked db-probe "better-sqlite3 probe failed"
 
-node config/scripts/check-orchestration-migration-coherence.mjs > "$RUN_DIR/migration.log" 2>&1
+timeout -k 30 120 node config/scripts/check-orchestration-migration-coherence.mjs > "$RUN_DIR/migration.log" 2>&1
 RC=$?
 printf 'GATE migration rc=%s\n' "$RC"
 
-node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.node.json > "$RUN_DIR/tsc-node.log" 2>&1
+timeout -k 30 600 node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.node.json > "$RUN_DIR/tsc-node.log" 2>&1
 RC=$?
 printf 'GATE tsc-node rc=%s\n' "$RC"
 grep 'error TS' "$RUN_DIR/tsc-node.log" | sort -u > "$RUN_DIR/tsc-node-errors.txt"
@@ -108,7 +111,7 @@ fi
 unset ORCA_CLAUDE_REALITY
 printf 'ORCA_CLAUDE_REALITY unset\n'
 
-$VITEST --reporter=json --outputFile="$RUN_DIR/vitest.json" $(cat "$RUN_DIR/vitest-files.txt") > "$RUN_DIR/vitest.log" 2>&1
+timeout -k 30 1500 $VITEST --reporter=json --outputFile="$RUN_DIR/vitest.json" $(cat "$RUN_DIR/vitest-files.txt") > "$RUN_DIR/vitest.log" 2>&1
 RC=$?
 printf 'GATE vitest rc=%s\n' "$RC"
 

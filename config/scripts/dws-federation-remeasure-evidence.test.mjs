@@ -404,6 +404,24 @@ describe('remote gate script contract', () => {
     }
     expect(codeLines(text).join('\n').toLowerCase()).not.toContain('daemon')
   })
+
+  it('Test 16 (W-4): clears the run dir files before the summary is opened, and refuses a run dir containing ..', () => {
+    const code = codeLines(text).join('\n')
+    const clear = code.indexOf('find "${RUN_DIR:?}" -maxdepth 1 -type f -delete')
+    expect(clear).toBeGreaterThan(-1)
+    expect(clear).toBeLessThan(code.indexOf('exec > "$RUN_DIR/summary.txt"'))
+    expect(code).toContain('*..*)')
+    const runner = readFileSync(fileURLToPath(new URL('./dws-federation-gates-run.ps1', import.meta.url)), 'utf8')
+    expect(runner).toMatch(/mkdir -p \$runDir; find \$runDir -maxdepth 1 -type f -delete; nohup/)
+  })
+
+  it('Test 16 (W-4): every heavy gate is wrapped in coreutils timeout', () => {
+    const code = codeLines(text)
+    for (const heavy of ['$VITEST "$PROBE_FILE"', 'check-orchestration-migration-coherence.mjs', 'typescript/bin/tsc', '--reporter=json']) {
+      const line = code.find((l) => l.includes(heavy))
+      expect(line, heavy).toMatch(/^timeout -k \d+ \d+ /)
+    }
+  })
 })
 
 describe('writer glue', () => {
