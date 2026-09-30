@@ -106,6 +106,11 @@ export function agentReplyFor({ captured, nonce, spawnError }) {
   return spawnError ? 'spawn-failed' : classifyAgentReply(captured, nonce)
 }
 
+/** An 'error' event is a failed start only before the child got a pid; later ones (kill, IPC) are not. */
+export function startFailureOf(child, error) {
+  return child.pid === undefined ? error : null
+}
+
 function buildChildSpec(opts) {
   const execPath = process.execPath
   if (opts.leg === 'test') {
@@ -205,8 +210,8 @@ async function main() {
   const exitCode = await new Promise((resolve) => {
     child.on('close', (code, signal) => resolve(code ?? (signal ? 1 : 1)))
     child.on('error', (error) => {
-      spawnError = error
-      process.stderr.write(`dws-offload-workload: child failed to start: ${String(error)}\n`)
+      spawnError = startFailureOf(child, error)
+      process.stderr.write(`dws-offload-workload: child error: ${String(error)}\n`)
       resolve(1)
     })
   })

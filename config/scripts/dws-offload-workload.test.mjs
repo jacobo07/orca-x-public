@@ -3,7 +3,8 @@ import {
   agentReplyFor,
   buildAgentPrompt,
   classifyAgentReply,
-  expectedAgentAnswer
+  expectedAgentAnswer,
+  startFailureOf
 } from './dws-offload-workload.mjs'
 import {
   applyLegOutcomes,
@@ -79,6 +80,16 @@ describe('agent reply outcomes (02-07)', () => {
     const spawnError = new Error('spawn claude ENOENT')
     expect(agentReplyFor({ captured: '', nonce: NONCE, spawnError })).toBe('spawn-failed')
     expect(agentReplyFor({ captured: LOGIN_LINE, nonce: NONCE, spawnError: null })).toBe('not-logged-in')
+  })
+
+  it('counts an error event as a failed start only when the child never got a pid (IN-02)', () => {
+    const error = new Error('spawn claude ENOENT')
+    expect(startFailureOf({ pid: undefined }, error)).toBe(error)
+    expect(startFailureOf({ pid: 4242 }, new Error('kill EPERM'))).toBeNull()
+    const ranAndPrintedLogin = startFailureOf({ pid: 4242 }, new Error('ipc send failed'))
+    expect(agentReplyFor({ captured: LOGIN_LINE, nonce: NONCE, spawnError: ranAndPrintedLogin })).toBe(
+      'not-logged-in'
+    )
   })
 
   it('emits only whitespace-free tokens (the spec LEG_END_RE contract)', () => {
