@@ -1265,51 +1265,75 @@
       "row": "HF Host identity for SSH targets",
       "owner": "ssh-relay-session + fleet-host-identity",
       "done": "an SSH target has a pinned host-key identity; a changed key is refused, never re-trusted",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-14",
+      "measuredAt": "2026-10-01",
       "required": true,
       "phases": [
         14
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: fleet-observation-service.ts:140-162 sshTargets not-enumerated; fabric.md:50 'no Orca identity'"
+      "evidence": [
+        { "kind": "file", "path": "src/main/ssh/ssh-host-key-pin-verifier.ts", "note": "the pin verifier ssh2's hostVerifier now consults (it no longer returns true for any key)" },
+        { "kind": "file", "path": "src/main/ssh/ssh-connection-host-key-pin.test.ts", "note": "unit: pinned, changed, first-contact and legacy paths on the connection" },
+        { "kind": "file", "path": "src/main/ssh/ssh-host-key-pin.real-sshd.test.ts", "note": "opt-in legs A-C over a real sshd (skips unless ORCA_REAL_SSHD_PORT is set)" },
+        { "kind": "file", "path": "tests/e2e/ssh-host-key-trust.spec.ts", "note": "the trust dialog in the real app (Leg D)" },
+        { "kind": "file", "path": "docs/dws/phase-14-host-identity-evidence.json", "note": "GEX44 private sshd: fence, witnesses, ssh-keygen fingerprints, per-leg verdicts" },
+        { "kind": "commit", "sha": "bd0197278", "note": "pin SSH host keys, refuse a changed key, first contact explicit" },
+        { "kind": "commit", "sha": "2e25fc8e8", "note": "trust prompt before a new host key; every other pin writer fenced" },
+        { "kind": "commit", "sha": "afb96e5ff", "note": "host identity shown in host management" },
+        { "kind": "commit", "sha": "b10b72e37", "note": "real-sshd evidence" }
+      ],
+      "reason": "measured 2026-09-30/10-01 (phase 14): PARTIAL. Proven: the ssh2 transport pins the host key; on a real sshd on GEX44 (disposable root, generated keys) first contact recorded exactly OpenSSH's own ssh-keygen fingerprint, a real key change was refused host_key_changed on interactive and automatic connects with the pin file unchanged, and the app's trust dialog passed 3/3 headless (REAL-APP, Leg D, after building the relay the e2e build omits). Open: system-OpenSSH transport parity is delegated (OD-3: its negotiated key is not portably observable below OpenSSH 8.5, research section 7), and an unpinned target on an automatic connect still connects with a loud diagnostic (OD-2 legacy grace) instead of being refused."
     },
     {
       "id": 57,
       "row": "HF Device registry durability",
       "owner": "secure-file + durability-contracts",
       "done": "orca-devices.json written with a barrier and carrying a durability contract",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-14",
+      "measuredAt": "2026-10-01",
       "required": true,
       "phases": [
         14
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: roaming scan 2026-09-20: orca-devices.json non-durable, uncontracted"
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/device-registry.ts", "note": "save() publishes through writeDurableSecureJsonFile; an unreadable registry is preserved and fails closed" },
+        { "kind": "file", "path": "src/main/runtime/device-registry-durability.test.ts", "note": "fsync-before-rename order for every mutator; corrupt, truncated and non-array files preserved" },
+        { "kind": "file", "path": "config/durability-contracts.jsonc", "note": "contract runtime.device-registry, crash-durable" },
+        { "kind": "commit", "sha": "da625caa9", "note": "durability barrier and contract" },
+        { "kind": "commit", "sha": "f43b913f5", "note": "a corrupt registry is preserved and fails closed" }
+      ],
+      "reason": "measured 2026-09-30 (phase 14, LOCAL-HOST, syscall-order test): PARTIAL. Proven: orca-devices.json is written with a barrier before the rename (drill: old writer -> 9 red), an unreadable file is renamed aside and the registry fails closed instead of collapsing to empty (drill: 3 red), and it carries the crash-durable contract runtime.device-registry. Open: deleting that contract leaves check-durability-contracts green, because a publisher that delegates to the durable secure-file writer is never required to have a contract; the contract exists but nothing keeps it existing (debt D14-01, a ratchet over durable publishers)."
     },
     {
       "id": 58,
       "row": "HF Revocation at the mutating effect",
       "owner": "runtime auth / device tokens",
       "done": "a revoked device with a live connection is refused at the next mutation",
-      "state": "UNKNOWN",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-14",
+      "measuredAt": "2026-10-01",
       "required": true,
       "phases": [
         14
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: revocation exists at pairing; effect-time re-check not measured"
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/device-authorization.ts", "note": "assertDeviceStillAuthorized: the one authority for the text, binary-frame and mobile-socket paths" },
+        { "kind": "file", "path": "src/main/runtime/runtime-rpc-revoked-device-effect.characterization.test.ts", "note": "real RpcServer, loopback WebSocket, E2EE, terminal stream: a revoked device's binary frame is refused (inverted from the measured defect)" },
+        { "kind": "file", "path": "src/main/runtime/device-authorization.test.ts", "note": "revoked vs unknown vs unavailable reasons; sockets terminated even when the revoke save throws" },
+        { "kind": "file", "path": "src/main/runtime/device-registry-durability.test.ts", "note": "tombstones survive a restart, are bounded, and a failed save leaves the device refused" },
+        { "kind": "commit", "sha": "da02f0bea", "note": "characterization: measured a revoked device's terminal frame written to the pty" },
+        { "kind": "commit", "sha": "1fb33afa5", "note": "refuse a revoked device's frames at the effect" },
+        { "kind": "commit", "sha": "90301bfe3", "note": "durable revocation tombstones, wire-compatible reason" }
+      ],
+      "reason": "measured 2026-09-30/10-01 (phase 14, LOCAL-HOST: real RpcServer on a loopback WebSocket with E2EE and a live terminal stream). Before (da02f0bea): a revoked device whose socket survived still had its binary terminal frame written to the pty. Now every text, binary and mobile-socket request re-checks one authority; a binary refusal closes 4001 and drops the frame; the wire code stays `unauthorized` with data.reason device_revoked. All four drills went red then green (skip binary authority; ignore tombstones; wire code; save-then-swap on revoke), and the named tests are green at b10b72e37. Not measured on a paired phone or a remote host."
     },
     {
       "id": 59,
