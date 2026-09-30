@@ -151,7 +151,7 @@ export type RuntimeCreateAgentSessionResult = {
 export type RuntimeAgentSessionRpcCaller = {
   clientId?: string
   clientKind?: 'mobile' | 'runtime'
-  signal?: AbortSignal
+  // Why: a caller's disconnect is Detach and must never cancel a launch, so no signal field exists.
 }
 
 export function isAgentSessionExecutionClaim(value: unknown): value is AgentSessionExecutionClaim {

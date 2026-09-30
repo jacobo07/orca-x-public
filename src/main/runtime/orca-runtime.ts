@@ -26830,7 +26830,7 @@ export class OrcaRuntimeService {
     const namespace = this.getAgentSessionExecutionNamespace(workspace, request.agent)
     if (
       !namespace ||
-      !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', _caller.signal))
+      !(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume'))
     ) {
       // Why: the renderer still holds the exact old request and may retry it before any side effect.
       throw new Error('agent_session_legacy_required')
@@ -26886,9 +26886,6 @@ export class OrcaRuntimeService {
     if (resumeCwd.status === 'outside-workspace') {
       throw new Error('agent_session_resume_context_unauthorized')
     }
-    if (_caller.signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
       env: startup.env,
@@ -26907,8 +26904,7 @@ export class OrcaRuntimeService {
       agentSessionResumeSubject: {
         agent: request.agent,
         providerSession: request.providerSession
-      },
-      signal: _caller.signal
+      }
     })
     return {
       terminal,
@@ -26986,13 +26982,7 @@ export class OrcaRuntimeService {
       // Why: reserve the client operation before any async preflight so concurrent retries cannot
       // both observe an empty ledger and reach the execution owner independently.
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
-      if (
-        !(await this.executionOwnerSupportsAgentSessionOperation(
-          workspace,
-          'create',
-          caller.signal
-        ))
-      ) {
+      if (!(await this.executionOwnerSupportsAgentSessionOperation(workspace, 'create'))) {
         // Why: the exact legacy launch remains client-owned until this pre-spawn check succeeds.
         throw new Error('agent_session_legacy_required')
       }
@@ -27065,9 +27055,6 @@ export class OrcaRuntimeService {
       } else {
         this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
       }
-      if (caller.signal?.aborted) {
-        throw new Error('client_disconnected')
-      }
       let terminal: RuntimeTerminalCreate
       const executionOperationId = createHash('sha256')
         .update(this.runtimeId)
@@ -27096,7 +27083,6 @@ export class OrcaRuntimeService {
           viewMode: request.viewMode,
           persistHostSessionBinding: true,
           agentSessionCreateOperationId: executionOperationId,
-          signal: caller.signal,
           onPtySpawnCommitted: () => {
             retainReplayFence = true
           }
