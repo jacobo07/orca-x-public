@@ -12,7 +12,13 @@ import { backlogSourceLabel } from '@/lib/backlog-source-labels'
 import { Badge } from '@/components/ui/badge'
 import type { BacklogItemSummary } from '../../../../shared/backlog-summary'
 import type { BacklogItemKind } from '../../../../shared/backlog-types'
-import { backlogKindLabel, backlogPriorityLabel, backlogStateLabel } from './backlog-presentation'
+import {
+  backlogKindLabel,
+  backlogPriorityLabel,
+  backlogStateLabel,
+  backlogStateTone
+} from './backlog-presentation'
+import { BacklogStateMark } from './BacklogStateMark'
 
 const KIND_ICON: Record<BacklogItemKind, LucideIcon> = {
   engineering: Wrench,
@@ -72,7 +78,10 @@ export function BacklogRow({ row }: { row: BacklogItemSummary }): React.JSX.Elem
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         {source ? <Chip name="source">{backlogSourceLabel(source)}</Chip> : null}
-        <Chip name="state">{backlogStateLabel(row.state)}</Chip>
+        <Chip name="state">
+          <BacklogStateMark tone={backlogStateTone(row.state)} />
+          {backlogStateLabel(row.state)}
+        </Chip>
         {row.priority !== 'normal' ? (
           <Chip name="priority">{backlogPriorityLabel(row.priority)}</Chip>
         ) : null}

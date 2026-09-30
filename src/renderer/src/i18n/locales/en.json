@@ -16868,6 +16868,17 @@
       "mismatchReports": "items but the ledger reports",
       "mismatchReconcile": ". Refresh to reconcile."
     },
+    "summary": {
+      "title": "Backlog summary",
+      "openByKind": "Open by kind",
+      "byState": "By state",
+      "total": "Total items",
+      "quarantined": "Records that could not be read",
+      "notRecorded": "not recorded",
+      "loading": "Loading summary…",
+      "unavailable": "Summary unavailable. The item list above is still current.",
+      "retry": "Retry summary"
+    },
     "status": {
       "loading": "Loading backlog…",
       "retry": "Retry loading",

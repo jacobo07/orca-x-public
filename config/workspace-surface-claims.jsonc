@@ -17,7 +17,8 @@
     "src/renderer/src/components/conversations",
     "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx",
     "mobile/src/workspace",
-    "src/renderer/src/components/resume-center"
+    "src/renderer/src/components/resume-center",
+    "src/renderer/src/components/backlog"
   ],
   "presenters": [
     {
@@ -39,6 +40,10 @@
     {
       "module": "src/renderer/src/components/resume-center/resume-center-presentation.ts",
       "toneType": "ContinuityTone"
+    },
+    {
+      "module": "src/renderer/src/components/backlog/backlog-presentation.ts",
+      "toneType": "BacklogTone"
     }
   ],
   "claims": {
@@ -206,6 +211,66 @@
       "producer": "src/renderer/src/components/resume-center/resume-all-queue.ts#runResumeAll",
       "absent": "omitted",
       "why": "Items not started in a finished run: unmeasured hosts, declined resumes, or no bind in time."
+    },
+    "backlog-open-total": {
+      "producer": "src/shared/backlog-view-selector.ts#selectBacklogView",
+      "absent": "omitted",
+      "why": "Open items in the loaded ledger snapshot, a cross-project item counted once; not drawn until a list succeeds."
+    },
+    "backlog-project-total": {
+      "producer": "src/shared/backlog-view-selector.ts#selectBacklogView",
+      "absent": "omitted",
+      "why": "Distinct projects holding an open item, unknown projects included and Unassigned excluded; not drawn until a list succeeds."
+    },
+    "backlog-scope-count": {
+      "producer": "src/shared/backlog-view-selector.ts#selectBacklogView",
+      "absent": "omitted",
+      "why": "Rows in that scope under the current state, kind and text filters; the strip is not drawn until a list succeeds."
+    },
+    "backlog-group-count": {
+      "producer": "src/shared/backlog-view-selector.ts#selectBacklogView",
+      "absent": "omitted",
+      "why": "Visible rows in the group; a cross-project row counts in each of its project groups."
+    },
+    "backlog-filter-empty-hidden-count": {
+      "producer": "src/shared/backlog-view-selector.ts#selectBacklogView",
+      "absent": "omitted",
+      "why": "Rows the current filters hide, or the closed rows only the Open filter hides; shown only when no row is visible."
+    },
+    "backlog-summary-kind-count": {
+      "producer": "src/renderer/src/components/backlog/backlog-client.ts#readBacklogHealth",
+      "absent": "backlog.summary.notRecorded",
+      "why": "The host's own open-by-kind count; an older host that omits it reads not recorded, never 0."
+    },
+    "backlog-summary-state-count": {
+      "producer": "src/renderer/src/components/backlog/backlog-client.ts#readBacklogHealth",
+      "absent": "omitted",
+      "why": "The host's by-state count, drawn only for states that hold at least one item."
+    },
+    "backlog-summary-total": {
+      "producer": "src/renderer/src/components/backlog/backlog-client.ts#readBacklogHealth",
+      "absent": "omitted",
+      "why": "Every readable item the host counts, all states; a failed health read draws no total at all."
+    },
+    "backlog-summary-quarantined": {
+      "producer": "src/renderer/src/components/backlog/backlog-client.ts#readBacklogHealth",
+      "absent": "omitted",
+      "why": "Records the host could not read, items and candidates together; the row is not drawn when there are none."
+    },
+    "backlog-notice-quarantined-count": {
+      "producer": "src/renderer/src/components/backlog/backlog-client.ts#readBacklogHealth",
+      "absent": "omitted",
+      "why": "The same quarantine list the report copies; the notice exists only while the host reports one."
+    },
+    "backlog-notice-snapshot-count": {
+      "producer": "src/renderer/src/components/backlog/backlog-snapshot.ts#loadBacklogSnapshot",
+      "absent": "omitted",
+      "why": "Distinct rows the paged read returned, shown beside the ledger total instead of picking one."
+    },
+    "backlog-notice-ledger-total": {
+      "producer": "src/renderer/src/components/backlog/backlog-snapshot.ts#loadBacklogSnapshot",
+      "absent": "omitted",
+      "why": "The total the host reported on the last page; it differs from the rows when the ledger changed between pages or a page repeated a row."
     }
   }
 }

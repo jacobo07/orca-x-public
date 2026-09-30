@@ -15,6 +15,7 @@ import { BacklogGroupList } from './BacklogGroupList'
 import { BacklogHeader } from './BacklogHeader'
 import { BacklogNotices } from './BacklogNotices'
 import { BacklogPageStateBlock, type BacklogBlockStatus } from './BacklogPageStateBlock'
+import { BacklogSummaryPanel } from './BacklogSummaryPanel'
 import { useBacklogSnapshot } from './use-backlog-snapshot'
 
 type BacklogPageStatus = BacklogBlockStatus | 'ready'
@@ -61,7 +62,7 @@ function useShownAnnouncement(filters: BacklogViewFilters, visibleCount: number 
 export default function BacklogPage(): React.JSX.Element {
   const closeBacklogPage = useAppStore((s) => s.closeBacklogPage)
   const projects = useAppStore((s) => s.projects)
-  const { load, health, refreshFailed, refresh } = useBacklogSnapshot()
+  const { load, health, refreshFailed, refresh, refreshHealth } = useBacklogSnapshot()
   // Renderer-local and regenerable (D-05): nothing here is persisted.
   const [filters, setFilters] = useState<BacklogViewFilters>(BACKLOG_DEFAULT_VIEW_FILTERS)
   const projectsById = useMemo(
@@ -90,7 +91,9 @@ export default function BacklogPage(): React.JSX.Element {
       data-backlog-failure-code={failure?.code ?? undefined}
       className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground"
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-4 pt-2 pb-4 md:px-8 md:pb-8">
+      {/* Layout ownership: the aside owns its width (lg:w-72); the main column takes the rest. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 px-4 pt-2 pb-4 md:px-8 md:pb-8 lg:flex-row">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <BacklogHeader
           counts={listed ? view : null}
           onClose={closeBacklogPage}
@@ -135,6 +138,10 @@ export default function BacklogPage(): React.JSX.Element {
         <div data-backlog-live-region="" aria-live="polite" className="sr-only">
           {announcement}
         </div>
+      </div>
+      {status === 'loading' || status === 'empty' || listed ? (
+        <BacklogSummaryPanel health={health} onRetry={() => void refreshHealth()} />
+      ) : null}
       </div>
       <BacklogCaptureDialog
         open={captureOpen}

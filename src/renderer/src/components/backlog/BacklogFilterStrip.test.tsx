@@ -68,7 +68,13 @@ beforeEach(() => {
   listAnswer = STANDARD
   runtimeCall.mockImplementation(async ({ method }: { method: string }) => {
     if (method === 'backlog.health') {
-      return envelope({ outcome: 'opened', quarantined: [] })
+      // The host always fills items (02-01); only openByKind/byKind are optional.
+      return envelope({
+        outcome: 'opened',
+        items: { total: 0, byState: {} },
+        candidates: { total: 0, byStatus: {} },
+        quarantined: []
+      })
     }
     if (listAnswer === 'pending') {
       return new Promise(() => {})
