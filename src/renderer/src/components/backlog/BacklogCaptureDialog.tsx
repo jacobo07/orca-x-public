@@ -174,16 +174,40 @@ export function BacklogCaptureDialog({
     setFailure(null)
   }
 
+  const resetForm = (): void => {
+    setText('')
+    setStatus('idle')
+    setFailure(null)
+    setProjectChoice(null)
+    setKind('idea')
+    setPriority('normal')
+    setReady(false)
+  }
+
+  // The host can close the dialog without handleOpenChange; a reopen never shows an old confirmation.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open && status === 'confirmed') {
+      resetForm()
+    }
+  }
+
   const handleOpenChange = (next: boolean): void => {
+    // The write is already sent and cannot be cancelled, so closing would claim "without capturing".
+    if (!next && submitting) {
+      return
+    }
     if (!next && status === 'confirmed') {
-      setText('')
-      setStatus('idle')
-      setProjectChoice(null)
-      setKind('idea')
-      setPriority('normal')
-      setReady(false)
+      resetForm()
     }
     onOpenChange(next)
+  }
+
+  const holdWhileSubmitting = (event: Event): void => {
+    if (submitting) {
+      event.preventDefault()
+    }
   }
 
   return (
@@ -194,6 +218,8 @@ export function BacklogCaptureDialog({
         data-backlog-capture-status={status}
         data-backlog-capture-failure={failure ?? undefined}
         className="gap-4 sm:max-w-lg"
+        onEscapeKeyDown={holdWhileSubmitting}
+        onInteractOutside={holdWhileSubmitting}
         onKeyDown={(event) => {
           if (status !== 'confirmed' && isBacklogSubmitChord(event)) {
             event.preventDefault()
@@ -332,6 +358,7 @@ export function BacklogCaptureDialog({
             <>
               <Button
                 variant="ghost"
+                disabled={submitting}
                 data-backlog-capture-close=""
                 onClick={() => handleOpenChange(false)}
               >
