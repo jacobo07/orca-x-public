@@ -16830,7 +16830,7 @@
     "page": {
       "title": "Backlog",
       "close": "Close backlog",
-      "closeTooltip": "Close",
+      "closeTooltip": "Close · Esc",
       "listLabel": "Backlog items"
     },
     "header": {
@@ -16884,7 +16884,7 @@
       "retry": "Retry loading",
       "empty": {
         "heading": "Your backlog is empty",
-        "body": "Capture an idea, a task or a decision, with or without a project."
+        "body": "Capture an idea, a task or a decision, with or without a project. Press N to capture from anywhere on this page."
       },
       "filterEmpty": {
         "heading": "No items match these filters",
@@ -17017,6 +17017,9 @@
       "projectLabel": "Project",
       "projectSearch": "Search projects",
       "charactersLeft": "characters left",
+      "overLimit": "Text is over the 20,000-character limit",
+      "ready": "Mark as ready",
+      "another": "Capture another item",
       "failed": {
         "storageFailed": "Not captured. The ledger could not write this item. Your text is kept here; try again.",
         "unreadable": "Not captured. The ledger on this host cannot be read right now. Your text is kept here; try again after reloading the backlog.",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -19,6 +19,7 @@ import { BacklogNotices } from './BacklogNotices'
 import { BacklogPageStateBlock, type BacklogBlockStatus } from './BacklogPageStateBlock'
 import type { BacklogLedgerChange } from './BacklogRowDetail'
 import { BacklogSummaryPanel } from './BacklogSummaryPanel'
+import { useBacklogPageKeys } from './use-backlog-page-keys'
 import { useBacklogSnapshot } from './use-backlog-snapshot'
 
 type BacklogPageStatus = BacklogBlockStatus | 'ready'
@@ -148,6 +149,25 @@ export default function BacklogPage(): React.JSX.Element {
     void refresh().then(() => requestFocus({ ...change, order }))
   }
 
+  const captureButtonRef = useRef<HTMLButtonElement>(null)
+  // Focus returns to what opened capture; opened by N from the body, that is the Capture button.
+  const openerRef = useRef<HTMLElement | null>(null)
+  const openCapture = useCallback((): void => {
+    const active = document.activeElement
+    openerRef.current =
+      active instanceof HTMLElement && pageRef.current?.contains(active)
+        ? active
+        : captureButtonRef.current
+    setCaptureOpen(true)
+  }, [])
+  const onCaptureOpenChange = (next: boolean): void => {
+    if (!next && !openerRef.current?.isConnected) {
+      openerRef.current = captureButtonRef.current
+    }
+    setCaptureOpen(next)
+  }
+  useBacklogPageKeys({ onCapture: openCapture, onClose: closeBacklogPage, captureOpen })
+
   return (
     <div
       ref={pageRef}
@@ -163,7 +183,8 @@ export default function BacklogPage(): React.JSX.Element {
           <BacklogHeader
             counts={listed ? view : null}
             onClose={closeBacklogPage}
-            onCapture={() => setCaptureOpen(true)}
+            onCapture={openCapture}
+            captureRef={captureButtonRef}
           />
           {listed && load?.status === 'ready' ? (
             <BacklogFilterStrip
@@ -197,7 +218,7 @@ export default function BacklogPage(): React.JSX.Element {
                 status={status}
                 filterEmpty={view?.filterEmpty ?? null}
                 onRetry={refetch}
-                onCapture={() => setCaptureOpen(true)}
+                onCapture={openCapture}
                 onClearFilters={() =>
                   setFilters((current) => ({ ...BACKLOG_DEFAULT_VIEW_FILTERS, sort: current.sort }))
                 }
@@ -218,9 +239,10 @@ export default function BacklogPage(): React.JSX.Element {
       </div>
       <BacklogCaptureDialog
         open={captureOpen}
-        onOpenChange={setCaptureOpen}
+        onOpenChange={onCaptureOpenChange}
         onConfirmed={refetch}
         onUncertain={refetch}
+        returnFocusTo={openerRef}
       />
     </div>
   )

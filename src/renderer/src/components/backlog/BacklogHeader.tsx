@@ -1,5 +1,6 @@
 import { Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ClaimValue } from './ClaimValue'
@@ -32,11 +33,13 @@ function ProjectTotal({ value }: { value: number }): React.JSX.Element {
 export function BacklogHeader({
   counts,
   onClose,
-  onCapture
+  onCapture,
+  captureRef
 }: {
   counts: BacklogHeaderCounts | null
   onClose: () => void
   onCapture: () => void
+  captureRef?: React.Ref<HTMLButtonElement>
 }): React.JSX.Element {
   return (
     <header className="flex flex-none flex-wrap items-center gap-x-2 gap-y-1 pb-4 md:flex-nowrap">
@@ -54,7 +57,7 @@ export function BacklogHeader({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate('backlog.page.closeTooltip', 'Close')}
+          {translate('backlog.page.closeTooltip', 'Close · Esc')}
         </TooltipContent>
       </Tooltip>
       <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
@@ -70,10 +73,18 @@ export function BacklogHeader({
         ) : null}
       </p>
       <span className="flex-1 md:hidden" />
-      <Button size="sm" data-backlog-action="capture" onClick={onCapture}>
-        <Plus className="size-4" aria-hidden />
-        {translate('backlog.capture.submit', 'Capture item')}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button ref={captureRef} size="sm" data-backlog-action="capture" onClick={onCapture}>
+            <Plus className="size-4" aria-hidden />
+            {translate('backlog.capture.submit', 'Capture item')}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
+          {translate('backlog.capture.submit', 'Capture item')}
+          <ShortcutKeyCombo keys={['N']} />
+        </TooltipContent>
+      </Tooltip>
     </header>
   )
 }

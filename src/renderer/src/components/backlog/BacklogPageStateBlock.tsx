@@ -104,7 +104,7 @@ function copyFor(
         heading: translate('backlog.status.empty.heading', 'Your backlog is empty'),
         body: translate(
           'backlog.status.empty.body',
-          'Capture an idea, a task or a decision, with or without a project.'
+          'Capture an idea, a task or a decision, with or without a project. Press N to capture from anywhere on this page.'
         )
       }
     case 'filter-empty':

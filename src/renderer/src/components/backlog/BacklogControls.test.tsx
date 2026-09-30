@@ -211,30 +211,38 @@ describe('page keys', () => {
 
   it('N does nothing with a modifier, while composing, in the search field, in a terminal, or with a layer open', async () => {
     await renderPage()
+    // Checked after EVERY key: a later Escape would close a dialog a wrong N had opened.
+    const expectIgnored = (target: EventTarget, init: KeyboardEventInit): void => {
+      key(target, init)
+      expect(q('[data-backlog-capture-dialog]')).toBeNull()
+      expect(mocks.closeBacklogPage).not.toHaveBeenCalled()
+    }
     for (const init of [
       { key: 'n', ctrlKey: true },
       { key: 'n', metaKey: true },
       { key: 'n', altKey: true },
       { key: 'n', isComposing: true }
     ]) {
-      key(document.body, init)
+      expectIgnored(document.body, init)
     }
-    key(q('[data-backlog-search]')!, { key: 'n' })
+    expectIgnored(q('[data-backlog-search]')!, { key: 'n' })
     const terminal = document.createElement('div')
     terminal.className = 'xterm'
     const helper = document.createElement('div')
     helper.tabIndex = 0
     terminal.appendChild(helper)
     document.body.appendChild(terminal)
-    key(helper, { key: 'n' })
-    key(helper, { key: 'Escape' })
+    expectIgnored(helper, { key: 'n' })
+    expectIgnored(helper, { key: 'Escape' })
     terminal.remove()
     await click('[data-backlog-filter="kind"]')
     await waitFor(() => expect(q('[data-slot="select-content"]')).not.toBeNull())
+    expectIgnored(document.body, { key: 'n' })
+    expectIgnored(document.body, { key: 'Escape' })
+    // Control: with no layer and no modifier, the same key does open capture.
+    await waitFor(() => expect(q('[data-slot="select-content"]')).toBeNull())
     key(document.body, { key: 'n' })
-    key(document.body, { key: 'Escape' })
-    expect(q('[data-backlog-capture-dialog]')).toBeNull()
-    expect(mocks.closeBacklogPage).not.toHaveBeenCalled()
+    expect(q('[data-backlog-capture-dialog]')).not.toBeNull()
   })
 
   it('Esc in the search field clears it and blurs; Esc on the page body closes Backlog once', async () => {
