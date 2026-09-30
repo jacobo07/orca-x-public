@@ -11,6 +11,8 @@ export type ObjectiveView = {
   text: string
   /** Names the record the text was quoted from, or why PROJECT.md gave none. */
   source: string
+  /** The row's meta: which kind of record, in two words; `source` holds the full account. */
+  sourceShort: string
   /** The milestone, shown beside a PROJECT.md goal so it is not lost. */
   milestone: string | null
   partial: boolean
@@ -39,6 +41,7 @@ export function describeObjective(brief: MissionBrief): ObjectiveView {
         }
       ),
       source: translate('missionBrief.meta.goal', 'Project goal'),
+      sourceShort: translate('missionBrief.meta.goal', 'Project goal'),
       milestone: null,
       partial: false
     }
@@ -49,6 +52,7 @@ export function describeObjective(brief: MissionBrief): ObjectiveView {
       source: translate('missionBrief.objective.fromMilestone', 'Milestone · {{gap}}', {
         gap: describeGap(objective.projectGap)
       }),
+      sourceShort: translate('missionBrief.meta.milestone', 'Milestone'),
       milestone: null,
       partial: objective.partial
     }
@@ -59,6 +63,10 @@ export function describeObjective(brief: MissionBrief): ObjectiveView {
       objective.section === 'what-this-is'
         ? translate('missionBrief.objective.fromWhatThisIs', 'PROJECT.md · What this is')
         : translate('missionBrief.objective.fromCoreValue', 'PROJECT.md · Core value'),
+    sourceShort:
+      objective.section === 'what-this-is'
+        ? translate('missionBrief.meta.goal', 'Project goal')
+        : translate('missionBrief.meta.coreValue', 'Core value'),
     milestone:
       brief.milestone.kind === 'known'
         ? translate('missionBrief.objective.milestone', 'Milestone: {{name}}', {

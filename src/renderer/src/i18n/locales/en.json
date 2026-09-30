@@ -16866,11 +16866,13 @@
       "noneWithNearest": "No phase verified yet. Phase {{id}} verification: {{status}}"
     },
     "meta": {
+      "coreValue": "Core value",
       "goal": "Project goal",
       "human": "Human action",
+      "humanBlock": "Human blocker",
+      "milestone": "Milestone",
       "notVerified": "Not verified",
       "read": "Read {{when}}",
-      "recordsListed": "Listed in the full path",
       "verified": "Verified"
     },
     "needsMe": {
@@ -16902,7 +16904,6 @@
       "description": "Every phase from the workspace’s own roadmap, with GSD’s verification verdict for each.",
       "noDirectory": "No phase directory yet",
       "recordReadByOrca": "{{role}} · read by Orca",
-      "records": "Mission records · {{summary}}",
       "title": "Full mission path",
       "verification": "Verification: {{status}}"
     },

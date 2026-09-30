@@ -14,7 +14,11 @@ import {
   describePhase,
   describeStageState
 } from './mission-brief-presentation'
-import { describeRecordCount, describeRecordRole } from './mission-objective-presentation'
+import {
+  describeObjective,
+  describeRecordCount,
+  describeRecordRole
+} from './mission-objective-presentation'
 
 /** Every phase of the same projection the brief shows; no second roadmap is kept. */
 export function MissionBriefFullPathDialog({
@@ -26,6 +30,7 @@ export function MissionBriefFullPathDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
+  const objective = describeObjective(brief)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -41,6 +46,32 @@ export function MissionBriefFullPathDialog({
             )}
           </DialogDescription>
         </DialogHeader>
+        {/* The brief shows the goal on one line; the whole of it and where it came from live here. */}
+        <section
+          className="flex flex-col gap-1 text-[13px]"
+          data-testid="mission-brief-path-objective"
+        >
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            {translate('missionBrief.row.objective', 'Objective')}
+          </h3>
+          <p>
+            {objective.text}
+            {objective.partial ? (
+              <span className="ml-2 text-[12px] text-muted-foreground">
+                {translate('missionBrief.objective.partial', '(partially read)')}
+              </span>
+            ) : null}
+          </p>
+          <p className="text-[12px] text-muted-foreground">{objective.source}</p>
+          {objective.milestone ? (
+            <p className="text-[12px] text-muted-foreground">{objective.milestone}</p>
+          ) : null}
+        </section>
+        {brief.stages.length === 0 ? (
+          <p className="border-t border-border py-3 text-[13px] text-muted-foreground">
+            {translate('missionBrief.stage.noneRecorded', 'No phases recorded')}
+          </p>
+        ) : null}
         <ol className="flex flex-col">
           {brief.stages.map((stage) => (
             <li
@@ -84,9 +115,10 @@ export function MissionBriefFullPathDialog({
           data-testid="mission-brief-path-records"
         >
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {translate('missionBrief.path.records', 'Mission records · {{summary}}', {
-              summary: describeRecordCount(brief.records)
-            })}
+            {translate('missionBrief.row.records', 'Mission records')} ·{' '}
+            <ClaimValue testId="mission-brief-records">
+              {describeRecordCount(brief.records)}
+            </ClaimValue>
           </h3>
           {brief.records.kind === 'listed' ? (
             <ul className="flex flex-col">

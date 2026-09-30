@@ -160,14 +160,16 @@ test.describe('@mission-brief', () => {
         await expect(dialog.getByTestId('mission-brief-signal-label')).toHaveText(
           String(record.signal)
         )
-        record.records = (
-          (await dialog.getByTestId('mission-brief-records').textContent()) ?? ''
-        ).trim()
         await orcaPage.screenshot({ path: `pr-evidence/mission-brief-${name}-full.png` })
 
         await dialog.getByTestId('mission-brief-view-path').click()
-        const listed = orcaPage.getByTestId('mission-brief-path-records').locator('li')
+        const pathRecords = orcaPage.getByTestId('mission-brief-path-records')
+        const listed = pathRecords.locator('li')
         await expect(listed.first()).toBeVisible()
+        // The count moved from a brief row into the full path, beside the list it counts.
+        record.records = (
+          (await pathRecords.getByTestId('mission-brief-records').textContent()) ?? ''
+        ).trim()
         record.recordsListed = await listed.count()
         if (goal !== undefined && goal !== null) {
           await expect(listed.filter({ hasText: '.planning/PROJECT.md' })).toContainText(

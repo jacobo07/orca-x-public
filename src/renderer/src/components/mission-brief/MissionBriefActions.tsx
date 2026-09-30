@@ -114,12 +114,30 @@ export function MissionBriefActions({
     }
   }
 
+  // Full geometry is the r02 reference's (docs/visual/references/mission-brief).
+  const button = compact
+    ? 'h-12 justify-start gap-3 text-[15px]'
+    : 'h-[55.2px] justify-start gap-3 rounded-[9px] px-[22px] text-[14.4px] font-medium [&_svg]:size-6'
   return (
-    <div className="flex flex-col gap-2 border-t border-border pt-4">
-      <div className={cn('grid gap-3', compact ? 'grid-cols-1' : 'grid-cols-[1fr_1.5fr_1fr]')}>
+    <div
+      className={cn(
+        'flex flex-col gap-2',
+        compact ? 'border-t border-border pt-4' : 'mx-1 mt-[21.6px]'
+      )}
+    >
+      <div
+        className={cn(
+          'grid',
+          compact ? 'grid-cols-1 gap-3' : 'grid-cols-[268fr_414.4fr_203.2fr] gap-[15.6px]'
+        )}
+      >
         <Button
           data-testid="mission-brief-continue"
-          className="h-12 justify-start gap-3 bg-foreground text-[15px] text-background hover:bg-foreground/90"
+          className={cn(
+            button,
+            'bg-foreground text-background hover:bg-foreground/90',
+            !compact && 'border border-foreground'
+          )}
           disabled={busy || continueBlocked !== null}
           onClick={() => void onContinue()}
         >
@@ -129,7 +147,7 @@ export function MissionBriefActions({
         <Button
           data-testid="mission-brief-needs-me"
           variant="outline"
-          className="h-12 justify-start gap-3 text-[15px]"
+          className={cn(button, !compact && 'border-input bg-transparent')}
           disabled={busy || needsMe.kind === 'nothing-recorded'}
           onClick={() => void onNeedsMe()}
         >
@@ -139,8 +157,8 @@ export function MissionBriefActions({
         <Button
           data-testid="mission-brief-view-path"
           variant="outline"
-          className="h-12 justify-start gap-3 text-[15px]"
-          disabled={brief.stages.length === 0}
+          className={cn(button, !compact && 'border-input bg-transparent')}
+          // Never gated on stages: the path also carries the objective, milestone and records.
           onClick={onViewPath}
         >
           <MapIcon className="size-5" aria-hidden />

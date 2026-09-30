@@ -138,8 +138,10 @@
       "producer": "html",
       "status": "candidate",
       "file": "mission-brief/mission-brief.full.desktop.needs-you.r02.png",
-      "sha256": "239732984a21a95961a05ce33fba71b39eb2650813b0fa49a79d57394105e417",
+      "sha256": "9657700cdc1c3fab6a1d392898ae8a1e50c066b535eaba48673c540cbb7a56f9",
       "date": "2026-09-30",
+      // Re-rendered once: <button> does not inherit font-family, so the first r02 set its three
+      // labels in Arial. They now inherit Geist at 14.4px, still inside the 2 px gate.
       // r01 rebuilt in Geist and live tokens, then gated against r01's pixels: rendered at 1.25
       // device scale with --selector .card, every measured box (card, tiles, chips, stage marks
       // and connectors, action card, time chip, chevron, all tags, buttons) and all ten row rules

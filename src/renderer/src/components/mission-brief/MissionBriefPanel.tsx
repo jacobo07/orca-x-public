@@ -37,8 +37,10 @@ export function MissionBriefPanel({
   const result =
     entry?.status === 'loaded' ? entry.result : entry?.status === 'loading' ? entry.previous : null
   const reading = entry === undefined || entry.status === 'loading'
+  // Full + read: refresh sits beside the read time in the header, so there is no toolbar row.
+  const fullBrief = !compact && result?.status === 'read'
 
-  const toolbar = (
+  const toolbar = fullBrief ? null : (
     <div className="flex items-center justify-end gap-2">
       {compact && onOpenFull && result?.status === 'read' ? (
         <Button
@@ -100,8 +102,14 @@ export function MissionBriefPanel({
     const { brief } = result
     body = (
       <>
-        <MissionBriefHeader brief={brief} projectName={projectName} compact={compact} />
-        <MissionBriefRows brief={brief} compact={compact} />
+        <MissionBriefHeader
+          brief={brief}
+          projectName={projectName}
+          compact={compact}
+          reading={reading}
+          onRefresh={refresh}
+        />
+        <MissionBriefRows brief={brief} compact={compact} onViewPath={() => setPathOpen(true)} />
         <MissionBriefActions
           brief={brief}
           row={row}
@@ -124,9 +132,13 @@ export function MissionBriefPanel({
       data-brief-status={reading && !result ? 'reading' : (result?.status ?? 'failed')}
       aria-label={translate('missionBrief.title', 'Mission Brief')}
       aria-busy={reading}
+      // Full geometry is the r02 reference's (docs/visual/references/mission-brief).
       className={cn(
-        'flex flex-col gap-4 rounded-xl border border-border bg-card',
-        compact ? 'p-4' : 'p-7'
+        'flex flex-col border border-border bg-card',
+        compact
+          ? 'gap-4 rounded-xl p-4'
+          : 'rounded-[14px] pt-[17.4px] pr-[19px] pb-[24.6px] pl-[18.2px]',
+        !compact && !fullBrief && 'gap-4'
       )}
     >
       {toolbar}
