@@ -148,6 +148,49 @@ describe('judgeWorkloadComparability', () => {
     expect(result.reason).toContain('bogus')
   })
 
+  it('says only direct child inputs were compared, never that all child inputs are identical', () => {
+    const result = judgeWorkloadComparability({
+      legs: ['test', 'build'],
+      baselineBlobHashes: same,
+      offloadBlobHashes: { ...same }
+    })
+    expect(result.reason).toContain('direct child inputs identical for legs test,build')
+    expect(result.reason).toContain('transitive src inputs not compared')
+    expect(result.reason).not.toMatch(/(^|; )child inputs identical/)
+  })
+
+  it('reports transitive inputs IDENTICAL_CHECKOUT only when both checkout shas exist and are equal', () => {
+    const args = { legs: ['test', 'build'], baselineBlobHashes: same, offloadBlobHashes: { ...same } }
+    const sha = 'a'.repeat(40)
+    expect(
+      judgeWorkloadComparability({ ...args, baselineCheckoutSha: sha, offloadCheckoutSha: sha })
+        .transitiveInputs
+    ).toEqual({ verdict: 'IDENTICAL_CHECKOUT' })
+  })
+
+  it.each([
+    ['differ', 'a'.repeat(40), 'b'.repeat(40)],
+    ['baseline missing', undefined, 'b'.repeat(40)],
+    ['offload missing', 'a'.repeat(40), undefined],
+    ['both missing', undefined, undefined]
+  ])('reports transitive inputs NOT_COMPARED when checkout shas %s', (_name, base, offload) => {
+    const result = judgeWorkloadComparability({
+      legs: ['test', 'build'],
+      baselineBlobHashes: same,
+      offloadBlobHashes: { ...same },
+      baselineCheckoutSha: base,
+      offloadCheckoutSha: offload
+    })
+    expect(result.verdict).toBe('COMPARABLE')
+    expect(result.transitiveInputs.verdict).toBe('NOT_COMPARED')
+    expect(result.transitiveInputs.reason).toEqual(expect.any(String))
+  })
+
+  it('carries transitiveInputs on non-COMPARABLE verdicts too', () => {
+    const result = judgeWorkloadComparability({ legs: ['test'], baselineBlobHashes: null, offloadBlobHashes: same })
+    expect(result.transitiveInputs.verdict).toBe('NOT_COMPARED')
+  })
+
   it('exposes the per-leg child inputs frozen', () => {
     expect(Object.isFrozen(CHILD_INPUT_PATHS_BY_LEG)).toBe(true)
     expect(CHILD_INPUT_PATHS_BY_LEG.agent).toEqual([])

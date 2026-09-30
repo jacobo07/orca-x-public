@@ -44,17 +44,35 @@ export function buildWorkloadManifest(fields) {
  * Judges comparability only over the inputs the legs that ran actually execute. A missing hash is
  * never equal, an empty checked set is UNJUDGED, and a wrapper difference is recorded, not refused.
  */
-export function judgeWorkloadComparability({ legs, baselineBlobHashes, offloadBlobHashes }) {
+export function judgeWorkloadComparability({
+  legs,
+  baselineBlobHashes,
+  offloadBlobHashes,
+  baselineCheckoutSha,
+  offloadCheckoutSha
+}) {
   const wrapperBase = baselineBlobHashes?.[WORKLOAD_WRAPPER_PATH]
   const wrapperOffload = offloadBlobHashes?.[WORKLOAD_WRAPPER_PATH]
   const wrapperMatchesBaseline =
     isBlobHash(wrapperBase) && isBlobHash(wrapperOffload) ? wrapperBase === wrapperOffload : null
+  // Only an equal checkout sha proves the transitive src inputs (tsc includes, vitest imports) match.
+  const hasShas = isBlobHash(baselineCheckoutSha) && isBlobHash(offloadCheckoutSha)
+  const transitiveInputs =
+    hasShas && baselineCheckoutSha === offloadCheckoutSha
+      ? { verdict: 'IDENTICAL_CHECKOUT' }
+      : {
+          verdict: 'NOT_COMPARED',
+          reason: hasShas
+            ? 'checkout shas differ; transitive src inputs not compared'
+            : 'checkoutSha missing on baseline or current; transitive src inputs not compared'
+        }
   const verdictOf = (verdict, reason, checkedPaths = [], mismatched = []) => ({
     verdict,
     reason,
     checkedPaths,
     mismatched,
-    wrapperMatchesBaseline
+    wrapperMatchesBaseline,
+    transitiveInputs
   })
 
   if (!baselineBlobHashes) {
@@ -82,5 +100,9 @@ export function judgeWorkloadComparability({ legs, baselineBlobHashes, offloadBl
     wrapperMatchesBaseline === true
       ? 'wrapper identical'
       : `wrapper ${WORKLOAD_WRAPPER_PATH} ${wrapperMatchesBaseline === false ? 'differs (recorded, child command lines not judged)' : 'hash unavailable'}`
-  return verdictOf('COMPARABLE', `child inputs identical for legs ${legs.join(',')}; ${wrapperNote}`, checkedPaths)
+  return verdictOf(
+    'COMPARABLE',
+    `direct child inputs identical for legs ${legs.join(',')}; transitive src inputs not compared; ${wrapperNote}`,
+    checkedPaths
+  )
 }
