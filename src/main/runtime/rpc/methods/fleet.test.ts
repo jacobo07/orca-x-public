@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { NodeManifestsResult } from '../../../../shared/node-manifest'
 import { installFleetObservation } from '../../../fleet/fleet-observation-slot'
+import type { NodeResourcesReply } from '../../../fleet/node-resources-measure'
+import { installNodeResourcesMeasurer } from '../../../fleet/node-resources-slot'
 import type { RpcContext } from '../core'
 import { FLEET_METHODS, type FleetPlacementViewResult } from './fleet'
 
@@ -181,6 +183,74 @@ describe('fleet.nodeManifests', () => {
     installLocalOnly()
     const result = await callManifests(undefined, { runtime: trap })
     expect(result.status).toBe('ok')
+    expect(touched).toEqual([])
+  })
+})
+
+describe('fleet.nodeResources', () => {
+  const resourcesMethod = FLEET_METHODS.find((entry) => entry.name === 'fleet.nodeResources')!
+  const callResources = (params: unknown, ctx: Partial<RpcContext> = {}) =>
+    resourcesMethod.handler(params, {
+      runtime: {} as RpcContext['runtime'],
+      ...ctx
+    }) as Promise<NodeResourcesReply>
+  const unknownReply = { outcome: 'unknown', reason: 'no-gpu-tool' } as const
+  const reply: NodeResourcesReply = {
+    schema: 'orca.node-resources/1',
+    disk: unknownReply,
+    gpu: unknownReply,
+    models: unknownReply
+  }
+
+  afterEach(() => installNodeResourcesMeasurer(null))
+
+  it('answers every kind of caller, measuring only this host, with the validated params', async () => {
+    const seen: unknown[] = []
+    installNodeResourcesMeasurer(async (params) => {
+      seen.push(params)
+      return reply
+    })
+    const callers: Partial<RpcContext>[] = [
+      {},
+      { clientKind: 'mobile' },
+      { pairedDeviceId: 'dev-1' },
+      { connectionId: 'socket-1' }
+    ]
+    for (const ctx of callers) {
+      await expect(callResources({ modelProbePorts: [8081] }, ctx)).resolves.toBe(reply)
+    }
+    expect(seen).toEqual(callers.map(() => ({ modelProbePorts: [8081] })))
+  })
+
+  it('has strict params: at most 4 ports, each 1-65535, no unknown key', () => {
+    const params = resourcesMethod.params!
+    expect(params.safeParse(undefined).success).toBe(true)
+    expect(params.safeParse({}).success).toBe(true)
+    expect(params.safeParse({ modelProbePorts: [1, 65535] }).success).toBe(true)
+    expect(params.safeParse({ modelProbePorts: [1, 2, 3, 4, 5] }).success).toBe(false)
+    expect(params.safeParse({ modelProbePorts: [0] }).success).toBe(false)
+    expect(params.safeParse({ modelProbePorts: [65536] }).success).toBe(false)
+    expect(params.safeParse({ modelProbePorts: [1.5] }).success).toBe(false)
+    expect(params.safeParse({ unknownKey: 1 }).success).toBe(false)
+  })
+
+  it('answers all-unknown measurer-not-installed when nothing is installed, never zeros', async () => {
+    const result = await callResources(undefined)
+    for (const family of [result.disk, result.gpu, result.models]) {
+      expect(family).toEqual({ outcome: 'unknown', reason: 'measurer-not-installed' })
+    }
+  })
+
+  it('never touches the runtime it could act through', async () => {
+    const touched: PropertyKey[] = []
+    const trap = new Proxy({} as RpcContext['runtime'], {
+      get: (_target, key) => {
+        touched.push(key)
+        throw new Error(`node resources reached runtime.${String(key)}`)
+      }
+    })
+    installNodeResourcesMeasurer(async () => reply)
+    await callResources(undefined, { runtime: trap })
     expect(touched).toEqual([])
   })
 })
