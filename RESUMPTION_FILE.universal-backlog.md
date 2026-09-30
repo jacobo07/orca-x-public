@@ -19,7 +19,9 @@ Phase 2 post-execution hooks were closed in epoch 6:
 - UI review: skipped because the agent guard refused it;
 - the real-app restart spec passed again ("2 passed") on a bundle that includes the WR-01 fix.
 Phase 3 has `03-CONTEXT.md` (D-01..D-21) and `03-UI-SPEC.md` (draft, U3-01..U3-14). It is NOT planned
-yet; the next step is plan-phase 3. The real-app check of "refuse dismissal while submitting" (WR-01) is
+yet. Plan-phase 3 is in research: `03-RESEARCH.md` is PARTIAL (skeleton plus part of Q6), because the
+epoch-6 session ended at the mission context wall. Finish that research, then plan and check. The
+real-app check of "refuse dismissal while submitting" (WR-01) is
 owed to the Phase 3 real-app plan.
 
 **Host rules that bit.**
