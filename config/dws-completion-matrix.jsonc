@@ -429,11 +429,11 @@
         { "kind": "file", "path": "src/shared/node-measurement-age-sole-authority.test.ts", "note": "sweep: the age check has one authority and all six scanned modules are required" },
         { "kind": "file", "path": "src/main/fleet/node-resources-measure.test.ts", "note": "host memory/disk/VRAM/model measurers" },
         { "kind": "file", "path": "src/main/fleet/fleet-observation-service.test.ts", "note": "observer step on the observer clock, old host reads unsupported" },
-        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.json", "note": "SC3 evidence: BLOCKED at deploy, no plane tag" },
+        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.json", "note": "SC3 evidence: MEASURED at rung gex44-local-caller; memory/disk/vram MATCH the ssh control, resident_model control UNJUDGED" },
         { "kind": "file", "path": "docs/dws/phase-5-node-manifest.md", "note": "what happened on GEX44, tolerances, ND-1/ND-2" },
         { "kind": "file", "path": "docs/dws/node-manifest-handoff.md", "note": "schema path and consumer rules for UWCP; consume half BLOCKED" }
       ],
-      "reason": "measured 2026-09-30: schema, real-producer contract, freshness and eligibility (drills M1-M5) and the CLI are tested locally; the GEX44 reading is BLOCKED at rung preflight (redeploy of orca-dws-serve failed at install: 133 sandboxed, then git dubious ownership twice with -NoSandbox), so no GEX44-PROVEN value exists; the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
+      "reason": "measured 2026-09-30: schema, real-producer contract, freshness and eligibility (drills M1-M5) and the CLI are tested locally; GEX44 was read through the product at rung gex44-local-caller (6e036d7, artifact sha256 equal at both ends, runtimeId equals the deployed serve): memory, disk and VRAM MATCH an independent ssh control, the resident model qwen3-coder-30b was read but its control is UNJUDGED (parse defect fixed in 3266e1a41, re-measure owed); the laptop fan-out rung was not attempted; the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
     },
     {
       "id": 18,
