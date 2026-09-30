@@ -668,14 +668,31 @@ Not measured. No `docs/dws/phase-2-offload-3-memory-delta.json` exists.
 
 Not judged. The quiescence readings of each launch are in the table above (readings every 10 s; declared threshold 300 MB over the last 6 readings, or 54 readings). No counted sweep ran, so no drift and no bracket verdict exist.
 
+### Owner checkpoint and agent leg (02-08 Tasks 3 and 4)
+
+The Owner login checkpoint was resolved by the plan's own rule, unattended: the existence check was re-run at 2026-09-30T00:55:20Z and printed
+
+```
+CLAUDE_CRED=0
+CODEX_CRED=0
+```
+
+so Branch B applied (no redeploy, no agent sweep). No text was treated as an Owner reply. AGENT_LEG = BLOCKED: no provider login in the orca-svc service HOME; the classifier control above is the evidence of what the leg reports (`agentReply=not-logged-in`). Record: `docs/dws/phase-2-agent-leg.json`. Owner action (condensed): keep the tunnel `ssh -N -L 127.0.0.1:6791:127.0.0.1:6791 gex44`, fetch the pairing URL with `ssh gex44 'sudo bash /home/kobii/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json'`, pair the gex44-svc host in an Orca desktop with the SSH-tunnel box checked, open a terminal on that host, run `/home/orca-svc/.orca-dws/agent-bin/claude`, type `/login`, finish, `/exit` (Codex: `/home/orca-svc/.orca-dws/agent-bin/codex login`). Never copy a credential file from another HOME.
+
+### Re-measured verdicts (02-08)
+
+**`DWS-P2-SC3 = BLOCKED`** (agent-turn leg: no provider login in the orca-svc service HOME; test-run leg remote proof not re-measured in 02-08 because offload-3 never ran, the 02-05 PASS stands as recorded; build leg remote proof UNJUDGED, not re-captured at 0.2 s for the same reason)
+
+**`DWS-P2-SC4 = INCONCLUSIVE`** (comparability UNJUDGED: no offload-3 run manifest exists, the sweep never reached the workload in three launches; absence, MB delta and bracket not re-measured; the desktop subtree stays unresolved and absence stays nonce-only as corrected by 02-07; claude/codex absence remains vacuous because the agent-turn leg is BLOCKED; families never sighted by the baseline (esbuild, indexer, orca-cli) are UNJUDGED; stream latency stays MEASURED, 02-05)
+
 ## Phase 2 verdict table
 
 | Criterion | Verdict | Instrument | Evidence file | SHA |
 |---|---|---|---|---|
 | SC1 (local baseline) | **PASS** (baseline sweep `baseline-2`; agent leg UNMEASURED, reason recorded in Criterion 1) | `dws-offload-workload.mjs` + laptop process sampler, ~1s cadence | `docs/dws/phase-2-baseline-summary.json` | `883138dcf` |
 | SC2 (loopback-only serve, no public port) | **PASS** (all four legs (a)-(d)) | `Test-DwsNoPublicPort -Port 6791`, `ss`/`curl`/`TcpClient` from inside and outside the host | `docs/dws/phase-2-local-ram-offload-evidence.md` Criterion 2 | `b8e385a0b` |
-| SC3 (desktop attach + remote execution proof) | **BLOCKED** (agent-turn leg: no provider login in the orca-svc service HOME; test-run leg PASS with remote-proof PASS; build leg exit=0, remote-proof UNJUDGED at the 2 s capture interval) (corrected 2026-09-30, 02-07) | `extractRemoteProof` against timestamped `ps --forest` captures under the serve MainPID | `docs/dws/phase-2-offload-summary.json`, `tests/e2e/dws-offload-workload.spec.ts` | `0b805a9b2` |
-| SC4 (laptop absence + memory delta + stream latency) | **INCONCLUSIVE** (bracket drift 4092.75 / 3032.82 MB >= 956.86 MB in both sweeps; absence PASS by run nonce only — desktop subtree unresolved in both sweeps; stream latency MEASURED N=7) (corrected 2026-09-30, 02-07) | laptop process sampler + `dws-offload-measurement.mjs compare`/`latency` | `docs/dws/phase-2-memory-delta.json`, `docs/dws/phase-2-stream-latency-remote.json` | `77314485a` / `d1a0ca38f` |
+| SC3 (desktop attach + remote execution proof) | **BLOCKED** (agent-turn leg: no provider login in the orca-svc service HOME; test-run leg PASS with remote-proof PASS; build leg exit=0, remote-proof UNJUDGED at the 2 s capture interval) (corrected 2026-09-30, 02-07) (re-measured 2026-09-30, 02-08: **BLOCKED** — agent-turn leg still has no provider login in the orca-svc service HOME; the offload-3 sweep did not reach the workload, so the test-run and build remote proofs were not re-measured) | `extractRemoteProof` against timestamped `ps --forest` captures under the serve MainPID | `docs/dws/phase-2-offload-summary.json`, `tests/e2e/dws-offload-workload.spec.ts` | `0b805a9b2` |
+| SC4 (laptop absence + memory delta + stream latency) | **INCONCLUSIVE** (bracket drift 4092.75 / 3032.82 MB >= 956.86 MB in both sweeps; absence PASS by run nonce only — desktop subtree unresolved in both sweeps; stream latency MEASURED N=7) (corrected 2026-09-30, 02-07) (re-measured 2026-09-30, 02-08: **INCONCLUSIVE** — comparability UNJUDGED, no offload-3 run manifest; nothing re-measured) | laptop process sampler + `dws-offload-measurement.mjs compare`/`latency` | `docs/dws/phase-2-memory-delta.json`, `docs/dws/phase-2-stream-latency-remote.json` | `77314485a` / `d1a0ca38f` |
 | SC5 (quit continuity + web-client reattach + backfill) | **PASS** (real clean quit, 95 new remote ticks unattended under the unchanged serve MainPID; BACKFILL PASS with a live-reader control; reattach latency MEASURED N=6) | `electronApp.evaluate(app.quit())` raced against the process `exit` event; `window.__paneManagers...serializeAddon.serialize()` via a headless msedge second client | `tests/e2e/dws-remote-continuity.spec.ts`, `config/scripts/dws-web-client-reattach.mjs`, `docs/dws/phase-2-reattach-latency.json` | `84ca86e8c` |
 
 > **Superseded row text (2026-09-30, 02-07):**
@@ -706,10 +723,11 @@ Not judged. The quiescence readings of each launch are in the table above (readi
 | Item | State | Reason | Owner action to close |
 |---|---|---|---|
 | SC3 agent-turn leg | BLOCKED | No provider login in the orca-svc service HOME: the CLI prints `Not logged in · Please run /login`, exit=1 (measured 2026-09-29) (corrected 2026-09-30, 02-07) | Open a terminal on the paired `gex44-svc` host in Orca, run `/home/orca-svc/.orca-dws/agent-bin/claude`, type `/login` and finish the browser flow; never copy a credential file from another HOME (02-08 carries the checkpoint) |
-| SC3 build leg remote-proof | UNJUDGED | The leg completed successfully (`exit=0`, `897ms`) but ran faster than the 2s `ps-capture` sampling interval could reliably catch | None — not a failure of the leg itself; a tighter capture interval (< 897ms) would close this, at the cost of larger capture files |
-| SC4 quantitative MB bracket | INCONCLUSIVE | Free-memory drift on this laptop (4092.75MB / 3032.82MB across two independent sweeps) exceeds the workload's own peak delta (956.86MB), swamping the signal | None available from this plan — would require running the same comparison on a laptop with materially less background memory churn, or a longer/heavier workload whose delta exceeds typical drift |
+| SC3 agent-turn leg, 02-08 re-check | BLOCKED | Re-measured 2026-09-30T00:55:20Z: still no provider login in the orca-svc service HOME (Claude and Codex both absent; existence check only). The classifier control against the real CLI returns `not-logged-in` (`docs/dws/phase-2-agent-leg.json`) | Same login; then re-run the agent leg (02-08 Task 4 branch A) |
+| SC3 build leg remote-proof | UNJUDGED | The leg completed successfully (`exit=0`, `897ms`) but ran faster than the 2s `ps-capture` sampling interval could reliably catch. 02-08 re-measurement at 0.2 s did not run (three launches failed before the workload: launcher stderr handling, git missing from the host PATH, a transient ssh kex timeout) | Re-run one offload sweep with git on PATH and the Start-Process launcher (`%LOCALAPPDATA%\orca-dws-p2\runs\offload-3c-launch.ps1`); pass -CaptureIntervalSec 0.2 |
+| SC4 quantitative MB bracket | INCONCLUSIVE | Free-memory drift on this laptop (4092.75MB / 3032.82MB across two independent sweeps) exceeds the workload's own peak delta (956.86MB), swamping the signal | Not re-measured in 02-08 (no counted sweep ran). Needs one sweep that reaches the workload, then a quiet laptop or a heavier workload whose delta exceeds typical drift |
 | Row 46 agent-turn leg (GEX44 heavy execution) | BLOCKED | Same cause as the SC3 agent-turn leg: no provider login in the orca-svc service HOME (corrected 2026-09-30, 02-07) | Same login as the SC3 agent-turn leg — one cause, two matrix rows |
-| SC4 absence attribution | nonce-only | remote manifest carried no desktopRootPid (fixed in the spec by 02-07) | none — re-measured by 02-08 |
+| SC4 absence attribution | nonce-only | remote manifest carried no desktopRootPid (fixed in the spec by 02-07); the 02-08 re-measurement did not reach the workload, so desktopRootPid was not exercised end to end | one offload sweep that reaches the workload (`desktopSubtreeSize > 1` proves the fix) |
 | ND-2 (ssh -L tunnel) | Named debt | The laptop reaches GEX44 through an Owner-key `ssh -L` forward, not a dispatcher-owned tunnel | Retires when UWCP S5's dispatcher-owned tunnel carries one paired-client session to `orca serve` on GEX44 |
 | Row 49 (Security), 52 (Knowledge Vault), 53 (UKDL), 54 (Constitutive Baseline Ratchet) | ABSENT | `reason: program` — out of this plan's scope, owned by later phases/programs | None — tracked at the program level, not this plan |
 
@@ -726,7 +744,9 @@ Not judged. The quiescence readings of each launch are in the table above (readi
 - `orca-dws-serve.service` — `active`, bound to `127.0.0.1:6791`, MainPID `692875` (unchanged
   across the entire duration of this plan's execution, including the desktop quit and both Task 2
   measurement passes).
-- Service checkout: `/home/orca-svc/dws-p2/b8e385a`.
+- 02-08 update: MainPID is `1181474` (the serve was restarted between 02-06 and 02-08; same checkout `/home/orca-svc/dws-p2/b8e385a`, same artifact sha256 `4c094db99fe0480c6178fbbe835b2fd6d0913c3dd29728360960bc3eee890fc9`); it did not change across the three 02-08 launches. No redeploy was made by 02-08 (Branch B).
+- Service checkout: `/home/orca-svc/dws-p2/b8e385a` (unchanged by 02-08).
+- 02-08 placed the classifier control copy `/home/kobii/dws-agent-control-e8e24ec.mjs` and `/home/orca-svc/.orca-dws/dws-agent-control-e8e24ec.mjs` (sha256 `9226f96715acf5c0c4800f6178a77fdf4fa0e7529e7569de2fdc0639f9a47618`); left in place, disposable.
 - Build clone HEAD (`/home/kobii/dws-0104-clone`, used for dispatching `status`/provisioning
   commands): unchanged by this plan — never moved, per host_rules.
 - Tarballs, bundles and refs under `/home/kobii/orca-x`: unchanged by this plan.
@@ -740,4 +760,5 @@ Not judged. The quiescence readings of each launch are in the table above (readi
 - `$env:LOCALAPPDATA\orca-dws-p2\` — unchanged.
 - `ssh -L` tunnel (PID `43824`, forwarding `127.0.0.1:6791`): stopped via `Stop-DwsTunnel`;
   confirmed no ssh process holding the `6791` forward remains.
+- 02-08: each launch's tunnel was stopped by its launcher (last: pid 42720, offload-3c) and no listener on `6791` remains; every 02-08 throwaway pairing file was deleted (`pairing-offload-3*.json` do not exist). Run state dirs `runs\offload-3`, `offload-3b`, `offload-3c` (with `offload-3\samples.ndjson`, about 470 MB) remain under `%LOCALAPPDATA%\orca-dws-p2\` and are not committed.
 - No orphaned Electron, Playwright, or msedge processes remain from this plan's execution.

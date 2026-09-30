@@ -1,0 +1,42 @@
+{
+  "measuredAt": "2026-09-30T00:55:20Z",
+  "source": {
+    "measuredAt": "UTC clock of the laptop at the credential existence re-check (02-08 Task 4 step 0)",
+    "credentialCheck": "Invoke-DwsSsh: sudo -n -u orca-svc test -s <path> (existence only; contents never read, printed, copied or hashed)",
+    "classifierControl": "02-08 Task 1 step 5: wrapper e8e24ec604bd run as orca-svc on GEX44 through sudo -n -u orca-svc -H bash -c",
+    "agentSweep": "none run: branch B (no login), no redeploy",
+    "agentBinOutside": "02-08 Task 1 step 4: sudo -n -u orca-svc -H bash -c 'test -x .../agent-bin/claude'"
+  },
+  "credentialCheck": {
+    "checkedAtUtc": "2026-09-30T00:55:20Z",
+    "printed": ["CLAUDE_CRED=0", "CODEX_CRED=0"],
+    "earlierCheckUtc": "2026-09-29T23:52:11Z",
+    "earlierPrinted": ["CLAUDE_CRED=0", "CODEX_CRED=0"],
+    "agentBinOutside": 0
+  },
+  "classifierControl": {
+    "verdict": "PASS",
+    "wrapperBlob": "e8e24ec604bdeb2df7feb17af9cbf17072b97451",
+    "sha256Local": "9226f96715acf5c0c4800f6178a77fdf4fa0e7529e7569de2fdc0639f9a47618",
+    "sha256Remote": "9226f96715acf5c0c4800f6178a77fdf4fa0e7529e7569de2fdc0639f9a47618",
+    "cwd": "/home/orca-svc/dws-p2/b8e385a",
+    "node": "v18.19.1",
+    "form": "agent --nonce ctl1a2b3c4d, no --agent-bin (agent-bin not executable outside the serve)",
+    "cliLine": "Not logged in · Please run /login",
+    "legEnd": "DWS-P2-LEG-END nonce=ctl1a2b3c4d leg=agent exit=1 ms=1811 utc=2026-09-29T23:52:49.517Z agentReply=not-logged-in"
+  },
+  "agentSweep": null,
+  "verdict": "BLOCKED",
+  "reason": "no provider login in the orca-svc service HOME (existence check 2026-09-30T00:55:20Z); the real CLI as orca-svc reports not-logged-in (classifier control PASS)",
+  "ownerAction": {
+    "summary": "Mint a login inside the orca-svc HOME on GEX44; never copy a credential file from another HOME",
+    "commands": [
+      "laptop terminal: ssh -N -L 127.0.0.1:6791:127.0.0.1:6791 gex44",
+      "laptop terminal: ssh gex44 'sudo bash /home/kobii/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json'  (pairing URL)",
+      "Orca desktop: pair the gex44-svc host with the SSH-tunnel box checked, open a terminal on that host",
+      "in that terminal: /home/orca-svc/.orca-dws/agent-bin/claude, type /login, finish the browser flow, /exit",
+      "Codex instead: /home/orca-svc/.orca-dws/agent-bin/codex login"
+    ],
+    "note": "Route B (ssh -t gex44 then sudo -u orca-svc -H agent-bin/claude) is not offered: AGENT_BIN_OUTSIDE=0. Then re-run the agent leg (02-08 Task 4 branch A)."
+  }
+}
