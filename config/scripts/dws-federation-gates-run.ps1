@@ -335,12 +335,36 @@ function Invoke-Closeout {
   Exit-Result 'OK' 0
 }
 
+# Why: newest-by-mtime alone can pair records from different HEADs; the two must be one run at one gated sha S,
+# and HEAD may only have moved past S inside the evidence-commit boundary.
+function Get-AssembleRefusal($Records) {
+  $h = $Records['head']
+  $a = $Records['attribution']
+  if ($h -and $a) {
+    if ($h.gatedSha -ne $a.gatedSha) { return "head and attribution records come from different runs (gatedSha $($h.gatedSha) vs $($a.gatedSha))" }
+    if ($h.attributionSha -ne $a.attributionSha) { return 'head and attribution records name different attribution shas' }
+  }
+  if ($h -and $h.fence -and $h.fence.sha -and $h.fence.sha -ne $h.gatedSha) {
+    return "head record gated $($h.fence.sha) but its label expects S=$($h.gatedSha)"
+  }
+  $s = $(if ($h) { $h.gatedSha } elseif ($a) { $a.gatedSha } else { $null })
+  if (-not $s) { return $null }
+  & $script:Git -C $script:Repo merge-base --is-ancestor $s HEAD 2>$null
+  if ($LASTEXITCODE -ne 0) { return "gated sha $s is not an ancestor of HEAD" }
+  $moved = @(Split-Lines (Get-LocalGit @('diff', '--name-only', $s, 'HEAD')))
+  $outside = @($moved | Where-Object { -not ($_.StartsWith('docs/dws/') -or $_ -eq 'config/dws-completion-matrix.jsonc') })
+  if ($outside.Count -gt 0) { return "HEAD moved past gated sha $s outside the evidence boundary: $($outside -join ', ')" }
+  return $null
+}
+
 function Invoke-Assemble {
   $records = @{}
   foreach ($which in @('attribution', 'head')) {
     $p = Get-LabelRecordPath $which
     $records[$which] = $(if ($p) { Read-Json $p } else { $null })
   }
+  $refusal = Get-AssembleRefusal $records
+  if ($refusal) { Write-Step 'ASSEMBLE' 'FAIL' $refusal; Exit-Result 'BLOCKED evidence-write' 4 }
   $preflight = Read-Json (Join-Path $script:State 'preflight.json')
   $closeout = Read-Json (Join-Path $script:State 'closeout.json')
   $anyRecord = @($records['head'], $records['attribution']) | Where-Object { $_ } | Select-Object -First 1
