@@ -115,12 +115,12 @@ function acceptItem(
   resolution: Extract<BacklogCandidateResolution, { action: 'accept' }>
 ): Promise<BacklogWriteOutcome<BacklogItem>> {
   const id = mintItemIdForCandidate(candidate.id)
-  // A hint is a guess about the project, so it can only ever become an inferred mapping.
+  // A derived hint stays inferred; an assigned hint is the Owner's choice and arrives explicit.
   const hinted: BacklogProjectRef[] = candidate.projectHint
     ? [
         {
           projectId: candidate.projectHint.projectId,
-          mapping: 'inferred',
+          mapping: candidate.projectHint.mapping ?? 'inferred',
           evidence: candidate.projectHint.evidence
         }
       ]

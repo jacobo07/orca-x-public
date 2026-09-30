@@ -3,6 +3,7 @@ import type { BacklogHost } from '../../../backlog/backlog-host'
 import { defineMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
   BacklogCandidateListParams,
+  BacklogCandidatesAssignParams,
   BacklogCandidatesIngestParams,
   BacklogCandidatesResolveParams
 } from './backlog-candidate-params'
@@ -74,6 +75,11 @@ export const BACKLOG_METHODS: RpcAnyMethod[] = [
     name: 'backlog.candidates.resolve',
     params: BacklogCandidatesResolveParams,
     handler: async (params, { runtime }) => requireBacklogHost(runtime).resolveCandidate(params)
+  }),
+  defineMethod({
+    name: 'backlog.candidates.assign',
+    params: BacklogCandidatesAssignParams,
+    handler: async (params, { runtime }) => requireBacklogHost(runtime).assignCandidate(params)
   }),
   defineMethod({
     name: 'backlog.merge',

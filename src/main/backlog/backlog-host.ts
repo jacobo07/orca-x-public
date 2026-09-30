@@ -12,7 +12,8 @@ import type {
   BacklogLoadResult,
   BacklogWriteOutcome
 } from '../../shared/backlog-outcomes'
-import type { BacklogItem } from '../../shared/backlog-types'
+import type { BacklogCandidate, BacklogItem } from '../../shared/backlog-types'
+import type { BacklogCandidateAssignment } from './backlog-candidate-assign'
 import type {
   BacklogCandidateIngestEntry,
   BacklogIngestEntryResult
@@ -41,6 +42,9 @@ export type BacklogHost = {
     entries: readonly BacklogCandidateIngestEntry[]
   ) => Promise<BacklogIngestEntryResult[]>
   resolveCandidate: (resolution: BacklogCandidateResolution) => Promise<BacklogResolveResult>
+  assignCandidate: (
+    assignment: BacklogCandidateAssignment
+  ) => Promise<BacklogWriteOutcome<BacklogCandidate>>
   merge: (input: BacklogItemMergeInput) => Promise<BacklogItemMergeResult>
   health: () => Promise<BacklogHealth>
   harvest: (unit: BacklogHarvestRpcUnit) => Promise<BacklogHarvestRunReport>
@@ -63,6 +67,7 @@ export function createBacklogHost(
     listCandidates: (query) => service.listCandidates(query),
     ingestCandidates: (entries) => service.ingestCandidates(entries),
     resolveCandidate: (resolution) => service.resolveCandidate(resolution),
+    assignCandidate: (assignment) => service.assignCandidate(assignment),
     merge: (input) => service.mergeItems(input),
     health: () => service.health()
   }

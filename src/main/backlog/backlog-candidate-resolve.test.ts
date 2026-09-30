@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BacklogCandidate, BacklogItem } from '../../shared/backlog-types'
+import type { BacklogCandidate, BacklogItem, BacklogProjectHint } from '../../shared/backlog-types'
 import type { BacklogCandidateIngestEntry } from './backlog-candidate-operations'
 import type * as RecordFile from './backlog-record-file'
 import type { BacklogService as BacklogServiceType } from './backlog-service'
@@ -113,7 +113,9 @@ describe('accept', () => {
 
   it('lets explicit projectRefs replace the hint', async () => {
     const candidateId = await ingest('fp-b', { projectHint: { projectId: 'orca', evidence: '' } })
-    const projectRefs = [{ projectId: 'kobii', mapping: 'explicit' as const, evidence: 'owner said' }]
+    const projectRefs = [
+      { projectId: 'kobii', mapping: 'explicit' as const, evidence: 'owner said' }
+    ]
 
     await service.resolveCandidate({ action: 'accept', candidateId, projectRefs, kind: 'research' })
 
@@ -129,7 +131,9 @@ describe('accept', () => {
     await service.resolveCandidate({ action: 'accept', candidateId })
 
     const item = readJson<BacklogItem>('items', mintItemIdForCandidate(candidateId))
-    expect(item.projectRefs).toEqual([{ projectId: 'P1', mapping: 'explicit', evidence: 'assigned' }])
+    expect(item.projectRefs).toEqual([
+      { projectId: 'P1', mapping: 'explicit', evidence: 'assigned' }
+    ])
     expect(item.schemaVersion).toBe(1)
   })
 
@@ -145,10 +149,10 @@ describe('accept', () => {
   })
 
   // Invariant (assumption delta): the item's mapping is the hint's mapping, absent reading inferred.
-  it.each([
+  it.each<[string, BacklogProjectHint, string]>([
     ['no mapping', { projectId: 'P1', evidence: 'cwd' }, 'inferred'],
-    ['inferred', { projectId: 'P1', evidence: 'cwd', mapping: 'inferred' as const }, 'inferred'],
-    ['explicit', { projectId: 'P1', evidence: 'said', mapping: 'explicit' as const }, 'explicit']
+    ['inferred', { projectId: 'P1', evidence: 'cwd', mapping: 'inferred' }, 'inferred'],
+    ['explicit', { projectId: 'P1', evidence: 'said', mapping: 'explicit' }, 'explicit']
   ])('accepts a hint with %s mapping as its own mapping', async (label, projectHint, expected) => {
     const candidateId = await ingest(`fp-invariant-${label}`, { projectHint })
 
@@ -253,7 +257,10 @@ describe('concurrent resolutions of one candidate', () => {
     const losers = [accepted, merged].filter((r) => r.candidate?.outcome === 'refused')
     expect(winners).toHaveLength(1)
     expect(losers).toEqual([
-      { candidate: { outcome: 'refused', code: 'candidate-already-resolved', detail: null }, item: null }
+      {
+        candidate: { outcome: 'refused', code: 'candidate-already-resolved', detail: null },
+        item: null
+      }
     ])
     const acceptedItemExists = existsSync(
       join(root, 'items', `${mintItemIdForCandidate(candidateId)}.json`)
@@ -279,7 +286,10 @@ describe('concurrent resolutions of one candidate', () => {
 
     expect(results.filter((r) => r.candidate?.outcome === 'published')).toHaveLength(1)
     expect(results.filter((r) => r.candidate?.outcome === 'refused')).toEqual([
-      { candidate: { outcome: 'refused', code: 'candidate-already-resolved', detail: null }, item: null }
+      {
+        candidate: { outcome: 'refused', code: 'candidate-already-resolved', detail: null },
+        item: null
+      }
     ])
     const status = readJson<BacklogCandidate>('candidates', candidateId).status
     const acceptedItemExists = existsSync(
@@ -293,7 +303,11 @@ describe('terminal resolutions', () => {
   it('dismiss, then accept is refused and creates no item', async () => {
     const candidateId = await ingest('fp-x')
 
-    const dismissed = await service.resolveCandidate({ action: 'dismiss', candidateId, note: 'noise' })
+    const dismissed = await service.resolveCandidate({
+      action: 'dismiss',
+      candidateId,
+      note: 'noise'
+    })
     expect(dismissed).toMatchObject({ candidate: { outcome: 'published' }, item: null })
     expect(readJson<BacklogCandidate>('candidates', candidateId).status).toBe('dismissed')
 

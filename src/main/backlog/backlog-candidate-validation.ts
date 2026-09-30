@@ -11,6 +11,7 @@ import {
   BACKLOG_CANDIDATE_EVENT_TYPES,
   BACKLOG_CANDIDATE_STATUSES,
   BACKLOG_CANDIDATE_UNCERTAINTIES,
+  BACKLOG_PROJECT_MAPPINGS,
   BACKLOG_SOURCE_CAPABILITY_LEVELS,
   BACKLOG_SOURCE_KINDS,
   type BacklogCandidate
@@ -57,9 +58,12 @@ function describeProjectHintDefect(hint: unknown): string | null {
   if (!isRow(hint) || !isBacklogBoundedText(hint.projectId, 1, BACKLOG_PROJECT_ID_MAX)) {
     return 'projectHint has a bad projectId'
   }
-  return isBacklogBoundedText(hint.evidence, 0, BACKLOG_SHORT_TEXT_MAX)
+  if (!isBacklogBoundedText(hint.evidence, 0, BACKLOG_SHORT_TEXT_MAX)) {
+    return 'projectHint evidence is not bounded text'
+  }
+  return hint.mapping === undefined || oneOf(BACKLOG_PROJECT_MAPPINGS, hint.mapping)
     ? null
-    : 'projectHint evidence is not bounded text'
+    : 'projectHint has an unknown mapping'
 }
 
 export function describeBacklogCandidateDefect(value: unknown): string | null {

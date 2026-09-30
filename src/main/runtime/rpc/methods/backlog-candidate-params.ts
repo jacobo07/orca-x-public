@@ -34,7 +34,9 @@ const nulFree = (max: number) =>
     .max(max)
     .refine((value) => !value.includes('\0'), 'Must not contain NUL')
 
-const BacklogCandidateIdParam = z.string().refine(isBacklogCandidateId, 'Not a backlog candidate id')
+const BacklogCandidateIdParam = z
+  .string()
+  .refine(isBacklogCandidateId, 'Not a backlog candidate id')
 
 const BacklogCandidateEntryParam = z.object({
   source: z.object({
@@ -63,6 +65,12 @@ export const BacklogCandidateListParams = z.object({
   status: z.enum(BACKLOG_CANDIDATE_STATUSES).optional(),
   limit: BacklogListLimitParam.optional(),
   cursor: BacklogListCursorParam.optional()
+})
+
+// A project id is data in a JSON record, never a path; null leaves the candidate unassigned.
+export const BacklogCandidatesAssignParams = z.object({
+  candidateId: BacklogCandidateIdParam,
+  projectId: z.string().min(1).max(BACKLOG_PROJECT_ID_MAX).nullable()
 })
 
 const note = z.string().max(BACKLOG_SHORT_TEXT_MAX).optional()

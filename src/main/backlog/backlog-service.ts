@@ -18,6 +18,7 @@ import {
   type BacklogPriority,
   type BacklogProjectRef
 } from '../../shared/backlog-types'
+import { assignBacklogCandidate, type BacklogCandidateAssignment } from './backlog-candidate-assign'
 import {
   ingestBacklogCandidates,
   type BacklogCandidateIngestEntry,
@@ -151,6 +152,12 @@ export class BacklogService {
 
   resolveCandidate(resolution: BacklogCandidateResolution): Promise<BacklogResolveResult> {
     return resolveBacklogCandidate(this.stores(), resolution)
+  }
+
+  assignCandidate(
+    assignment: BacklogCandidateAssignment
+  ): Promise<BacklogWriteOutcome<BacklogCandidate>> {
+    return assignBacklogCandidate(this.stores(), assignment)
   }
 
   mergeItems(input: BacklogItemMergeInput): Promise<BacklogItemMergeResult> {

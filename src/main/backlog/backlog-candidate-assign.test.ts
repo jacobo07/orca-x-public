@@ -50,7 +50,9 @@ const pathOf = (id: string): string => join(root, 'candidates', `${id}.json`)
 const onDisk = (id: string): BacklogCandidate =>
   JSON.parse(readFileSync(pathOf(id), 'utf-8')) as BacklogCandidate
 const sha = (id: string): string =>
-  createHash('sha256').update(readFileSync(pathOf(id))).digest('hex')
+  createHash('sha256')
+    .update(readFileSync(pathOf(id)))
+    .digest('hex')
 
 const ASSIGNED_P1 = { projectId: 'P1', evidence: 'assigned', mapping: 'explicit' }
 
@@ -155,7 +157,11 @@ describe('assign on a resolved candidate', () => {
 
     const outcome = await service.assignCandidate({ candidateId: id, projectId: 'P1' })
 
-    expect(outcome).toEqual({ outcome: 'refused', code: 'candidate-already-resolved', detail: null })
+    expect(outcome).toEqual({
+      outcome: 'refused',
+      code: 'candidate-already-resolved',
+      detail: null
+    })
     expect(sha(id)).toBe(before)
   })
 
@@ -194,6 +200,26 @@ describe('assign racing resolve', () => {
       expect(stored.projectHint).toBeNull()
     }
   })
+
+  // Accept builds its item from the candidate it loaded, so a hint landing mid-accept would split them.
+  it('accept then assign: the item carries the hint the accepted candidate ends with', async () => {
+    const id = await ingest('fp-race-accept')
+
+    const [accepted, assigned] = await Promise.all([
+      service.resolveCandidate({ action: 'accept', candidateId: id }),
+      service.assignCandidate({ candidateId: id, projectId: 'P1' })
+    ])
+
+    expect(accepted.item).toMatchObject({ outcome: 'published' })
+    expect(assigned).toEqual({
+      outcome: 'refused',
+      code: 'candidate-already-resolved',
+      detail: null
+    })
+    const stored = onDisk(id)
+    expect(stored.status).toBe('accepted')
+    expect(stored.projectHint).toBeNull()
+  })
 })
 
 describe('hint mapping validation', () => {
@@ -203,7 +229,10 @@ describe('hint mapping validation', () => {
   }
 
   it.each(['explicit', 'inferred', undefined])('accepts mapping %s', async (mapping) => {
-    const hint = mapping === undefined ? { projectId: 'P', evidence: '' } : { projectId: 'P', evidence: '', mapping }
+    const hint =
+      mapping === undefined
+        ? { projectId: 'P', evidence: '' }
+        : { projectId: 'P', evidence: '', mapping }
     expect((await withHint(hint)).outcome).toBe('loaded')
   })
 
