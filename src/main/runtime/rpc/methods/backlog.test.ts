@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest'
 import {
   BACKLOG_INGEST_BATCH_MAX,
   BACKLOG_LIST_LIMIT_MAX,
+  BACKLOG_PROJECT_ID_MAX,
   BACKLOG_TEXT_MAX
 } from '../../../../shared/backlog-rpc-limits'
 import type { RpcContext } from '../core'
 import { BACKLOG_METHODS } from './backlog'
 import {
   BacklogCandidateListParams,
+  BacklogCandidatesAssignParams,
   BacklogCandidatesIngestParams,
   BacklogCandidatesResolveParams
 } from './backlog-candidate-params'
@@ -36,7 +38,9 @@ const NAMES = [
   // Phase 3: host-side harvest of this host's own stores (R-04).
   'backlog.harvest.run',
   // In-memory per-unit run status; connected only after a finished run (D-19).
-  'backlog.harvest.status'
+  'backlog.harvest.status',
+  // Assign or clear an open candidate's project; the only v2 record writer (R-01).
+  'backlog.candidates.assign'
 ]
 
 const ITEM_ID = 'bli_00000000-0000-4000-8000-000000000000'
@@ -68,7 +72,8 @@ const VALID_PARAMS: Record<string, unknown> = {
   'backlog.candidates.list': { status: 'open' },
   'backlog.health': undefined,
   'backlog.harvest.run': { unit: 'orca-conversations' },
-  'backlog.harvest.status': undefined
+  'backlog.harvest.status': undefined,
+  'backlog.candidates.assign': { candidateId: CANDIDATE_ID, projectId: 'P1' }
 }
 
 function ctxWithoutHost(): RpcContext {
@@ -82,7 +87,30 @@ function ctxWithoutHost(): RpcContext {
 describe('backlog.* runtime methods', () => {
   it('registers exactly the ledger method set', () => {
     expect(BACKLOG_METHODS.map((entry) => entry.name).sort()).toEqual([...NAMES].sort())
-    expect(NAMES).toHaveLength(12)
+    expect(NAMES).toHaveLength(13)
+  })
+
+  it('bounds assign params: a candidate id and a bounded project id or null', () => {
+    const assign = (params: unknown) => BacklogCandidatesAssignParams.safeParse(params).success
+    expect(assign({ candidateId: CANDIDATE_ID, projectId: 'P1' })).toBe(true)
+    expect(assign({ candidateId: CANDIDATE_ID, projectId: null })).toBe(true)
+    expect(
+      assign({ candidateId: CANDIDATE_ID, projectId: 'p'.repeat(BACKLOG_PROJECT_ID_MAX) })
+    ).toBe(true)
+    expect(
+      assign({ candidateId: CANDIDATE_ID, projectId: 'p'.repeat(BACKLOG_PROJECT_ID_MAX + 1) })
+    ).toBe(false)
+    expect(assign({ candidateId: CANDIDATE_ID, projectId: '' })).toBe(false)
+    expect(assign({ candidateId: CANDIDATE_ID })).toBe(false)
+    expect(assign({ candidateId: ITEM_ID, projectId: 'P1' })).toBe(false)
+    expect(assign({ candidateId: 'blc_short', projectId: 'P1' })).toBe(false)
+    const stripped = BacklogCandidatesAssignParams.safeParse({
+      candidateId: CANDIDATE_ID,
+      projectId: 'P1',
+      mapping: 'inferred',
+      schemaVersion: 9
+    })
+    expect(stripped.data).toEqual({ candidateId: CANDIDATE_ID, projectId: 'P1' })
   })
 
   it('accepts only the harvest units this build can run', () => {

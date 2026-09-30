@@ -122,6 +122,45 @@ describe('accept', () => {
     expect(item.kind).toBe('research')
   })
 
+  it('carries an assigned hint into the item as an explicit mapping', async () => {
+    const candidateId = await ingest('fp-assigned')
+    await service.assignCandidate({ candidateId, projectId: 'P1' })
+
+    await service.resolveCandidate({ action: 'accept', candidateId })
+
+    const item = readJson<BacklogItem>('items', mintItemIdForCandidate(candidateId))
+    expect(item.projectRefs).toEqual([{ projectId: 'P1', mapping: 'explicit', evidence: 'assigned' }])
+    expect(item.schemaVersion).toBe(1)
+  })
+
+  it('explicit projectRefs still win over an assigned hint', async () => {
+    const candidateId = await ingest('fp-assigned-override')
+    await service.assignCandidate({ candidateId, projectId: 'P1' })
+    const projectRefs = [{ projectId: 'P9', mapping: 'inferred' as const, evidence: 'caller' }]
+
+    await service.resolveCandidate({ action: 'accept', candidateId, projectRefs })
+
+    const item = readJson<BacklogItem>('items', mintItemIdForCandidate(candidateId))
+    expect(item.projectRefs).toEqual(projectRefs)
+  })
+
+  // Invariant (assumption delta): the item's mapping is the hint's mapping, absent reading inferred.
+  it.each([
+    ['no mapping', { projectId: 'P1', evidence: 'cwd' }, 'inferred'],
+    ['inferred', { projectId: 'P1', evidence: 'cwd', mapping: 'inferred' as const }, 'inferred'],
+    ['explicit', { projectId: 'P1', evidence: 'said', mapping: 'explicit' as const }, 'explicit']
+  ])('accepts a hint with %s mapping as its own mapping', async (label, projectHint, expected) => {
+    const candidateId = await ingest(`fp-invariant-${label}`, { projectHint })
+
+    await service.resolveCandidate({ action: 'accept', candidateId })
+
+    const item = readJson<BacklogItem>('items', mintItemIdForCandidate(candidateId))
+    expect(item.projectRefs).toEqual([
+      { projectId: 'P1', mapping: expected, evidence: projectHint.evidence }
+    ])
+    expect(item.projectRefs[0].mapping).toBe(projectHint.mapping ?? 'inferred')
+  })
+
   it('is idempotent: a second accept leaves one item and both legs unchanged', async () => {
     const candidateId = await ingest('fp-c')
     await service.resolveCandidate({ action: 'accept', candidateId })

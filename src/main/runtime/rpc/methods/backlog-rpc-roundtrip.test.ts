@@ -383,6 +383,68 @@ describe('backlog runtime RPC round trip', () => {
     })
   })
 
+  it('assigns a candidate over RPC; a fresh runtime lists it and accept carries explicit', async () => {
+    const rows = (await resultOf(dispatcherOn(root), 'backlog.candidates.ingest', {
+      candidates: [
+        {
+          source: {
+            kind: 'orca-conversation',
+            ref: 'conv_assign',
+            capturedAt: 4,
+            adapter: 'orca-conversations',
+            capabilityLevel: 'full'
+          },
+          fingerprint: 'fp-assign',
+          text: 'Assign me',
+          uncertainty: 'low'
+        }
+      ]
+    })) as unknown as { id: string }[]
+    const candidateId = rows[0].id
+
+    const assigned = await resultOf(dispatcherOn(root), 'backlog.candidates.assign', {
+      candidateId,
+      projectId: 'P1'
+    })
+    expect(assigned.outcome).toBe('published')
+
+    type Listed = { candidates: (Record<string, unknown> & { events: { type: string }[] })[] }
+    const listed = (await resultOf(
+      dispatcherOn(root),
+      'backlog.candidates.list',
+      {}
+    )) as unknown as Listed
+    expect(listed.candidates[0]).toMatchObject({
+      id: candidateId,
+      schemaVersion: 2,
+      projectHint: { projectId: 'P1', evidence: 'assigned', mapping: 'explicit' }
+    })
+    expect(listed.candidates[0].events.map((event) => event.type)).toEqual([
+      'ingested',
+      'hint-assigned'
+    ])
+
+    const accepted = (await resultOf(dispatcherOn(root), 'backlog.candidates.resolve', {
+      action: 'accept',
+      candidateId
+    })) as unknown as { item: { outcome: string; record: { id: string } } }
+    expect(accepted.item.outcome).toBe('published')
+    const item = await resultOf(dispatcherOn(root), 'backlog.get', { id: accepted.item.record.id })
+    expect(item.record!.projectRefs).toEqual([
+      { projectId: 'P1', mapping: 'explicit', evidence: 'assigned' }
+    ])
+
+    const refused = await resultOf(dispatcherOn(root), 'backlog.candidates.assign', {
+      candidateId,
+      projectId: null
+    })
+    expect(refused).toMatchObject({ outcome: 'refused', code: 'candidate-already-resolved' })
+    const invalid = await dispatcherOn(root).dispatch(
+      request('backlog.candidates.assign', { candidateId, projectId: '' })
+    )
+    expect(!invalid.ok && invalid.error.code).toBe('invalid_argument')
+  })
+
   it('merges two items over RPC; a fresh runtime reads the loser superseded', async () => {
     const dispatcher = dispatcherOn(root)
     const survivor = (await resultOf(dispatcher, 'backlog.capture', { text: 'Keep', kind: 'idea' }))
