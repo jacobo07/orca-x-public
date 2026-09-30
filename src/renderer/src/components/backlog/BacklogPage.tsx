@@ -13,6 +13,7 @@ import { BacklogCaptureDialog } from './BacklogCaptureDialog'
 import { BacklogFilterStrip } from './BacklogFilterStrip'
 import { BacklogGroupList } from './BacklogGroupList'
 import { BacklogHeader } from './BacklogHeader'
+import { BacklogNotices } from './BacklogNotices'
 import { BacklogPageStateBlock, type BacklogBlockStatus } from './BacklogPageStateBlock'
 import { useBacklogSnapshot } from './use-backlog-snapshot'
 
@@ -60,7 +61,7 @@ function useShownAnnouncement(filters: BacklogViewFilters, visibleCount: number 
 export default function BacklogPage(): React.JSX.Element {
   const closeBacklogPage = useAppStore((s) => s.closeBacklogPage)
   const projects = useAppStore((s) => s.projects)
-  const { load, refresh } = useBacklogSnapshot()
+  const { load, health, refreshFailed, refresh } = useBacklogSnapshot()
   // Renderer-local and regenerable (D-05): nothing here is persisted.
   const [filters, setFilters] = useState<BacklogViewFilters>(BACKLOG_DEFAULT_VIEW_FILTERS)
   const projectsById = useMemo(
@@ -102,6 +103,14 @@ export default function BacklogPage(): React.JSX.Element {
             scopeCounts={view.scopeCounts}
             projectsById={projectsById}
             rows={load.rows}
+          />
+        ) : null}
+        {load !== null ? (
+          <BacklogNotices
+            load={load.status === 'ready' ? load : null}
+            health={health}
+            refreshFailed={refreshFailed}
+            onRetry={refetch}
           />
         ) : null}
         <section

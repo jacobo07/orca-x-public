@@ -444,8 +444,10 @@ describe('BacklogPage refresh model and notices', () => {
     const pending = deferred()
     listOverride = () => pending.promise
     focusWindow()
+    await flush()
     expect(listCalls()).toBe(2)
     focusWindow()
+    await flush()
     expect(listCalls()).toBe(2)
     await act(async () => {
       pending.resolve(listed([item('bli_a')]))
@@ -454,6 +456,7 @@ describe('BacklogPage refresh model and notices', () => {
     act(() => root.unmount())
     root = createRoot(container)
     focusWindow()
+    await flush()
     expect(listCalls()).toBe(2)
   })
 

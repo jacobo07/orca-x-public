@@ -16859,6 +16859,15 @@
       "updatedAsc": "Oldest first",
       "priority": "Priority"
     },
+    "notice": {
+      "retry": "Retry",
+      "refreshFailed": "The list could not be refreshed. What you see is from the last successful read.",
+      "quarantined": "records could not be read (items and candidates) and are left out of every count on this page.",
+      "copyQuarantine": "Copy quarantine report",
+      "mismatchLoaded": "Loaded",
+      "mismatchReports": "items but the ledger reports",
+      "mismatchReconcile": ". Refresh to reconcile."
+    },
     "status": {
       "loading": "Loading backlog…",
       "retry": "Retry loading",

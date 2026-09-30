@@ -1,8 +1,32 @@
+import { useEffect, useState } from 'react'
 import { CircleHelp, Inbox, Loader2, Lock, Plus, TriangleAlert, Unplug } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ClaimValue } from './ClaimValue'
+
+const LOADER_DELAY_MS = 200
+
+/** A loader that appears only after 200 ms, so a fast read never flashes one. One-shot timeout. */
+export function BacklogDelayedLoader({ label }: { label: string }): React.JSX.Element | null {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), LOADER_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
+  if (!visible) {
+    return null
+  }
+  return (
+    <div
+      data-backlog-loading=""
+      className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
+    >
+      <Loader2 className="size-4 animate-spin" aria-hidden />
+      {label}
+    </div>
+  )
+}
 
 export type BacklogBlockStatus =
   | 'loading'
@@ -150,14 +174,9 @@ export function BacklogPageStateBlock({
   onCapture: () => void
   onClearFilters: () => void
   onShowAllStates: () => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   if (status === 'loading') {
-    return (
-      <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
-        {translate('backlog.status.loading', 'Loading backlog…')}
-      </div>
-    )
+    return <BacklogDelayedLoader label={translate('backlog.status.loading', 'Loading backlog…')} />
   }
   const copy = copyFor(status, filterEmpty)
   const critical = status === 'storage-failed'
