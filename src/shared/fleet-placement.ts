@@ -10,6 +10,7 @@ import {
   type FleetResourceSample,
   type FleetUnmeasuredOutcome
 } from './fleet-resource-observation'
+import { isMeasurementStale } from './node-measurement-age'
 import type { FleetNodeResourcesObservation } from './node-resources'
 
 export type FleetPlacementMember = {
@@ -101,9 +102,8 @@ function judge(
   if (sample.outcome !== 'measured') {
     reasons.push({ reason: 'sample-unmeasured', outcome: sample.outcome })
   } else {
-    const ageMs = fleetSampleAgeMs(sample, request.now)
-    if (ageMs > request.maxSampleAgeMs) {
-      reasons.push({ reason: 'sample-stale', ageMs })
+    if (isMeasurementStale(sample.startedAt, request.maxSampleAgeMs, request.now)) {
+      reasons.push({ reason: 'sample-stale', ageMs: fleetSampleAgeMs(sample, request.now) })
     }
   }
   if (facts.protocol === 'blocked') {

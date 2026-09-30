@@ -7,6 +7,7 @@ import {
 import type { FleetHostIdentity } from './fleet-host-identity'
 import type { FleetHostFacts, FleetResourceSample } from './fleet-resource-observation'
 import { planFleetPlacement, type FleetPlacementMember } from './fleet-placement'
+import { isMeasurementStale, measurementAgeMs } from './node-measurement-age'
 
 const GB = 1024 ** 3
 const NOW = 1_000_000
@@ -221,5 +222,25 @@ describe('fleet placement planning', () => {
     expect(planFleetPlacement(hosts.toReversed(), request)).toEqual(
       planFleetPlacement(hosts, request)
     )
+  })
+
+  it('judges sample staleness with the shared age primitive at max-1, max and max+1', () => {
+    for (const age of [59_999, 60_000, 60_001]) {
+      const sample: FleetResourceSample = {
+        outcome: 'measured',
+        runtimeId: 'rt-vps',
+        startedAt: NOW - age,
+        totalMemory: 32 * GB,
+        availableMemory: 8 * GB,
+        availableMemorySource: 'free-memory',
+        processSweep: 'measured'
+      }
+      const plan = planFleetPlacement([member(vps, 'fp-vps', 8 * GB, { sample })], request)
+      const stale = isMeasurementStale(sample.startedAt, request.maxSampleAgeMs, NOW)
+      expect(plan.rejected[0]?.reasons ?? []).toEqual(
+        stale ? [{ reason: 'sample-stale', ageMs: measurementAgeMs(sample.startedAt, NOW) }] : []
+      )
+      expect(stale).toBe(age > 60_000)
+    }
   })
 })

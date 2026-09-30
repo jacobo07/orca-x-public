@@ -1,4 +1,5 @@
 import { runtimeCompatibility } from './execution-host-registry'
+import { measurementAgeMs } from './node-measurement-age'
 import type { HostAvailableMemorySource } from './process-stats-types'
 
 /** One RPC reply as the fleet reader saw it; `runtimeId` comes from the reply's own meta. */
@@ -192,5 +193,5 @@ export function fleetSampleAgeMs(
   sample: Pick<FleetResourceSample, 'startedAt'>,
   now: number
 ): number {
-  return Math.max(0, now - sample.startedAt)
+  return measurementAgeMs(sample.startedAt, now)
 }
