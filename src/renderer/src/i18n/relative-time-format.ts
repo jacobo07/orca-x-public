@@ -5,19 +5,29 @@ import { getIntlLocale } from './i18n'
 // date shapes following the OS region is conventional. The language can change at runtime, and
 // plugin packs register under a synthetic tag Intl rejects, so resolve through getIntlLocale()
 // and cache per resolved locale rather than freezing one formatter at module scope.
-let cached: { locale: string; formatter: Intl.RelativeTimeFormat } | null = null
+const cached = new Map<
+  Intl.RelativeTimeFormatStyle,
+  { locale: string; formatter: Intl.RelativeTimeFormat }
+>()
 
-export function getUiRelativeTimeFormatter(): Intl.RelativeTimeFormat {
+export function getUiRelativeTimeFormatter(
+  style: Intl.RelativeTimeFormatStyle = 'long'
+): Intl.RelativeTimeFormat {
   const locale = getIntlLocale()
-  if (!cached || cached.locale !== locale) {
-    cached = { locale, formatter: new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }) }
+  let entry = cached.get(style)
+  if (!entry || entry.locale !== locale) {
+    entry = { locale, formatter: new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style }) }
+    cached.set(style, entry)
   }
-  return cached.formatter
+  return entry.formatter
 }
 
 /** Format a signed millisecond delta (future positive, past negative) at minute/hour/day granularity. */
-export function formatUiRelativeTime(diffMs: number): string {
-  const formatter = getUiRelativeTimeFormatter()
+export function formatUiRelativeTime(
+  diffMs: number,
+  style: Intl.RelativeTimeFormatStyle = 'long'
+): string {
+  const formatter = getUiRelativeTimeFormatter(style)
   const diffMinutes = Math.round(diffMs / 60_000)
   if (Math.abs(diffMinutes) < 60) {
     return formatter.format(diffMinutes, 'minute')

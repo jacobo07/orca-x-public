@@ -337,7 +337,7 @@ export function MissionBriefRows({
         icon={Database}
         label={translate('missionBrief.row.freshness', 'Evidence freshness')}
         meta={translate('missionBrief.meta.read', 'Read {{when}}', {
-          when: formatUiRelativeTime(brief.readAt - Date.now())
+          when: formatUiRelativeTime(brief.readAt - Date.now(), 'short')
         })}
         metaIcon={Clock}
         metaEnd

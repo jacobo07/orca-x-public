@@ -321,7 +321,7 @@ export function MissionBriefHeader({
           ) : null}
           <p className={cn('text-[12px] text-muted-foreground', full && 'pr-[5.6px] leading-4')}>
             {translate('missionBrief.readAt', 'Read {{when}}', {
-              when: formatUiRelativeTime(brief.readAt - Date.now())
+              when: formatUiRelativeTime(brief.readAt - Date.now(), 'short')
             })}
           </p>
         </div>
