@@ -192,9 +192,23 @@ describe('revoked device whose socket survived the kill (row 58; characterizatio
       sendEncryptedWsRequest(session, { id: 'after_revoke', method: 'status.get' })
       const reply = await responses.next('after_revoke')
       expect(reply).toMatchObject({ ok: false, error: { code: 'unauthorized' } })
-      // V-REV-WIRE-CODE: the code stays the one old clients fail closed on; the reason rides only in data.
-      expect((reply.error as { code: string }).code).toBe('unauthorized')
-      expect((reply.error as { data?: unknown }).data).toEqual({ reason: 'device_revoked' })
+    } finally {
+      session.ws.close()
+      await server.stop()
+    }
+  }, 30_000)
+
+  it('V-REV-WIRE-CODE: the code stays the one old clients fail closed on; the reason rides only in data', async () => {
+    const { server, session, responses } = await openRevokedRuntimeSession()
+    try {
+      const offer = server.getDeviceRegistry()!.listDevices()[0]!
+      expect(server.revokeRuntimeAccess(offer.deviceId)).toBe(true)
+
+      sendEncryptedWsRequest(session, { id: 'wire_code', method: 'status.get' })
+      const reply = await responses.next('wire_code')
+      const error = reply.error as { code: string; data?: unknown }
+      expect(error.code).toBe('unauthorized')
+      expect(error.data).toEqual({ reason: 'device_revoked' })
     } finally {
       session.ws.close()
       await server.stop()
