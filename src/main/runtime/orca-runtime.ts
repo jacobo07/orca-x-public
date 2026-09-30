@@ -27851,9 +27851,6 @@ export class OrcaRuntimeService {
     }
     const startupCommand = await this.resolveMobileSessionTerminalCommand(workspace, opts)
     this.assertStableReadyGraph(graphEpoch, worktreeId)
-    if (opts.signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
     const win = this.getAvailableAuthoritativeWindow()
     if (!win) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
@@ -27869,8 +27866,7 @@ export class OrcaRuntimeService {
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
-          launchConfig: startupCommand.launchConfig,
-          signal: opts.signal
+          launchConfig: startupCommand.launchConfig
         }
       )
     }
@@ -27930,6 +27926,10 @@ export class OrcaRuntimeService {
           source: 'runtime-session',
           activate: opts.activate
         })
+        // Why: a listener added to an already-aborted signal never fires; settle now, the renderer still owns the tab.
+        if (opts.signal?.aborted) {
+          onAbort()
+        }
       })
 
       if (opts.activate !== false) {
@@ -27994,8 +27994,7 @@ export class OrcaRuntimeService {
             launchAgent: startupCommand.launchAgent,
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
-            launchConfig: startupCommand.launchConfig,
-            signal: opts.signal
+            launchConfig: startupCommand.launchConfig
           }
         )
       } catch (error) {
@@ -28124,7 +28123,6 @@ export class OrcaRuntimeService {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
-      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -28155,8 +28153,7 @@ export class OrcaRuntimeService {
       ...(isNewSession ? { isNewSession: true } : {}),
       persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
-      deferMobileSessionPublish: true,
-      signal: opts.signal
+      deferMobileSessionPublish: true
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {

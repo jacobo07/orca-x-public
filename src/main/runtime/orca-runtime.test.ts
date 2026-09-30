@@ -28185,7 +28185,7 @@ describe('OrcaRuntimeService', () => {
     expect(setBackgroundThrottling).not.toHaveBeenCalled()
   })
 
-  it('cancels a paired renderer-owned create before publication when its client disconnects', async () => {
+  it('a paired renderer-owned create still reaches the renderer after its client disconnects; only the wait ends', async () => {
     const spawn = vi.fn()
     const send = vi.fn()
     const setBackgroundThrottling = vi.fn()
@@ -28205,15 +28205,45 @@ describe('OrcaRuntimeService', () => {
     })
     abort.abort()
 
+    // Why: a missing already-aborted guard would run down the 10 s reply timeout; race so it fails loudly.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('waited for the create timeout')), 2_000)
+    )
     await expect(
-      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        clientNavigationId: 'device-a',
-        signal: abort.signal
-      })
+      Promise.race([
+        runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+          clientNavigationId: 'device-a',
+          signal: abort.signal
+        }),
+        timeout
+      ])
     ).rejects.toThrow('client_disconnected')
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][0]).toBe('terminal:requestTabCreate')
+    // Why: the renderer owns that spawn; the host never spawns on this path.
     expect(spawn).not.toHaveBeenCalled()
-    expect(send).not.toHaveBeenCalled()
-    expect(setBackgroundThrottling).not.toHaveBeenCalled()
+  })
+
+  it('a headless runtime-owned create spawns even when its client already disconnected', async () => {
+    const spawn = vi.fn(async () => ({ id: 'pty-headless-detached' }))
+    const abort = new AbortController()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    abort.abort()
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      clientNavigationId: 'device-a',
+      signal: abort.signal
+    })
+
+    expect(created.tab.type).toBe('terminal')
+    expect(spawn).toHaveBeenCalledTimes(1)
   })
 
   it('selects a created terminal only for the paired caller', async () => {
