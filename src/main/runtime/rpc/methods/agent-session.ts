@@ -206,13 +206,11 @@ type AgentSessionRuntime = OrcaRuntimeService & {
 
 function callerContext(
   clientId: string | undefined,
-  clientKind: 'mobile' | 'runtime' | undefined,
-  signal: AbortSignal | undefined
+  clientKind: 'mobile' | 'runtime' | undefined
 ): RuntimeAgentSessionRpcCaller {
   return {
     ...(clientId !== undefined ? { clientId } : {}),
-    ...(clientKind !== undefined ? { clientKind } : {}),
-    ...(signal ? { signal } : {})
+    ...(clientKind !== undefined ? { clientKind } : {})
   }
 }
 
@@ -238,20 +236,24 @@ export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.ensureAgentSession',
     params: EnsureAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) =>
+    // Why: a socket close is Detach; a retry adopts through clientOperationId (CTX-DET-2).
+    effect: 'launch',
+    handler: (params, { runtime, pairedDeviceId, clientId, clientKind }) =>
       (runtime as AgentSessionRuntime).ensureAgentSession(
         withExecutionHostAgentPresentation(params, clientKind),
-        callerContext(pairedDeviceId ?? clientId, clientKind, signal)
+        callerContext(pairedDeviceId ?? clientId, clientKind)
       )
   }),
   defineMethod({
     name: 'terminal.createAgentSession',
     params: CreateAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
+    // Why: a socket close is Detach; a retry adopts through clientOperationId (CTX-DET-2).
+    effect: 'launch',
+    handler: (params, { runtime, pairedDeviceId, clientId, clientKind }) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
       return (runtime as AgentSessionRuntime).createAgentSession(
         withExecutionHostAgentPresentation(params, clientKind),
-        callerContext(pairedDeviceId ?? clientId, clientKind, signal)
+        callerContext(pairedDeviceId ?? clientId, clientKind)
       )
     }
   })

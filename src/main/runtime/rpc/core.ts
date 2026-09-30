@@ -63,8 +63,10 @@ export type LegacyCoordinatorAuthorityProof = Readonly<{
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
-  // Why: lets long-poll handlers release immediately on client disconnect instead of running down timeoutMs. See design doc §3.1.
+  // Why: lets long-poll handlers release immediately on client disconnect instead of running down timeoutMs. See design doc §3.1. Launch-class methods never receive it.
   signal?: AbortSignal
+  // Why: socket signal re-exposed to launch-class methods ONLY for ending a wait nobody awaits — never a pre-effect check, never forwarded into a spawn.
+  waitSignal?: AbortSignal
   // Why: per-WebSocket key so the server reaps a closing socket's subscriptions without touching sibling sockets sharing the deviceToken.
   connectionId?: string
   // Why: shared-control multiplexes many logical streams over one socket; the frame id lets handlers register cleanup per logical stream.
@@ -109,17 +111,21 @@ export type RpcContext = {
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => unknown
 
+export type RpcMethodEffect = 'launch'
+
 // Why: RpcMethod erases the param type; centralizing the cast in defineMethod sidesteps RpcHandler's contravariance.
 export type RpcMethod = {
   readonly name: string
   readonly params: ZodType | null
   readonly handler: (params: unknown, ctx: RpcContext) => unknown
+  readonly effect?: RpcMethodEffect
 }
 
 type DefineMethodSpec<TSchema extends ZodType | null> = {
   name: string
   params: TSchema
   handler: RpcHandler<TSchema extends ZodType ? TSchema['_output'] : void>
+  effect?: RpcMethodEffect
 }
 
 export function defineMethod<TSchema extends ZodType | null>(
@@ -128,7 +134,8 @@ export function defineMethod<TSchema extends ZodType | null>(
   return {
     name: spec.name,
     params: spec.params,
-    handler: spec.handler as RpcMethod['handler']
+    handler: spec.handler as RpcMethod['handler'],
+    ...(spec.effect ? { effect: spec.effect } : {})
   }
 }
 
@@ -168,6 +175,14 @@ export function defineStreamingMethod<TSchema extends ZodType | null>(
 }
 
 export type RpcAnyMethod = RpcMethod | RpcStreamingMethod
+
+// Why: a socket close is Detach — it ends observation, never a launch.
+export function socketAbortSignalsFor(
+  method: RpcAnyMethod,
+  signal: AbortSignal | undefined
+): Pick<RpcContext, 'signal' | 'waitSignal'> {
+  return 'effect' in method && method.effect === 'launch' ? { waitSignal: signal } : { signal }
+}
 
 export function isStreamingMethod(method: RpcAnyMethod): method is RpcStreamingMethod {
   return 'stream' in method && method.stream === true
