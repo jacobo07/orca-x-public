@@ -74,7 +74,11 @@ function searchHaystack(row: Row): string {
 }
 
 function matchesState(row: Row, state: BacklogViewFilters['state']): boolean {
-  return state === 'all' ? true : state === 'open' ? isBacklogStateOpen(row.state) : row.state === state
+  return state === 'all'
+    ? true
+    : state === 'open'
+      ? isBacklogStateOpen(row.state)
+      : row.state === state
 }
 
 function matchesScope(row: Row, scope: BacklogViewScope): boolean {
@@ -164,7 +168,12 @@ function groupRows(
         continue
       }
       const known = knownProjectIds.has(projectId)
-      place(`${known ? 'project' : 'unknown'}:${projectId}`, known ? 'project' : 'unknown', projectId, row)
+      place(
+        `${known ? 'project' : 'unknown'}:${projectId}`,
+        known ? 'project' : 'unknown',
+        projectId,
+        row
+      )
     }
   }
   const compare = comparator(sort)

@@ -69,7 +69,12 @@ export function queryBacklogItems(
   const rest = { total, nextCursor, quarantinedCount: quarantinedCount(snapshot, 'item') }
   // Projected after paging so the host never copies the whole ledger.
   return query.view === 'summary'
-    ? { outcome: 'listed', view: 'summary', items: page.map((item) => toBacklogItemSummary(item)), ...rest }
+    ? {
+        outcome: 'listed',
+        view: 'summary',
+        items: page.map((item) => toBacklogItemSummary(item)),
+        ...rest
+      }
     : { outcome: 'listed', view: 'full', items: page, ...rest }
 }
 

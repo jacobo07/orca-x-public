@@ -53,7 +53,9 @@ const sentParams = () =>
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   localCall.mockReset()
-  vi.stubGlobal('window', { api: { runtime: { call: localCall }, runtimeEnvironments: { call: vi.fn() } } })
+  vi.stubGlobal('window', {
+    api: { runtime: { call: localCall }, runtimeEnvironments: { call: vi.fn() } }
+  })
 })
 
 afterAll(() => {

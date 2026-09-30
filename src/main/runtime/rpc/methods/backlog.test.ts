@@ -167,8 +167,8 @@ describe('backlog.* runtime methods', () => {
     expect(resolve({ action: 'archive', candidateId: CANDIDATE_ID })).toBe(false)
     expect(resolve({ action: 'dismiss', candidateId: 'blc_short' })).toBe(false)
     expect(BacklogMergeParams.safeParse(VALID_PARAMS['backlog.merge']).success).toBe(true)
-    expect(BacklogMergeParams.safeParse({ survivorId: ITEM_ID, loserId: CANDIDATE_ID }).success).toBe(
-      false
-    )
+    expect(
+      BacklogMergeParams.safeParse({ survivorId: ITEM_ID, loserId: CANDIDATE_ID }).success
+    ).toBe(false)
   })
 })

@@ -116,7 +116,9 @@ describe('backlog runtime RPC round trip', () => {
     const refused = await resultOf(dispatcher, 'backlog.update', {
       id: captured.record!.id,
       patch: {
-        addEvidence: [{ class: 'PROVEN', origin: 'model', subject: 'artifact', source: 'llm', ref: null }]
+        addEvidence: [
+          { class: 'PROVEN', origin: 'model', subject: 'artifact', source: 'llm', ref: null }
+        ]
       }
     })
 
@@ -139,7 +141,12 @@ describe('backlog runtime RPC round trip', () => {
       uncertainty: 'medium',
       projectHint: { projectId: 'orca', evidence: 'cwd' }
     }
-    const plain = { source: source('run-2'), fingerprint: 'fp-2', text: 'Same idea', uncertainty: 'high' }
+    const plain = {
+      source: source('run-2'),
+      fingerprint: 'fp-2',
+      text: 'Same idea',
+      uncertainty: 'high'
+    }
     const rows = (await resultOf(dispatcher, 'backlog.candidates.ingest', {
       candidates: [hinted, plain]
     })) as unknown as { id: string; outcome: string }[]
@@ -206,7 +213,7 @@ describe('backlog runtime RPC round trip', () => {
     const gone = await resultOf(fresh, 'backlog.get', { id: loser.id })
     expect(gone.record).toMatchObject({ state: 'superseded', mergedInto: survivor.id })
     const kept = await resultOf(fresh, 'backlog.get', { id: survivor.id })
-    expect((kept.record!.sourceLinks as { kind: string; ref: string }[])).toEqual([
+    expect(kept.record!.sourceLinks as { kind: string; ref: string }[]).toEqual([
       expect.objectContaining({ kind: 'manual', ref: survivor.id }),
       expect.objectContaining({ kind: 'manual', ref: loser.id })
     ])
@@ -244,7 +251,9 @@ describe('backlog runtime RPC round trip', () => {
     type Listed = { total: number; items: { id: string }[]; nextCursor: string | null }
     const reader = dispatcherOn(root)
     const list = (params: unknown) =>
-      resultOf(reader, 'backlog.list', params) as unknown as Promise<Listed & { quarantinedCount: number }>
+      resultOf(reader, 'backlog.list', params) as unknown as Promise<
+        Listed & { quarantinedCount: number }
+      >
     expect(await list({ unassigned: true })).toMatchObject({ total: 1, quarantinedCount: 1 })
     expect(await list({ projectId: 'P' })).toMatchObject({ total: 2 })
     const first = await list({ limit: 2 })

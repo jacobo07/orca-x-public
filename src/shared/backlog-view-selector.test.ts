@@ -211,8 +211,8 @@ describe('selectBacklogView filterEmpty', () => {
 
   it('reports filters otherwise', () => {
     const rows = [row('X', { state: 'done' }), row('Y', { state: 'ready' })]
-    expect(selectBacklogView(rows, filters({ text: 'nothing matches' }), KNOWN).filterEmpty).toEqual(
-      { reason: 'filters', hiddenCount: 2 }
-    )
+    expect(
+      selectBacklogView(rows, filters({ text: 'nothing matches' }), KNOWN).filterEmpty
+    ).toEqual({ reason: 'filters', hiddenCount: 2 })
   })
 })

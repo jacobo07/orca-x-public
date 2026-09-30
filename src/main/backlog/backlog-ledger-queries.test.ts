@@ -98,7 +98,12 @@ const ids = (rows: { id: string }[]) => rows.map((row) => row.id)
 describe('ledger item queries', () => {
   it('sorts createdAt descending, then id ascending, and counts the quarantine', () => {
     const listed = queryBacklogItems(SNAPSHOT, {})
-    expect(listed).toMatchObject({ outcome: 'listed', total: 5, nextCursor: null, quarantinedCount: 1 })
+    expect(listed).toMatchObject({
+      outcome: 'listed',
+      total: 5,
+      nextCursor: null,
+      quarantinedCount: 1
+    })
     expect(listed.outcome === 'listed' && ids(listed.items)).toEqual([
       itemId(2),
       itemId(4),
@@ -188,7 +193,10 @@ describe('ledger candidate queries and health', () => {
       [...BACKLOG_CANDIDATE_STATUSES].sort()
     )
     expect(health.items).toMatchObject({ total: 5, byState: { ready: 3, done: 1, running: 0 } })
-    expect(health.candidates).toMatchObject({ total: 3, byStatus: { open: 2, dismissed: 1, merged: 0 } })
+    expect(health.candidates).toMatchObject({
+      total: 3,
+      byStatus: { open: 2, dismissed: 1, merged: 0 }
+    })
     expect(health.quarantined).toEqual([QUARANTINED])
   })
 

@@ -1,6 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { BACKLOG_RUNTIME_CAPABILITY, RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
+import {
+  BACKLOG_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
+} from '../../../../shared/protocol-version'
 import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { RUNTIME_COMPAT_BLOCK_CODE } from '../../runtime/runtime-protocol-compat'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
@@ -98,7 +101,14 @@ afterAll(() => {
 describe('backlog client targets', () => {
   it('calls the local runtime with no capability pre-check and asks for summary rows', async () => {
     localCall.mockResolvedValue(
-      ok({ outcome: 'listed', view: 'summary', items: [], total: 0, nextCursor: null, quarantinedCount: 0 })
+      ok({
+        outcome: 'listed',
+        view: 'summary',
+        items: [],
+        total: 0,
+        nextCursor: null,
+        quarantinedCount: 0
+      })
     )
     const page = keep(await listBacklogPage(LOCAL, { cursor: null, limit: 100 }))
     expect(page).toMatchObject({ status: 'ok', hostView: 'summary', total: 0 })
@@ -114,9 +124,9 @@ describe('backlog client targets', () => {
     expect(keep(await listBacklogPage(REMOTE, { cursor: null, limit: 100 }))).toEqual({
       status: 'capability-unsupported'
     })
-    expect(
-      keep(await captureBacklogItem(REMOTE, { text: 'x', kind: 'idea' }))
-    ).toEqual({ status: 'capability-unsupported' })
+    expect(keep(await captureBacklogItem(REMOTE, { text: 'x', kind: 'idea' }))).toEqual({
+      status: 'capability-unsupported'
+    })
     expect(backlogCalls(environmentCall)).toHaveLength(0)
     expect(localCall).not.toHaveBeenCalled()
   })
@@ -206,7 +216,10 @@ describe('backlog client read classification', () => {
         { outcome: 'unreadable', code: 'not-json', reason: 'raw' },
         { status: 'unreadable', code: 'not-json' }
       ],
-      [{ outcome: 'schema-too-new', storedVersion: 9 }, { status: 'schema-too-new', storedVersion: 9 }]
+      [
+        { outcome: 'schema-too-new', storedVersion: 9 },
+        { status: 'schema-too-new', storedVersion: 9 }
+      ]
     ]
     for (const [answer, expected] of answers) {
       localCall.mockResolvedValue(ok(answer))
@@ -245,7 +258,10 @@ describe('backlog client write classification', () => {
         { outcome: 'unreadable', code: 'too-large', reason: 'raw' },
         { status: 'unreadable', code: 'too-large' }
       ],
-      [{ outcome: 'schema-too-new', storedVersion: 3 }, { status: 'schema-too-new', storedVersion: 3 }],
+      [
+        { outcome: 'schema-too-new', storedVersion: 3 },
+        { status: 'schema-too-new', storedVersion: 3 }
+      ],
       [
         { outcome: 'storage-failed', stage: 'barrier', code: null },
         { status: 'storage-failed', stage: 'barrier', code: null }
