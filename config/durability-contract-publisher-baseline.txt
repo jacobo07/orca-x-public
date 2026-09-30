@@ -1,0 +1,10 @@
+# Modules under src/main that call a durable publish entry point (writeDurable*, writeFileDurable*) but carry no
+# durability contract in config/durability-contracts.jsonc.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green - classify
+# the module instead. Existing debt stays visible here; new debt is blocked at the gate.
+# Prune after classifying: pnpm check:durability-contracts --prune
+src/main/artifacts/artifact-share-record-store.ts
+src/main/orca-profiles/profile-artifact-cloud-cleanup.ts
+src/main/sidecar-snapshot-file.ts
+src/main/usage-cache-snapshot-writer.ts
