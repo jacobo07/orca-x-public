@@ -204,12 +204,17 @@ describe('readMissionBrief — cost', () => {
 
   it('reports a failed planning read as failed, not as an empty mission', async () => {
     const d = deps({
-      runGsd: vi.fn(async () => ({ kind: 'failed' as const, detail: 'planning-inspect: boom' }))
+      runGsd: vi.fn(async () => ({
+        kind: 'failed' as const,
+        reason: 'install-incomplete' as const,
+        detail: "planning-inspect: Error: Cannot find module '../scripts/x.cjs'"
+      }))
     })
     expect(await createMissionBriefReader(d)(REQUEST)).toEqual({
       status: 'failed',
       stage: 'gsd',
-      detail: 'planning-inspect: boom'
+      reason: 'install-incomplete',
+      detail: "planning-inspect: Error: Cannot find module '../scripts/x.cjs'"
     })
   })
 })

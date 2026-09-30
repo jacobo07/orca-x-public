@@ -16973,6 +16973,34 @@
     "title": "Mission Brief",
     "unlocks": {
       "none": "Nothing becomes reachable from this phase alone"
+    },
+    "failure": {
+      "installIncomplete": "GSD's installation on this machine is incomplete.",
+      "installIncompleteAction": "Reinstall or update GSD, then re-read.",
+      "timedOut": "GSD took too long to read the mission records.",
+      "timedOutAction": "Re-read when the machine is less busy.",
+      "badOutput": "GSD answered in a form Orca cannot read.",
+      "badOutputAction": "Update GSD so its version matches, then re-read.",
+      "gsd": "GSD could not read this workspace's mission records.",
+      "read": "Orca could not read the mission records.",
+      "action": "The technical detail says why. Re-read after fixing it.",
+      "detail": "Technical detail"
+    },
+    "frontierStatus": {
+      "planning": "Planning",
+      "readyToPlan": "Ready to plan",
+      "readyToExecute": "Ready to execute",
+      "executing": "Executing",
+      "inProgress": "In progress",
+      "verifying": "Verifying",
+      "readyForVerification": "Ready for verification",
+      "phaseComplete": "Phase complete",
+      "complete": "Complete",
+      "definingRequirements": "Defining requirements",
+      "awaitingNextMilestone": "Awaiting next milestone",
+      "blocked": "Blocked",
+      "paused": "Paused",
+      "recorded": "Recorded as “{{value}}”"
     }
   }
 }

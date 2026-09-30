@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import type { MissionBriefFailure } from '../../shared/mission-brief-types'
 
 /**
  * Runs GSD's own read commands (`planning inspect`, `roadmap analyze`, `smart-entry --json`) so the
@@ -11,7 +12,36 @@ import path from 'node:path'
 
 export type GsdCommand = 'planning-inspect' | 'roadmap-analyze' | 'smart-entry'
 
-export type GsdRun = { kind: 'ok'; json: unknown } | { kind: 'failed'; detail: string }
+export type GsdFailure = MissionBriefFailure
+
+export type GsdRun =
+  | { kind: 'ok'; json: unknown }
+  | { kind: 'failed'; reason: GsdFailure; detail: string }
+
+const DETAIL_MAX = 500
+
+// Why stderr: execFile's message starts with "Command failed: <argv>", which names no cause.
+function failureOf(
+  command: GsdCommand,
+  error: Error & { killed?: boolean; signal?: string | null },
+  stderr: string
+): GsdRun {
+  const lines = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const cause =
+    lines.find((line) => /\b(Error|Cannot find module)\b/.test(line)) ??
+    lines.at(-1) ??
+    error.message.split('\n')[0]
+  const reason: GsdFailure =
+    error.killed && error.signal
+      ? 'timed-out'
+      : /Cannot find module|MODULE_NOT_FOUND/.test(stderr)
+        ? 'install-incomplete'
+        : 'failed'
+  return { kind: 'failed', reason, detail: `${command}: ${cause}`.slice(0, DETAIL_MAX) }
+}
 
 export type GsdRunner = (
   command: GsdCommand,
@@ -55,15 +85,19 @@ export function createGsdRunner(toolsPath: string = defaultGsdToolsPath()): GsdR
           windowsHide: true,
           encoding: 'utf8'
         },
-        (error, stdout) => {
+        (error, stdout, stderr) => {
           if (error) {
-            resolve({ kind: 'failed', detail: `${command}: ${error.message.split('\n')[0]}` })
+            resolve(failureOf(command, error, stderr))
             return
           }
           try {
             resolve({ kind: 'ok', json: JSON.parse(stdout.replace(/^﻿/, '')) })
           } catch {
-            resolve({ kind: 'failed', detail: `${command}: output was not JSON` })
+            resolve({
+              kind: 'failed',
+              reason: 'bad-output',
+              detail: `${command}: output was not JSON`
+            })
           }
         }
       )

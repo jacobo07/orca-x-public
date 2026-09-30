@@ -25,6 +25,7 @@ import {
   describeLastVerified,
   describePhase
 } from './mission-brief-presentation'
+import { describeFrontierStatus } from './mission-frontier-status'
 import { describeObjective } from './mission-objective-presentation'
 import { MissionBriefNextActionCard } from './MissionBriefNextActionCard'
 import { MISSION_TONE_CLASS } from './mission-tone-class'
@@ -204,7 +205,9 @@ export function MissionBriefRows({
       <BriefRow
         icon={BarChart3}
         label={translate('missionBrief.row.frontier', 'Current frontier')}
-        meta={brief.frontier.kind === 'known' ? brief.frontier.status : null}
+        meta={
+          brief.frontier.kind === 'known' ? describeFrontierStatus(brief.frontier.status) : null
+        }
         metaIcon={Link2}
         height="frontier"
         compact={compact}

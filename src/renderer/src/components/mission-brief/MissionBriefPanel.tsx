@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceRowModel } from '../resume-center/resume-center-model'
 import { describeUnavailable } from './mission-brief-presentation'
+import { describeFailure } from './mission-failure-presentation'
 import { MissionBriefActions } from './MissionBriefActions'
 import { MissionBriefFullPathDialog } from './MissionBriefFullPathDialog'
 import { MissionBriefHeader } from './MissionBriefHeader'
@@ -120,6 +121,25 @@ export function MissionBriefPanel({
         />
         <MissionBriefFullPathDialog brief={brief} open={pathOpen} onOpenChange={setPathOpen} />
       </>
+    )
+  } else if (result.status === 'failed') {
+    const failure = describeFailure(result)
+    body = (
+      <div className="flex flex-col gap-2 text-sm" role="alert" data-testid="mission-brief-failure">
+        <p className="text-foreground">{failure.sentence}</p>
+        <p className="text-muted-foreground">{failure.action}</p>
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none">
+            {translate('missionBrief.failure.detail', 'Technical detail')}
+          </summary>
+          <pre
+            data-testid="mission-brief-failure-detail"
+            className="mt-1 whitespace-pre-wrap break-all rounded-md bg-muted/40 p-2 font-mono select-text"
+          >
+            {failure.detail}
+          </pre>
+        </details>
+      </div>
     )
   } else {
     body = <p className="text-sm text-muted-foreground">{describeUnavailable(result)}</p>

@@ -191,4 +191,8 @@ export type MissionBriefResult =
         | 'invalid-request'
         | 'client-unsupported'
     }
-  | { status: 'failed'; stage: 'gsd' | 'read'; detail: string }
+  /** `detail` is the technical cause for a disclosure, never the sentence shown. */
+  | { status: 'failed'; stage: 'gsd' | 'read'; reason: MissionBriefFailure; detail: string }
+
+/** `install-incomplete`: GSD could not load one of its own files (a partial copy or update). */
+export type MissionBriefFailure = 'install-incomplete' | 'timed-out' | 'bad-output' | 'failed'

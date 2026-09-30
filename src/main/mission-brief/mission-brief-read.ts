@@ -177,7 +177,7 @@ export function createMissionBriefReader(deps: MissionBriefReadDeps) {
     // Why sequential: three concurrent GSD processes per read would triple peak memory.
     const inspect = await deps.runGsd('planning-inspect', location.path, choice.workstream)
     if (inspect.kind === 'failed') {
-      return { status: 'failed', stage: 'gsd', detail: inspect.detail }
+      return { status: 'failed', stage: 'gsd', reason: inspect.reason, detail: inspect.detail }
     }
     const roadmap = await deps.runGsd('roadmap-analyze', location.path, choice.workstream)
     const smartEntry = await deps.runGsd('smart-entry', location.path, choice.workstream)
@@ -228,6 +228,7 @@ export function createMissionBriefReader(deps: MissionBriefReadDeps) {
         (error: unknown): MissionBriefResult => ({
           status: 'failed',
           stage: 'read',
+          reason: 'failed',
           detail: error instanceof Error ? error.message : String(error)
         })
       )
