@@ -11,8 +11,16 @@ sitting ABOVE Tasks and linking to execution owners.
 capture, restart, grouping, filters, search, state change and the SC2 count oracle in the REAL Windows
 Electron app (LOCAL_RENDER). 7 mutation drills were all caught. Gaps G1/G2 were closed by 02-08.
 Coherence anchor: `git log --oneline 14ca2070e..HEAD` lists only `backlog` commits;
-`phases/02-*/02-VERIFICATION.md` status is `passed`. Next: Phase 3 (candidate inbox + harvesters), which
-has no directory yet.
+`phases/02-*/02-VERIFICATION.md` status is `passed`.
+Phase 2 post-execution hooks were closed in epoch 6:
+- review: 1 warning (WR-01), fixed in `d06b80679`/`c23b4bc0c`; IN-01..04 left open as info;
+- validation: `nyquist_compliant` true, with the es/en parity test `cb2640aa5`;
+- security: 31/31 threats closed;
+- UI review: skipped because the agent guard refused it;
+- the real-app restart spec passed again ("2 passed") on a bundle that includes the WR-01 fix.
+Phase 3 has `03-CONTEXT.md` (D-01..D-21) and `03-UI-SPEC.md` (draft, U3-01..U3-14). It is NOT planned
+yet; the next step is plan-phase 3. The real-app check of "refuse dismissal while submitting" (WR-01) is
+owed to the Phase 3 real-app plan.
 
 **Host rules that bit.**
 - GSD specialists have no PowerShell, so dispatch executors, checkers and verifiers as `general-purpose`
@@ -26,14 +34,19 @@ has no directory yet.
 - Pre-existing reds (localization x3, mobile-aperture 4 names, type-aware audit 7/12) are baselined in
   `phases/02-*/baselines/`.
 - Real-app runs: `--mode e2e` build + SKIP_BUILD=1, `orcaPage`, rebuild after the final commit, and
-  check that timestamps chain.
+  check that timestamps chain. Playwright runs as `node node_modules/@playwright/test/cli.js test …`
+  (npx dies), and `C:\Program Files\Git\cmd` must be prepended to PATH, or global setup fails at
+  `git init`.
+- The agent-solo guard's tracker is machine-wide, so another pane's dispatch blocks yours for 30 s. Do
+  other work, then retry once. On the second refusal, do the work inline or skip it if its hook
+  allows skipping.
 
 **Active decisions.** See STATE.md Decisions. Never write in `Apps\io-chatgpt-plugin`. Never
 `pnpm install` (node_modules is a junction). Push is Owner-only. OWNER DECISION pending (non-blocking):
 regenerate husky hooks.
 
-**Next 3 actions.** 1) Phase 3 discuss (smart discuss, unattended: take the recommended answers and
-record each), then research, plan, check and execute. 2) Phase 4 (reconciliation and merge).
+**Next 3 actions.** 1) Phase 3 plan-phase: research, plan, check, then execute. The context and UI spec
+are already written, so do NOT re-discuss. 2) Phase 4 (reconciliation and merge).
 3) Phase 5 (executor lanes).
 
 **Start.** Run `/gsd-autonomous --ws ub` from the worktree root (set the workstream first); update
