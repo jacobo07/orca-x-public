@@ -292,3 +292,81 @@ describe('capture fields', () => {
     expect(onOpenChange).toHaveBeenLastCalledWith(false)
   })
 })
+
+describe('dismissal while a capture is in flight (WR-01)', () => {
+  function pendingCapture(): (outcome: BacklogMutationOutcome) => void {
+    let resolve: (outcome: BacklogMutationOutcome) => void = () => {}
+    mocks.captureBacklogItem.mockReturnValue(
+      new Promise<BacklogMutationOutcome>((r) => {
+        resolve = r
+      })
+    )
+    return (outcome) => resolve(outcome)
+  }
+
+  function renderOpen(open: boolean): void {
+    act(() => {
+      root.render(
+        <BacklogCaptureDialog
+          open={open}
+          onOpenChange={onOpenChange}
+          onConfirmed={onConfirmed}
+          onUncertain={onUncertain}
+        />
+      )
+    })
+  }
+
+  it('refuses Close, Escape and an outside press while submitting; the close button is disabled', async () => {
+    pendingCapture()
+    render()
+    typeText('slow host')
+    await submit()
+    expect(dialog().getAttribute('data-backlog-capture-status')).toBe('submitting')
+    const close = q<HTMLButtonElement>('[data-backlog-capture-close]')!
+    expect(close.disabled).toBe(true)
+    await act(async () => {
+      close.click()
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    await userEvent.setup().keyboard('{Escape}')
+    await act(async () => {
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+    expect(dialog().getAttribute('data-backlog-capture-status')).toBe('submitting')
+  })
+
+  it('still closes on Escape once the capture has answered (control)', async () => {
+    const resolve = pendingCapture()
+    render()
+    typeText('answered')
+    await submit()
+    await act(async () => {
+      resolve({ status: 'storage-failed', stage: 'publish', code: null })
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    expect(q<HTMLButtonElement>('[data-backlog-capture-close]')!.disabled).toBe(false)
+    await userEvent.setup().keyboard('{Escape}')
+    expect(onOpenChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('a reopen after a confirmed capture shows a fresh form, even if the host closed it', async () => {
+    mocks.captureBacklogItem.mockResolvedValue({
+      status: 'confirmed',
+      item: {} as never,
+      unchanged: false
+    })
+    render()
+    typeText('landed')
+    await submit()
+    expect(dialog().getAttribute('data-backlog-capture-status')).toBe('confirmed')
+    renderOpen(false)
+    renderOpen(true)
+    await flush()
+    expect(dialog().getAttribute('data-backlog-capture-status')).toBe('idle')
+    expect(dialog().textContent).not.toContain('Captured to')
+    expect(field().value).toBe('')
+  })
+})
