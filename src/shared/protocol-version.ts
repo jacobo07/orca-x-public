@@ -71,6 +71,8 @@ export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as cons
 export const CONVERSATIONS_RUNTIME_CAPABILITY = 'conversations.v1' as const
 // Why: runtime-conditional; advertised only when the host wired the intent ledger (backlog.*).
 export const BACKLOG_RUNTIME_CAPABILITY = 'backlog.v1' as const
+// Why: runtime-conditional; the host serves backlog.candidates.assign, backlog.harvest.run and backlog.harvest.status.
+export const BACKLOG_INBOX_RUNTIME_CAPABILITY = 'backlog.inbox.v1' as const
 export const BROWSER_SCREENCAST_RUNTIME_CAPABILITY = 'browser.screencast.v1' as const
 export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: older hosts discard browser.tabCreate's page field, so clients may only

@@ -624,6 +624,7 @@ import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   CONVERSATIONS_RUNTIME_CAPABILITY,
   BACKLOG_RUNTIME_CAPABILITY,
+  BACKLOG_INBOX_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   GIT_BULK_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
   GIT_DISCARD_STALE_STATE_RUNTIME_CAPABILITY,
@@ -5977,6 +5978,7 @@ export class OrcaRuntimeService {
     }
     if (this.backlogHost !== null) {
       capabilities.push(BACKLOG_RUNTIME_CAPABILITY)
+      capabilities.push(BACKLOG_INBOX_RUNTIME_CAPABILITY)
     }
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend
