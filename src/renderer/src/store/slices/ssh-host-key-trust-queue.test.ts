@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { create } from 'zustand'
 import { createSshSlice, type SshSlice } from './ssh'
+import { createTestStore } from './store-test-helpers'
 
 function makeStore() {
   return create<SshSlice>()((...args) =>
@@ -35,5 +36,14 @@ describe('ssh host key trust queue', () => {
     store.getState().enqueueSshHostKeyTrustRequest(request('a'))
 
     expect(store.getState().sshCredentialQueue).toEqual([])
+  })
+  it('drops the pending trust requests of a removed target and keeps the others', () => {
+    const store = createTestStore()
+    store.getState().enqueueSshHostKeyTrustRequest(request('a'))
+    store.getState().enqueueSshHostKeyTrustRequest({ ...request('b'), targetId: 'ssh-2' })
+
+    store.getState().clearRemovedSshTargetState('ssh-1')
+
+    expect(store.getState().sshHostKeyTrustQueue.map((r) => r.requestId)).toEqual(['b'])
   })
 })
