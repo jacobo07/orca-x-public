@@ -88,6 +88,9 @@ $dwsRemoteSshHost = 'gex44'
 $dwsRemoteClone = '/home/kobii/dws-0104-clone'
 # Why invariant: an es-ES host would otherwise format 0.2 as "0,2" and break the remote `sleep` argument.
 $captureIntervalText = $CaptureIntervalSec.ToString('0.###', [System.Globalization.CultureInfo]::InvariantCulture)
+if ([double]::Parse($captureIntervalText, [System.Globalization.CultureInfo]::InvariantCulture) -le 0) {
+  throw "-CaptureIntervalSec $CaptureIntervalSec rounds to 0 at the 3-decimal remote format (minimum 0.001)"
+}
 $psCaptureBody = "bash $dwsRemoteClone/config/scripts/dws-gex44-serve-provision.sh ps-capture $CaptureCount $captureIntervalText"
 
 if ($PlanOnly) {
