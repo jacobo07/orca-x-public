@@ -22,10 +22,29 @@ export const PRODUCER_ROOTS = [
 // 6395; 90% of 6395 = 5755.5, rounded down to a multiple of 50.
 export const MIN_SCANNED_FILES = 5750
 
-// Frozen: path + exact literal text -> a one-line reason a reader can disagree with. Expected
-// empty today (RESEARCH found zero 'workstream' occurrences); the stale-entry clause (case 2)
-// keeps it from becoming a permanent excuse if a future hit is exempted here without cause.
-export const NOT_A_WORKSTREAM_SURFACE = Object.freeze({})
+// Frozen: path + exact literal text -> a one-line reason a reader can disagree with. Holds only the
+// dws Phase 3 Cancel Workstream refusal (a command that lists no Workstream); the stale-entry clause
+// (case 2) keeps it from becoming a permanent excuse if a hit is exempted here without cause.
+const CANCEL_REFUSAL_REASON =
+  'Cancel Workstream refusal (dws Phase 3): names the authority it defers to, lists no Workstream; remove when Phase 4 inverts this file'
+export const NOT_A_WORKSTREAM_SURFACE = Object.freeze({
+  'src/shared/execution-effect-refusals.ts': [
+    { text: 'WORKSTREAM_AUTHORITY_UNAVAILABLE', reason: CANCEL_REFUSAL_REASON },
+    { text: 'CANCEL_WORKSTREAM_REFUSAL_CODES', reason: CANCEL_REFUSAL_REASON },
+    { text: 'CancelWorkstreamRefusalCode', reason: CANCEL_REFUSAL_REASON },
+    { text: 'workstream_authority_unavailable', reason: CANCEL_REFUSAL_REASON }
+  ],
+  'src/main/runtime/rpc/methods/index.ts': [
+    { text: 'WORKSTREAM_CANCEL_METHODS', reason: CANCEL_REFUSAL_REASON },
+    { text: './workstream-cancel', reason: CANCEL_REFUSAL_REASON }
+  ],
+  'src/main/runtime/rpc/methods/workstream-cancel.ts': [
+    { text: 'WORKSTREAM_AUTHORITY_UNAVAILABLE', reason: CANCEL_REFUSAL_REASON },
+    { text: 'WorkstreamCancelParams', reason: CANCEL_REFUSAL_REASON },
+    { text: 'WORKSTREAM_CANCEL_METHODS', reason: CANCEL_REFUSAL_REASON },
+    { text: 'workstream.cancel', reason: CANCEL_REFUSAL_REASON }
+  ]
+})
 
 const STEM = /workstream/i
 
