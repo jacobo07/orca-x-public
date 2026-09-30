@@ -122,7 +122,7 @@ Node delivers an IPC message a tick after reading it and checks the channel only
 
 ## Detach, Stop, Cancel
 
-Window close, client disconnect and app quit are Detach: they never stop an Execution or cancel a Workstream. Stop Execution is an explicit act (`terminal.stopExact` and its siblings). Cancel Workstream belongs to UWCP (`uwcp.control/1`) and is ABSENT (refuses): `workstream.cancel` answers `workstream_authority_unavailable` and never degrades into a Stop. An RPC that launches or mutates an Execution declares `effect: 'launch'`. See [`docs/reference/detach-stop-cancel-effects.md`](./docs/reference/detach-stop-cancel-effects.md).
+Window close, client disconnect and app quit are Detach for remote and runtime-hosted Executions: they never stop one or cancel a Workstream. A local PTY owned by this app process is the exception: `killAllPty()` on will-quit and update install ends it with the process (pinned by `src/main/quit-path-local-runtime-teardown.characterization.test.ts`); daemon-backed PTYs survive. Stop Execution is an explicit act (`terminal.stopExact` and its siblings). Cancel Workstream belongs to UWCP (`uwcp.control/1`) and is ABSENT (refuses): `workstream.cancel` answers `workstream_authority_unavailable` and never degrades into a Stop. An RPC that launches or mutates an Execution declares `effect: 'launch'`. See [`docs/reference/detach-stop-cancel-effects.md`](./docs/reference/detach-stop-cancel-effects.md).
 
 ## Git Binary Compatibility
 

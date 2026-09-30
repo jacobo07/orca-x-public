@@ -7,7 +7,7 @@ disconnect is only ever the first one.
 
 | Effect | Status | Triggered by | Authority | May touch | Refusal vocabulary | Proof |
 | --- | --- | --- | --- | --- | --- | --- |
-| Detach control surface | LIVE | window close, client disconnect, app quit | the transport | the socket and observation streams only; never an Execution or a Workstream | none (it is not a command) | `src/main/runtime/runtime-rpc-client-disconnect.characterization.test.ts`, `src/main/runtime/rpc/effect-class-registry.test.ts`, `src/main/runtime/orca-runtime-agent-session-detach.test.ts`, `src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-detach-sends-no-stop.test.ts`, `src/main/quit-path-local-runtime-teardown.characterization.test.ts` |
+| Detach control surface | LIVE | window close, client disconnect, app quit | the transport | the socket and observation streams only; never a remote or runtime-hosted Execution, never a Workstream. Quit still ends this app process's own local PTYs (`killAllPty()`, pinned by the quit-path characterization test); daemon-backed PTYs survive | none (it is not a command) | `src/main/runtime/runtime-rpc-client-disconnect.characterization.test.ts`, `src/main/runtime/rpc/effect-class-registry.test.ts`, `src/main/runtime/orca-runtime-agent-session-detach.test.ts`, `src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-detach-sends-no-stop.test.ts`, `src/main/quit-path-local-runtime-teardown.characterization.test.ts` |
 | Stop Execution | LIVE | an explicit user action | the runtime that owns the Execution | one Execution (a PTY set); the Workstream remains | `STOP_EXECUTION_REFUSAL_CODES` | `src/main/runtime/rpc/errors.test.ts`, `src/shared/execution-effect-refusals.test.ts` |
 | Cancel Workstream: ABSENT (refuses) | ABSENT | an explicit operator request | UWCP `uwcp.control/1` (not built) | nothing in this runtime | `CANCEL_WORKSTREAM_REFUSAL_CODES` | `src/main/runtime/rpc/methods/workstream-cancel.test.ts` |
 
@@ -20,7 +20,7 @@ Stop Execution is the existing terminal effect, named; there is no second stop p
 - `terminal.sleep` and `worktree.sleep`: Stop plus a sleep checkpoint.
 - `terminal.close` and `terminal.closeTab`: Stop plus retire the row.
 
-Only an explicit user action is Stop. Window close, disconnect and quit are Detach.
+Only an explicit user action is Stop. Window close, disconnect and quit are Detach (quit excepted for this process's own local PTYs, see Status).
 
 ### Refusal vocabulary
 
