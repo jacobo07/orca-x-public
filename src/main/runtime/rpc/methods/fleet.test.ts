@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import type { NodeManifestsResult } from '../../../../shared/node-manifest'
 import { installFleetObservation } from '../../../fleet/fleet-observation-slot'
 import type { RpcContext } from '../core'
 import { FLEET_METHODS, type FleetPlacementViewResult } from './fleet'
@@ -103,5 +107,80 @@ describe('fleet.placementView', () => {
     expect(result.status).toBe('ok')
     expect(touched).toEqual([])
     expect(JSON.parse(JSON.stringify(result))).toEqual(result)
+  })
+})
+
+describe('fleet.nodeManifests', () => {
+  const manifestMethod = FLEET_METHODS.find((entry) => entry.name === 'fleet.nodeManifests')!
+  const callManifests = (params: unknown, ctx: Partial<RpcContext> = {}) =>
+    manifestMethod.handler(params, {
+      runtime: {} as RpcContext['runtime'],
+      ...ctx
+    }) as Promise<NodeManifestsResult>
+  const schema = JSON.parse(
+    readFileSync(
+      join(process.cwd(), 'config', 'schemas', 'orca-node-manifest-1.schema.json'),
+      'utf8'
+    )
+  ) as never
+
+  it('answers a local caller with schema-valid manifests, one per observed member', async () => {
+    installLocalOnly()
+    const result = await callManifests(undefined)
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') {
+      return
+    }
+    expect(result.observedAt).toBe(50_000)
+    expect(result.manifests).toHaveLength(1)
+    const validator = z.fromJSONSchema(schema)
+    for (const manifest of result.manifests) {
+      expect(validator.safeParse(JSON.parse(JSON.stringify(manifest))).success).toBe(true)
+    }
+    expect(result.manifests[0].measurements.memory).toMatchObject({
+      status: 'measured',
+      source: 'free-memory'
+    })
+  })
+
+  it('refuses every remote caller without calling the observation reader', async () => {
+    installLocalOnly()
+    const remote: Partial<RpcContext>[] = [
+      { clientKind: 'mobile' },
+      { pairedDeviceId: 'dev-1' },
+      { connectionId: 'socket-1' }
+    ]
+    for (const ctx of remote) {
+      await expect(callManifests(undefined, ctx)).resolves.toEqual({
+        status: 'refused',
+        reason: 'remote-caller'
+      })
+    }
+    expect(reads).toBe(0)
+  })
+
+  it('says when no reader is installed', async () => {
+    await expect(callManifests(undefined)).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'no-fleet-reader'
+    })
+  })
+
+  it('has strict params and never touches the runtime it could act through', async () => {
+    const params = manifestMethod.params!
+    expect(params.safeParse(undefined).success).toBe(true)
+    expect(params.safeParse({}).success).toBe(true)
+    expect(params.safeParse({ unknownKey: 1 }).success).toBe(false)
+    const touched: PropertyKey[] = []
+    const trap = new Proxy({} as RpcContext['runtime'], {
+      get: (_target, key) => {
+        touched.push(key)
+        throw new Error(`node manifests reached runtime.${String(key)}`)
+      }
+    })
+    installLocalOnly()
+    const result = await callManifests(undefined, { runtime: trap })
+    expect(result.status).toBe('ok')
+    expect(touched).toEqual([])
   })
 })

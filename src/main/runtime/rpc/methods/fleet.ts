@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { planFleetPlacement, type FleetPlacementRequest } from '../../../../shared/fleet-placement'
 import type { FleetPlacementViewResult } from '../../../../shared/fleet-placement-view'
+import { buildNodeManifests, type NodeManifestsResult } from '../../../../shared/node-manifest'
 import { readFleetObservation } from '../../../fleet/fleet-observation-slot'
 import { defineMethod, type RpcMethod } from '../core'
 import { isLocalRpcCaller } from '../local-rpc-caller'
@@ -50,6 +51,26 @@ export const FLEET_METHODS: RpcMethod[] = [
         request,
         observation,
         proposal: planFleetPlacement(observation.members, request)
+      }
+    }
+  }),
+  defineMethod({
+    name: 'fleet.nodeManifests',
+    params: z.object({}).strict().optional(),
+    handler: async (_params, ctx): Promise<NodeManifestsResult> => {
+      // Why: answering would have this host query its own paired runtimes on another's behalf.
+      if (!isLocalRpcCaller(ctx)) {
+        return { status: 'refused', reason: 'remote-caller' }
+      }
+      const pending = readFleetObservation()
+      if (!pending) {
+        return { status: 'unavailable', reason: 'no-fleet-reader' }
+      }
+      const observation = await pending
+      return {
+        status: 'ok',
+        observedAt: observation.completedAt,
+        manifests: buildNodeManifests(observation)
       }
     }
   })

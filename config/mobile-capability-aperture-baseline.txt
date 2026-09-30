@@ -151,6 +151,8 @@ files.watch
 files.write
 files.writeBase64
 files.writeBase64Chunk
+# Added 2026-09-30, local-caller only by design: same fan-out as fleet.placementView below.
+fleet.nodeManifests
 # Added 2026-09-18, local-caller only by design: answering makes this host query its own paired
 # runtimes with its own credentials, so the handler refuses every remote caller by context.
 fleet.placementView
