@@ -258,8 +258,9 @@ cmd_install() {
       || git -c safe.directory='*' clone --depth 1 "file://$CLONE_DIR" "$svc_checkout" \
       || { echo "INSTALL_FAILED step=clone" >&2; exit 9; }
   fi
-  if ! git -C "$svc_checkout" checkout --detach "$sha" 2>/dev/null; then
-    { git -C "$svc_checkout" fetch "file://$CLONE_DIR" "$sha" && git -C "$svc_checkout" checkout --detach "$sha"; } \
+  # Root re-enters a checkout already chowned to orca-svc on a reinstall; git refuses it as dubious ownership.
+  if ! git -c safe.directory='*' -C "$svc_checkout" checkout --detach "$sha" 2>/dev/null; then
+    { git -c safe.directory='*' -C "$svc_checkout" fetch "file://$CLONE_DIR" "$sha" && git -c safe.directory='*' -C "$svc_checkout" checkout --detach "$sha"; } \
       || { echo "INSTALL_FAILED step=checkout" >&2; exit 9; }
   fi
   chown -R "$SVC_USER:$SVC_USER" "$svc_checkout" || { echo "INSTALL_FAILED step=chown-checkout" >&2; exit 9; }
