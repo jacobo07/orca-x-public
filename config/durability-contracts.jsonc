@@ -83,7 +83,7 @@
     },
     {
       "id": "persistence.profile-data-file",
-      "state": "orca-data.json and its .bak ring — workspace session, terminal layouts, open files",
+      "state": "orca-data.json and its .bak ring — workspace session, terminal layouts, open files, and each SSH target's host-key pin (sshTargets[].hostKeyPin)",
       // Two publishers, and the gate holds both to the tier. The transfer writer was a bare
       // write+rename while this contract read as satisfied — a contract names state, not one file,
       // and its guarantee is only as strong as its weakest publisher.
@@ -99,6 +99,7 @@
       ],
       "knownGaps": [
         "The .bak ring bounds loss at roughly one hour, so the contract is 'no total loss', not 'no loss'.",
+        "A pin lost with a newest write or a restored .bak degrades to unpinned: the next interactive connect asks again, and an automatic reconnect follows the legacy unpinned grace (counted, never pinned). Loss never turns into trust in a changed key, and a damaged pin is refused as unverifiable rather than read as no pin.",
         "Only loading-store rotates the .bak ring; a profile transfer replaces the file with no backup refresh, so a transfer is the one publish with no recovery slot behind it."
       ]
     },

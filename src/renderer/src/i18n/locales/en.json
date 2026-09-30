@@ -8230,6 +8230,12 @@
           "106bd57f4a": "SSH Password"
         },
         "SshTargetCard": {
+          "identityPinned": "Pinned {{value0}}",
+          "identityDelegated": "Identity delegated to OpenSSH",
+          "identityChanged": "Host key changed - connection refused",
+          "identityNotTrusted": "Host key not trusted - connection refused",
+          "identityUnreadable": "Stored host key record is unreadable",
+          "identityNotPinned": "Identity not pinned",
           "a883f5a00f": "terminal timeout: {{value0}}",
           "8ce71262f4": "terminals until reset",
           "ec6543cee9": "Connect",

@@ -15,8 +15,10 @@ import {
   type SshConnectionStatus,
   type SshTarget
 } from '../../../../shared/ssh-types'
+import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { describeSshHostIdentity } from './ssh-host-identity-copy'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
 import { translate } from '@/i18n/i18n'
 
@@ -119,6 +121,7 @@ export function SshTargetCard({
     ? `${target.username}@${target.host}:${target.port}`
     : `${target.host}:${target.port}`
   const terminalPersistence = formatTerminalPersistence(target)
+  const hostIdentity = describeSshHostIdentity(target, state?.hostIdentity)
 
   const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
     // Why: SSH target actions can resolve after the card is removed; the root
@@ -301,6 +304,14 @@ export function SshTargetCard({
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
           {` \u2022 ${terminalPersistence}`}
         </p>
+        <Badge
+          variant={hostIdentity.variant}
+          data-ssh-host-identity={hostIdentity.status}
+          title={hostIdentity.text}
+          className="mt-1 max-w-full justify-start font-mono text-[11px]"
+        >
+          <span className="truncate">{hostIdentity.text}</span>
+        </Badge>
         {state?.error ? (
           <p className="mt-0.5 truncate text-xs text-red-400">{state.error}</p>
         ) : null}
