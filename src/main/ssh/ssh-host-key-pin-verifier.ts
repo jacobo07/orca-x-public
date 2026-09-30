@@ -23,6 +23,7 @@ export type OfferedHostKey = {
 export type HostKeyVerdict =
   | { kind: 'pinned-match' }
   | { kind: 'unpinned' }
+  | { kind: 'endpoint-mismatch' }
   | { kind: 'changed'; pinnedFingerprint: string }
   | { kind: 'unverifiable' }
 
@@ -55,14 +56,14 @@ export function verifyHostKeyAgainstPin(pin: unknown, offered: OfferedHostKey): 
     return { kind: 'unverifiable' }
   }
   if (parsed.host.toLowerCase() !== offered.host.toLowerCase() || parsed.port !== offered.port) {
-    return { kind: 'unpinned' }
+    return { kind: 'endpoint-mismatch' }
   }
   return parsed.fingerprint === offered.fingerprint
     ? { kind: 'pinned-match' }
     : { kind: 'changed', pinnedFingerprint: parsed.fingerprint }
 }
 
-// Why: only a match, or first contact of a never-pinned legacy target on an automatic attempt (OD-2), may proceed; a target whose pin was removed needs a person.
+// Why: only a match, or first contact of a never-pinned legacy target on an automatic attempt (OD-2), may proceed; a target that has or had a pin needs a person.
 export function hostKeyVerdictAllowsConnect(
   verdict: HostKeyVerdict,
   interactive: boolean,

@@ -17,6 +17,7 @@ import {
   hostKeyVerdictAllowsConnect,
   parseHostKeyPin,
   readHostKeyAlgorithm,
+  refusalFromVerdict,
   verifyHostKeyAgainstPin
 } from './ssh-host-key-pin-verifier'
 
@@ -65,9 +66,11 @@ describe('verifyHostKeyAgainstPin', () => {
       })
     ).toEqual({ kind: 'changed', pinnedFingerprint: FINGERPRINT })
     expect(verifyHostKeyAgainstPin(undefined, offered)).toEqual({ kind: 'unpinned' })
-    expect(verifyHostKeyAgainstPin(pin({ port: 2222 }), offered)).toEqual({ kind: 'unpinned' })
+    expect(verifyHostKeyAgainstPin(pin({ port: 2222 }), offered)).toEqual({
+      kind: 'endpoint-mismatch'
+    })
     expect(verifyHostKeyAgainstPin(pin({ host: 'other.example' }), offered)).toEqual({
-      kind: 'unpinned'
+      kind: 'endpoint-mismatch'
     })
     expect(verifyHostKeyAgainstPin(pin({ host: 'EXAMPLE.com' }), offered)).toEqual({
       kind: 'pinned-match'
@@ -102,10 +105,12 @@ describe('verifyHostKeyAgainstPin', () => {
     }
   })
 
-  it('CHARACTERIZATION: a pin for another endpoint reads unpinned and an automatic attempt may connect', () => {
+  it('a pin for another endpoint reads endpoint-mismatch and never connects without a person', () => {
     const verdict = verifyHostKeyAgainstPin(pin({ host: 'elsewhere.example' }), offered)
-    expect(verdict).toEqual({ kind: 'unpinned' })
-    expect(hostKeyVerdictAllowsConnect(verdict, false)).toBe(true)
+    expect(verdict).toEqual({ kind: 'endpoint-mismatch' })
+    expect(hostKeyVerdictAllowsConnect(verdict, false)).toBe(false)
+    expect(hostKeyVerdictAllowsConnect(verdict, true)).toBe(false)
+    expect(refusalFromVerdict(verdict, offered).reason).toBe('host_key_unpinned')
   })
   it('parseHostKeyPin keeps optional fields and rejects wrong types', () => {
     expect(parseHostKeyPin(pin({ algorithm: 'ssh-ed25519', publicKeyBase64: 'AAAA' }))).toEqual(

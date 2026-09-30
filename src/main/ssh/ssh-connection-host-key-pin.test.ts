@@ -311,29 +311,47 @@ describe('SshConnection host key pinning', () => {
     expect(conn.getTarget().hostKeyPinReset).toBeUndefined()
   })
 
-  it('a pin for a different host or port reads unpinned, not changed', async () => {
+  it('a pin for a different host or port is refused as untrusted, not as changed', async () => {
     const conn = new SshConnection(
       createTarget({ hostKeyPin: pinFor(OTHER_KEY, { port: 2222 }) }),
       createCallbacks()
     )
 
-    await conn.connect()
+    const refusal = await captureRefusal(conn.connect())
 
-    expect(conn.getState().hostIdentity).toBe('unpinned-legacy')
+    expect(refusal.reason).toBe('host_key_unpinned')
+    expect(conn.getState().hostIdentity).toBe('refused-unpinned')
   })
 
-  it('V-SSH-PIN-ENDPOINT-MISMATCH: CHARACTERIZATION - a pin for another endpoint still gets the legacy automatic grace', async () => {
+  it('V-SSH-PIN-ENDPOINT-MISMATCH-AUTOMATIC-REFUSED: a pin for another endpoint gets no legacy grace on an automatic connect', async () => {
     const onHostKeyTrustRequest = vi.fn(async () => pinFor(OTHER_KEY))
+    const pin = pinFor(OTHER_KEY, { host: 'elsewhere.example' })
+    const conn = new SshConnection(
+      createTarget({ hostKeyPin: pin }),
+      createCallbacks({ onHostKeyTrustRequest })
+    )
+
+    const refusal = await captureRefusal(conn.connect())
+
+    expect(refusal.reason).toBe('host_key_unpinned')
+    expect(conn.getState()).toMatchObject({ status: 'error', hostIdentity: 'refused-unpinned' })
+    expect(onHostKeyTrustRequest).not.toHaveBeenCalled()
+    expect(getUnpinnedAutomaticConnectCount('target-1')).toBe(0)
+    expect(conn.getTarget().hostKeyPin).toEqual(pin)
+  })
+
+  it('V-SSH-PIN-ENDPOINT-MISMATCH-INTERACTIVE-PROMPTS: an interactive connect asks and the confirmed pin replaces the stale one', async () => {
+    const onHostKeyTrustRequest = vi.fn(async () => pinFor(GOOD_KEY))
     const conn = new SshConnection(
       createTarget({ hostKeyPin: pinFor(OTHER_KEY, { host: 'elsewhere.example' }) }),
       createCallbacks({ onHostKeyTrustRequest })
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
-    expect(conn.getState()).toMatchObject({ status: 'connected', hostIdentity: 'unpinned-legacy' })
-    expect(getUnpinnedAutomaticConnectCount('target-1')).toBe(1)
-    expect(onHostKeyTrustRequest).not.toHaveBeenCalled()
+    expect(onHostKeyTrustRequest).toHaveBeenCalledTimes(1)
+    expect(conn.getState()).toMatchObject({ status: 'connected', hostIdentity: 'pinned' })
+    expect(conn.getTarget().hostKeyPin).toEqual(pinFor(GOOD_KEY))
   })
   it.each([false, true])(
     'V-SSH-MALFORMED-REFUSED: a damaged pin refuses interactive=%s attempts',

@@ -35,10 +35,10 @@ describe('resolveSshHostIdentityStatus', () => {
 
   it('never shows verified for a pin recorded for a different endpoint', () => {
     expect(resolveSshHostIdentityStatus({ ...target(PIN), port: 2222 }, 'pinned')).toBe(
-      'unpinned-legacy'
+      'refused-unpinned'
     )
     expect(resolveSshHostIdentityStatus({ ...target(PIN), host: 'other' }, undefined)).toBe(
-      'unpinned-legacy'
+      'refused-unpinned'
     )
   })
 

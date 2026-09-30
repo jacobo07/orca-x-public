@@ -67,7 +67,8 @@ export function resolveSshHostIdentityStatus(
     return 'unverifiable'
   }
   if (pin.host.toLowerCase() !== target.host.toLowerCase() || pin.port !== target.port) {
-    return 'unpinned-legacy'
+    // Why: a pin for another endpoint grants no automatic grace, so it never reads as legacy.
+    return 'refused-unpinned'
   }
   return live && live !== 'pinned' ? live : 'pinned'
 }
