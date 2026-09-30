@@ -235,18 +235,18 @@ describe('BacklogProjectPicker in the edit form', () => {
     await openEditor()
     await openPicker()
     expect(pickerOptions()).toEqual(['unassigned', 'P1', 'P2'])
-    expect(q('[data-backlog-capture-project-option="P1"]')?.getAttribute('data-selected')).toBe(
-      'true'
-    )
+    expect(
+      q('[data-backlog-capture-project-option="P1"]')?.getAttribute('data-backlog-selected')
+    ).toBe('true')
     await pick('unassigned')
     expect(q('[data-backlog-edit-field="project"]')?.getAttribute('data-value')).toBe('unassigned')
-    expect(q('[data-backlog-capture-project-option="P1"]')?.getAttribute('data-selected')).toBe(
-      'false'
-    )
+    expect(
+      q('[data-backlog-capture-project-option="P1"]')?.getAttribute('data-backlog-selected')
+    ).toBe('false')
     await pick('P2')
     expect(q('[data-backlog-edit-field="project"]')?.getAttribute('data-value')).toBe('P2')
     expect(
-      q('[data-backlog-capture-project-option="unassigned"]')?.getAttribute('data-selected')
+      q('[data-backlog-capture-project-option="unassigned"]')?.getAttribute('data-backlog-selected')
     ).toBe('false')
   })
 

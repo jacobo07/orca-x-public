@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { backlogSourceLabel } from '@/lib/backlog-source-labels'
 import { useAppStore } from '@/store'
+import { Button } from '@/components/ui/button'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type {
   BacklogItem,
@@ -14,6 +15,7 @@ import type { Project } from '../../../../shared/project-types'
 import { getBacklogItem, type BacklogGetOutcome } from './backlog-client'
 import type { BacklogMutationOutcome } from './backlog-mutation-client'
 import { backlogKindLabel, backlogPriorityLabel, backlogStateLabel } from './backlog-presentation'
+import { BacklogRowEditForm, type BacklogEditEnd } from './BacklogRowEditForm'
 import { BacklogStateMenu } from './BacklogStateMenu'
 
 /** A confirmed (or unconfirmable) ledger write the page must refetch for. */
@@ -25,6 +27,13 @@ export type BacklogLedgerChange = {
 
 type DetailState = { status: 'loading' } | BacklogGetOutcome
 type DetailNotice = { alert: boolean; text: string }
+
+function staleCopy(): string {
+  return translate(
+    'backlog.detail.stale',
+    'This item changed since it was loaded. It has been reloaded; try again.'
+  )
+}
 
 function relative(at: number): string {
   return formatUiRelativeTime(at - Date.now())
@@ -223,7 +232,17 @@ export function BacklogRowDetail({
   const environmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId ?? null)
   const [state, setState] = useState<DetailState>({ status: 'loading' })
   const [notice, setNotice] = useState<DetailNotice | null>(null)
+  const [editing, setEditing] = useState(false)
+  const editButton = useRef<HTMLButtonElement>(null)
+  const returnFocus = useRef(false)
   const generation = useRef(0)
+
+  useEffect(() => {
+    if (!editing && returnFocus.current) {
+      returnFocus.current = false
+      editButton.current?.focus()
+    }
+  }, [editing])
 
   const reload = useCallback(async () => {
     generation.current += 1
@@ -241,45 +260,78 @@ export function BacklogRowDetail({
     }
   }, [reload])
 
-  const onTransition = (outcome: BacklogMutationOutcome, to: BacklogItemState): void => {
-    switch (outcome.status) {
-      case 'confirmed':
-        generation.current += 1
-        setState({ status: 'loaded', item: outcome.item })
-        setNotice(null)
-        onLedgerChanged({ itemId, groupKey, movedTo: to })
-        return
-      case 'stale':
-        setNotice({
-          alert: false,
-          text: translate(
-            'backlog.detail.stale',
-            'This item changed since it was loaded. It has been reloaded; try again.'
-          )
-        })
-        void reload()
-        return
-      case 'unknown':
-        setNotice({
-          alert: false,
-          text: translate(
-            'backlog.detail.transitionUnknown',
-            'We could not confirm this change. The item has been reloaded.'
-          )
-        })
-        void reload()
-        onLedgerChanged({ itemId, groupKey, movedTo: null })
-        return
-      default:
-        setNotice({
-          alert: true,
-          text: translate(
-            'backlog.detail.mutationFailed',
-            'Not changed. The ledger could not write this change. Try again.'
-          )
-        })
+  const confirmed = (item: BacklogItem, movedTo: BacklogItemState | null): void => {
+    generation.current += 1
+    setState({ status: 'loaded', item })
+    setNotice(null)
+    onLedgerChanged({ itemId, groupKey, movedTo })
+  }
+
+  // Stale and unknown both reload; unknown may have been written, so the page refetches too.
+  const reloadAfter = (reason: 'stale' | 'unknown', unknownCopy: string): void => {
+    setNotice({ alert: false, text: reason === 'stale' ? staleCopy() : unknownCopy })
+    void reload()
+    if (reason === 'unknown') {
+      onLedgerChanged({ itemId, groupKey, movedTo: null })
     }
   }
+
+  const onTransition = (outcome: BacklogMutationOutcome, to: BacklogItemState): void => {
+    if (outcome.status === 'confirmed') {
+      confirmed(outcome.item, to)
+    } else if (outcome.status === 'stale' || outcome.status === 'unknown') {
+      reloadAfter(
+        outcome.status,
+        translate(
+          'backlog.detail.transitionUnknown',
+          'We could not confirm this change. The item has been reloaded.'
+        )
+      )
+    } else {
+      setNotice({
+        alert: true,
+        text: translate(
+          'backlog.detail.mutationFailed',
+          'Not changed. The ledger could not write this change. Try again.'
+        )
+      })
+    }
+  }
+
+  const onEditEnd = (end: BacklogEditEnd): void => {
+    returnFocus.current = true
+    setEditing(false)
+    if (end.kind === 'confirmed') {
+      confirmed(end.item, null)
+    } else if (end.kind === 'reload') {
+      reloadAfter(
+        end.reason,
+        translate(
+          'backlog.edit.unknown',
+          'We could not confirm this change was saved. The item has been reloaded.'
+        )
+      )
+    }
+  }
+
+  const actions =
+    state.status === 'loaded' ? (
+      <>
+        <BacklogStateMenu item={state.item} onOutcome={onTransition} />
+        <Button
+          ref={editButton}
+          variant="ghost"
+          size="sm"
+          data-backlog-action="edit"
+          onClick={() => {
+            setNotice(null)
+            setEditing(true)
+          }}
+        >
+          {translate('backlog.edit.open', 'Edit item')}
+        </Button>
+      </>
+    ) : null
 
   return (
     <div
@@ -294,11 +346,10 @@ export function BacklogRowDetail({
         <p className="text-muted-foreground">
           {translate('backlog.detail.loading', 'Loading item…')}
         </p>
+      ) : state.status === 'loaded' && editing ? (
+        <BacklogRowEditForm item={state.item} onEnd={onEditEnd} />
       ) : state.status === 'loaded' ? (
-        <LoadedDetail
-          item={state.item}
-          actions={<BacklogStateMenu item={state.item} onOutcome={onTransition} />}
-        />
+        <LoadedDetail item={state.item} actions={actions} />
       ) : (
         <p className="text-muted-foreground">{failureCopy(state)}</p>
       )}

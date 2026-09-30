@@ -16952,6 +16952,16 @@
       "transitionUnknown": "We could not confirm this change. The item has been reloaded.",
       "mutationFailed": "Not changed. The ledger could not write this change. Try again."
     },
+    "edit": {
+      "open": "Edit item",
+      "original": "Original text",
+      "save": "Save changes",
+      "discard": "Discard changes",
+      "overLimit": "Summary is over the 2,000-character limit",
+      "kindWhileDone": "The kind cannot change while the item is done.",
+      "capacity": "This item has reached its size limit.",
+      "unknown": "We could not confirm this change was saved. The item has been reloaded."
+    },
     "history": {
       "created": "Created",
       "updated": "Updated",
@@ -17004,6 +17014,9 @@
       "cancel": "Close without capturing",
       "closeConfirmed": "Close capture",
       "confirmed": "Captured to {{target}}",
+      "projectLabel": "Project",
+      "projectSearch": "Search projects",
+      "charactersLeft": "characters left",
       "failed": {
         "storageFailed": "Not captured. The ledger could not write this item. Your text is kept here; try again.",
         "unreadable": "Not captured. The ledger on this host cannot be read right now. Your text is kept here; try again after reloading the backlog.",
