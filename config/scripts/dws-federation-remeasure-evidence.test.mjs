@@ -248,6 +248,47 @@ describe('validateEvidence', () => {
   })
 })
 
+describe('validateEvidence on the persisted file (W-2)', () => {
+  const REAL = fileURLToPath(new URL('../../docs/dws/phase-7-federation-remeasure.json', import.meta.url))
+  const real = () => JSON.parse(readFileSync(REAL, 'utf8'))
+  const mutate = (fn) => {
+    const copy = real()
+    fn(copy)
+    return validateEvidence(copy)
+  }
+
+  it('Test 14: the committed evidence file is the green control', () => {
+    expect(validateEvidence(real())).toEqual({ ok: true, problems: [] })
+  })
+
+  const reds = [
+    ['head fence sha is not headSha', (e) => (e.fences.head.sha = 'f'.repeat(40)), 'fence-mismatch'],
+    ['head remoteRevParse is null', (e) => (e.fences.head.remoteRevParse = null), 'fence-mismatch'],
+    ['attribution remoteRevParse differs', (e) => (e.fences.attribution.remoteRevParse = 'e'.repeat(40)), 'fence-mismatch'],
+    ['attribution sha is not the attribution sha', (e) => {
+      e.fences.attribution.sha = 'd'.repeat(40)
+      e.fences.attribution.remoteRevParse = 'd'.repeat(40)
+    }, 'fence-mismatch'],
+    ['fenceOk is missing', (e) => (e.fences.head.fenceOk = null), 'fenceOk line missing'],
+    ['vitest counts are missing', (e) => (e.fences.attribution.vitest = null), 'gates-timeout'],
+    ['missingTestFiles is non-empty', (e) => (e.fences.head.missingTestFiles = ['src/main/ipc/conversations.test.ts']), 'named-file-missing'],
+    ['a fence carries a BLOCKED record', (e) => (e.fences.head.blocked = { rung: 'tree-dirty', reason: 'x' }), 'fence-blocked'],
+    ['gatesFencedSha differs from headSha', (e) => (e.gatesFencedSha = 'b'.repeat(40)), 'gatesFencedSha']
+  ]
+  it.each(reds)('Test 14: MEASURED is refused when %s', (_name, fn, needle) => {
+    const result = mutate(fn)
+    expect(result.ok).toBe(false)
+    expect(result.problems.join('\n')).toContain(needle === 'fence-blocked' ? 'BLOCKED' : needle)
+  })
+
+  it('Test 14: the same faults are refused under FAIL as well', () => {
+    expect(mutate((e) => {
+      e.verdict = 'FAIL'
+      e.fences.head.remoteRevParse = null
+    }).ok).toBe(false)
+  })
+})
+
 describe('renderEvidenceMarkdown', () => {
   it('Test 9: carries verdict, both shas, not-rerun list, correction, ND-1 and the two-sha distinction', () => {
     const ev = buildEvidence(record())

@@ -114,7 +114,21 @@ function blockedBy(rung, reason) {
 }
 
 // Shared by the --record build path and the persisted-file validator: takes the fenceEvidence() shape.
-export function fenceCoherenceBlock(label, fe) {
+export function fenceCoherenceBlock(label, fe, headSha) {
+  const own = fe.sha ?? ''
+  if (fe.blocked) {
+    return blockedBy(fe.blocked.rung ?? 'fence-blocked', `${label}: fence carries a BLOCKED record`)
+  }
+  const shaOk = label === 'head' ? own === headSha : own.startsWith(ATTRIBUTION_SHA_SHORT)
+  if (!shaOk || fe.remoteRevParse !== own) {
+    return blockedBy('fence-mismatch', `${label}: fence sha / remote rev-parse do not match the expected sha`)
+  }
+  if (!fe.fenceOk) {
+    return blockedBy('fence-mismatch', `${label}: fenceOk line missing`)
+  }
+  if (!fe.vitest || fe.treeClean !== true || fe.gates?.['db-probe'] !== 0) {
+    return blockedBy('gates-timeout', `${label}: vitest counts, clean tree or db-probe rc=0 missing`)
+  }
   if ((fe.missingTestFiles ?? []).length > 0) {
     return blockedBy('named-file-missing', `${label}: named federation test file(s) absent: ${fe.missingTestFiles.join(', ')}`)
   }
@@ -156,7 +170,7 @@ function fenceBlock(label, fence, parsed, expectedRev) {
   if (!parsed.vitest || parsed.gates.migration === undefined || parsed.gates['tsc-node'] === undefined) {
     return blockedBy('gates-timeout', `${label}: gate lines missing from the summary`)
   }
-  return fenceCoherenceBlock(label, fenceEvidence(fence))
+  return fenceCoherenceBlock(label, fenceEvidence(fence), expectedRev)
 }
 
 export function judgeRemeasure({ headFence, attributionFence, localHead, containment, timeouts, blocked }) {
@@ -289,7 +303,18 @@ export function validateEvidence(evidence) {
     for (const label of ['attribution', 'head']) {
       if (!evidence.fences?.[label]) {
         problems.push(`${evidence.verdict} evidence lacks the ${label} fence`)
+      } else {
+        const bad = fenceCoherenceBlock(label, evidence.fences[label], evidence.headSha)
+        if (bad) {
+          problems.push(`${evidence.verdict} evidence: ${bad.blockedReason} [${bad.rungReached}]`)
+        }
       }
+    }
+    if (evidence.gatesFencedSha !== evidence.headSha) {
+      problems.push('gatesFencedSha differs from headSha')
+    }
+    if (evidence.federationHead && evidence.federationHead !== evidence.fences?.attribution?.sha) {
+      problems.push('federationHead differs from the attribution fence sha')
     }
   }
   if (evidence?.verdict === 'BLOCKED' && (!evidence.rungReached || !evidence.blockedReason)) {
