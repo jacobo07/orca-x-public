@@ -5,11 +5,13 @@ import { BACKLOG_OPEN_STATES } from '../../shared/backlog-summary'
 import {
   BACKLOG_CANDIDATE_STATUSES,
   BACKLOG_ITEM_STATES,
+  BACKLOG_SOURCE_KINDS,
   type BacklogCandidate,
   type BacklogCandidateStatus,
   type BacklogItem,
   type BacklogItemKind,
-  type BacklogItemState
+  type BacklogItemState,
+  type BacklogSourceKind
 } from '../../shared/backlog-types'
 import type { BacklogLedgerSnapshot } from './backlog-ledger-open'
 import {
@@ -50,13 +52,17 @@ function item(
   }
 }
 
-function candidate(n: number, status: BacklogCandidateStatus): BacklogCandidate {
+function candidate(
+  n: number,
+  status: BacklogCandidateStatus,
+  kind: BacklogSourceKind = 'orca-conversation'
+): BacklogCandidate {
   return {
     schemaVersion: 1,
     id: `blc_${n.toString(16).padStart(32, '0')}`,
     fingerprint: `fp-${n}`,
     source: {
-      kind: 'orca-conversation',
+      kind,
       ref: `conv_${n}`,
       capturedAt: n,
       adapter: 'orca-conversations',
@@ -230,6 +236,38 @@ describe('ledger candidate queries and health', () => {
     expect(sum(health.items.byKind!)).toBe(health.items.total)
     expect(sum(health.items.openByKind!)).toBe(
       BACKLOG_OPEN_STATES.reduce((total, state) => total + health.items.byState[state], 0)
+    )
+  })
+
+  it('counts every candidate by source kind over all statuses, zero included', () => {
+    const snapshot: BacklogLedgerSnapshot = {
+      ...SNAPSHOT,
+      candidates: [
+        candidate(1, 'open', 'orca-conversation'),
+        candidate(2, 'dismissed', 'orca-conversation'),
+        candidate(3, 'open', 'codex-transcript')
+      ]
+    }
+    const health = summarizeBacklogHealth(snapshot)
+    expect(health.candidates.bySourceKind).toEqual({
+      manual: 0,
+      'orca-conversation': 2,
+      'claude-code-transcript': 0,
+      'codex-transcript': 1,
+      'chatgpt-export': 0,
+      infinityops: 0
+    })
+    const sum = (counts: Record<string, number>) =>
+      Object.values(counts).reduce((total, count) => total + count, 0)
+    expect(sum(health.candidates.bySourceKind!)).toBe(health.candidates.total)
+    expect(health.candidates.total).toBe(3)
+  })
+
+  it('reports every source kind as a measured zero on an empty ledger', () => {
+    const health = summarizeBacklogHealth({ ...SNAPSHOT, items: [], candidates: [] })
+    expect(health.candidates.total).toBe(0)
+    expect(health.candidates.bySourceKind).toEqual(
+      Object.fromEntries(BACKLOG_SOURCE_KINDS.map((kind) => [kind, 0]))
     )
   })
 })

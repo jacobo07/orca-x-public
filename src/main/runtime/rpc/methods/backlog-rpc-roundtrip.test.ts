@@ -526,7 +526,18 @@ describe('backlog runtime RPC round trip', () => {
     }
     expect(byKind.byKind).toEqual({ engineering: 1, research: 0, decision: 0, manual: 0, idea: 2 })
     expect(byKind.openByKind).toEqual(byKind.byKind)
-    const open = (await resultOf(reader, 'backlog.candidates.list', {
+    // Counted over all statuses: the dismissed candidate still counts toward its source.
+    const candidates = (health as unknown as { candidates: Record<string, unknown> }).candidates
+    expect(candidates.total).toBe(2)
+    expect(candidates.bySourceKind).toEqual({
+      manual: 0,
+      'orca-conversation': 2,
+      'claude-code-transcript': 0,
+      'codex-transcript': 0,
+      'chatgpt-export': 0,
+      infinityops: 0
+    })
+    const open =(await resultOf(reader, 'backlog.candidates.list', {
       status: 'open'
     })) as unknown as { total: number; candidates: { id: string }[] }
     expect(open.total).toBe(1)
