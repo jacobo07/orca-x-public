@@ -44,6 +44,27 @@ describe('public SSH state', () => {
     expect(unpinned?.error).toMatch(/not trusted yet/i)
   })
 
+  it('V-SSH-REFUSAL-COPY-REACHABLE: no refusal text promises a re-pin, which no UI can perform', () => {
+    for (const hostIdentity of ['refused-changed', 'refused-unpinned', 'unverifiable'] as const) {
+      const error = getPublicSshState({
+        targetId: 'ssh-a',
+        status: 'error',
+        error: 'private',
+        reconnectAttempt: 0,
+        hostIdentity
+      })?.error
+      expect(error).not.toMatch(/re-?pin/i)
+    }
+    const changed = getPublicSshState({
+      targetId: 'ssh-a',
+      status: 'error',
+      error: 'private',
+      reconnectAttempt: 0,
+      hostIdentity: 'refused-changed'
+    })?.error
+    expect(changed).toMatch(/remove this SSH target.*add it again/i)
+  })
+
   it('leaves a generic outage, and a healthy identity, unchanged', () => {
     const outage = getPublicSshState({
       targetId: 'ssh-a',

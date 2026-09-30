@@ -8,11 +8,11 @@ import {
 // Why: a host-key refusal is fixed by re-verifying the host, not by waiting; the text carries no fingerprint or address.
 const HOST_KEY_REFUSAL_MESSAGES: Record<SshHostKeyRefusalReason, string> = {
   host_key_changed:
-    'SSH host key changed; the host was not trusted. Verify it and re-pin it in Orca before connecting.',
+    'SSH host key changed; the host was not trusted. If the change is expected, remove this SSH target in Orca and add it again, then confirm the new fingerprint when Orca asks.',
   host_key_unpinned:
     'SSH host key is not trusted yet. Connect from the Orca desktop app to confirm it.',
   host_key_unverifiable:
-    'SSH host key record is unreadable. Re-pin the host in Orca before connecting.'
+    'SSH host key record is unreadable. Remove this SSH target in Orca and add it again, then confirm the host key when Orca asks.'
 }
 
 export function getHostKeyRefusalReason(
