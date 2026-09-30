@@ -14948,5 +14948,221 @@
       "finished": "Listo. Iniciadas:",
       "leftAsleep": "dejadas dormidas:"
     }
+  },
+  "backlog": {
+    "rail": {
+      "label": "Backlog"
+    },
+    "settings": {
+      "showButton": {
+        "title": "Mostrar botón de Backlog",
+        "description": "Muestra el botón de Backlog en la barra de actividad.",
+        "keywordBacklog": "backlog",
+        "keywordIntent": "intención",
+        "keywordIdeas": "ideas"
+      }
+    },
+    "page": {
+      "title": "Backlog",
+      "close": "Cerrar backlog",
+      "closeTooltip": "Cerrar · Esc",
+      "listLabel": "Elementos del backlog"
+    },
+    "header": {
+      "openItems_one": "elemento abierto",
+      "openItems_other": "elementos abiertos",
+      "across": "en",
+      "projects_one": "proyecto",
+      "projects_other": "proyectos"
+    },
+    "filters": {
+      "scopeLabel": "Filtrar por proyecto",
+      "all": "Todos",
+      "state": "Estado",
+      "stateOpen": "Abiertos",
+      "stateAll": "Todos los estados",
+      "kind": "Tipo",
+      "kindAll": "Todos los tipos",
+      "search": "Buscar en el backlog",
+      "searchHint": "Buscar texto…",
+      "shown_one": "{{count}} elemento mostrado",
+      "shown_other": "{{count}} elementos mostrados"
+    },
+    "sort": {
+      "label": "Ordenar",
+      "updatedDesc": "Actualizados recientemente",
+      "updatedAsc": "Más antiguos primero",
+      "priority": "Prioridad"
+    },
+    "notice": {
+      "retry": "Reintentar",
+      "refreshFailed": "No se pudo actualizar la lista. Lo que ves es de la última lectura correcta.",
+      "quarantined": "registros no se pudieron leer (elementos y candidatos) y quedan fuera de todos los recuentos de esta página.",
+      "copyQuarantine": "Copiar informe de cuarentena",
+      "mismatchLoaded": "Se cargaron",
+      "mismatchReports": "elementos, pero el registro indica",
+      "mismatchReconcile": ". Actualiza para conciliar."
+    },
+    "summary": {
+      "title": "Resumen del backlog",
+      "openByKind": "Abiertos por tipo",
+      "byState": "Por estado",
+      "total": "Total de elementos",
+      "quarantined": "Registros que no se pudieron leer",
+      "notRecorded": "sin registrar",
+      "loading": "Cargando resumen…",
+      "unavailable": "Resumen no disponible. La lista de elementos sigue actualizada.",
+      "retry": "Reintentar resumen"
+    },
+    "status": {
+      "loading": "Cargando backlog…",
+      "retry": "Reintentar la carga",
+      "empty": {
+        "heading": "Tu backlog está vacío",
+        "body": "Captura una idea, una tarea o una decisión, con o sin proyecto. Pulsa N para capturar desde cualquier parte de esta página."
+      },
+      "filterEmpty": {
+        "heading": "Ningún elemento coincide con estos filtros",
+        "hiddenByFilters": "elementos están ocultos por los filtros actuales.",
+        "noOpen": "No hay elementos abiertos.",
+        "closedHidden": "elementos cerrados están ocultos.",
+        "clear": "Borrar filtros",
+        "showAllStates": "Mostrar todos los estados"
+      },
+      "storageFailed": {
+        "heading": "No se pudo leer el backlog",
+        "body": "Falló la lectura del registro en este host y no se cambió nada. Reinténtalo y, si sigue fallando, reinicia Orca."
+      },
+      "capabilityUnsupported": {
+        "heading": "Este host de Orca no ofrece Backlog",
+        "body": "El host activo ejecuta una versión anterior de Orca. Actualiza Orca en ese host o cambia a un host que tenga Backlog."
+      },
+      "forbidden": {
+        "heading": "El backlog no está disponible en esta conexión",
+        "body": "El acceso de esta conexión no incluye el Backlog. Ábrelo desde la aplicación de escritorio."
+      },
+      "unreachable": {
+        "heading": "No se pudo contactar con este host de Orca",
+        "body": "El Backlog está en el host activo. Comprueba la conexión y vuelve a intentarlo."
+      }
+    },
+    "group": {
+      "unassigned": "Sin asignar",
+      "unknown": "Proyecto desconocido",
+      "items_one": "{{count}} elemento",
+      "items_other": "{{count}} elementos",
+      "noun_one": "elemento",
+      "noun_other": "elementos",
+      "label": "{{project}}, {{items}}"
+    },
+    "row": {
+      "textShortened": "(texto acortado)",
+      "inferred": "inferido",
+      "moreProjects_one": "+{{count}} proyecto",
+      "moreProjects_other": "+{{count}} proyectos",
+      "moved": "Movido a {{state}}"
+    },
+    "detail": {
+      "loading": "Cargando elemento…",
+      "absent": "Este elemento ya no está en el backlog.",
+      "unreadable": "Este elemento no se puede leer ahora mismo.",
+      "schemaTooNew": "Este elemento se guardó con una versión más reciente de Orca.",
+      "loadFailed": "No se pudo cargar este elemento. Contrae y expande la fila para volver a intentarlo.",
+      "summary": "Resumen",
+      "kind": "Tipo",
+      "priority": "Prioridad",
+      "state": "Estado",
+      "created": "Creado",
+      "updated": "Actualizado",
+      "projects": "Proyectos",
+      "sources": "Orígenes",
+      "history": "Historial",
+      "none": "Ninguno",
+      "explicit": "Explícito",
+      "inferred": "Inferido",
+      "changeState": "Cambiar estado",
+      "doneNeedsEvidence": "Primero necesita evidencia de finalización",
+      "doneIdea": "Una idea no se puede marcar como hecha; cambia antes su tipo",
+      "stale": "Este elemento cambió desde que se cargó. Se ha vuelto a cargar; inténtalo de nuevo.",
+      "transitionUnknown": "No pudimos confirmar este cambio. El elemento se ha vuelto a cargar.",
+      "mutationFailed": "Sin cambios. El registro no pudo guardar este cambio. Inténtalo de nuevo."
+    },
+    "edit": {
+      "open": "Editar elemento",
+      "original": "Texto original",
+      "save": "Guardar cambios",
+      "discard": "Descartar cambios",
+      "overLimit": "El resumen supera el límite de 2.000 caracteres",
+      "kindWhileDone": "El tipo no puede cambiar mientras el elemento está hecho.",
+      "capacity": "Este elemento ha alcanzado su límite de tamaño.",
+      "unknown": "No pudimos confirmar que este cambio se guardara. El elemento se ha vuelto a cargar."
+    },
+    "history": {
+      "created": "Creado",
+      "updated": "Actualizado",
+      "transitioned": "Cambio de estado",
+      "sourceLinked": "Origen vinculado",
+      "mergedIn": "Fusionado aquí",
+      "mergedInto": "Fusionado en"
+    },
+    "state": {
+      "needsTriage": "Por clasificar",
+      "ready": "Listo",
+      "waitingForExecutor": "Esperando ejecutor",
+      "preparing": "Preparando",
+      "running": "En ejecución",
+      "review": "En revisión",
+      "done": "Hecho",
+      "blocked": "Bloqueado",
+      "stale": "Obsoleto",
+      "superseded": "Reemplazado",
+      "dismissed": "Descartado",
+      "unknown": "Desconocido"
+    },
+    "kind": {
+      "engineering": "Ingeniería",
+      "research": "Investigación",
+      "decision": "Decisión",
+      "manual": "Tarea manual",
+      "idea": "Idea"
+    },
+    "priority": {
+      "urgent": "Urgente",
+      "high": "Alta",
+      "normal": "Normal",
+      "low": "Baja"
+    },
+    "source": {
+      "manual": "Manual",
+      "orcaConversation": "Conversación de Orca",
+      "claudeCodeTranscript": "Claude Code",
+      "codexTranscript": "Codex",
+      "chatgptExport": "ChatGPT",
+      "infinityops": "InfinityOps"
+    },
+    "capture": {
+      "title": "Capturar en el backlog",
+      "description": "Escríbelo como lo piensas. El proyecto, el tipo y la prioridad se pueden cambiar después.",
+      "textLabel": "Texto del elemento",
+      "submit": "Capturar elemento",
+      "submitting": "Capturando…",
+      "cancel": "Cerrar sin capturar",
+      "closeConfirmed": "Cerrar captura",
+      "confirmed": "Capturado en {{target}}",
+      "projectLabel": "Proyecto",
+      "projectSearch": "Buscar proyectos",
+      "charactersLeft": "caracteres restantes",
+      "overLimit": "El texto supera el límite de 20.000 caracteres",
+      "ready": "Marcar como listo",
+      "another": "Capturar otro elemento",
+      "failed": {
+        "storageFailed": "No capturado. El registro no pudo guardar este elemento. Tu texto se conserva aquí; inténtalo de nuevo.",
+        "unreadable": "No capturado. El registro de este host no se puede leer ahora mismo. Tu texto se conserva aquí; inténtalo de nuevo después de recargar el backlog.",
+        "capability": "No capturado. Este host no ofrece Backlog.",
+        "unknown": "No pudimos confirmar que se guardara. Revisa la lista antes de volver a capturar.",
+        "unreachable": "No capturado. No se pudo contactar con este host. Tu texto se conserva aquí; inténtalo de nuevo.",
+        "other": "No capturado. Tu texto se conserva aquí; inténtalo de nuevo."
+      }
+    }
   }
 }
