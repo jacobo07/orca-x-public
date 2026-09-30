@@ -55,6 +55,24 @@ describe('formatNodeManifests', () => {
     expect(text).toMatch(/disk: \/ 40 GB free of 100 GB — measured 20s ago, trusted for 600s/)
   })
 
+  it('prints a value past its trust window as unknown (stale) with no number, and one exactly at it as a reading', () => {
+    const measured = (ageMs: number) => ({
+      status: 'measured' as const,
+      measured_at: OBSERVED_AT - ageMs,
+      max_age_ms: 60_000,
+      source: 'proc-meminfo',
+      value: { total_bytes: 32 * GB, available_bytes: 9 * GB, available_source: 'proc-meminfo' }
+    })
+    const memoryLine = (ageMs: number) =>
+      formatNodeManifests(ok([manifest({ memory: measured(ageMs) })]))
+        .split('\n')
+        .find((entry) => entry.startsWith('  memory: '))!
+    expect(memoryLine(75_000)).toBe('  memory: unknown (stale)')
+    expect(memoryLine(60_001)).toBe('  memory: unknown (stale)')
+    expect(memoryLine(60_000)).toContain('measured 60s ago')
+    expect(memoryLine(59_000)).toContain('measured 59s ago')
+  })
+
   it('prints an unknown family as unknown (<reason>) with no other digit', () => {
     const lines = formatNodeManifests(ok([manifest()])).split('\n')
     for (const [prefix, reason] of [

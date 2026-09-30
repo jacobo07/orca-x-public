@@ -1,5 +1,5 @@
 import type { NodeManifest, NodeManifestsResult, NodeMeasurement } from '../shared/node-manifest'
-import { measurementAgeMs } from '../shared/node-measurement-age'
+import { isMeasurementStale, measurementAgeMs } from '../shared/node-measurement-age'
 import { formatByteCount } from './workspace-format'
 
 /** 0: the manifests were read · 1: this machine could not ask. */
@@ -18,6 +18,9 @@ function describeMeasurement<V>(
 ): string {
   if (measurement.status === 'unknown') {
     return `unknown (${measurement.reason})`
+  }
+  if (isMeasurementStale(measurement.measured_at, measurement.max_age_ms, observedAt)) {
+    return 'unknown (stale)'
   }
   const age = seconds(measurementAgeMs(measurement.measured_at, observedAt))
   return `${describeValue(measurement.value)} — measured ${age} ago, trusted for ${seconds(measurement.max_age_ms)} (${measurement.source})`
