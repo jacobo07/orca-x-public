@@ -34,7 +34,24 @@ const CHIP_CLASS =
 const TRIGGER_CLASS = 'h-8 text-[12px]'
 const SORTS: readonly BacklogViewSort[] = ['updated-desc', 'updated-asc', 'priority']
 
-type Chip = { key: string; name: string; count: number; mark: React.ReactNode }
+const UNKNOWN_PROJECT_ID_TAIL_CHARS = 12
+
+type Chip = {
+  key: string
+  name: string
+  label: string
+  count: number
+  mark: React.ReactNode
+  idTail?: string
+  fullId?: string
+}
+
+// Why: ids that share a prefix differ at the end, so the end is what the chip must keep.
+function unknownProjectIdTail(projectId: string): string {
+  return projectId.length <= UNKNOWN_PROJECT_ID_TAIL_CHARS
+    ? projectId
+    : `…${projectId.slice(-(UNKNOWN_PROJECT_ID_TAIL_CHARS - 1))}`
+}
 
 function scopeKey(scope: BacklogViewScope): string {
   switch (scope.kind) {
@@ -98,35 +115,47 @@ function buildChips(
   )
   const projectChips = ordered.map((projectId): Chip => {
     const project = projectsById.get(projectId)
+    const count = counts.projects.get(projectId) ?? 0
+    if (project) {
+      return {
+        key: `project:${projectId}`,
+        name: project.displayName,
+        label: project.displayName,
+        count,
+        mark: <RepoBadgeMark color={project.badgeColor} className="size-2 rounded-full" />
+      }
+    }
+    const unknown = translate('backlog.group.unknown', 'Unknown project')
     return {
       key: `project:${projectId}`,
-      name: project
-        ? project.displayName
-        : `${translate('backlog.group.unknown', 'Unknown project')} ${projectId}`,
-      count: counts.projects.get(projectId) ?? 0,
-      mark: project ? (
-        <RepoBadgeMark color={project.badgeColor} className="size-2 rounded-full" />
-      ) : (
-        <CircleHelp className="size-3.5 text-muted-foreground" aria-hidden />
-      )
+      name: `${unknown} ${projectId}`,
+      label: unknown,
+      count,
+      mark: <CircleHelp className="size-3.5 text-muted-foreground" aria-hidden />,
+      idTail: unknownProjectIdTail(projectId),
+      fullId: projectId
     }
   })
   const sources = BACKLOG_SOURCE_KINDS.filter(
     (source) =>
       counts.sources.has(source) || (selected.kind === 'source' && selected.source === source)
   )
+  const all = translate('backlog.filters.all', 'All')
+  const unassigned = translate('backlog.group.unassigned', 'Unassigned')
   return [
-    { key: 'all', name: translate('backlog.filters.all', 'All'), count: counts.all, mark: null },
+    { key: 'all', name: all, label: all, count: counts.all, mark: null },
     ...projectChips,
     {
       key: 'unassigned',
-      name: translate('backlog.group.unassigned', 'Unassigned'),
+      name: unassigned,
+      label: unassigned,
       count: counts.unassigned,
       mark: <Inbox className="size-3.5 text-muted-foreground" aria-hidden />
     },
     ...sources.map((source) => ({
       key: `source:${source}`,
       name: backlogSourceLabel(source),
+      label: backlogSourceLabel(source),
       count: counts.sources.get(source) ?? 0,
       mark: null
     }))
@@ -258,10 +287,16 @@ export function BacklogFilterStrip({
               project: chip.name,
               items: backlogItemCountLabel(chip.count)
             })}
+            title={chip.fullId}
             className={CHIP_CLASS}
           >
             {chip.mark}
-            <span className="max-w-40 truncate">{chip.name}</span>
+            <span className="max-w-40 truncate">{chip.label}</span>
+            {chip.idTail ? (
+              <span data-backlog-scope-id-tail="" className="shrink-0 font-mono">
+                {chip.idTail}
+              </span>
+            ) : null}
             <ClaimValue testId="backlog-scope-count" value={chip.count} />
           </ToggleGroupItem>
         ))}
