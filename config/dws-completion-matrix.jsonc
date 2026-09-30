@@ -811,14 +811,31 @@
       "owner": "federation reviews",
       "done": "P4b flow live",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "phase-7",
+      "measuredAt": "2026-09-30",
       "required": true,
       "phases": [
         7
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "P4a"
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-records.ts", "note": "a review record bound to one revision, with its policy and producer task" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-request.ts", "note": "review request and reviews.policy feasibility" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-subject-capture.ts", "note": "captures the exact subject revision a review judges" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-findings.ts", "note": "findings attached to a review" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-flow.test.ts", "note": "the review flow end to end (re-ran green on GEX44 at the gated sha)" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-reality.test.ts", "note": "the opt-in live record (ORCA_CLAUDE_REALITY=1), Claude only; skipped in the phase-7 GEX44 run" },
+        { "kind": "file", "path": "src/main/runtime/rpc/methods/orchestration-reviews.test.ts", "note": "the review RPC methods" },
+        { "kind": "file", "path": "config/scripts/check-federation-ownership.mjs", "note": "ownership sweep: this branch edits no federation-owned file" },
+        { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.json", "note": "phase-7 evidence: MEASURED at rung gates, both GEX44 fences 677 passed / 0 failed" },
+        { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.md", "note": "what was run on GEX44 and what was not re-run" },
+        { "kind": "commit", "sha": "4aa2cf116", "note": "P4a: reviews bound to one revision" },
+        { "kind": "commit", "sha": "5c51b36ee", "note": "P4b: an unnamed builder is not independent" },
+        { "kind": "commit", "sha": "da3ec43c0", "note": "P4b: a review of a real agent's commit, run on a real provider (Claude only)" },
+        { "kind": "commit", "sha": "47558af87", "note": "the sealing note" }
+      ],
+      "reason": "measured 2026-09-30: federation's sealed review flow (P4a/P4b, reviews v31/v32) is contained in this branch (71dd7bc97 is the merge base, 0 commits behind at 997b4a55a) and its gates re-ran on GEX44 at 997b4a55a with both fences at 677 passed / 0 failed (tsc 0 errors, verdict MEASURED); a live independent review across TWO providers is UNPROVEN (federation's own live record da3ec43c0 is Claude only: independent -> failed/no-provider, any -> degraded-same-provider); no live provider spend in this phase; the four inherited mobile-aperture entries (orchestration.reviewRequest, orchestration.reviewShow, conversations.subscribe, conversations.unsubscribe) are federation debt; federation's RESUMPTION note cites live-review commit 2e8c5516a, which is not in the object store, so da3ec43c0 is cited instead."
     },
     {
       "id": 37,
