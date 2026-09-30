@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 const ROOT = process.cwd()
 const AGE_FILE = 'src/shared/node-measurement-age.ts'
 
-// Why: 05-04 creates the last two; each is reported not-yet-created, never clean (05-05 makes them required).
+// Why: every member is required; a missing file fails the sweep instead of reading as clean.
 const SCANNED = [
   'src/shared/fleet-placement.ts',
   'src/shared/fleet-resource-observation.ts',
@@ -36,11 +36,12 @@ describe('measurement age has one authority', () => {
     const report = SCANNED.map((rel) =>
       existsSync(join(ROOT, rel))
         ? { rel, state: hits(readRepo(rel)).length === 0 ? 'clean' : 'second-age-check' }
-        : { rel, state: 'not-yet-created' }
+        : { rel, state: 'missing' }
     )
+    expect(report.filter((r) => r.state === 'missing')).toEqual([])
     expect(report.filter((r) => r.state === 'second-age-check')).toEqual([])
-    // Why: the first four exist today; a rename must not silently drop them from the sweep.
-    expect(report.filter((r) => r.state === 'clean').length).toBeGreaterThanOrEqual(4)
+    // Why: a rename must not silently drop a member from the sweep.
+    expect(report.filter((r) => r.state === 'clean').length).toBe(SCANNED.length)
   })
 
   it('positive control: the scan finds a synthetic second check and the real authority', () => {
