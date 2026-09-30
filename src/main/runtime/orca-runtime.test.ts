@@ -28199,29 +28199,51 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    electronMocks.BrowserWindow.fromId.mockReturnValue({
-      isDestroyed: () => false,
-      webContents: { isDestroyed: () => false, send, setBackgroundThrottling }
-    })
+    const webContents = { isDestroyed: () => false, send, setBackgroundThrottling }
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false, webContents })
     abort.abort()
 
     // Why: a missing already-aborted guard would run down the 10 s reply timeout; race so it fails loudly.
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('waited for the create timeout')), 2_000)
     )
-    await expect(
-      Promise.race([
-        runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-          clientNavigationId: 'device-a',
-          signal: abort.signal
-        }),
-        timeout
-      ])
-    ).rejects.toThrow('client_disconnected')
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0][0]).toBe('terminal:requestTabCreate')
-    // Why: the renderer owns that spawn; the host never spawns on this path.
-    expect(spawn).not.toHaveBeenCalled()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      await expect(
+        Promise.race([
+          runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+            clientNavigationId: 'device-a',
+            signal: abort.signal
+          }),
+          timeout
+        ])
+      ).rejects.toThrow('client_disconnected')
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+      expect(send.mock.calls[0][0]).toBe('terminal:requestTabCreate')
+      // Why: the renderer owns that spawn; the host never spawns on this path.
+      expect(spawn).not.toHaveBeenCalled()
+      // Why: the throttle must stay held until the create's own bookkeeping ends, not when the caller leaves.
+      expect(setBackgroundThrottling).not.toHaveBeenCalledWith(true)
+
+      // The renderer replies after the caller is gone: the create still registers as if the caller were present.
+      const requestId = (send.mock.calls[0][1] as { requestId: string }).requestId
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        { requestId, tabId: 'tab-detached', title: 'Terminal' }
+      )
+      const pending = (
+        runtime as unknown as { pendingMobileTerminalCreatesByKey: Map<string, unknown> }
+      ).pendingMobileTerminalCreatesByKey
+      await vi.waitFor(() => expect(pending.has(`${TEST_WORKTREE_ID}::tab-detached`)).toBe(true))
+      expect(setBackgroundThrottling).not.toHaveBeenCalledWith(true)
+
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(pending.size).toBe(0)
+      expect(setBackgroundThrottling).toHaveBeenCalledWith(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('a headless runtime-owned create spawns even when its client already disconnected', async () => {
