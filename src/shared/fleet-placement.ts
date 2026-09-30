@@ -10,6 +10,7 @@ import {
   type FleetResourceSample,
   type FleetUnmeasuredOutcome
 } from './fleet-resource-observation'
+import type { FleetNodeResourcesObservation } from './node-resources'
 
 export type FleetPlacementMember = {
   address: ExecutionHostId
@@ -17,6 +18,8 @@ export type FleetPlacementMember = {
   identity: FleetHostIdentity
   facts: FleetHostFacts
   sample: FleetResourceSample
+  /** Disk, GPU and model readings; absent = not collected, which the manifest reports as unknown. */
+  nodeResources?: FleetNodeResourcesObservation
 }
 
 export type FleetPlacementRequest = {

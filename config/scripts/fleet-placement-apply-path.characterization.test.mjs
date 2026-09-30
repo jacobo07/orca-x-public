@@ -36,6 +36,11 @@ export const READ_ONLY_PROPOSAL_CONSUMERS = Object.freeze({
     reason:
       'calls planFleetPlacement and returns the proposal as RPC data; fleet.test.ts proves it never touches ctx.runtime'
   },
+  'src/shared/node-manifest.ts': {
+    role: 'read-only-projection',
+    reason:
+      'imports FleetPlacementMember/FleetObservation types only, to project them into a node manifest; never calls planFleetPlacement'
+  },
   'src/cli/fleet-placement-format.ts': {
     role: 'formatter',
     reason: 'formats a FleetPlacementViewResult into text and an exit code; reads reasons, never acts'
