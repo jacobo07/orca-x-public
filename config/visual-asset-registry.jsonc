@@ -95,6 +95,35 @@
       "sha256": "99160c1c211bc339f82e2b5e03595a46ff17d97430d165b19a55a947f6beec73",
       "date": "2026-09-21",
       "notes": "Rendered from docs/visual/producers/shell.global.desktop.at-rest.html at 1440x900 CSS, 2x (2880x1800). Corrects r01's two blocking deltas: the selected row is an accent surface plus data-current rather than a saturated fill, and the Spanish is right. All five status marks are the W1 tokens, UNKNOWN hollow among filled."
+    },
+    {
+      "assetId": "mission-brief.full.desktop.needs-you.r01",
+      "surface": "mission-brief",
+      "subsurface": "full",
+      "device": "desktop",
+      "state": "needs-you",
+      "revision": 1,
+      "class": "north-star",
+      "truth": "target",
+      "targetLabel": true,
+      "producer": "generated",
+      "status": "candidate",
+      "file": "mission-brief/mission-brief.full.desktop.needs-you.r01.png",
+      "sha256": "d18ea5b5ccb6a3d9eb4a32b44e5786e3acee464e4fcea8618fa5d5e2437e6693",
+      "date": "2026-09-29",
+      "provenance": {
+        "tool": "ChatGPT image generation (Owner-supplied download)",
+        "thread": "unknown: supplied by the Owner as a file, not produced in a recorded thread",
+        "sourcePath": "<DOWNLOADS>/Imagen de ChatGPT 29 sept 2026, 20_11_45.png",
+        "requestedSize": "unknown",
+        "actualSize": "1448x1086"
+      },
+      // Measured, not eyeballed: the card is 1204 px wide in a 1448 px image, the icon tiles
+      // 52 px and labels ~17.5 px, which is Orca's 963 px card / 40 px tile / 14 px text at a
+      // 1.25 device scale (Windows 125%). Its surfaces are a cool near-black (#111315 card,
+      // #1a1d1f insets) that Orca's neutral dark palette does not carry; the producer maps
+      // them to the nearest tokens rather than inventing new ones.
+      "notes": "The Mission Brief north star the Owner approved. Content is illustrative (a Shopify OAuth mission); the ~6-10 min estimate and the Shopify glyph have no record behind them in Orca and are not reproduced as data."
     }
   ]
 }
