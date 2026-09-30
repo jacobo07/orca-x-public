@@ -3,9 +3,8 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const here = path.dirname(fileURLToPath(import.meta.url))
+const here = import.meta.dirname
 const carrierHost = process.env.ORCA_HWF_CARRIER_HOST || 'gex44'
 const remoteVerbs = new Set(['create', 'status', 'witness', 'procs', 'teardown'])
 
@@ -20,7 +19,10 @@ function argValue(args, name) {
 }
 
 function utcStamp() {
-  return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')
+  return new Date()
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d+Z$/, 'Z')
 }
 
 function runRemoteVerb(verb, root, outFile) {
@@ -70,9 +72,13 @@ if (verb === 'new-root') {
     fail('usage: fetch-key <root> --to <dir>')
   }
   mkdirSync(dir, { recursive: true })
-  const r = spawnSync('scp', ['-o', 'BatchMode=yes', `${carrierHost}:${root}/client_key`, path.join(dir, 'client_key')], {
-    stdio: 'inherit'
-  })
+  const r = spawnSync(
+    'scp',
+    ['-o', 'BatchMode=yes', `${carrierHost}:${root}/client_key`, path.join(dir, 'client_key')],
+    {
+      stdio: 'inherit'
+    }
+  )
   process.exit(r.status ?? 1)
 } else if (verb === 'run-file') {
   const createFile = argValue(rest, '--create')
@@ -102,5 +108,7 @@ if (verb === 'new-root') {
   }
   process.exit(runRemoteVerb(verb, root, argValue(rest, '--out')))
 } else {
-  fail('usage: hwf-two-host-remote.mjs <new-root|create|status|witness|procs|teardown|fetch-key|run-file> ...')
+  fail(
+    'usage: hwf-two-host-remote.mjs <new-root|create|status|witness|procs|teardown|fetch-key|run-file> ...'
+  )
 }
