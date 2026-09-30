@@ -77,7 +77,7 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
 
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { interactive: true })
   })
 
   it('registers the provider before broadcasting connected authority', async () => {

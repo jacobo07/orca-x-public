@@ -16,6 +16,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       getTarget: vi.fn(),
       addTarget: vi.fn(),
       updateTarget: vi.fn(),
+      setHostKeyPin: vi.fn(),
       removeTarget: vi.fn(),
       importFromSshConfig: vi.fn().mockReturnValue([]),
       lastRepoReadoptions: [] as {
