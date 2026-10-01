@@ -41,7 +41,7 @@ function legacyIds(context: ProjectionContext): LegacyIds {
   const repos: Repo[] = context.runtime
     .listRepos()
     .map((repo) => ({ ...repo, gitRootIdentity: undefined, gitRootIdentityNoneReason: undefined }))
-  const projection = projectHostSetupProjectionFromRepos(repos)
+  const projection = projectHostSetupProjectionFromRepos(repos, undefined, { identityContext: [] })
   return {
     projects: projection.projects,
     setups: projection.setups,

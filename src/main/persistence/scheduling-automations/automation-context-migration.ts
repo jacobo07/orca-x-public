@@ -123,7 +123,8 @@ export function getAutomationContextsForRepo(
       sourceContext: null
     }
   }
-  const projection = projectHostSetupProjectionFromRepos([repo])
+  // Why: one repo cannot decide root identity (it depends on the repos not shown): the conservative repo: id.
+  const projection = projectHostSetupProjectionFromRepos([repo], undefined, { identityContext: [] })
   const projectedProject = projection.projects[0]
   const projectedSetup = projection.setups[0]
   const setup =

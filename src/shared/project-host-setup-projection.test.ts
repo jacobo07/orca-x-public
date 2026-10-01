@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getProjectIdentityKey,
+  isHostLocalProjectId,
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
   getProjectHostSetupWorktreeMeta,
@@ -7,6 +9,7 @@ import {
   getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
+import { buildRootIdentityEligibility } from './project-root-identity-key'
 import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName'>): Repo {
@@ -662,5 +665,178 @@ describe('derived project identity stability', () => {
       })
     ])
     expect(projection.projects.map((project) => project.id)).toEqual(['github:acme/app'])
+  })
+})
+
+describe('git-root project identity', () => {
+  const ROOT = 'a'.repeat(40)
+  const OTHER_ROOT = 'b'.repeat(40)
+
+  function rooted(
+    id: string,
+    overrides: Partial<Repo> = {},
+    rootCommit = ROOT,
+    commonDir = `/srv/${id}/.git`
+  ): Repo {
+    return repo({
+      id,
+      path: `/srv/${id}`,
+      displayName: id,
+      gitRemoteIdentity: null,
+      gitRootIdentity: { rootCommit, commonDir, shallow: false },
+      ...overrides
+    })
+  }
+
+  it('derives one project with two setups for a remote-less repo replicated on two hosts', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      rooted('laptop'),
+      rooted('gpu', { connectionId: 'gpu-vm' })
+    ])
+
+    expect(projection.projects.map((project) => project.id)).toEqual([`git-root:${ROOT}`])
+    expect(projection.projects[0]?.sourceRepoIds).toEqual(['laptop', 'gpu'])
+    expect(projection.setups.map((setup) => [setup.id, setup.hostId, setup.projectId])).toEqual([
+      ['laptop', 'local', `git-root:${ROOT}`],
+      ['gpu', 'ssh:gpu-vm', `git-root:${ROOT}`]
+    ])
+    expect(projection.identityCollisions).toEqual([])
+  })
+
+  it('keeps a same-host duplicate apart, reports it once, and lets the other host keep the key', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      rooted('laptop'),
+      rooted('gpu-main', { connectionId: 'gpu-vm' }),
+      rooted('gpu-fork', { connectionId: 'gpu-vm' })
+    ])
+
+    expect(projection.setups.map((setup) => [setup.id, setup.projectId])).toEqual([
+      ['laptop', `git-root:${ROOT}`],
+      ['gpu-main', 'repo:gpu-main'],
+      ['gpu-fork', 'repo:gpu-fork']
+    ])
+    expect(
+      projection.projects.find((project) => project.id === `git-root:${ROOT}`)?.sourceRepoIds
+    ).toEqual(['laptop'])
+    expect(projection.identityCollisions).toEqual([
+      {
+        kind: 'same-host-duplicate',
+        rootCommit: ROOT,
+        hostId: 'ssh:gpu-vm',
+        setupIds: ['gpu-fork', 'gpu-main']
+      }
+    ])
+  })
+
+  it('groups a linked worktree added as a repo with its main repository, without a record', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      rooted('main', {}, ROOT, '/srv/main/.git'),
+      rooted('linked', { path: '/srv/linked' }, ROOT, '/srv/main/.git')
+    ])
+
+    expect(projection.projects.map((project) => project.id)).toEqual([`git-root:${ROOT}`])
+    expect(projection.identityCollisions).toEqual([])
+  })
+
+  it('never joins a remote-less repo to a remote project that shares its root', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      rooted('plain'),
+      rooted('hosted', {
+        connectionId: 'gpu-vm',
+        gitRemoteIdentity: {
+          canonicalKey: 'git.example.com/team/app',
+          remoteName: 'origin',
+          remoteUrl: 'https://git.example.com/team/app.git'
+        }
+      })
+    ])
+
+    expect(projection.projects.map((project) => project.id).sort()).toEqual([
+      'git:git.example.com/team/app',
+      'repo:plain'
+    ])
+    expect(projection.identityCollisions).toEqual([
+      {
+        kind: 'shares-root-with-remote-project',
+        rootCommit: ROOT,
+        hostId: 'local',
+        setupIds: ['plain'],
+        projectIds: ['git:git.example.com/team/app']
+      }
+    ])
+  })
+
+  it('keeps provider and git remote identity above the root identity', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      rooted('github', { upstream: { owner: 'acme', repo: 'widget' } })
+    ])
+
+    expect(projection.projects.map((project) => project.id)).toEqual(['github:acme/widget'])
+  })
+
+  it('derives repo: for pending, settled-none and folder repos', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      rooted('pending', { gitRootIdentity: undefined }),
+      rooted('none', { gitRootIdentity: null, connectionId: 'a' }),
+      rooted('folder', { kind: 'folder', connectionId: 'b' }),
+      rooted('pending-remote', { gitRemoteIdentity: undefined, connectionId: 'c' })
+    ])
+
+    expect(projection.setups.map((setup) => setup.projectId)).toEqual([
+      'repo:pending',
+      'repo:none',
+      'repo:folder',
+      'repo:pending-remote'
+    ])
+  })
+
+  it('returns repo: from getProjectIdentityKey when no eligibility is supplied', () => {
+    const resolved = rooted('lone')
+
+    expect(getProjectIdentityKey(resolved)).toBe('repo:lone')
+    expect(getProjectIdentityKey(resolved, new Set(['lone']))).toBe(`git-root:${ROOT}`)
+    expect(getProjectIdentityKey(resolved, new Set())).toBe('repo:lone')
+  })
+
+  it('judges a projected subset against the full context, and a lone repo against none', () => {
+    const laptop = rooted('laptop')
+    const gpuMain = rooted('gpu-main', { connectionId: 'gpu-vm' })
+    const gpuFork = rooted('gpu-fork', { connectionId: 'gpu-vm' })
+    const all = [laptop, gpuMain, gpuFork]
+
+    // The collision is only visible in the context: the shown subset holds one GPU repo.
+    const subset = projectHostSetupProjectionFromRepos([laptop, gpuMain], undefined, {
+      identityContext: all
+    })
+    const blind = projectHostSetupProjectionFromRepos([laptop, gpuMain])
+    const conservative = projectHostSetupProjectionFromRepos([laptop, gpuMain], undefined, {
+      identityContext: []
+    })
+
+    expect(subset.setups.map((setup) => setup.projectId)).toEqual([
+      `git-root:${ROOT}`,
+      'repo:gpu-main'
+    ])
+    expect(blind.setups.map((setup) => setup.projectId)).toEqual([
+      `git-root:${ROOT}`,
+      `git-root:${ROOT}`
+    ])
+    expect(conservative.setups.map((setup) => setup.projectId)).toEqual([
+      'repo:laptop',
+      'repo:gpu-main'
+    ])
+    expect(subset.identityCollisions).toHaveLength(1)
+  })
+
+  it('keeps roots apart and leaves the host-local predicate on repo: only', () => {
+    const projection = projectHostSetupProjectionFromRepos([
+      rooted('one'),
+      rooted('two', { connectionId: 'gpu-vm' }, OTHER_ROOT)
+    ])
+
+    expect(projection.projects).toHaveLength(2)
+    expect(isHostLocalProjectId('repo:one')).toBe(true)
+    expect(isHostLocalProjectId(`git-root:${ROOT}`)).toBe(false)
+    expect(buildRootIdentityEligibility([rooted('one')]).eligibleRepoIds.has('one')).toBe(true)
   })
 })

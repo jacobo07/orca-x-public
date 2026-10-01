@@ -25,6 +25,7 @@ import type {
   ProjectUpdateArgs
 } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { buildRootIdentityEligibility } from '../../../../shared/project-root-identity-key'
 import {
   getProjectIdentityKey,
   mergeCatalogCreatedAt,
@@ -536,7 +537,8 @@ async function fetchProjectHostSetupCompatibility(
     }
   } catch {
     // Why: newer clients must hydrate against older runtimes that only know repo.list; derive the transitional model locally.
-    return projectHostSetupProjectionFromRepos(repos)
+    // These repos are one host's, so root identity is not judged here: the conservative repo: derivation.
+    return projectHostSetupProjectionFromRepos(repos, undefined, { identityContext: [] })
   }
 }
 
@@ -1073,13 +1075,17 @@ function mergeFetchedReposForHost(
 
 function applyInheritedProjectGroups(previous: readonly Repo[], fetched: readonly Repo[]): Repo[] {
   const projectGroupIdByProject = new Map<string, string | null>()
+  // Why: root identity is judged over every repo seen so far; a fetched row replaces its previous copy.
+  const { eligibleRepoIds } = buildRootIdentityEligibility([
+    ...new Map([...previous, ...fetched].map((repo) => [repo.id, repo])).values()
+  ])
   for (const repo of previous) {
     const projectGroupId =
       repo.projectGroupId === undefined ? undefined : (repo.projectGroupId ?? null)
     if (projectGroupId === undefined) {
       continue
     }
-    const projectId = getProjectIdentityKey(repo)
+    const projectId = getProjectIdentityKey(repo, eligibleRepoIds)
     if (projectId.startsWith('repo:')) {
       continue
     }
@@ -1094,7 +1100,9 @@ function applyInheritedProjectGroups(previous: readonly Repo[], fetched: readonl
     if (repo.projectGroupId !== undefined) {
       return repo
     }
-    const inheritedProjectGroupId = projectGroupIdByProject.get(getProjectIdentityKey(repo))
+    const inheritedProjectGroupId = projectGroupIdByProject.get(
+      getProjectIdentityKey(repo, eligibleRepoIds)
+    )
     if (inheritedProjectGroupId === undefined) {
       return repo
     }

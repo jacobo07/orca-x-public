@@ -67,7 +67,10 @@ function getProjectSetupModel({
   if (eligibleRepos.length === 0) {
     return null
   }
-  const projection = projectHostSetupProjectionFromRepos(eligibleRepos)
+  // Why: eligibleRepos is a filtered subset with no full list in scope, so root identity is not judged here.
+  const projection = projectHostSetupProjectionFromRepos(eligibleRepos, undefined, {
+    identityContext: []
+  })
   return {
     projects: projection.projects,
     setups: projection.setups
@@ -228,7 +231,10 @@ export function resolveWorkspaceCreationTarget(
     focusedLegacyRepo ?? (legacyCandidates.length === 1 ? legacyCandidates[0] : null)
   let legacyTarget: WorkspaceCreationTarget | null = null
   if (legacyRepo) {
-    const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
+    // Why: one repo cannot decide root identity (it depends on the repos not shown): the conservative repo: id.
+    const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo], undefined, {
+      identityContext: []
+    }).setups[0]
     const legacyHostId = getRepoExecutionHostId(legacyRepo)
     const legacySetup =
       setups.find(

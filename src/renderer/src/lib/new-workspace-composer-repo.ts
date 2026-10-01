@@ -5,6 +5,7 @@ import {
   resolveNewWorkspaceDialogRepoId
 } from '../../../shared/new-workspace-dialog-repo'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
+import { buildRootIdentityEligibility } from '../../../shared/project-root-identity-key'
 import type { Repo } from '../../../shared/repo-types'
 
 export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
@@ -29,8 +30,12 @@ export function resolveComposerActiveRepoId(
   if (!activeRepo || !isRuntimeOwnedSshTargetId(activeRepo.connectionId)) {
     return activeRepoId
   }
-  const projectKey = getProjectIdentityKey(activeRepo)
-  const sibling = eligibleRepos.find((repo) => getProjectIdentityKey(repo) === projectKey)
+  // Why: eligibleRepos is a filtered subset; root identity is judged over the full repo list.
+  const { eligibleRepoIds } = buildRootIdentityEligibility(repos)
+  const projectKey = getProjectIdentityKey(activeRepo, eligibleRepoIds)
+  const sibling = eligibleRepos.find(
+    (repo) => getProjectIdentityKey(repo, eligibleRepoIds) === projectKey
+  )
   return sibling?.id ?? activeRepoId
 }
 
