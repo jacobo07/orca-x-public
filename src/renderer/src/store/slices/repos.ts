@@ -660,6 +660,15 @@ function getReposById(repos: readonly Repo[]): Map<string, Repo[]> {
   return reposById
 }
 
+// Why: desktop persistence owns local and direct-SSH rows, so a local refresh is authoritative for
+// both; runtime rows stay owned by their remote Orca server. Setups and projects must share this rule.
+function fetchedCatalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
+  if (catalogHostId !== LOCAL_EXECUTION_HOST_ID) {
+    return rowHostId === catalogHostId
+  }
+  return rowHostId === LOCAL_EXECUTION_HOST_ID || parseExecutionHostId(rowHostId)?.kind === 'ssh'
+}
+
 function getSourceRepoIdsOutsideHost(
   project: Project,
   reposById: ReadonlyMap<string, readonly Repo[]>,
@@ -667,7 +676,7 @@ function getSourceRepoIdsOutsideHost(
 ): string[] {
   return project.sourceRepoIds.filter((repoId) => {
     const repos = reposById.get(repoId) ?? []
-    return repos.some((repo) => getRepoExecutionHostId(repo) !== hostId)
+    return repos.some((repo) => !fetchedCatalogOwnsHost(hostId, getRepoExecutionHostId(repo)))
   })
 }
 
@@ -918,14 +927,10 @@ function mergeFetchedProjectCompatibilityForHost({
   repos: readonly Repo[]
   hostId: string
 }): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return setup.hostId === hostId
-    }
-    const owner = parseExecutionHostId(setup.hostId)
-    // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
-    return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
-  }
+  const catalogOwns = (rowHostId: string): boolean => fetchedCatalogOwnsHost(hostId, rowHostId)
+  const ownsAnyHost = (hostIds: ReadonlySet<string>): boolean => [...hostIds].some(catalogOwns)
+  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean =>
+    catalogOwns(setup.hostId)
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
   const preservedSetups = previous.projectHostSetups.filter(
     (setup) => !setupBelongsToFetchedCatalog(setup)
@@ -951,7 +956,7 @@ function mergeFetchedProjectCompatibilityForHost({
   )
   const projectHasCurrentOwnerOutsideHost = (project: Project): boolean => {
     for (const ownerHostId of currentProjectOwnerHostIds(project)) {
-      if (ownerHostId !== hostId) {
+      if (!catalogOwns(ownerHostId)) {
         return true
       }
     }
@@ -962,8 +967,8 @@ function mergeFetchedProjectCompatibilityForHost({
       const previousProject = previousProjectById.get(project.id)
       // Why: repo-derived compatibility projects include every host; a one-host refresh should only reconcile or prune that host's ownership.
       return (
-        fetchedProjectHostIds(project).has(hostId) ||
-        (previousProject ? previousProjectHostIds(previousProject).has(hostId) : false)
+        ownsAnyHost(fetchedProjectHostIds(project)) ||
+        (previousProject ? ownsAnyHost(previousProjectHostIds(previousProject)) : false)
       )
     })
     .map((project) => {
@@ -981,7 +986,7 @@ function mergeFetchedProjectCompatibilityForHost({
   const preservedProjects = previous.projects.filter(
     (project) =>
       !fetchedProjectIds.has(project.id) &&
-      (!previousProjectHostIds(project).has(hostId) || projectHasCurrentOwnerOutsideHost(project))
+      (!ownsAnyHost(previousProjectHostIds(project)) || projectHasCurrentOwnerOutsideHost(project))
   )
   // Why: both merges always allocate (sourceRepoIds is rebuilt per project, and fetched setups
   // arrive freshly cloned over IPC), so reconcile against `previous` to recover identity when a
