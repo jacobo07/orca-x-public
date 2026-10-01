@@ -4,7 +4,12 @@ import path from 'node:path'
 
 import { expect, test } from './helpers/orca-app'
 import { scanLaptopForContentNonces } from './helpers/hwf-two-host-absence-scan'
+import { probeHwfClientSurfaces } from './helpers/hwf-two-host-agent-launch'
 import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
+import {
+  createRuntimeDesktopPairingOffer,
+  launchPairedWebClient
+} from './helpers/paired-electron-client'
 import {
   connectHwfTargetWithTrust,
   disconnectHwfTarget,
@@ -116,6 +121,55 @@ test.describe('two-host remote-first continuity', () => {
       }
       expect(scan.verdict).toBe('PASS')
     } finally {
+      if (targetId) {
+        await disconnectHwfTarget(orcaPage, targetId).catch(() => undefined)
+      }
+      await carrier.kill()
+    }
+  })
+
+  test('probes what the two clients expose on the owning host', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(600_000)
+    const run = readHwfRunFile()
+    const localPort = readHwfLocalPort()
+    await waitForSessionReady(orcaPage)
+    const carrier = await startHwfCarrier(run, localPort)
+    let targetId: string | null = null
+    let webClient: Awaited<ReturnType<typeof launchPairedWebClient>> | null = null
+    try {
+      const connected = await connectHwfTargetWithTrust(orcaPage, run, localPort)
+      targetId = connected.targetId
+      expect(connected.pin).toBe(run.fingerprint)
+      const hydrated = await hydrateHwfRemoteRepo(orcaPage, connected, run.repo)
+      await waitForActiveTerminalManager(orcaPage, 45_000)
+      await waitForActivePanePtyId(orcaPage, 45_000)
+
+      const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+      webClient = await launchPairedWebClient(electronApp, offer)
+      const executionHostId = `ssh:${encodeURIComponent(connected.targetId)}`
+      await expect
+        .poll(
+          () =>
+            webClient!.page.evaluate(
+              ({ id, hostId }) =>
+                Object.values(window.__store?.getState().worktreesByRepo ?? {})
+                  .flat()
+                  .some((worktree) => worktree.id === id && worktree.hostId === hostId),
+              { id: hydrated.worktreeId, hostId: executionHostId }
+            ),
+          { timeout: 30_000, message: 'web client never saw the SSH worktree' }
+        )
+        .toBe(true)
+
+      const probe = await probeHwfClientSurfaces(orcaPage, webClient.page)
+      console.log(`HWF_PROBE_WEB_GIT_COMMIT=${probe.webGitCommit}`)
+      console.log(`HWF_PROBE_WEB_AGENT_STATUS=${probe.webAgentStatus}`)
+      console.log(`HWF_PROBE_SSH_AGENT_MENU=${probe.sshAgentMenu}`)
+    } finally {
+      await webClient?.dispose().catch(() => undefined)
       if (targetId) {
         await disconnectHwfTarget(orcaPage, targetId).catch(() => undefined)
       }

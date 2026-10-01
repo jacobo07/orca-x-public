@@ -124,6 +124,18 @@ PROBE
     SP=$(sshd_pid)
     if [ "$SP" != 0 ] && kill -0 "$SP" 2>/dev/null; then via_private_sshd "bash -l $ROOT/probe.sh"; fi
     ;;
+  install-stub)
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    mkdir -p "$ROOT/bin"
+    # Marker is split across printf args so the typed command never contains the joined text.
+    cat > "$ROOT/bin/hwf-agent-stub" <<'STUB'
+#!/usr/bin/env bash
+printf '%s%s\n' 'HWF_AGENT_STUB_' 'READY'
+while read -r _; do :; done
+STUB
+    chmod +x "$ROOT/bin/hwf-agent-stub"
+    echo "STUB=$ROOT/bin/hwf-agent-stub"
+    ;;
   witness)
     REAL_HOME=$(getent passwd "$USER_NAME" | cut -d: -f6)
     if [ -f "$REAL_HOME/.ssh/known_hosts" ]; then

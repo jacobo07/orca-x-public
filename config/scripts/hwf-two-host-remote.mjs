@@ -6,7 +6,7 @@ import path from 'node:path'
 
 const here = import.meta.dirname
 const carrierHost = process.env.ORCA_HWF_CARRIER_HOST || 'gex44'
-const remoteVerbs = new Set(['create', 'status', 'witness', 'procs', 'teardown'])
+const remoteVerbs = new Set(['create', 'status', 'witness', 'procs', 'teardown', 'install-stub'])
 
 function fail(message) {
   console.error(message)
