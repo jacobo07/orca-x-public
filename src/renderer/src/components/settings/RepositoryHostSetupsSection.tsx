@@ -1,10 +1,5 @@
 import { useMemo, useState } from 'react'
-import {
-  getExecutionHostLabel,
-  parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { getExecutionHostLabel, type ExecutionHostId } from '../../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -20,16 +15,9 @@ import { SettingsBadge } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
-import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
+import { buildSetupHostOptions } from './repository-host-setup-options'
+import { deriveRepositoryHostSetupRowState } from './repository-host-setup-row-state'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
-import {
-  selectRuntimeAwareSshStatus,
-  selectRuntimeAwareSshTargetLabel
-} from '@/store/slices/runtime-environment-ssh'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {
   repo: Repo
@@ -216,93 +204,24 @@ export function RepositoryHostSetupsSection({
       </div>
       <div className="divide-y divide-border rounded-md border border-border">
         {projectHostSetups.map((setup) => {
-          const executionHost = parseExecutionHostId(setup.executionHostId ?? setup.hostId)
-          const transportHost = parseExecutionHostId(setup.hostId)
-          const runtimeOwnerEnvironmentId =
-            setup.runtimeOwnerEnvironmentId?.trim() ||
-            (transportHost?.kind === 'runtime' ? transportHost.environmentId : null)
-          // Why: share one host-health derivation with the status bar so a degraded
-          // owner can never read "Ready" here and "Connected"/"Disconnected" there.
-          const runtimeOwnerStatusEntry = runtimeOwnerEnvironmentId
-            ? runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
-            : undefined
-          const runtimeOwnerState = runtimeOwnerEnvironmentId
-            ? runtimeHostConnectionState({
-                hasStatusEntry: Boolean(runtimeOwnerStatusEntry),
-                status: runtimeOwnerStatusEntry?.status
-              })
-            : null
-          const runtimeOwnerReachable =
-            runtimeOwnerState === null || isConnectedRuntimeHostState(runtimeOwnerState)
-          const runtimeOwnerWorkspaceWindowClosed = runtimeOwnerState === 'workspace-window-closed'
-          const runtimeOwnerHostId = runtimeOwnerEnvironmentId
-            ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
-            : null
-          const runtimeOwnerHostLabel = runtimeOwnerHostId
-            ? (hostOptionById.get(runtimeOwnerHostId)?.label ??
-              getExecutionHostLabel(runtimeOwnerHostId))
-            : ''
-          const nestedSshStatus =
-            runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
-              ? selectRuntimeAwareSshStatus(
-                  {
-                    sshConnectionStates,
-                    sshTargetLabels,
-                    removedSshTargetLabels,
-                    sshTargetsHydrated,
-                    sshStateByEnvironment,
-                    runtimeStatusByEnvironmentId
-                  },
-                  runtimeOwnerEnvironmentId,
-                  executionHost.targetId
-                )
-              : undefined
-          const setupReady =
-            setup.setupState === 'ready' &&
-            runtimeOwnerReachable &&
-            !runtimeOwnerWorkspaceWindowClosed &&
-            (nestedSshStatus === undefined || nestedSshStatus === 'connected')
-          const setupStateLabel = !runtimeOwnerReachable
-            ? translate(
-                'auto.components.settings.RepositoryPane.hostStateDisconnected',
-                'Disconnected'
-              )
-            : runtimeOwnerWorkspaceWindowClosed
-              ? translate(
-                  'auto.components.settings.RepositoryPane.hostStateWorkspaceWindowClosed',
-                  'Workspace window closed'
-                )
-              : nestedSshStatus === null
-                ? translate('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
-                : nestedSshStatus !== undefined && nestedSshStatus !== 'connected'
-                  ? translate(
-                      'auto.components.settings.RepositoryPane.hostStateDisconnected',
-                      'Disconnected'
-                    )
-                  : getSetupStateLabel(setup.setupState)
-          const setupHostLabel =
-            runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
-              ? translate(
-                  'auto.components.settings.RepositoryPane.nestedHostLabel',
-                  '{{value0}} via {{value1}}',
-                  {
-                    value0: selectRuntimeAwareSshTargetLabel(
-                      {
-                        sshConnectionStates,
-                        sshTargetLabels,
-                        removedSshTargetLabels,
-                        sshTargetsHydrated,
-                        sshStateByEnvironment,
-                        runtimeStatusByEnvironmentId
-                      },
-                      runtimeOwnerEnvironmentId,
-                      executionHost.targetId
-                    ),
-                    value1:
-                      hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId)
-                  }
-                )
-              : (hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId))
+          const {
+            setupReady,
+            setupStateLabel,
+            setupHostLabel,
+            runtimeOwnerWorkspaceWindowClosed,
+            runtimeOwnerHostLabel
+          } = deriveRepositoryHostSetupRowState({
+            setup,
+            hostOptionById,
+            store: {
+              sshConnectionStates,
+              sshTargetLabels,
+              removedSshTargetLabels,
+              sshTargetsHydrated,
+              sshStateByEnvironment,
+              runtimeStatusByEnvironmentId
+            }
+          })
           const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
           const canOpenSetup = setup.repoId.trim().length > 0
           const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
