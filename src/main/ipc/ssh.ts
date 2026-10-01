@@ -24,6 +24,8 @@ import type {
   SshConfigHostListArgs,
   SshRepoReadoption,
   SshTarget,
+  SshHostKeyPin,
+  SshHostIdentityStatus,
   SshConnectionStatus,
   SshConnectionState,
   DirectSshAuthority
@@ -45,6 +47,14 @@ import {
 } from '../ports/ssh-advertised-url-enrichment'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
+import {
+  registerHostKeyTrustHandler,
+  requestHostKeyTrust,
+  resetHostKeyTrustPromptsForTests
+} from './ssh-host-key-trust-prompt'
+import { describeHostKeyRefusalForOwner } from './ssh-host-key-refusal-copy'
+import { hostIdentityForRefusal, isSshHostKeyRefusedError } from '../ssh/ssh-host-key-pin-verifier'
+import { resolveSshHostIdentityStatus } from '../../shared/ssh-host-key-pin-shape'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -90,6 +100,7 @@ const SSH_IPC_CHANNELS = [
   'ssh:getState',
   'ssh:needsPassphrasePrompt',
   'ssh:testConnection',
+  'ssh:replaceHostKeyPin',
   'ssh:addPortForward',
   'ssh:updatePortForward',
   'ssh:removePortForward',
@@ -99,6 +110,12 @@ const SSH_IPC_CHANNELS = [
 
 // Why: keep this outside registerSshHandlers so a BrowserWindow recreation mid-connect doesn't split credential tracking.
 const credentialRequestedForTarget = new Set<string>()
+
+// Why: replace-pin deletes the pin, so the next trust prompt can only show what it replaced if we remember it here.
+const replacedPinFingerprintByTarget = new Map<string, string>()
+
+// Why: a refused connection is dropped from the manager, so this is the only memory of its verdict for identity counts.
+const hostKeyRefusalByTarget = new Map<string, SshHostIdentityStatus>()
 
 function getCurrentMainWindow(): BrowserWindow | null {
   return currentGetMainWindow()
@@ -118,6 +135,20 @@ export function getRegisteredSshState(targetId: string): SshConnectionState | un
 /** Public targets for runtime RPC clients — same list the desktop renderer gets. */
 export function listRegisteredSshTargets(): SshTarget[] {
   return sshStore?.listTargets() ?? []
+}
+
+/** Identity status per saved target, derived now: the live connection outranks the saved pin. */
+export function listSshHostIdentities(): { targetId: string; status: SshHostIdentityStatus }[] {
+  if (!sshStore) {
+    throw new Error('ssh_handlers_not_registered')
+  }
+  return sshStore.listTargets().map((target) => ({
+    targetId: target.id,
+    status: resolveSshHostIdentityStatus(
+      target,
+      connectionManager?.getState(target.id)?.hostIdentity ?? hostKeyRefusalByTarget.get(target.id)
+    )
+  }))
 }
 
 /** Removed-target id → last known label, for ghost-host display on paired clients. */
@@ -149,6 +180,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
       )
     }
     persistedStore?.removeSshRemotePtyLeases(targetId)
+    hostKeyRefusalByTarget.delete(targetId)
     store.removeTarget(targetId)
   })
 }
@@ -675,6 +707,41 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
       credentialRequestedForTarget.add(targetId)
       return requestCredential(getCurrentMainWindow, targetId, kind, detail)
     },
+    // Why: this callback is the only writer of a trust pin; it persists (flushed) before the connection may retry, and never touches credentialRequestedForTarget.
+    onHostKeyTrustRequest: async (targetId, request) => {
+      const target = sshStore?.getTarget(targetId)
+      if (!target) {
+        return null
+      }
+      const previousFingerprint = replacedPinFingerprintByTarget.get(targetId)
+      const trusted = await requestHostKeyTrust(getCurrentMainWindow, {
+        targetId,
+        label: target.label,
+        host: request.host,
+        port: request.port,
+        offeredFingerprint: request.fingerprint,
+        ...(request.algorithm ? { algorithm: request.algorithm } : {}),
+        ...(previousFingerprint ? { previousFingerprint } : {})
+      })
+      if (!trusted) {
+        return null
+      }
+      const pin: SshHostKeyPin = {
+        fingerprint: request.fingerprint,
+        ...(request.algorithm ? { algorithm: request.algorithm } : {}),
+        ...(request.publicKeyBase64 ? { publicKeyBase64: request.publicKeyBase64 } : {}),
+        host: request.host,
+        port: request.port,
+        pinnedAt: Date.now(),
+        source: 'tofu-confirmed'
+      }
+      const saved = sshStore!.setHostKeyPin(targetId, pin)
+      if (!saved?.hostKeyPin) {
+        return null
+      }
+      replacedPinFingerprintByTarget.delete(targetId)
+      return saved.hostKeyPin
+    },
     onStateChange: (targetId: string, state: SshConnectionState) => {
       if (testingTargets.has(targetId)) {
         return
@@ -961,6 +1028,7 @@ export function registerSshHandlers(
   registerAdvertisedUrlRefresh(getCurrentMainWindow)
 
   registerCredentialHandler(getCurrentMainWindow)
+  registerHostKeyTrustHandler(getCurrentMainWindow)
 
   const callbacks = createSshConnectionCallbacks()
   if (connectionManager) {
@@ -1015,7 +1083,9 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:addTarget', (_event, args: { target: Omit<SshTarget, 'id'> }) => {
-    const target = sshStore!.addTarget(args.target)
+    // Why: a pin is trust; a renderer-supplied one must never reach the store.
+    const { hostKeyPin: _untrusted, ...unpinnedTarget } = args.target
+    const target = sshStore!.addTarget(unpinnedTarget)
     // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
     const repoReadoptions = takeRepoReadoptions()
     return { target, repoReadoptions }
@@ -1024,7 +1094,37 @@ export function registerSshHandlers(
   ipcMain.handle(
     'ssh:updateTarget',
     (_event, args: { id: string; updates: Partial<Omit<SshTarget, 'id'>> }) => {
-      return sshStore!.updateTarget(args.id, args.updates)
+      const { hostKeyPin: _untrusted, ...unpinnedUpdates } = args.updates
+      return sshStore!.updateTarget(args.id, unpinnedUpdates)
+    }
+  )
+
+  // Why: the only IPC that discards a pin, and only for the fingerprint the person was shown.
+  ipcMain.handle(
+    'ssh:replaceHostKeyPin',
+    (
+      _event,
+      args: { targetId: string; expectedPreviousFingerprint: string }
+    ):
+      | { replaced: true }
+      | { replaced: false; reason: 'target_not_found' | 'no_pin' | 'stale_pin' } => {
+      const target = sshStore!.getTarget(args.targetId)
+      if (!target) {
+        return { replaced: false, reason: 'target_not_found' }
+      }
+      if (!target.hostKeyPin) {
+        return { replaced: false, reason: 'no_pin' }
+      }
+      if (target.hostKeyPin.fingerprint !== args.expectedPreviousFingerprint) {
+        return { replaced: false, reason: 'stale_pin' }
+      }
+      sshStore!.setHostKeyPin(args.targetId, null)
+      hostKeyRefusalByTarget.delete(args.targetId)
+      replacedPinFingerprintByTarget.set(args.targetId, target.hostKeyPin.fingerprint)
+      console.info(
+        `[ssh-host-key] pin replaced for ${args.targetId}: previous ${target.hostKeyPin.fingerprint} at ${new Date().toISOString()}`
+      )
+      return { replaced: true }
     }
   )
 
@@ -1055,7 +1155,11 @@ export function registerSshHandlers(
 
   // ── Connection lifecycle ───────────────────────────────────────────
 
-  async function connectTarget(targetId: string): Promise<SshConnectionState> {
+  // Why: `interactive` is set only by the ssh:connect handler; runtime RPC and other callers cannot confirm a host key.
+  async function connectTarget(
+    targetId: string,
+    options?: { interactive?: boolean }
+  ): Promise<SshConnectionState> {
     const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
     if (e2eProbePath) {
       appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
@@ -1095,7 +1199,7 @@ export function registerSshHandlers(
     assertSshConnectsNotFenced()
 
     pendingTransportReconnects.delete(targetId)
-    const promise = doConnect(targetId, replacePendingTransport)
+    const promise = doConnect(targetId, replacePendingTransport, options?.interactive === true)
     const attempt = { authority: getSshProviderAuthority(targetId), promise }
     connectInFlight.set(targetId, attempt)
     try {
@@ -1107,16 +1211,18 @@ export function registerSshHandlers(
     }
   }
 
-  registeredConnectSshTarget = connectTarget
+  // Why: the wrapper drops `options` so no runtime/RPC caller can claim interactivity.
+  registeredConnectSshTarget = (targetId: string) => connectTarget(targetId)
   registeredGetSshState = (targetId: string) => getPublicSshState(targetId)
 
   ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    return connectTarget(args.targetId)
+    return connectTarget(args.targetId, { interactive: true })
   })
 
   async function doConnect(
     targetId: string,
-    replacePendingTransport = false
+    replacePendingTransport = false,
+    interactive = false
   ): Promise<SshConnectionState> {
     const target = sshStore!.getTarget(targetId)
     if (!target) {
@@ -1207,7 +1313,9 @@ export function registerSshHandlers(
       conn && conn !== priorConnection ? conn : null
 
     try {
-      conn = await connectionManager!.connect(target)
+      conn = interactive
+        ? await connectionManager!.connect(target, { interactive: true })
+        : await connectionManager!.connect(target)
       if (!ownsSession()) {
         throw createCancelledConnectAttemptError()
       }
@@ -1224,11 +1332,22 @@ export function registerSshHandlers(
       await abandonFailedSshSession(targetId, session)
       clearRelayLostBackoff(targetId)
       clearRelayStateOverride(targetId)
+      if (isSshHostKeyRefusedError(err)) {
+        hostKeyRefusalByTarget.set(targetId, hostIdentityForRefusal(err.reason))
+      } else {
+        hostKeyRefusalByTarget.delete(targetId)
+      }
+      // Why: the connection is dropped after a refusal, so this broadcast is the only place its host-identity verdict reaches the renderer.
       broadcastSshState(getCurrentMainWindow, targetId, {
         targetId,
         status,
-        error: errObj.message,
-        reconnectAttempt: 0
+        error: isSshHostKeyRefusedError(err)
+          ? describeHostKeyRefusalForOwner(err, target.label)
+          : errObj.message,
+        reconnectAttempt: 0,
+        ...(isSshHostKeyRefusedError(err)
+          ? { hostIdentity: hostIdentityForRefusal(err.reason) }
+          : {})
       })
       throw err
     }
@@ -1248,12 +1367,16 @@ export function registerSshHandlers(
 
       // Why: we manually pushed `deploying-relay`, so send `connected` straight to the renderer — routing through onStateChange would trigger reconnect logic.
       clearRelayStateOverride(targetId)
+      hostKeyRefusalByTarget.delete(targetId)
+      // Why: this broadcast replaces the transport's state, so without it the card cannot tell a delegated host from a pinned one.
+      const hostIdentity = connectionManager!.getState(targetId)?.hostIdentity
       broadcastSshState(getCurrentMainWindow, targetId, {
         targetId,
         status: 'connected',
         error: null,
         reconnectAttempt: 0,
-        supportsFolderDownload: conn.usesSystemSshTransport?.() !== true
+        supportsFolderDownload: conn.usesSystemSshTransport?.() !== true,
+        ...(hostIdentity ? { hostIdentity } : {})
       })
     } catch (err) {
       if (!ownsSession()) {
@@ -1478,7 +1601,7 @@ export function registerSshHandlers(
     const probe = (async () => {
       // Why: a probe transport opened after the shutdown drain would outlive orderly teardown.
       assertSshConnectsNotFenced()
-      const conn = await connectionManager!.connect(target)
+      const conn = await connectionManager!.connect(target, { interactive: true })
       const state = conn.getState()
       await connectionManager!.disconnect(args.targetId)
       return state
@@ -1489,7 +1612,11 @@ export function registerSshHandlers(
     } catch (err) {
       return {
         success: false,
-        error: err instanceof Error ? err.message : String(err)
+        error: isSshHostKeyRefusedError(err)
+          ? describeHostKeyRefusalForOwner(err, target.label)
+          : err instanceof Error
+            ? err.message
+            : String(err)
       }
     } finally {
       testConnectionProbes.delete(probe)
@@ -1773,6 +1900,8 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   testingTargets.clear()
   testConnectionProbes.clear()
   credentialRequestedForTarget.clear()
+  replacedPinFingerprintByTarget.clear()
+  resetHostKeyTrustPromptsForTests()
   quitTeardownStartGate.resetForTests()
   sshShutdownDrain = null
 

@@ -222,7 +222,10 @@ export function RemoteServerFields({
         ) : null}
       </div>
       {parsedLink.ok ? (
-        <div className="space-y-1 rounded-md border border-border/60 p-3">
+        <div
+          className="space-y-1 rounded-md border border-border/60 p-3"
+          data-add-server-link-destination={parsedLink.value.endpointKind}
+        >
           <div className="flex items-center gap-2 text-xs font-medium">
             {translate(
               'auto.components.sidebar.AddRemoteHostDialog.linkDestination',

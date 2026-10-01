@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   argvRequestsServeMode,
   findServeSubcommandIndex,
-  normalizeServeModeArgv
+  normalizeServeModeArgv,
+  parseServeBindHost,
+  readServeBindHostArg
 } from './serve-mode-argv'
 
 describe('serve-mode-argv', () => {
@@ -204,5 +206,76 @@ describe('serve-mode-argv', () => {
     walk([])
 
     expect(disagreements).toEqual([])
+  })
+
+  it('rewrites --bind-host into --serve-bind-host and does not treat its value as positional (DWS-P2)', () => {
+    expect(
+      normalizeServeModeArgv(['/AppRun', 'serve', '--bind-host', '127.0.0.1', '--port', '6791'])
+    ).toEqual(['/AppRun', '--serve', '--serve-bind-host', '127.0.0.1', '--serve-port', '6791'])
+    // Why: the IP literal after --bind-host must be consumed as a value, never mistaken for a
+    // later `serve` subcommand or positional (mirrors the existing --user-data-dir case).
+    expect(findServeSubcommandIndex(['app', '--bind-host', 'serve'])).toBe(-1)
+  })
+
+  it('parseServeBindHost accepts IP literals and localhost, rejects everything else (DWS-P2)', () => {
+    expect(parseServeBindHost(null)).toBeNull()
+    expect(parseServeBindHost('127.0.0.1')).toBe('127.0.0.1')
+    expect(parseServeBindHost('::1')).toBe('::1')
+    expect(parseServeBindHost('localhost')).toBe('localhost')
+    // Why 0.0.0.0 is accepted: it is a deliberate, explicit operator choice (all-interfaces bind
+    // via the same option), distinct from the implicit exposeNetworkByDefault default.
+    expect(parseServeBindHost('0.0.0.0')).toBe('0.0.0.0')
+
+    expect(() => parseServeBindHost('example.com')).toThrow(
+      'Invalid --serve-bind-host value: example.com'
+    )
+    expect(() => parseServeBindHost('127.0.0.1:6791')).toThrow(
+      'Invalid --serve-bind-host value: 127.0.0.1:6791'
+    )
+    expect(() => parseServeBindHost('   ')).toThrow('Invalid --serve-bind-host value:    ')
+    // Why: isIP accepts a zone id, but no ws:// URL can carry one.
+    expect(() => parseServeBindHost('fe80::1%eth0')).toThrow(
+      'Invalid --serve-bind-host value: fe80::1%eth0'
+    )
+  })
+
+  it('readServeBindHostArg fails closed on a present flag with no usable value (DWS-P2 CR-01)', () => {
+    // Why: valueAfter() used to return null for these, i.e. "no pin", and serve bound 0.0.0.0.
+    for (const argv of [
+      ['/AppRun', '--serve', '--serve-bind-host'],
+      ['/AppRun', '--serve', '--serve-bind-host', '--serve-json'],
+      ['/AppRun', '--serve', '--serve-bind-host', ''],
+      ['/AppRun', '--serve', '--serve-bind-host', '   '],
+      ['/AppRun', '--serve', '--serve-bind-host='],
+      // CLI-form spellings, through the real normalizer.
+      ...[
+        ['/AppRun', 'serve', '--bind-host'],
+        ['/AppRun', 'serve', '--bind-host', '--json'],
+        ['/AppRun', 'serve', '--bind-host=']
+      ].map((cli) => normalizeServeModeArgv(cli))
+    ]) {
+      expect(() => readServeBindHostArg(argv), argv.join(' ')).toThrow(
+        'Missing value for --serve-bind-host.'
+      )
+    }
+  })
+
+  it('readServeBindHostArg still rejects an invalid value and pins a valid one (green control)', () => {
+    expect(readServeBindHostArg(['/AppRun', '--serve'])).toBeNull()
+    expect(readServeBindHostArg(['/AppRun', '--serve', '--serve-bind-host', '127.0.0.1'])).toBe(
+      '127.0.0.1'
+    )
+    // The `=` spelling is not rewritten by the normalizer, so it must be read as-is.
+    expect(readServeBindHostArg(['/AppRun', '--serve', '--serve-bind-host=127.0.0.1'])).toBe(
+      '127.0.0.1'
+    )
+    expect(
+      readServeBindHostArg(
+        normalizeServeModeArgv(['/AppRun', 'serve', '--bind-host', '127.0.0.1', '--json'])
+      )
+    ).toBe('127.0.0.1')
+    expect(() =>
+      readServeBindHostArg(['/AppRun', '--serve', '--serve-bind-host', 'example.com'])
+    ).toThrow('Invalid --serve-bind-host value: example.com')
   })
 })

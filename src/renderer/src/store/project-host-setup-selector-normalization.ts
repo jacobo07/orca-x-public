@@ -4,6 +4,7 @@ import {
   getProjectIdentityKey,
   type ProjectHostSetupProjection
 } from '../../../shared/project-host-setup-projection'
+import { buildRootIdentityEligibility } from '../../../shared/project-root-identity-key'
 
 export type NormalizedProjectHostSetupProjection = ProjectHostSetupProjection & {
   changed: boolean
@@ -16,6 +17,7 @@ export function normalizeHydratedProjectHostSetupProjection(
   derived: ProjectHostSetupProjection
 ): NormalizedProjectHostSetupProjection {
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  const { eligibleRepoIds } = buildRootIdentityEligibility(repos)
   const derivedProjectIds = new Set(derived.projects.map((project) => project.id))
   const projectIdByHydratedProjectId = new Map<string, string>()
   let changed = false
@@ -24,7 +26,7 @@ export function normalizeHydratedProjectHostSetupProjection(
     if (!repo) {
       return setup
     }
-    const projectId = getProjectIdentityKey(repo)
+    const projectId = getProjectIdentityKey(repo, eligibleRepoIds)
     if (projectId === setup.projectId || projectId === `repo:${repo.id}`) {
       return setup
     }

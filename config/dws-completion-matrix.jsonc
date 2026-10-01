@@ -1,0 +1,1768 @@
+// dws program completion matrix — the source of truth for `pnpm check:dws-completeness`.
+//
+// This file, not .planning/workstreams/dws/MATRIX.md, is what the done-gate reads: .planning/ is
+// git-excluded, so a gate reading it would be unrunnable on any other checkout. MATRIX.md is a
+// human view that points here.
+//
+// Only `state: "PASS"` closes a row, and only when it cites at least one `evidence` entry that
+// resolves (an existing file path, or a package.json gate script name) — a PASS citing nothing, or
+// citing something that does not resolve, is a checker failure, not a pass. Run the gate:
+//   node config/scripts/check-dws-completeness.mjs   (or: pnpm check:dws-completeness)
+
+{
+  "schema": "dws-completion-matrix/1",
+  "rows": [
+    {
+      "id": 1,
+      "row": "Global Workspace",
+      "owner": "Orca Workspace nav",
+      "done": "Workstreams visible from two authorized clients",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/workstream-surface.characterization.test.mjs",
+          "note": "RED characterization: no Orca surface lists Workstreams today; Phase 4 inverts it in place"
+        }
+      ],
+      "reason": "Measured 2026-09-28: structural sweep over renderer/shared/mobile/preload/main-ipc found zero Workstream producers or surfaces (0 raw hits before exclusions); Workstreams are not visible from any Orca surface today"
+    },
+    {
+      "id": 2,
+      "row": "Account-scoped discovery",
+      "owner": "paired hosts + UWCP home (derived)",
+      "done": "new paired device lists Workstreams, sees no contents",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/workstream-surface.characterization.test.mjs",
+          "note": "RED characterization: no Orca surface lists Workstreams today; Phase 4 inverts it in place"
+        }
+      ],
+      "reason": "Measured 2026-09-28: same structural sweep as row 1 — no Workstream listing surface exists for any client, paired or not, so a paired device cannot list Workstreams today"
+    },
+    {
+      "id": 3,
+      "row": "Device enrollment",
+      "owner": "E2EE pairing + device tokens",
+      "done": "existing pairing/revocation tests (cite)",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/runtime/pairing-endpoint.test.ts",
+          "note": "Endpoint/hostname normalization for advertised pairing addresses (loopback default, LAN/tailnet/relay forms)"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-pairing-offer.test.ts",
+          "note": "RPC server creates a pairing offer for the active WebSocket transport"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-relay-pairing.test.ts",
+          "note": "Relay pairing offer minting, remint, and device revoke-on-cleanup-failure paths"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-device-revocation.test.ts",
+          "note": "Pre-auth E2EE WebSocket state is cleaned up (revoked) when the socket closes"
+        }
+      ],
+      "reason": "Measured 2026-09-28: all 4 cited test files pass on GEX44 (dws-0104-clone @ 05a26246e, 4 files/83 tests) — device pairing-offer creation, relay pairing/remint/revoke, and pre-auth E2EE cleanup on socket close are the existing pairing/revocation tests the done condition asks to cite"
+    },
+    {
+      "id": 4,
+      "row": "Workstream-scoped authorization",
+      "owner": "UWCP authority record",
+      "done": "device without scope refused an Operator Event",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4,
+        12
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)",
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Orca side. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged."
+    },
+    {
+      "id": 5,
+      "row": "Workstream identity",
+      "owner": "UWCP goal log",
+      "done": "Orca shows the same id from two clients",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "UWCP S1"
+    },
+    {
+      "id": 6,
+      "row": "Mission integration",
+      "owner": "orchestration tasks",
+      "done": "task carries Workstream subject",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — task carries Workstream subject not yet evidenced"
+    },
+    {
+      "id": 7,
+      "row": "Execution identity",
+      "owner": "UWCP epoch / orchestration run",
+      "done": "new execution id, same Workstream, lineage visible",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — new execution id, same Workstream, lineage visible not yet evidenced"
+    },
+    {
+      "id": 8,
+      "row": "Session virtualization",
+      "owner": "UWCP brief+capsule, cogws resume",
+      "done": "kill execution, successor continues from frontier",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — kill execution, successor continues from frontier not yet evidenced"
+    },
+    {
+      "id": 9,
+      "row": "Control-surface attach",
+      "owner": "runtime pairing + driver state",
+      "done": "laptop attaches to GEX44 runtime",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/dws-remote-attach.spec.ts",
+          "note": "02-05: attachDwsRemoteRuntime drives the real desktop UI (AddRemoteHostDialog, SSH-tunnel checkbox); verifyAndAddRuntimeEnvironmentFromPairingCode performs a live status.get RPC over the tunnel before the dialog can close — the close IS the attach proof. Real run PASSED."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/dws-remote-continuity.spec.ts",
+          "note": "02-06: attachDwsRemoteRuntime re-run for the continuity leg, same live round-trip, real run PASSED (a second, independent attach against the same runtime)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-local-ram-offload-evidence.md",
+          "note": "Criterion 3 section narrates both attach runs"
+        }
+      ],
+      "reason": "measured 2026-09-28: two independent real desktop-UI attaches to the GEX44 runtime over the ssh -L tunnel, each gated on a live status.get round-trip before the pairing dialog could close"
+    },
+    {
+      "id": 10,
+      "row": "Detach without cancellation",
+      "owner": "runtime lifecycle",
+      "done": "client quit, remote work continues",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-3",
+      "measuredAt": "2026-09-30",
+      "required": true,
+      "phases": [
+        2,
+        3
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)",
+        "Phase 2"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/runtime/runtime-rpc-client-disconnect.characterization.test.ts",
+          "note": "Inverted in place in Phase 3 (cases A/B): a socket close no longer aborts a launch - the dispatcher hands a launch RPC waitSignal instead of signal and the runtime caller carries no signal; case E proves a disconnect-refusing runtime still completes the create; control D pins that observation (terminal.wait) still aborts on close"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/quit-path-local-runtime-teardown.characterization.test.ts",
+          "note": "Narrowed in Phase 3: local-only kill stays (in-process local PTYs); before-quit/will-quit call no remote runtime; src/main stop-literal sweep pins that no quit path sends a remote stop"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/dws-remote-continuity.spec.ts",
+          "note": "02-06 product-level proof: dispatched a bounded tick loop, confirmed it in a remote capture, quit the desktop via a real Electron app.quit() (exit code 0, no kill), wrote continuity.json (mainPidAtDispatch, tQuitLine)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-local-ram-offload-evidence.md",
+          "note": "Criterion 5 section: post-quit ssh check ~97s after quit showed the SAME serve MainPID and 95 new ticks (>= elapsed-5=92 required)"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/orca-runtime-agent-session-detach.test.ts",
+          "note": "Phase 3: a disconnected caller does not stop createAgentSession; a same-id retry replays the completed create"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/effect-class-registry.test.ts",
+          "note": "Phase 3: exactly three launch RPCs are flagged; dispatch withholds the socket signal from them and keeps it for other methods; launch-signal ratchet"
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-detach-sends-no-stop.test.ts",
+          "note": "Phase 3: a remote pty transport sends no stop-class RPC on disconnect or destroy"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-3-detach-stop-cancel-evidence.md",
+          "note": "Phase 3: mutation drills M1-M11 each turned their named test red and restored byte-exact"
+        },
+        {
+          "kind": "file",
+          "path": "docs/reference/detach-stop-cancel-effects.md",
+          "note": "Phase 3: Detach, Stop Execution and Cancel Workstream named as distinct effects with distinct authorities"
+        }
+      ],
+      "reason": "measured 2026-09-28: the characterizations' unit-level finding is now confirmed at product level — a real desktop quit (app.quit(), exit=0) left the remote tick loop running under the unchanged serve MainPID, growing continuously for >90s unattended. Re-measured in Phase 3 (2026-09-30): Detach is now a named effect, distinct from Stop Execution and Cancel Workstream. Launch RPCs no longer abort on client disconnect (server side, proven by the inverted characterization and the runtime detach test), pane teardown and quit send no Stop (client side), and Phase 2 SC5 product-level continuity stands. The drills M1-M11 caught every mutant (docs/dws/phase-3-detach-stop-cancel-evidence.md). Local-host tier only: the GEX44 serve was NOT redeployed at the Phase 3 SHA and the real-app continuity spec was not rerun."
+    },
+    {
+      "id": 11,
+      "row": "Client switch",
+      "owner": "runtime + pairing",
+      "done": "Device B reattaches, no restatement",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/dws-web-client-reattach.mjs",
+          "note": "second client = the bundled web client (CTX-CONT-2, assumption_delta: no-change), driven headlessly (msedge). Reader proven live (two reads 2.5s apart showed the tick number growing) via window.__paneManagers.get(tabId).getActivePane().serializeAddon.serialize() -- the only reader rung this codebase offers (no xterm a11y addon wired). BACKFILL=PASS: visible tick 892 > tick-at-quit 8, i.e. the web client displayed output produced entirely while no client was attached (\"no restatement\" -- it was never re-sent, it was already there)."
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-reattach-latency.json",
+          "note": "reattach latency N=6 MEASURED, medianMs=6762.5 -- Device B (the web client) reattaches and sees current state repeatably, not as a one-off"
+        }
+      ],
+      "reason": "measured 2026-09-28: a second, independent client (the bundled web client, opened through the same ssh tunnel) reattached to the paired runtime after the first client (the desktop) quit, and displayed terminal output produced entirely while unattached -- BACKFILL=PASS with a live-reader control"
+    },
+    {
+      "id": 12,
+      "row": "Mobile projection",
+      "owner": "mobile runtime client",
+      "done": "mobile reads state + sends one Operator Event",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — mobile reads state + sends one Operator Event not yet evidenced"
+    },
+    {
+      "id": 13,
+      "row": "UWCP continuity",
+      "owner": "UWCP",
+      "done": "cited UWCP gate",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "other pane"
+    },
+    {
+      "id": 14,
+      "row": "Active frontier",
+      "owner": "UWCP brief",
+      "done": "visible in Orca",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — visible in Orca not yet evidenced"
+    },
+    {
+      "id": 15,
+      "row": "Evidence preservation",
+      "owner": "UWCP log",
+      "done": "visible in Orca, survives client switch",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — visible in Orca, survives client switch not yet evidenced"
+    },
+    {
+      "id": 16,
+      "row": "Workspace Capsule",
+      "owner": "UWCP workspace.py",
+      "done": "UWCP S2 gate",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [],
+      "dependsOn": [
+        "UWCP S2 gate (other pane)"
+      ],
+      "evidence": [],
+      "reason": "untested"
+    },
+    {
+      "id": 17,
+      "row": "GEX44 Node Manifest",
+      "owner": "fleet obs + UWCP node adapter",
+      "done": "real measurement, freshness-bound",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-5",
+      "measuredAt": "2026-09-30",
+      "required": true,
+      "phases": [
+        5
+      ],
+      "dependsOn": [
+        "Phase 2"
+      ],
+      "evidence": [
+        { "kind": "file", "path": "config/schemas/orca-node-manifest-1.schema.json", "note": "the versioned manifest contract handed to UWCP" },
+        { "kind": "file", "path": "src/shared/node-manifest-schema.contract.test.ts", "note": "real-producer manifests validate against the schema" },
+        { "kind": "file", "path": "src/shared/node-manifest-eligibility.test.ts", "note": "freshness and eligibility with drills M1-M5" },
+        { "kind": "file", "path": "src/shared/node-measurement-age-sole-authority.test.ts", "note": "sweep: the age check has one authority and all six scanned modules are required" },
+        { "kind": "file", "path": "src/main/fleet/node-resources-measure.test.ts", "note": "host memory/disk/VRAM/model measurers" },
+        { "kind": "file", "path": "src/main/fleet/fleet-observation-service.test.ts", "note": "observer step on the observer clock, old host reads unsupported" },
+        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.json", "note": "SC3 evidence: MEASURED at rung gex44-local-caller; memory/disk/vram MATCH the ssh control, resident_model control UNJUDGED" },
+        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.md", "note": "what happened on GEX44, tolerances, ND-1/ND-2" },
+        { "kind": "file", "path": "docs/dws/node-manifest-handoff.md", "note": "schema path and consumer rules for UWCP; consume half BLOCKED" }
+      ],
+      "reason": "measured 2026-09-30: schema, real-producer contract, freshness and eligibility (drills M1-M5) and the CLI are tested locally; GEX44 was read through the product at rung gex44-local-caller (6e036d7, artifact sha256 equal at both ends, runtimeId equals the deployed serve): memory, disk and VRAM MATCH an independent ssh control, the resident model qwen3-coder-30b was read but its control is UNJUDGED (parse defect fixed in 3266e1a41, re-measure owed); the laptop fan-out rung was not attempted; the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
+    },
+    {
+      "id": 18,
+      "row": "Fleet Resource Graph",
+      "owner": "src/main/fleet",
+      "done": "`orca fleet placement` against real runtime",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [
+        2,
+        5
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)",
+        "Phase 2"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-fleet-placement.json",
+          "note": "real `fleet placement --json` run against the GEX44 runtime: status=ok, real observation (runtimeId matches the deployed serve, totalMemory/availableMemory consistent with the known host), a placement proposal selected. Ran from a terminal ON GEX44 (a LOCAL RPC caller) -- fleet.placementView (fleet.ts:26-30) structurally refuses a REMOTE caller (status:refused, reason:remote-caller) by design (\"answering would have this host query its own paired runtimes on another's behalf\"), reproduced first before finding the correct local-caller invocation."
+        }
+      ],
+      "reason": "measured 2026-09-28: `fleet placement` runs successfully against the real GEX44 runtime when invoked as a local caller on that host; invoking it as a remote caller (via --environment from the laptop) is refused by design, not a defect"
+    },
+    {
+      "id": 19,
+      "row": "Placement Engine integration",
+      "owner": "fleet proposal + UWCP placement.py",
+      "done": "one rule set, apply path",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/fleet-placement-apply-path.characterization.test.mjs",
+          "note": "RED characterization: a placement proposal has no apply path; Phase 6 inverts it in place"
+        }
+      ],
+      "reason": "Measured 2026-09-28: a proposal engine exists (src/shared/fleet-placement.ts, planFleetPlacement) with exactly 4 read-only importers (view method, observation service, cli formatter, cli printer) and 0 importers that act on proposal.selected; no apply path exists today"
+    },
+    {
+      "id": 20,
+      "row": "Resource Governor",
+      "owner": "UWCP lease store",
+      "done": "contention golden",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — contention golden not yet evidenced"
+    },
+    {
+      "id": 21,
+      "row": "Resource leases",
+      "owner": "UWCP lease store",
+      "done": "forged/stale lease refused",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — forged/stale lease refused not yet evidenced"
+    },
+    {
+      "id": 22,
+      "row": "RAM-aware scheduling",
+      "owner": "placement",
+      "done": "low-RAM host not selected for heavy work",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — low-RAM host not selected for heavy work not yet evidenced"
+    },
+    {
+      "id": 23,
+      "row": "GPU-aware scheduling",
+      "owner": "placement",
+      "done": "VRAM requirement honoured",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        6
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "UWCP lease store S4-S5"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — VRAM requirement honoured not yet evidenced"
+    },
+    {
+      "id": 24,
+      "row": "Workspace locality",
+      "owner": "placement input",
+      "done": "hydrated node preferred, measured",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — hydrated node preferred, measured not yet evidenced"
+    },
+    {
+      "id": 25,
+      "row": "Model availability",
+      "owner": "provider/routing",
+      "done": "availability states fail closed",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — availability states fail closed not yet evidenced"
+    },
+    {
+      "id": 26,
+      "row": "Model residency",
+      "owner": "Resource Elasticity",
+      "done": "AVAILABLE != RESIDENT drill",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — AVAILABLE != RESIDENT drill not yet evidenced"
+    },
+    {
+      "id": 27,
+      "row": "Local inference",
+      "owner": "GEX44 runtime",
+      "done": "re-measured + bake-off",
+      "state": "UNKNOWN",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "conflicting records"
+    },
+    {
+      "id": 28,
+      "row": "Cognitive Routing",
+      "owner": "federation routing",
+      "done": "cite P3 gates",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/agent-identity.ts",
+          "note": "mintAgentId() takes no arguments, on purpose: an agent's id cannot inherit a provider's, host's or session's lifetime"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-conversation-turn.test.ts",
+          "note": "provider routing exists (codex/claude, ranked by continuity/preference/tools/quota/auth) but no cited test runs the same agent on provider X then Y"
+        }
+      ],
+      "reason": "Measured 2026-09-28: MISSION.md's own definition of Cognitive Routing is 'prove Agent identity persists across model change' — the same underlying claim as row 32 (Model switching), which this matrix already carries as PARTIAL. AgentId is architecturally provider-independent (agent-identity.ts) and provider routing exists, but no test in this worktree exercises one agent across provider X then Y to prove coherence; 'P3 gates' (federation Phase 3's own gate suite) is not a resolvable artifact in this worktree. Demoted from the Stage-Zero PASS seed for consistency with row 32's own PARTIAL."
+    },
+    {
+      "id": 29,
+      "row": "Provider availability",
+      "owner": "claude-auth-readiness etc.",
+      "done": "cite",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/claude/claude-auth-readiness.ts",
+          "note": "checkClaudeAuth distinguishes absent/unreadable/no-token/expired credential states, and an env API key, without reading a token out of the function"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/claude/claude-auth-readiness.test.ts",
+          "note": "5 tests pin every readiness state named above, plus the macOS keychain vs Linux/Windows credential-file split"
+        }
+      ],
+      "reason": "Measured 2026-09-28: cited test file passes on GEX44 (dws-0104-clone @ 05a26246e) — matches the row's owner (claude-auth-readiness) and done condition verbatim"
+    },
+    {
+      "id": 30,
+      "row": "Provider quota",
+      "owner": "provider-quota-observations",
+      "done": "quota read on the routing path",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — quota read on the routing path not yet evidenced"
+    },
+    {
+      "id": 31,
+      "row": "Agent identity portability",
+      "owner": "cogws roster",
+      "done": "cite P3 live evidence",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/agent-identity.ts",
+          "note": "mintAgentId() takes no arguments 'on purpose' (source comment): no mint function takes a project id, conversation id, display name, provider, provider session or pane"
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/agent-identity.test.ts",
+          "note": "pins the zero-argument mint signature as the contract worth pinning, 'not the string' — a mint accepting a provider would let identity inherit its lifetime"
+        }
+      ],
+      "reason": "Measured 2026-09-28: the capability exists and is architecturally sound (AgentId minted independent of provider/host/session, pinned by test) but the done condition asks to cite 'P3 live evidence' — an actual live cross-host/cross-provider demonstration — which is not a committed, resolvable artifact in this worktree; if it exists it is only in federation's git-excluded .planning records (orca-federation-wt), which cannot be cited per CONTEXT.md. 'cogws roster' (CognitiveWorkspaceRoster.tsx) is a rendering surface, not a portability proof, so it is not cited as evidence."
+    },
+    {
+      "id": 32,
+      "row": "Model switching",
+      "owner": "routed-conversation-turn",
+      "done": "same agent, provider X then Y, coherent",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        8
+      ],
+      "dependsOn": [
+        "Phase 5",
+        "Phase 6",
+        "federation P8 model client"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — same agent, provider X then Y, coherent not yet evidenced"
+    },
+    {
+      "id": 33,
+      "row": "Host switching",
+      "owner": "UWCP epochs / remote agent",
+      "done": "same Workstream, different host",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — same Workstream, different host not yet evidenced"
+    },
+    {
+      "id": 34,
+      "row": "Automatic distribution",
+      "owner": "orchestration + routing + placement",
+      "done": "golden",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — golden not yet evidenced"
+    },
+    {
+      "id": 35,
+      "row": "Mission decomposition",
+      "owner": "orchestration DAG",
+      "done": "independent tasks placed differently",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — independent tasks placed differently not yet evidenced"
+    },
+    {
+      "id": 36,
+      "row": "Independent review",
+      "owner": "federation reviews",
+      "done": "P4b flow live",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-7",
+      "measuredAt": "2026-09-30",
+      "required": true,
+      "phases": [
+        7
+      ],
+      "dependsOn": [],
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-records.ts", "note": "a review record bound to one revision, with its policy and producer task" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-request.ts", "note": "review request and reviews.policy feasibility" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-subject-capture.ts", "note": "captures the exact subject revision a review judges" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-findings.ts", "note": "findings attached to a review" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-flow.test.ts", "note": "the review flow end to end (re-ran green on GEX44 at the gated sha)" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-reality.test.ts", "note": "the opt-in live record (ORCA_CLAUDE_REALITY=1), Claude only; skipped in the phase-7 GEX44 run" },
+        { "kind": "file", "path": "src/main/runtime/rpc/methods/orchestration-reviews.test.ts", "note": "the review RPC methods" },
+        { "kind": "file", "path": "config/scripts/check-federation-ownership.mjs", "note": "ownership sweep: this branch edits no federation-owned file" },
+        { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.json", "note": "phase-7 evidence: MEASURED at rung gates, both GEX44 fences 677 passed / 0 failed" },
+        { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.md", "note": "what was run on GEX44 and what was not re-run" },
+        { "kind": "commit", "sha": "4aa2cf116", "note": "P4a: reviews bound to one revision" },
+        { "kind": "commit", "sha": "5c51b36ee", "note": "P4b: an unnamed builder is not independent" },
+        { "kind": "commit", "sha": "da3ec43c0", "note": "P4b: a review of a real agent's commit, run on a real provider (Claude only)" },
+        { "kind": "commit", "sha": "47558af87", "note": "the sealing note" }
+      ],
+      "reason": "measured 2026-09-30: federation's sealed review flow (P4a/P4b, reviews v31/v32) is contained in this branch (71dd7bc97 is the merge base, 0 commits behind at 997b4a55a) and its gates re-ran on GEX44 at 997b4a55a with both fences at 677 passed / 0 failed (tsc 0 errors, verdict MEASURED); a live independent review across TWO providers is UNPROVEN (federation's own live record da3ec43c0 is Claude only: independent -> failed/no-provider, any -> degraded-same-provider); no live provider spend in this phase; the four inherited mobile-aperture entries (orchestration.reviewRequest, orchestration.reviewShow, conversations.subscribe, conversations.unsubscribe) are federation debt; federation's RESUMPTION note cites live-review commit 2e8c5516a, which is not in the object store, so da3ec43c0 is cited instead."
+    },
+    {
+      "id": 37,
+      "row": "Verification policy",
+      "owner": "federation + UWCP judge",
+      "done": "policy-routed reviewer",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-7",
+      "measuredAt": "2026-09-30",
+      "required": true,
+      "phases": [
+        7
+      ],
+      "dependsOn": [],
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-request.ts", "note": "reviews.policy none/any/independent: feasibility judged before any turn runs" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/coordinator-agent-tasks.ts", "note": "policy independent excludes the producer's provider" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-settlement.ts", "note": "reviewer provider taken from the turn's recorded result, not from conversation provenance" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/subject-bound-gates.ts", "note": "approval re-checks the gate's review requirement against the exact subject" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/subject-bound-gates.test.ts", "note": "the subject-bound gate and its review requirement" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/approval-authority-aperture.test.ts", "note": "only the desktop IPC may import decide/rebind" },
+        { "kind": "file", "path": "src/main/ipc/agent-federation.test.ts", "note": "the P7 guard test" },
+        { "kind": "file", "path": "config/scripts/check-federation-ownership.mjs", "note": "ownership sweep: no federation-owned file edited on this branch" },
+        { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.json", "note": "phase-7 evidence: MEASURED at rung gates, both GEX44 fences 677 passed / 0 failed" },
+        { "kind": "commit", "sha": "5c14ecc24", "note": "a review records its policy and producer task (v32)" },
+        { "kind": "commit", "sha": "3f3bcf7ae", "note": "P5: a gate carries the exact commit it approves (v33)" },
+        { "kind": "commit", "sha": "205048aa5", "note": "P5: approval enforced where the task acts" }
+      ],
+      "reason": "measured 2026-09-30: the policy-routed reviewer exists as code (reviews.policy none/any/independent, producer-provider exclusion, reviewer provider taken from the routed result) and its gates re-ran on GEX44 at 997b4a55a with both fences at 677 passed / 0 failed (verdict MEASURED); a policy-routed reviewer across two live providers is unevidenced (no live spend in this phase); the UWCP judge half of this row belongs to another program."
+    },
+    {
+      "id": 38,
+      "row": "Operator Events",
+      "owner": "UWCP operator.*",
+      "done": "issued from Orca, consumed remotely",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — issued from Orca, consumed remotely not yet evidenced. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged."
+    },
+    {
+      "id": 39,
+      "row": "Multi-client consistency",
+      "owner": "UWCP log ordering",
+      "done": "stale client write refused",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        4,
+        12
+      ],
+      "dependsOn": [
+        "UWCP control verbs (other pane)",
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Orca"
+    },
+    {
+      "id": 40,
+      "row": "Observability",
+      "owner": "correlation ids",
+      "done": "end-to-end explain query",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — end-to-end explain query not yet evidenced"
+    },
+    {
+      "id": 41,
+      "row": "Execution correlation",
+      "owner": "ids across orchestration/UWCP",
+      "done": "one trace joins them",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        9
+      ],
+      "dependsOn": [
+        "Phase 6",
+        "Phase 8"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — one trace joins them not yet evidenced"
+    },
+    {
+      "id": 42,
+      "row": "Routing explainability",
+      "owner": "routing reasons",
+      "done": "cite",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-1",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [],
+      "dependsOn": [],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/conversation/conversation-provider-routing.ts",
+          "note": "describeRoute() renders one line naming who ran the turn and every provider it passed over with its reason; routeConversationTurn() never silently falls back"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-conversation-turn.test.ts",
+          "note": "asserts the exact explained-route string, e.g. 'running on claude (codex: codex credential is no-credential)', and every skip reason (quota/auth/exclude/tools)"
+        }
+      ],
+      "reason": "Measured 2026-09-28: cited test file passes on GEX44 (dws-0104-clone @ 05a26246e) — directly proves 'routing reasons' (the row's owner) render an explained route with a named reason for every provider skipped"
+    },
+    {
+      "id": 43,
+      "row": "Economics telemetry",
+      "owner": "outcome dataset",
+      "done": "recorded per execution",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        10
+      ],
+      "dependsOn": [
+        "Phase 7",
+        "Phase 9"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — recorded per execution not yet evidenced"
+    },
+    {
+      "id": 44,
+      "row": "Adaptive-prior dataset",
+      "owner": "UWCP routing_priors + reviews",
+      "done": "verified-only priors",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        10
+      ],
+      "dependsOn": [
+        "Phase 7",
+        "Phase 9"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — verified-only priors not yet evidenced"
+    },
+    {
+      "id": 45,
+      "row": "Local RAM reduction",
+      "owner": "measurement",
+      "done": "before/after MB + process tree",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-30",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-memory-delta.json",
+          "note": "02-05: absence was judged by run nonce only in both sweeps, because the remote manifest carried no desktopRootPid (desktop subtree size 1); the peak-delta BRACKET is INCONCLUSIVE both times (free-memory drift 4092.75MB / 3032.82MB >= workloadTotal peakDeltaMb 956.86MB) -- this laptop's own background memory churn exceeds the workload's signal (corrected 2026-09-30, 02-07)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-agent-leg.json",
+          "note": "02-08: agent-turn leg BLOCKED (no provider login in the orca-svc service HOME), so claude/codex absence stays vacuous; classifier control against the real CLI returned not-logged-in"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-memory-delta.json",
+          "note": "02-08 counted sweep offload-3d: COMPARABLE; absence PASS for vitest, tsc, workload-wrapper (desktopSubtreeSize 40); bracket OK (drift 201.35MB < peak delta 954.505MB); workload peak delta 954.505MB, median 142.305MB; control surface 982.336MB peak"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-summary.json",
+          "note": "02-08 offload-3d summary: desktopRootPidValid true, legWindowCovered true, 110 samples, no failed legs"
+        }
+      ],
+      "reason": "re-measured 2026-09-30 (02-08 continuation, counted sweep offload-3d): PARTIAL, SC4 BLOCKED at rung 4 (rung 1 no FAIL on vitest, tsc, workload-wrapper; rung 2 machine comparability verdict COMPARABLE; rung 3 bracket OK, free-memory drift 201.35MB < workload peak delta 954.505MB; no agent sweep ran because the agent-turn leg is BLOCKED, so claude/codex absence is vacuous); desktop subtree resolved (desktopSubtreeSize 40); esbuild, indexer and orca-cli UNJUDGED (never sighted by the baseline); a codex.exe app-server (pid 29228, the desktop Codex app, one sample of 110) was seen on the laptop and is disclosed, not judged against the offload. Superseded earlier 02-08 text: PARTIAL at rung 2 with comparability UNJUDGED because three launches failed before the workload. Earlier text: measured 2026-09-28, corrected 2026-09-30 (02-07): absence of local claude/codex/vitest/build/indexer processes during offload was judged by run nonce only, because the remote manifest carried no desktopRootPid (desktop subtree size 1), so the desktop's own subtree was never searched; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
+    },
+    {
+      "id": 46,
+      "row": "GEX44 heavy execution",
+      "owner": "orca serve on GEX44",
+      "done": "remote process tree",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-30",
+      "required": true,
+      "phases": [
+        2
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-summary.json",
+          "note": "02-05: test leg dispatched through the paired GEX44 environment; remote-proof PASS via ps --forest under the serve PID, peakRssMb=589.14"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-fleet-placement.json",
+          "note": "02-06: independent confirmation the GEX44 runtime executes and reports real host facts under the same runtimeId"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-agent-leg.json",
+          "note": "02-08: agent-turn leg BLOCKED: credential existence check printed no login for Claude or Codex in the orca-svc service HOME (2026-09-30T00:55:20Z); classifier control not-logged-in"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-remote-proof.json",
+          "note": "02-08 counted sweep offload-3d: test leg UNJUDGED (no LEG-START childPid/startUtc to bind the capture to); build leg PASS, peakRssMb=696.41"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-offload-3-summary.json",
+          "note": "02-08 offload-3d summary: 110 samples, desktopRootPidValid true, legWindowCovered true"
+        }
+      ],
+      "reason": "re-measured 2026-09-30 (02-08): PARTIAL because the agent-turn leg is BLOCKED and the test-run leg remote proof is UNJUDGED; agent-turn leg BLOCKED (no provider login in the orca-svc service HOME, existence check 2026-09-30T00:55:20Z; the real CLI reports not-logged-in; Owner action = interactive login as orca-svc on GEX44, never a copied credential); test-run leg remote proof UNJUDGED (counted sweep offload-3d: no LEG-START childPid/startUtc reached the manifest for the test leg, so the capture cannot be bound; the ps capture does hold a vitest tree under the serve MainPID at 01:05:24Z-01:05:30Z, peak 592.4MB, which is unbound evidence and is not counted as PASS); build leg remote proof PASS (does not gate SC3; tsc pid 1399288 bound by LEG-START, peakRssMb=696.41 at the 0.2 s capture). Superseded earlier 02-08 text: test-run leg not re-measured because no sweep reached the workload. Earlier text: measured 2026-09-28: the test-run leg's remote process tree proof is PASS (real vitest process captured under the serve's PID tree, peakRssMb=589.14); the agent-turn leg is BLOCKED, no provider login in the orca-svc service HOME (measured 2026-09-29: the CLI prints 'Not logged in', exit=1); Owner action = interactive login as orca-svc on GEX44, never a copied credential (cause corrected 2026-09-30, 02-07)"
+    },
+    {
+      "id": 47,
+      "row": "Failure recovery",
+      "owner": "runtime + UWCP",
+      "done": "node offline / client dies drills",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — node offline / client dies drills not yet evidenced"
+    },
+    {
+      "id": 48,
+      "row": "Protocol versioning",
+      "owner": "remote-wire doctrine",
+      "done": "mixed-version matrix for new verbs",
+      "state": "PARTIAL",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: PARTIAL — mixed-version matrix for new verbs not yet evidenced"
+    },
+    {
+      "id": 49,
+      "row": "Security",
+      "owner": "threat model",
+      "done": "every class controlled or named debt",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 50,
+      "row": "Performance",
+      "owner": "measurement",
+      "done": "latency/hydration/reattach numbers",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-2",
+      "measuredAt": "2026-09-28",
+      "required": true,
+      "phases": [
+        2,
+        12
+      ],
+      "dependsOn": [
+        "Phase 1",
+        "Decision D1 (broker law)",
+        "Decision D2 (transport)",
+        "Phases 2-11"
+      ],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-stream-latency-remote.json",
+          "note": "02-05: stream (marker round-trip) latency MEASURED, remote medianMs=964.64 (n=7) vs local-floor medianMs=926.96 (n=7)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-2-reattach-latency.json",
+          "note": "02-06: reattach latency MEASURED, medianMs=6762.5 (n=6), plus firstAttachLatencyMs=13479 recorded separately"
+        }
+      ],
+      "reason": "measured 2026-09-28: stream and reattach latency numbers are both MEASURED with a named instrument and N>=5; hydration latency (a distinct number from reattach) is unmeasured this phase and Phase 12 owns the remaining performance surface (mixed-version matrices, broader latency budget work) -- PARTIAL is the honest state, not PASS"
+    },
+    {
+      "id": 51,
+      "row": "Product Reality",
+      "owner": "goldens",
+      "done": "each golden PASS",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        12
+      ],
+      "dependsOn": [
+        "Phases 2-11"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — each golden PASS not yet evidenced"
+    },
+    {
+      "id": 52,
+      "row": "Knowledge Vault",
+      "owner": "vault",
+      "done": "records written",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 53,
+      "row": "UKDL",
+      "owner": "ukdl",
+      "done": "evidence-backed rules",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 54,
+      "row": "Constitutive Baseline Ratchet",
+      "owner": "CPP baseline compiler",
+      "done": "promoted standards",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "program"
+    },
+    {
+      "id": 55,
+      "row": "Inheritance verification",
+      "owner": "gates/tests",
+      "done": "planted regression red",
+      "state": "ABSENT",
+      "stateSource": "stage-zero-seed",
+      "required": true,
+      "phases": [
+        13
+      ],
+      "dependsOn": [
+        "Phase 12"
+      ],
+      "evidence": [],
+      "reason": "Stage Zero: ABSENT — planted regression red not yet evidenced"
+    },
+    {
+      "id": 56,
+      "row": "HF Host identity for SSH targets",
+      "owner": "ssh-relay-session + fleet-host-identity",
+      "done": "an SSH target has a pinned host-key identity; a changed key is refused, never re-trusted",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-14",
+      "measuredAt": "2026-10-01",
+      "required": true,
+      "phases": [
+        14
+      ],
+      "dependsOn": [],
+      "evidence": [
+        { "kind": "file", "path": "src/main/ssh/ssh-host-key-pin-verifier.ts", "note": "the pin verifier ssh2's hostVerifier now consults (it no longer returns true for any key)" },
+        { "kind": "file", "path": "src/main/ssh/ssh-connection-host-key-pin.test.ts", "note": "unit: pinned, changed, first-contact and legacy paths on the connection" },
+        { "kind": "file", "path": "src/main/ssh/ssh-host-key-pin.real-sshd.test.ts", "note": "opt-in legs A-C over a real sshd (skips unless ORCA_REAL_SSHD_PORT is set)" },
+        { "kind": "file", "path": "tests/e2e/ssh-host-key-trust.spec.ts", "note": "the trust dialog in the real app (Leg D)" },
+        { "kind": "file", "path": "docs/dws/phase-14-host-identity-evidence.json", "note": "GEX44 private sshd: fence, witnesses, ssh-keygen fingerprints, per-leg verdicts" },
+        { "kind": "commit", "sha": "bd0197278", "note": "pin SSH host keys, refuse a changed key, first contact explicit" },
+        { "kind": "commit", "sha": "2e25fc8e8", "note": "trust prompt before a new host key; every other pin writer fenced" },
+        { "kind": "commit", "sha": "afb96e5ff", "note": "host identity shown in host management" },
+        { "kind": "commit", "sha": "b10b72e37", "note": "real-sshd evidence" },
+        { "kind": "commit", "sha": "059af5e87", "note": "a removed or re-pointed pin refuses automatic connects until re-trusted" },
+        { "kind": "commit", "sha": "0fff3967b", "note": "a pin recorded for another endpoint refuses automatic connects" }
+      ],
+      "reason": "measured 2026-09-30/10-01 (phase 14): PARTIAL. Proven: the ssh2 transport pins the host key; on a real sshd on GEX44 (disposable root, generated keys, at 43b869962) first contact recorded exactly OpenSSH's own ssh-keygen fingerprint, a real key change was refused host_key_changed on interactive and automatic connects with the pin file unchanged, and the app's trust dialog passed 3/3 headless (REAL-APP, Leg D, after building the relay the e2e build omits). After review (LOCAL-HOST only, real-sshd legs not re-run): a target whose pin was removed or re-pointed, or whose pin names another endpoint, is refused on automatic connects and prompts on interactive ones. Open: system-OpenSSH transport parity is delegated (OD-3: its negotiated key is not portably observable below OpenSSH 8.5, research section 7), and a never-pinned target on an automatic connect still connects with a loud diagnostic (OD-2 legacy grace) instead of being refused."
+    },
+    {
+      "id": 57,
+      "row": "HF Device registry durability",
+      "owner": "secure-file + durability-contracts",
+      "done": "orca-devices.json written with a barrier and carrying a durability contract",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-14",
+      "measuredAt": "2026-10-01",
+      "required": true,
+      "phases": [
+        14
+      ],
+      "dependsOn": [],
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/device-registry.ts", "note": "save() publishes through writeDurableSecureJsonFile; unparseable content is quarantined and fails closed; a read failure fails closed and leaves the file in place" },
+        { "kind": "file", "path": "src/main/runtime/device-registry-durability.test.ts", "note": "fsync-before-rename order for every mutator; corrupt, truncated and non-array files preserved; an I/O error leaves the file untouched; older-build readers see an array" },
+        { "kind": "file", "path": "config/durability-contracts.jsonc", "note": "contracts runtime.device-registry and runtime.device-revocations, crash-durable" },
+        { "kind": "file", "path": "config/scripts/check-durability-contracts.mjs", "note": "every durable-publisher caller needs a contract (floor 14 callers); the two device contracts are required by id" },
+        { "kind": "commit", "sha": "da625caa9", "note": "durability barrier and contract" },
+        { "kind": "commit", "sha": "f43b913f5", "note": "a corrupt registry is preserved and fails closed" },
+        { "kind": "commit", "sha": "ffa5aa035", "note": "quarantine only unparseable content, never a read failure" },
+        { "kind": "commit", "sha": "205c0b7cf", "note": "devices file stays a bare array; tombstones in a sibling durable file" },
+        { "kind": "commit", "sha": "3000200d8", "note": "contract existence ratchet over durable publishers" }
+      ],
+      "reason": "measured 2026-10-01 (phase 14, LOCAL-HOST, syscall-order test): orca-devices.json is written with a barrier before the rename (drill: old writer -> 9 red), stays a bare array that older builds read, and fails closed without collapsing to empty: unparseable content is renamed aside (drill: 3 red) and a read failure leaves the file in place (drill: red). It carries the crash-durable contract runtime.device-registry (revocation tombstones: runtime.device-revocations), and deleting either contract now turns check-durability-contracts red (drill on the real config: both exit 1, restored byte-exact). Not measured: a real power loss. Four other durable publishers are baselined without contracts (config/durability-contract-publisher-baseline.txt)."
+    },
+    {
+      "id": 58,
+      "row": "HF Revocation at the mutating effect",
+      "owner": "runtime auth / device tokens",
+      "done": "a revoked device with a live connection is refused at the next mutation",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-14",
+      "measuredAt": "2026-10-01",
+      "required": true,
+      "phases": [
+        14
+      ],
+      "dependsOn": [],
+      "evidence": [
+        { "kind": "file", "path": "src/main/runtime/device-authorization.ts", "note": "assertDeviceStillAuthorized: the one authority for the text, binary-frame and mobile-socket paths" },
+        { "kind": "file", "path": "src/main/runtime/runtime-rpc-revoked-device-effect.characterization.test.ts", "note": "real RpcServer, loopback WebSocket, E2EE, terminal stream: a revoked device's binary frame is refused (inverted from the measured defect)" },
+        { "kind": "file", "path": "src/main/runtime/device-authorization.test.ts", "note": "revoked vs unknown vs unavailable reasons; sockets terminated even when the revoke save throws" },
+        { "kind": "file", "path": "src/main/runtime/device-registry-durability.test.ts", "note": "tombstones survive a restart, are bounded, and a failed save leaves the device refused" },
+        { "kind": "commit", "sha": "da02f0bea", "note": "characterization: measured a revoked device's terminal frame written to the pty" },
+        { "kind": "commit", "sha": "1fb33afa5", "note": "refuse a revoked device's frames at the effect" },
+        { "kind": "commit", "sha": "90301bfe3", "note": "durable revocation tombstones, wire-compatible reason" },
+        { "kind": "commit", "sha": "205c0b7cf", "note": "tombstones moved to orca-device-revocations.json; damage there loses only the reason, never authorizes" }
+      ],
+      "reason": "measured 2026-09-30/10-01 (phase 14, LOCAL-HOST: real RpcServer on a loopback WebSocket with E2EE and a live terminal stream). Before (da02f0bea): a revoked device whose socket survived still had its binary terminal frame written to the pty. Now every text, binary and mobile-socket request re-checks one authority; a binary refusal closes 4001 and drops the frame; the wire code stays `unauthorized` with data.reason device_revoked. All four drills went red then green (skip binary authority; ignore tombstones; wire code; save-then-swap on revoke), plus the WR-02 drill on the sibling tombstone file; named tests green at f58915d8d. Residual: if the devices-file save throws during a revoke, the device is refused in this process and the error propagates, but a restart before the next successful save would read it back as paired. Not measured on a paired phone or a remote host."
+    },
+    {
+      "id": 59,
+      "row": "HF Remote-first continuity",
+      "owner": "providers routed by connectionId/runtime owner",
+      "done": "a second client opens a host-only project; fs/git/pty/agents act on the owning host; reconnect keeps work",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-15",
+      "measuredAt": "2026-10-01",
+      "required": true,
+      "phases": [
+        15
+      ],
+      "dependsOn": [],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-remote-first.spec.ts",
+          "note": "opt-in REAL-TWO-HOST spec: connect/terminal/absence, fs+git+terminal from both clients, agent launch and hook routing, and the two reconnect tests"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-ssh-target.ts",
+          "note": "trust-dialog connect, run file, remote reads inside the disposable root"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-owning-host-legs.ts",
+          "note": "terminal, fs and git legs that act on the owning host, with independent ssh reads"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-reconnect.ts",
+          "note": "carrier drop and restore, clock skew, tick parse, outage window classification"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-reconnect-legs.ts",
+          "note": "shell leg: same relay and shell pid, gap-free ticks, outage backfill in Client A and B"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-reconnect-agent-leg.ts",
+          "note": "agent leg: same claude pid and hook emitter, status row, outage hook"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-15-remote-first-evidence.md",
+          "note": "Runs 1 to 3 with leg tables, observations and the final verdict table"
+        },
+        {
+          "kind": "commit",
+          "sha": "426117e85",
+          "note": "two-host spec, target adapter, carrier and laptop absence scan (Run 1 tracer)"
+        },
+        {
+          "kind": "commit",
+          "sha": "d44e30dbb",
+          "note": "fs, git and terminal legs from both clients on the owning host"
+        },
+        {
+          "kind": "commit",
+          "sha": "4984de149",
+          "note": "agent launch placement (real claude process) and hook routing to both clients"
+        },
+        {
+          "kind": "commit",
+          "sha": "6fb064b7b",
+          "note": "reconnect legs as recorded in Run 3 (carrier drop, ladder reconnect, same relay/shell/agent)"
+        },
+        {
+          "kind": "commit",
+          "sha": "e6814ae2a",
+          "note": "Run 3 evidence and the phase verdict table"
+        }
+      ],
+      "reason": "measured 2026-10-01 (phase 15, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2). Observed: a second client (paired web) and the desktop both open the host-only project with the laptop holding none of its content; terminal, fs and git act on the owning host from both clients (independent ssh reads, laptop absence scan with controls); a real claude process launches on the owning host and a hook posted there reaches both clients' agent-status stores (claim level: agent process + hook routing, no model turn); a carrier-only drop is recovered by Orca's own ladder (generation advances, no test-side connect) with the same relay, shell and agent pids, gap-free ticks and Client A backfill 13/13. Open legs keeping this PARTIAL: (1) the hook posted during the outage was delivered in 3 runs but LOST in 2 earlier attempts of a different pane ordering, cause not characterized; (2) no model turn (OD-1 default); (3) Client B is live after the reconnect but not backfilled for the outage window (0/13); (4) the pane's status row is absent while the transport re-establishes and returns with the replayed hook; (5) the SSH New-tab menu offers Claude but not Codex, so one provider was launched. SSH-DOCKER and localhost results were not used."
+    },
+    {
+      "id": 60,
+      "row": "HF Logical workspace identity without a remote",
+      "owner": "project-host-setup-projection",
+      "done": "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        16
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: project-host-setup-projection.ts:112-116 repo: fallback is per-host"
+    },
+    {
+      "id": 61,
+      "row": "HF Replica topology surface",
+      "owner": "Project + ProjectHostSetup",
+      "done": "UI and CLI list every replica of a logical workspace with its host and role",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        16
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: ProjectHostSetup exists (project-types.ts:50-70); no replica role/state surface"
+    },
+    {
+      "id": 62,
+      "row": "HF Replica state model",
+      "owner": "new workspace-replica-state module",
+      "done": "evidence-based states; unknown never healthy; timestamps never decide",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        17
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: no cross-host comparison in src/{main,relay,shared}"
+    },
+    {
+      "id": 63,
+      "row": "HF Cross-host comparison transport",
+      "owner": "relay git + bundle",
+      "done": "ancestry decided on transferred objects (bundle verified); relay capability-probed",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        17
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: git-exec-validator.ts:19 allowlist lacks rev-list/bundle"
+    },
+    {
+      "id": 64,
+      "row": "HF Dirty-state capsule",
+      "owner": "git tree objects (UWCP A6 semantics)",
+      "done": "uncommitted state captured as a content-addressed commit under refs/orca/capsules",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        17
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: no stash/bundle/tree capture in src"
+    },
+    {
+      "id": 65,
+      "row": "HF One-way safe sync",
+      "owner": "sync pipeline",
+      "done": "fast-forward of a proven descendant, capsule first, generation-fenced; disk-full/disconnect/stale stay failures",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        18
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: no sync pipeline"
+    },
+    {
+      "id": 66,
+      "row": "HF Divergence and conflict workflow",
+      "owner": "sync pipeline + merge-tree preview",
+      "done": "diverged replicas preserved as refs; conflict surfaced; neither side overwritten",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        19
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: conflict-summary.ts:196-277 preview exists, single host only"
+    },
+    {
+      "id": 67,
+      "row": "HF Dirty-both reconciliation",
+      "owner": "sync pipeline",
+      "done": "same-base disjoint edits reconciled only when merge-tree is clean; otherwise conflict",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        19
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: none"
+    },
+    {
+      "id": 68,
+      "row": "HF Environment contract",
+      "owner": "orca.yaml",
+      "done": "declared requirements with probes on local, SSH and runtime hosts",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        20
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: orca-yaml-hook-types.ts:6-16 setup scripts only; preflight.ts:91,183 agent detection"
+    },
+    {
+      "id": 69,
+      "row": "HF Prepare this device",
+      "owner": "preflight + orca.yaml setup",
+      "done": "satisfied/missing/incompatible/unsupported/needs-authorization/unknown; only authorized actions run; no secrets",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        20
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: none"
+    },
+    {
+      "id": 70,
+      "row": "HF Continue here across hosts",
+      "owner": "working-set restore planner",
+      "done": "a working set translates through projectId to another host; each pane reattach/resume/restart/unavailable",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        21
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: project-working-set-restore-plan.ts:136-141 scope-mismatch blocker"
+    },
+    {
+      "id": 71,
+      "row": "HF SSH targets in fleet observation",
+      "owner": "fleet observation",
+      "done": "SSH hosts measured with freshness through the relay; unmeasured stays unknown",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        22
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: fleet-observation-service.ts:140-162"
+    },
+    {
+      "id": 72,
+      "row": "HF Jobs placed across hosts",
+      "owner": "orchestration dispatch + dws phase 6 apply",
+      "done": "two jobs of one mission run concurrently on two hosts with observable placement and integrated results",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        22
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: orchestration db.ts:619-645 tasks have no host; fleet-placement.ts:63 proposal authorizes nothing"
+    },
+    {
+      "id": 73,
+      "row": "HF Host loss and reconnect",
+      "owner": "ssh-relay-session reconnect",
+      "done": "host drops, others continue, return creates no duplicate PTY/agent/job",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        23
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: ssh-relay-session.ts reconnecting state exists; no fabric-level proof"
+    },
+    {
+      "id": 74,
+      "row": "HF Mixed relay versions fail closed",
+      "owner": "relay-handshake + capability probes",
+      "done": "an old relay rejects new sync/fabric methods; client never widens",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        23
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: relay-handshake.ts:206 exact-version exit 42; no fabric methods yet"
+    },
+    {
+      "id": 75,
+      "row": "HF Real two-host Production Reality",
+      "owner": "GEX44 disposable root",
+      "done": "every HF row claiming a cross-host property is exercised Windows<->GEX44 over real SSH",
+      "state": "PARTIAL",
+      "stateSource": "measured",
+      "measuredIn": "phase-15",
+      "measuredAt": "2026-10-01",
+      "required": true,
+      "phases": [
+        15
+      ],
+      "dependsOn": [],
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/hwf-two-host-disposable-root.sh",
+          "note": "GEX44 provisioner: create, status, witness, procs, teardown; refuses any root outside /tmp/orca-hwf-p15-*"
+        },
+        {
+          "kind": "file",
+          "path": "config/scripts/hwf-two-host-remote.mjs",
+          "note": "laptop driver that ships the committed provisioner as one base64 ssh argument"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-remote-first.spec.ts",
+          "note": "opt-in REAL-TWO-HOST spec; a skip reads as NOT RUN"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-15-remote-first-evidence.md",
+          "note": "the runs with their planes, witnesses and teardown counts"
+        },
+        {
+          "kind": "commit",
+          "sha": "9d0395e52",
+          "note": "GEX44 disposable-root provisioner and laptop driver"
+        },
+        {
+          "kind": "commit",
+          "sha": "426117e85",
+          "note": "spec, target adapter and absence scan (Run 1 tracer)"
+        },
+        {
+          "kind": "commit",
+          "sha": "d74f36422",
+          "note": "Run 2 evidence (row-59 legs on the owning host)"
+        },
+        {
+          "kind": "commit",
+          "sha": "e6814ae2a",
+          "note": "Run 3 evidence and the verdict table"
+        }
+      ],
+      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. PARTIAL, never PASS: the harness exercises only row 59 so far; owed rows 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH."
+    },
+    {
+      "id": 76,
+      "row": "HF Multi-host baseline family",
+      "owner": "CPP modules/tower",
+      "done": "family multi_host_fabric B0 built from verified origins; a synthetic future violation goes red",
+      "state": "ABSENT",
+      "stateSource": "measured",
+      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
+      "measuredAt": "2026-09-27",
+      "required": true,
+      "phases": [
+        24
+      ],
+      "dependsOn": [],
+      "evidence": [],
+      "reason": "Measured 2026-09-27: tower has 4 families, none multi-host"
+    }
+  ],
+  "namedDebt": [
+    {
+      "id": "ND-1",
+      "decision": "D1",
+      "debt": "autonomous evidence lanes reach GEX44 by bundle+ssh until UWCP S5's dispatcher path exists",
+      "retireWhen": "the replacement dispatcher path has run once"
+    },
+    {
+      "id": "ND-2",
+      "decision": "D2",
+      "debt": "the laptop reaches GEX44's loopback-only orca serve through an Owner-key ssh -L forward, not the dispatcher-owned tunnel D2 names",
+      "retireWhen": "UWCP S5's dispatcher-owned tunnel has carried one paired-client session to orca serve on GEX44"
+    }
+  ]
+}

@@ -11,3 +11,4 @@
 # stale and fails the check.
 # Prune after wiring: node config/scripts/check-ci-gate-coverage.mjs --prune
 
+check:dws-completeness  # program done-gate, red by design until the dws program completes

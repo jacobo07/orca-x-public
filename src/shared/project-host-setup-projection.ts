@@ -1,7 +1,15 @@
 import { getRepoExecutionHostId } from './execution-host'
-import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
-import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
-import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
+import {
+  projectIdentityCollisionsFromEligibility,
+  type ProjectIdentityCollision
+} from './project-identity-collisions'
+import {
+  getProjectGitRemoteIdentity,
+  getProjectIdForProviderIdentity,
+  getProjectProviderIdentity
+} from './project-provider-identity'
+import { buildRootIdentityEligibility, rootIdentityProjectId } from './project-root-identity-key'
+import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { WorktreeMeta } from './worktree/meta-types'
 
@@ -9,63 +17,13 @@ type ProjectAccumulator = {
   project: Project
 }
 
+export { getProjectIdForProviderIdentity, getProjectProviderIdentity }
+
 export type ProjectHostSetupProjection = {
   projects: readonly Project[]
   setups: readonly ProjectHostSetup[]
-}
-
-export function getProjectProviderIdentity(
-  repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
-): ProjectProviderIdentity | null {
-  const owner = typeof repo.upstream?.owner === 'string' ? repo.upstream.owner.trim() : ''
-  const name = typeof repo.upstream?.repo === 'string' ? repo.upstream.repo.trim() : ''
-  if (owner && name) {
-    return {
-      provider: 'github',
-      owner,
-      repo: name,
-      ...(repo.upstream?.host ? { host: repo.upstream.host } : {})
-    }
-  }
-  if (repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github') {
-    const parts = (repo.repoIcon.label?.trim() ?? '').split('/')
-    const iconOwner = parts[0]?.trim()
-    const iconRepo = parts[1]?.trim()
-    // Why: repo auto-detect can know the GitHub slug through the generated
-    // avatar icon even when legacy `upstream` has not been backfilled yet.
-    if (iconOwner && iconRepo && parts.length === 2) {
-      let host: string | undefined
-      try {
-        const url = new URL(repo.repoIcon.src)
-        host = url.protocol === 'https:' ? url.host : undefined
-      } catch {
-        // Legacy persisted icons can be malformed; keep the host-less fallback.
-      }
-      return {
-        provider: 'github',
-        owner: iconOwner,
-        repo: iconRepo,
-        ...(host && !isDefaultGitHubHost(host) ? { host } : {})
-      }
-    }
-  }
-  // Why: the remote URL retains HTTP(S) endpoint ports that the canonical
-  // key omits, so prefer it when reconstructing a host-qualified GHES identity.
-  return (
-    parseGitHubRemoteUrl(repo.gitRemoteIdentity?.remoteUrl) ??
-    parseGitHubCanonicalKey(repo.gitRemoteIdentity?.canonicalKey)
-  )
-}
-
-function getProjectGitRemoteIdentity(
-  repo: Pick<Repo, 'gitRemoteIdentity'>
-): NonNullable<Repo['gitRemoteIdentity']> | null {
-  const identity = repo.gitRemoteIdentity
-  const canonicalKey =
-    typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim() : ''
-  const remoteName = typeof identity?.remoteName === 'string' ? identity.remoteName.trim() : ''
-  const remoteUrl = typeof identity?.remoteUrl === 'string' ? identity.remoteUrl.trim() : ''
-  return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
+  /** Derived on every projection and never persisted; absent from hosts that predate it. */
+  identityCollisions?: readonly ProjectIdentityCollision[]
 }
 
 /** True when the repo resolves to a GitHub provider identity (via explicit
@@ -95,8 +53,14 @@ export function isProjectRemoteIdentityPending(
 
 const HOST_LOCAL_PROJECT_ID_PREFIX = 'repo:'
 
+/**
+ * Precedence: github: > git: > git-root:<first commit> > repo:<id>. A git-root: id is only
+ * derived for a repo in `eligibleRepoIds`, which is computed over a whole repo set (see
+ * buildRootIdentityEligibility), so no argument means the conservative repo: fallback.
+ */
 export function getProjectIdentityKey(
-  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity' | 'gitRootIdentity'>,
+  eligibleRepoIds?: ReadonlySet<string>
 ): string {
   const identity = getProjectProviderIdentity(repo)
   if (identity) {
@@ -106,106 +70,24 @@ export function getProjectIdentityKey(
   if (gitRemoteIdentity) {
     return `git:${gitRemoteIdentity.canonicalKey}`
   }
+  if (eligibleRepoIds?.has(repo.id) && repo.gitRootIdentity) {
+    return rootIdentityProjectId(repo.gitRootIdentity.rootCommit)
+  }
   return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
 }
 
 /**
  * True for the `repo:<id>` fallback above — a folder project, or a git repo with no
- * remote. The id is a per-host repo id, so the same project on another host derives a
- * different one and can never be matched there.
+ * remote and no proven first commit. The id is a per-host repo id, so the same project on
+ * another host derives a different one and can never be matched there; a git-root: id
+ * is matchable across hosts and is deliberately not host-local.
  */
 export function isHostLocalProjectId(projectId: string): boolean {
   return projectId.startsWith(HOST_LOCAL_PROJECT_ID_PREFIX)
 }
 
-export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentity): string {
-  return `github:${githubRepoIdentityKey(identity)}`
-}
-
-function getProjectId(
-  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
-): string {
-  return getProjectIdentityKey(repo)
-}
-
-function isGitHubRemoteHost(host: string): boolean {
-  const hostname = host.toLowerCase().replace(/:\d+$/, '')
-  // A generic git remote is provider-neutral. Only infer GHES when the host
-  // itself carries a GitHub/GHE signal; upstream/icon metadata handles custom names.
-  return (
-    isDefaultGitHubHost(hostname) ||
-    hostname.startsWith('github.') ||
-    hostname.startsWith('github-') ||
-    hostname.startsWith('ghe.') ||
-    hostname.startsWith('ghe-')
-  )
-}
-
-function projectProviderIdentity(
-  host: string,
-  owner: string,
-  repo: string
-): ProjectProviderIdentity | null {
-  const normalizedHost = normalizeGitHubRemoteHost(host)
-  if (!isGitHubRemoteHost(normalizedHost)) {
-    return null
-  }
-  return {
-    provider: 'github',
-    owner,
-    repo,
-    ...(!isDefaultGitHubHost(normalizedHost) ? { host: normalizedHost } : {})
-  }
-}
-
-function parseGitHubRemotePath(path: string): { owner: string; repo: string } | null {
-  const parts = path.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
-  if (parts.length !== 2) {
-    return null
-  }
-  const [owner, repoWithSuffix] = parts
-  const repo = repoWithSuffix?.replace(/\.git$/i, '')
-  return owner && repo ? { owner, repo } : null
-}
-
-function parseGitHubCanonicalKey(canonicalKey: string | undefined): ProjectProviderIdentity | null {
-  const trimmed = canonicalKey?.trim()
-  if (!trimmed) {
-    return null
-  }
-  const slash = trimmed.indexOf('/')
-  if (slash <= 0) {
-    return null
-  }
-  const host = trimmed.slice(0, slash)
-  const path = parseGitHubRemotePath(trimmed.slice(slash + 1))
-  return path ? projectProviderIdentity(host, path.owner, path.repo) : null
-}
-
-function parseGitHubRemoteUrl(remoteUrl: string | undefined): ProjectProviderIdentity | null {
-  const trimmed = remoteUrl?.trim()
-  if (!trimmed) {
-    return null
-  }
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
-  if (sshMatch?.[1] && sshMatch[2] && sshMatch[3]) {
-    return projectProviderIdentity(sshMatch[1], sshMatch[2], sshMatch[3])
-  }
-  try {
-    const url = new URL(trimmed)
-    if (!['git:', 'git+ssh:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
-      return null
-    }
-    const path = parseGitHubRemotePath(url.pathname)
-    if (!path) {
-      return null
-    }
-    // HTTP ports identify the API endpoint; SSH/git ports are transport-only.
-    const host = url.protocol === 'http:' || url.protocol === 'https:' ? url.host : url.hostname
-    return projectProviderIdentity(host, path.owner, path.repo)
-  } catch {
-    return null
-  }
+function getProjectId(repo: Repo, eligibleRepoIds: ReadonlySet<string>): string {
+  return getProjectIdentityKey(repo, eligibleRepoIds)
 }
 
 // Why: `addedAt || now` restamps Date.now() when addedAt is 0 / absent / NaN, so every
@@ -241,12 +123,12 @@ export function mergeCatalogUpdatedAt(left: number, right: number): number {
   return Math.max(known, other)
 }
 
-function createProjectFromRepo(repo: Repo): Project {
+function createProjectFromRepo(repo: Repo, projectId: string): Project {
   const identity = getProjectProviderIdentity(repo)
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
   return {
-    id: getProjectId(repo),
+    id: projectId,
     displayName: repo.displayName,
     badgeColor: repo.badgeColor,
     ...(repo.repoIcon !== undefined ? { repoIcon: repo.repoIcon } : {}),
@@ -299,19 +181,26 @@ function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
   }
 }
 
+/**
+ * `identityContext` is the whole repo set identity is judged against: a caller projecting a
+ * filtered subset must pass the full list (a git-root: id depends on the repos NOT shown), and
+ * `[]` means "no context", i.e. the conservative repo: derivation.
+ */
 export function projectHostSetupProjectionFromRepos(
   repos: readonly Repo[],
-  _now?: number
+  _now?: number,
+  options?: { identityContext?: readonly Repo[] }
 ): ProjectHostSetupProjection {
   const projectById = new Map<string, ProjectAccumulator>()
   const setups: ProjectHostSetup[] = []
+  const eligibility = buildRootIdentityEligibility(options?.identityContext ?? repos)
 
   for (const repo of repos) {
-    const projectId = getProjectId(repo)
+    const projectId = getProjectId(repo, eligibility.eligibleRepoIds)
     const existing = projectById.get(projectId)
     const project = existing
       ? mergeProjectRepo(existing.project, repo)
-      : createProjectFromRepo(repo)
+      : createProjectFromRepo(repo, projectId)
     const setup = createSetupFromRepo(repo, projectId)
     projectById.set(projectId, {
       project
@@ -321,7 +210,8 @@ export function projectHostSetupProjectionFromRepos(
 
   return {
     projects: [...projectById.values()].map((entry) => entry.project),
-    setups
+    setups,
+    identityCollisions: projectIdentityCollisionsFromEligibility(eligibility)
   }
 }
 
@@ -338,7 +228,7 @@ export function getProjectHostSetupForRepo(
 ): ProjectHostSetup {
   return (
     setups.find((setup) => setup.repoId === repo.id) ??
-    projectHostSetupProjectionFromRepos([repo]).setups[0]
+    projectHostSetupProjectionFromRepos([repo], undefined, { identityContext: [] }).setups[0]
   )
 }
 

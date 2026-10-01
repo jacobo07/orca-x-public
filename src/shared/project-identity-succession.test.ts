@@ -136,3 +136,140 @@ describe('carryProjectStateThroughIdentityChange', () => {
     expect([...result.remappedProjectIds]).toEqual([['repo:r1', 'git:host/acme/left']])
   })
 })
+
+describe('repo: to git-root: merge hand-over', () => {
+  const ROOT_ID = `git-root:${'a'.repeat(40)}`
+  const application = (id: string) => ({
+    id: `capp_${id}`,
+    label: id,
+    origin: `https://${id}.example.com`,
+    signInOrigins: [],
+    addedAt: 1
+  })
+  const merged = () => makeProject({ id: ROOT_ID, sourceRepoIds: ['a', 'b'] })
+  const predecessorA = () =>
+    makeProject({
+      id: 'repo:a',
+      sourceRepoIds: ['a'],
+      updatedAt: 20,
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+      connectedApplications: [application('aaaaaaaa')]
+    })
+  const predecessorB = () =>
+    makeProject({
+      id: 'repo:b',
+      sourceRepoIds: ['b'],
+      updatedAt: 10,
+      localWindowsRuntimePreference: { kind: 'windows-host' },
+      connectedApplications: [application('bbbbbbbb')]
+    })
+
+  it('claims every contained predecessor and unions their applications, primary first', () => {
+    const result = carryProjectStateThroughIdentityChange(
+      [merged()],
+      [predecessorA(), predecessorB()]
+    )
+
+    expect(result.projects[0]?.connectedApplications?.map((entry) => entry.id)).toEqual([
+      'capp_aaaaaaaa',
+      'capp_bbbbbbbb'
+    ])
+    expect([...result.remappedProjectIds].sort()).toEqual([
+      ['repo:a', ROOT_ID],
+      ['repo:b', ROOT_ID]
+    ])
+    expect(result.projects[0]?.updatedAt).toBe(20)
+  })
+
+  it('lets the primary win an application id clash', () => {
+    const clash = { ...application('aaaaaaaa'), label: 'from b' }
+    const b = { ...predecessorB(), connectedApplications: [clash] }
+
+    const result = carryProjectStateThroughIdentityChange([merged()], [predecessorA(), b])
+
+    expect(result.projects[0]?.connectedApplications).toEqual([
+      expect.objectContaining({ id: 'capp_aaaaaaaa', label: 'aaaaaaaa' })
+    ])
+  })
+
+  it('takes the preference from the predecessor holding the local repo, whatever the order', () => {
+    // `b` is the primary (newer) but holds only the remote replica; `a` holds the local one.
+    const b = { ...predecessorB(), updatedAt: 99 }
+
+    for (const previous of [
+      [predecessorA(), b],
+      [b, predecessorA()]
+    ]) {
+      const result = carryProjectStateThroughIdentityChange([merged()], previous, new Set(['a']))
+      expect(result.projects[0]?.localWindowsRuntimePreference).toEqual({
+        kind: 'wsl',
+        distro: 'Ubuntu'
+      })
+    }
+  })
+
+  it('fills an absent preference in primary order when no claimed predecessor is local', () => {
+    const bare = { ...predecessorA(), localWindowsRuntimePreference: undefined }
+
+    const result = carryProjectStateThroughIdentityChange([merged()], [bare, predecessorB()])
+
+    expect(result.projects[0]?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
+  })
+
+  it('keeps the primary preference when two predecessors are both local', () => {
+    // The stated cost: two repo rows of one repository on this host, two different preferences.
+    const result = carryProjectStateThroughIdentityChange(
+      [merged()],
+      [predecessorB(), predecessorA()],
+      new Set(['a', 'b'])
+    )
+
+    // The holders are tried in claim order: `a` is the primary (newer updatedAt).
+    expect(result.projects[0]?.localWindowsRuntimePreference).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+  })
+
+  it('does not claim a predecessor holding a repo the root project does not contain', () => {
+    const spread = makeProject({
+      id: 'repo:c',
+      sourceRepoIds: ['b', 'c'],
+      connectedApplications: [application('cccccccc')]
+    })
+
+    const result = carryProjectStateThroughIdentityChange([merged()], [predecessorA(), spread])
+
+    expect([...result.remappedProjectIds]).toEqual([['repo:a', ROOT_ID]])
+    expect(result.projects[0]?.connectedApplications?.map((entry) => entry.id)).toEqual([
+      'capp_aaaaaaaa'
+    ])
+  })
+
+  it('leaves a 1:1 promotion to a non-root key exactly as before', () => {
+    const projected = makeProject({ id: 'git:host/acme/app', sourceRepoIds: ['a', 'b'] })
+
+    const result = carryProjectStateThroughIdentityChange(
+      [projected],
+      [predecessorA(), predecessorB()],
+      new Set(['b'])
+    )
+
+    expect([...result.remappedProjectIds]).toEqual([['repo:a', 'git:host/acme/app']])
+    expect(result.projects[0]?.localWindowsRuntimePreference).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+  })
+
+  it('lets a git-root: row that already exists claim an orphaned predecessor that joins it', () => {
+    const existing = makeProject({ id: ROOT_ID, sourceRepoIds: ['a', 'b'], updatedAt: 5 })
+
+    const result = carryProjectStateThroughIdentityChange([merged()], [existing, predecessorB()])
+
+    expect(result.projects[0]?.connectedApplications?.map((entry) => entry.id)).toEqual([
+      'capp_bbbbbbbb'
+    ])
+    expect([...result.remappedProjectIds]).toEqual([['repo:b', ROOT_ID]])
+  })
+})

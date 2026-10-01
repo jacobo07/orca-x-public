@@ -1,5 +1,6 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
+import { buildRootIdentityEligibility } from '../../../../shared/project-root-identity-key'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type AutomationProjectGroup = {
@@ -13,8 +14,9 @@ export function getAutomationProjectGroups(
   selectedRepoId: string
 ): AutomationProjectGroup[] {
   const groupsByProject = new Map<string, AutomationProjectGroup>()
+  const { eligibleRepoIds } = buildRootIdentityEligibility(repos)
   for (const repo of repos) {
-    const projectKey = getProjectIdentityKey(repo)
+    const projectKey = getProjectIdentityKey(repo, eligibleRepoIds)
     const current = groupsByProject.get(projectKey)
     if (!current) {
       groupsByProject.set(projectKey, { projectKey, repo, sources: [repo] })

@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { planFleetPlacement, type FleetPlacementRequest } from '../../../../shared/fleet-placement'
 import type { FleetPlacementViewResult } from '../../../../shared/fleet-placement-view'
+import { buildNodeManifests, type NodeManifestsResult } from '../../../../shared/node-manifest'
 import { readFleetObservation } from '../../../fleet/fleet-observation-slot'
+import type { NodeResourcesReply } from '../../../fleet/node-resources-measure'
+import { readNodeResources } from '../../../fleet/node-resources-slot'
 import { defineMethod, type RpcMethod } from '../core'
 import { isLocalRpcCaller } from '../local-rpc-caller'
 
@@ -15,6 +18,11 @@ const PlacementViewParams = z
     currentFingerprint: z.string().min(1).optional(),
     maxSampleAgeMs: z.number().finite().positive().optional()
   })
+  .strict()
+
+// Why: ports only (never a URL), so a paired peer cannot make this host fetch an arbitrary address.
+const NodeResourcesParams = z
+  .object({ modelProbePorts: z.array(z.number().int().min(1).max(65535)).max(4).optional() })
   .strict()
 
 export type { FleetPlacementViewResult }
@@ -52,5 +60,33 @@ export const FLEET_METHODS: RpcMethod[] = [
         proposal: planFleetPlacement(observation.members, request)
       }
     }
+  }),
+  defineMethod({
+    name: 'fleet.nodeManifests',
+    params: NodeResourcesParams.optional(),
+    handler: async (params, ctx): Promise<NodeManifestsResult> => {
+      // Why: answering would have this host query its own paired runtimes on another's behalf.
+      if (!isLocalRpcCaller(ctx)) {
+        return { status: 'refused', reason: 'remote-caller' }
+      }
+      const pending = readFleetObservation(
+        params?.modelProbePorts ? { modelProbePorts: params.modelProbePorts } : undefined
+      )
+      if (!pending) {
+        return { status: 'unavailable', reason: 'no-fleet-reader' }
+      }
+      const observation = await pending
+      return {
+        status: 'ok',
+        observedAt: observation.completedAt,
+        manifests: buildNodeManifests(observation)
+      }
+    }
+  }),
+  defineMethod({
+    name: 'fleet.nodeResources',
+    params: NodeResourcesParams.optional(),
+    // Why: it reads only this host, so unlike the placement view it needs no remote-caller refusal.
+    handler: async (params): Promise<NodeResourcesReply> => readNodeResources(params ?? {})
   })
 ]

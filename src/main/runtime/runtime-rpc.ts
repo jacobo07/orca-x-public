@@ -23,6 +23,13 @@ import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
 import {
+  assertDeviceStillAuthorized,
+  deviceRefusalDetail,
+  revokeDeviceAndTerminateConnections,
+  DEVICE_UNAUTHORIZED_CLOSE_CODE,
+  DEVICE_UNAUTHORIZED_CLOSE_REASON
+} from './device-authorization'
+import {
   E2EEKeypairUnreadableError,
   E2EEKeypairUnusableError,
   loadOrCreateE2EEKeypair,
@@ -54,7 +61,7 @@ import type {
 } from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { GIT_DISCARD_OBSERVED_STATE_REQUIRED_CODE } from '../../shared/protocol-version'
-import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
+import { isAdvertisedHostServedByPin, resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
 import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
@@ -79,6 +86,9 @@ type OrcaRuntimeRpcServerOptions = {
   // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
   // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
   exposeNetworkByDefault?: boolean
+  // Why: DWS-P2 (CTX-EXP-1) — pins the listener to this host; outranks exposeNetworkByDefault and
+  // makes the pairing-time widen (ensureNetworkExposure) a permanent no-op while set.
+  pinnedBindHost?: string
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
@@ -94,6 +104,7 @@ export type PairingOfferUnavailableReason =
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
   | 'network_exposure_failed'
+  | 'network_exposure_pinned'
 
 export type PairingOfferUnavailable = {
   available: false
@@ -540,6 +551,7 @@ export class OrcaRuntimeRpcServer {
   private readonly wsPort: number
   private readonly preferPinnedWsPort: boolean
   private readonly exposeNetworkByDefault: boolean
+  private readonly pinnedBindHost: string | null
   private readonly webClientRoot: string | undefined
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   private wsBoundHost: string | null = null
@@ -598,6 +610,7 @@ export class OrcaRuntimeRpcServer {
     wsPort = DEFAULT_WS_PORT,
     preferPinnedWsPort = false,
     exposeNetworkByDefault = false,
+    pinnedBindHost,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
@@ -612,6 +625,7 @@ export class OrcaRuntimeRpcServer {
     this.wsPort = wsPort
     this.preferPinnedWsPort = preferPinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
+    this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
@@ -689,22 +703,29 @@ export class OrcaRuntimeRpcServer {
         return false
       }
     }
-    if (!this.deviceRegistry?.removeDevice(deviceId)) {
+    if (!this.revokeAndTerminate(device)) {
       return false
     }
     this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     this.runtime.forgetClientNavigationState(deviceId)
-    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
+  }
+
+  private revokeAndTerminate(device: DeviceEntry): boolean {
+    return (
+      this.deviceRegistry !== null &&
+      revokeDeviceAndTerminateConnections(this.deviceRegistry, device, (token) =>
+        this.mobileSocketWiring?.terminateDeviceConnections(token)
+      )
+    )
   }
 
   revokeRuntimeAccess(deviceId: string): boolean {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
+    if (device?.scope !== 'runtime' || !this.revokeAndTerminate(device)) {
       return false
     }
     this.runtime.forgetClientNavigationState(deviceId)
-    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
 
@@ -751,6 +772,16 @@ export class OrcaRuntimeRpcServer {
     const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
     if (!advertised.ok) {
       return pairingUnavailable(advertised.reason, advertised.guidance)
+    }
+    // Why: a pinned listener never widens, so an offer for an address it does not serve can never connect.
+    if (
+      this.pinnedBindHost !== null &&
+      !isAdvertisedHostServedByPin(this.pinnedBindHost, args.address)
+    ) {
+      return pairingUnavailable(
+        'network_exposure_pinned',
+        `The listener is pinned to ${this.pinnedBindHost} (--bind-host), so it cannot serve the advertised address. Advertise ${this.pinnedBindHost} or a tunnel that forwards to it.`
+      )
     }
     const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
@@ -1078,9 +1109,17 @@ export class OrcaRuntimeRpcServer {
     }
   }
 
-  private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
-    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
-    if (!connectionId) {
+  private handleWebSocketBinaryMessage(
+    bytes: Uint8Array<ArrayBufferLike>,
+    socket: AuthenticatedMobileSocket
+  ): void {
+    const { ws, connectionId } = socket
+    // Why: terminal input rides this path with no per-request auth, so a revoked device must be refused per frame.
+    const authorization = this.deviceRegistry
+      ? assertDeviceStillAuthorized(this.deviceRegistry, socket.device.deviceToken)
+      : null
+    if (!authorization?.ok) {
+      ws.close(DEVICE_UNAUTHORIZED_CLOSE_CODE, DEVICE_UNAUTHORIZED_CLOSE_REASON)
       return
     }
     const frame = decodeTerminalStreamFrame(bytes)
@@ -1303,6 +1342,11 @@ export class OrcaRuntimeRpcServer {
   // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
   // counting it would republish the runtime on every interface one restart after the user declined that.
   private resolveInitialWebSocketBindHost(): string {
+    // Why: DWS-P2 (CTX-EXP-1) — an explicit pin outranks exposeNetworkByDefault and every device-reach
+    // heuristic below; it is the first branch on purpose.
+    if (this.pinnedBindHost !== null) {
+      return this.pinnedBindHost
+    }
     if (this.exposeNetworkByDefault) {
       return WS_BIND_HOST_ALL_INTERFACES
     }
@@ -1348,7 +1392,9 @@ export class OrcaRuntimeRpcServer {
     this.wsBoundHost = options.host
     return {
       transport: wsTransport,
-      endpoint: `ws://${options.host}:${wsTransport.resolvedPort}`
+      // Why: an unbracketed IPv6 literal (`ws://::1:6768`) is not a URL, so a `--bind-host ::1` pin would
+      // throw in resolveAdvertisedPairingEndpoint after the listener had already bound.
+      endpoint: `ws://${options.host.includes(':') ? `[${options.host}]` : options.host}:${wsTransport.resolvedPort}`
     }
   }
 
@@ -1381,7 +1427,7 @@ export class OrcaRuntimeRpcServer {
           socket
         )
       },
-      onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+      onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket),
       onReady: () => {
         // Why: first authenticated mobile/remote client (direct WS and
         // cloud relay both attach here) starts path-candidate tracking.
@@ -1424,7 +1470,9 @@ export class OrcaRuntimeRpcServer {
     if (
       !this.enableWebSocket ||
       this.stopping ||
-      this.wsBoundHost === WS_BIND_HOST_ALL_INTERFACES
+      this.wsBoundHost === WS_BIND_HOST_ALL_INTERFACES ||
+      // Why: DWS-P2 (CTX-EXP-1) — a pinned bind host makes the pairing-time widen a permanent no-op.
+      this.pinnedBindHost !== null
     ) {
       return
     }
@@ -1707,11 +1755,15 @@ export class OrcaRuntimeRpcServer {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
       return
     }
-    const device = this.deviceRegistry?.validateToken(token)
-    if (!device) {
-      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
+    const authorization = this.deviceRegistry
+      ? assertDeviceStillAuthorized(this.deviceRegistry, token)
+      : null
+    if (!authorization?.ok) {
+      const { message, data } = deviceRefusalDetail(authorization?.reason ?? 'unknown_token')
+      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', message, data)))
       return
     }
+    const device = authorization.device
     if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
       reply(
         JSON.stringify(
@@ -1804,8 +1856,8 @@ export class OrcaRuntimeRpcServer {
     }
   }
 
-  private buildError(id: string, code: string, message: string): RpcResponse {
-    return errorResponse(id, { runtimeId: this.runtime.getRuntimeId() }, code, message)
+  private buildError(id: string, code: string, message: string, data?: unknown): RpcResponse {
+    return errorResponse(id, { runtimeId: this.runtime.getRuntimeId() }, code, message, data)
   }
 
   private writeMetadata(): void {

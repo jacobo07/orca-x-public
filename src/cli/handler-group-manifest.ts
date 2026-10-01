@@ -191,7 +191,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'fleet',
-    keys: ['fleet placement'],
+    keys: ['fleet placement', 'fleet manifest'],
     load: async () => (await import('./handlers/fleet.js')).FLEET_HANDLERS
   },
   {

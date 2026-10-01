@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
+import { assertDeviceStillAuthorized } from '../device-authorization'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
@@ -149,10 +150,11 @@ export class MobileSocketWiring {
         requireV2: metadata.transport === 'relay',
         outboundMemoryBudget: this.outboundMemoryBudget,
         resolveAuthenticatedDevice: (token) => {
-          const device = this.deviceRegistry.validateToken(token)
-          if (!device) {
+          const authorization = assertDeviceStillAuthorized(this.deviceRegistry, token)
+          if (!authorization.ok) {
             return null
           }
+          const device = authorization.device
           // Why: outer relay authorization cannot choose the local Orca
           // identity; E2EE must resolve the same device before readiness.
           if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {

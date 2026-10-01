@@ -1,0 +1,134 @@
+{
+  "schema": "orca.dws-federation-remeasure/1",
+  "verdict": "MEASURED",
+  "rungReached": "gates",
+  "blockedReason": null,
+  "headSha": "997b4a55a92f860df1e923616b46b0e338448c24",
+  "gatesFencedSha": "997b4a55a92f860df1e923616b46b0e338448c24",
+  "serveDeployedSha": "3266e1a41790ab356def108aca96895e1e921279",
+  "federationHead": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+  "containment": {
+    "localRef": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+    "originRef": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+    "mergeBase": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+    "mergeBaseOrigin": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+    "behindLocal": 0,
+    "behindOrigin": 0,
+    "fetch": {
+      "detail": "git fetch origin orca-x/agent-federation rc=0 (From github.com/jacobo07/orca-x, branch orca-x/agent-federation -> FETCH_HEAD)",
+      "outcome": "ok"
+    },
+    "federationWorktreeHead": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+    "mode": "ancestry"
+  },
+  "fences": {
+    "attribution": {
+      "sha": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+      "label": "attribution",
+      "remoteRevParse": "71dd7bc979858f58633f3a72c081892759f0ee4e",
+      "fenceOk": "FENCE_OK 997b4a55a92f860df1e923616b46b0e338448c24",
+      "orcaXHeadBefore": "f9a721fda491096b74f0115d78632356e526d096",
+      "orcaXHeadAfter": "f9a721fda491096b74f0115d78632356e526d096",
+      "nodeVersion": "v24.21.0",
+      "gates": {
+        "db-probe": 0,
+        "migration": 0,
+        "tsc-node": 0,
+        "vitest": 0
+      },
+      "vitest": {
+        "total": 687,
+        "passed": 677,
+        "failed": 0,
+        "skipped": 10,
+        "suites": 95,
+        "skippedFiles": 7
+      },
+      "vitestFiles": 95,
+      "tscErrorCount": 0,
+      "realityEnv": "unset",
+      "diskFreeGbBefore": 31,
+      "diskFreeGbAfter": 31,
+      "treeClean": true,
+      "failedTests": [],
+      "tscErrors": [],
+      "skippedFiles": [
+        "agent-delegation-reality.test.ts",
+        "agent-task-reality.test.ts",
+        "claude-conversation-reality.test.ts",
+        "claude-mcp-bridge-reality.test.ts",
+        "conversation-process-boundary.test.ts",
+        "conversation-reality.test.ts",
+        "review-reality.test.ts"
+      ],
+      "blocked": null,
+      "utcStart": "2026-09-30T06:25:01.7875718Z",
+      "utcEnd": "2026-09-30T06:25:45.0117991Z"
+    },
+    "head": {
+      "sha": "997b4a55a92f860df1e923616b46b0e338448c24",
+      "label": "head",
+      "remoteRevParse": "997b4a55a92f860df1e923616b46b0e338448c24",
+      "fenceOk": "FENCE_OK 997b4a55a92f860df1e923616b46b0e338448c24",
+      "orcaXHeadBefore": "f9a721fda491096b74f0115d78632356e526d096",
+      "orcaXHeadAfter": "f9a721fda491096b74f0115d78632356e526d096",
+      "nodeVersion": "v24.21.0",
+      "gates": {
+        "db-probe": 0,
+        "migration": 0,
+        "tsc-node": 0,
+        "vitest": 0
+      },
+      "vitest": {
+        "total": 687,
+        "passed": 677,
+        "failed": 0,
+        "skipped": 10,
+        "suites": 95,
+        "skippedFiles": 7
+      },
+      "vitestFiles": 95,
+      "tscErrorCount": 0,
+      "realityEnv": "unset",
+      "diskFreeGbBefore": 31,
+      "diskFreeGbAfter": 31,
+      "treeClean": true,
+      "failedTests": [],
+      "tscErrors": [],
+      "skippedFiles": [
+        "agent-delegation-reality.test.ts",
+        "agent-task-reality.test.ts",
+        "claude-conversation-reality.test.ts",
+        "claude-mcp-bridge-reality.test.ts",
+        "conversation-process-boundary.test.ts",
+        "conversation-reality.test.ts",
+        "review-reality.test.ts"
+      ],
+      "blocked": null,
+      "utcStart": "2026-09-30T06:26:15.1594551Z",
+      "utcEnd": "2026-09-30T06:26:58.8182155Z"
+    }
+  },
+  "attribution": {
+    "preExistingRed": [],
+    "headOnlyRed": []
+  },
+  "ownership": {
+    "exit": 0,
+    "stdout": "OWNERSHIP owned=97 changed=127 intersect=1 allowed=1 violations=0 verdict=OK\r\nALLOWED src/cli/handler-group-manifest.ts 0c35e3422 CLI handler-group registry. The dws edit adds 'fleet manifest' inside the fleet group's own key list; the orchestration group entry federation added in cfa93e8d9 is untouched, so this is a shared registry touch and not a federation subsystem edit.\r\nINFO p0-conflict-resolutions 17\r\nINFO p0-conflict .github/workflows/pr.yml\r\nINFO p0-conflict .gitignore\r\nINFO p0-conflict config/durability-contracts.jsonc\r\nINFO p0-conflict config/scripts/check-durability-contracts.mjs\r\nINFO p0-conflict config/scripts/check-durability-contracts.test.mjs\r\nINFO p0-conflict config/scripts/check-mobile-capability-aperture.mjs\r\nINFO p0-conflict config/scripts/check-reliability-gates.mjs\r\nINFO p0-conflict package.json\r\nINFO p0-conflict src/main/daemon/daemon-host-relocation.test.ts\r\nINFO p0-conflict src/main/index.ts\r\nINFO p0-conflict src/main/runtime/orca-runtime.ts\r\nINFO p0-conflict src/main/window/attach-main-window-services.ts\r\nINFO p0-conflict src/renderer/src/components/terminal-pane/pty-connection-test-store-state.ts\r\nINFO p0-conflict src/renderer/src/components/terminal-pane/pty-connection.ts\r\nINFO p0-conflict src/renderer/src/i18n/locales/en.json\r\nINFO p0-conflict src/renderer/src/store/slices/ui.ts\r\nINFO p0-conflict src/shared/runtime-types.ts\r\nINFO wider-shared-not-federation-owned AGENTS.md\r\nINFO wider-shared-not-federation-owned package.json\r\nINFO wider-shared-not-federation-owned src/main/index.ts\r\nINFO wider-shared-not-federation-owned src/main/runtime/orca-runtime.ts\r\nINFO wider-shared-not-federation-owned src/main/runtime/rpc/methods/index.ts\r\nINFO wider-shared-not-federation-owned src/main/runtime/runtime-rpc.ts"
+  },
+  "cloneHeadAtEnd": "997b4a55a92f860df1e923616b46b0e338448c24",
+  "orcaXHeadAtEnd": "f9a721fda491096b74f0115d78632356e526d096",
+  "cloneLeftAtGatedSha": true,
+  "notRerun": [
+    "federation's mutation drills: federation's own claim, not re-run because they edit federation-owned files",
+    "tests/e2e/agent-federation-approval.spec.ts: NOT-RERUN, federation P6 evidence ddc6f67d8"
+  ],
+  "correction": "Federation cites live-review commit 2e8c5516a, which is not present in the object store; da3ec43c0 and 47558af87 are the cited evidence.",
+  "inheritedDebt": [
+    "orchestration.reviewRequest, orchestration.reviewShow, conversations.subscribe and conversations.unsubscribe are unfixed mobile-aperture entries: federation debt, not fixed here",
+    "ND-1: the legal lane is the Orca bundle+ssh evidence lane until UWCP S5 dispatcher lands"
+  ],
+  "evidenceCommitBoundary": "Gates ran at the fenced sha S; the evidence commit E may touch only docs/dws/, the requirements matrix and the allow-list.",
+  "utc": null
+}

@@ -124,6 +124,10 @@ Node delivers an IPC message a tick after reading it and checks the channel only
 
 Unfinished intent from any project or chat lives in the Universal Backlog, which sits above Tasks and links to the owners that execute it — it never copies their state. Harvested text is a candidate until accepted and reconciled against evidence; project is optional; source, executor and project are separate. See [`docs/reference/universal-backlog.md`](./docs/reference/universal-backlog.md) and, for the ChatGPT doorway, [`docs/reference/backlog-infinityops-contract.md`](./docs/reference/backlog-infinityops-contract.md).
 
+## Detach, Stop, Cancel
+
+Window close, client disconnect and app quit are Detach for remote and runtime-hosted Executions: they never stop one or cancel a Workstream. A local PTY owned by this app process is the exception: `killAllPty()` on will-quit and update install ends it with the process (pinned by `src/main/quit-path-local-runtime-teardown.characterization.test.ts`); daemon-backed PTYs survive. Stop Execution is an explicit act (`terminal.stopExact` and its siblings). Cancel Workstream belongs to UWCP (`uwcp.control/1`) and is ABSENT (refuses): `workstream.cancel` answers `workstream_authority_unavailable` and never degrades into a Stop. An RPC that launches or mutates an Execution declares `effect: 'launch'`. See [`docs/reference/detach-stop-cancel-effects.md`](./docs/reference/detach-stop-cancel-effects.md).
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).

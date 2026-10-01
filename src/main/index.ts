@@ -107,6 +107,8 @@ import {
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
 import { listEnvironments, resolveEnvironment } from '../shared/runtime-environment-store'
 import { installFleetObservation } from './fleet/fleet-observation-slot'
+import { measureNodeResources } from './fleet/node-resources-measure'
+import { installNodeResourcesMeasurer, readNodeResources } from './fleet/node-resources-slot'
 import { readE2EEPublicKey } from './runtime/e2ee-keypair'
 import { getPreferredPairingOffer } from '../shared/runtime-environments'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
@@ -164,7 +166,11 @@ import {
   installUnhandledRejectionLogging
 } from './startup/main-process-error-guards'
 import { enableRendererHeapHeadroom } from './startup/renderer-heap-headroom'
-import { argvRequestsServeMode, normalizeServeModeArgv } from './startup/serve-mode-argv'
+import {
+  argvRequestsServeMode,
+  normalizeServeModeArgv,
+  readServeBindHostArg
+} from './startup/serve-mode-argv'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   readActiveGpuFallbackMarker,
@@ -334,7 +340,7 @@ import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { beginSshShutdown } from './ipc/ssh'
+import { beginSshShutdown, listSshHostIdentities } from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -1996,6 +2002,8 @@ type ServeOptions = {
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
+  // DWS-P2 (CTX-EXP-1): pins the WS listener host, outranking exposeNetworkByDefault.
+  bindHost: string | null
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -2023,7 +2031,8 @@ function getServeOptions(argv = process.argv): ServeOptions {
     noPairing: argv.includes('--serve-no-pairing'),
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
-    projectRoot: valueAfter('--serve-project-root')
+    projectRoot: valueAfter('--serve-project-root'),
+    bindHost: readServeBindHostArg(argv)
   }
 }
 
@@ -2795,19 +2804,28 @@ void app.whenReady().then(async () => {
     readLocalPublicKey: () => readE2EEPublicKey(getCanonicalUserDataPath()),
     getLocalStatus: () => runtimeService.getStatus(),
     collectLocalSnapshot: () => runtimeService.getMemorySnapshot(),
+    collectLocalNodeResources: (options) =>
+      readNodeResources({
+        ...(options.modelProbePorts ? { modelProbePorts: [...options.modelProbePorts] } : {})
+      }),
     listEnvironments: () => listEnvironments(app.getPath('userData')),
-    callEnvironment: ({ environmentId, method, pairingRevision, timeoutMs, signal }) =>
+    listSshHostIdentities,
+    callEnvironment: ({ environmentId, method, params, pairingRevision, timeoutMs, signal }) =>
       callRuntimeEnvironment(
         app.getPath('userData'),
         environmentId,
         method,
-        undefined,
+        params,
         timeoutMs,
         pairingRevision,
         undefined,
         { signal }
       )
   })
+  // Why: the node's userData is where its work lands, so it is the disk the manifest describes.
+  installNodeResourcesMeasurer((params) =>
+    measureNodeResources({ ...params, dataPath: app.getPath('userData') })
+  )
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })
@@ -3251,6 +3269,8 @@ void app.whenReady().then(async () => {
           preferPinnedWsPort: true
         }
       : {}),
+    // Why: DWS-P2 (CTX-EXP-1) — an explicit --bind-host pins the listener even under exposeNetworkByDefault.
+    ...(serveOptions?.bindHost ? { pinnedBindHost: serveOptions.bindHost } : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   registerMobileHandlers(runtimeRpc, {

@@ -391,6 +391,72 @@ describe('serveOrcaApp', () => {
     )
   })
 
+  it('passes an explicit bind host through to the foreground server child', async () => {
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => handler(0, null))
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+
+    await expect(
+      serveOrcaApp({
+        json: true,
+        port: '6791',
+        pairingAddress: '127.0.0.1',
+        bindHost: '127.0.0.1'
+      })
+    ).resolves.toBe(0)
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/Applications/Orca.app/Contents/MacOS/Orca',
+      [
+        '--serve',
+        '--serve-json',
+        '--serve-port',
+        '6791',
+        '--serve-pairing-address',
+        '127.0.0.1',
+        '--serve-bind-host',
+        '127.0.0.1'
+      ],
+      expect.objectContaining({
+        cwd: resolve(__dirname, '../../..')
+      })
+    )
+  })
+
+  it('omits --serve-bind-host when no bind host is given', async () => {
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => handler(0, null))
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+
+    await expect(serveOrcaApp({ json: true, bindHost: null })).resolves.toBe(0)
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/Applications/Orca.app/Contents/MacOS/Orca',
+      ['--serve', '--serve-json'],
+      expect.objectContaining({
+        cwd: resolve(__dirname, '../../..')
+      })
+    )
+  })
+
   it('preserves an AppImage no-sandbox launch for the server child', async () => {
     process.env.ORCA_APPIMAGE_NO_SANDBOX = '1'
     const child = {

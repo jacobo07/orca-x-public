@@ -165,6 +165,10 @@ files.watch
 files.write
 files.writeBase64
 files.writeBase64Chunk
+# Added 2026-09-30, local-caller only by design: same fan-out as fleet.placementView below.
+fleet.nodeManifests
+# Added 2026-09-30, read-only, measures only its own host; a paired peer's copy adds nothing mobile shows.
+fleet.nodeResources
 # Added 2026-09-18, local-caller only by design: answering makes this host query its own paired
 # runtimes with its own credentials, so the handler refuses every remote caller by context.
 fleet.placementView
@@ -336,6 +340,9 @@ updater.getStatus
 updater.install
 workspacePorts.kill
 workspacePorts.scan
+# Added 2026-09-30, desktop-only by design: Cancel Workstream refuses (UWCP uwcp.control/1 unbuilt), and a
+# mobile client has no consent surface for cancelling a Workstream; revisit when UWCP control lands.
+workstream.cancel
 worktree.detectedList
 worktree.lineageList
 worktree.list

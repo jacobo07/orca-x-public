@@ -1,0 +1,90 @@
+{
+  "schema": "dws-phase-14-host-identity-evidence/1",
+  "measuredAt": "2026-09-30",
+  "sha": "d07722752dc092f01c5ffc2b0d0eecc391dce24d",
+  "shaLegD": "43b869962e0c253c75428278145e3932e80871a4",
+  "plane": { "legsABC": "REAL-SSH", "legD": "REAL-APP" },
+  "host": "gex44",
+  "disposableRoot": "/tmp/orca-hwf-p14-20260930T144311Z",
+  "throwawayHome": "/tmp/orca-hwf-p14-20260930T144311Z/home",
+  "sshd": {
+    "binary": "/usr/sbin/sshd",
+    "listen": "127.0.0.1:46675",
+    "unprivileged": true,
+    "hostKeys": "generated with ssh-keygen -t ed25519 inside the disposable root"
+  },
+  "fence": {
+    "bundleBase": "9b18327a8",
+    "runs": [
+      {
+        "legs": ["A"],
+        "head": "0bdc4b363dc8c48cb475f92b49446c073227d9a1",
+        "bundleSha256": "782efc87f3afed811de8d7c5adfc6103ebf56ecd6089983b79c4018f7994f935",
+        "headMatch": true,
+        "note": "first Leg A attempt failed at EAI_AGAIN (target without source resolved the label through ssh -G); fixed in d07722752 and re-run"
+      },
+      {
+        "legs": ["A", "B", "C"],
+        "head": "d07722752dc092f01c5ffc2b0d0eecc391dce24d",
+        "bundleSha256": "35472a94bb094acb67860da7de53bc75d1230aab93fcabe0d688e0dd652db616",
+        "headMatch": true
+      },
+      {
+        "legs": ["D"],
+        "head": "43b869962e0c253c75428278145e3932e80871a4",
+        "bundleSha256": "8ad6da185188f02e45274ea0c8df804452acbc6060fe7ca2cf05af4cdb2109aa",
+        "headMatch": true
+      }
+    ],
+    "pnpmLockSha256": {
+      "clone": "0e3e7a31898368794d116b4a62b0007985de968abdb4cce3616233689a405dd8",
+      "orcaX": "0e3e7a31898368794d116b4a62b0007985de968abdb4cce3616233689a405dd8",
+      "match": true,
+      "nodeModules": "symlinked"
+    }
+  },
+  "witnessesBefore": {
+    "knownHostsSha256": "eee39ff279a28b40862a2a1e01e663a84d09d9c1527f9438fa8cda0ff014694f",
+    "orcaXHead": "f9a721fda491096b74f0115d78632356e526d096"
+  },
+  "witnessesAfter": {
+    "knownHostsSha256": "eee39ff279a28b40862a2a1e01e663a84d09d9c1527f9438fa8cda0ff014694f",
+    "orcaXHead": "f9a721fda491096b74f0115d78632356e526d096"
+  },
+  "hostKeyFingerprintA": "SHA256:1DfgLKVowScWCzS+3Rtb0Z7md8si9NeC+evipbJER7I",
+  "hostKeyFingerprintB": "SHA256:6dRDSvO68LeHg8RZtmxNk0WvuZBZIG45OJiNtzqSpdw",
+  "fingerprintInstrument": "ssh-keygen -lf <hostkey>.pub (OpenSSH, independent of Orca)",
+  "legs": {
+    "A": {
+      "verdict": "PASS",
+      "passed": 1,
+      "skipped": 0,
+      "test": "src/main/ssh/ssh-host-key-pin.real-sshd.test.ts V-REAL-A",
+      "observed": "interactive first contact with a confirming callback recorded pin SHA256:1DfgLKVowScWCzS+3Rtb0Z7md8si9NeC+evipbJER7I, equal to ssh-keygen's fingerprint of host key A; source tofu-confirmed; written to a temp userData only"
+    },
+    "B": {
+      "verdict": "PASS",
+      "passed": 1,
+      "skipped": 0,
+      "test": "src/main/ssh/ssh-host-key-pin.real-sshd.test.ts V-REAL-B",
+      "observed": "sshd restarted on host key B; interactive and automatic connects both refused reason=host_key_changed; userData SHA-256 cfd17b21...5064 before and after; sshd.log shows two preauth disconnects and no accepted publickey"
+    },
+    "C": {
+      "verdict": "PASS",
+      "passed": 1,
+      "skipped": 0,
+      "test": "src/main/ssh/ssh-host-key-pin.real-sshd.test.ts V-REAL-C",
+      "observed": "unpinned target on an automatic attempt connected, emitted the unpinned diagnostic, wrote no pin, never invoked the trust callback"
+    },
+    "D": {
+      "verdict": "MEASURED",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "test": "tests/e2e/ssh-host-key-trust.spec.ts (electron-headless, xvfb-run, SKIP_BUILD after electron-vite build --mode e2e)",
+      "observed": "declining first contact leaves no pin; trusting first contact pins the key, connects, and a later connect asks nothing; a swapped host key is refused with both fingerprints, no dialog, pin unchanged",
+      "firstAttempt": "2 of 3 failed with connect ok:false after Trust: the e2e build does not produce out/relay, so the post-handshake relay deploy failed. Harness rung, not a product defect: after node config/scripts/build-relay.mjs (RELAY_EXIT=0) the unchanged spec at the same sha passed 3/3",
+      "harnessDebt": "the three tests share one sshd across parallel workers while one test swaps its host key; they passed, but the ordering is not pinned"
+    }
+  }
+}

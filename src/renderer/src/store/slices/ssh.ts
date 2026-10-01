@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import type { SshHostKeyTrustRequestEvent } from '../../../../preload/api/ssh-api'
 import type {
   SshConnectionState,
   PortForwardEntry,
@@ -45,6 +46,8 @@ export type SshSlice = {
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
+  /** Pending first-contact host-key confirmations; a fingerprint question, never a secret. */
+  sshHostKeyTrustQueue: SshHostKeyTrustRequestEvent[]
   /** Incremented when an SSH target transitions to 'connected'. Allows
    * components like the file explorer to re-trigger data loads that failed
    * before the connection was established. */
@@ -67,6 +70,8 @@ export type SshSlice = {
   setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   removeSshCredentialRequest: (requestId: string) => void
+  enqueueSshHostKeyTrustRequest: (req: SshHostKeyTrustRequestEvent) => void
+  removeSshHostKeyTrustRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
   clearPortForwards: (targetId: string) => void
   setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
@@ -90,6 +95,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
+  sshHostKeyTrustQueue: [],
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
   detectedPortsByConnection: {},
@@ -159,6 +165,12 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   removeSshCredentialRequest: (requestId) =>
     set((s) => ({
       sshCredentialQueue: s.sshCredentialQueue.filter((req) => req.requestId !== requestId)
+    })),
+  enqueueSshHostKeyTrustRequest: (req) =>
+    set((s) => ({ sshHostKeyTrustQueue: [...s.sshHostKeyTrustQueue, req] })),
+  removeSshHostKeyTrustRequest: (requestId) =>
+    set((s) => ({
+      sshHostKeyTrustQueue: s.sshHostKeyTrustQueue.filter((req) => req.requestId !== requestId)
     })),
 
   setPortForwards: (targetId, forwards) =>

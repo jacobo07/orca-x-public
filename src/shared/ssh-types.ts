@@ -53,7 +53,43 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** Pinned ssh2 host key for (host, port). Absent means never trusted. The
+   *  system OpenSSH transport ignores it (known_hosts owns identity there). */
+  hostKeyPin?: SshHostKeyPin
+  /** A pin existed and was removed (replace, or re-point at another endpoint). Automatic connects refuse until a person re-trusts; never-pinned legacy targets keep the grace. */
+  hostKeyPinReset?: true
 }
+
+export type SshHostKeyPinSource = 'tofu-confirmed' | 'imported-known-hosts' | 'manual'
+
+export type SshHostKeyPin = {
+  /** OpenSSH `SHA256:` + 43 unpadded base64 chars of sha256(wire key blob). */
+  fingerprint: string
+  algorithm?: string
+  /** Wire key blob, kept so a later OpenSSH-parity path can compare bytes. */
+  publicKeyBase64?: string
+  /** Recorded so a re-pointed target reads unpinned rather than changed. */
+  host: string
+  port: number
+  pinnedAt: number
+  source: SshHostKeyPinSource
+}
+
+export const SSH_HOST_KEY_REFUSED_CODE = 'ORCA_SSH_HOST_KEY_REFUSED'
+
+export type SshHostKeyRefusalReason =
+  | 'host_key_changed'
+  | 'host_key_unpinned'
+  | 'host_key_unverifiable'
+
+/** Non-secret account of who vouched for the host on the last attempt. */
+export type SshHostIdentityStatus =
+  | 'pinned'
+  | 'unpinned-legacy'
+  | 'delegated-to-openssh'
+  | 'refused-changed'
+  | 'refused-unpinned'
+  | 'unverifiable'
 
 /** Public target identity safe to mirror to a paired client. */
 export type SshTargetSummary = Pick<SshTarget, 'id' | 'label'>
@@ -181,6 +217,8 @@ export type SshConnectionState = {
   supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
+  /** Optional so old readers ignore it. */
+  hostIdentity?: SshHostIdentityStatus
 }
 
 /** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */

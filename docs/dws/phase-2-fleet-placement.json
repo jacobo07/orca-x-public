@@ -1,0 +1,70 @@
+{
+  "measuredAt": "2026-09-28",
+  "invocation": "node <svcCheckout>/out/cli/index.js fleet placement --json (no --environment/--pairing-code flag) dispatched via a terminal running ON GEX44 (created through Invoke-DwsCli --environment gex44-svc from the laptop; the fleet placement command itself must run AS a local caller on the target host)",
+  "finding": "fleet.placementView (src/main/runtime/rpc/methods/fleet.ts:26-30) explicitly refuses a non-local RPC caller with { status: 'refused', reason: 'remote-caller' } -- 'answering would have this host query its own paired runtimes on another's behalf'. Invoking it via the laptop's Invoke-DwsCli with --environment gex44-svc (a REMOTE caller from GEX44's perspective) reproduced exactly that refusal. Invoking it from a terminal already running ON GEX44 (a LOCAL caller there) succeeded.",
+  "realResult": {
+    "id": "0532f6b9-db74-4041-8c27-7440f155a983",
+    "ok": true,
+    "result": {
+      "status": "ok",
+      "request": { "now": 1790630452131, "maxSampleAgeMs": 60000 },
+      "observation": {
+        "observedAt": 1790630452113,
+        "completedAt": 1790630452131,
+        "members": [
+          {
+            "address": "local",
+            "label": "Local Linux",
+            "identity": { "state": "keyed", "fingerprint": "5zaaXzMEwzUTdvGzXWPuG40fN0vDqdTlvNwrqZmcGj8" },
+            "facts": {
+              "runtimeId": "7467d1d2-ddcf-4e1a-8ef5-aefa84d1074e",
+              "platform": "linux",
+              "protocol": "not-applicable"
+            },
+            "sample": {
+              "outcome": "measured",
+              "runtimeId": "7467d1d2-ddcf-4e1a-8ef5-aefa84d1074e",
+              "startedAt": 1790630452114,
+              "totalMemory": 67194220544,
+              "availableMemory": 52726759424,
+              "availableMemorySource": "proc-meminfo",
+              "processSweep": "measured"
+            }
+          }
+        ],
+        "coverage": { "runtimeEnvironments": 0, "sshTargets": "not-enumerated" }
+      },
+      "proposal": {
+        "decision": "selected",
+        "selected": {
+          "key": "fingerprint:5zaaXzMEwzUTdvGzXWPuG40fN0vDqdTlvNwrqZmcGj8",
+          "fingerprint": "5zaaXzMEwzUTdvGzXWPuG40fN0vDqdTlvNwrqZmcGj8",
+          "label": "Local Linux",
+          "addresses": ["local"],
+          "evidenceAddress": "local",
+          "availableMemory": 52726759424,
+          "availableMemorySource": "proc-meminfo",
+          "sampleAgeMs": 17,
+          "isCurrent": false
+        },
+        "eligible": [
+          {
+            "key": "fingerprint:5zaaXzMEwzUTdvGzXWPuG40fN0vDqdTlvNwrqZmcGj8",
+            "fingerprint": "5zaaXzMEwzUTdvGzXWPuG40fN0vDqdTlvNwrqZmcGj8",
+            "label": "Local Linux",
+            "addresses": ["local"],
+            "evidenceAddress": "local",
+            "availableMemory": 52726759424,
+            "availableMemorySource": "proc-meminfo",
+            "sampleAgeMs": 17,
+            "isCurrent": false
+          }
+        ],
+        "rejected": []
+      }
+    },
+    "meta": { "runtimeId": "7467d1d2-ddcf-4e1a-8ef5-aefa84d1074e" }
+  },
+  "runtimeIdMatchesServe": true,
+  "note": "runtimeId matches the deployed serve's own runtimeId (from serve-ready.json), and totalMemory/availableMemory are consistent with GEX44's known host facts (~64GB total) -- this is a real observation of the real runtime, not a fixture."
+}

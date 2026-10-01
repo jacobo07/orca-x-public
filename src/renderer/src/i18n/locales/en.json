@@ -8210,6 +8210,15 @@
           "f1fc50dad2": "Failed to load SSH targets",
           "0cda732f43": "Connection test failed"
         },
+        "SshHostKeyTrustDialog": {
+          "submitFailed": "Failed to send the host key answer",
+          "title": "Trust this host key?",
+          "description": "Orca has not connected to {{value0}} ({{value1}}:{{value2}}) before. Trust it only if this fingerprint matches the host.",
+          "fingerprintLabel": "Fingerprint",
+          "previous": "Previously pinned:",
+          "deny": "Don't trust",
+          "trust": "Trust"
+        },
         "SshPassphraseDialog": {
           "d5a234456f": "Cancel",
           "c3ce71aad6": "Enter passphrase",
@@ -8226,6 +8235,12 @@
           "106bd57f4a": "SSH Password"
         },
         "SshTargetCard": {
+          "identityPinned": "Pinned {{value0}}",
+          "identityDelegated": "Identity delegated to OpenSSH",
+          "identityChanged": "Host key changed - connection refused",
+          "identityNotTrusted": "Host key not trusted - connection refused",
+          "identityUnreadable": "Stored host key record is unreadable",
+          "identityNotPinned": "Identity not pinned",
           "a883f5a00f": "terminal timeout: {{value0}}",
           "8ce71262f4": "terminals until reset",
           "ec6543cee9": "Connect",

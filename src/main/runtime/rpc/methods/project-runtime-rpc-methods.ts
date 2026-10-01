@@ -3,6 +3,10 @@ import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
+import {
+  projectResultForClient,
+  projectRootIdentityForClient
+} from '../project-root-identity-client-projection'
 
 const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
@@ -100,39 +104,48 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'project.list',
     params: null,
-    handler: (_params, { runtime }) => {
-      runtime.enrichMissingRepoGitRemoteIdentities?.()
-      return { projects: runtime.listProjects() }
+    handler: (_params, context) => {
+      context.runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return projectRootIdentityForClient('projects', context.runtime.listProjects(), context)
     }
   }),
   defineMethod({
     name: 'project.update',
     params: ProjectUpdate,
-    handler: (params, { runtime }) => ({
-      project: runtime.updateProject(params.projectId, params.updates)
-    })
+    handler: (params, context) =>
+      projectResultForClient(
+        { project: context.runtime.updateProject(params.projectId, params.updates) },
+        context
+      )
   }),
   defineMethod({
     name: 'projectHostSetup.list',
     params: null,
-    handler: (_params, { runtime }) => {
-      runtime.enrichMissingRepoGitRemoteIdentities?.()
-      return { setups: runtime.listProjectHostSetups() }
+    handler: (_params, context) => {
+      context.runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return projectRootIdentityForClient(
+        'setups',
+        context.runtime.listProjectHostSetups(),
+        context
+      )
     }
   }),
   defineMethod({
     name: 'projectHostSetup.create',
     params: ProjectHostSetupCreate,
-    handler: (params, { runtime }) => ({
-      result: runtime.createProjectHostSetup(params)
+    handler: (params, context) => ({
+      result: projectResultForClient(context.runtime.createProjectHostSetup(params), context)
     })
   }),
   defineMethod({
     name: 'projectHostSetup.setupExistingFolder',
     params: ProjectHostSetupExistingFolder,
     handler: async (params, context) => ({
-      result: projectRepoResultVisibilityForClient(
-        await context.runtime.setupProjectExistingFolder(params),
+      result: projectResultForClient(
+        projectRepoResultVisibilityForClient(
+          await context.runtime.setupProjectExistingFolder(params),
+          context
+        ),
         context
       )
     })
@@ -141,8 +154,11 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
     name: 'projectHostSetup.clone',
     params: ProjectHostSetupClone,
     handler: async (params, context) => ({
-      result: projectRepoResultVisibilityForClient(
-        await context.runtime.setupProjectClone(params),
+      result: projectResultForClient(
+        projectRepoResultVisibilityForClient(
+          await context.runtime.setupProjectClone(params),
+          context
+        ),
         context
       )
     })
@@ -151,8 +167,11 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
     name: 'projectHostSetup.update',
     params: ProjectHostSetupUpdate,
     handler: (params, context) => ({
-      result: projectRepoResultVisibilityForClient(
-        context.runtime.updateProjectHostSetup(params),
+      result: projectResultForClient(
+        projectRepoResultVisibilityForClient(
+          context.runtime.updateProjectHostSetup(params),
+          context
+        ),
         context
       )
     })
@@ -161,8 +180,11 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
     name: 'projectHostSetup.delete',
     params: ProjectHostSetupDelete,
     handler: (params, context) => ({
-      result: projectRepoResultVisibilityForClient(
-        context.runtime.deleteProjectHostSetup(params),
+      result: projectResultForClient(
+        projectRepoResultVisibilityForClient(
+          context.runtime.deleteProjectHostSetup(params),
+          context
+        ),
         context
       )
     })

@@ -102,6 +102,40 @@ describe('ssh RPC methods', () => {
     expect(JSON.stringify([stateResponse, connectResponse])).not.toContain(privateMessage)
   })
 
+  it('V-SSH-PUBLIC-HOST-KEY: a refused host key reaches RPC callers as an actionable message, a generic outage stays unchanged', async () => {
+    const fingerprint = 'SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+    const refused = Object.assign(
+      new Error(
+        `Host key for hub.internal:22 changed: pinned ${fingerprint}, offered ${fingerprint}.`
+      ),
+      { code: 'ORCA_SSH_HOST_KEY_REFUSED', reason: 'host_key_changed' }
+    )
+    // Why: the failed connection is dropped from the pool, so no state survives to describe the refusal.
+    getRegisteredSshStateMock.mockReturnValue(undefined)
+    connectRegisteredSshTargetMock.mockRejectedValueOnce(refused)
+    connectRegisteredSshTargetMock.mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const refusedResponse = await dispatcher.dispatch(
+      makeRequest('ssh.connect', { targetId: 'ssh-1' })
+    )
+    const outageResponse = await dispatcher.dispatch(
+      makeRequest('ssh.connect', { targetId: 'ssh-1' })
+    )
+
+    expect(refusedResponse).toMatchObject({
+      ok: false,
+      error: { message: expect.stringMatching(/host key changed/i) }
+    })
+    expect(JSON.stringify(refusedResponse)).not.toContain('SHA256')
+    expect(JSON.stringify(refusedResponse)).not.toContain('hub.internal')
+    expect(outageResponse).toMatchObject({
+      ok: false,
+      error: { message: 'SSH connection unavailable' }
+    })
+  })
+
   it('lists redacted SSH target summaries for paired clients', async () => {
     const targets = [
       {

@@ -83,6 +83,7 @@ export function serveOrcaApp(
     mobilePairing?: boolean
     recipeJson?: boolean
     projectRoot?: string | null
+    bindHost?: string | null
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
@@ -99,6 +100,9 @@ export function serveOrcaApp(
   }
   if (args.pairingAddress) {
     childArgs.push('--serve-pairing-address', args.pairingAddress)
+  }
+  if (args.bindHost) {
+    childArgs.push('--serve-bind-host', args.bindHost)
   }
   if (args.noPairing) {
     childArgs.push('--serve-no-pairing')

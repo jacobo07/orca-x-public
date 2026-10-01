@@ -66,6 +66,9 @@ function registryFor(
             lastSeenAt: 0
           }
         : null,
+    // Why: the device authority asks the registry why a token was refused, so the fake must answer.
+    getAvailability: () => ({ available: true }),
+    isRevokedToken: () => false,
     updateLastSeen: vi.fn(),
     updateLastSeenDeferred: vi.fn()
   } as unknown as DeviceRegistry

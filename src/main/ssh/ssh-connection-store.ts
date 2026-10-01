@@ -1,5 +1,5 @@
 import type { Store } from '../persistence'
-import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
+import type { SshHostKeyPin, SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
@@ -88,6 +88,11 @@ export class SshConnectionStore {
       this.reclaimAlias(updated.configHost ?? updated.label)
     }
     return updated
+  }
+
+  /** The only writer of a target's pin; the store flushes before returning. */
+  setHostKeyPin(id: string, pin: SshHostKeyPin | null): SshTarget | null {
+    return this.store.setSshTargetHostKeyPin(id, pin)
   }
 
   removeTarget(id: string): void {

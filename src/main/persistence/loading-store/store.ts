@@ -75,6 +75,7 @@ import {
 } from '../../orca-profiles/profile-project-session-state'
 import type {
   RemovedSshTargetTombstone,
+  SshHostKeyPin,
   SshPtyConsumerRecovery,
   SshRemotePtyLease,
   SshTarget
@@ -262,6 +263,7 @@ import {
   removeDeletedSshConfigAlias as removeDeletedSshConfigAliasOperation,
   removeRemovedSshTargetTombstone as removeRemovedSshTargetTombstoneOperation,
   removeSshTarget as removeSshTargetOperation,
+  setSshTargetHostKeyPin as setSshTargetHostKeyPinOperation,
   updateSshTarget as updateSshTargetOperation
 } from '../leasing-ssh-ptys/ssh-target-state'
 import {
@@ -2323,6 +2325,8 @@ export class Store {
         | 'repoIcon'
         | 'upstream'
         | 'gitRemoteIdentity'
+        | 'gitRootIdentity'
+        | 'gitRootIdentityNoneReason'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -2355,6 +2359,9 @@ export class Store {
     const compatibilityState = mergeProjectHostSetupCompatibilityState(this.state, this.state.repos)
     this.state.projects = compatibilityState.projects
     this.state.projectHostSetups = compatibilityState.projectHostSetups
+    // Why: dependents keyed by a project id move with it, or an id change strands them for good.
+    this.state.agents = compatibilityState.agents ?? this.state.agents
+    this.state.worktreeMeta = compatibilityState.worktreeMeta ?? this.state.worktreeMeta
   }
 
   private projectHostSetupOperations: ProjectHostSetupPersistenceOperations | null = null
@@ -3473,6 +3480,10 @@ export class Store {
 
   removeSshTarget(id: string): void {
     removeSshTargetOperation(this.getSshTargetStateOperations(), id)
+  }
+
+  setSshTargetHostKeyPin(id: string, pin: SshHostKeyPin | null): SshTarget | null {
+    return setSshTargetHostKeyPinOperation(this.getSshTargetStateOperations(), id, pin)
   }
 
   // ── Live Claude PTY sessions ───────────────────────────────────────

@@ -1,5 +1,6 @@
 import { mkdtempSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -24,6 +25,13 @@ vi.mock('../git/worktree', () => {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
+})
+
+// Why: a host with IPv6 loopback disabled cannot bind ::1; skip the IPv6 pin case rather than fail on it.
+const ipv6LoopbackAvailable = await new Promise<boolean>((resolve) => {
+  const probe = createServer()
+  probe.once('error', () => resolve(false))
+  probe.listen(0, '::1', () => probe.close(() => resolve(true)))
 })
 
 describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
@@ -517,6 +525,94 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       errorSpy.mockRestore()
     }
   })
+
+  it('pins the bind host over exposeNetworkByDefault (DWS-P2 pinned)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      exposeNetworkByDefault: true,
+      pinnedBindHost: '127.0.0.1'
+    })
+
+    await server.start()
+    try {
+      // Why: exposeNetworkByDefault alone would bind 0.0.0.0 (see the sibling `orca serve` test
+      // above) -- the pin (CTX-EXP-1) must win over it.
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('makes the pairing-time widen a no-op while pinned (DWS-P2 no-op)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      exposeNetworkByDefault: true,
+      pinnedBindHost: '127.0.0.1'
+    })
+
+    await server.start()
+    try {
+      const transportBefore = wsTransportOf(server)
+      const portBefore = transportBefore?.resolvedPort
+      // Why: the same call that widens an unpinned server (STA-2370 sibling test above) must be a
+      // permanent no-op here -- same transport instance, same host, same port.
+      const offer = await server.createMobilePairingOffer({
+        address: '127.0.0.1',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(true)
+      // WR-02: a LAN address the pinned loopback listener cannot serve is refused, not minted.
+      const lanOffer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(lanOffer).toMatchObject({ available: false, reason: 'network_exposure_pinned' })
+      expect(server.createPairingOffer({ address: '100.64.1.20', scope: 'runtime' })).toMatchObject(
+        { available: false, reason: 'network_exposure_pinned' }
+      )
+      expect(wsTransportOf(server)).toBe(transportBefore)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      expect(wsTransportOf(server)?.resolvedPort).toBe(portBefore)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it.skipIf(!ipv6LoopbackAvailable)(
+    'brackets a pinned IPv6 host so the bound endpoint parses (DWS-P2 WR-01)',
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const server = new OrcaRuntimeRpcServer({
+        runtime: new OrcaRuntimeService(),
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0,
+        pinnedBindHost: '::1'
+      })
+
+      await server.start()
+      try {
+        const endpoint = server.getWebSocketEndpoint()!
+        // Why: `ws://::1:<port>` used to be emitted and `new URL` throws on it.
+        expect(endpoint).toMatch(/^ws:\/\/\[::1\]:\d+$/)
+        expect(new URL(endpoint).hostname).toBe('[::1]')
+        expect(server.createPairingOffer({ address: '[::1]', scope: 'runtime' })).toMatchObject({
+          available: true
+        })
+      } finally {
+        await server.stop()
+      }
+    }
+  )
 
   it('refuses to widen a pairing offer that arrives after the server has stopped', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

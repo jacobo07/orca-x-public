@@ -51,7 +51,6 @@
       "provenBy": ["src/main/runtime/e2ee-keypair.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see the comment in shared/secure-file.ts), so on Windows the barrier proves the file's contents reached disk before the rename, not that the rename itself survives a power loss.",
-        "<userData>/orca-devices.json, the paired-device registry keyed to this identity, is still published by the non-durable writeSecureJsonFile and carries no contract of its own. It is downstream of this key rather than the root, and is not fixed here.",
         "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind.",
         "The side-effect-free observer readE2EEPublicKey still answers null for both 'invalid' and 'could not be read'; only the loader, which decides guidance and replacement, keeps them apart."
       ]
@@ -72,6 +71,30 @@
         "The markdown editor and the file preview editor still hold unsaved edits only in memory (variant-parity drafts.user-invested-input-survives-process-death stays open).",
         "Salvaged dictation is kept and the user told, but no screen yet lists or re-inserts it.",
         "Host removal purges drafts outside the per-key mutation queue, so a save in flight at that instant can recreate one entry."
+      ]
+    },
+    {
+      "id": "runtime.device-registry",
+      "state": "<userData>/orca-devices.json — every paired device token, scope, reach, relay binding. A bare JSON array, so an older build still reads it.",
+      "writer": "src/main/runtime/device-registry.ts",
+      "tier": "crash-durable",
+      "lostIf": "Every pairing at once: the file was published by a rename with no fsync, so a power loss could leave it empty or torn, and the loader then treated an unreadable file as no devices. The writer now fsyncs before the rename, and an unparseable file is preserved as orca-devices.json.corrupt-<ms> while the registry fails closed; an I/O read failure leaves the file in place and the registry unavailable.",
+      "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
+      "knownGaps": [
+        "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts), so on Windows the proven claim is that the contents reached disk before the rename, not that the rename itself survives a power loss.",
+        "The forget-identity cleanup is deferred (see runtime.e2ee-host-identity)."
+      ]
+    },
+    {
+      "id": "runtime.device-revocations",
+      "state": "<userData>/orca-device-revocations.json — sha256 digests of the tokens of devices the owner removed, with the removal time",
+      "writer": "src/main/runtime/device-registry.ts",
+      "tier": "crash-durable",
+      "lostIf": "Only the refusal reason: a revoked token reads unknown_token instead of device_revoked, and is still refused because its device row is gone from orca-devices.json. A missing or unreadable file never makes the registry unavailable and never authorizes anyone. Devices are written first, so a failed write here can lose a reason but never resurrect a device.",
+      "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
+      "knownGaps": [
+        "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts).",
+        "The file is not in MOBILE_PAIRING_USERDATA_FILES: the userData migration needs every listed file to exist, and this one legitimately may not."
       ]
     },
     {
@@ -97,7 +120,7 @@
     },
     {
       "id": "persistence.profile-data-file",
-      "state": "orca-data.json and its .bak ring — workspace session, terminal layouts, open files",
+      "state": "orca-data.json and its .bak ring — workspace session, terminal layouts, open files, and each SSH target's host-key pin (sshTargets[].hostKeyPin)",
       // Two publishers, and the gate holds both to the tier. The transfer writer was a bare
       // write+rename while this contract read as satisfied — a contract names state, not one file,
       // and its guarantee is only as strong as its weakest publisher.
@@ -113,6 +136,7 @@
       ],
       "knownGaps": [
         "The .bak ring bounds loss at roughly one hour, so the contract is 'no total loss', not 'no loss'.",
+        "A pin lost with a newest write or a restored .bak degrades to unpinned: the next interactive connect asks again, and an automatic reconnect follows the legacy unpinned grace (counted, never pinned). Loss never turns into trust in a changed key, and a damaged pin is refused as unverifiable rather than read as no pin.",
         "Only loading-store rotates the .bak ring; a profile transfer replaces the file with no backup refresh, so a transfer is the one publish with no recovery slot behind it."
       ]
     },
@@ -276,6 +300,17 @@
         "It is a field of orca-data.json, so in practice it receives that file's crash-durable barrier — stronger than this tier owes. The tier states what the state is worth, not what the host file happens to give it; if the topology ever moves to a file of its own, atomic-only is the guarantee that must survive the move.",
         "The dangerous shape here was never the barrier, it was collapse-into-empty. A quit closes every window one at a time, so the last close is the write that would publish an empty set over a good one, and an unreadable value returned as [] would do the same on the next publish. Both are refused in window-topology.ts rather than in the writer, which is why the proof is a pure test and not a syscall trace.",
         "No completion marker gates the restore: the plan is re-derived from the recorded entries on every launch, so there is no 'topology restored' flag that could become durable ahead of the state it certifies."
+      ]
+    },
+    {
+      "id": "projects.replica-root-identity",
+      "state": "repos[].gitRootIdentity and repos[].gitRootIdentityNoneReason inside the profile data file — the cached first-parent root commit, shallow flag and git common dir of each git repo, or why it has none",
+      "writer": "src/main/persistence/loading-store/store.ts",
+      "tier": "regenerable",
+      "lostIf": "The next list call re-probes; until then the replica derives a host-local repo: id and is shown ungrouped and pending, never merged.",
+      "knownGaps": [
+        "It lives inside a crash-durable host file, so it receives a stronger barrier than it owes.",
+        "Collisions and replica roles are computed on read and never written, so there is no derived state that could outlive the root it was computed from."
       ]
     },
     {

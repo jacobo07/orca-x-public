@@ -81,6 +81,16 @@ proxy URL such as `https://orca.example.com/runtime` (`http(s)` is normalized
 to `ws(s)`). Wildcard addresses such as `*`, `0.0.0.0`, and `::` cannot be
 advertised.
 
+`--bind-host <address>` is what pins the listener itself — an IP literal (IPv4
+or IPv6) or `localhost`. It outranks `orca serve`'s all-interfaces default and
+makes any later pairing-time widen (the LAN/QR opt-in above) a permanent no-op,
+and it is orthogonal to `--pairing-address`: one controls what the listener
+binds to, the other controls what address is advertised in the pairing offer.
+A loopback-bound serve (`--bind-host 127.0.0.1`) is reached from another
+machine through an SSH forward, e.g.
+`ssh -N -L 127.0.0.1:6768:127.0.0.1:6768 <host>`, paired with
+`--pairing-address 127.0.0.1` so the offer advertises the forward's local end.
+
 The command writes one ready block to stdout after the listener bind and
 pairing initialization complete:
 
@@ -163,7 +173,7 @@ Type=simple
 User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20 --bind-host 127.0.0.1
 StandardOutput=journal
 StandardError=journal
 KillMode=mixed
@@ -258,7 +268,7 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20 --bind-host 127.0.0.1
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5

@@ -87,6 +87,7 @@ export function AddRepoHostSelector({
                     <CommandItem
                       value="Add remote host SSH host Orca server"
                       onSelect={() => setAddHostOpen(true)}
+                      data-testid="add-remote-host-menu-item"
                       className="items-start gap-2 px-3 py-2 text-xs text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
                     >
                       <Plus className="mt-0.5 size-3 shrink-0" />
@@ -137,6 +138,7 @@ export function AddRepoHostSelector({
                     {onAddRemoteServer ? (
                       <button
                         type="button"
+                        data-testid="add-remote-server-action"
                         className="flex w-full flex-col rounded-sm px-2.5 py-2 text-left hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                         onClick={() => {
                           setAddHostOpen(false)

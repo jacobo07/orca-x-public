@@ -119,6 +119,8 @@ docs/**
 !docs/reference/universal-backlog.md
 !docs/reference/windows-setup-shell.md
 !docs/reference/worktree-scan-fingerprint.md
+!docs/dws/
+!docs/dws/**
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

@@ -8,7 +8,9 @@ import {
   hasDurabilityBarrier,
   looksLikeAtomicPublisher,
   looksLikeDirectStateWriter,
+  looksLikeDurablePublisherCaller,
   looksLikePrimitiveDelegate,
+  MIN_DURABLE_PUBLISHER_CALLERS,
   main,
   parseBaseline
 } from './check-durability-contracts.mjs'
@@ -45,7 +47,8 @@ function makeTempRoot(
   baseline = '',
   directBaseline = '',
   delegateBaseline = '',
-  failureSemanticsBaseline = ''
+  failureSemanticsBaseline = '',
+  publisherBaseline = ''
 ) {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-durability-contracts-'))
   tempDirs.push(root)
@@ -62,6 +65,13 @@ function makeTempRoot(
     writeFileSync(
       path.join(root, 'config', 'durability-direct-writer-baseline.txt'),
       directBaseline,
+      'utf8'
+    )
+  }
+  if (publisherBaseline !== null) {
+    writeFileSync(
+      path.join(root, 'config', 'durability-contract-publisher-baseline.txt'),
+      publisherBaseline,
       'utf8'
     )
   }
@@ -518,10 +528,111 @@ describe('durable-primitive delegates', () => {
       { ...COMPLIANT_FILES, 'src/main/conversation-store.ts': DELEGATING_PUBLISHER },
       '',
       '',
+      'src/main/conversation-store.ts\n',
       'src/main/conversation-store.ts\n'
     )
     await expect(main(root)).resolves.toBe(0)
     expect(errors).toEqual([])
+  })
+})
+
+// The hole: secure-file's durable writer is a barrier the delegate ratchet cannot see, so deleting
+// the contract of a module that used it left the gate green.
+const SECURE_PUBLISHER =
+  "import { writeDurableSecureJsonFile } from '../../shared/secure-file'\n" +
+  'writeDurableSecureJsonFile(p, value)\n'
+
+describe('durable publisher contract existence', () => {
+  const errors = []
+
+  afterEach(() => {
+    errors.length = 0
+    vi.restoreAllMocks()
+    while (tempDirs.length > 0) {
+      rmSync(tempDirs.pop(), { recursive: true, force: true })
+    }
+  })
+
+  function captureErrors() {
+    vi.spyOn(console, 'error').mockImplementation((line) => errors.push(String(line)))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  }
+
+  it('sees every durable entry point and ignores a bare import', () => {
+    expect(looksLikeDurablePublisherCaller(SECURE_PUBLISHER)).toBe(true)
+    expect(looksLikeDurablePublisherCaller(DELEGATING_PUBLISHER)).toBe(true)
+    expect(looksLikeDurablePublisherCaller(BARE_WRITER)).toBe(false)
+    expect(
+      looksLikeDurablePublisherCaller("import { writeDurableSecureJsonFile } from './x'\n")
+    ).toBe(false)
+  })
+
+  it('goes red naming the module when its contract is deleted', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), {
+      ...COMPLIANT_FILES,
+      'src/main/runtime/device-registry.ts': SECURE_PUBLISHER
+    })
+    await expect(main(root)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain(
+      'New unclassified durable publisher caller: src/main/runtime/device-registry.ts'
+    )
+  })
+
+  it('stays green while a contract names the module', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest({ writer: ['src/main/demo-writer.ts', 'src/main/runtime/device-registry.ts'] }),
+      { ...COMPLIANT_FILES, 'src/main/runtime/device-registry.ts': SECURE_PUBLISHER }
+    )
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  it('stays green for a baselined caller', async () => {
+    captureErrors()
+    const root = makeTempRoot(
+      validManifest(),
+      { ...COMPLIANT_FILES, 'src/main/runtime/device-registry.ts': SECURE_PUBLISHER },
+      '',
+      '',
+      '',
+      'src/main/runtime/device-registry.ts\n'
+    )
+    await expect(main(root)).resolves.toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  it('reports a stale baseline entry', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), COMPLIANT_FILES, '', '', '', 'src/main/gone.ts\n')
+    await expect(main(root)).resolves.toBe(1)
+    expect(errors.join('\n')).toContain(
+      'Stale durability baseline entry (prune it): src/main/gone.ts'
+    )
+  })
+
+  it('fails loudly when the sweep finds fewer callers than the floor', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), COMPLIANT_FILES)
+    await expect(main(root, { minPublisherCallers: 1 })).resolves.toBe(1)
+    expect(errors.join('\n')).toContain('the sweep is blind, not clean')
+  })
+
+  it('goes red naming a required contract id that was deleted, even if a sibling names the file', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), COMPLIANT_FILES)
+    await expect(main(root, { requiredContractIds: ['runtime.device-registry'] })).resolves.toBe(1)
+    expect(errors.join('\n')).toContain('runtime.device-registry: required contract is missing')
+  })
+
+  it('stays green when every required contract id is present', async () => {
+    captureErrors()
+    const root = makeTempRoot(validManifest(), COMPLIANT_FILES)
+    await expect(main(root, { requiredContractIds: ['demo.state'] })).resolves.toBe(0)
+  })
+  it('ships a floor that the CLI enforces', () => {
+    expect(MIN_DURABLE_PUBLISHER_CALLERS).toBeGreaterThan(0)
   })
 })
 

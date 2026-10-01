@@ -4,6 +4,8 @@
  * when the AppImage/CLI redirect did not rewrite them.
  */
 
+import { isIP } from 'node:net'
+
 const SERVE_FLAG = '--serve'
 
 // Why Map, not a record: `'toString' in {}` is true, so an object lookup turns a
@@ -18,7 +20,9 @@ const CLI_TO_SERVE_FLAG = new Map([
 const CLI_TO_SERVE_VALUE_FLAG = new Map([
   ['--port', '--serve-port'],
   ['--pairing-address', '--serve-pairing-address'],
-  ['--project-root', '--serve-project-root']
+  ['--project-root', '--serve-project-root'],
+  // DWS-P2 (CTX-EXP-1): pins the WS listener host; orthogonal to --pairing-address.
+  ['--bind-host', '--serve-bind-host']
 ])
 
 /**
@@ -31,10 +35,50 @@ const VALUE_TAKING_FLAGS = new Set([
   '--serve-port',
   '--serve-pairing-address',
   '--serve-project-root',
+  '--serve-bind-host',
   '--user-data-dir',
   '--environment',
   '--pairing-code'
 ])
+
+/**
+ * Validate a `--bind-host`/`--serve-bind-host` value at argv-parse time (DWS-P2, CTX-EXP-1).
+ * Why parse-time, not bind-time: an invalid WS bind host is swallowed by the runtime's own
+ * try/catch around WebSocket transport startup (runtime-rpc.ts), which would silently leave
+ * `orca serve` with no listener at all. Accepts an IPv4/IPv6 literal (via node:net isIP) or the
+ * literal `localhost`; anything else throws, matching the --serve-port error shape.
+ */
+export function parseServeBindHost(raw: string | null): string | null {
+  if (raw === null) {
+    return null
+  }
+  const trimmed = raw.trim()
+  // Why: a zone id (`fe80::1%eth0`) passes isIP but cannot be written into a ws:// URL, so the
+  // endpoint would be unparseable after the listener bound.
+  if (trimmed === 'localhost' || (isIP(trimmed) !== 0 && !trimmed.includes('%'))) {
+    return trimmed
+  }
+  throw new Error(`Invalid --serve-bind-host value: ${raw}`)
+}
+
+/**
+ * Read `--serve-bind-host` from argv by presence, not by value: a present flag with a missing,
+ * empty or flag-shaped value throws, never degrades to "no pin" (which binds 0.0.0.0 under
+ * `orca serve`). Also reads the `--serve-bind-host=<host>` spelling, which the normalizer passes through.
+ */
+export function readServeBindHostArg(argv: readonly string[]): string | null {
+  const flag = '--serve-bind-host'
+  const index = argv.findIndex((token) => token === flag || token.startsWith(`${flag}=`))
+  if (index === -1) {
+    return null
+  }
+  const token = argv[index]!
+  const raw = token === flag ? argv[index + 1] : token.slice(flag.length + 1)
+  if (raw === undefined || raw.trim() === '' || isFlagToken(raw)) {
+    throw new Error('Missing value for --serve-bind-host.')
+  }
+  return parseServeBindHost(raw)
+}
 
 // Why: a CLI-form `serve` is not a serve launch when help was asked for. The AppImage redirect
 // already hands these to the CLI (the same three tokens); without the refusal here,

@@ -2819,6 +2819,22 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why optional: the web preload has no trust surface, so its connects of unpinned hosts fail closed in main.
+    const unsubscribeHostKeyTrustRequest = window.api.ssh.onHostKeyTrustRequest?.((data) => {
+      useAppStore.getState().enqueueSshHostKeyTrustRequest(data)
+    })
+    if (unsubscribeHostKeyTrustRequest) {
+      unsubs.push(unsubscribeHostKeyTrustRequest)
+    }
+    const unsubscribeHostKeyTrustResolved = window.api.ssh.onHostKeyTrustResolved?.(
+      ({ requestId }) => {
+        useAppStore.getState().removeSshHostKeyTrustRequest(requestId)
+      }
+    )
+    if (unsubscribeHostKeyTrustResolved) {
+      unsubs.push(unsubscribeHostKeyTrustResolved)
+    }
+
     unsubs.push(
       window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {
         const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)

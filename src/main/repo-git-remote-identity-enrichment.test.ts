@@ -12,6 +12,11 @@ vi.mock('./repo-git-remote-identity', () => ({
   probeGitRemoteIdentity: vi.fn()
 }))
 
+// Why: the remote sweep also drives the root sweep; keep it off a real git here.
+vi.mock('./repo-git-root-identity', () => ({
+  probeGitRootIdentity: vi.fn().mockResolvedValue({ status: 'unavailable' })
+}))
+
 type RepoIdentityStore = {
   getRepos: () => Repo[]
   getRepo: (id: string) => Repo | undefined

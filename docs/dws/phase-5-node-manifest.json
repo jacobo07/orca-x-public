@@ -1,0 +1,112 @@
+{
+  "verdict": "MEASURED",
+  "rung": "gex44-local-caller",
+  "headSha": "6e036d7ccec3e6b4ea5e31c5109ca6349e7723d3",
+  "runtimeIdMatchesServe": true,
+  "deployed": {
+    "sha": "6e036d7ccec3e6b4ea5e31c5109ca6349e7723d3",
+    "svcCheckout": "/home/orca-svc/dws-p2/6e036d7",
+    "boundEndpoint": "ws://127.0.0.1:6791",
+    "artifactSha256Laptop": "3c68024e33b83f6fd8e47ff37b4a995d0d974b356088ea78ec4f78c521d9cf04",
+    "artifactSha256Gex44": "3c68024e33b83f6fd8e47ff37b4a995d0d974b356088ea78ec4f78c521d9cf04",
+    "deployedUtc": "2026-09-30T04:55:39.0315223Z"
+  },
+  "utc": {
+    "start": "2026-09-30T04:55:07.9319001Z",
+    "end": "2026-09-30T04:56:18.1080801Z"
+  },
+  "product": {
+    "memoryAvailableBytes": 52938711040,
+    "vramFreeBytes": 3202351104,
+    "diskAvailableBytes": 32911593472,
+    "modelIds": [
+      "qwen3-coder-30b"
+    ],
+    "diskFilesystemPath": "/",
+    "statuses": {
+      "memory": "measured",
+      "disk": "measured",
+      "vram": "measured",
+      "resident_model": "measured"
+    },
+    "memberAddress": "local",
+    "observedAt": 1790744171515
+  },
+  "control": {
+    "valid": true,
+    "memoryAvailableBytes": 52867870720,
+    "vramFreeBytes": 3202351104,
+    "diskAvailableBytes": 32911626240,
+    "modelIds": null
+  },
+  "comparison": {
+    "memory": {
+      "verdict": "MATCH",
+      "delta": 70840320,
+      "tolerance": 5286787072
+    },
+    "vram": {
+      "verdict": "MATCH",
+      "delta": 0,
+      "tolerance": 268435456
+    },
+    "disk": {
+      "verdict": "MATCH",
+      "delta": 32768,
+      "tolerance": 1073741824
+    },
+    "resident_model": {
+      "verdict": "UNJUDGED",
+      "reason": "control-missing"
+    }
+  },
+  "planeTags": {
+    "memory": "GEX44-PROVEN",
+    "vram": "GEX44-PROVEN",
+    "disk": "GEX44-PROVEN"
+  },
+  "notes": [
+    "judged against control-before; product reading: gex44-local-caller"
+  ],
+  "controlStability": {
+    "memory": {
+      "verdict": "MATCH",
+      "delta": 108175360,
+      "tolerance": 5297604608
+    },
+    "vram": {
+      "verdict": "MATCH",
+      "delta": 0,
+      "tolerance": 268435456
+    },
+    "disk": {
+      "verdict": "MATCH",
+      "delta": 45056,
+      "tolerance": 1073741824
+    },
+    "resident_model": {
+      "verdict": "UNJUDGED",
+      "reason": "both-unknown"
+    }
+  },
+  "probePort": 8081,
+  "fanOut": "not attempted: SPIKE-CLI-TARGET names the desktop default profile as the laptop-local runtime; orcaProcesses=1, and starting a second Electron runtime on a laptop with 5176.7 MB free (out/ is the Linux build) was not authorized",
+  "teardown": {
+    "tunnelSshProcesses": 0,
+    "tunnelPortListeners": 0,
+    "laptopLocalRuntimePid": null,
+    "serveActive": "active",
+    "notes": [
+      "TUNNEL_STOPPED pid=47164"
+    ]
+  },
+  "serveMainPid": {
+    "before": "1470711",
+    "after": "1473744"
+  },
+  "laptopFreeMbAtStart": 5176.7,
+  "diskFact": {
+    "availableBytes": 32911626240,
+    "percentUsed": 98
+  }
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FleetPlacementViewResult } from '../../shared/fleet-placement-view'
 import { fleetPlacementExitCode, formatFleetPlacementView } from '../fleet-placement-format'
-import { fleetPlacementParams } from './fleet'
+import { FLEET_HANDLERS, fleetManifestParams, fleetPlacementParams } from './fleet'
 
 const GB = 1024 ** 3
 const candidate = (key: string, label: string, availableMemory: number) => ({
@@ -103,5 +103,70 @@ describe('orca fleet placement', () => {
     expect(refused).toContain('refused')
     expect(unavailable).toContain('no fleet reader')
     expect(refused).not.toBe(unavailable)
+  })
+})
+
+describe('orca fleet manifest', () => {
+  const flagsOf = (entries: [string, string | boolean][]) => new Map(entries)
+
+  it('maps --model-probe-ports to params and sends nothing when absent', () => {
+    expect(fleetManifestParams(new Map())).toEqual({})
+    expect(fleetManifestParams(flagsOf([['model-probe-ports', '8081, 8082']]))).toEqual({
+      modelProbePorts: [8081, 8082]
+    })
+  })
+
+  it('rejects a non-integer, an out-of-range port and more than four ports before any RPC', () => {
+    for (const bad of ['80.5', 'abc', '65536', '0', '1,2,3,4,5', '8081,']) {
+      expect(() => fleetManifestParams(flagsOf([['model-probe-ports', bad]]))).toThrow(
+        /model-probe-ports/
+      )
+    }
+  })
+
+  async function run(result: unknown, entries: [string, string | boolean][] = []) {
+    const calls: { method: string; params: unknown }[] = []
+    const client = {
+      call: async (method: string, params: unknown) => {
+        calls.push({ method, params })
+        return { id: 'r', ok: true, result, _meta: { runtimeId: 'rt' } }
+      }
+    }
+    const lines: string[] = []
+    const original = console.log
+    console.log = (...args: unknown[]) => void lines.push(args.join(' '))
+    const previousExit = process.exitCode
+    try {
+      await FLEET_HANDLERS['fleet manifest']({
+        client: client as never,
+        flags: flagsOf(entries),
+        cwd: '.',
+        json: entries.some(([name]) => name === 'json')
+      })
+      const exitCode = process.exitCode
+      return { calls, lines, exitCode }
+    } finally {
+      console.log = original
+      process.exitCode = previousExit
+    }
+  }
+
+  it('calls only fleet.nodeManifests, sets the exit code, and prints the RPC result with --json', async () => {
+    const okResult = { status: 'ok', observedAt: 1, manifests: [] }
+    const printed = await run(okResult, [
+      ['json', true],
+      ['model-probe-ports', '8081']
+    ])
+    expect(printed.calls).toEqual([
+      { method: 'fleet.nodeManifests', params: { modelProbePorts: [8081] } }
+    ])
+    expect(printed.exitCode).toBe(0)
+    expect(JSON.parse(printed.lines.join('\n')).result).toEqual(okResult)
+    const refused = await run({ status: 'refused', reason: 'remote-caller' })
+    expect(refused.exitCode).toBe(1)
+    expect(refused.lines.join('\n')).toContain('refused')
+    expect(
+      printed.calls.concat(refused.calls).some((c) => c.method === 'fleet.placementView')
+    ).toBe(false)
   })
 })

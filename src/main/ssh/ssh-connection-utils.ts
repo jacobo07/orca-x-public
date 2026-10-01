@@ -1,5 +1,5 @@
 import type { ConnectConfig } from 'ssh2'
-import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { SshTarget, SshConnectionState, SshHostKeyPin } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import {
   findEncryptedPrivateKeyPath,
@@ -15,8 +15,21 @@ export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
 export type SshCredentialKind = 'passphrase' | 'password'
 
+export type SshHostKeyTrustRequest = {
+  host: string
+  port: number
+  fingerprint: string
+  algorithm?: string
+  publicKeyBase64?: string
+}
+
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
+  /** Interactive attempts only. The owner persists (flushed) any pin it returns before resolving. */
+  onHostKeyTrustRequest?: (
+    targetId: string,
+    request: SshHostKeyTrustRequest
+  ) => Promise<SshHostKeyPin | null>
   onCredentialRequest?: (
     targetId: string,
     kind: SshCredentialKind,
