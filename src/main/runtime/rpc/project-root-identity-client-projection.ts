@@ -10,6 +10,10 @@ import {
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import { PROJECT_ROOT_IDENTITY_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { Repo } from '../../../shared/repo-types'
+import {
+  deriveReplicaTopology,
+  type ProjectHostSetupWithReplicaTopology
+} from '../../../shared/replica-topology'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { RpcContext } from './core'
 
@@ -56,6 +60,20 @@ function identityCollisionsFor(context: ProjectionContext): ProjectIdentityColli
   )
 }
 
+/** Only a capable client gets it: an older one never saw the field and must not start to. */
+function withReplicaTopology(
+  setups: readonly ProjectHostSetup[],
+  identityCollisions: readonly ProjectIdentityCollision[],
+  context: ProjectionContext
+): ProjectHostSetupWithReplicaTopology[] {
+  const entries = deriveReplicaTopology({
+    setups,
+    repos: context.runtime.listRepos(),
+    identityCollisions
+  })
+  return setups.map((setup, index) => ({ ...setup, replicaTopology: entries[index] }))
+}
+
 export function projectRootIdentityForClient(
   kind: 'projects',
   stored: readonly Project[],
@@ -72,7 +90,18 @@ export function projectRootIdentityForClient(
   context: ProjectionContext
 ): object {
   if (supportsProjectRootIdentity(context)) {
-    return { [kind]: stored, identityCollisions: identityCollisionsFor(context) }
+    const identityCollisions = identityCollisionsFor(context)
+    if (kind === 'setups') {
+      return {
+        setups: withReplicaTopology(
+          stored as readonly ProjectHostSetup[],
+          identityCollisions,
+          context
+        ),
+        identityCollisions
+      }
+    }
+    return { projects: stored, identityCollisions }
   }
   const legacy = legacyIds(context)
   if (kind === 'projects') {
