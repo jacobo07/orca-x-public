@@ -8,6 +8,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
+import { worktreeResultForClient } from '../worktree-project-id-client-projection'
 import {
   WorktreeCreate,
   WorktreeActivate,
@@ -46,9 +47,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.show',
     params: WorktreeSelector,
-    handler: async (params, { runtime }) => ({
-      worktree: await runtime.showManagedWorktree(params.worktree)
-    })
+    handler: async (params, context) =>
+      worktreeResultForClient(
+        { worktree: await context.runtime.showManagedWorktree(params.worktree) },
+        context
+      )
   }),
   defineMethod({
     name: 'worktree.sleep',
@@ -78,39 +81,46 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       // Why: a mobile create interrupted by a connection migration is retried with
       // the same clientMutationId; dedupe so the host returns the in-flight/created
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
-      context.runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
-        const { runtime } = context
-        const repo = await runtime.showRepo(params.repo)
-        const automationProvenance = resolveAutomationWorkspaceProvenance({
-          authority: runtime,
-          repoSelector: params.repo,
-          repo,
-          request: params.automationProvenanceRequest
-        })
-        // Why: provenance tokens are reserved before creation so retries can recover,
-        // but failed create attempts must release the reservation for a safe retry.
-        try {
-          const result = await runtime.createManagedWorktree(
-            buildManagedWorktreeCreateArgs(params, {
-              automationProvenance,
-              cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
-                startupAgent: params.startupAgent ?? params.createdWithAgent,
-                createdAt: Date.now()
-              }),
-              creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+      worktreeResultForClient(
+        await context.runtime.dedupeWorktreeCreate(
+          params.repo,
+          params.clientMutationId,
+          async () => {
+            const { runtime } = context
+            const repo = await runtime.showRepo(params.repo)
+            const automationProvenance = resolveAutomationWorkspaceProvenance({
+              authority: runtime,
+              repoSelector: params.repo,
+              repo,
+              request: params.automationProvenanceRequest
             })
-          )
-          finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-          // Why: agent callers need a stable dispatch target without traversing
-          // terminal-list layout duplicates after creating the worktree.
-          return params.startupAgent && result.startupTerminal?.handle
-            ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
-            : result
-        } catch (error) {
-          releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-          throw error
-        }
-      })
+            // Why: provenance tokens are reserved before creation so retries can recover,
+            // but failed create attempts must release the reservation for a safe retry.
+            try {
+              const result = await runtime.createManagedWorktree(
+                buildManagedWorktreeCreateArgs(params, {
+                  automationProvenance,
+                  cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+                    startupAgent: params.startupAgent ?? params.createdWithAgent,
+                    createdAt: Date.now()
+                  }),
+                  creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+                })
+              )
+              finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+              // Why: agent callers need a stable dispatch target without traversing
+              // terminal-list layout duplicates after creating the worktree.
+              return params.startupAgent && result.startupTerminal?.handle
+                ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
+                : result
+            } catch (error) {
+              releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+              throw error
+            }
+          }
+        ),
+        context
+      )
   }),
   defineMethod({
     name: 'worktree.prefetchCreateBase',
@@ -126,46 +136,52 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.set',
     params: WorktreeSet,
-    handler: async (params, { runtime }) => ({
-      worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
-        displayName: params.displayName,
-        linkedIssue: params.linkedIssue,
-        linkedPR: params.linkedPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabMR: params.linkedGitLabMR,
-        linkedGitLabIssue: params.linkedGitLabIssue,
-        linkedBitbucketPR: params.linkedBitbucketPR,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-        linkedGiteaPR: params.linkedGiteaPR,
-        linkedWorkItem: params.linkedWorkItem,
-        linkedTaskSourceContext: params.linkedTaskSourceContext,
-        comment: params.comment,
-        isArchived: params.isArchived,
-        isUnread: params.isUnread,
-        isPinned: params.isPinned,
-        sortOrder: params.sortOrder,
-        manualOrder: params.manualOrder,
-        lastActivityAt: params.lastActivityAt,
-        createdAt: params.createdAt,
-        sparseDirectories: params.sparseDirectories,
-        sparseBaseRef: params.sparseBaseRef,
-        sparsePresetId: params.sparsePresetId,
-        baseRef: params.baseRef,
-        workspaceStatus: params.workspaceStatus,
-        pushTarget: params.pushTarget,
-        diffComments: params.diffComments,
-        mobileDiffReview: params.mobileDiffReview,
-        lineage:
-          params.parentWorktree || params.noParent === true
-            ? {
-                parentWorktree: params.parentWorktree,
-                noParent: params.noParent === true
-              }
-            : undefined
-      } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
-    })
+    handler: async (params, context) => {
+      const { runtime } = context
+      return worktreeResultForClient(
+        {
+          worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
+            displayName: params.displayName,
+            linkedIssue: params.linkedIssue,
+            linkedPR: params.linkedPR,
+            linkedLinearIssue: params.linkedLinearIssue,
+            linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+            linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+            linkedGitLabMR: params.linkedGitLabMR,
+            linkedGitLabIssue: params.linkedGitLabIssue,
+            linkedBitbucketPR: params.linkedBitbucketPR,
+            linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+            linkedGiteaPR: params.linkedGiteaPR,
+            linkedWorkItem: params.linkedWorkItem,
+            linkedTaskSourceContext: params.linkedTaskSourceContext,
+            comment: params.comment,
+            isArchived: params.isArchived,
+            isUnread: params.isUnread,
+            isPinned: params.isPinned,
+            sortOrder: params.sortOrder,
+            manualOrder: params.manualOrder,
+            lastActivityAt: params.lastActivityAt,
+            createdAt: params.createdAt,
+            sparseDirectories: params.sparseDirectories,
+            sparseBaseRef: params.sparseBaseRef,
+            sparsePresetId: params.sparsePresetId,
+            baseRef: params.baseRef,
+            workspaceStatus: params.workspaceStatus,
+            pushTarget: params.pushTarget,
+            diffComments: params.diffComments,
+            mobileDiffReview: params.mobileDiffReview,
+            lineage:
+              params.parentWorktree || params.noParent === true
+                ? {
+                    parentWorktree: params.parentWorktree,
+                    noParent: params.noParent === true
+                  }
+                : undefined
+          } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
+        },
+        context
+      )
+    }
   }),
   defineMethod({
     name: 'worktree.persistSortOrder',

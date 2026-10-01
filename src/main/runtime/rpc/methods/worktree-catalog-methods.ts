@@ -1,5 +1,6 @@
 import { defineMethod, type RpcMethod } from '../core'
 import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
+import { worktreeResultForClient } from '../worktree-project-id-client-projection'
 import { supportsWorktreeVisibilitySourceDefaults } from '../worktree-visibility-client-capability'
 import {
   WorktreeDetectedListParams,
@@ -29,10 +30,13 @@ export const WORKTREE_CATALOG_METHODS: RpcMethod[] = [
     name: 'worktree.list',
     params: WorktreeListParams,
     handler: async (params, context) =>
-      context.runtime.listManagedWorktrees(
-        params.repo,
-        params.limit,
-        supportsWorktreeVisibilitySourceDefaults(context)
+      worktreeResultForClient(
+        await context.runtime.listManagedWorktrees(
+          params.repo,
+          params.limit,
+          supportsWorktreeVisibilitySourceDefaults(context)
+        ),
+        context
       )
   }),
   defineMethod({
@@ -44,10 +48,13 @@ export const WORKTREE_CATALOG_METHODS: RpcMethod[] = [
     name: 'worktree.detectedList',
     params: WorktreeDetectedListParams,
     handler: async (params, context) =>
-      context.runtime.listDetectedManagedWorktrees(
-        params.repo,
-        undefined,
-        supportsWorktreeVisibilitySourceDefaults(context)
+      worktreeResultForClient(
+        await context.runtime.listDetectedManagedWorktrees(
+          params.repo,
+          undefined,
+          supportsWorktreeVisibilitySourceDefaults(context)
+        ),
+        context
       )
   })
 ]

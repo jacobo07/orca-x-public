@@ -106,10 +106,24 @@ export function projectIdForClient(
   repoId: string | null | undefined,
   context: ProjectionContext
 ): string | null {
-  if (supportsProjectRootIdentity(context) || !isRootProjectId(projectId)) {
-    return projectId
+  return projectIdResolverForClient(context)(projectId, repoId)
+}
+
+/** `projectIdForClient` for a list: the legacy projection is built once, and only when needed. */
+export function projectIdResolverForClient(
+  context: ProjectionContext
+): (projectId: string, repoId: string | null | undefined) => string | null {
+  if (supportsProjectRootIdentity(context)) {
+    return (projectId) => projectId
   }
-  return (repoId ? legacyIds(context).projectIdByRepoId.get(repoId) : undefined) ?? null
+  let legacy: LegacyIds | undefined
+  return (projectId, repoId) => {
+    if (!isRootProjectId(projectId)) {
+      return projectId
+    }
+    legacy ??= legacyIds(context)
+    return (repoId ? legacy.projectIdByRepoId.get(repoId) : undefined) ?? null
+  }
 }
 
 type ProjectResultShape = { project?: Project; setup?: ProjectHostSetup; repo?: Repo }

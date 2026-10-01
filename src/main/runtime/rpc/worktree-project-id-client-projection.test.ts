@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PROJECT_ROOT_IDENTITY_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { Repo } from '../../../shared/repo-types'
 import { WORKTREE_METHODS } from './methods/worktree'
+import { worktreeResultForClient } from './worktree-project-id-client-projection'
 
 const ROOT = 'a'.repeat(40)
 const ROOT_PROJECT_ID = `git-root:${ROOT}`
@@ -82,14 +83,60 @@ function projectIdOf(result: Awaited<ReturnType<typeof invoke>>): string | undef
 
 describe('worktree publishers and the git-root: project id', () => {
   it.each(PUBLISHERS)(
-    'CHARACTERIZATION: %s hands an old client the git-root: id it cannot resolve',
+    '%s hands an old client the id it was given for that repo, never git-root:',
     async (name, params) => {
-      expect(projectIdOf(await invoke(name, params, OLD_CLIENT))).toBe(ROOT_PROJECT_ID)
+      expect(projectIdOf(await invoke(name, params, OLD_CLIENT))).toBe('repo:b')
     }
   )
 
   it.each(PUBLISHERS)('%s hands a capable client the git-root: id', async (name, params) => {
     expect(projectIdOf(await invoke(name, params, NEW_CLIENT))).toBe(ROOT_PROJECT_ID)
     expect(projectIdOf(await invoke(name, params, undefined))).toBe(ROOT_PROJECT_ID)
+  })
+})
+
+describe('worktreeResultForClient', () => {
+  const context = (clientCapabilities?: string[]) =>
+    ({ clientCapabilities, runtime: { listRepos: () => REPOS } }) as never
+
+  it('maps every record of a list and leaves the rest of the result alone', () => {
+    const payload = {
+      worktrees: [record('a', ROOT_PROJECT_ID), record('b', ROOT_PROJECT_ID)],
+      totalCount: 2,
+      truncated: false
+    }
+
+    const mapped = worktreeResultForClient(payload, context(OLD_CLIENT))
+
+    expect(mapped.worktrees.map((entry) => entry.projectId)).toEqual(['repo:a', 'repo:b'])
+    expect(mapped).toMatchObject({ totalCount: 2, truncated: false })
+    expect(payload.worktrees[0]?.projectId).toBe(ROOT_PROJECT_ID)
+  })
+
+  it('drops the field of a worktree whose repo maps to no project the client was given', () => {
+    const payload = { worktree: record('ghost', ROOT_PROJECT_ID) }
+
+    const mapped = worktreeResultForClient(payload, context(OLD_CLIENT))
+
+    expect(mapped.worktree).not.toHaveProperty('projectId')
+    expect(mapped.worktree.repoId).toBe('ghost')
+  })
+
+  it('keeps a worktree with a non-root id or no id byte-identical for an old client', () => {
+    const plain = record('a', 'github:acme/app')
+    const bare = record('b')
+    const payload = { worktrees: [plain, bare] }
+
+    const mapped = worktreeResultForClient(payload, context(OLD_CLIENT))
+
+    expect(mapped).toBe(payload)
+    expect(mapped.worktrees[0]).toBe(plain)
+  })
+
+  it('returns the very same result for a capable client and for an in-process caller', () => {
+    const payload = { worktrees: [record('b', ROOT_PROJECT_ID)] }
+
+    expect(worktreeResultForClient(payload, context(NEW_CLIENT))).toBe(payload)
+    expect(worktreeResultForClient(payload, context(undefined))).toBe(payload)
   })
 })

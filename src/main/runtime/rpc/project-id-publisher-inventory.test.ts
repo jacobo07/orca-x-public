@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest'
 
 const METHODS_DIR = fileURLToPath(new URL('./methods/', import.meta.url))
 
-// Measured 2026-10-01 before editing: 26 methods carry a project-id marker in their handler text.
-const PUBLISHER_FLOOR = 26
+// Measured 2026-10-01: 26 methods carry a project-id marker in their handler text; the five worktree
+// record publishers (Worktree.projectId) were added by 16-03, which makes 31.
+const PUBLISHER_FLOOR = 31
 
 type PublisherClass = 'gated' | 'no-project-id'
 
@@ -27,6 +28,11 @@ const PUBLISHERS: Record<string, { class: PublisherClass; reason?: string }> = {
   'automation.update': { class: 'gated' },
   'automation.runNow': { class: 'gated' },
   'automation.runs': { class: 'gated' },
+  'worktree.list': { class: 'gated' },
+  'worktree.detectedList': { class: 'gated' },
+  'worktree.show': { class: 'gated' },
+  'worktree.set': { class: 'gated' },
+  'worktree.create': { class: 'gated' },
   'automation.delete': {
     class: 'no-project-id',
     reason: 'returns the removal acknowledgement only, no automation or run context'
@@ -62,7 +68,8 @@ const PUBLISHERS: Record<string, { class: PublisherClass; reason?: string }> = {
 const GATE_CALLS = [
   'projectRootIdentityForClient(',
   'projectResultForClient(',
-  'automationResultForClient('
+  'automationResultForClient(',
+  'worktreeResultForClient('
 ]
 
 const PROJECT_ID_MARKER = new RegExp(
@@ -78,7 +85,8 @@ const PROJECT_ID_MARKER = new RegExp(
     'ProjectHostSetup',
     '\\b(?:list|show|create|update|delete)Automation',
     'runAutomationNow',
-    'listAutomationRuns'
+    'listAutomationRuns',
+    '\\b(?:list|show|update|create)(?:Detected)?Managed(?:Worktrees?|WorktreeMeta)\\b'
   ].join('|')
 )
 
@@ -108,6 +116,7 @@ describe('project-id publisher inventory', () => {
     expect(names).toContain('project.list')
     expect(names).toContain('projectHostSetup.setupExistingFolder')
     expect(names).toContain('automation.list')
+    expect(names).toContain('worktree.list')
     expect(found.length).toBeGreaterThanOrEqual(PUBLISHER_FLOOR)
   })
 
