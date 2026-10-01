@@ -23,7 +23,11 @@ import {
 import type { HwfSession } from './hwf-two-host-session'
 import { sendToTerminal, waitForActivePanePtyId, waitForTerminalOutput } from './terminal'
 // Why: the typed command never contains the joined marker, so only real shell output can satisfy the wait; retype is the readiness wait.
-async function readShellPid(page: Page, ptyId: string, label: string): Promise<number> {
+async function readShellPid(
+  page: Page,
+  ptyId: string,
+  label: string
+): Promise<{ pid: number; marker: string }> {
   const nonce = randomBytes(4).toString('hex')
   const command = `printf 'HWF_SP${label}_%s_%s\\n' '${nonce}' "$$"`
   for (let attempt = 1; ; attempt += 1) {
@@ -39,7 +43,7 @@ async function readShellPid(page: Page, ptyId: string, label: string): Promise<n
   }
   const match = new RegExp(`HWF_SP${label}_${nonce}_(\\d+)`).exec(await bufferText(page))
   expect(match).not.toBeNull()
-  return Number(match![1])
+  return { pid: Number(match![1]), marker: `HWF_SP${label}_${nonce}_` }
 }
 
 function relayAncestor(procs: RootProc[], pid: number): number | null {
@@ -75,11 +79,16 @@ export async function runShellLeg(page: Page, session: HwfSession): Promise<void
     await activateWebSshWorktree(webPage, worktree.id)
     await assertTerminalOnOwningHost(page, run, 'R', 'pty-write')
     const ptyBefore = await waitForActivePanePtyId(page, 45_000)
-    const pidBefore = await readShellPid(page, ptyBefore, 'a')
+    const shellBefore = await readShellPid(page, ptyBefore, 'a')
+    const pidBefore = shellBefore.pid
     const procsBefore = listRootProcs(run)
     const shell = procsBefore.find((proc) => proc.pid === pidBefore)
     const relayBefore = relayAncestor(procsBefore, pidBefore)
-    const countBefore = procsBefore.filter((proc) => proc.cwd === run.repo).length
+    const underRelay = (procs: RootProc[], relay: number | null): number =>
+      procs.filter((proc) => proc.cwd === run.repo && relayAncestor(procs, proc.pid) === relay)
+        .length
+    const countBefore = underRelay(procsBefore, relayBefore)
+    const rootCountBefore = procsBefore.filter((proc) => proc.cwd === run.repo).length
     console.log(
       `HWF_SHELL_BEFORE pid=${pidBefore} cwd=${shell?.cwd ?? 'missing'} relay=${relayBefore} count=${countBefore}`
     )
@@ -102,15 +111,17 @@ export async function runShellLeg(page: Page, session: HwfSession): Promise<void
     const bufferA = await bufferText(page)
     await sendToTerminal(page, ptyAfter, '\x03')
     await sleep(2_000)
-    const pidAfter = await readShellPid(page, ptyAfter, 'b')
+    const shellAfterRead = await readShellPid(page, ptyAfter, 'b')
+    const pidAfter = shellAfterRead.pid
     await sleep(2_000)
     const procsAfter = listRootProcs(run)
     const shellAfter = procsAfter.find((proc) => proc.pid === pidAfter)
     const relayAfter = relayAncestor(procsAfter, pidAfter)
-    const countAfter = procsAfter.filter((proc) => proc.cwd === run.repo).length
+    const countAfter = underRelay(procsAfter, relayAfter)
+    const rootCountAfter = procsAfter.filter((proc) => proc.cwd === run.repo).length
     console.log(`HWF_RELAY_PID before=${relayBefore} after=${relayAfter}`)
     console.log(
-      `HWF_SHELL_PID before=${pidBefore} after=${pidAfter} count_before=${countBefore} count_after=${countAfter} cwd_after=${shellAfter?.cwd ?? 'missing'} ptyid_same=${ptyBefore === ptyAfter}`
+      `HWF_SHELL_PID before=${pidBefore} after=${pidAfter} count_before=${countBefore} count_after=${countAfter} root_count_before=${rootCountBefore} root_count_after=${rootCountAfter} cwd_after=${shellAfter?.cwd ?? 'missing'} ptyid_same=${ptyBefore === ptyAfter}`
     )
 
     const tickText = readRemoteFile(run, `ticks-${nonce}.log`)
@@ -130,9 +141,18 @@ export async function runShellLeg(page: Page, session: HwfSession): Promise<void
     const seenA = parseTicks(bufferA, nonce).map((tick) => tick.n)
     const seenCount = inWindow.filter((tick) => seenA.includes(tick.n)).length
     console.log(`HWF_BACKFILL_A outage_ticks=${inWindow.length} seen=${seenCount}`)
+    let bLive = false
+    for (let i = 0; i < 20 && !bLive; i += 1) {
+      bLive = (await bufferText(webPage)).includes(shellAfterRead.marker)
+      await sleep(1_000)
+    }
+    console.log(`HWF_B_LIVE_AFTER=${bLive ? 'yes' : 'no'}`)
     const bufferB = await bufferText(webPage)
     const seenB = parseTicks(bufferB, nonce).map((tick) => tick.n)
     const seenCountB = inWindow.filter((tick) => seenB.includes(tick.n)).length
+    console.log(
+      `HWF_B_TICKS count=${seenB.length} first=${seenB[0] ?? 'none'} last=${seenB.at(-1) ?? 'none'}`
+    )
     console.log(
       seenB.length > 0
         ? `HWF_BACKFILL_B outage_ticks=${inWindow.length} seen=${seenCountB}`

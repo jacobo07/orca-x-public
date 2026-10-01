@@ -45,6 +45,62 @@ function paneRowPresent(page: Page, paneKey: string): Promise<boolean> {
   )
 }
 
+type RowRemoval = { t: number; fn: string; key: string; stack: string }
+
+// Why: a row that vanishes across a reconnect must be attributed, not guessed; this wraps the page's two removal actions and records who called them and when.
+async function instrumentRowRemovals(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      return
+    }
+    const sink: RowRemoval[] = []
+    ;(window as unknown as { __hwfRemovals: RowRemoval[] }).__hwfRemovals = sink
+    for (const fn of ['removeAgentStatus', 'dropAgentStatus'] as const) {
+      const original = store.getState()[fn]
+      store.setState({
+        [fn]: (key: string) => {
+          const stack = (new Error('hwf-row-removal-origin').stack ?? '')
+            .split('\n')
+            .slice(2, 6)
+            .join(' | ')
+          sink.push({ t: Date.now(), fn, key, stack })
+          return original(key)
+        }
+      } as never)
+    }
+  })
+}
+
+async function readRowRemovals(page: Page): Promise<RowRemoval[]> {
+  return page.evaluate(
+    () => (window as unknown as { __hwfRemovals?: RowRemoval[] }).__hwfRemovals ?? []
+  )
+}
+
+// Samples whether the pane's row exists until stop() is called; returns the first transition times.
+function sampleRowPresence(page: Page, paneKey: string): { stop: () => Promise<string> } {
+  const samples: { t: number; present: boolean }[] = []
+  let running = true
+  const loop = (async () => {
+    while (running) {
+      samples.push({
+        t: Date.now(),
+        present: await paneRowPresent(page, paneKey).catch(() => false)
+      })
+      await sleep(500)
+    }
+  })()
+  return {
+    stop: async () => {
+      running = false
+      await loop
+      const flips = samples.filter((s, i) => i > 0 && s.present !== samples[i - 1].present)
+      return JSON.stringify({ samples: samples.length, flips })
+    }
+  }
+}
+
 function alive(run: HwfRun, pid: number): boolean {
   return execOnOwningHost(run, `kill -0 ${pid} 2>/dev/null && echo alive; true`).out.includes(
     'alive'
@@ -74,8 +130,25 @@ export async function runAgentLeg(
     await assertTerminalOnOwningHost(page, run, 'G', 'pty-write')
     const hookPty = await waitForActivePanePtyId(page, 45_000)
     const paneKey = await readActivePaneKey(page)
-    await postHookAndAwaitStatus(page, webPage, hookPty, paneKey)
-    const agentPid = await launchProviderOnOwningHost(page, run, surfaces, providers)
+    const claudeRe = /(^|[/\s])claude(\s|$)/
+    // Why: the launcher returns the first claude it sees, which may belong to an earlier app run in the same root; this run's agent is the one that was not there before.
+    const knownClaude = new Set(
+      listRootProcs(run)
+        .filter((proc) => claudeRe.test(proc.argv))
+        .map((proc) => proc.pid)
+    )
+    const launched = await launchProviderOnOwningHost(page, run, surfaces, providers)
+    let agentPid: number | null = null
+    for (let i = 0; launched !== null && i < 20 && agentPid === null; i += 1) {
+      agentPid =
+        listRootProcs(run).find(
+          (proc) => claudeRe.test(proc.argv) && proc.cwd === run.repo && !knownClaude.has(proc.pid)
+        )?.pid ?? null
+      if (agentPid === null) {
+        await sleep(3_000)
+      }
+    }
+    expect(launched === null || agentPid !== null).toBe(true)
     if (agentPid === null) {
       writeHwfLeg({
         leg,
@@ -86,13 +159,17 @@ export async function runAgentLeg(
       console.log('HWF_AGENT_PID=NOT_RUN reason=no-provider-launched')
       return
     }
-    const agentProcsBefore = listRootProcs(run).filter((proc) =>
-      /(^|[/\s])claude(\s|$)/.test(proc.argv)
-    )
-    const rowBefore = await paneRowPresent(page, paneKey)
-
+    const agentProcsBefore = listRootProcs(run).filter((proc) => claudeRe.test(proc.argv))
+    // Why: the agent tab is active now; the hook pane's output wait reads the active tab, and its row is only trustworthy if no command is typed in that pane after the row lands.
+    await page.evaluate((tabId) => {
+      const state = window.__store?.getState()
+      state?.setActiveTab(tabId)
+      state?.setActiveTabType('terminal')
+    }, paneKey.split(':')[0])
+    await instrumentRowRemovals(page)
+    const sampler = sampleRowPresence(page, paneKey)
     const stalePid = readRemoteFile(run, 'outage-emitter.pid').trim()
-    const prompt = await scheduleOutageHook(page, hookPty, run, 12)
+    const prompt = await scheduleOutageHook(page, hookPty, run, 25)
     let emitterPid = 0
     for (let i = 0; i < 20 && !emitterPid; i += 1) {
       const current = readRemoteFile(run, 'outage-emitter.pid').trim()
@@ -100,10 +177,17 @@ export async function runAgentLeg(
       await sleep(500)
     }
     expect(emitterPid).toBeGreaterThan(0)
+    const scheduledAtMs = Date.now()
     console.log(
       `HWF_EMITTER pid=${emitterPid} alive=${emitterPid ? alive(run, emitterPid) : false}`
     )
+    await postHookAndAwaitStatus(page, webPage, hookPty, paneKey)
+    const rowBefore = await paneRowPresent(page, paneKey)
     const skew = readClockSkew(run)
+    // Why: the outage hook fires 25 s after scheduling; killing at +15 s puts it about 10 s into the 22 s outage, clear of both 5 s margins.
+    while (Date.now() < scheduledAtMs + 15_000) {
+      await sleep(250)
+    }
     const drop = await dropAndRestoreCarrier(carrier, page, targetId)
     console.log(dropLine(drop))
     console.log(reconnectLine(drop))
@@ -115,6 +199,14 @@ export async function runAgentLeg(
       delivered = await agentRows(page, prompt)
       await sleep(1_000)
     }
+    console.log(
+      `HWF_ROW_FLIPS ${await sampler.stop()} kill_ms=${drop.tKillMs} restore_ms=${drop.tRestoreMs}`
+    )
+    const removals = await readRowRemovals(page)
+    console.log(
+      `HWF_ROW_REMOVALS count=${removals.length} ${JSON.stringify(removals.slice(0, 4).map((r) => ({ ...r, rel_kill_ms: r.t - drop.tKillMs })))}`
+    )
+    console.log(`HWF_PANE_KEY=${paneKey}`)
     deliveredB = await agentRows(webPage, prompt)
     const hookLog = readOutageHookLog(run)
     const window = outageWindowOnRemoteClock(drop.tKillMs, drop.tRestoreMs, skew.skewS)
@@ -128,7 +220,7 @@ export async function runAgentLeg(
 
     const procsAfter = listRootProcs(run)
     const agentAfter = procsAfter.find((proc) => proc.pid === agentPid)
-    const agentProcsAfter = procsAfter.filter((proc) => /(^|[/\s])claude(\s|$)/.test(proc.argv))
+    const agentProcsAfter = procsAfter.filter((proc) => claudeRe.test(proc.argv))
     const rowAfter = await paneRowPresent(page, paneKey)
     const emitterAlive = emitterPid ? alive(run, emitterPid) : false
     console.log(
