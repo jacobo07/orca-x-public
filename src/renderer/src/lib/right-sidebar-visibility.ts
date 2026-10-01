@@ -26,7 +26,9 @@ const PROJECT_SCOPED_APPLICATION_VIEWS = new Set<ActiveView>([
   'automations',
   'skills',
   'artifacts',
-  'mobile'
+  'mobile',
+  // Reachable with no project open, for Unassigned capture.
+  'backlog'
 ])
 
 /**

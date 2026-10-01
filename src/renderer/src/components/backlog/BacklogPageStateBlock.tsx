@@ -1,0 +1,240 @@
+import { useEffect, useState } from 'react'
+import { CircleHelp, Inbox, Loader2, Lock, Plus, TriangleAlert, Unplug } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { ClaimValue } from './ClaimValue'
+
+const LOADER_DELAY_MS = 200
+
+/** A loader that appears only after 200 ms, so a fast read never flashes one. One-shot timeout. */
+export function BacklogDelayedLoader({ label }: { label: string }): React.JSX.Element | null {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), LOADER_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
+  if (!visible) {
+    return null
+  }
+  return (
+    <div
+      data-backlog-loading=""
+      className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
+    >
+      <Loader2 className="size-4 animate-spin" aria-hidden />
+      {label}
+    </div>
+  )
+}
+
+export type BacklogBlockStatus =
+  | 'loading'
+  | 'empty'
+  | 'filter-empty'
+  | 'storage-failed'
+  | 'capability-unsupported'
+  | 'forbidden'
+  | 'unreachable'
+
+export type BacklogFilterEmpty =
+  | { reason: 'closed-only'; closedCount: number }
+  | { reason: 'filters'; hiddenCount: number }
+
+type BlockCopy = { heading: string; body: React.ReactNode }
+
+function filterEmptyBody(filterEmpty: BacklogFilterEmpty | null): React.ReactNode {
+  if (filterEmpty?.reason === 'closed-only') {
+    return (
+      <>
+        {translate('backlog.status.filterEmpty.noOpen', 'No open items.')}{' '}
+        <ClaimValue testId="backlog-filter-empty-hidden-count" value={filterEmpty.closedCount} />{' '}
+        {translate('backlog.status.filterEmpty.closedHidden', 'closed items are hidden.')}
+      </>
+    )
+  }
+  return filterEmpty ? (
+    <>
+      <ClaimValue testId="backlog-filter-empty-hidden-count" value={filterEmpty.hiddenCount} />{' '}
+      {translate(
+        'backlog.status.filterEmpty.hiddenByFilters',
+        'items are hidden by the current filters.'
+      )}
+    </>
+  ) : null
+}
+
+function FilterEmptyAction({
+  filterEmpty,
+  onClearFilters,
+  onShowAllStates
+}: {
+  filterEmpty: BacklogFilterEmpty | null
+  onClearFilters: () => void
+  onShowAllStates: () => void
+}): React.JSX.Element {
+  return filterEmpty?.reason === 'closed-only' ? (
+    <Button
+      variant="outline"
+      size="sm"
+      data-backlog-action="show-all-states"
+      onClick={onShowAllStates}
+    >
+      {translate('backlog.status.filterEmpty.showAllStates', 'Show all states')}
+    </Button>
+  ) : (
+    <Button
+      variant="outline"
+      size="sm"
+      data-backlog-action="clear-filters"
+      onClick={onClearFilters}
+    >
+      {translate('backlog.status.filterEmpty.clear', 'Clear filters')}
+    </Button>
+  )
+}
+
+function copyFor(
+  status: Exclude<BacklogBlockStatus, 'loading'>,
+  filterEmpty: BacklogFilterEmpty | null
+): BlockCopy {
+  switch (status) {
+    case 'empty':
+      return {
+        heading: translate('backlog.status.empty.heading', 'Your backlog is empty'),
+        body: translate(
+          'backlog.status.empty.body',
+          'Capture an idea, a task or a decision, with or without a project. Press N to capture from anywhere on this page.'
+        )
+      }
+    case 'filter-empty':
+      return {
+        heading: translate('backlog.status.filterEmpty.heading', 'No items match these filters'),
+        body: filterEmptyBody(filterEmpty)
+      }
+    case 'storage-failed':
+      return {
+        heading: translate('backlog.status.storageFailed.heading', 'Backlog could not be read'),
+        body: translate(
+          'backlog.status.storageFailed.body',
+          'Reading the ledger on this host failed, and nothing was changed. Retry, and if it keeps failing, restart Orca.'
+        )
+      }
+    case 'capability-unsupported':
+      return {
+        heading: translate(
+          'backlog.status.capabilityUnsupported.heading',
+          'This Orca host does not provide a Backlog'
+        ),
+        body: translate(
+          'backlog.status.capabilityUnsupported.body',
+          'The active host runs an older Orca. Update Orca on that host, or switch to a host that has Backlog.'
+        )
+      }
+    case 'forbidden':
+      return {
+        heading: translate(
+          'backlog.status.forbidden.heading',
+          'Backlog is not available on this connection'
+        ),
+        body: translate(
+          'backlog.status.forbidden.body',
+          "This connection's access does not include the Backlog. Open it from the desktop app."
+        )
+      }
+    case 'unreachable':
+      return {
+        heading: translate(
+          'backlog.status.unreachable.heading',
+          'This Orca host could not be reached'
+        ),
+        body: translate(
+          'backlog.status.unreachable.body',
+          'The Backlog lives on the active host. Check the connection, then retry.'
+        )
+      }
+  }
+}
+
+function BlockIcon({
+  status
+}: {
+  status: Exclude<BacklogBlockStatus, 'loading'>
+}): React.JSX.Element {
+  switch (status) {
+    case 'empty':
+    case 'filter-empty':
+      return <Inbox className="size-7 text-muted-foreground" aria-hidden />
+    case 'storage-failed':
+      return <TriangleAlert className="size-7 text-destructive" aria-hidden />
+    case 'capability-unsupported':
+      return <CircleHelp className="size-7 text-[var(--status-unknown)]" aria-hidden />
+    case 'forbidden':
+      return <Lock className="size-7 text-muted-foreground" aria-hidden />
+    case 'unreachable':
+      return <Unplug className="size-7 text-[var(--status-unknown)]" aria-hidden />
+  }
+}
+
+/** One block per non-ready page status. Failure codes live only in data-* attributes, never in copy. */
+export function BacklogPageStateBlock({
+  status,
+  filterEmpty = null,
+  onRetry,
+  onCapture,
+  onClearFilters,
+  onShowAllStates
+}: {
+  status: BacklogBlockStatus
+  filterEmpty?: BacklogFilterEmpty | null
+  onRetry: () => void
+  onCapture: () => void
+  onClearFilters: () => void
+  onShowAllStates: () => void
+}): React.JSX.Element | null {
+  if (status === 'loading') {
+    return <BacklogDelayedLoader label={translate('backlog.status.loading', 'Loading backlog…')} />
+  }
+  const copy = copyFor(status, filterEmpty)
+  const critical = status === 'storage-failed'
+  const retryable = critical || status === 'unreachable'
+  return (
+    <div
+      role={critical ? 'alert' : undefined}
+      data-backlog-notice={status === 'filter-empty' ? 'filter-empty' : undefined}
+      className={cn(
+        'mx-auto my-16 flex max-w-md flex-col items-center gap-2 text-center',
+        critical && 'rounded-md border border-destructive/40 bg-destructive/10 px-4 py-4'
+      )}
+    >
+      <BlockIcon status={status} />
+      <h2
+        className={cn(
+          'text-lg font-medium leading-6',
+          critical ? 'text-destructive' : 'text-foreground'
+        )}
+      >
+        {copy.heading}
+      </h2>
+      <p className="text-sm text-muted-foreground">{copy.body}</p>
+      {retryable ? (
+        <Button variant="outline" size="sm" data-backlog-action="retry" onClick={onRetry}>
+          {translate('backlog.status.retry', 'Retry loading')}
+        </Button>
+      ) : null}
+      {status === 'filter-empty' ? (
+        <FilterEmptyAction
+          filterEmpty={filterEmpty}
+          onClearFilters={onClearFilters}
+          onShowAllStates={onShowAllStates}
+        />
+      ) : null}
+      {status === 'empty' ? (
+        <Button size="sm" data-backlog-action="capture-empty" onClick={onCapture}>
+          <Plus className="size-4" aria-hidden />
+          {translate('backlog.capture.submit', 'Capture item')}
+        </Button>
+      ) : null}
+    </div>
+  )
+}

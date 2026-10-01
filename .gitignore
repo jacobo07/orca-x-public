@@ -107,6 +107,7 @@ docs/**
 !docs/orca-cognitive-workspace-spec.md
 !docs/mobile-workstation-runtime-spec.md
 !docs/reference/
+!docs/reference/backlog-infinityops-contract.md
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/linux-glibc-compatibility.md
@@ -115,6 +116,7 @@ docs/**
 !docs/reference/remote-agent-turn-authority.md
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/renderer-agent-status-performance.md
+!docs/reference/universal-backlog.md
 !docs/reference/windows-setup-shell.md
 !docs/reference/worktree-scan-fingerprint.md
 

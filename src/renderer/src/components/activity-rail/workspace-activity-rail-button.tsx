@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   CalendarClock,
+  ClipboardList,
   EyeOff,
   Files,
   List,
@@ -39,6 +40,7 @@ const ACTIVITY_ICONS: Record<
   // The launcher opens projects into terminals; it gave its window icon and its name to the agent
   // Workspace (Owner, 2026-09-24).
   workspace: SquareTerminal,
+  backlog: ClipboardList,
   tasks: List,
   automations: CalendarClock,
   activity: Bell,
@@ -55,6 +57,8 @@ function activityLabel(activity: WorkspaceActivityId): string {
       return translate('auto.components.sidebar.SidebarNav.workspace', 'Workspace')
     case 'workspace':
       return translate('activityRail.terminals', 'Terminals')
+    case 'backlog':
+      return translate('backlog.rail.label', 'Backlog')
     case 'tasks':
       return translate('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')
     case 'automations':
@@ -164,6 +168,7 @@ export function WorkspaceActivityRailButton({
 export const HIDE_SETTING_BY_ACTIVITY: Record<WorkspaceActivityId, keyof GlobalSettings | null> = {
   'agent-workspace': 'showAgentWorkspaceButton',
   workspace: 'showWorkspaceButton',
+  backlog: 'showBacklogButton',
   tasks: 'showTasksButton',
   automations: 'showAutomationsButton',
   mobile: 'showMobileButton',

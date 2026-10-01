@@ -1,0 +1,273 @@
+import { describe, expect, it } from 'vitest'
+
+import type { BacklogQuarantineEntry } from '../../shared/backlog-outcomes'
+import { BACKLOG_OPEN_STATES } from '../../shared/backlog-summary'
+import {
+  BACKLOG_CANDIDATE_STATUSES,
+  BACKLOG_ITEM_STATES,
+  BACKLOG_SOURCE_KINDS,
+  type BacklogCandidate,
+  type BacklogCandidateStatus,
+  type BacklogItem,
+  type BacklogItemKind,
+  type BacklogItemState,
+  type BacklogSourceKind
+} from '../../shared/backlog-types'
+import type { BacklogLedgerSnapshot } from './backlog-ledger-open'
+import {
+  queryBacklogCandidates,
+  queryBacklogItems,
+  summarizeBacklogHealth
+} from './backlog-ledger-queries'
+
+function itemId(n: number): string {
+  return `bli_00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`
+}
+
+function item(
+  n: number,
+  fields: { state?: BacklogItemState; kind?: BacklogItemKind; project?: string; createdAt?: number }
+): BacklogItem {
+  return {
+    schemaVersion: 1,
+    id: itemId(n),
+    kind: fields.kind ?? 'engineering',
+    originalText: `item ${n}`,
+    normalizedIntent: `item ${n}`,
+    projectRefs: fields.project
+      ? [{ projectId: fields.project, mapping: 'explicit', evidence: 'test' }]
+      : [],
+    state: fields.state ?? 'needs-triage',
+    priority: 'normal',
+    dependencies: [],
+    executorPolicy: null,
+    sourceLinks: [],
+    executionLinks: [],
+    evidence: [],
+    events: [],
+    mergedInto: null,
+    revision: 1,
+    createdAt: fields.createdAt ?? n,
+    updatedAt: fields.createdAt ?? n
+  }
+}
+
+function candidate(
+  n: number,
+  status: BacklogCandidateStatus,
+  kind: BacklogSourceKind = 'orca-conversation'
+): BacklogCandidate {
+  return {
+    schemaVersion: 1,
+    id: `blc_${n.toString(16).padStart(32, '0')}`,
+    fingerprint: `fp-${n}`,
+    source: {
+      kind,
+      ref: `conv_${n}`,
+      capturedAt: n,
+      adapter: 'orca-conversations',
+      capabilityLevel: 'full'
+    },
+    text: `candidate ${n}`,
+    uncertainty: 'unknown',
+    status,
+    resolvedItemId: null,
+    projectHint: null,
+    events: [],
+    revision: 1
+  }
+}
+
+const QUARANTINED: BacklogQuarantineEntry = {
+  recordKind: 'item',
+  fileName: 'garbage.json',
+  id: null,
+  code: 'invalid-name',
+  reason: 'file name is not a record id'
+}
+
+const SNAPSHOT: BacklogLedgerSnapshot = {
+  outcome: 'opened',
+  items: [
+    item(1, { state: 'ready', project: 'P', createdAt: 10 }),
+    item(2, { state: 'needs-triage', kind: 'idea', createdAt: 30 }),
+    item(3, { state: 'ready', project: 'Q', createdAt: 20 }),
+    item(4, { state: 'done', project: 'P', createdAt: 30 }),
+    item(5, { state: 'ready', createdAt: 5 })
+  ],
+  candidates: [candidate(1, 'open'), candidate(2, 'dismissed'), candidate(3, 'open')],
+  quarantined: [QUARANTINED]
+}
+
+const ids = (rows: { id: string }[]) => rows.map((row) => row.id)
+
+describe('ledger item queries', () => {
+  it('sorts createdAt descending, then id ascending, and counts the quarantine', () => {
+    const listed = queryBacklogItems(SNAPSHOT, {})
+    expect(listed).toMatchObject({
+      outcome: 'listed',
+      total: 5,
+      nextCursor: null,
+      quarantinedCount: 1
+    })
+    expect(listed.outcome === 'listed' && ids(listed.items)).toEqual([
+      itemId(2),
+      itemId(4),
+      itemId(3),
+      itemId(1),
+      itemId(5)
+    ])
+  })
+
+  it('filters by state, kind, project and Unassigned', () => {
+    const only = (query: Parameters<typeof queryBacklogItems>[1]) => {
+      const listed = queryBacklogItems(SNAPSHOT, query)
+      return listed.outcome === 'listed' ? { total: listed.total, ids: ids(listed.items) } : null
+    }
+    expect(only({ state: 'ready' })).toEqual({ total: 3, ids: [itemId(3), itemId(1), itemId(5)] })
+    expect(only({ kind: 'idea' })).toEqual({ total: 1, ids: [itemId(2)] })
+    expect(only({ projectId: 'P' })).toEqual({ total: 2, ids: [itemId(4), itemId(1)] })
+    expect(only({ unassigned: true })).toEqual({ total: 2, ids: [itemId(2), itemId(5)] })
+    expect(only({ state: 'ready', unassigned: true })).toEqual({ total: 1, ids: [itemId(5)] })
+  })
+
+  it('pages with a decimal cursor; total counts every match', () => {
+    const first = queryBacklogItems(SNAPSHOT, { limit: 2 })
+    if (first.outcome !== 'listed') {
+      throw new Error(first.outcome)
+    }
+    expect(first.total).toBe(5)
+    expect(ids(first.items)).toEqual([itemId(2), itemId(4)])
+    expect(first.nextCursor).toBe('2')
+
+    const second = queryBacklogItems(SNAPSHOT, { limit: 2, cursor: first.nextCursor! })
+    const third = queryBacklogItems(SNAPSHOT, {
+      limit: 2,
+      cursor: (second as { nextCursor: string }).nextCursor
+    })
+    expect(second.outcome === 'listed' && ids(second.items)).toEqual([itemId(3), itemId(1)])
+    expect(third).toMatchObject({ total: 5, nextCursor: null })
+    expect(third.outcome === 'listed' && ids(third.items)).toEqual([itemId(5)])
+  })
+
+  it('echoes view full by default and returns the records unchanged', () => {
+    const listed = queryBacklogItems(SNAPSHOT, {})
+    expect(listed).toMatchObject({ outcome: 'listed', view: 'full' })
+    expect(listed.outcome === 'listed' && listed.items).toEqual([
+      SNAPSHOT.items[1],
+      SNAPSHOT.items[3],
+      SNAPSHOT.items[2],
+      SNAPSHOT.items[0],
+      SNAPSHOT.items[4]
+    ])
+  })
+
+  it('projects summary rows after paging with identical filters, pages and total', () => {
+    for (const query of [{}, { state: 'ready' as const }, { limit: 2, cursor: '2' }]) {
+      const full = queryBacklogItems(SNAPSHOT, query)
+      const summary = queryBacklogItems(SNAPSHOT, { ...query, view: 'summary' })
+      if (full.outcome !== 'listed' || summary.outcome !== 'listed') {
+        throw new Error('not listed')
+      }
+      expect(summary.view).toBe('summary')
+      expect(summary.total).toBe(full.total)
+      expect(summary.nextCursor).toBe(full.nextCursor)
+      expect(summary.quarantinedCount).toBe(full.quarantinedCount)
+      expect(ids(summary.items)).toEqual(ids(full.items))
+      for (const row of summary.items) {
+        expect(Object.hasOwn(row, 'events')).toBe(false)
+        expect(Object.hasOwn(row, 'evidence')).toBe(false)
+      }
+    }
+  })
+})
+
+describe('ledger candidate queries and health', () => {
+  it('filters candidates by status', () => {
+    const open = queryBacklogCandidates(SNAPSHOT, { status: 'open' })
+    expect(open).toMatchObject({ outcome: 'listed', total: 2, nextCursor: null })
+    expect(open.outcome === 'listed' && open.candidates.every((row) => row.status === 'open')).toBe(
+      true
+    )
+    expect(queryBacklogCandidates(SNAPSHOT, {})).toMatchObject({ total: 3 })
+  })
+
+  it('reports every state and status key, zero included, and the quarantine', () => {
+    const health = summarizeBacklogHealth(SNAPSHOT)
+    expect(Object.keys(health.items.byState).sort()).toEqual([...BACKLOG_ITEM_STATES].sort())
+    expect(Object.keys(health.candidates.byStatus).sort()).toEqual(
+      [...BACKLOG_CANDIDATE_STATUSES].sort()
+    )
+    expect(health.items).toMatchObject({ total: 5, byState: { ready: 3, done: 1, running: 0 } })
+    expect(health.candidates).toMatchObject({
+      total: 3,
+      byStatus: { open: 2, dismissed: 1, merged: 0 }
+    })
+    expect(health.quarantined).toEqual([QUARANTINED])
+  })
+
+  it('counts every item by kind and open items by kind, zero included', () => {
+    const snapshot: BacklogLedgerSnapshot = {
+      ...SNAPSHOT,
+      items: [
+        item(1, { kind: 'idea', state: 'needs-triage' }),
+        item(2, { kind: 'idea', state: 'dismissed' }),
+        item(3, { kind: 'engineering', state: 'ready' }),
+        item(4, { kind: 'decision', state: 'done' })
+      ]
+    }
+    const health = summarizeBacklogHealth(snapshot)
+    expect(health.items.byKind).toEqual({
+      idea: 2,
+      engineering: 1,
+      decision: 1,
+      research: 0,
+      manual: 0
+    })
+    expect(health.items.openByKind).toEqual({
+      idea: 1,
+      engineering: 1,
+      decision: 0,
+      research: 0,
+      manual: 0
+    })
+    const sum = (counts: Record<string, number>) =>
+      Object.values(counts).reduce((total, count) => total + count, 0)
+    expect(sum(health.items.byKind!)).toBe(health.items.total)
+    expect(sum(health.items.openByKind!)).toBe(
+      BACKLOG_OPEN_STATES.reduce((total, state) => total + health.items.byState[state], 0)
+    )
+  })
+
+  it('counts every candidate by source kind over all statuses, zero included', () => {
+    const snapshot: BacklogLedgerSnapshot = {
+      ...SNAPSHOT,
+      candidates: [
+        candidate(1, 'open', 'orca-conversation'),
+        candidate(2, 'dismissed', 'orca-conversation'),
+        candidate(3, 'open', 'codex-transcript')
+      ]
+    }
+    const health = summarizeBacklogHealth(snapshot)
+    expect(health.candidates.bySourceKind).toEqual({
+      manual: 0,
+      'orca-conversation': 2,
+      'claude-code-transcript': 0,
+      'codex-transcript': 1,
+      'chatgpt-export': 0,
+      infinityops: 0
+    })
+    const sum = (counts: Record<string, number>) =>
+      Object.values(counts).reduce((total, count) => total + count, 0)
+    expect(sum(health.candidates.bySourceKind!)).toBe(health.candidates.total)
+    expect(health.candidates.total).toBe(3)
+  })
+
+  it('reports every source kind as a measured zero on an empty ledger', () => {
+    const health = summarizeBacklogHealth({ ...SNAPSHOT, items: [], candidates: [] })
+    expect(health.candidates.total).toBe(0)
+    expect(health.candidates.bySourceKind).toEqual(
+      Object.fromEntries(BACKLOG_SOURCE_KINDS.map((kind) => [kind, 0]))
+    )
+  })
+})

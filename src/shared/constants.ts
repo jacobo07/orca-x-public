@@ -284,6 +284,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showArtifactsButton: false,
     showSkillsButton: false,
     showMobileButton: true,
+    showBacklogButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
     // Why: Orca-first keeps core shortcuts working from a focused terminal; TUI-ownership users opt in.

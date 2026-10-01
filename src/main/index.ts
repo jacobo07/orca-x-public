@@ -96,6 +96,7 @@ import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtim
 import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
 import { SkillCloudService } from './skills/skill-cloud-service'
 import { getConversationHost } from './ipc/conversations'
+import { getBacklogHost } from './ipc/backlog-host-wiring'
 import { recoverPendingSkillTransactions } from './skills/skill-transaction-startup-recovery'
 import { isArtifactSharingEnabled } from '../shared/artifact-sharing-gate'
 import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
@@ -2918,6 +2919,8 @@ void app.whenReady().then(async () => {
       () => store!.getProjects()
     )
   )
+  // Same reason: headless serve never opens a window, so the ledger host is wired here for every client.
+  runtimeService.setBacklogHost(getBacklogHost())
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.

@@ -237,6 +237,9 @@ export type GlobalSettings = {
   showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
+  /** Default-on: only an explicit false hides the Backlog rail entry. The Universal Backlog's
+   *  rollback visibility flag; the view stays reachable and persisted when it is hidden. */
+  showBacklogButton?: boolean
   /** @deprecated LEGACY, read by nothing. Governed the opt-in "Chats" rail entry that merged into
    *  Workspace (2026-09-24). Declared only because profiles written before then still hold it; it
    *  must never gate Workspace — it defaulted to false, so a stored false is not a choice. */

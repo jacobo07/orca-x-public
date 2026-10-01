@@ -120,6 +120,10 @@ Node delivers an IPC message a tick after reading it and checks the channel only
 
 `fork()` always creates an IPC channel, so a site is exposed even with no `'ipc'` in its `stdio`. The teardown that arms the crash — dropping the last `'message'` listener, then disconnecting or killing — usually lives in a different function from the fork, which is why this is a gate rather than a code-review note. `removeAllListeners()` on a child is the sharpest form: it takes node's own internal handlers with it.
 
+## Universal Backlog
+
+Unfinished intent from any project or chat lives in the Universal Backlog, which sits above Tasks and links to the owners that execute it — it never copies their state. Harvested text is a candidate until accepted and reconciled against evidence; project is optional; source, executor and project are separate. See [`docs/reference/universal-backlog.md`](./docs/reference/universal-backlog.md) and, for the ChatGPT doorway, [`docs/reference/backlog-infinityops-contract.md`](./docs/reference/backlog-infinityops-contract.md).
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).

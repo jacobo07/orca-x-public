@@ -190,7 +190,9 @@ const TopLevelViewSchema = z.enum([
   // once someone turns on `showAgentsButton` and navigates there.
   'agents',
   // Same debt and reasoning; reachable only by opening the Resume Center from the Workspace.
-  'resumeCenter'
+  'resumeCenter',
+  // Same debt and reasoning; the Backlog rail entry is default-on, so publishing is reachable.
+  'backlog'
 ])
 const UiUpdateFields = z
   .object({

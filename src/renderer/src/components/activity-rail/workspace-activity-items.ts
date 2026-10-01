@@ -16,6 +16,7 @@ import type { TopLevelView } from '../../../../shared/ui-chrome-types'
 export type WorkspaceActivityId =
   | 'agent-workspace'
   | 'workspace'
+  | 'backlog'
   | 'tasks'
   | 'automations'
   | 'activity'
@@ -29,12 +30,14 @@ export type WorkspaceActivityId =
  * directly below Explorer instead, so its slot here applies only where the panel's icons are not
  * on screen.
  *
- * Then as before: open a project into terminals, work the queue that feeds it, the scheduled work
- * behind it, the opt-in surfaces, and the companion device — reached once during setup — last.
+ * Then as before: open a project into terminals, the Backlog of unfinished intent that sits above
+ * Tasks, work the queue that feeds it, the scheduled work behind it, the opt-in surfaces, and the
+ * companion device — reached once during setup — last.
  */
 export const WORKSPACE_ACTIVITY_ORDER: readonly WorkspaceActivityId[] = [
   'agent-workspace',
   'workspace',
+  'backlog',
   'tasks',
   'automations',
   'activity',
@@ -49,6 +52,7 @@ export type WorkspaceActivitySettings =
         GlobalSettings,
         | 'showAgentWorkspaceButton'
         | 'showWorkspaceButton'
+        | 'showBacklogButton'
         | 'showTasksButton'
         | 'showAutomationsButton'
         | 'showMobileButton'
@@ -64,6 +68,7 @@ const ACTIVE_VIEW_BY_ACTIVITY: Record<WorkspaceActivityId, TopLevelView> = {
   // The page the Chats entry opened: the entry was renamed and moved, the route id was not.
   'agent-workspace': 'conversations',
   workspace: 'workspace',
+  backlog: 'backlog',
   tasks: 'tasks',
   automations: 'automations',
   // Renamed from `agents` in W-C3. The view id was ALREADY 'activity': this rail entry was the only
@@ -89,6 +94,8 @@ function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySet
       return settings?.showAgentWorkspaceButton !== false
     case 'workspace':
       return settings?.showWorkspaceButton !== false
+    case 'backlog':
+      return settings?.showBacklogButton !== false
     case 'tasks':
       return settings?.showTasksButton !== false
     case 'automations':

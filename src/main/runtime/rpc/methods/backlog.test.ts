@@ -1,0 +1,243 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  BACKLOG_INGEST_BATCH_MAX,
+  BACKLOG_LIST_LIMIT_MAX,
+  BACKLOG_PROJECT_ID_MAX,
+  BACKLOG_TEXT_MAX
+} from '../../../../shared/backlog-rpc-limits'
+import type { RpcContext } from '../core'
+import { BACKLOG_METHODS } from './backlog'
+import {
+  BacklogCandidateListParams,
+  BacklogCandidatesAssignParams,
+  BacklogCandidatesIngestParams,
+  BacklogCandidatesResolveParams
+} from './backlog-candidate-params'
+import { BacklogHarvestRunParams } from './backlog-harvest-params'
+import {
+  BacklogCaptureParams,
+  BacklogListParams,
+  BacklogMergeParams,
+  BacklogTransitionParams,
+  BacklogUpdateParams
+} from './backlog-params'
+
+// The complete Phase 1 surface: a new method must be added here deliberately.
+const NAMES = [
+  'backlog.list',
+  'backlog.get',
+  'backlog.capture',
+  'backlog.update',
+  'backlog.transition',
+  'backlog.merge',
+  'backlog.candidates.list',
+  'backlog.candidates.ingest',
+  'backlog.candidates.resolve',
+  'backlog.health',
+  // Phase 3: host-side harvest of this host's own stores (R-04).
+  'backlog.harvest.run',
+  // In-memory per-unit run status; connected only after a finished run (D-19).
+  'backlog.harvest.status',
+  // Assign or clear an open candidate's project; the only v2 record writer (R-01).
+  'backlog.candidates.assign'
+]
+
+const ITEM_ID = 'bli_00000000-0000-4000-8000-000000000000'
+const OTHER_ITEM_ID = 'bli_00000000-0000-4000-8000-000000000001'
+const CANDIDATE_ID = `blc_${'a'.repeat(32)}`
+
+const CANDIDATE = {
+  source: {
+    kind: 'orca-conversation',
+    ref: 'conv_1',
+    capturedAt: 1,
+    adapter: 'orca-conversations',
+    capabilityLevel: 'full'
+  },
+  fingerprint: 'fp',
+  text: 'Harvested intent',
+  uncertainty: 'unknown'
+}
+
+const VALID_PARAMS: Record<string, unknown> = {
+  'backlog.capture': { text: 'Ship it', kind: 'engineering' },
+  'backlog.get': { id: ITEM_ID },
+  'backlog.update': { id: ITEM_ID, patch: { priority: 'high' } },
+  'backlog.transition': { id: ITEM_ID, to: 'ready' },
+  'backlog.candidates.ingest': { candidates: [CANDIDATE] },
+  'backlog.candidates.resolve': { action: 'dismiss', candidateId: CANDIDATE_ID },
+  'backlog.merge': { survivorId: ITEM_ID, loserId: OTHER_ITEM_ID },
+  'backlog.list': { state: 'ready' },
+  'backlog.candidates.list': { status: 'open' },
+  'backlog.health': undefined,
+  'backlog.harvest.run': { unit: 'orca-conversations' },
+  'backlog.harvest.status': undefined,
+  'backlog.candidates.assign': { candidateId: CANDIDATE_ID, projectId: 'P1' }
+}
+
+function ctxWithoutHost(): RpcContext {
+  return {
+    runtime: { getBacklogHost: () => null } as unknown as RpcContext['runtime'],
+    connectionId: 'conn-1',
+    clientKind: 'runtime'
+  }
+}
+
+describe('backlog.* runtime methods', () => {
+  it('registers exactly the ledger method set', () => {
+    expect(BACKLOG_METHODS.map((entry) => entry.name).sort()).toEqual([...NAMES].sort())
+    expect(NAMES).toHaveLength(13)
+  })
+
+  it('bounds assign params: a candidate id and a bounded project id or null', () => {
+    const assign = (params: unknown) => BacklogCandidatesAssignParams.safeParse(params).success
+    expect(assign({ candidateId: CANDIDATE_ID, projectId: 'P1' })).toBe(true)
+    expect(assign({ candidateId: CANDIDATE_ID, projectId: null })).toBe(true)
+    expect(
+      assign({ candidateId: CANDIDATE_ID, projectId: 'p'.repeat(BACKLOG_PROJECT_ID_MAX) })
+    ).toBe(true)
+    expect(
+      assign({ candidateId: CANDIDATE_ID, projectId: 'p'.repeat(BACKLOG_PROJECT_ID_MAX + 1) })
+    ).toBe(false)
+    expect(assign({ candidateId: CANDIDATE_ID, projectId: '' })).toBe(false)
+    expect(assign({ candidateId: CANDIDATE_ID })).toBe(false)
+    expect(assign({ candidateId: ITEM_ID, projectId: 'P1' })).toBe(false)
+    expect(assign({ candidateId: 'blc_short', projectId: 'P1' })).toBe(false)
+    const stripped = BacklogCandidatesAssignParams.safeParse({
+      candidateId: CANDIDATE_ID,
+      projectId: 'P1',
+      mapping: 'inferred',
+      schemaVersion: 9
+    })
+    expect(stripped.data).toEqual({ candidateId: CANDIDATE_ID, projectId: 'P1' })
+  })
+
+  it('accepts only the harvest units this build can run', () => {
+    const run = (params: unknown) => BacklogHarvestRunParams.safeParse(params).success
+    expect(run({ unit: 'orca-conversations' })).toBe(true)
+    expect(run({ unit: 'agent-transcripts' })).toBe(true)
+    expect(run({ unit: 'chatgpt-export' })).toBe(false)
+    expect(run({ unit: 'nope' })).toBe(false)
+    expect(run({})).toBe(false)
+    const stripped = BacklogHarvestRunParams.safeParse({ unit: 'orca-conversations', path: '/x' })
+    expect(stripped.data).toEqual({ unit: 'orca-conversations' })
+  })
+
+  it('hands an agent-transcripts run to the host harvester', async () => {
+    const units: unknown[] = []
+    const ctx = {
+      runtime: {
+        getBacklogHost: () => ({
+          harvest: async (unit: unknown) => {
+            units.push(unit)
+            return { outcome: 'refused', unit, code: 'source-unreadable', finishedAt: 1 }
+          }
+        })
+      } as unknown as RpcContext['runtime'],
+      connectionId: 'conn-1',
+      clientKind: 'runtime'
+    } as RpcContext
+    const method = BACKLOG_METHODS.find(
+      (entry) => entry.name === 'backlog.harvest.run'
+    ) as unknown as {
+      handler: (params: unknown, ctx: RpcContext) => Promise<unknown>
+    }
+    await method.handler({ unit: 'agent-transcripts' }, ctx)
+    expect(units).toEqual(['agent-transcripts'])
+  })
+
+  it('bounds list params and refuses a project filter combined with Unassigned', () => {
+    const list = (params: unknown) => BacklogListParams.safeParse(params).success
+    expect(list({})).toBe(true)
+    expect(list({ projectId: 'P', limit: BACKLOG_LIST_LIMIT_MAX, cursor: '200' })).toBe(true)
+    expect(list({ unassigned: true, state: 'ready', kind: 'idea' })).toBe(true)
+    expect(list({ projectId: 'P', unassigned: true })).toBe(false)
+    expect(list({ limit: BACKLOG_LIST_LIMIT_MAX + 1 })).toBe(false)
+    expect(list({ limit: 0 })).toBe(false)
+    expect(list({ cursor: 'abc' })).toBe(false)
+    expect(list({ cursor: '-1' })).toBe(false)
+    expect(list({ state: 'archived' })).toBe(false)
+    expect(BacklogListParams.safeParse({ view: 'summary' }).data).toEqual({ view: 'summary' })
+    expect(BacklogListParams.safeParse({ view: 'full' }).data).toEqual({ view: 'full' })
+    expect(list({ view: 'compact' })).toBe(false)
+    const candidates = (params: unknown) => BacklogCandidateListParams.safeParse(params).success
+    expect(candidates({ status: 'open', limit: 5, cursor: '5' })).toBe(true)
+    expect(candidates({ status: 'archived' })).toBe(false)
+    expect(candidates({ cursor: '1.5' })).toBe(false)
+  })
+
+  it('answers capability_unsupported on a host with no backlog host (fails closed)', async () => {
+    let checked = 0
+    for (const entry of BACKLOG_METHODS) {
+      const method = entry as unknown as {
+        handler: (params: unknown, ctx: RpcContext) => Promise<unknown>
+      }
+      await expect(
+        method.handler(VALID_PARAMS[entry.name], ctxWithoutHost()),
+        entry.name
+      ).rejects.toMatchObject({ code: 'capability_unsupported' })
+      checked += 1
+    }
+    expect(checked).toBe(NAMES.length)
+  })
+
+  it('bounds capture text and strips caller-chosen identity keys', () => {
+    expect(
+      BacklogCaptureParams.safeParse({ text: 'x'.repeat(BACKLOG_TEXT_MAX + 1), kind: 'idea' })
+        .success
+    ).toBe(false)
+    expect(BacklogCaptureParams.safeParse({ text: '   ', kind: 'idea' }).success).toBe(false)
+
+    const parsed = BacklogCaptureParams.safeParse({
+      text: 'Ship it',
+      kind: 'idea',
+      id: 'bli_forged',
+      revision: 99,
+      events: []
+    })
+    expect(parsed.success).toBe(true)
+    expect(parsed.data).toEqual({ text: 'Ship it', kind: 'idea' })
+  })
+
+  it('rejects a transition to an unknown state and an empty update patch', () => {
+    expect(BacklogTransitionParams.safeParse({ id: ITEM_ID, to: 'archived' }).success).toBe(false)
+    expect(BacklogTransitionParams.safeParse({ id: ITEM_ID, to: 'done' }).success).toBe(true)
+    expect(BacklogUpdateParams.safeParse({ id: ITEM_ID, patch: {} }).success).toBe(false)
+    const stripped = BacklogUpdateParams.safeParse({
+      id: ITEM_ID,
+      patch: { priority: 'low', revision: 7 },
+      revision: 7
+    })
+    expect(stripped.success).toBe(true)
+    expect(stripped.data).toEqual({ id: ITEM_ID, patch: { priority: 'low' } })
+  })
+
+  it('bounds the ingest batch and refuses NUL identity components and unknown kinds', () => {
+    const ingest = (candidates: unknown[]) =>
+      BacklogCandidatesIngestParams.safeParse({ candidates }).success
+    expect(ingest([CANDIDATE])).toBe(true)
+    expect(ingest(Array.from({ length: BACKLOG_INGEST_BATCH_MAX }, () => CANDIDATE))).toBe(true)
+    expect(ingest(Array.from({ length: BACKLOG_INGEST_BATCH_MAX + 1 }, () => CANDIDATE))).toBe(
+      false
+    )
+    expect(ingest([])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, fingerprint: 'f\0p' }])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, source: { ...CANDIDATE.source, ref: 'c\0nv' } }])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, source: { ...CANDIDATE.source, kind: 'email' } }])).toBe(false)
+    expect(ingest([{ ...CANDIDATE, uncertainty: 0.4 }])).toBe(false)
+  })
+
+  it('validates resolve actions and merge ids', () => {
+    const resolve = (params: unknown) => BacklogCandidatesResolveParams.safeParse(params).success
+    expect(resolve({ action: 'accept', candidateId: CANDIDATE_ID })).toBe(true)
+    expect(resolve({ action: 'merge', candidateId: CANDIDATE_ID, itemId: ITEM_ID })).toBe(true)
+    expect(resolve({ action: 'merge', candidateId: CANDIDATE_ID })).toBe(false)
+    expect(resolve({ action: 'archive', candidateId: CANDIDATE_ID })).toBe(false)
+    expect(resolve({ action: 'dismiss', candidateId: 'blc_short' })).toBe(false)
+    expect(BacklogMergeParams.safeParse(VALID_PARAMS['backlog.merge']).success).toBe(true)
+    expect(
+      BacklogMergeParams.safeParse({ survivorId: ITEM_ID, loserId: CANDIDATE_ID }).success
+    ).toBe(false)
+  })
+})

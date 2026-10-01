@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { isTopLevelView } from '../../../../shared/top-level-view'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
@@ -672,5 +673,68 @@ describe('createUISlice space navigation', () => {
 
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
     expect(store.getState().activeView).toBe('artifacts')
+  })
+})
+
+describe('createUISlice backlog navigation', () => {
+  it('returns to the originating view after closing Backlog', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openBacklogPage()
+
+    expect(store.getState().activeView).toBe('backlog')
+    expect(store.getState().previousViewBeforeBacklog).toBe('tasks')
+
+    store.getState().closeBacklogPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('keeps the original return target when Backlog is reopened while already visible', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openBacklogPage()
+    store.getState().openBacklogPage()
+
+    expect(store.getState().previousViewBeforeBacklog).toBe('tasks')
+
+    store.getState().closeBacklogPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('returns to terminals when the recorded Activity view was withdrawn by its setting', () => {
+    const store = createUIStore()
+    store.setState({
+      activeView: 'activity',
+      settings: { ...getDefaultSettings('/tmp'), experimentalActivity: false }
+    })
+
+    store.getState().openBacklogPage()
+    expect(store.getState().previousViewBeforeBacklog).toBe('activity')
+
+    store.getState().closeBacklogPage()
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('restores a persisted Backlog view on startup', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'backlog' }), 'startup')
+
+    expect(isTopLevelView('backlog')).toBe(true)
+    expect(store.getState().activeView).toBe('backlog')
+  })
+
+  it('restores a persisted Backlog view when its rail entry is hidden', () => {
+    const store = createUIStore()
+    store.setState({ settings: { ...getDefaultSettings('/tmp'), showBacklogButton: false } })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'backlog' }), 'startup')
+
+    expect(store.getState().activeView).toBe('backlog')
   })
 })

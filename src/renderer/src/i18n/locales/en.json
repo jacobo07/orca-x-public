@@ -17002,5 +17002,224 @@
       "paused": "Paused",
       "recorded": "Recorded as “{{value}}”"
     }
+  },
+  "activity": {
+    "railLabel": "Activity"
+  },
+  "backlog": {
+    "rail": {
+      "label": "Backlog"
+    },
+    "settings": {
+      "showButton": {
+        "title": "Show Backlog Button",
+        "description": "Show the Backlog button in the activity rail.",
+        "keywordBacklog": "backlog",
+        "keywordIntent": "intent",
+        "keywordIdeas": "ideas"
+      }
+    },
+    "page": {
+      "title": "Backlog",
+      "close": "Close backlog",
+      "closeTooltip": "Close · Esc",
+      "listLabel": "Backlog items"
+    },
+    "header": {
+      "openItems_one": "open item",
+      "openItems_other": "open items",
+      "across": "across",
+      "projects_one": "project",
+      "projects_other": "projects"
+    },
+    "filters": {
+      "scopeLabel": "Filter by project",
+      "all": "All",
+      "state": "State",
+      "stateOpen": "Open",
+      "stateAll": "All states",
+      "kind": "Kind",
+      "kindAll": "All kinds",
+      "search": "Search backlog",
+      "searchHint": "Search text…",
+      "shown_one": "{{count}} item shown",
+      "shown_other": "{{count}} items shown"
+    },
+    "sort": {
+      "label": "Sort",
+      "updatedDesc": "Most recently updated",
+      "updatedAsc": "Oldest first",
+      "priority": "Priority"
+    },
+    "notice": {
+      "retry": "Retry",
+      "refreshFailed": "The list could not be refreshed. What you see is from the last successful read.",
+      "quarantined": "records could not be read (items and candidates) and are left out of every count on this page.",
+      "copyQuarantine": "Copy quarantine report",
+      "mismatchLoaded": "Loaded",
+      "mismatchReports": "items but the ledger reports",
+      "mismatchReconcile": ". Refresh to reconcile."
+    },
+    "summary": {
+      "title": "Backlog summary",
+      "openByKind": "Open by kind",
+      "byState": "By state",
+      "total": "Total items",
+      "quarantined": "Records that could not be read",
+      "notRecorded": "not recorded",
+      "loading": "Loading summary…",
+      "unavailable": "Summary unavailable. The item list above is still current.",
+      "retry": "Retry summary"
+    },
+    "status": {
+      "loading": "Loading backlog…",
+      "retry": "Retry loading",
+      "empty": {
+        "heading": "Your backlog is empty",
+        "body": "Capture an idea, a task or a decision, with or without a project. Press N to capture from anywhere on this page."
+      },
+      "filterEmpty": {
+        "heading": "No items match these filters",
+        "hiddenByFilters": "items are hidden by the current filters.",
+        "noOpen": "No open items.",
+        "closedHidden": "closed items are hidden.",
+        "clear": "Clear filters",
+        "showAllStates": "Show all states"
+      },
+      "storageFailed": {
+        "heading": "Backlog could not be read",
+        "body": "Reading the ledger on this host failed, and nothing was changed. Retry, and if it keeps failing, restart Orca."
+      },
+      "capabilityUnsupported": {
+        "heading": "This Orca host does not provide a Backlog",
+        "body": "The active host runs an older Orca. Update Orca on that host, or switch to a host that has Backlog."
+      },
+      "forbidden": {
+        "heading": "Backlog is not available on this connection",
+        "body": "This connection's access does not include the Backlog. Open it from the desktop app."
+      },
+      "unreachable": {
+        "heading": "This Orca host could not be reached",
+        "body": "The Backlog lives on the active host. Check the connection, then retry."
+      }
+    },
+    "group": {
+      "unassigned": "Unassigned",
+      "unknown": "Unknown project",
+      "items_one": "{{count}} item",
+      "items_other": "{{count}} items",
+      "noun_one": "item",
+      "noun_other": "items",
+      "label": "{{project}}, {{items}}"
+    },
+    "row": {
+      "textShortened": "(text shortened)",
+      "inferred": "inferred",
+      "moreProjects_one": "+{{count}} project",
+      "moreProjects_other": "+{{count}} projects",
+      "moved": "Moved to {{state}}"
+    },
+    "detail": {
+      "loading": "Loading item…",
+      "absent": "This item is no longer in the backlog.",
+      "unreadable": "This item cannot be read right now.",
+      "schemaTooNew": "This item was saved by a newer version of Orca.",
+      "loadFailed": "This item could not be loaded. Collapse and expand the row to try again.",
+      "summary": "Summary",
+      "kind": "Kind",
+      "priority": "Priority",
+      "state": "State",
+      "created": "Created",
+      "updated": "Updated",
+      "projects": "Projects",
+      "sources": "Sources",
+      "history": "History",
+      "none": "None",
+      "explicit": "Explicit",
+      "inferred": "Inferred",
+      "changeState": "Change state",
+      "doneNeedsEvidence": "Needs completion evidence first",
+      "doneIdea": "An idea cannot be marked done; change its kind first",
+      "stale": "This item changed since it was loaded. It has been reloaded; try again.",
+      "transitionUnknown": "We could not confirm this change. The item has been reloaded.",
+      "mutationFailed": "Not changed. The ledger could not write this change. Try again."
+    },
+    "edit": {
+      "open": "Edit item",
+      "original": "Original text",
+      "save": "Save changes",
+      "discard": "Discard changes",
+      "overLimit": "Summary is over the 2,000-character limit",
+      "kindWhileDone": "The kind cannot change while the item is done.",
+      "capacity": "This item has reached its size limit.",
+      "unknown": "We could not confirm this change was saved. The item has been reloaded."
+    },
+    "history": {
+      "created": "Created",
+      "updated": "Updated",
+      "transitioned": "State changed",
+      "sourceLinked": "Source linked",
+      "mergedIn": "Merged in",
+      "mergedInto": "Merged into"
+    },
+    "state": {
+      "needsTriage": "Needs triage",
+      "ready": "Ready",
+      "waitingForExecutor": "Waiting for executor",
+      "preparing": "Preparing",
+      "running": "Running",
+      "review": "In review",
+      "done": "Done",
+      "blocked": "Blocked",
+      "stale": "Stale",
+      "superseded": "Superseded",
+      "dismissed": "Dismissed",
+      "unknown": "Unknown"
+    },
+    "kind": {
+      "engineering": "Engineering",
+      "research": "Research",
+      "decision": "Decision",
+      "manual": "Manual task",
+      "idea": "Idea"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "normal": "Normal",
+      "low": "Low"
+    },
+    "source": {
+      "manual": "Manual",
+      "orcaConversation": "Orca conversation",
+      "claudeCodeTranscript": "Claude Code",
+      "codexTranscript": "Codex",
+      "chatgptExport": "ChatGPT",
+      "infinityops": "InfinityOps"
+    },
+    "capture": {
+      "title": "Capture to backlog",
+      "description": "Write it the way you think it. Project, kind and priority can change later.",
+      "textLabel": "Item text",
+      "submit": "Capture item",
+      "submitting": "Capturing…",
+      "cancel": "Close without capturing",
+      "closeConfirmed": "Close capture",
+      "confirmed": "Captured to {{target}}",
+      "projectLabel": "Project",
+      "projectSearch": "Search projects",
+      "charactersLeft": "characters left",
+      "overLimit": "Text is over the 20,000-character limit",
+      "ready": "Mark as ready",
+      "another": "Capture another item",
+      "failed": {
+        "storageFailed": "Not captured. The ledger could not write this item. Your text is kept here; try again.",
+        "unreadable": "Not captured. The ledger on this host cannot be read right now. Your text is kept here; try again after reloading the backlog.",
+        "capability": "Not captured. This host does not provide a Backlog.",
+        "unknown": "We could not confirm this was saved. Check the list before capturing again.",
+        "unreachable": "Not captured. This host could not be reached. Your text is kept here; try again.",
+        "other": "Not captured. Your text is kept here; try again."
+      }
+    }
   }
 }

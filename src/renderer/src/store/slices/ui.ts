@@ -669,6 +669,7 @@ export type UISlice = {
   previousViewBeforeMobile: Exclude<TopLevelView, 'mobile'>
   previousViewBeforeConversations: Exclude<TopLevelView, 'conversations'>
   previousViewBeforeArtifacts: Exclude<TopLevelView, 'artifacts'>
+  previousViewBeforeBacklog: Exclude<TopLevelView, 'backlog'>
   setActiveView: (view: UISlice['activeView']) => void
   /** Shows the workspace launcher: open a project, rather than browse the whole project list. */
   openWorkspacePage: () => void
@@ -760,6 +761,8 @@ export type UISlice = {
   clearPendingSkillsSharedView: () => void
   openArtifactsPage: () => void
   closeArtifactsPage: () => void
+  openBacklogPage: () => void
+  closeBacklogPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
   openConversationsPage: () => void
@@ -1283,6 +1286,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   pendingSkillsSharedView: false,
   previousViewBeforeMobile: 'terminal',
   previousViewBeforeArtifacts: 'terminal',
+  previousViewBeforeBacklog: 'terminal',
   previousViewBeforeConversations: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
@@ -1556,6 +1560,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeArtifactsPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeArtifacts
+    })),
+  openBacklogPage: () =>
+    set((state) => ({
+      activeView: 'backlog',
+      previousViewBeforeBacklog:
+        state.activeView === 'backlog' ? state.previousViewBeforeBacklog : state.activeView
+    })),
+  closeBacklogPage: () =>
+    set((state) => ({
+      activeView: resolvePageReturnTarget(state.previousViewBeforeBacklog, state.settings)
     })),
   // No closeWorkspacePage twin: the launcher is left by opening a project, which is a real
   // navigation to that workspace, not a dismissal that has to restore where you came from.

@@ -35,7 +35,8 @@ const PROJECT_SCOPED_APP_VIEWS = [
   'automations',
   'skills',
   'artifacts',
-  'mobile'
+  'mobile',
+  'backlog'
 ] as const
 
 describe('right sidebar visibility helpers', () => {

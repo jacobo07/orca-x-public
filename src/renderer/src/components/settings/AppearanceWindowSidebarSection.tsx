@@ -25,6 +25,7 @@ import { FloatingWorkspaceDockSetting } from './FloatingWorkspaceDockSetting'
 import { SidePanelDockSetting } from './SidePanelDockSetting'
 import {
   getLeftSidebarAppearanceEntry,
+  getShowBacklogButtonEntry,
   getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
@@ -263,6 +264,22 @@ export function AppearanceWindowSidebarSection({
                       checked={settings.showTasksButton !== false}
                       onChange={() =>
                         updateSettings({ showTasksButton: !(settings.showTasksButton !== false) })
+                      }
+                    />
+                  </SearchableSetting>
+
+                  <SearchableSetting
+                    title={getShowBacklogButtonEntry().title}
+                    description={getShowBacklogButtonEntry().description}
+                    keywords={getShowBacklogButtonEntry().keywords}
+                  >
+                    <SettingsSwitchRow
+                      label={translate('backlog.settings.showButton.title', 'Show Backlog Button')}
+                      checked={settings.showBacklogButton !== false}
+                      onChange={() =>
+                        updateSettings({
+                          showBacklogButton: !(settings.showBacklogButton !== false)
+                        })
                       }
                     />
                   </SearchableSetting>

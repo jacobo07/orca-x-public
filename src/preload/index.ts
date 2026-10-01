@@ -2679,6 +2679,10 @@ const api = {
       ipcRenderer.invoke('pet:delete', id, fileName, kind)
   },
 
+  backlog: {
+    importChatGptExport: () => ipcRenderer.invoke('backlog:importChatGptExport')
+  } satisfies PreloadApi['backlog'],
+
   browser: {
     registerGuest: (args: {
       browserPageId: string

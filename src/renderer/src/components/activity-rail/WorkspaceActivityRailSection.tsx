@@ -139,6 +139,7 @@ export function WorkspaceActivityRailSection({
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
+  const openBacklogPage = useAppStore((s) => s.openBacklogPage)
 
   const visible = React.useMemo(
     () =>
@@ -186,6 +187,8 @@ export function WorkspaceActivityRailSection({
           // Opening the surface retires the "New" marker, exactly as the row did.
           mobileOnboardingBadge.dismiss()
           return openMobilePage()
+        case 'backlog':
+          return openBacklogPage()
         default: {
           // A rail entry that dispatches nothing is a dead control, and it looks identical to a
           // working one: it renders, it takes focus, and it does nothing. `conversations` shipped
@@ -201,6 +204,7 @@ export function WorkspaceActivityRailSection({
       openActivityPage,
       openArtifactsPage,
       openAutomationsPage,
+      openBacklogPage,
       openConversationsPage,
       openMobilePage,
       openSkillsPage,

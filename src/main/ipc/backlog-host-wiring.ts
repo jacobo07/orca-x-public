@@ -1,0 +1,60 @@
+import { listAiVaultSessions } from '../ai-vault/cached-session-list'
+import { createBacklogHost, type BacklogHost } from '../backlog/backlog-host'
+import { BacklogService } from '../backlog/backlog-service'
+import {
+  createBacklogHarvestRunner,
+  type BacklogHarvestRunner
+} from '../backlog/harvest/backlog-harvest-runner'
+import { conversationSourceFromStore } from '../backlog/harvest/orca-conversation-harvest'
+import { ConversationStore } from '../conversation/conversation-store'
+import { readNativeChatTranscript } from '../native-chat/transcript-reader'
+import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import {
+  getOrcaBacklogDirectory,
+  getOrcaConversationsDirectory
+} from '../orca-profiles/profile-storage-paths'
+
+// The only backlog module that reaches Electron (through the profile helpers). Named `-wiring` so it
+// cannot be mistaken for src/main/backlog/backlog-host.ts.
+
+let backlogService: BacklogService | null = null
+let backlogHarvester: BacklogHarvestRunner | null = null
+
+// The profile is resolved per operation (a switch applies immediately), never at module load:
+// ensureActiveOrcaProfile has side effects.
+function backlogLedgerRoot(): string {
+  return getOrcaBacklogDirectory(ensureActiveOrcaProfile().profile.id)
+}
+
+export function getBacklogService(): BacklogService {
+  backlogService ??= new BacklogService(backlogLedgerRoot)
+  return backlogService
+}
+
+/** The host's runner, shared with the desktop export import so single flight and status are one. */
+export function getBacklogHarvestRunner(): BacklogHarvestRunner {
+  // A store per run: its constructor has no side effects, and the harvest only lists and loads.
+  backlogHarvester ??= createBacklogHarvestRunner({
+    service: getBacklogService(),
+    ledgerRoot: backlogLedgerRoot,
+    sources: {
+      conversations: () =>
+        conversationSourceFromStore(
+          new ConversationStore(getOrcaConversationsDirectory(ensureActiveOrcaProfile().profile.id))
+        ),
+      transcripts: () => ({
+        // unlimited: the harvester caps after its agent filter; force: include a just-written transcript.
+        list: () => listAiVaultSessions({ unlimited: true, force: true }),
+        statBytes: (filePath) => wslGatedStat(filePath, 'scan').then((stats) => stats.size),
+        readTranscript: (provider, sessionId, filePath) =>
+          readNativeChatTranscript(provider, sessionId, { filePath })
+      })
+    }
+  })
+  return backlogHarvester
+}
+
+export function getBacklogHost(): BacklogHost {
+  return createBacklogHost(getBacklogService(), getBacklogHarvestRunner())
+}

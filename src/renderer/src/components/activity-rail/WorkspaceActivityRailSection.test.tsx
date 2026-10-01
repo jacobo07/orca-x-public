@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   openArtifactsPage: vi.fn(),
   openSkillsPage: vi.fn(),
   openWorkspacePage: vi.fn(),
+  openBacklogPage: vi.fn(),
   updateSettings: vi.fn(),
   dismissMobileOnboardingBadge: vi.fn(),
   unreadCount: 0,
@@ -93,7 +94,8 @@ function renderRail(settings: Record<string, unknown> = {}): void {
     openConversationsPage: mocks.openConversationsPage,
     openArtifactsPage: mocks.openArtifactsPage,
     openSkillsPage: mocks.openSkillsPage,
-    openWorkspacePage: mocks.openWorkspacePage
+    openWorkspacePage: mocks.openWorkspacePage,
+    openBacklogPage: mocks.openBacklogPage
   }
   act(() => {
     root.render(
@@ -169,6 +171,7 @@ describe('WorkspaceActivityRailSection', () => {
     const dispatched: Record<WorkspaceActivityId, ReturnType<typeof vi.fn>> = {
       'agent-workspace': mocks.openConversationsPage,
       workspace: mocks.openWorkspacePage,
+      backlog: mocks.openBacklogPage,
       tasks: mocks.openTaskPage,
       automations: mocks.openAutomationsPage,
       activity: mocks.openActivityPage,
@@ -259,12 +262,43 @@ describe('WorkspaceActivityRailSection', () => {
     renderRail({
       showAgentWorkspaceButton: false,
       showWorkspaceButton: false,
+      showBacklogButton: false,
       showTasksButton: false,
       showAutomationsButton: false,
       showMobileButton: false
     })
 
     expect(container.querySelector('[data-workspace-activity-rail]')).toBeNull()
+  })
+
+  it('shows Backlog by default, third, and opens the Backlog page on click', () => {
+    renderRail()
+
+    const order = [...container.querySelectorAll('[data-workspace-activity]')].map((node) =>
+      node.getAttribute('data-workspace-activity')
+    )
+    expect(order.slice(0, 3)).toEqual(['agent-workspace', 'workspace', 'backlog'])
+    expect(activity('backlog')?.getAttribute('aria-label')).toBe('Backlog')
+
+    act(() => activity('backlog')?.click())
+    expect(mocks.openBacklogPage).toHaveBeenCalledTimes(1)
+  })
+
+  it('omits Backlog when its flag is false, and hides it through that flag', () => {
+    // Station control: the rail itself is present, only the Backlog entry is gone.
+    renderRail({ showBacklogButton: false })
+    expect(container.querySelector('[data-workspace-activity-rail]')).not.toBeNull()
+    expect(activity('backlog')).toBeNull()
+
+    renderRail()
+    const entry = activity('backlog')?.closest('div')
+    const hide = [...(entry?.parentElement?.querySelectorAll('button') ?? [])].find((button) =>
+      button.textContent?.includes('Hide from sidebar')
+    )
+    expect(hide).toBeDefined()
+    act(() => hide?.click())
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showBacklogButton: false })
   })
 
   it('leads with Workspace and calls the launcher Terminals', () => {
