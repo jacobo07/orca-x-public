@@ -2633,7 +2633,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ),
         terminalRailWidth: clampTerminalRailWidth(ui.terminalRailWidth, s.terminalRailWidth),
         terminalRailCollapsed: ui.terminalRailCollapsed === true,
-        globalNavCollapsed: ui.globalNavCollapsed === true,
+        // A broadcast can predate this window's own debounced write and would revert the toggle.
+        globalNavCollapsed: isOwnLoad ? ui.globalNavCollapsed === true : s.globalNavCollapsed,
         combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
           ui.combinedDiffFileTreeWidth,
           undefined,

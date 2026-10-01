@@ -193,6 +193,27 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
 
+  it('keeps the global navigation collapse when a broadcast carries the pre-toggle value', () => {
+    // Measured on GEX44 (global-nav-shell-stability): collapse, then switch view. The view switch
+    // writes activeView at once while the collapse rides the 150ms debounced writer, so main's
+    // broadcast still says expanded — applying it reverted the choice, and the writer then
+    // persisted the revert.
+    const store = createUIStore()
+    store.setState({ globalNavCollapsed: true })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ globalNavCollapsed: false }), 'sync')
+
+    expect(store.getState().globalNavCollapsed).toBe(true)
+  })
+
+  it('still restores the global navigation collapse at startup', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ globalNavCollapsed: true }), 'startup')
+
+    expect(store.getState().globalNavCollapsed).toBe(true)
+  })
+
   it('falls back to terminal when the persisted active view is not a known view', () => {
     const store = createUIStore()
 
