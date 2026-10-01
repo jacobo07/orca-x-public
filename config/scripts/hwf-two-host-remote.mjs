@@ -64,6 +64,12 @@ function parseKeyValues(text) {
 
 const [verb, root, ...rest] = process.argv.slice(2)
 
+// Anchored shape of what new-root mints; refuses locally before the root reaches any ssh/scp argument.
+if (verb !== 'new-root' && root !== undefined && !/^\/tmp\/orca-hwf-p15-[0-9A-Za-z]+$/.test(root)) {
+  console.error(`REFUSED root=${root}`)
+  process.exit(2)
+}
+
 if (verb === 'new-root') {
   console.log(`/tmp/orca-hwf-p15-${utcStamp()}`)
 } else if (verb === 'fetch-key') {

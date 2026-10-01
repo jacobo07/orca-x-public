@@ -6,6 +6,8 @@ VERB="${1:-}"
 ROOT="${2:-}"
 
 case "$ROOT" in
+  /tmp/orca-hwf-p15-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p15-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p15-*) ;;
   *) echo "REFUSED root=$ROOT"; exit 2 ;;
 esac
