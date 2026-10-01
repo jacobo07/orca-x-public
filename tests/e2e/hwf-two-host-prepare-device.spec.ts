@@ -213,6 +213,14 @@ test.describe('two-host prepare this device', () => {
       const l6Outcome = await measureNow(orcaPage)
       const l6States = await rowStates(orcaPage)
       const l6Reasons = await rowReasons(orcaPage)
+      // RED evidence for Run 5's L6: what the measurement itself said while the rows read the contract.
+      const api6 = await measureThroughApi(orcaPage, repoId).catch((error: unknown) => error)
+      captureJson(captureDir, 'measure-l6', api6 instanceof Error ? { error: api6.message } : api6)
+      console.log(
+        api6 instanceof Error
+          ? `HWF20_L6_API threw=${api6.message.replace(/\s+/g, '_').slice(0, 120)}`
+          : `HWF20_L6_API contract=${(api6 as { contract: string }).contract} status=${(api6 as { measurement: { status: string } }).measurement.status}`
+      )
       const ids = Object.keys(l6States)
       const noObs = ids.filter(
         (id) => l6States[id] === 'unknown' && ['unreachable', 'timed-out'].includes(l6Reasons[id])
@@ -232,7 +240,10 @@ test.describe('two-host prepare this device', () => {
 
       // L5 scan: Run 4 found Chromium holding Network/Cookies(-journal) exclusively while the app ran,
       // so the scanner (unchanged) read INCONCLUSIVE. Scanning after exit leaves nothing locked.
+      const appProcess = electronApp.process()
       await closeElectronAppForE2E(electronApp)
+      // Why: the fixture's teardown calls process() again, which throws once the handle is closed (Run 5).
+      electronApp.process = () => appProcess
       await cleanupE2EDaemons(userData)
       const scan = scanLaptopForContentNonces({
         roots: [
