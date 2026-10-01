@@ -24,19 +24,39 @@ export type AbsenceScanResult = {
   controlsPlanted: number
   filesScanned: number
   filesUnreadable: number
+  unreadable: string[]
+  // Unreadable paths under the userData root that no named reason covers; any one makes the verdict INCONCLUSIVE.
+  unexplainedUnreadable: string[]
   capped: boolean
 }
 
 const CHUNK_BYTES = 1024 * 1024
 
-function fileContainsAny(file: string, needles: Buffer[]): Set<number> | null {
+// Chromium files known to be unreadable while the app runs; each entry needs a reason, and a path with no reason is not listed.
+const KNOWN_UNREADABLE: { suffix: RegExp; reason: string }[] = []
+
+function isKnownUnreadable(file: string): boolean {
+  const normalized = file.replace(/\\/g, '/')
+  return KNOWN_UNREADABLE.some((entry) => entry.suffix.test(normalized))
+}
+
+function isUnder(dir: string, file: string): boolean {
+  const rel = path.relative(dir, file)
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
+}
+
+// `complete` is false when the file could not be opened or a read failed midway; matches found before the failure are kept.
+function fileContainsAny(
+  file: string,
+  needles: Buffer[]
+): { found: Set<number>; complete: boolean } {
   const found = new Set<number>()
   const overlap = Math.max(...needles.map((n) => n.length)) - 1
   let fd: number
   try {
     fd = openSync(file, 'r')
   } catch {
-    return null
+    return { found, complete: false }
   }
   try {
     const buf = Buffer.alloc(CHUNK_BYTES + overlap)
@@ -55,11 +75,24 @@ function fileContainsAny(file: string, needles: Buffer[]): Set<number> | null {
       carry = Math.min(overlap, window.length)
       window.copy(buf, 0, window.length - carry)
     }
-    return found
+    return { found, complete: true }
   } catch {
-    return null
+    return { found, complete: false }
   } finally {
     closeSync(fd)
+  }
+}
+
+export function logAbsenceScan(scan: AbsenceScanResult): void {
+  console.log(
+    `HWF_ABSENCE verdict=${scan.verdict} control=${scan.controlsFound === scan.controlsPlanted ? 'found' : 'missing'} hits=${scan.hits.length} files=${scan.filesScanned} unreadable=${scan.filesUnreadable} unexplained_unreadable=${scan.unexplainedUnreadable.length} capped=${scan.capped}`
+  )
+  // Hit files are named in the log so a FAIL is actionable; the nonce itself is never printed.
+  for (const hit of scan.hits) {
+    console.log(`HWF_ABSENCE_HIT ${hit.file}`)
+  }
+  for (const file of scan.unreadable) {
+    console.log(`HWF_ABSENCE_UNREADABLE ${file}`)
   }
 }
 
@@ -68,6 +101,7 @@ export function scanLaptopForContentNonces(args: {
   roots: AbsenceScanRoot[]
   nonces: string[]
   maxFiles?: number
+  userDataRoot?: string
 }): AbsenceScanResult {
   const maxFiles = args.maxFiles ?? 200_000
   const controls = args.roots.map((root) => {
@@ -79,8 +113,8 @@ export function scanLaptopForContentNonces(args: {
   const needles = [...args.nonces, ...controls.map((c) => c.token)].map((s) => Buffer.from(s))
   const hits: AbsenceScanResult['hits'] = []
   const controlSeen = new Set<number>()
+  const unreadable: string[] = []
   let filesScanned = 0
-  let filesUnreadable = 0
   let capped = false
 
   const visitFile = (file: string): void => {
@@ -89,10 +123,9 @@ export function scanLaptopForContentNonces(args: {
       return
     }
     filesScanned += 1
-    const found = fileContainsAny(file, needles)
-    if (!found) {
-      filesUnreadable += 1
-      return
+    const { found, complete } = fileContainsAny(file, needles)
+    if (!complete) {
+      unreadable.push(file)
     }
     for (const i of found) {
       if (i < args.nonces.length) {
@@ -108,7 +141,7 @@ export function scanLaptopForContentNonces(args: {
     try {
       entries = readdirSync(dir, { withFileTypes: true })
     } catch {
-      filesUnreadable += 1
+      unreadable.push(dir)
       return
     }
     for (const entry of entries) {
@@ -120,7 +153,7 @@ export function scanLaptopForContentNonces(args: {
       try {
         stat = lstatSync(full)
       } catch {
-        filesUnreadable += 1
+        unreadable.push(full)
         continue
       }
       if (stat.isSymbolicLink()) {
@@ -152,11 +185,14 @@ export function scanLaptopForContentNonces(args: {
     }
   }
 
+  const unexplainedUnreadable = args.userDataRoot
+    ? unreadable.filter((file) => isUnder(args.userDataRoot!, file) && !isKnownUnreadable(file))
+    : []
   const controlsFound = controlSeen.size
   const verdict =
     hits.length > 0
       ? 'FAIL'
-      : controlsFound === controls.length && !capped
+      : controlsFound === controls.length && !capped && unexplainedUnreadable.length === 0
         ? 'PASS'
         : 'INCONCLUSIVE'
   return {
@@ -165,7 +201,9 @@ export function scanLaptopForContentNonces(args: {
     controlsFound,
     controlsPlanted: controls.length,
     filesScanned,
-    filesUnreadable,
+    filesUnreadable: unreadable.length,
+    unreadable,
+    unexplainedUnreadable,
     capped
   }
 }

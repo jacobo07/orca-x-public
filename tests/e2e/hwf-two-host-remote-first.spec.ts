@@ -3,7 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { expect, test } from './helpers/orca-app'
-import { scanLaptopForContentNonces } from './helpers/hwf-two-host-absence-scan'
+import { logAbsenceScan, scanLaptopForContentNonces } from './helpers/hwf-two-host-absence-scan'
+import { readSeedThroughClientA } from './helpers/hwf-two-host-seed-read'
 import {
   launchProviderOnOwningHost,
   launchStubOnOwningHost,
@@ -96,7 +97,7 @@ test.describe('two-host remote-first continuity', () => {
       console.log(`HWF_GENERATION=${connected.generation}`)
       expect(connected.pin).toBe(run.fingerprint)
 
-      await hydrateHwfRemoteRepo(orcaPage, connected, run.repo)
+      const hydrated = await hydrateHwfRemoteRepo(orcaPage, connected, run.repo)
       await waitForActiveTerminalManager(orcaPage, 45_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 45_000)
 
@@ -133,19 +134,17 @@ test.describe('two-host remote-first continuity', () => {
       )
       expect(fenceMatch).toBe(true)
 
+      // The scan can only fail if this process actually held the host-only seed content.
+      await readSeedThroughClientA(orcaPage, run, connected.targetId, hydrated.worktreeId)
+
       // Absence runs here, before fixture teardown deletes the userData dir it must read.
       const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
       const scan = scanLaptopForContentNonces({
         roots: [{ dir: userData }, { dir: os.tmpdir(), modifiedSinceMs: startedAtMs - 60_000 }],
-        nonces: [run.seedNonce]
+        nonces: [run.seedNonce],
+        userDataRoot: userData
       })
-      console.log(
-        `HWF_ABSENCE verdict=${scan.verdict} control=${scan.controlsFound === scan.controlsPlanted ? 'found' : 'missing'} hits=${scan.hits.length} files=${scan.filesScanned} unreadable=${scan.filesUnreadable} capped=${scan.capped}`
-      )
-      // Hit files are named in the log so a FAIL is actionable; the nonce itself is never printed.
-      for (const hit of scan.hits) {
-        console.log(`HWF_ABSENCE_HIT ${hit.file}`)
-      }
+      logAbsenceScan(scan)
       expect(scan.verdict).toBe('PASS')
     } finally {
       if (targetId) {
@@ -205,18 +204,16 @@ test.describe('two-host remote-first continuity', () => {
         console.log('HWF_GIT_B=status-only reason=web-shim-has-no-git-commit')
       }
 
+      await readSeedThroughClientA(orcaPage, run, targetId, worktree.id)
+
       // Absence runs here, before fixture teardown deletes the userData dir it must read.
       const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
       const scan = scanLaptopForContentNonces({
         roots: [{ dir: userData }, { dir: os.tmpdir(), modifiedSinceMs: startedAtMs - 60_000 }],
-        nonces
+        nonces,
+        userDataRoot: userData
       })
-      console.log(
-        `HWF_ABSENCE verdict=${scan.verdict} control=${scan.controlsFound === scan.controlsPlanted ? 'found' : 'missing'} hits=${scan.hits.length} files=${scan.filesScanned} unreadable=${scan.filesUnreadable} capped=${scan.capped}`
-      )
-      for (const hit of scan.hits) {
-        console.log(`HWF_ABSENCE_HIT ${hit.file}`)
-      }
+      logAbsenceScan(scan)
       expect(scan.verdict).toBe('PASS')
     } finally {
       await session.dispose()
