@@ -4,12 +4,22 @@ import path from 'node:path'
 
 import { expect, test } from './helpers/orca-app'
 import { scanLaptopForContentNonces } from './helpers/hwf-two-host-absence-scan'
-import { probeHwfClientSurfaces } from './helpers/hwf-two-host-agent-launch'
-import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
-  createRuntimeDesktopPairingOffer,
-  launchPairedWebClient
-} from './helpers/paired-electron-client'
+  launchProviderOnOwningHost,
+  launchStubOnOwningHost,
+  postHookAndAwaitStatus,
+  probeHwfClientSurfaces,
+  readActivePaneKey,
+  type HwfClientProbe
+} from './helpers/hwf-two-host-agent-launch'
+import {
+  activateWebSshWorktree,
+  assertFsMutationsOnOwningHost,
+  assertGitCommitOnOwningHost,
+  assertTerminalOnOwningHost
+} from './helpers/hwf-two-host-owning-host-legs'
+import { bootHwfSession } from './helpers/hwf-two-host-session'
+import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
   connectHwfTargetWithTrust,
   disconnectHwfTarget,
@@ -43,6 +53,21 @@ test.use({
   orcaAppExtraEnv: { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
 })
 
+// Written from the probe test's HWF_PROBE_ lines plus the provisioner status; later assertions branch only on these.
+function readHwfProbeFile(): Record<string, string> {
+  const file = process.env.ORCA_HWF_PROBE_FILE
+  if (!file) {
+    throw new Error('ORCA_HWF_PROBE_FILE is unset (15-02-probe.txt)')
+  }
+  const values: Record<string, string> = {}
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const match = /^([A-Z_]+)=(.*)$/.exec(line)
+    if (match) {
+      values[match[1]] = match[2].trim()
+    }
+  }
+  return values
+}
 test.describe.configure({ mode: 'serial' })
 
 test.describe('two-host remote-first continuity', () => {
@@ -133,47 +158,97 @@ test.describe('two-host remote-first continuity', () => {
     electronApp
   }) => {
     test.setTimeout(600_000)
-    const run = readHwfRunFile()
-    const localPort = readHwfLocalPort()
-    await waitForSessionReady(orcaPage)
-    const carrier = await startHwfCarrier(run, localPort)
-    let targetId: string | null = null
-    let webClient: Awaited<ReturnType<typeof launchPairedWebClient>> | null = null
+    const session = await bootHwfSession(orcaPage, electronApp, { web: true })
     try {
-      const connected = await connectHwfTargetWithTrust(orcaPage, run, localPort)
-      targetId = connected.targetId
-      expect(connected.pin).toBe(run.fingerprint)
-      const hydrated = await hydrateHwfRemoteRepo(orcaPage, connected, run.repo)
-      await waitForActiveTerminalManager(orcaPage, 45_000)
-      await waitForActivePanePtyId(orcaPage, 45_000)
-
-      const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-      webClient = await launchPairedWebClient(electronApp, offer)
-      const executionHostId = `ssh:${encodeURIComponent(connected.targetId)}`
-      await expect
-        .poll(
-          () =>
-            webClient!.page.evaluate(
-              ({ id, hostId }) =>
-                Object.values(window.__store?.getState().worktreesByRepo ?? {})
-                  .flat()
-                  .some((worktree) => worktree.id === id && worktree.hostId === hostId),
-              { id: hydrated.worktreeId, hostId: executionHostId }
-            ),
-          { timeout: 30_000, message: 'web client never saw the SSH worktree' }
-        )
-        .toBe(true)
-
-      const probe = await probeHwfClientSurfaces(orcaPage, webClient.page)
+      const probe = await probeHwfClientSurfaces(orcaPage, session.web!.page)
       console.log(`HWF_PROBE_WEB_GIT_COMMIT=${probe.webGitCommit}`)
       console.log(`HWF_PROBE_WEB_AGENT_STATUS=${probe.webAgentStatus}`)
       console.log(`HWF_PROBE_SSH_AGENT_MENU=${probe.sshAgentMenu}`)
     } finally {
-      await webClient?.dispose().catch(() => undefined)
-      if (targetId) {
-        await disconnectHwfTarget(orcaPage, targetId).catch(() => undefined)
+      await session.dispose()
+    }
+  })
+
+  test('fs, git and terminal act on the owning host from both clients', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.setTimeout(900_000)
+    const startedAtMs = Date.now()
+    const session = await bootHwfSession(orcaPage, electronApp, { web: true })
+    try {
+      const { run, worktree, targetId, executionHostId } = session
+      const webPage = session.web!.page
+      const probe = readHwfProbeFile()
+      const auth = { connectionId: targetId, executionHostId }
+
+      await assertTerminalOnOwningHost(orcaPage, run, 'A', 'pty-write')
+      await activateWebSshWorktree(webPage, worktree.id)
+      await assertTerminalOnOwningHost(webPage, run, 'B', 'keyboard')
+
+      const nonces = [run.seedNonce]
+      nonces.push(await assertFsMutationsOnOwningHost(orcaPage, run, worktree, auth, 'A'))
+      nonces.push(await assertFsMutationsOnOwningHost(webPage, run, worktree, null, 'B'))
+      nonces.push(
+        (await assertGitCommitOnOwningHost(orcaPage, run, worktree, auth, 'A')).contentNonce
+      )
+      if (probe.HWF_PROBE_WEB_GIT_COMMIT === 'function') {
+        nonces.push(
+          (await assertGitCommitOnOwningHost(webPage, run, worktree, null, 'B')).contentNonce
+        )
+      } else {
+        await webPage.evaluate(async (worktreePath) => {
+          await window.api?.git?.status?.({ worktreePath })
+        }, worktree.path)
+        console.log('HWF_GIT_B=status-only reason=web-shim-has-no-git-commit')
       }
-      await carrier.kill()
+
+      // Absence runs here, before fixture teardown deletes the userData dir it must read.
+      const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+      const scan = scanLaptopForContentNonces({
+        roots: [{ dir: userData }, { dir: os.tmpdir(), modifiedSinceMs: startedAtMs - 60_000 }],
+        nonces
+      })
+      console.log(
+        `HWF_ABSENCE verdict=${scan.verdict} control=${scan.controlsFound === scan.controlsPlanted ? 'found' : 'missing'} hits=${scan.hits.length} files=${scan.filesScanned} unreadable=${scan.filesUnreadable} capped=${scan.capped}`
+      )
+      for (const hit of scan.hits) {
+        console.log(`HWF_ABSENCE_HIT ${hit.file}`)
+      }
+      expect(scan.verdict).toBe('PASS')
+    } finally {
+      await session.dispose()
+    }
+  })
+
+  test('agent launch and hook status act on the owning host', async ({ orcaPage, electronApp }) => {
+    test.setTimeout(900_000)
+    const session = await bootHwfSession(orcaPage, electronApp, { web: true })
+    try {
+      const { run, worktree } = session
+      const webPage = session.web!.page
+      const probe = readHwfProbeFile()
+      await activateWebSshWorktree(webPage, worktree.id)
+      const ptyId = await waitForActivePanePtyId(orcaPage, 45_000)
+      const paneKey = await readActivePaneKey(orcaPage)
+      const webHasStatus = probe.HWF_PROBE_WEB_AGENT_STATUS === 'present'
+      await postHookAndAwaitStatus(orcaPage, webHasStatus ? webPage : null, ptyId, paneKey)
+
+      const menu = probe.HWF_PROBE_SSH_AGENT_MENU as HwfClientProbe['sshAgentMenu']
+      const surfaces: HwfClientProbe = {
+        webGitCommit: probe.HWF_PROBE_WEB_GIT_COMMIT === 'function' ? 'function' : 'undefined',
+        webAgentStatus: webHasStatus ? 'present' : 'absent',
+        sshAgentMenu: menu
+      }
+      await launchProviderOnOwningHost(orcaPage, run, surfaces, {
+        codex: probe.PROVIDER_CODEX ?? 'none',
+        claude: probe.PROVIDER_CLAUDE ?? 'none'
+      })
+      if (menu !== 'absent') {
+        await launchStubOnOwningHost(orcaPage, run, menu)
+      }
+    } finally {
+      await session.dispose()
     }
   })
 })
