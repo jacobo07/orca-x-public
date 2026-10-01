@@ -3,8 +3,11 @@ import type { GitRootProbeResult } from '../shared/git-root-identity'
 import type { Repo } from '../shared/repo-types'
 
 const probeMock = vi.hoisted(() => vi.fn())
+const remoteProbeMock = vi.hoisted(() => vi.fn())
 vi.mock('./repo-git-root-identity', () => ({ probeGitRootIdentity: probeMock }))
+vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: remoteProbeMock }))
 
+import { buildRootIdentityEligibility } from '../shared/project-root-identity-key'
 import { linkRepoToRootProject } from './project-root-identity-link'
 
 const ROOT = 'e'.repeat(40)
@@ -51,6 +54,7 @@ async function refusalOf(promise: Promise<unknown>): Promise<{ code?: string; me
 
 beforeEach(() => {
   probeMock.mockReset()
+  remoteProbeMock.mockReset().mockResolvedValue({ status: 'no-remote' })
 })
 
 describe('linkRepoToRootProject', () => {
@@ -73,10 +77,71 @@ describe('linkRepoToRootProject', () => {
     await linkRepoToRootProject(store as never, target, `git-root:${ROOT}`)
 
     expect(probeMock).toHaveBeenCalledWith('/srv/new', 'gpu-vm')
+    expect(remoteProbeMock).toHaveBeenCalledWith('/srv/new', 'gpu-vm')
+    // Why one write: root and settled remote land together, so the repo is never half-eligible.
+    expect(store.updateRepo).toHaveBeenCalledTimes(1)
     expect(store.updateRepo).toHaveBeenCalledWith('new', {
       gitRootIdentity: { rootCommit: ROOT, commonDir: '/srv/new/.git', shallow: false },
-      gitRootIdentityNoneReason: undefined
+      gitRootIdentityNoneReason: undefined,
+      gitRemoteIdentity: null
     })
+    expect(buildRootIdentityEligibility(store.getRepos()).eligibleRepoIds.has('new')).toBe(true)
+  })
+
+  it('refuses root_identity_unavailable when the remote probe cannot reach git, never writing null', async () => {
+    const target = repo('new', { connectionId: 'gpu-vm' })
+    const store = fakeStore([target])
+    const before = structuredClone([target])
+    probeMock.mockResolvedValue(resolved(ROOT, '/srv/new/.git'))
+    remoteProbeMock.mockResolvedValue({ status: 'unavailable' })
+
+    const refusal = await refusalOf(
+      linkRepoToRootProject(store as never, target, `git-root:${ROOT}`)
+    )
+
+    expect(refusal.code).toBe('root_identity_unavailable')
+    expect(store.updateRepo).not.toHaveBeenCalled()
+    expect(store.getRepos()).toEqual(before)
+  })
+
+  it('refuses root_identity_has_remote when the folder has a usable remote', async () => {
+    const target = repo('new')
+    const store = fakeStore([target])
+    probeMock.mockResolvedValue(resolved(ROOT, '/srv/new/.git'))
+    remoteProbeMock.mockResolvedValue({
+      status: 'resolved',
+      identity: {
+        canonicalKey: 'git.example.test/acme/widget',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.example.test:acme/widget.git'
+      }
+    })
+
+    const refusal = await refusalOf(
+      linkRepoToRootProject(store as never, target, `git-root:${ROOT}`)
+    )
+
+    expect(refusal.code).toBe('root_identity_has_remote')
+    expect(store.updateRepo).not.toHaveBeenCalled()
+  })
+
+  it('refuses root_identity_has_remote when a resolved remote is already recorded, even if git now says none', async () => {
+    const target = repo('new', {
+      gitRemoteIdentity: {
+        canonicalKey: 'git.example.test/acme/widget',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.example.test:acme/widget.git'
+      }
+    })
+    const store = fakeStore([target])
+    probeMock.mockResolvedValue(resolved(ROOT, '/srv/new/.git'))
+
+    const refusal = await refusalOf(
+      linkRepoToRootProject(store as never, target, `git-root:${ROOT}`)
+    )
+
+    expect(refusal.code).toBe('root_identity_has_remote')
+    expect(store.updateRepo).not.toHaveBeenCalled()
   })
 
   it('refuses root_identity_unavailable when the host cannot answer', async () => {
@@ -121,6 +186,7 @@ describe('linkRepoToRootProject', () => {
 
     expect(refusal.code).toBe('root_identity_absent')
     expect(probeMock).not.toHaveBeenCalled()
+    expect(remoteProbeMock).not.toHaveBeenCalled()
   })
 
   it('refuses root_identity_mismatch when the folder starts from a different commit', async () => {

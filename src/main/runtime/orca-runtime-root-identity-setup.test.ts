@@ -16,12 +16,15 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('electron', () => electronMocks)
 vi.mock('../github/client', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  getRepoUpstream: vi.fn().mockResolvedValue(null)
+  getRepoUpstream: vi.fn().mockResolvedValue(null),
+  // Why: a folder with a remote would otherwise reach out for a GitHub avatar.
+  getRepoSlug: vi.fn().mockResolvedValue(null)
 }))
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 
+import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const GIT = [
@@ -54,12 +57,8 @@ async function withTempGitRepo(
 }
 
 function runtimeWithFakeStore(repos: Record<string, unknown>[]) {
-  const projectId = (): string | undefined =>
-    (
-      repos.find((repo) => repo.gitRootIdentity)?.gitRootIdentity as
-        | { rootCommit: string }
-        | undefined
-    )?.rootCommit
+  // Why the real projection: a fake keyed on gitRootIdentity hid that a pending remote is not eligible (HR-1).
+  const projection = () => projectHostSetupProjectionFromRepos(repos as never)
   const store = {
     getRepos: () => [...repos] as never,
     addRepo: (repo: Record<string, unknown>) => repos.push(repo),
@@ -78,19 +77,8 @@ function runtimeWithFakeStore(repos: Record<string, unknown>[]) {
         repos.splice(index, 1)
       }
     },
-    // Why: stands in for the projection once repos with a proven root derive git-root ids.
-    getProjects: () =>
-      projectId() ? ([{ id: `git-root:${projectId()}`, displayName: 'p' }] as never) : [],
-    getProjectHostSetups: () =>
-      repos
-        .filter((repo) => repo.gitRootIdentity)
-        .map((repo) => ({
-          id: repo.id,
-          projectId: `git-root:${projectId()}`,
-          repoId: repo.id,
-          hostId: 'runtime:env-1',
-          path: repo.path
-        })) as never,
+    getProjects: () => projection().projects,
+    getProjectHostSetups: () => projection().setups,
     getSettings: () => ({ workspaceDir: '/tmp/workspaces', nestWorkspaces: false })
   }
   return new OrcaRuntimeService(store as never)
@@ -111,9 +99,31 @@ describe('OrcaRuntimeService.setupProjectExistingFolder with a git-root project'
       })
 
       expect(result.project.id).toBe(`git-root:${root}`)
+      expect(result.setup.projectId).toBe(`git-root:${root}`)
       expect(repos[0]?.gitRootIdentity).toMatchObject({ rootCommit: root, shallow: false })
+      // Why: a real `git remote -v` answered "no remote", which is the only thing that may settle null.
+      expect(repos[0]?.gitRemoteIdentity).toBeNull()
     })
   })
+
+  it('refuses root_identity_has_remote for a folder with a remote and removes the repo it created', async () => {
+    await withTempGitRepo(true, async (dir, root) => {
+      git(dir, 'remote', 'add', 'origin', 'git@git.example.test:acme/widget.git')
+      const repos: Record<string, unknown>[] = []
+      const runtime = runtimeWithFakeStore(repos)
+
+      await expect(
+        runtime.setupProjectExistingFolder({
+          projectId: `git-root:${root}`,
+          hostId: 'runtime:env-1',
+          path: dir,
+          kind: 'git'
+        })
+      ).rejects.toThrow(/^root_identity_has_remote: /)
+
+      expect(repos).toEqual([])
+    })
+  }, 60_000)
 
   it('refuses root_identity_mismatch and removes the repo it created', async () => {
     await withTempGitRepo(true, async (dir) => {

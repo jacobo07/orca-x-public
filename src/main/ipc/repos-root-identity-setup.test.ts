@@ -28,12 +28,15 @@ vi.mock('../providers/ssh-filesystem-dispatch', () =>
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
 vi.mock('../repo-git-root-identity', () => ({ probeGitRootIdentity: probeMock }))
 
+import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createRepoHandlerHarness, resetLocalRepoMocks } from './repos-remote-test-harness'
 
-const { handleMock, mockStore, invalidateAuthorizedRootsCacheMock } = reposMocks
+const { handleMock, mockStore, invalidateAuthorizedRootsCacheMock, gitExecFileAsyncMock } =
+  reposMocks
+const { mockGitProvider } = reposMocks
 
 const ROOT = '1'.repeat(40)
 const SETUP_ARGS = {
@@ -53,10 +56,19 @@ beforeEach(() => {
 describe('projectHostSetups:setupExistingFolder with a git-root project', () => {
   const { handlers, mockWindow, captureHandlers } = createRepoHandlerHarness()
   let added: Record<string, unknown>[]
+  let remoteStdout: () => Promise<string>
 
   beforeEach(() => {
     captureHandlers(handleMock)
     resetLocalRepoMocks(reposMocks)
+    // Why: `git remote -v` runs through the real remote probe on both hosts; only git's answer is staged.
+    remoteStdout = async () => ''
+    const answer = async (args: string[]) => ({
+      stdout: args[0] === 'remote' && args[1] === '-v' ? await remoteStdout() : '',
+      stderr: ''
+    })
+    gitExecFileAsyncMock.mockReset().mockImplementation(answer)
+    mockGitProvider.exec.mockReset().mockImplementation(answer)
     mockWindow.webContents.send.mockReset()
     added = []
     mockStore.removeProject.mockReset()
@@ -74,22 +86,12 @@ describe('projectHostSetups:setupExistingFolder with a git-root project', () => 
       Object.assign(repo, updates)
       return { ...repo }
     })
-    // Why: stands in for the projection once repos with a proven root derive git-root ids.
-    mockStore.getProjects.mockImplementation(() =>
-      added.some((repo) => repo.gitRootIdentity)
-        ? [{ id: SETUP_ARGS.projectId, displayName: 'p' }]
-        : []
+    // Why the real projection: a fake keyed on gitRootIdentity hid that a pending remote is not eligible (HR-1).
+    mockStore.getProjects.mockImplementation(
+      () => projectHostSetupProjectionFromRepos(added as never).projects
     )
-    mockStore.getProjectHostSetups.mockImplementation(() =>
-      added
-        .filter((repo) => repo.gitRootIdentity)
-        .map((repo) => ({
-          id: repo.id,
-          projectId: SETUP_ARGS.projectId,
-          repoId: repo.id,
-          hostId: 'local',
-          path: repo.path
-        }))
+    mockStore.getProjectHostSetups.mockImplementation(
+      () => projectHostSetupProjectionFromRepos(added as never).setups
     )
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -107,8 +109,64 @@ describe('projectHostSetups:setupExistingFolder with a git-root project', () => 
       commonDir: '/tmp/root-identity-folder/.git',
       shallow: false
     })
+    expect(added[0]?.gitRemoteIdentity).toBeNull()
     expect(result).toHaveProperty('project.id', SETUP_ARGS.projectId)
+    expect(result).toHaveProperty('setup.projectId', SETUP_ARGS.projectId)
     expect(mockStore.removeProject).not.toHaveBeenCalled()
+  })
+
+  it('links a remote-less folder on a direct SSH host through the same remote probe', async () => {
+    probeMock.mockResolvedValue({
+      status: 'resolved',
+      identity: { rootCommit: ROOT, commonDir: '/srv/replica/.git', shallow: false }
+    })
+
+    const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      ...SETUP_ARGS,
+      hostId: 'ssh:conn-1',
+      path: '/srv/replica'
+    })
+
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote', '-v'], '/srv/replica')
+    expect(added[0]).toMatchObject({ connectionId: 'conn-1', gitRemoteIdentity: null })
+    expect(result).toHaveProperty('setup.projectId', SETUP_ARGS.projectId)
+    expect(result).toHaveProperty('setup.hostId', 'ssh:conn-1')
+  })
+
+  it('refuses root_identity_unavailable when the remote probe cannot reach git, never settling it to none', async () => {
+    probeMock.mockResolvedValue({
+      status: 'resolved',
+      identity: { rootCommit: ROOT, commonDir: '/tmp/root-identity-folder/.git', shallow: false }
+    })
+    remoteStdout = async () => {
+      throw new Error('git: host unreachable')
+    }
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, SETUP_ARGS)
+    ).rejects.toThrow(/^root_identity_unavailable: /)
+
+    const remoteWrites = mockStore.updateRepo.mock.calls.filter(
+      ([, updates]) => 'gitRemoteIdentity' in (updates as object)
+    )
+    expect(remoteWrites).toEqual([])
+    expect(added).toEqual([])
+  })
+
+  it('refuses root_identity_has_remote for a folder with a remote and leaves nothing behind', async () => {
+    probeMock.mockResolvedValue({
+      status: 'resolved',
+      identity: { rootCommit: ROOT, commonDir: '/tmp/root-identity-folder/.git', shallow: false }
+    })
+    remoteStdout = async () =>
+      'origin\tgit@git.example.test:acme/widget.git (fetch)\norigin\tgit@git.example.test:acme/widget.git (push)\n'
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, SETUP_ARGS)
+    ).rejects.toThrow(/^root_identity_has_remote: /)
+
+    expect(added).toEqual([])
+    expect(mockStore.removeProject).toHaveBeenCalledTimes(1)
   })
 
   it.each([

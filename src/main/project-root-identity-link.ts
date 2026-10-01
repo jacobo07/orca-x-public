@@ -4,6 +4,7 @@ import {
   ROOT_PROJECT_ID_PREFIX
 } from '../shared/project-root-identity-key'
 import type { Repo } from '../shared/repo-types'
+import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import { probeGitRootIdentity } from './repo-git-root-identity'
 import type { Store } from './persistence'
 
@@ -12,6 +13,7 @@ export type RootIdentityRefusalCode =
   | 'root_identity_absent'
   | 'root_identity_mismatch'
   | 'root_identity_collision'
+  | 'root_identity_has_remote'
 
 export class RootIdentityRefusal extends Error {
   readonly code: RootIdentityRefusalCode
@@ -64,13 +66,25 @@ export async function linkRepoToRootProject(
       "This folder's history does not start with the project's first commit."
     )
   }
-  const probed: Repo = { ...repo, gitRootIdentity: identity }
-  // Why: the new repo's remote probe may be pending; a remote-less project cannot be set up from
-  // a folder that already has a remote, and a pending one is judged as the project it asks to join.
-  const context = [
-    ...store.getRepos().filter((entry) => entry.id !== repo.id),
-    { ...probed, gitRemoteIdentity: null }
-  ]
+  // Why: eligibility needs a settled "no remote"; the add path leaves it pending (it cannot tell none from failed).
+  const current = store.getRepos().find((entry) => entry.id === repo.id) ?? repo
+  const remote = current.gitRemoteIdentity
+    ? null
+    : await probeGitRemoteIdentity(repo.path, repo.connectionId)
+  if (remote?.status === 'unavailable') {
+    throw new RootIdentityRefusal(
+      'root_identity_unavailable',
+      "This folder's remotes could not be read on its host. Try again once the host is reachable."
+    )
+  }
+  if (!remote || remote.status === 'resolved') {
+    throw new RootIdentityRefusal(
+      'root_identity_has_remote',
+      'This folder has a remote, so it belongs to that remote project, not to this local-history project.'
+    )
+  }
+  const probed: Repo = { ...repo, gitRootIdentity: identity, gitRemoteIdentity: null }
+  const context = [...store.getRepos().filter((entry) => entry.id !== repo.id), probed]
   const hostId = getRepoExecutionHostId(repo)
   const duplicate = buildRootIdentityEligibility(context).sameHostDuplicates.some(
     (group) =>
@@ -86,7 +100,8 @@ export async function linkRepoToRootProject(
   }
   const updated = store.updateRepo(repo.id, {
     gitRootIdentity: identity,
-    gitRootIdentityNoneReason: undefined
+    gitRootIdentityNoneReason: undefined,
+    gitRemoteIdentity: null
   })
   if (!updated) {
     throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
