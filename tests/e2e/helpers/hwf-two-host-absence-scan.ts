@@ -32,12 +32,27 @@ export type AbsenceScanResult = {
 
 const CHUNK_BYTES = 1024 * 1024
 
-// Chromium files known to be unreadable while the app runs; each entry needs a reason, and a path with no reason is not listed.
-const KNOWN_UNREADABLE: { suffix: RegExp; reason: string }[] = []
+// Measured in Run 4: the only unreadable userData paths were three `LOCK` files (Local Storage/leveldb, the orca-browser partition's Local Storage/leveldb, Session Storage).
+// A path with no reason is not listed.
+const KNOWN_UNREADABLE: { suffix: RegExp; reason: string }[] = [
+  {
+    suffix: /(^|\/)(leveldb|Session Storage)\/LOCK$/,
+    reason:
+      'LevelDB advisory-lock file Chromium holds exclusively while the app runs; empty by design, so it cannot hold a nonce'
+  }
+]
 
+// The reason only covers a file that is actually empty, so the size is checked rather than assumed.
 function isKnownUnreadable(file: string): boolean {
   const normalized = file.replace(/\\/g, '/')
-  return KNOWN_UNREADABLE.some((entry) => entry.suffix.test(normalized))
+  if (!KNOWN_UNREADABLE.some((entry) => entry.suffix.test(normalized))) {
+    return false
+  }
+  try {
+    return lstatSync(file).size === 0
+  } catch {
+    return false
+  }
 }
 
 function isUnder(dir: string, file: string): boolean {
@@ -185,8 +200,12 @@ export function scanLaptopForContentNonces(args: {
     }
   }
 
+  // Overlapping roots (userData lies inside the recent-temp root) visit a file twice.
+  const uniqueUnreadable = [...new Set(unreadable)]
   const unexplainedUnreadable = args.userDataRoot
-    ? unreadable.filter((file) => isUnder(args.userDataRoot!, file) && !isKnownUnreadable(file))
+    ? uniqueUnreadable.filter(
+        (file) => isUnder(args.userDataRoot!, file) && !isKnownUnreadable(file)
+      )
     : []
   const controlsFound = controlSeen.size
   const verdict =
@@ -201,8 +220,8 @@ export function scanLaptopForContentNonces(args: {
     controlsFound,
     controlsPlanted: controls.length,
     filesScanned,
-    filesUnreadable: unreadable.length,
-    unreadable,
+    filesUnreadable: uniqueUnreadable.length,
+    unreadable: uniqueUnreadable,
     unexplainedUnreadable,
     capped
   }
