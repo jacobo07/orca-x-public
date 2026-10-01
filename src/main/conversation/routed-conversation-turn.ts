@@ -22,7 +22,7 @@ export type RoutedTurnDeps = Omit<ConversationTurnDeps, 'driver' | 'checkAuth'> 
 
 export type RoutedTurnResult = {
   turn: ConversationTurnOutcome
-  /** Null when no provider could run the turn. */
+  /** Null when no provider could run the turn; on auth-required, the one that would run it. */
   provider: ProviderType | null
   route: string
 }
@@ -35,7 +35,8 @@ export async function runRoutedConversationTurn(
   const now = deps.now ?? (() => Date.now())
   const existing = await deps.service.read(request.conversationId)
   // Continuity only: a conversation already talking to a provider keeps doing so while it can.
-  const continuity = existing.outcome === 'loaded' ? (existing.record.provenance.at(-1)?.agent ?? null) : null
+  const continuity =
+    existing.outcome === 'loaded' ? (existing.record.provenance.at(-1)?.agent ?? null) : null
   const route = await routeConversationTurn({
     entries: deps.providers,
     requirement: { ...requirement, continuity },
@@ -46,9 +47,24 @@ export async function runRoutedConversationTurn(
   if (route.outcome === 'refused') {
     return { turn: { outcome: 'no-provider', detail: explained }, provider: null, route: explained }
   }
-  deps.emit(request.conversationId, { kind: 'provider-status', status: 'routed', detail: explained })
+  // Signed out is not absent: the runner keeps its own order (project gate, durable message, auth)
+  // and answers auth-required naming every provider. Re-asked there, so a sign-in meanwhile counts.
+  const checkAuth: ConversationTurnDeps['checkAuth'] =
+    route.outcome === 'routed'
+      ? route.entry.checkAuth
+      : async () => {
+          const auth = await route.entry.checkAuth()
+          return auth.ready ? auth : { ready: false, detail: explained }
+        }
+  if (route.outcome === 'routed') {
+    deps.emit(request.conversationId, {
+      kind: 'provider-status',
+      status: 'routed',
+      detail: explained
+    })
+  }
   const turn = await runConversationTurn(
-    { ...deps, driver: route.entry.driver, checkAuth: route.entry.checkAuth },
+    { ...deps, driver: route.entry.driver, checkAuth },
     request
   )
   return { turn, provider: route.entry.provider, route: explained }

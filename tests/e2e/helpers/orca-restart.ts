@@ -16,11 +16,12 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import { disposeE2EProfile, e2eProfileResidue } from './e2e-profile-disposal'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import {
@@ -56,13 +57,6 @@ type RestartSession = {
   dispose: () => Promise<void>
 }
 
-async function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms)
-    timeout.unref?.()
-  })
-}
-
 async function reserveRestartRuntimeWsPort(): Promise<number> {
   const server = createServer()
   return new Promise<number>((resolve, reject) => {
@@ -77,24 +71,6 @@ async function reserveRestartRuntimeWsPort(): Promise<number> {
       server.close((error) => (error ? reject(error) : resolve(address.port)))
     })
   })
-}
-
-async function removeProfileDir(userDataDir: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      rmSync(userDataDir, { recursive: true, force: true })
-      return
-    } catch (error) {
-      if (attempt === 4) {
-        // Why not rethrown: a temp profile still locked by a dying helper must not turn a judged run red.
-        console.error(`[orca-restart] left ${userDataDir}: ${String(error)}`)
-        return
-      }
-      // Why: on Windows, taskkill can return before Electron/PTY handles are
-      // fully released, making immediate temp-profile deletion flaky.
-      await delay(250)
-    }
-  }
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
@@ -142,6 +118,11 @@ export function createRestartSession(
   const headful = shouldLaunchHeadful(testInfo)
   const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)
   let runtimeWsPort: number | null = null
+  // Every main process this session started: disposal proves each gone before touching the profile.
+  const launchedPids: number[] = []
+  // Launches not yet closed. A spec that never calls close() would otherwise leave its main process
+  // alive under dispose(); on Windows that surfaced as an EPERM misread as a transient lock.
+  const openApps = new Set<ElectronApplication>()
 
   // Why: this helper bypasses the shared `electronApp` fixture, so it must
   // seed the same completed onboarding profile or first-run overlays cover
@@ -183,6 +164,12 @@ export function createRestartSession(
         ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
       }
     })
+    const mainPid = app.process().pid
+    if (mainPid) {
+      launchedPids.push(mainPid)
+    }
+    openApps.add(app)
+    app.once('close', () => openApps.delete(app))
     // Why: attach before firstWindow — the main-process daemon guard and the
     // plugin-system startup metrics can both emit before the renderer is ready.
     if (options?.onStderr) {
@@ -207,14 +194,18 @@ export function createRestartSession(
   }
 
   const dispose = async (): Promise<void> => {
-    await cleanupE2EDaemons(userDataDir)
+    for (const app of openApps) {
+      console.log('[e2e-cleanup] restart-session closing a launch the spec left open')
+      await closeElectronAppForE2E(app)
+      openApps.delete(app)
+    }
     if (process.env.ORCA_E2E_PRESERVE_RESTART_PROFILE === '1') {
+      await cleanupE2EDaemons(userDataDir)
       console.log(`[e2e] Preserved restart profile at ${userDataDir}`)
       return
     }
-    if (existsSync(userDataDir)) {
-      await removeProfileDir(userDataDir)
-    }
+    const result = await disposeE2EProfile(userDataDir, { ownedPids: launchedPids })
+    expect.soft(e2eProfileResidue('restart-session', result), 'profile disposal').toBeNull()
   }
 
   return { userDataDir, seedCodexResumeRollout, launch, close, dispose }

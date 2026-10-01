@@ -18,7 +18,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -31,7 +31,8 @@ import {
 import { forwardElectronProcessLogs } from './orca-app'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { createElectronHomeIsolation } from './electron-home-isolation'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { disposeE2EProfile, e2eProfileResidue } from './e2e-profile-disposal'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './store'
 import { establishSeededWorkspace } from './seeded-workspace-precondition'
 import { waitForActiveTerminalManager, waitForPaneIdentitySnapshot } from './terminal'
@@ -245,18 +246,14 @@ export async function launchPackagedOrca({
     const owned = captureOwnedProcessTree(mainPid)
     await closeElectronAppForE2E(app)
     reapOwnedProcessTree(owned)
-    // Why before the userData removal: it reads this profile's daemon pid files to reap the
-    // detached daemons an intentional quit leaves alive for warm reattach.
-    await cleanupE2EDaemons(userDataDir)
-    // Why best-effort: Windows keeps parts of a just-closed Electron profile locked, so an EPERM
-    // here is routine — and an exception thrown during cleanup replaces whatever verdict the spec
-    // body reached. A test must never be failed by its own teardown.
-    for (const dir of [runDir, userDataDir]) {
-      try {
-        rmSync(dir, { recursive: true, force: true })
-      } catch (error) {
-        console.warn(`[packaged-e2e] cleanup-failed: could not remove ${dir}`, error)
-      }
+    // A transient Windows lock is waited out; residue (a live owned process, a lock that never
+    // releases) fails softly, so it never replaces a body failure reported from the spec.
+    for (const [label, dir] of [
+      ['packaged-run-dir', runDir],
+      ['packaged-user-data', userDataDir]
+    ] as const) {
+      const result = await disposeE2EProfile(dir, { ownedPids: owned })
+      expect.soft(e2eProfileResidue(label, result), 'profile disposal').toBeNull()
     }
   }
 

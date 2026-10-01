@@ -27,10 +27,12 @@ VERIFIED on GEX44 (`/home/kobii/cw-shell-wt`, node 24): tsc node/cli/web clean i
 clean; 8 affected vitest files 45/45; real-Electron `workspace-shell-reality.spec.ts` PASS at
 `d9ed840ad` (run5); screenshots read. `connected-application-studio` + `agent-federation-approval` PASS.
 VERIFIED on Windows (this host, real Electron, es locale): every body step of the shell spec
-passed incl. dark picker (trace: only error is `dispose()` EPERM rmdir of the temp profile —
-transient lock, dir deleted fine afterwards; pre-existing helper `orca-restart.ts:85`).
-NOT A BRANCH DEFECT: `agent-chat-project-location` + `cognitive-workspace-surface` get
-`no-provider` (want `auth-required`) on GEX44 — identical on base `a3445471e` (A/B run2).
+passed incl. dark picker. RETRACTED (2026-09-29): the `dispose()` EPERM was not a transient lock —
+the spec never closed its app, so disposal ran against a live Electron. Fixed `1b9a1e3c9`; Windows
+run at that commit: 1 passed, CLEANUP_SUCCEEDED 615 ms, process table clean.
+FIXED (wsrel P1 `4a300eaba`): `agent-chat-project-location` + `cognitive-workspace-surface` got
+`no-provider` because the router folded a signed-out provider into "absent"; both PASS on GEX44 at
+`786418bfa` (`auth-required`). Profile disposal has one owner: `tests/e2e/helpers/e2e-profile-disposal.ts`.
 
 ## 3. Active decisions
 - Side panel SUPPRESSED on 'conversations' (closing it already unmounts panel content; closed =
@@ -40,9 +42,14 @@ NOT A BRANCH DEFECT: `agent-chat-project-location` + `cognitive-workspace-surfac
 - Local vitest per file is fine (â‰ˆ1â€“40 s); `tsc -p config/tsconfig.tc.web.json` locally 68 s.
 
 ## 4. Next 3 actions
-1. W-S is verified; the Owner decides push/merge. Nothing else is owed on this branch.
-2. Separate debt: why GEX44 reports `no-provider` with claude/codex in /usr/local/bin.
-3. Separate debt: `orca-restart.ts` dispose retries give up before Windows releases the profile.
+1. W-S and wsrel are verified; the Owner decides push/merge of this branch (now ahead by the wsrel commits).
+2. CLOSED `e6abe77a8`: e2e home isolation now strips provider credentials (`ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, ...).
+3. No repo tsconfig includes `tests/e2e`; type-check e2e edits with a scratch config. Measured 2026-09-29
+   at `e6abe77a8` (scratch config: electron-toolkit node base + DOM lib, no web path aliases): 416 errors
+   in `tests/e2e`, 746 with the renderer import closure — mostly specs using `AppStore.setState`/`subscribe`
+   and undeclared `window.__*E2E` globals. Pre-existing debt, too large for an adjacent fix; a gate would
+   need a frozen per-error baseline. Upper bound: the config is uncalibrated for renderer aliases.
+wsrel state of record: `.planning/workstreams/wsrel/` (git-excluded, worktree-local).
 GEX44 run dirs: cw-shell-e2e-run{,2,3,4,5}; base A/B worktree `/home/kobii/cw-shell-base`.
 
 ## 5. Start

@@ -97,10 +97,8 @@ test('a person can create an agent in Workspace and find the same one after a re
 
     await session.close(second.app)
   } finally {
-    // Cleanup must not decide the verdict: a Windows EPERM on the temp dir would otherwise replace
-    // a real assertion failure as the reported error.
-    await session.dispose().catch((error: unknown) => {
-      console.error(`[agents-e2e] cleanup failed (not a test result): ${String(error)}`)
-    })
+    // dispose() waits out a transient Windows lock and reports residue softly, so it never
+    // replaces a body failure and is never silently accepted.
+    await session.dispose()
   }
 })
