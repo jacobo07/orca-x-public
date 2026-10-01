@@ -135,8 +135,14 @@ test('a person can talk to an agent and find the same conversation after a resta
     )
 
     // ── Stage 7: Brainstorming stays agent-less, and does not list the agent's chat ─────────────
-    // Re-entered through the rail entry itself, not only through Back.
+    // Re-entered through the global entry itself, not only through Back. It lands on Resume
+    // (Workspace's home, spec §2.3); Agents is one WorkspaceNav step from there.
     await first.page.locator(workspaceEntry).first().click()
+    await expect(first.page.locator('[data-workspace-frame]')).toHaveAttribute(
+      'data-workspace-destination',
+      'resume'
+    )
+    await first.page.locator('[data-workspace-nav-item="agents"]').click()
     await expect(brainstorm).toHaveAttribute('data-conversation-scope', 'brainstorming')
     await expect(first.page.getByTestId('agent-chat-header')).toHaveCount(0)
     // The same selector found the row a moment ago, in the agent's scope.

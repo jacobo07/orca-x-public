@@ -46,7 +46,9 @@ test('the Workspace approves the commit a person is shown, never one that moved'
       BrowserWindow.getAllWindows()[0]?.setSize(1700, 960)
     })
     const coordinatorPane = await waitForActivePaneHookDescriptor(page)
+    // Workspace opens on Resume; the roster (and New agent) lives under Agents.
     await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+    await page.locator('[data-workspace-nav-item="agents"]').click()
     const shipper = await createAgent(page, 'Shipper')
     await createAgent(page, 'Bystander')
 

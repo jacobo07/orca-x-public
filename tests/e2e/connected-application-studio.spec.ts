@@ -61,6 +61,8 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
     })
 
     await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+    // Workspace opens on Resume; the roster (and New agent) lives under Agents.
+    await page.locator('[data-workspace-nav-item="agents"]').click()
     await page.getByTestId('workspace-new-agent').click()
     await page.getByTestId('new-agent-name').fill('Studio Hand')
     await page.getByTestId('new-agent-role').fill('creative')

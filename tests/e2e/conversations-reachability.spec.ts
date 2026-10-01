@@ -38,6 +38,8 @@ const workspaceEntry = '[data-workspace-activity="agent-workspace"]'
 
 async function openConversations(page: Page): Promise<void> {
   await page.locator(workspaceEntry).first().click()
+  // Workspace opens on Resume; Brainstorming's threads are the Threads destination.
+  await page.locator('[data-workspace-nav-item="threads"]').click()
   await expect(page.getByTestId('conversations-page')).toBeVisible()
 }
 
