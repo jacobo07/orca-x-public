@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { GIT_ROOT_PROBE_ARGV } from '../shared/git-root-identity'
 import { validateGitExecArgs } from './git-exec-validator'
 
 function expectAllowed(args: string[]): void {
@@ -242,5 +243,15 @@ describe('validateGitExecArgs', () => {
     ])('rejects unsafe create-project write args %j', (args) => {
       expectBlocked(args, 'via exec is restricted')
     })
+  })
+})
+
+describe('git root identity probe argv', () => {
+  it.each(Object.entries(GIT_ROOT_PROBE_ARGV))('allows the %s step', (_name, args) => {
+    expectAllowed([...args])
+  })
+
+  it('refuses a denied variant of the same subcommand (positive control)', () => {
+    expectBlocked(['log', '--output=x'], 'Dangerous git flags are not allowed')
   })
 })

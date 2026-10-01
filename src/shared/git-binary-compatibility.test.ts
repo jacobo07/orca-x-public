@@ -15,6 +15,13 @@ import {
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 import {
+  classifyGitRootProbe,
+  GIT_ROOT_PROBE_ARGV,
+  nextGitRootProbeStep,
+  type GitRootProbeResult,
+  type GitRootProbeSteps
+} from './git-root-identity'
+import {
   githubPullRequestHeadLocalRef,
   gitlabMergeRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
@@ -246,5 +253,47 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await expect(
       runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
     ).rejects.toBeDefined()
+  })
+
+  it('derives the first-parent root, shallow flag, unborn state and one common dir for a linked worktree with baseline argv', async () => {
+    // Why: every repo is a subdirectory of the mounted repoPath so the docker legs can see it;
+    // `-C <sub>` is test plumbing and the exported probe argv is passed unchanged after it.
+    const nested = ['-c', 'safe.directory=*'] // 2.25 has no ownership check; harmless there.
+    await runGit([...nested, 'init', '-q', 'root-unborn'])
+    await runGit([...nested, 'clone', '-q', '--no-local', '--depth', '1', '.', 'root-shallow'])
+    await runGit([...nested, 'worktree', 'add', '-q', '-b', 'compat-root', 'root-linked-wt'])
+
+    const pathGitSaw = (sub: string): string =>
+      image ? (sub === '.' ? '/repo' : `/repo/${sub}`) : sub === '.' ? repoPath : join(repoPath, sub)
+
+    async function probe(sub: string): Promise<GitRootProbeResult> {
+      const steps: GitRootProbeSteps = {}
+      for (let next = nextGitRootProbeStep(steps); next; next = nextGitRootProbeStep(steps)) {
+        try {
+          const result = await runGit([...nested, '-C', sub, ...GIT_ROOT_PROBE_ARGV[next]])
+          steps[next] = { ok: true, stdout: result.stdout }
+        } catch {
+          steps[next] = { ok: false }
+        }
+      }
+      return classifyGitRootProbe(steps, pathGitSaw(sub))
+    }
+
+    const independentRoot = (await runGit(['rev-list', '--max-parents=0', 'HEAD'])).stdout.trim()
+    const main = await probe('.')
+    expect(main).toMatchObject({ status: 'resolved', identity: { rootCommit: independentRoot } })
+    await expect(probe('root-unborn')).resolves.toEqual({
+      status: 'settled-none',
+      reason: 'unborn'
+    })
+    await expect(probe('root-shallow')).resolves.toEqual({
+      status: 'settled-none',
+      reason: 'shallow'
+    })
+    const linked = await probe('root-linked-wt')
+    expect(linked).toMatchObject({ status: 'resolved', identity: { rootCommit: independentRoot } })
+    if (main.status === 'resolved' && linked.status === 'resolved') {
+      expect(linked.identity.commonDir).toBe(main.identity.commonDir)
+    }
   })
 })
