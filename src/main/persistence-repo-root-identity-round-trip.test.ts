@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -45,6 +45,11 @@ async function loadedRepo() {
 }
 
 describe('Repo.gitRootIdentity persistence', () => {
+  // The first createStore() pays the cold ./persistence import (~5 s), which timed out whichever case ran first.
+  beforeAll(async () => {
+    await import('./persistence')
+  }, 30_000)
+
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
