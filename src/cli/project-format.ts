@@ -6,6 +6,13 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
 } from '../shared/project-types'
+import type { ProjectHostSetupWithReplicaTopology } from '../shared/replica-topology'
+import {
+  formatReplicaListRow,
+  identityBasisOfProjectId,
+  REPLICA_LIST_HEADER,
+  replicaListFooter
+} from './replica-topology-format'
 
 export function formatProjectList(result: { projects: Project[] }): string {
   if (result.projects.length === 0) {
@@ -16,21 +23,21 @@ export function formatProjectList(result: { projects: Project[] }): string {
       const identity = project.providerIdentity
         ? `${project.providerIdentity.provider}:${project.providerIdentity.owner}/${project.providerIdentity.repo}`
         : 'no-provider'
-      return `${project.id}  ${project.displayName}  ${identity}`
+      return `${project.id}  ${project.displayName}  ${identity}  basis:${identityBasisOfProjectId(project.id)}`
     })
     .join('\n')
 }
 
-export function formatProjectHostSetupList(result: { setups: ProjectHostSetup[] }): string {
+export function formatProjectHostSetupList(
+  result: { setups: ProjectHostSetupWithReplicaTopology[] },
+  runtimeLabel?: string
+): string {
+  // Why: the scope footer is printed even when empty, so "no rows" never reads as "none anywhere".
+  const footer = replicaListFooter(runtimeLabel)
   if (result.setups.length === 0) {
-    return 'No project host setups found.'
+    return ['No project host setups found.', footer].join('\n')
   }
-  return result.setups
-    .map(
-      (setup) =>
-        `${setup.id}  project:${setup.projectId}  host:${setup.hostId}  ${setup.setupState}  ${setup.path}`
-    )
-    .join('\n')
+  return [REPLICA_LIST_HEADER, ...result.setups.map(formatReplicaListRow), footer].join('\n')
 }
 
 export function formatProjectHostSetupResult(result: { result: ProjectHostSetupResult }): string {

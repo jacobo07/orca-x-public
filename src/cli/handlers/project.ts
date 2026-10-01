@@ -1,6 +1,6 @@
+import type { ProjectIdentityCollision } from '../../shared/project-identity-collisions'
 import type {
   Project,
-  ProjectHostSetup,
   ProjectHostSetupCloneArgs,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -11,6 +11,7 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
 import type { RepoKind } from '../../shared/repo-types'
+import type { ProjectHostSetupWithReplicaTopology } from '../../shared/replica-topology'
 import type { CommandHandler } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,
@@ -44,13 +45,25 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   'project setups': async ({ flags, client, json }) => {
     const projectFilter = getOptionalStringFlag(flags, 'project')
     const hostFilter = getOptionalStringFlag(flags, 'host')
-    const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+    // Why: this list already carries `identityCollisions` for a host that reports them, so a
+    // second project.list round trip would only repeat it.
+    const result = await client.call<{
+      setups: ProjectHostSetupWithReplicaTopology[]
+      identityCollisions?: ProjectIdentityCollision[]
+    }>('projectHostSetup.list')
     const setups = result.result.setups.filter(
       (setup) =>
         (projectFilter === undefined || setup.projectId === projectFilter) &&
         (hostFilter === undefined || setup.hostId === hostFilter)
     )
-    printResult({ ...result, result: { setups } }, json, formatProjectHostSetupList)
+    const { identityCollisions } = result.result
+    const runtimeId = result._meta?.runtimeId
+    const runtimeLabel = runtimeId ? `the connected Orca runtime (${runtimeId})` : undefined
+    printResult(
+      { ...result, result: { setups, ...(identityCollisions ? { identityCollisions } : {}) } },
+      json,
+      (value) => formatProjectHostSetupList(value, runtimeLabel)
+    )
   },
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
     const rawPath = getRequiredStringFlag(flags, 'path')
