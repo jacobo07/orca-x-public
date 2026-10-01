@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { ResumeCenterModel } from './resume-center-model'
 import { ClaimValue } from './ClaimValue'
@@ -20,16 +21,18 @@ function Stat({
 }
 
 export function ResumeCenterSummaryPanel({
-  model
+  model,
+  className
 }: {
   model: ResumeCenterModel
+  className?: string
 }): React.JSX.Element {
   const [tipDismissed, setTipDismissed] = useState(false)
   const { totals } = model
   return (
     <aside
       data-testid="resume-center-summary"
-      className="flex w-72 shrink-0 flex-col gap-3"
+      className={cn('flex w-72 shrink-0 flex-col gap-3', className)}
       aria-label={translate('resumeCenter.summary.title', 'Desk summary')}
     >
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-card/40 p-4">

@@ -3207,6 +3207,9 @@ const api = {
     renderPanePreview: (request) => ipcRenderer.invoke('continuity:renderPanePreview', request),
     admitWake: (request) => ipcRenderer.invoke('continuity:admitWake', request)
   } satisfies PreloadApi['continuity'],
+  missionBrief: {
+    read: (request) => ipcRenderer.invoke('missionBrief:read', request)
+  } satisfies PreloadApi['missionBrief'],
   durableExit: {
     park: (request) => ipcRenderer.invoke('durableExit:park', request),
     onParkPhaseRequest: (callback) => {

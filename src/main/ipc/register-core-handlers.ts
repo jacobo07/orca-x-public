@@ -38,6 +38,7 @@ import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust
 import { registerSessionHandlers } from './session'
 import { registerProjectWorkingSetHandlers } from './project-working-set'
 import { registerContinuityHandlers } from './continuity'
+import { registerMissionBriefHandlers } from './mission-brief'
 import { registerDurableExitHandlers } from './durable-exit'
 import { registerWorkspaceWindowClaimHandlers } from './workspace-window-claim'
 import { registerSettingsHandlers } from './settings'
@@ -225,6 +226,7 @@ export function registerCoreHandlers(
   registerSessionHandlers(store)
   registerProjectWorkingSetHandlers()
   registerContinuityHandlers(store)
+  registerMissionBriefHandlers(store)
   registerDurableExitHandlers(() => store.getDataFilePath())
   registerWorkspaceWindowClaimHandlers({
     openNewWindow: lifecycleOptions.onOpenNewWindow,

@@ -1,0 +1,198 @@
+import type { ExecutionHostId } from './execution-host'
+
+/**
+ * The Mission Brief: a projection of a workspace's own mission records (GSD `.planning`, Ralph
+ * mission records, git). It stores nothing; every field names what decided it, and a field with no
+ * producer answer says so instead of showing an empty or a zero.
+ */
+
+export type MissionBriefRequest = {
+  hostId: ExecutionHostId
+  workspaceKey: string
+  /** A workstream under `.planning/workstreams/`; main refuses a name it did not list. */
+  workstream?: string
+}
+
+/** Raw Ralph mission record fields the brief reads, from `~/.claude/state/gsd-mission-*.json`. */
+export type RalphMissionRecord = {
+  missionId: string
+  state: string
+  reason: string
+  workstream: string | null
+  heartbeatAtMs: number | null
+  updatedAtMs: number | null
+}
+
+/** What `.planning/STATE.md` records, quoted rather than interpreted. */
+export type StateMdRecord = {
+  recordedHead: string | null
+  /** The `Phase:` line under "Current Position" — prose the frontmatter can disagree with. */
+  positionPhase: string | null
+  /** `null` = no blockers section exists; `[]` = the section exists and is empty. */
+  blockers: string[] | null
+  ownerDecisions: string[]
+}
+
+/** The goal `.planning/PROJECT.md` states in prose; each field `null` when the file does not say it. */
+export type ProjectMdRecord = {
+  /** First paragraph under "What this is". */
+  whatThisIs: string | null
+  /** A `**Core value:**` line, or the first paragraph under a "Core value" heading. */
+  coreValue: string | null
+}
+
+export type GitHeadReading =
+  | { kind: 'read'; head: string; commitsSinceRecorded: number | null }
+  | { kind: 'unreadable' }
+
+/** Every file under `.planning`, workspace-relative and `/`-separated. */
+export type PlanningFilesReading =
+  /** `truncated`: a bound was hit or a subdirectory was unreadable, so the list is not complete. */
+  { kind: 'listed'; files: string[]; truncated: boolean } | { kind: 'unreadable' }
+
+/** Everything main read for one workspace. The GSD outputs stay `unknown` until validated. */
+export type MissionReadings = {
+  workstream: string | null
+  /** STATE.md relative to the workspace root, `/`-separated. */
+  stateFile: string
+  inspect: unknown
+  roadmap: unknown
+  smartEntry: unknown
+  stateRecord: StateMdRecord | null
+  /** PROJECT.md relative to the workspace root; the workstream's if it has one. `null` = neither exists. */
+  projectFile: string | null
+  /** `null` when there is no PROJECT.md or it could not be read. */
+  projectRecord: ProjectMdRecord | null
+  recordFiles: PlanningFilesReading
+  git: GitHeadReading
+  /** Latest record first; only records whose cwd is this workspace. */
+  missions: RalphMissionRecord[]
+  readAt: number
+}
+
+export type MissionStageState = 'proven' | 'claimed' | 'current' | 'future'
+
+export type MissionStage = {
+  id: string
+  name: string
+  goal: string | null
+  state: MissionStageState
+  /** GSD's verification verdict for the phase, verbatim; `null` = GSD has no directory for it. */
+  verification: string | null
+  dependsOn: string[]
+  /** Dependency text that names something other than a phase (an external condition). */
+  externalDependency: string | null
+}
+
+export type MissionContradiction =
+  | { kind: 'frontier-disagrees'; recorded: string; active: string }
+  | { kind: 'claimed-without-verification'; stageId: string; verification: string | null }
+  | { kind: 'claimed-with-open-dependency'; stageId: string; dependencyId: string }
+
+export type MissionFreshness =
+  | { kind: 'current'; recordedHead: string }
+  | { kind: 'stale'; recordedHead: string; head: string; commitsSince: number | null }
+  | { kind: 'unknown'; reason: 'no-recorded-head' | 'git-unreadable' }
+
+export type HumanAttentionItem =
+  | { source: 'ralph-mission'; missionId: string; reason: string }
+  | { source: 'state-md'; text: string }
+  | { source: 'gsd-verification'; stageId: string; nextAction: string }
+
+export type AutonomousWork = {
+  missionId: string
+  reason: string
+  /** `null` = the record carries no heartbeat, so liveness is not known. */
+  heartbeatAgeMs: number | null
+  live: boolean
+}
+
+export type MissionSignal = 'needs-you' | 'autonomous' | 'next' | 'unknown'
+
+/** Why PROJECT.md gave no goal: no file, a file without a goal section, or a file main could not read. */
+export type ProjectGoalGap = 'absent' | 'no-goal-section' | 'unreadable'
+
+export type MissionMilestone =
+  | { kind: 'known'; text: string; partial: boolean }
+  | { kind: 'unknown' }
+
+export type MissionRecordRole =
+  | 'project'
+  | 'state'
+  | 'roadmap'
+  | 'requirements'
+  | 'config'
+  | 'phase'
+  | 'research'
+  | 'other'
+
+export type MissionRecordFile = {
+  path: string
+  role: MissionRecordRole
+  /** Orca itself parses this file. Whether GSD reads a file is not known here, so it is never claimed. */
+  readByOrca: boolean
+}
+
+export type MissionBrief = {
+  workstream: string | null
+  stateFile: string
+  /** PROJECT.md's goal first; the milestone only when PROJECT.md states none. */
+  objective:
+    | {
+        kind: 'known'
+        source: 'project-md'
+        section: 'what-this-is' | 'core-value'
+        text: string
+        file: string
+      }
+    | {
+        kind: 'known'
+        source: 'milestone'
+        text: string
+        partial: boolean
+        projectGap: ProjectGoalGap
+      }
+    | { kind: 'unknown'; projectGap: ProjectGoalGap }
+  milestone: MissionMilestone
+  records:
+    | { kind: 'listed'; files: MissionRecordFile[]; truncated: boolean }
+    | { kind: 'unreadable' }
+  stages: MissionStage[]
+  frontier:
+    | { kind: 'known'; stageId: string; name: string | null; status: string | null }
+    | { kind: 'unknown' }
+  lastVerified:
+    | { kind: 'verified'; stageId: string; name: string | null }
+    | { kind: 'none'; nearest: { stageId: string; verification: string } | null }
+  nextAction:
+    | { kind: 'known'; label: string; command: string; situation: string }
+    | { kind: 'unknown' }
+  unlocks: { stageId: string; name: string }[]
+  humanAttention: HumanAttentionItem[]
+  autonomous: AutonomousWork[]
+  blockers: { kind: 'recorded'; lines: string[] } | { kind: 'not-recorded' }
+  haltedRun: { missionId: string; reason: string } | null
+  contradictions: MissionContradiction[]
+  freshness: MissionFreshness
+  signal: MissionSignal
+  readAt: number
+}
+
+export type MissionBriefResult =
+  | { status: 'read'; brief: MissionBrief }
+  | { status: 'no-mission' }
+  | { status: 'choose-workstream'; workstreams: string[] }
+  | {
+      status: 'unavailable'
+      reason:
+        | 'remote-host'
+        | 'workspace-unknown'
+        | 'gsd-tools-absent'
+        | 'invalid-request'
+        | 'client-unsupported'
+    }
+  /** `detail` is the technical cause for a disclosure, never the sentence shown. */
+  | { status: 'failed'; stage: 'gsd' | 'read'; reason: MissionBriefFailure; detail: string }
+
+/** `install-incomplete`: GSD could not load one of its own files (a partial copy or update). */
+export type MissionBriefFailure = 'install-incomplete' | 'timed-out' | 'bad-output' | 'failed'

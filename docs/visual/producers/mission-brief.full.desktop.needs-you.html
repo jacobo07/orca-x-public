@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orca X — Mission Brief, completo, requiere tu atención</title>
+
+    <!--
+      r02 of mission-brief.full.desktop.needs-you: the r01 image-model mockup rebuilt as a
+      token-true page. Geometry is MEASURED from r01's pixels, not eyeballed: r01 is a 1.25 device
+      scale render (its 1204 px card is 963 CSS px), so every length below is r01 px / 1.25.
+      Render this page at --scale 1.25 and it can be compared with r01 pixel for pixel.
+
+      Type sizes are fitted, not chosen: r01's image-model face is narrower than Geist and not
+      even consistent with itself (two chips in one row differ by 7%), so each run's size and the
+      inline per-run overrides come from r01's measured ink widths. data-m / data-box name the
+      elements the fitting probe reads; they carry no styling.
+
+      Colours come only from main.css. r01's cool near-black (#111315 card, #1a1d1f insets) is not
+      an Orca token; the nearest are --card and --muted at 40%, and --border / --input over --card
+      land on r01's separator (#23-#2a) and outline (#383c3e) greys almost exactly.
+
+      Content is r01's, including its illustrative Shopify mission. Two things in r01 have no
+      record behind them in Orca and are drawn here only as geometry: the "~6-10 min" estimate
+      and the Shopify glyph. The app renders a copy-command chip and a terminal glyph in those
+      slots instead.
+    -->
+    <link rel="stylesheet" href="../../../node_modules/tailwindcss/theme.css" />
+    <link rel="stylesheet" href="../../../src/renderer/src/assets/main.css" />
+
+    <style>
+      /* Geometry only. No colour literals below this line. */
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 40px 90px;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+      .card {
+        width: 964px;
+        padding: 17.4px 19px 24.6px 18.2px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+      }
+
+      /* Header ------------------------------------------------------------------ */
+      .header { display: flex; justify-content: space-between; height: 112.8px; padding-left: 3.2px; }
+      .ident { display: flex; gap: 20px; }
+      .tile {
+        flex: none; display: grid; place-items: center;
+        border: 1px solid var(--border); border-radius: 10px;
+      }
+      .tile.big { width: 54.4px; height: 54.4px; }
+      .tile.big svg { width: 26px; height: 26px; }
+      .eyebrow { margin: 1.5px 0 0; line-height: 14px; font-size: 11.4px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted-foreground); }
+      h1 { margin: 3.6px 0 0; font-size: 29.1px; line-height: 40px; font-weight: 600; letter-spacing: -0.01em; }
+      .chips { display: flex; gap: 12px; margin-top: 6px; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 10px;
+        height: 30px; padding: 0 13.5px 0 12px; font-size: 12.4px;
+        border: 1px solid var(--border); border-radius: 8px;
+      }
+      .chip svg { width: 16px; height: 16px; }
+      .chip.attention { padding-left: 13px;
+        color: var(--agent-question-text);
+        border-color: color-mix(in srgb, var(--agent-question) 40%, transparent);
+        background: color-mix(in srgb, var(--agent-question) 10%, transparent);
+      }
+      .dot { width: 13px; height: 13px; border-radius: 999px; background: var(--agent-question); }
+
+      .progress { display: flex; flex-direction: column; align-items: flex-end; }
+      .updated { font-size: 12px; line-height: 16px; margin-top: 0; padding-right: 5.6px; color: var(--muted-foreground); }
+      .strip { display: grid; grid-template-columns: 97.6px 101px 104.8px 105.2px; margin-top: 28.6px; margin-right: -17.8px; }
+      .stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10.8px; }
+      .stage + .stage::before {
+        content: ''; position: absolute; top: 10.2px; right: calc(50% + 13.8px); width: 70px; height: 1.6px;
+        background: linear-gradient(to right, color-mix(in srgb, var(--muted-foreground) 33%, transparent), color-mix(in srgb, var(--muted-foreground) 42%, transparent));
+      }
+      .stage:nth-child(3)::before { width: 76.8px; background: linear-gradient(to right, color-mix(in srgb, var(--muted-foreground) 85%, transparent), color-mix(in srgb, var(--foreground) 80%, transparent)); }
+      .stage:nth-child(4)::before { width: 77.6px; background: linear-gradient(to right, color-mix(in srgb, var(--foreground) 10%, transparent), color-mix(in srgb, var(--foreground) 9%, transparent)); }
+      .mark { width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center; }
+      .mark.proven { background: var(--muted-foreground); color: var(--card); }
+      .mark.proven svg { width: 13px; height: 13px; stroke-width: 3; }
+      .mark.current { border: 5px solid var(--foreground); }
+      .mark.future { border: 2.6px solid var(--input); }
+      .stage span { font-size: 10.6px; white-space: nowrap; line-height: 14px; color: var(--muted-foreground); }
+      .stage.current span { color: var(--foreground); font-weight: 500; font-size: 11.8px; }
+
+      /* Rows ---------------------------------------------------------------------- */
+      .rows { padding: 0; }
+      .row {
+        display: grid; grid-template-columns: 42px 174px 1fr 127px; column-gap: 20px;
+        align-items: center; height: 52px; padding: 0 7.2px 0 8px;
+        border-top: 1px solid var(--border);
+      }
+      .row:last-child { border-bottom: 1px solid var(--border); }
+      .row:nth-child(2) { height: 51.2px; } .row:nth-child(3) { height: 67.2px; } .row:nth-child(4) { height: 84px; }
+      .row:nth-child(5) { height: 56px; } .row:nth-child(6) { height: 55.2px; } .row:nth-child(7) { height: 72.8px; }
+      .row:nth-child(8) { height: 54.4px; } .row:nth-child(9) { height: 57.6px; }
+      .row .tile { width: 42px; height: 42px; }
+      .row .tile svg { width: 20px; height: 20px; }
+      .label { font-size: 12.75px; font-weight: 500; line-height: 20px; }
+      .value { font-size: 13.7px; line-height: 21px; padding: 7px 0; }
+      .value.dim { font-size: 13.8px; color: color-mix(in srgb, var(--foreground) 80%, transparent); }
+      .meta.end { justify-self: end; font-size: 10px; }
+      .meta { display: flex; align-items: center; gap: 9.4px; font-size: 11px; white-space: nowrap; color: var(--muted-foreground); }
+      .meta svg { width: 21px; height: 21px; flex: none; }
+      .wide { grid-column: 3 / span 2; margin-left: -1.2px; }
+      
+
+      .next {
+        display: flex; align-items: center; height: 66px; padding: 0 16px 0 18px;
+        background: color-mix(in srgb, var(--muted) 40%, transparent);
+        border: 1px solid var(--input); border-radius: 10px;
+      }
+      .next .glyph { width: 27px; height: 30px; margin-right: 16px; }
+      .next .rule { width: 1.6px; height: 44px; background: var(--input); margin: 0 15.2px 0 0.8px; position: relative; top: 2.8px; }
+      .next .text { flex: 1; min-width: 0; position: relative; top: 2.8px; }
+      .next .title { font-size: 14.8px; font-weight: 500; line-height: 22px; }
+      .next .sub { font-size: 11.8px; line-height: 18px; margin-top: 1.4px; color: var(--muted-foreground); }
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px; height: 33px; padding: 0 11px 0 12px;
+        font-size: 12px; font-weight: 500;
+        border: 1px solid var(--input); border-radius: 8px;
+      }
+      .pill svg { width: 18px; height: 18px; }
+      .chev { width: 20px; height: 20px; margin-left: 26px; color: var(--foreground); }
+      .chev svg { stroke-width: 2; }
+
+      .chipset { display: flex; gap: 11.2px; }
+      
+      
+      .chipset.unlock .tag { height: 36.8px; }
+      .chipset.delegable .tag { height: 34.4px; }
+      .tag {
+        display: inline-flex; align-items: center; gap: 9.4px; height: 37px; padding: 0 11px 0 12px;
+        font-size: 11.1px; white-space: nowrap;
+        background: color-mix(in srgb, var(--muted) 40%, transparent);
+        border: 1px solid var(--border); border-radius: 8px;
+      }
+      .tag svg { width: 16px; height: 16px; }
+
+      /* Actions ------------------------------------------------------------------- */
+      .actions { display: grid; grid-template-columns: 268px 414.4px 203.2px; gap: 15.6px; margin: 21.6px 4px 0; }
+      .btn {
+        display: flex; align-items: center; gap: 12px; height: 55.2px; padding: 0 22px;
+        font-family: inherit; font-size: 14.4px; font-weight: 500; border-radius: 9px; white-space: nowrap;
+        border: 1px solid var(--input); color: var(--foreground); background: transparent;
+      }
+      .btn svg { width: 24px; height: 24px; }
+      .btn.primary { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+    </style>
+  </head>
+  <body>
+    <section class="card" data-producer="mission-brief.full.desktop.needs-you.r02">
+      <header class="header">
+        <div class="ident">
+          <span class="tile big" data-m="header tile" data-box><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M17 5l2-2"/></svg></span>
+          <div>
+            <p class="eyebrow" data-m="eyebrow">Sidecar brief</p>
+            <h1 data-m="h1">Mission Brief</h1>
+            <div class="chips">
+              <span class="chip" data-m="project chip" data-box><svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg><span data-m="chip brand text" style="font-size: 11.9px">Brand 001</span></span>
+              <span class="chip attention" data-m="attention chip" data-box><span class="dot"></span><span data-m="chip attention text">Requiere tu atención</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="progress">
+          <span class="updated" data-m="updated">Actualizado hace 2 min</span>
+          <ol class="strip" style="list-style:none;padding:0;margin-bottom:0">
+            <li class="stage"><span class="mark proven" data-m="stage1 mark" data-box><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span>Ideación</span></li>
+            <li class="stage"><span class="mark proven"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span data-m="stage Construccion">Construcción</span></li>
+            <li class="stage current"><span class="mark current"></span><span data-m="stage Validacion">Validación</span></li>
+            <li class="stage"><span class="mark future" data-m="stage4 mark" data-box></span><span style="font-size: 11.2px">Escala</span></li>
+          </ol>
+        </div>
+      </header>
+
+      <div class="rows">
+        <div class="row" data-m="row1" data-box>
+          <span class="tile" data-m="row tile objetivo" data-box><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>
+          <span class="label" data-m="label Objetivo">Objetivo</span>
+          <span class="value" data-m="value Objetivo" style="font-size: 13.3px">Llevar Brand 001 hasta NAIF_INVESTMENT_ELIGIBLE</span>
+          <span class="meta"><svg viewBox="0 0 24 24"><path d="M5 21V4h12l-2 4 2 4H5"/></svg><span data-m="meta Objetivo">Meta del proyecto</span></span>
+        </div>
+        <div class="row" data-m="row2" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><path d="M6 20v-6M12 20V8M18 20v-10"/></svg></span>
+          <span class="label">Frontier actual</span>
+          <span class="value">Shopify tenant binding requiere autorización del owner</span>
+          <span class="meta"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1"/></svg>Bloqueo actual</span>
+        </div>
+        <div class="row" data-m="row3" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><path d="M14 3H6v18h12V7zM14 3v4h4M9 13h6M9 17h6"/></svg></span>
+          <span class="label" data-m="label Ultimo">Último resultado verificado</span>
+          <span class="value" data-m="value Ultimo" style="font-size: 14.17px; word-spacing: -1.27px; position: relative; top: 2.4px">La preparación técnica está completa. El siguiente bloqueo<br />real es OAuth + 2FA en Shopify.</span>
+          <span class="meta"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Verificado</span>
+        </div>
+        <div class="row action" data-m="row4" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg></span>
+          <span class="label">Siguiente mejor acción</span>
+          <div class="wide">
+            <div class="next" data-m="action card" data-box>
+              <span class="glyph"><svg viewBox="0 0 24 24"><path d="M5 7h14l-1 14H6zM9 7a3 3 0 0 1 6 0"/></svg></span>
+              <span class="rule"></span>
+              <div class="text">
+                <div class="title" data-m="next title">Autorizar Shopify</div>
+                <div class="sub" data-m="next sub">Aprobar acceso OAuth y completar 2FA</div>
+              </div>
+              <span class="pill" data-m="time chip" data-box><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span data-m="pill text">~6–10 min</span></span>
+              <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></span>
+            </div>
+          </div>
+        </div>
+        <div class="row" data-m="row5" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1"/></svg></span>
+          <span class="label">Desbloquea</span>
+          <div class="wide chipset unlock">
+            <span class="tag" data-m="unlock chip 1" data-box style="font-size: 11.2px"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></svg><span data-m="tag Commerce">Commerce Ready</span></span>
+            <span class="tag" data-m="unlock chip 2" data-box style="font-size: 11.04px"><svg viewBox="0 0 24 24"><path d="M6 20v-6M12 20V8M18 20v-10"/></svg>Measurement spine</span>
+            <span class="tag" data-m="unlock chip 3" data-box style="font-size: 11.1px"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></svg>Primer loop de adquisición</span>
+          </div>
+        </div>
+        <div class="row" data-m="row6" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+          <span class="label">Tu intervención</span>
+          <span class="value">Iniciar sesión, completar 2FA y aprobar el consentimiento OAuth</span>
+          <span class="meta"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Acción humana</span>
+        </div>
+        <div class="row" data-m="row7" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></span>
+          <span class="label" data-m="label Trabajo">Trabajo delegable ya preparado</span>
+          <div class="wide chipset delegable">
+            <span class="tag" data-m="delegable chip 1" data-box style="font-size: 10.22px"><svg viewBox="0 0 24 24"><path d="M14 3H6v18h12V7zM14 3v4h4"/></svg>Validación técnica</span>
+            <span class="tag" data-m="delegable chip 2" data-box style="font-size: 10.22px"><svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>Callback handling</span>
+            <span class="tag" data-m="delegable chip 3" data-box style="font-size: 10.68px"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>Post-check verification</span>
+            <span class="tag" data-m="delegable chip 4" data-box style="font-size: 11.21px"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span data-m="tag Continuacion">Continuación automática</span></span>
+          </div>
+        </div>
+        <div class="row" data-m="row8" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18h.01"/></svg></span>
+          <span class="label">Riesgos / bloqueos</span>
+          <span class="value">Esperando credenciales humanas. No hay otros bloqueos críticos.</span>
+          <span class="meta"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18h.01"/></svg>Bloqueo humano</span>
+        </div>
+        <div class="row" data-m="row9" data-box>
+          <span class="tile"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg></span>
+          <span class="label">Frescura de evidencia</span>
+          <span class="value dim" data-m="value Frescura">Repo + runtime + estado de producción reconciliados</span>
+          <span class="meta end"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span data-m="meta Frescura">Actualizado hace 2 min</span></span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" data-m="button primary" data-box><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg>Continuar misión</button>
+        <button class="btn" data-m="button secondary" data-box><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span data-m="btn2 text">Haz lo que necesita de mí</span></button>
+        <button class="btn" data-m="button tertiary" data-box><svg viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></svg><span data-m="btn3 text">Ver ruta completa</span></button>
+      </div>
+    </section>
+  </body>
+</html>

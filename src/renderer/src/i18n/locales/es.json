@@ -14948,5 +14948,197 @@
       "finished": "Listo. Iniciadas:",
       "leftAsleep": "dejadas dormidas:"
     }
+  },
+  "missionBrief": {
+    "action": {
+      "continue": "Continuar misión",
+      "needsMe": "Haz lo que necesita de mí",
+      "viewPath": "Ver ruta completa"
+    },
+    "attention": {
+      "mission": "La ejecución autónoma está bloqueada: {{reason}}",
+      "verification": "Fase {{id}}: {{action}}"
+    },
+    "blockers": {
+      "halted": "La ejecución autónoma se detuvo: {{reason}}",
+      "noneRecorded": "Ninguno registrado en STATE.md",
+      "notRecorded": "Bloqueos no registrados"
+    },
+    "continue": {
+      "autonomous": "Avanza de forma autónoma: no hay nada que iniciar",
+      "noAgent": "No hay una sesión de agente en este espacio de trabajo para reanudar",
+      "noDesk": "Abre este brief desde el Resume Center para continuar",
+      "notStarted": "La sesión del agente no se inició",
+      "refused": "No se inició: el host rechazó otra sesión en este momento",
+      "rereadFailed": "No se pudo volver a leer la misión, así que no se inició nada",
+      "running": "La sesión del agente está en marcha"
+    },
+    "contradiction": {
+      "claimed": "La fase {{id}} está marcada como hecha sin una verificación aprobada",
+      "frontier": "STATE.md dice fase {{recorded}}, la planificación dice fase {{active}}",
+      "openDependency": "La fase {{id}} está marcada como hecha mientras la fase {{dependency}} sigue abierta"
+    },
+    "delegable": {
+      "none": "No hay ninguna ejecución autónoma registrada en marcha",
+      "run": "Ejecución autónoma {{id}}"
+    },
+    "dialog": {
+      "description": "Registros de misión de {{name}}"
+    },
+    "freshness": {
+      "current": "El estado de planificación coincide con la confirmación actual",
+      "gitUnreadable": "No se pudo leer la confirmación actual",
+      "noRecordedHead": "El estado de planificación no registra ninguna confirmación",
+      "stale": "{{count}} confirmaciones desde que se registró el estado de planificación",
+      "staleUncounted": "Registrado en una confirmación anterior"
+    },
+    "frontier": {
+      "unknown": "Frontier desconocido"
+    },
+    "intervention": {
+      "none": "No hay nada registrado que espere por ti"
+    },
+    "kicker": "Sidecar brief",
+    "lastVerified": {
+      "none": "Todavía no hay ninguna fase verificada",
+      "noneWithNearest": "Todavía no hay ninguna fase verificada. Verificación de la fase {{id}}: {{status}}"
+    },
+    "meta": {
+      "coreValue": "Valor central",
+      "goal": "Meta del proyecto",
+      "human": "Acción humana",
+      "humanBlock": "Bloqueo humano",
+      "milestone": "Hito",
+      "notVerified": "Sin verificar",
+      "read": "Actualizado {{when}}",
+      "verified": "Verificado"
+    },
+    "needsMe": {
+      "notOpened": "No se pudo abrir el espacio de trabajo",
+      "nothing": "No hay nada registrado que espere por ti",
+      "opened": "Se abrió donde esto te espera. La ayuda guiada aún no está disponible."
+    },
+    "nextAction": {
+      "copy": "Copiar comando",
+      "unknown": "Siguiente paso desconocido"
+    },
+    "objective": {
+      "fromCoreValue": "PROJECT.md · Valor central",
+      "fromMilestone": "Hito · {{gap}}",
+      "fromWhatThisIs": "PROJECT.md · Qué es esto",
+      "gap": {
+        "absent": "sin PROJECT.md",
+        "noGoal": "PROJECT.md no declara ninguna meta",
+        "unreadable": "No se pudo leer PROJECT.md"
+      },
+      "milestone": "Hito: {{name}}",
+      "partial": "(leído parcialmente)",
+      "unknown": "No hay meta registrada: {{gap}}, sin hito nombrado"
+    },
+    "openFull": "Abrir brief completo",
+    "path": {
+      "contradictions": "Registros que no coinciden",
+      "dependsOn": "Depende de: {{list}}",
+      "description": "Cada fase de la hoja de ruta del propio espacio de trabajo, con el veredicto de verificación de GSD para cada una.",
+      "noDirectory": "Todavía no hay directorio de fase",
+      "recordReadByOrca": "{{role}} · leído por Orca",
+      "title": "Ruta completa de la misión",
+      "verification": "Verificación: {{status}}"
+    },
+    "phase": {
+      "bare": "Fase {{id}}",
+      "named": "Fase {{id}} · {{name}}"
+    },
+    "readAt": "Actualizado {{when}}",
+    "records": {
+      "atLeast": "Al menos {{count}} archivos",
+      "count": "{{count}} archivos",
+      "role": {
+        "config": "Configuración",
+        "other": "Otro",
+        "phase": "Fase",
+        "project": "Proyecto",
+        "requirements": "Requisitos",
+        "research": "Investigación",
+        "roadmap": "Hoja de ruta",
+        "state": "Estado"
+      },
+      "unreadable": "No se pudieron listar los archivos de planificación"
+    },
+    "refresh": "Volver a leer los registros de misión",
+    "row": {
+      "blockers": "Riesgos / bloqueos",
+      "delegable": "Trabajo delegable ya en marcha",
+      "freshness": "Frescura de evidencia",
+      "frontier": "Frontier actual",
+      "intervention": "Tu intervención",
+      "lastVerified": "Último resultado verificado",
+      "nextAction": "Siguiente mejor acción",
+      "objective": "Objetivo",
+      "records": "Registros de misión",
+      "unlocks": "Desbloquea"
+    },
+    "signal": {
+      "autonomous": "Avanza por su cuenta",
+      "needsYou": "Requiere tu atención",
+      "next": "Siguiente paso listo",
+      "unknown": "Siguiente paso desconocido"
+    },
+    "signalShort": {
+      "autonomous": "Autónomo",
+      "needsYou": "Te necesita",
+      "next": "Siguiente",
+      "unknown": "Desconocido"
+    },
+    "stage": {
+      "claimed": "Marcada como hecha, sin verificar",
+      "current": "Actual",
+      "future": "Sin empezar",
+      "label": "Fases de la misión",
+      "noneRecorded": "No hay fases registradas",
+      "proven": "Verificada"
+    },
+    "state": {
+      "chooseWorkstream": "Este espacio de trabajo tiene varias misiones. ¿Cuál?",
+      "client": "Este cliente no puede leer los registros de misión.",
+      "failed": "No se pudieron leer los registros de misión.",
+      "noGsd": "GSD no está instalado en este equipo, así que no se pueden leer los registros de misión.",
+      "noMission": "Este espacio de trabajo no guarda registros de misión (.planning).",
+      "reading": "Leyendo registros de misión…",
+      "remote": "Los registros de misión de otro host aún no se leen.",
+      "unknownWorkspace": "No se pudo localizar este espacio de trabajo."
+    },
+    "title": "Mission Brief",
+    "unlocks": {
+      "none": "Nada se vuelve alcanzable solo con esta fase"
+    },
+    "failure": {
+      "installIncomplete": "La instalación de GSD en este equipo está incompleta.",
+      "installIncompleteAction": "Reinstala o actualiza GSD y vuelve a leer.",
+      "timedOut": "GSD tardó demasiado en leer los registros de misión.",
+      "timedOutAction": "Vuelve a leer cuando el equipo esté menos ocupado.",
+      "badOutput": "GSD respondió en un formato que Orca no puede leer.",
+      "badOutputAction": "Actualiza GSD para que su versión coincida y vuelve a leer.",
+      "gsd": "GSD no pudo leer los registros de misión de este espacio de trabajo.",
+      "read": "Orca no pudo leer los registros de misión.",
+      "action": "El detalle técnico explica por qué. Vuelve a leer después de corregirlo.",
+      "detail": "Detalle técnico"
+    },
+    "frontierStatus": {
+      "planning": "Planificando",
+      "readyToPlan": "Listo para planificar",
+      "readyToExecute": "Listo para ejecutar",
+      "executing": "Ejecutando",
+      "inProgress": "En curso",
+      "verifying": "Verificando",
+      "readyForVerification": "Listo para verificar",
+      "phaseComplete": "Fase completada",
+      "complete": "Completado",
+      "definingRequirements": "Definiendo requisitos",
+      "awaitingNextMilestone": "Esperando el siguiente hito",
+      "blocked": "Bloqueado",
+      "paused": "En pausa",
+      "recorded": "Registrado como “{{value}}”"
+    }
   }
 }

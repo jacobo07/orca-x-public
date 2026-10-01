@@ -49,6 +49,19 @@ describe('formatUiRelativeTime', () => {
   it('formats future deltas', () => {
     expect(formatUiRelativeTime(2 * 86_400_000)).toBe('in 2 days')
   })
+
+  it('abbreviates units only when a caller asks for the short style', () => {
+    mockIntlLocale.value = 'es'
+    expect(formatUiRelativeTime(-2 * 60_000, 'short')).toBe('hace 2 min')
+    expect(formatUiRelativeTime(-3 * 3_600_000, 'short')).toBe('hace 3 h')
+    expect(formatUiRelativeTime(-2 * 60_000)).toBe('hace 2 minutos')
+  })
+
+  it('keeps one formatter per style so a short caller cannot change the long ones', () => {
+    expect(getUiRelativeTimeFormatter('short')).not.toBe(getUiRelativeTimeFormatter())
+    expect(getUiRelativeTimeFormatter('short')).toBe(getUiRelativeTimeFormatter('short'))
+    expect(formatUiRelativeTime(-5 * 60_000)).toBe('5 minutes ago')
+  })
 })
 
 describe('formatUiRelativeTimeFromDate', () => {
