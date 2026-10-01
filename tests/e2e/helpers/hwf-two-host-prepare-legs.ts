@@ -49,10 +49,18 @@ export type MeasureOutcome = 'rows' | 'failed' | 'host-predates'
 export async function measureNow(page: Page): Promise<MeasureOutcome> {
   const button = block(page).locator('[data-prepare-measure]')
   await expect(button).toBeEnabled({ timeout: 60_000 })
-  // React flushes a discrete click synchronously, so the measuring state is visible right after it.
-  const sawMeasuring = await button.evaluate((el) => {
-    ;(el as HTMLButtonElement).click()
-    return (el as HTMLButtonElement).disabled
+  // An observer installed before the click catches the measuring state even if React commits it a tick later.
+  const sawMeasuring = await button.evaluate(async (el) => {
+    const button = el as HTMLButtonElement
+    let seen = false
+    const observer = new MutationObserver(() => {
+      seen ||= button.disabled
+    })
+    observer.observe(button, { attributes: true })
+    button.click()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    observer.disconnect()
+    return seen || button.disabled
   })
   expect(sawMeasuring).toBe(true)
   await expect(button).toBeEnabled({ timeout: 120_000 })

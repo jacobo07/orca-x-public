@@ -111,8 +111,9 @@ test.describe('two-host prepare this device', () => {
       expect(fenceMatch).toBe(true)
       await waitForSshConnected(orcaPage, targetId, { timeoutMs: 60_000 })
       const repoId = await addRemoteRepo(orcaPage, connected, run.projectPath, 'HWF20 project')
+      // Live identity from main's connection state (the renderer mirror does not carry it).
       const identity = await orcaPage.evaluate(
-        (id) => window.__store!.getState().sshConnectionStates.get(id)?.hostIdentity ?? 'absent',
+        async (id) => (await window.api.ssh.getState({ targetId: id }))?.hostIdentity ?? 'absent',
         targetId
       )
       console.log(`HWF20_IDENTITY=${identity}`)
