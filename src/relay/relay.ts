@@ -37,6 +37,10 @@ import { FsHandler } from './fs-handler'
 import { installRelayLogRotation } from './rotating-log-writer'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
+import {
+  ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES,
+  EnvironmentRequirementsHandler
+} from './environment-requirements-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
@@ -716,6 +720,7 @@ async function main(): Promise<void> {
   const gitHandler = new GitHandler(dispatcher, context, watchRegistry)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
+  void new EnvironmentRequirementsHandler(dispatcher)
   const _skillInstallHandler = new SkillInstallHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
   void _preflightHandler
@@ -933,7 +938,7 @@ async function main(): Promise<void> {
   let graceBranch: RelayGraceBranch | null = null
 
   dispatcher.onRequest('relay.status', async () => ({
-    capabilities: SKILL_RELAY_CAPABILITIES,
+    capabilities: [...SKILL_RELAY_CAPABILITIES, ...ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES],
     pid: process.pid,
     uptimeMs: Date.now() - startedAt,
     detached,

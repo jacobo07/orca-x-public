@@ -172,9 +172,29 @@ export async function isCommandOnPathForRelay(
   command: string,
   options: RelayCommandLookupOptions = {}
 ): Promise<boolean> {
+  try {
+    return (await resolveCommandPathForRelay(command, options)) !== null
+  } catch {
+    // Why: preflight treats a lookup that could not run as "not found"; only the
+    // environment probe needs to tell the two apart.
+    return false
+  }
+}
+
+/**
+ * Same lookup as `isCommandOnPathForRelay`, returning the resolved absolute path. Null means a
+ * lookup ran and found nothing; a thrown error means EVERY lookup failed to run, so the caller
+ * can say "lookup failed" rather than "absent".
+ */
+export async function resolveCommandPathForRelay(
+  command: string,
+  options: RelayCommandLookupOptions = {}
+): Promise<string | null> {
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const specs = buildCommandLookupSpecs(command, platform, env, options.accountLoginShell)
+  let answered = false
+  let lastError: unknown
 
   for (const spec of specs) {
     try {
@@ -184,31 +204,45 @@ export async function isCommandOnPathForRelay(
         timeout: 5000,
         ...(spec.windowsHide ? { windowsHide: true } : {})
       })
-      if (hasAbsoluteCommandPath(stdout, platform)) {
-        return true
+      answered = true
+      const resolved = readResolvedCommandPath(stdout, platform)
+      if (resolved) {
+        return resolved
       }
-    } catch {
+    } catch (error) {
       // Try the inherited-PATH fallback before reporting the agent missing.
+      lastError = error
     }
   }
 
-  return false
+  if (!answered && lastError !== undefined) {
+    throw Object.assign(new Error('Every command lookup spec failed to run.'), {
+      name: 'RelayCommandLookupFailedError',
+      cause: lastError
+    })
+  }
+  return null
+}
+
+export function readResolvedCommandPath(output: string, platform: NodeJS.Platform): string | null {
+  const pathOps = platform === 'win32' ? win32 : path
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    const resolvedPath =
+      platform === 'win32'
+        ? line
+        : line.startsWith(AGENT_PATH_PREFIX)
+          ? line.slice(AGENT_PATH_PREFIX.length)
+          : ''
+    if (pathOps.isAbsolute(resolvedPath)) {
+      return resolvedPath
+    }
+  }
+  return null
 }
 
 export function hasAbsoluteCommandPath(output: string, platform: NodeJS.Platform): boolean {
-  const pathOps = platform === 'win32' ? win32 : path
-  return output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .some((line) => {
-      const resolvedPath =
-        platform === 'win32'
-          ? line
-          : line.startsWith(AGENT_PATH_PREFIX)
-            ? line.slice(AGENT_PATH_PREFIX.length)
-            : ''
-      return pathOps.isAbsolute(resolvedPath)
-    })
+  return readResolvedCommandPath(output, platform) !== null
 }
 
 function buildPosixCommandLookupSpec(command: string, shell: string): CommandLookupSpec {

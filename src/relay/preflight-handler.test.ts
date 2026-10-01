@@ -36,7 +36,9 @@ import {
   buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
   isCommandOnPathForRelay,
-  PreflightHandler
+  PreflightHandler,
+  readResolvedCommandPath,
+  resolveCommandPathForRelay
 } from './preflight-handler'
 
 function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
@@ -233,6 +235,72 @@ describe('hasAbsoluteCommandPath', () => {
     expect(
       hasAbsoluteCommandPath('C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd\r\n', 'win32')
     ).toBe(true)
+  })
+})
+
+describe('readResolvedCommandPath', () => {
+  it('returns the sentinel-marked absolute path and ignores unmarked paths', () => {
+    expect(
+      readResolvedCommandPath('/tmp/spoof\nwelcome\n__ORCA_AGENT_PATH__/opt/bin/codex\n', 'linux')
+    ).toBe('/opt/bin/codex')
+  })
+
+  it('returns null when nothing absolute was printed', () => {
+    expect(readResolvedCommandPath('codex is a shell function\n', 'linux')).toBeNull()
+    expect(readResolvedCommandPath('__ORCA_AGENT_PATH__relative/codex\n', 'linux')).toBeNull()
+  })
+
+  it('returns the first Windows absolute path', () => {
+    expect(
+      readResolvedCommandPath('C:\\Tools\\codex.exe\r\nC:\\Other\\codex.exe\r\n', 'win32')
+    ).toBe('C:\\Tools\\codex.exe')
+  })
+
+  it('agrees with hasAbsoluteCommandPath', () => {
+    for (const output of ['__ORCA_AGENT_PATH__/a/b\n', 'nothing\n', '']) {
+      expect(readResolvedCommandPath(output, 'linux') !== null).toBe(
+        hasAbsoluteCommandPath(output, 'linux')
+      )
+    }
+  })
+})
+
+describe('resolveCommandPathForRelay', () => {
+  const options = {
+    platform: 'linux' as const,
+    env: { SHELL: '/bin/bash', PATH: '/usr/bin' },
+    accountLoginShell: '/bin/bash'
+  }
+
+  it('returns the resolved path of the first spec that finds one', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: '__ORCA_AGENT_PATH__/usr/bin/git\n' })
+    await expect(resolveCommandPathForRelay('git', options)).resolves.toBe('/usr/bin/git')
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns null when every lookup ran and printed nothing', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: 'banner\n' })
+    await expect(resolveCommandPathForRelay('git', options)).resolves.toBeNull()
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws a tagged error when every lookup spec failed', async () => {
+    execFileAsyncMock.mockRejectedValue(new Error('spawn failed'))
+    await expect(resolveCommandPathForRelay('git', options)).rejects.toMatchObject({
+      name: 'RelayCommandLookupFailedError'
+    })
+  })
+
+  it('does not throw when one spec failed and another answered', async () => {
+    execFileAsyncMock
+      .mockRejectedValueOnce(new Error('startup failed'))
+      .mockResolvedValueOnce({ stdout: 'banner\n' })
+    await expect(resolveCommandPathForRelay('git', options)).resolves.toBeNull()
+  })
+
+  it('keeps isCommandOnPathForRelay answering false when every spec failed', async () => {
+    execFileAsyncMock.mockRejectedValue(new Error('spawn failed'))
+    await expect(isCommandOnPathForRelay('git', options)).resolves.toBe(false)
   })
 })
 
