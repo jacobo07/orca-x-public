@@ -8,8 +8,8 @@ import { normalizeHydratedProjectHostSetupProjection } from './project-host-setu
 
 const projectHostSetupProjectionCache = new WeakMap<AppState['repos'], ProjectHostSetupProjection>()
 const providedProjectHostSetupProjectionCache = new WeakMap<
-  Project[],
-  WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>
+  AppState['repos'],
+  WeakMap<Project[], WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>>
 >()
 const mergedProjectHostSetupProjectionCache = new WeakMap<
   AppState['repos'],
@@ -32,21 +32,34 @@ function getCachedProjectHostSetupProjection(repos: AppState['repos']): ProjectH
 }
 
 function getCachedProvidedProjectHostSetupProjection(
+  repos: AppState['repos'],
   projects: Project[],
   setups: ProjectHostSetup[]
 ): ProjectHostSetupProjection {
-  const cachedBySetups = providedProjectHostSetupProjectionCache.get(projects)
+  const cachedByProjects = providedProjectHostSetupProjectionCache.get(repos)
+  const cachedBySetups = cachedByProjects?.get(projects)
   const cachedProjection = cachedBySetups?.get(setups)
   if (cachedProjection) {
     return cachedProjection
   }
 
-  const projection = { projects, setups }
+  // Why: a collision is a fact about the repo set, so it rides every branch, not only the derived one.
+  const projection = {
+    projects,
+    setups,
+    identityCollisions: getCachedProjectHostSetupProjection(repos).identityCollisions
+  }
+  const nextCachedByProjects =
+    cachedByProjects ??
+    new WeakMap<Project[], WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>>()
   const nextCachedBySetups =
     cachedBySetups ?? new WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>()
   nextCachedBySetups.set(setups, projection)
   if (!cachedBySetups) {
-    providedProjectHostSetupProjectionCache.set(projects, nextCachedBySetups)
+    nextCachedByProjects.set(projects, nextCachedBySetups)
+  }
+  if (!cachedByProjects) {
+    providedProjectHostSetupProjectionCache.set(repos, nextCachedByProjects)
   }
   return projection
 }
@@ -83,7 +96,8 @@ function mergeProjectHostSetupProjection(
   // beside legacy repos. Keep repo-backed compatibility rows visible in that case.
   const projection = {
     projects: mergeById(derived.projects, normalized.projects),
-    setups: mergeById(derived.setups, normalized.setups)
+    setups: mergeById(derived.setups, normalized.setups),
+    identityCollisions: derived.identityCollisions
   }
   const nextCachedByProjects =
     cachedByProjects ??
@@ -115,7 +129,8 @@ function getCachedNormalizedProjectHostSetupProjection(
   }
   const projection = {
     projects: mergeById(derived.projects, normalized.projects),
-    setups: mergeById(derived.setups, normalized.setups)
+    setups: mergeById(derived.setups, normalized.setups),
+    identityCollisions: derived.identityCollisions
   }
   const nextCachedByProjects =
     cachedByProjects ??
@@ -174,6 +189,7 @@ export function getProjectHostSetupProjectionFromState(
       )
     }
     return getCachedProvidedProjectHostSetupProjection(
+      state.repos,
       state.projects as Project[],
       state.projectHostSetups as ProjectHostSetup[]
     )

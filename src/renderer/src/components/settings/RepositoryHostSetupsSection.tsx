@@ -6,6 +6,10 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
+import {
+  getProjectReplicaNotice,
+  getReplicaTopologyFromState
+} from '../../store/replica-topology-selector'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -18,7 +22,11 @@ import { translate } from '@/i18n/i18n'
 import { buildSetupHostOptions } from './repository-host-setup-options'
 import { deriveRepositoryHostSetupRowState } from './repository-host-setup-row-state'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
-import { ReplicaHostHealthLine } from './ReplicaTopologyDetails'
+import {
+  ReplicaHostHealthLine,
+  ReplicaRowTopology,
+  ReplicaTopologyNotice
+} from './ReplicaTopologyDetails'
 
 type RepositoryHostSetupsSectionProps = {
   repo: Repo
@@ -95,6 +103,7 @@ export function RepositoryHostSetupsSection({
   const projectHostSetupProjection = useAppStore((state) =>
     getProjectHostSetupProjectionFromState(state)
   )
+  const replicaTopology = useAppStore((state) => getReplicaTopologyFromState(state))
   const repoProjectHostSetup = projectHostSetupProjection.setups.find(
     (setup) => setup.repoId === repo.id
   )
@@ -125,6 +134,14 @@ export function RepositoryHostSetupsSection({
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
   const projectId = selectedProjectHostSetup?.projectId
+  const replicaNotice = useMemo(
+    () =>
+      projectId ? getProjectReplicaNotice(projectHostSetupProjection, repos, projectId) : null,
+    [projectHostSetupProjection, repos, projectId]
+  )
+  const hasReplicaNotice =
+    replicaNotice !== null &&
+    (replicaNotice.collisions.length > 0 || replicaNotice.groupingRootCommit !== null)
   // Why: the single project pane switches host in place — set the ephemeral
   // per-project selection instead of navigating to a separate repo section.
   const selectHost = (hostId: ExecutionHostId) => {
@@ -138,7 +155,7 @@ export function RepositoryHostSetupsSection({
     }
   }
   if (
-    (projectHostSetups.length <= 1 && setupHostOptions.length === 0) ||
+    (projectHostSetups.length <= 1 && setupHostOptions.length === 0 && !hasReplicaNotice) ||
     (!forceVisible && !matchesSettingsSearch(searchQuery, searchEntries))
   ) {
     return null
@@ -152,163 +169,177 @@ export function RepositoryHostSetupsSection({
         'Hosts where this project is set up.'
       )}
       keywords={[repo.displayName, 'host', 'ssh', 'remote', 'vm', 'path']}
-      className="space-y-3"
       forceVisible={forceVisible}
     >
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <Label className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryPane.availableHosts', 'Available Hosts')}
-          </Label>
-          {switchableProjectHostSetups.length > 1 ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {translate('auto.components.settings.RepositoryPane.viewingHost', 'Viewing host')}
-              </span>
-              <Select
-                value={selectedProjectHostSetup?.id}
-                onValueChange={(setupId) => {
-                  if (setupId === selectedProjectHostSetup?.id) {
-                    return
-                  }
-                  const setup = switchableProjectHostSetups.find(
-                    (candidate) => candidate.id === setupId
-                  )
-                  if (setup) {
-                    selectSetup(setup)
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 w-44 min-w-0 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {switchableProjectHostSetups.map((setup) => (
-                    <SelectItem key={setup.id} value={setup.id}>
-                      <span className="block min-w-0 truncate">
-                        {hostOptionById.get(setup.executionHostId ?? setup.hostId)?.label ??
-                          getExecutionHostLabel(setup.executionHostId ?? setup.hostId)}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.RepositoryPane.availableHostsHelp',
-            'Project paths and worktree settings are host-specific; creating a workspace can target any ready setup.'
-          )}
-        </p>
-      </div>
-      <div className="divide-y divide-border rounded-md border border-border">
-        {projectHostSetups.map((setup) => {
-          const {
-            health,
-            setupReady,
-            setupStateLabel,
-            setupHostLabel,
-            runtimeOwnerWorkspaceWindowClosed,
-            runtimeOwnerHostLabel
-          } = deriveRepositoryHostSetupRowState({
-            setup,
-            hostOptionById,
-            store: {
-              sshConnectionStates,
-              sshTargetLabels,
-              removedSshTargetLabels,
-              sshTargetsHydrated,
-              sshStateByEnvironment,
-              runtimeStatusByEnvironmentId
-            }
-          })
-          const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
-          const canOpenSetup = setup.repoId.trim().length > 0
-          const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
-          return (
-            <div
-              key={setup.id}
-              data-current={isCurrentSetup ? 'true' : undefined}
-              className={cn(
-                'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
-                isCurrentSetup ? 'bg-accent' : ''
+      <div className="space-y-3" data-replica-topology-section>
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <Label className="text-sm font-semibold">
+              {translate(
+                'auto.components.settings.RepositoryPane.availableHosts',
+                'Available Hosts'
               )}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium">{setupHostLabel}</span>
-                  <SettingsBadge tone={setupReady ? 'accent' : 'muted'}>
-                    {setupStateLabel}
-                  </SettingsBadge>
-                </div>
-                <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                  {setup.path ||
-                    translate(
-                      'auto.components.settings.RepositoryPane.setupPathPending',
-                      'Path pending'
-                    )}
-                </p>
-                <ReplicaHostHealthLine health={health} />
-                {runtimeOwnerWorkspaceWindowClosed ? (
-                  // Why: no runtime RPC can open a remote desktop window, so the only
-                  // honest affordance is telling the user what to do on that host.
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {translate(
-                      'auto.components.settings.RepositoryPane.hostWorkspaceWindowClosedHelp',
-                      'The server is reachable but its Orca window is closed. Open Orca on {{value0}} to use this setup.',
-                      { value0: runtimeOwnerHostLabel }
-                    )}
+            </Label>
+            {switchableProjectHostSetups.length > 1 ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {translate('auto.components.settings.RepositoryPane.viewingHost', 'Viewing host')}
+                </span>
+                <Select
+                  value={selectedProjectHostSetup?.id}
+                  onValueChange={(setupId) => {
+                    if (setupId === selectedProjectHostSetup?.id) {
+                      return
+                    }
+                    const setup = switchableProjectHostSetups.find(
+                      (candidate) => candidate.id === setupId
+                    )
+                    if (setup) {
+                      selectSetup(setup)
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-44 min-w-0 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {switchableProjectHostSetups.map((setup) => (
+                      <SelectItem key={setup.id} value={setup.id}>
+                        <span className="block min-w-0 truncate">
+                          {hostOptionById.get(setup.executionHostId ?? setup.hostId)?.label ??
+                            getExecutionHostLabel(setup.executionHostId ?? setup.hostId)}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.RepositoryPane.availableHostsHelp',
+              'Project paths and worktree settings are host-specific; creating a workspace can target any ready setup.'
+            )}
+          </p>
+        </div>
+        <div className="divide-y divide-border rounded-md border border-border">
+          {projectHostSetups.map((setup) => {
+            const {
+              health,
+              setupReady,
+              setupStateLabel,
+              setupHostLabel,
+              runtimeOwnerWorkspaceWindowClosed,
+              runtimeOwnerHostLabel
+            } = deriveRepositoryHostSetupRowState({
+              setup,
+              hostOptionById,
+              store: {
+                sshConnectionStates,
+                sshTargetLabels,
+                removedSshTargetLabels,
+                sshTargetsHydrated,
+                sshStateByEnvironment,
+                runtimeStatusByEnvironmentId
+              }
+            })
+            const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
+            const canOpenSetup = setup.repoId.trim().length > 0
+            const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
+            return (
+              <div
+                key={setup.id}
+                data-setup-id={setup.id}
+                data-current={isCurrentSetup ? 'true' : undefined}
+                className={cn(
+                  'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
+                  isCurrentSetup ? 'bg-accent' : ''
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium">{setupHostLabel}</span>
+                    <SettingsBadge tone={setupReady ? 'accent' : 'muted'}>
+                      {setupStateLabel}
+                    </SettingsBadge>
+                  </div>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                    {setup.path ||
+                      translate(
+                        'auto.components.settings.RepositoryPane.setupPathPending',
+                        'Path pending'
+                      )}
                   </p>
+                  <ReplicaHostHealthLine health={health} />
+                  <ReplicaRowTopology entry={replicaTopology.get(setup.id)} />
+                  {runtimeOwnerWorkspaceWindowClosed ? (
+                    // Why: no runtime RPC can open a remote desktop window, so the only
+                    // honest affordance is telling the user what to do on that host.
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {translate(
+                        'auto.components.settings.RepositoryPane.hostWorkspaceWindowClosedHelp',
+                        'The server is reachable but its Orca window is closed. Open Orca on {{value0}} to use this setup.',
+                        { value0: runtimeOwnerHostLabel }
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+                {isCurrentSetup ? (
+                  <SettingsBadge>
+                    {translate('auto.components.settings.RepositoryPane.currentSetup', 'Current')}
+                  </SettingsBadge>
+                ) : null}
+                {!isCurrentSetup && canOpenSetup ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      selectSetup(setup)
+                    }}
+                  >
+                    {translate('auto.components.settings.RepositoryPane.openSetup', 'Open')}
+                  </Button>
+                ) : null}
+                {canRemoveSetup ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setDeletingSetupId(setup.id)
+                      await deleteProjectHostSetup({ setupId: setup.id })
+                      setDeletingSetupId(null)
+                    }}
+                  >
+                    {translate('auto.components.settings.RepositoryPane.removeSetup', 'Remove')}
+                  </Button>
                 ) : null}
               </div>
-              {isCurrentSetup ? (
-                <SettingsBadge>
-                  {translate('auto.components.settings.RepositoryPane.currentSetup', 'Current')}
-                </SettingsBadge>
-              ) : null}
-              {!isCurrentSetup && canOpenSetup ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    selectSetup(setup)
-                  }}
-                >
-                  {translate('auto.components.settings.RepositoryPane.openSetup', 'Open')}
-                </Button>
-              ) : null}
-              {canRemoveSetup ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    setDeletingSetupId(setup.id)
-                    await deleteProjectHostSetup({ setupId: setup.id })
-                    setDeletingSetupId(null)
-                  }}
-                >
-                  {translate('auto.components.settings.RepositoryPane.removeSetup', 'Remove')}
-                </Button>
-              ) : null}
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
+        {replicaNotice ? (
+          <ReplicaTopologyNotice
+            notice={replicaNotice}
+            hostLabelOf={(hostId) =>
+              hostOptionById.get(hostId)?.label ?? getExecutionHostLabel(hostId)
+            }
+          />
+        ) : null}
+        {selectedProjectHostSetup ? (
+          <RepositoryHostSetupActions
+            repoDisplayName={repo.displayName}
+            selectedProjectHostSetup={selectedProjectHostSetup}
+            setupHostOptions={setupHostOptions}
+            setupProjectExistingFolder={setupProjectExistingFolder}
+            setupProjectClone={setupProjectClone}
+            createProjectHostSetup={createProjectHostSetup}
+            onSetupReady={selectHost}
+          />
+        ) : null}
       </div>
-      {selectedProjectHostSetup ? (
-        <RepositoryHostSetupActions
-          repoDisplayName={repo.displayName}
-          selectedProjectHostSetup={selectedProjectHostSetup}
-          setupHostOptions={setupHostOptions}
-          setupProjectExistingFolder={setupProjectExistingFolder}
-          setupProjectClone={setupProjectClone}
-          createProjectHostSetup={createProjectHostSetup}
-          onSetupReady={selectHost}
-        />
-      ) : null}
     </SearchableSetting>
   )
 }

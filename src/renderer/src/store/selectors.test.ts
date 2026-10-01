@@ -440,7 +440,9 @@ describe('store selectors', () => {
 
     expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toEqual({
       projects,
-      setups: projectHostSetups
+      setups: projectHostSetups,
+      // Why: collisions are a fact about the repos, so the provided branch carries them too (W8).
+      identityCollisions: []
     })
   })
 
