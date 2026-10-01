@@ -75,7 +75,7 @@ async function newSessionsOver(page: Page, baseline: string[], ms: number): Prom
 
 async function openResumeCenter(page: Page): Promise<void> {
   await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
-  await page.getByTestId('workspace-open-resume-center').click()
+  await page.locator('[data-workspace-nav-item="resume"]').click()
   await expect(page.getByTestId('resume-center-page')).toBeVisible({ timeout: 15_000 })
 }
 

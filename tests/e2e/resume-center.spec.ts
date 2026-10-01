@@ -99,7 +99,7 @@ test.describe('@resume-center', () => {
     const second = await seedTab(orcaPage, 'RCB')
 
     await orcaPage.locator('[data-workspace-activity="agent-workspace"]').first().click()
-    await orcaPage.getByTestId('workspace-open-resume-center').click()
+    await orcaPage.locator('[data-workspace-nav-item="resume"]').click()
     await expect(orcaPage.getByTestId('resume-center-page')).toBeVisible({ timeout: 15_000 })
 
     // Both tabs reach the desk, and both read as running because the host lists their sessions.

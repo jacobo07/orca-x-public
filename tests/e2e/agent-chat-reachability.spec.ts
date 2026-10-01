@@ -29,8 +29,9 @@ async function openWorkspaceAgents(page: Page, app: ElectronApplication): Promis
   // Wide enough that the roster column is laid out beside the chat.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
   await page.locator(workspaceEntry).first().click()
+  // Workspace opens on Resume Center; Agents is a WorkspaceNav destination.
+  await page.locator('[data-workspace-nav-item="agents"]').click()
   await expect(page.getByTestId('conversations-page')).toBeVisible()
-  await page.getByTestId('workspace-tab-agents').click()
 }
 
 async function openAgentChat(page: Page, agentId: string): Promise<void> {
@@ -124,9 +125,9 @@ test('a person can talk to an agent and find the same conversation after a resta
     await first.page.getByTestId('agent-chat-back').click()
     const brainstorm = first.page.getByTestId('conversations-page')
     await expect(brainstorm).toHaveAttribute('data-conversation-scope', 'brainstorming')
-    await expect(first.page.getByTestId('workspace-tab-agents')).toHaveAttribute(
-      'aria-selected',
-      'true'
+    await expect(first.page.locator('[data-workspace-nav-item="agents"]')).toHaveAttribute(
+      'aria-current',
+      'page'
     )
     await expect(first.page.getByTestId('workspace-agent-row')).toHaveAttribute(
       'data-agent-id',

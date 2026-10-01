@@ -222,7 +222,7 @@ test('Resume Center open restores a slept workspace without starting any process
     expect(targetTabIds.length, 'the slept workspace kept no rows across the restart').toBe(1)
 
     await relaunched.locator('[data-workspace-activity="agent-workspace"]').first().click()
-    await relaunched.getByTestId('workspace-open-resume-center').click()
+    await relaunched.locator('[data-workspace-nav-item="resume"]').click()
     const section = relaunched.locator(
       `[data-testid="resume-center-workspace"][data-workspace-key="${target}"]`
     )

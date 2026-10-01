@@ -33,8 +33,9 @@ async function openWorkspaceAgents(page: Page, app: ElectronApplication): Promis
   // Wide enough that the roster column is laid out beside the chat.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1700, 960))
   await page.locator(workspaceEntry).first().click()
+  // Workspace opens on Resume Center; Agents is a WorkspaceNav destination.
+  await page.locator('[data-workspace-nav-item="agents"]').click()
   await expect(page.getByTestId('conversations-page')).toBeVisible()
-  await page.getByTestId('workspace-tab-agents').click()
 }
 
 test('a person can create an agent in Workspace and find the same one after a restart', async ({

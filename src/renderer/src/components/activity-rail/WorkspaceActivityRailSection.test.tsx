@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
-  openConversationsPage: vi.fn(),
+  openWorkspaceHome: vi.fn(),
   openArtifactsPage: vi.fn(),
   openSkillsPage: vi.fn(),
   openWorkspacePage: vi.fn(),
@@ -90,7 +90,7 @@ function renderRail(settings: Record<string, unknown> = {}, activeView = 'termin
     openAutomationsPage: mocks.openAutomationsPage,
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
-    openConversationsPage: mocks.openConversationsPage,
+    openWorkspaceHome: mocks.openWorkspaceHome,
     openArtifactsPage: mocks.openArtifactsPage,
     openSkillsPage: mocks.openSkillsPage,
     openWorkspacePage: mocks.openWorkspacePage,
@@ -168,7 +168,7 @@ describe('WorkspaceActivityRailSection', () => {
     // itself blind to one. Keying by WorkspaceActivityId makes a missing entry a TYPECHECK failure,
     // which is the only form of this gate that a new activity cannot be added around.
     const dispatched: Record<WorkspaceActivityId, ReturnType<typeof vi.fn>> = {
-      'agent-workspace': mocks.openConversationsPage,
+      'agent-workspace': mocks.openWorkspaceHome,
       workspace: mocks.openWorkspacePage,
       backlog: mocks.openBacklogPage,
       tasks: mocks.openTaskPage,
@@ -309,7 +309,7 @@ describe('WorkspaceActivityRailSection', () => {
     expect(activity('workspace')?.getAttribute('aria-label')).toBe('Terminals')
 
     act(() => activity('agent-workspace')?.click())
-    expect(mocks.openConversationsPage).toHaveBeenCalledTimes(1)
+    expect(mocks.openWorkspaceHome).toHaveBeenCalledTimes(1)
   })
 
   it('labeled rows keep the same entries, order, dispatch and badge as the icons', () => {
@@ -339,12 +339,23 @@ describe('WorkspaceActivityRailSection', () => {
   })
 
   it('keeps Workspace current on every Workspace destination, and only there', () => {
-    for (const view of ['resumeCenter', 'conversations', 'backlog', 'workstation']) {
+    for (const view of ['resumeCenter', 'conversations', 'workstation']) {
       renderRail({}, view)
       expect(activity('agent-workspace')?.getAttribute('aria-current'), view).toBe('page')
     }
     renderRail({}, 'tasks')
     expect(activity('agent-workspace')?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('on Backlog, the most specific visible entry is current', () => {
+    renderRail({}, 'backlog')
+    expect(activity('backlog')?.getAttribute('aria-current')).toBe('page')
+    expect(activity('agent-workspace')?.getAttribute('aria-current')).toBeNull()
+
+    // Backlog's own entry hidden: Workspace, which holds Backlog as a destination, takes over.
+    renderRail({ showBacklogButton: false }, 'backlog')
+    expect(activity('backlog')).toBeNull()
+    expect(activity('agent-workspace')?.getAttribute('aria-current')).toBe('page')
   })
 
   it('hides Workspace through its own key, not the Chats one', () => {

@@ -56,9 +56,9 @@ async function openRoster(
   await expect(page.getByTestId('workspace-agent-row')).toHaveCount(0)
   const started = Date.now()
   await press(page.locator('[data-workspace-activity="agent-workspace"]').first())
-  await expect(page.getByTestId('workspace-tab-agents')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-workspace-nav-item="agents"]')).toBeVisible({ timeout: 60_000 })
   const entered = Date.now()
-  await press(page.getByTestId('workspace-tab-agents'))
+  await press(page.locator('[data-workspace-nav-item="agents"]'))
   await expect(page.getByTestId('workspace-agent-row').first()).toBeVisible({ timeout: 60_000 })
   const done = Date.now()
   return { total: done - started, entry: entered - started, rows: done - entered }
@@ -115,7 +115,7 @@ test('Workspace stays cheap with 200 agents and 1,000 threads', async ({
   const roster = await openRoster(orcaPage)
   const rosterDom = await openRoster(orcaPage, 'dom')
   const agentRows = await orcaPage.getByTestId('workspace-agent-row').count()
-  await orcaPage.getByTestId('workspace-tab-threads').click()
+  await orcaPage.locator('[data-workspace-nav-item="threads"]').click()
   await expect(orcaPage.getByTestId('conversations-list-row').first()).toBeVisible({
     timeout: 60_000
   })

@@ -57,14 +57,18 @@ test('Workspace owns its shell and shows the running agent and the project estat
       prompt: 'reconcile the ledger'
     })
 
+    // Workspace opens on its home (Resume Center); Agents is a WorkspaceNav destination.
     await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
-    await expect(page.getByTestId('workspace-roster')).toBeVisible()
+    await expect(page.locator('[data-workspace-destination="resume"]')).toBeVisible()
     await expect(page.locator(WORKTREE_LIST)).toHaveCount(0)
     await expect(page.locator(SIDE_PANEL)).toHaveCount(0)
 
-    const agentsTab = page.getByTestId('workspace-tab-agents')
-    await agentsTab.dispatchEvent('mousedown')
-    await expect(agentsTab).toHaveAttribute('data-state', 'active')
+    const agentsTab = page.locator('[data-workspace-nav-item="agents"]')
+    await agentsTab.click()
+    await expect(agentsTab).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByTestId('workspace-roster')).toBeVisible()
+    await expect(page.locator(WORKTREE_LIST)).toHaveCount(0)
+    await expect(page.locator(SIDE_PANEL)).toHaveCount(0)
     const running = page.getByTestId('workspace-running-session')
     await expect(running).toHaveCount(1)
     await expect(running).toHaveAttribute('data-pane-key', pane.paneKey)
@@ -72,9 +76,9 @@ test('Workspace owns its shell and shows the running agent and the project estat
     await settleAnimations(page)
     await page.screenshot({ path: testInfo.outputPath('workspace-agents.png') })
 
-    const projectsTab = page.getByTestId('workspace-tab-projects')
-    await projectsTab.dispatchEvent('mousedown')
-    await expect(projectsTab).toHaveAttribute('data-state', 'active')
+    const projectsTab = page.locator('[data-workspace-nav-item="projects"]')
+    await projectsTab.click()
+    await expect(projectsTab).toHaveAttribute('aria-current', 'page')
     const projectCount = await page.evaluate(() => window.__store!.getState().projects.length)
     expect(projectCount).toBeGreaterThan(0)
     await expect(page.getByTestId('workspace-project')).toHaveCount(projectCount)

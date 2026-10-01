@@ -1,23 +1,20 @@
-import { History, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import type { WorkspaceRosterTab } from '@/lib/workspace-destinations'
 import type {
   WorkspaceAgentRow,
   WorkspaceThreadRow
 } from '../../../../shared/cognitive-workspace-projection'
 import type { AgentProjectChoice } from '../agents/agent-project-choices'
+import { workspaceDestinationLabel } from '../workspace-frame/WorkspaceNav'
 
 import { RunningSessionsSection } from './RunningSessionsSection'
 import { WorkspaceAgentButton, WorkspaceThreadButton } from './workspace-roster-rows'
 import type { WorkspaceRunningSession } from './workspace-running-sessions'
-import { WorkspaceExitButton } from './WorkspaceExitButton'
 import { WorkspaceProjectsSection } from './WorkspaceProjectsSection'
-
-export type WorkspaceRosterTab = 'agents' | 'threads' | 'projects'
 
 export type WorkspaceAgentsLoad =
   | { status: 'loading' }
@@ -34,7 +31,6 @@ export type WorkspaceAgentsLoad =
 export function CognitiveWorkspaceRoster({
   fullWidth,
   tab,
-  onTabChange,
   agentsLoad,
   agents,
   projectChoices,
@@ -53,7 +49,6 @@ export function CognitiveWorkspaceRoster({
 }: {
   fullWidth: boolean
   tab: WorkspaceRosterTab
-  onTabChange: (tab: WorkspaceRosterTab) => void
   agentsLoad: WorkspaceAgentsLoad
   agents: readonly WorkspaceAgentRow[]
   projectChoices: readonly AgentProjectChoice[]
@@ -70,7 +65,6 @@ export function CognitiveWorkspaceRoster({
   onNewAgent: () => void
   onNewAgentHere: (projectId: string) => void
 }): React.JSX.Element {
-  const openResumeCenter = useAppStore((s) => s.openResumeCenter)
   return (
     <aside
       className={cn(
@@ -79,54 +73,24 @@ export function CognitiveWorkspaceRoster({
       )}
       aria-label={translate('workspace.roster.label', 'Cognitive Workspace')}
       data-testid="workspace-roster"
+      data-roster-list={tab}
     >
-      <div className="flex items-start justify-between gap-2 px-4 pb-2 pt-4">
-        <WorkspaceExitButton />
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-base font-semibold">
-            {translate('workspace.title', 'Cognitive Workspace')}
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {translate('workspace.subtitle', 'Agents, conversations and execution.')}
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={openResumeCenter}
-            aria-label={translate('resumeCenter.title', 'Resume Center')}
-            data-testid="workspace-open-resume-center"
-          >
-            <History className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onNewAgent}
-            aria-label={translate('agents.new', 'New agent')}
-            data-testid="workspace-new-agent"
-          >
-            <Plus className="size-4" />
-          </Button>
-        </div>
+      {/* Which list is WorkspaceNav's choice; exit and Resume Center live in the frame. */}
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <h1 className="min-w-0 truncate text-base font-semibold">
+          {workspaceDestinationLabel(tab)}
+        </h1>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={onNewAgent}
+          aria-label={translate('agents.new', 'New agent')}
+          data-testid="workspace-new-agent"
+        >
+          <Plus className="size-4" />
+        </Button>
       </div>
-
-      <Tabs value={tab} onValueChange={(value) => onTabChange(value as WorkspaceRosterTab)}>
-        <TabsList variant="line" className="w-full justify-start border-b border-border px-3">
-          <TabsTrigger value="agents" data-testid="workspace-tab-agents">
-            {translate('workspace.tab.agents', 'Agents')}
-          </TabsTrigger>
-          <TabsTrigger value="threads" data-testid="workspace-tab-threads">
-            {translate('workspace.tab.threads', 'Threads')}
-          </TabsTrigger>
-          <TabsTrigger value="projects" data-testid="workspace-tab-projects">
-            {translate('workspace.tab.projects', 'Projects')}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
 
       {/* A plain scroller, not ScrollArea: its viewport sizes content to max-content, which let
           long thread titles push rows past the column edge instead of truncating. */}

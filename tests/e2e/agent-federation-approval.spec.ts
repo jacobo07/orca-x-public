@@ -29,7 +29,7 @@ async function createAgent(page: Page, name: string): Promise<string> {
 }
 
 async function openAgent(page: Page, name: string): Promise<void> {
-  await page.getByTestId('workspace-tab-agents').click()
+  await page.locator('[data-workspace-nav-item="agents"]').click()
   await page.getByTestId('workspace-agents').getByText(name, { exact: true }).click()
   await expect(page.getByTestId('agent-chat-name')).toHaveText(name)
 }

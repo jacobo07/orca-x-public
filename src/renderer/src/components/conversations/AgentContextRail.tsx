@@ -126,7 +126,7 @@ export function AgentContextRail({
 
   return (
     <aside
-      className="scrollbar-sleek flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border bg-background p-3"
+      className="flex w-full flex-col gap-3"
       aria-label={translate('workspace.context.label', 'Agent context')}
       data-testid="agent-context-rail"
     >

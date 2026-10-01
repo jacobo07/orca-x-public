@@ -1,4 +1,4 @@
-import { ArrowLeft, Folder, PanelRight, Server } from 'lucide-react'
+import { ArrowLeft, Folder, Server } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -28,9 +28,7 @@ export function AgentChatHeader({
   project,
   grounding,
   onBack,
-  compact,
-  railOpen,
-  onToggleRail
+  compact
 }: {
   lookup: ScopedAgentLookup
   project: WorkspaceProjectRef | null
@@ -38,8 +36,6 @@ export function AgentChatHeader({
   onBack: () => void
   /** The location chip keeps its icon and dot; its words move to the tooltip and screen readers. */
   compact: boolean
-  railOpen: boolean
-  onToggleRail: () => void
 }): React.JSX.Element {
   const location =
     grounding?.status === 'loaded' && grounding.grounding.outcome === 'found'
@@ -115,17 +111,6 @@ export function AgentChatHeader({
           </span>
         ) : null}
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onToggleRail}
-        aria-pressed={railOpen}
-        aria-label={translate('workspace.context.toggle', 'Context')}
-        data-testid="workspace-context-toggle"
-      >
-        <PanelRight className="size-4" />
-      </Button>
     </header>
   )
 }

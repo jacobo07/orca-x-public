@@ -56,7 +56,10 @@ test('the workspace grounds each agent in its own project and in the turn runner
       BrowserWindow.getAllWindows()[0]?.setSize(1700, 960)
     })
     await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+    await page.locator('[data-workspace-nav-item="agents"]').click()
     await expect(page.getByTestId('workspace-roster')).toBeVisible()
+    // The agent's context is the frame's column, not a rail inside the conversation surface.
+    await expect(page.locator('[data-workspace-frame-column=""]')).toBeVisible()
     await expect(page.getByTestId('conversations-page')).toHaveAttribute(
       'data-workspace-layout',
       'wide'
@@ -106,7 +109,7 @@ test('the workspace grounds each agent in its own project and in the turn runner
     )
 
     // A thread picked from another agent's scope opens in its own agent's scope.
-    await page.getByTestId('workspace-tab-threads').click()
+    await page.locator('[data-workspace-nav-item="threads"]').click()
     await page.getByTestId('conversations-list-row').first().click()
     await expect(page.getByTestId('agent-chat-header')).toHaveAttribute('data-agent-id', ledger)
     await expect(page.getByText('What is in this repository?').first()).toBeVisible()
