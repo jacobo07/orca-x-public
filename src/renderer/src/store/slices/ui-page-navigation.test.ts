@@ -691,6 +691,21 @@ describe('createUISlice backlog navigation', () => {
     expect(store.getState().activeView).toBe('tasks')
   })
 
+  it('closes back to the Workspace destination Backlog was opened from', () => {
+    // Backlog's only entry is Workspace navigation (spec §3), so that path must record the
+    // close target too — otherwise X returns to whatever an older visit left behind.
+    const store = createUIStore()
+    store.getState().openTaskPage()
+    store.getState().openBacklogPage()
+    store.getState().closeBacklogPage()
+
+    store.getState().openWorkspaceDestination('agents')
+    store.getState().openWorkspaceDestination('backlog')
+    store.getState().closeBacklogPage()
+
+    expect(store.getState().activeView).toBe('conversations')
+  })
+
   it('keeps the original return target when Backlog is reopened while already visible', () => {
     const store = createUIStore()
 

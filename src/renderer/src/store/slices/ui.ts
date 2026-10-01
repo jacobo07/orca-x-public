@@ -1612,7 +1612,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })),
   openWorkspaceHome: () => get().openWorkspaceDestination(WORKSPACE_HOME),
   openWorkspaceDestination: (destination) =>
-    set((state) => {
+    // Backlog also owns its own close target (previousViewBeforeBacklog).
+    destination === 'backlog'
+      ? get().openBacklogPage()
+      : set((state) => {
       const rosterTab = rosterTabForWorkspaceDestination(destination)
       return {
         activeView: viewForWorkspaceDestination(destination),

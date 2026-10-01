@@ -143,7 +143,6 @@ export function WorkspaceActivityRailSection({
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openWorkspaceHome = useAppStore((s) => s.openWorkspaceHome)
-  const openBacklogPage = useAppStore((s) => s.openBacklogPage)
 
   const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
   const showsActivity = visible.includes('activity')
@@ -186,8 +185,6 @@ export function WorkspaceActivityRailSection({
           // Opening the surface retires the "New" marker, exactly as the row did.
           mobileOnboardingBadge.dismiss()
           return openMobilePage()
-        case 'backlog':
-          return openBacklogPage()
         default: {
           // A rail entry that dispatches nothing is a dead control, and it looks identical to a
           // working one: it renders, it takes focus, and it does nothing. `conversations` shipped
@@ -203,7 +200,6 @@ export function WorkspaceActivityRailSection({
       openActivityPage,
       openArtifactsPage,
       openAutomationsPage,
-      openBacklogPage,
       openMobilePage,
       openSkillsPage,
       openTaskPage,
@@ -235,7 +231,7 @@ export function WorkspaceActivityRailSection({
       data-workspace-activity-rail=""
     >
       {visible.map((activity) => {
-        const active = isWorkspaceActivityCurrent(activity, activeView, visible)
+        const active = isWorkspaceActivityCurrent(activity, activeView)
         // Tasks is the one activity with secondary actions, so it renders its own variant rather
         // than teaching the generic button about providers it will never have.
         return activity === 'tasks' ? (
