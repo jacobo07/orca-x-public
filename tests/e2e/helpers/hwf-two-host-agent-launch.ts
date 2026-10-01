@@ -218,12 +218,17 @@ export async function readActivePaneKey(page: Page): Promise<string> {
   })
 }
 
-async function statusRowArrived(page: Page, paneKey: string, prompt: string): Promise<boolean> {
+// paneKey null = match on the unique prompt nonce alone: the web client re-keys a delivered row to its own web-terminal-* pane (measured), so key equality is only valid on the desktop.
+async function statusRowArrived(
+  page: Page,
+  paneKey: string | null,
+  prompt: string
+): Promise<boolean> {
   return page.evaluate(
     ({ paneKey, prompt }) =>
       Object.values(window.__store?.getState().agentStatusByPaneKey ?? {}).some(
         (entry) =>
-          entry.paneKey === paneKey &&
+          (paneKey === null || entry.paneKey === paneKey) &&
           entry.prompt === prompt &&
           entry.agentType === 'codex' &&
           entry.state === 'working'
@@ -268,22 +273,40 @@ export async function postHookAndAwaitStatus(
     ].join('\n')
   )
   await waitForTerminalOutput(desktopPage, posted, 20_000)
-  await expect
-    .poll(() => statusRowArrived(desktopPage, paneKey, prompt), {
-      timeout: 20_000,
-      message: 'hook status did not reach the desktop agent-status store'
-    })
-    .toBe(true)
+  // Both clients are watched at once: a row can be superseded, so a sequential wait could miss the second client's window.
+  const watch = (page: Page, name: string): Promise<void> =>
+    expect
+      .poll(() => statusRowArrived(page, page === desktopPage ? paneKey : null, prompt), {
+        timeout: 20_000,
+        message: `hook status did not reach the ${name} agent-status store`
+      })
+      .toBe(true)
+  const desktop = watch(desktopPage, 'desktop')
+  const web = webPage ? watch(webPage, 'web') : null
+  web?.catch(() => undefined)
+  await desktop
   console.log('HWF_HOOK_A=ok')
-  if (!webPage) {
+  if (!webPage || !web) {
     console.log('HWF_HOOK_B=NOT_RUN reason=web-store-has-no-agent-status')
     return
   }
-  await expect
-    .poll(() => statusRowArrived(webPage, paneKey, prompt), {
-      timeout: 20_000,
-      message: 'hook status did not reach the web agent-status store'
-    })
-    .toBe(true)
+  try {
+    await web
+  } catch (error) {
+    console.log(`HWF_HOOK_B_DIAG ${await describeAgentRows(webPage)}`)
+    throw error
+  }
   console.log('HWF_HOOK_B=ok')
+}
+
+async function describeAgentRows(page: Page): Promise<string> {
+  const rows = await page.evaluate(() =>
+    Object.entries(window.__store?.getState().agentStatusByPaneKey ?? {}).map(([key, entry]) => ({
+      key,
+      paneKey: entry.paneKey,
+      agentType: entry.agentType,
+      state: entry.state
+    }))
+  )
+  return JSON.stringify({ rowCount: rows.length, rows: rows.slice(0, 6) })
 }
