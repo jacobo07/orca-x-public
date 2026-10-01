@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
-# GEX44 provisioner for the phase-15 two-host rung; verbs: create status witness procs teardown. Never deletes anything.
+# GEX44 provisioner for the phase-15/16 two-host rungs; verbs: create status witness procs teardown install-stub
+# seed-p16 git-compat-p16. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
 ROOT="${2:-}"
+EXTRA="${3:-}"
 
 case "$ROOT" in
-  /tmp/orca-hwf-p15-) echo "REFUSED root=$ROOT"; exit 2 ;;
-  /tmp/orca-hwf-p15-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
-  /tmp/orca-hwf-p15-*) ;;
+  /tmp/orca-hwf-p1[56]-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p1[56]-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p1[56]-*) ;;
   *) echo "REFUSED root=$ROOT"; exit 2 ;;
 esac
+
+# One flag set for every seed init/add/commit so both hosts mint the same first commit (W10).
+G="git -c core.autocrlf=false -c core.safecrlf=false -c commit.gpgsign=false -c core.hooksPath= -c init.defaultBranch=main -c user.name=hwf16 -c user.email=hwf16@example.invalid"
+
+seed_git() {
+  GIT_AUTHOR_NAME=hwf16 GIT_AUTHOR_EMAIL=hwf16@example.invalid GIT_AUTHOR_DATE='2026-10-01T00:00:00+0000' \
+  GIT_COMMITTER_NAME=hwf16 GIT_COMMITTER_EMAIL=hwf16@example.invalid GIT_COMMITTER_DATE='2026-10-01T00:00:00+0000' \
+    $G "$@"
+}
 
 USER_NAME=$(id -un)
 
@@ -169,6 +180,73 @@ STUB
       I=$((I + 1))
     done
     echo "REMAINING=$LEFT"
+    ;;
+  seed-p16)
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *) echo "REFUSED nonce=$EXTRA"; exit 2 ;;
+    esac
+    NONCE="$EXTRA"
+    REPLICA="$ROOT/repos/p16-replica"
+    FORK="$ROOT/repos/p16-fork"
+    SHALLOW="$ROOT/repos/p16-shallow"
+    UNBORN="$ROOT/repos/p16-unborn"
+    LATE="$ROOT/repos/p16-late"
+    if [ -e "$REPLICA" ]; then echo "REFUSED exists=$REPLICA"; exit 3; fi
+    mkdir -p "$REPLICA"
+    seed_git -C "$REPLICA" init -q
+    printf 'HWF16_%s\n' "$NONCE" > "$REPLICA/seed.txt"
+    seed_git -C "$REPLICA" add seed.txt
+    seed_git -C "$REPLICA" commit -q -m 'hwf p16 seed'
+    SEED_ROOT=$(git -C "$REPLICA" rev-parse HEAD)
+    printf '%s\n' "$(hostname)" > "$REPLICA/host.txt"
+    $G -C "$REPLICA" add host.txt
+    $G -C "$REPLICA" commit -q -m 'hwf p16 host commit'
+    git clone -q "$REPLICA" "$FORK"
+    git -C "$FORK" remote remove origin
+    printf 'fork of %s\n' "$NONCE" > "$FORK/fork.txt"
+    $G -C "$FORK" add fork.txt
+    $G -C "$FORK" commit -q -m 'hwf p16 fork commit'
+    git clone -q --depth 1 "file://$REPLICA" "$SHALLOW"
+    git -C "$SHALLOW" remote remove origin
+    mkdir -p "$UNBORN"
+    $G -C "$UNBORN" init -q
+    mkdir -p "$LATE"
+    $G -C "$LATE" init -q
+    printf 'HWF16_LATE_%s\n' "$NONCE" > "$LATE/late.txt"
+    $G -C "$LATE" add late.txt
+    $G -C "$LATE" commit -q -m 'hwf p16 late repo'
+    echo "SEED_ROOT=$SEED_ROOT"
+    echo "REPLICA_PATH=$REPLICA"
+    echo "REPLICA_HEAD=$(git -C "$REPLICA" rev-parse HEAD)"
+    echo "FORK_PATH=$FORK"
+    echo "FORK_HEAD=$(git -C "$FORK" rev-parse HEAD)"
+    echo "SHALLOW_PATH=$SHALLOW"
+    echo "SHALLOW_IS_SHALLOW=$(git -C "$SHALLOW" rev-parse --is-shallow-repository)"
+    echo "UNBORN_PATH=$UNBORN"
+    echo "LATE_PATH=$LATE"
+    echo "LATE_HEAD=$(git -C "$LATE" rev-parse HEAD)"
+    ;;
+  git-compat-p16)
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    GB="git"
+    if [ -n "$EXTRA" ]; then GB="$EXTRA"; fi
+    echo "GIT_BIN=$GB"
+    echo "GIT_VERSION=$("$GB" --version 2>&1 | tr '\n' '|')"
+    for NAME in replica shallow unborn; do
+      P="$ROOT/repos/p16-$NAME"
+      UP=$(printf '%s' "$NAME" | tr 'a-z' 'A-Z')
+      OUT=$("$GB" -C "$P" rev-parse --is-shallow-repository --git-common-dir 2>&1) && EC=0 || EC=$?
+      echo "GC_${UP}_SHALLOW_EXIT=$EC"
+      echo "GC_${UP}_SHALLOW_OUT=$(printf '%s' "$OUT" | tr '\n' '|')"
+      OUT=$("$GB" -C "$P" log --first-parent --max-parents=0 --format=%H HEAD 2>&1) && EC=0 || EC=$?
+      echo "GC_${UP}_ROOTLOG_EXIT=$EC"
+      echo "GC_${UP}_ROOTLOG_OUT=$(printf '%s' "$OUT" | tr '\n' '|')"
+      OUT=$("$GB" -C "$P" for-each-ref --count=1 '--format=%(objectname)' 2>&1) && EC=0 || EC=$?
+      echo "GC_${UP}_REFS_EXIT=$EC"
+      echo "GC_${UP}_REFS_OUT=$(printf '%s' "$OUT" | tr '\n' '|')"
+    done
     ;;
   *)
     echo "REFUSED verb=$VERB"; exit 2

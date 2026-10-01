@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+// Refusal drill for the two-host root guard: every DRILL line is derived from a captured exit code, never typed.
+import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import os from 'node:os'
+import path from 'node:path'
+
+const here = import.meta.dirname
+const driver = path.join(here, 'hwf-two-host-remote.mjs')
+const carrierHost = process.env.ORCA_HWF_CARRIER_HOST || 'gex44'
+const SSH_OWN_FAILURE = 255
+
+const badRoots = [
+  ['p17', '/tmp/orca-hwf-p17-X'],
+  ['bare', '/tmp/orca-hwf-p16-'],
+  ['dotdot', '/tmp/orca-hwf-p16-../x'],
+  ['semicolon', '/tmp/orca-hwf-p16-a;id'],
+  ['slash', '/tmp/orca-hwf-p16-a/'],
+  ['not-ours', '/tmp/not-ours']
+]
+
+function report(side, label, status) {
+  // ssh's own failure (or a spawn that never ran) is not a refusal by the guard.
+  if (status === null || (side === 'remote' && status === SSH_OWN_FAILURE)) {
+    console.log(`DRILL ${side} ${label} ERROR exit=${status}`)
+    return
+  }
+  console.log(`DRILL ${side} ${label} ${status !== 0 ? 'REFUSED' : 'ACCEPTED'} exit=${status}`)
+}
+
+function runDriver(args) {
+  return spawnSync(process.execPath, [driver, ...args], { encoding: 'utf8', timeout: 60_000 })
+    .status
+}
+
+const script = readFileSync(path.join(here, 'hwf-two-host-disposable-root.sh'), 'utf8').replace(
+  /\r\n/g,
+  '\n'
+)
+const b64 = Buffer.from(script, 'utf8').toString('base64')
+
+function runRemoteScript(root) {
+  return spawnSync(
+    'ssh',
+    [
+      '-o',
+      'ConnectTimeout=10',
+      '-o',
+      'BatchMode=yes',
+      carrierHost,
+      `echo ${b64} | base64 -d | bash -s -- status '${root}'`
+    ],
+    { encoding: 'utf8', timeout: 60_000 }
+  ).status
+}
+
+for (const [label, root] of badRoots) {
+  report('driver', label, runDriver(['status', root]))
+  report('remote', label, runRemoteScript(root))
+}
+report('remote', 'no-root', runRemoteScript('/tmp/orca-hwf-p16-NOPE0'))
+report(
+  'driver',
+  'seed-p16-bad-root',
+  runDriver(['seed-p16', '/tmp/orca-hwf-p17-X', '0123456789abcdef'])
+)
+report('driver', 'new-nonce', runDriver(['new-nonce']))
+report(
+  'driver',
+  'seed-local-p16',
+  runDriver([
+    'seed-local-p16',
+    '--nonce',
+    '0123456789abcdef',
+    '--dir',
+    path.join(os.tmpdir(), `orca-hwf-p16-drill-${process.pid}`)
+  ])
+)
