@@ -529,6 +529,7 @@ describe('durable-primitive delegates', () => {
       '',
       '',
       'src/main/conversation-store.ts\n',
+      '',
       'src/main/conversation-store.ts\n'
     )
     await expect(main(root)).resolves.toBe(0)
@@ -597,6 +598,7 @@ describe('durable publisher contract existence', () => {
       '',
       '',
       '',
+      '',
       'src/main/runtime/device-registry.ts\n'
     )
     await expect(main(root)).resolves.toBe(0)
@@ -605,7 +607,15 @@ describe('durable publisher contract existence', () => {
 
   it('reports a stale baseline entry', async () => {
     captureErrors()
-    const root = makeTempRoot(validManifest(), COMPLIANT_FILES, '', '', '', 'src/main/gone.ts\n')
+    const root = makeTempRoot(
+      validManifest(),
+      COMPLIANT_FILES,
+      '',
+      '',
+      '',
+      '',
+      'src/main/gone.ts\n'
+    )
     await expect(main(root)).resolves.toBe(1)
     expect(errors.join('\n')).toContain(
       'Stale durability baseline entry (prune it): src/main/gone.ts'
