@@ -1,6 +1,6 @@
 import { sha256 } from './sha256'
 
-// Why: unlike hashOrcaHookScript, the approval names the exact bytes, so nothing is trimmed here.
+// Why: unlike the setup-trust digest, the approval names the exact bytes, so nothing is trimmed here.
 // crypto.subtle is undefined off a secure context (LAN web client); the fallback yields the same SHA-256.
 export async function rendererPrepareSha256Hex(bytes: Uint8Array): Promise<string> {
   const subtle = (globalThis.crypto as Crypto | undefined)?.subtle as SubtleCrypto | undefined
