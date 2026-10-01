@@ -1658,17 +1658,83 @@
       "row": "HF Environment contract",
       "owner": "orca.yaml",
       "done": "declared requirements with probes on local, SSH and runtime hosts",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-20",
+      "measuredAt": "2026-10-02",
       "required": true,
       "phases": [
         20
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: orca-yaml-hook-types.ts:6-16 setup scripts only; preflight.ts:91,183 agent detection"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-prepare-device.spec.ts",
+          "note": "opt-in REAL-TWO-HOST spec; L1 measures a seeded GEX44 contract over SSH, Test B reads an old relay; a skip reads as NOT RUN"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-prepare-legs.ts",
+          "note": "Settings station, user Measure, row handles, measurement capture, independent ssh reads"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-20-environment-contract-evidence.md",
+          "note": "per-leg verdicts with planes; L1, R1, O1 and the cited LOCAL-HOST laptop run"
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/orca-yaml-requirements.ts",
+          "note": "bounded requirements parser: parsed, absent or unparseable"
+        },
+        {
+          "kind": "file",
+          "path": "src/relay/environment-requirements-handler.ts",
+          "note": "relay probes behind capability environment.requirements.v1"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/environment-requirement-measurement.ts",
+          "note": "reads orca.yaml on the owning host, hashes its bytes, keys the host as <executionHostId>@<installationTag>"
+        },
+        {
+          "kind": "commit",
+          "sha": "faf51a8ed",
+          "note": "orca.yaml requirements contract with a bounded parser"
+        },
+        {
+          "kind": "commit",
+          "sha": "4b444ada0",
+          "note": "closed probe core and cwd-free local measurement (LOCAL-HOST real laptop run)"
+        },
+        {
+          "kind": "commit",
+          "sha": "0f7147427",
+          "note": "relay measures requirements behind a capability"
+        },
+        {
+          "kind": "commit",
+          "sha": "6a140c0d3",
+          "note": "measure on the owning host (RPC, IPC, runtime)"
+        },
+        {
+          "kind": "commit",
+          "sha": "1b51350f6",
+          "note": "preload, renderer client and orca CLI"
+        },
+        {
+          "kind": "commit",
+          "sha": "79ec9c0b6",
+          "note": "two-host harness seeds an environment contract (seed-p20, serve-p20, serve-query-p20)"
+        },
+        {
+          "kind": "commit",
+          "sha": "c92c9971f",
+          "note": "phase 20 two-host evidence"
+        }
+      ],
+      "reason": "measured 2026-10-02 (phase 20, REAL-TWO-HOST for SSH, REAL-RUNTIME for the runtime host, LOCAL-HOST for this laptop). Local: 20-01 T2 real laptop probe found git 2.52.0 outside the workspace, an absent command absent and a .cmd shim reported without executing it (LOCAL-HOST). SSH: a fresh-profile Windows Orca measured a seeded GEX44 contract over real ssh2 with a pinned host key: every declared kind reached its state, os linux, git 2.43.0 equal to an independent ssh read, contract sha equal to the seed (REAL-TWO-HOST, Runs 3-6). Runtime: a disposable orca serve on GEX44, fenced to 01acd5e7c, answered orca project requirements run on GEX44 with status measured, os linux, git 2.43.0 equal to an independent read, hostKey local@c0d6078e9c767e3a (REAL-RUNTIME). An old relay (5de29754c) reads every row unknown host-predates-probes with zero missing (REAL-TWO-HOST, O1). Not observed: WSL (no distro on this host, NOT_RUN). Known defect carried to row 69: with the SSH transport dead the contract read reports unreadable while the measurement says unreachable (phase-20 L6 RED)."
     },
     {
       "id": 69,
@@ -1790,7 +1856,7 @@
         {
           "kind": "file",
           "path": "config/scripts/hwf-two-host-disposable-root.sh",
-          "note": "GEX44 provisioner: create, status, witness, procs, teardown, seed-p16; refuses any root outside /tmp/orca-hwf-p1[56]-*"
+          "note": "GEX44 provisioner: create, status, witness, procs, teardown, seed-p16, seed-p20, edit-prepare-p20, stat-shim-p20, serve-p20, serve-query-p20; refuses any root outside /tmp/orca-hwf-p1[56]-* and /tmp/orca-hwf-p20-*"
         },
         {
           "kind": "file",
@@ -1813,6 +1879,11 @@
           "note": "phase 16 Run 6 through the same harness: rows 60 and 61 legs, witnesses and teardown counts"
         },
         {
+          "kind": "file",
+          "path": "docs/dws/phase-20-environment-contract-evidence.md",
+          "note": "phase 20 through the same harness: rows 68 and 69 legs L1-L6, runtime and old-relay legs, witnesses and teardown counts"
+        },
+        {
           "kind": "commit",
           "sha": "9d0395e52",
           "note": "GEX44 disposable-root provisioner and laptop driver"
@@ -1833,7 +1904,7 @@
           "note": "Run 3 evidence and the verdict table"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. Phase 16 (Run 6, root /tmp/orca-hwf-p16-20261001T165645Z, REAL-TWO-HOST, guard widened to p1[56]) then exercised rows 60 and 61 through the same harness (both PARTIAL, one passing spec, witnesses equal, zero root processes after teardown). PARTIAL, never PASS: the harness exercises rows 59, 60 and 61 so far; owed rows 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH."
+      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. Phase 16 (Run 6, root /tmp/orca-hwf-p16-20261001T165645Z, REAL-TWO-HOST, guard widened to p1[56]) then exercised rows 60 and 61 through the same harness (both PARTIAL, one passing spec, witnesses equal, zero root processes after teardown). Phase 20 (roots /tmp/orca-hwf-p20-20261001T231448Z..T234707Z, REAL-TWO-HOST, guard widened to /tmp/orca-hwf-p1[56]-* and /tmp/orca-hwf-p20-*) then exercised rows 68 and 69 through the same harness: row 68 PASS (SSH and runtime legs observed), row 69 legs L1-L5 observed and L6 RED on product behaviour (an unreachable SSH host reads contract-unreadable), row 69 left unedited; witnesses equal and zero root processes after teardown. PARTIAL, never PASS: the harness exercises rows 59, 60, 61, 68 and 69 so far; owed rows 62, 63, 64, 65, 66, 67, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH, and row 69 owes its L6 leg."
     },
     {
       "id": 76,
