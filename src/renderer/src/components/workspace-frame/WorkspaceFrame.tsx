@@ -45,7 +45,12 @@ export function WorkspaceFrame({
     if (!element) {
       return
     }
-    const apply = (width: number): void => setHasColumn(width >= WORKSPACE_FRAME_COLUMN_MIN_PX)
+    // 0 = not laid out (hidden ancestor): keep the last decision rather than fold.
+    const apply = (width: number): void => {
+      if (width > 0) {
+        setHasColumn(width >= WORKSPACE_FRAME_COLUMN_MIN_PX)
+      }
+    }
     apply(element.getBoundingClientRect().width)
     const observer = new ResizeObserver((entries) => {
       const entry = entries.at(-1)

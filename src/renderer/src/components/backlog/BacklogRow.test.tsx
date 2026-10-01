@@ -231,16 +231,14 @@ describe('BacklogRow expand and detail', () => {
       true
     )
 
-    // Below lg the page is the one scroller; the list scrolls on its own only from lg up.
+    // The list scrolls itself above a height floor; below it the page scrolls, never a 0px list.
     const list = q('[data-backlog-page] section[aria-label]')!
-    expect(list.classList.contains('overflow-y-auto')).toBe(false)
-    expect(list.classList.contains('lg:overflow-y-auto')).toBe(true)
-    expect(list.classList.contains('lg:min-h-0')).toBe(true)
-    const column = list.parentElement!
-    expect(column.classList.contains('min-h-min')).toBe(true)
-    const wrapper = column.parentElement!
-    expect(wrapper.classList.contains('overflow-y-auto')).toBe(true)
-    expect(wrapper.classList.contains('lg:overflow-visible')).toBe(true)
+    expect(list.classList.contains('overflow-y-auto')).toBe(true)
+    expect(list.classList.contains('min-h-64')).toBe(true)
+    expect(list.classList.contains('min-h-0')).toBe(false)
+    const page = list.parentElement!
+    expect(page.hasAttribute('data-backlog-page')).toBe(true)
+    expect(page.classList.contains('overflow-y-auto')).toBe(true)
   })
 
   it('shows the full record: text, summary, fields, projects, sources and history newest first, no raw payload', async () => {

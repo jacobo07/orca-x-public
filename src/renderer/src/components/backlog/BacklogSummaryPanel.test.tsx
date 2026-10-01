@@ -135,6 +135,13 @@ async function renderPage(summaryStatus: string): Promise<HTMLElement> {
 }
 
 describe('BacklogSummaryPanel', () => {
+  it('renders as Workspace frame context: in the frame column, not inside the page', async () => {
+    const aside = await renderPage('ready')
+    expect(aside.closest('[data-workspace-frame-column]')).not.toBeNull()
+    expect(aside.closest('[data-backlog-page]')).toBeNull()
+    expect(q('[data-backlog-page]')!.closest('[data-workspace-frame] main')).not.toBeNull()
+  })
+
   it('reads open by kind, non-zero states with tone marks, the total and no quarantine row', async () => {
     const aside = await renderPage('ready')
     expect(aside.tagName).toBe('ASIDE')

@@ -128,7 +128,7 @@ export function BacklogSummaryPanel({
       aria-label={translate('backlog.summary.title', 'Backlog summary')}
       data-backlog-summary=""
       data-backlog-summary-status={status}
-      className="scrollbar-sleek max-h-[40vh] w-full shrink-0 overflow-y-auto lg:max-h-none lg:w-72"
+      className="w-full shrink-0"
     >
       <div className="rounded-xl border border-border bg-card p-4">
         <h2 className="text-sm font-medium">

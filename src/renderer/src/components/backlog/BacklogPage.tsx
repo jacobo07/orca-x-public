@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { WorkspaceFrame } from '../workspace-frame/WorkspaceFrame'
 import {
   BACKLOG_DEFAULT_VIEW_FILTERS,
   selectBacklogView,
@@ -168,84 +169,83 @@ export default function BacklogPage(): React.JSX.Element {
   }
   useBacklogPageKeys({ onCapture: openCapture, onClose: closeBacklogPage, captureOpen })
 
+  const summary =
+    status === 'loading' || status === 'empty' || listed ? (
+      <BacklogSummaryPanel health={health} onRetry={() => void refreshHealth()} />
+    ) : null
+
   return (
-    <div
-      ref={pageRef}
-      data-backlog-page=""
-      data-backlog-status={status}
-      data-backlog-failure-stage={failure?.stage}
-      data-backlog-failure-code={failure?.code ?? undefined}
-      className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground"
-    >
-      {/* Layout ownership: the aside owns its width (lg:w-72); the main column takes the rest.
-          Below lg the page is the one scroller (list, then summary): as a flex child the list was
-          squeezed to 0px by wrapped chips and the stacked summary. */}
-      <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pt-2 pb-4 md:px-8 md:pb-8 lg:flex-row lg:overflow-visible">
-        <div className="flex min-h-min min-w-0 flex-1 flex-col lg:min-h-0">
-          <BacklogHeader
-            counts={listed ? view : null}
-            onClose={closeBacklogPage}
-            onCapture={openCapture}
-            captureRef={captureButtonRef}
+    <WorkspaceFrame context={summary}>
+      {/* The frame's column owns the summary's width. The list scrolls itself above its floor;
+          below it (short window, wrapped chips) the page scrolls, so the list never squeezes to 0px. */}
+      <div
+        ref={pageRef}
+        data-backlog-page=""
+        data-backlog-status={status}
+        data-backlog-failure-stage={failure?.stage}
+        data-backlog-failure-code={failure?.code ?? undefined}
+        className="scrollbar-sleek relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-background px-4 pt-2 pb-4 text-foreground md:px-8 md:pb-8"
+      >
+        <BacklogHeader
+          counts={listed ? view : null}
+          onClose={closeBacklogPage}
+          onCapture={openCapture}
+          captureRef={captureButtonRef}
+        />
+        {listed && load?.status === 'ready' ? (
+          <BacklogFilterStrip
+            filters={filters}
+            onChange={setFilters}
+            scopeCounts={view.scopeCounts}
+            projectsById={projectsById}
+            rows={load.rows}
           />
-          {listed && load?.status === 'ready' ? (
-            <BacklogFilterStrip
-              filters={filters}
-              onChange={setFilters}
-              scopeCounts={view.scopeCounts}
-              projectsById={projectsById}
-              rows={load.rows}
-            />
-          ) : null}
-          {load !== null ? (
-            <BacklogNotices
-              load={load.status === 'ready' ? load : null}
-              health={health}
-              refreshFailed={refreshFailed}
-              onRetry={refetch}
-            />
-          ) : null}
-          <section
-            aria-label={translate('backlog.page.listLabel', 'Backlog items')}
-            className="scrollbar-sleek flex-1 lg:min-h-0 lg:overflow-y-auto"
-          >
-            {status === 'ready' ? (
-              <BacklogGroupList
-                groups={view?.groups ?? []}
-                projectsById={projectsById}
-                onLedgerChanged={onLedgerChanged}
-              />
-            ) : (
-              <BacklogPageStateBlock
-                status={status}
-                filterEmpty={view?.filterEmpty ?? null}
-                onRetry={refetch}
-                onCapture={openCapture}
-                onClearFilters={() =>
-                  setFilters((current) => ({ ...BACKLOG_DEFAULT_VIEW_FILTERS, sort: current.sort }))
-                }
-                onShowAllStates={() => setFilters((current) => ({ ...current, state: 'all' }))}
-              />
-            )}
-          </section>
-          <div data-backlog-live-region="" aria-live="polite" className="sr-only">
-            {announcement}
-          </div>
-          <div data-backlog-moved-region="" aria-live="polite" className="sr-only">
-            {moved}
-          </div>
-        </div>
-        {status === 'loading' || status === 'empty' || listed ? (
-          <BacklogSummaryPanel health={health} onRetry={() => void refreshHealth()} />
         ) : null}
+        {load !== null ? (
+          <BacklogNotices
+            load={load.status === 'ready' ? load : null}
+            health={health}
+            refreshFailed={refreshFailed}
+            onRetry={refetch}
+          />
+        ) : null}
+        <section
+          aria-label={translate('backlog.page.listLabel', 'Backlog items')}
+          className="scrollbar-sleek min-h-64 flex-1 overflow-y-auto"
+        >
+          {status === 'ready' ? (
+            <BacklogGroupList
+              groups={view?.groups ?? []}
+              projectsById={projectsById}
+              onLedgerChanged={onLedgerChanged}
+            />
+          ) : (
+            <BacklogPageStateBlock
+              status={status}
+              filterEmpty={view?.filterEmpty ?? null}
+              onRetry={refetch}
+              onCapture={openCapture}
+              onClearFilters={() =>
+                setFilters((current) => ({ ...BACKLOG_DEFAULT_VIEW_FILTERS, sort: current.sort }))
+              }
+              onShowAllStates={() => setFilters((current) => ({ ...current, state: 'all' }))}
+            />
+          )}
+        </section>
+        <div data-backlog-live-region="" aria-live="polite" className="sr-only">
+          {announcement}
+        </div>
+        <div data-backlog-moved-region="" aria-live="polite" className="sr-only">
+          {moved}
+        </div>
+        <BacklogCaptureDialog
+          open={captureOpen}
+          onOpenChange={onCaptureOpenChange}
+          onConfirmed={refetch}
+          onUncertain={refetch}
+          returnFocusTo={openerRef}
+        />
       </div>
-      <BacklogCaptureDialog
-        open={captureOpen}
-        onOpenChange={onCaptureOpenChange}
-        onConfirmed={refetch}
-        onUncertain={refetch}
-        returnFocusTo={openerRef}
-      />
-    </div>
+    </WorkspaceFrame>
   )
 }
