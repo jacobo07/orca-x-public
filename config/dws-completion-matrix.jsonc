@@ -1349,15 +1349,76 @@
       "done": "a second client opens a host-only project; fs/git/pty/agents act on the owning host; reconnect keeps work",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-15",
+      "measuredAt": "2026-10-01",
       "required": true,
       "phases": [
         15
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: ssh-filesystem-dispatch.ts:21, repo-runtime-owner.ts:124-139; no two-host proof"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-remote-first.spec.ts",
+          "note": "opt-in REAL-TWO-HOST spec: connect/terminal/absence, fs+git+terminal from both clients, agent launch and hook routing, and the two reconnect tests"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-ssh-target.ts",
+          "note": "trust-dialog connect, run file, remote reads inside the disposable root"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-owning-host-legs.ts",
+          "note": "terminal, fs and git legs that act on the owning host, with independent ssh reads"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-reconnect.ts",
+          "note": "carrier drop and restore, clock skew, tick parse, outage window classification"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-reconnect-legs.ts",
+          "note": "shell leg: same relay and shell pid, gap-free ticks, outage backfill in Client A and B"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-reconnect-agent-leg.ts",
+          "note": "agent leg: same claude pid and hook emitter, status row, outage hook"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-15-remote-first-evidence.md",
+          "note": "Runs 1 to 3 with leg tables, observations and the final verdict table"
+        },
+        {
+          "kind": "commit",
+          "sha": "426117e85",
+          "note": "two-host spec, target adapter, carrier and laptop absence scan (Run 1 tracer)"
+        },
+        {
+          "kind": "commit",
+          "sha": "d44e30dbb",
+          "note": "fs, git and terminal legs from both clients on the owning host"
+        },
+        {
+          "kind": "commit",
+          "sha": "4984de149",
+          "note": "agent launch placement (real claude process) and hook routing to both clients"
+        },
+        {
+          "kind": "commit",
+          "sha": "6fb064b7b",
+          "note": "reconnect legs as recorded in Run 3 (carrier drop, ladder reconnect, same relay/shell/agent)"
+        },
+        {
+          "kind": "commit",
+          "sha": "e6814ae2a",
+          "note": "Run 3 evidence and the phase verdict table"
+        }
+      ],
+      "reason": "measured 2026-10-01 (phase 15, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2). Observed: a second client (paired web) and the desktop both open the host-only project with the laptop holding none of its content; terminal, fs and git act on the owning host from both clients (independent ssh reads, laptop absence scan with controls); a real claude process launches on the owning host and a hook posted there reaches both clients' agent-status stores (claim level: agent process + hook routing, no model turn); a carrier-only drop is recovered by Orca's own ladder (generation advances, no test-side connect) with the same relay, shell and agent pids, gap-free ticks and Client A backfill 13/13. Open legs keeping this PARTIAL: (1) the hook posted during the outage was delivered in 3 runs but LOST in 2 earlier attempts of a different pane ordering, cause not characterized; (2) no model turn (OD-1 default); (3) Client B is live after the reconnect but not backfilled for the outage window (0/13); (4) the pane's status row is absent while the transport re-establishes and returns with the replayed hook; (5) the SSH New-tab menu offers Claude but not Codex, so one provider was launched. SSH-DOCKER and localhost results were not used."
     },
     {
       "id": 60,
@@ -1619,17 +1680,58 @@
       "row": "HF Real two-host Production Reality",
       "owner": "GEX44 disposable root",
       "done": "every HF row claiming a cross-host property is exercised Windows<->GEX44 over real SSH",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-15",
+      "measuredAt": "2026-10-01",
       "required": true,
       "phases": [
         15
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: authorized 2026-09-27; not yet run"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "config/scripts/hwf-two-host-disposable-root.sh",
+          "note": "GEX44 provisioner: create, status, witness, procs, teardown; refuses any root outside /tmp/orca-hwf-p15-*"
+        },
+        {
+          "kind": "file",
+          "path": "config/scripts/hwf-two-host-remote.mjs",
+          "note": "laptop driver that ships the committed provisioner as one base64 ssh argument"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-remote-first.spec.ts",
+          "note": "opt-in REAL-TWO-HOST spec; a skip reads as NOT RUN"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-15-remote-first-evidence.md",
+          "note": "the runs with their planes, witnesses and teardown counts"
+        },
+        {
+          "kind": "commit",
+          "sha": "9d0395e52",
+          "note": "GEX44 disposable-root provisioner and laptop driver"
+        },
+        {
+          "kind": "commit",
+          "sha": "426117e85",
+          "note": "spec, target adapter and absence scan (Run 1 tracer)"
+        },
+        {
+          "kind": "commit",
+          "sha": "d74f36422",
+          "note": "Run 2 evidence (row-59 legs on the owning host)"
+        },
+        {
+          "kind": "commit",
+          "sha": "e6814ae2a",
+          "note": "Run 3 evidence and the verdict table"
+        }
+      ],
+      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. PARTIAL, never PASS: the harness exercises only row 59 so far; owed rows 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH."
     },
     {
       "id": 76,
