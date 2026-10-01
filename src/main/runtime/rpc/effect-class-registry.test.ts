@@ -117,12 +117,13 @@ function buildProbe() {
 }
 
 describe('effect-class registry', () => {
-  it('flags exactly the three launch RPC methods', () => {
+  it('flags exactly the four launch RPC methods', () => {
     const flagged = ALL_RPC_METHODS.filter((m) => 'effect' in m && m.effect === 'launch')
       .map((m) => m.name)
       .sort()
 
     expect(flagged).toEqual([
+      'environment.runPrepareStep',
       'session.tabs.createTerminal',
       'terminal.createAgentSession',
       'terminal.ensureAgentSession'
@@ -197,11 +198,12 @@ describe('launch-signal ratchet', () => {
     expect(swept.offenders).toEqual([])
   })
 
-  it('station control: the sweep extracts the three flagged methods', () => {
+  it('station control: the sweep extracts the four flagged methods', () => {
     const files = methodSourceFiles()
     const swept = sweepLaunchSignalOffenders(files, (f) => readFileSync(join(METHODS_DIR, f), 'utf8'))
 
     expect([...swept.names].sort()).toEqual([
+      'environment.runPrepareStep',
       'session.tabs.createTerminal',
       'terminal.createAgentSession',
       'terminal.ensureAgentSession'
