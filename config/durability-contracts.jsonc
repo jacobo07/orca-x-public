@@ -250,6 +250,17 @@
       ]
     },
     {
+      "id": "projects.replica-root-identity",
+      "state": "repos[].gitRootIdentity and repos[].gitRootIdentityNoneReason inside the profile data file — the cached first-parent root commit, shallow flag and git common dir of each git repo, or why it has none",
+      "writer": "src/main/persistence/loading-store/store.ts",
+      "tier": "regenerable",
+      "lostIf": "The next list call re-probes; until then the replica derives a host-local repo: id and is shown ungrouped and pending, never merged.",
+      "knownGaps": [
+        "It lives inside a crash-durable host file, so it receives a stronger barrier than it owes.",
+        "Collisions and replica roles are computed on read and never written, so there is no derived state that could outlive the root it was computed from."
+      ]
+    },
+    {
       "id": "working-set.sealed-manifest",
       "state": "<profile>/project-working-sets/<host+owner hash>/<workingSetId>.json — one immutable file per saved project working set",
       "writer": "src/main/project-working-set/working-set-store.ts",

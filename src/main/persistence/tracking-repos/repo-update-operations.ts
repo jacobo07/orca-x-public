@@ -44,6 +44,8 @@ export class RepoUpdatePersistenceOperations {
         | 'repoIcon'
         | 'upstream'
         | 'gitRemoteIdentity'
+        | 'gitRootIdentity'
+        | 'gitRootIdentityNoneReason'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -176,6 +178,13 @@ export class RepoUpdatePersistenceOperations {
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
       }
+    }
+    if (
+      'gitRootIdentityNoneReason' in sanitizedUpdates &&
+      sanitizedUpdates.gitRootIdentityNoneReason === undefined
+    ) {
+      delete repo.gitRootIdentityNoneReason
+      delete sanitizedUpdates.gitRootIdentityNoneReason
     }
     Object.assign(repo, sanitizedUpdates)
     this.syncProjectHostSetupCompatibilityState()

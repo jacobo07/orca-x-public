@@ -2325,6 +2325,8 @@ export class Store {
         | 'repoIcon'
         | 'upstream'
         | 'gitRemoteIdentity'
+        | 'gitRootIdentity'
+        | 'gitRootIdentityNoneReason'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
