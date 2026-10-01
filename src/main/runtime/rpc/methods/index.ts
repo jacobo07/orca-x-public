@@ -44,6 +44,7 @@ import { AGENT_SESSION_METHODS } from './agent-session'
 import { ARTIFACT_METHODS } from './artifacts'
 import { DURABLE_EXIT_METHODS } from './durable-exit'
 import { WORKSTREAM_CANCEL_METHODS } from './workstream-cancel'
+import { ENVIRONMENT_REQUIREMENTS_METHODS } from './environment-requirements'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -52,6 +53,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...STATUS_METHODS,
   ...DURABLE_EXIT_METHODS,
   ...WORKSTREAM_CANCEL_METHODS,
+  ...ENVIRONMENT_REQUIREMENTS_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,

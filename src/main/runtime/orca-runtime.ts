@@ -1206,6 +1206,10 @@ import {
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
+  measureEnvironmentRequirements,
+  type EnvironmentRequirementsMeasurement
+} from '../environment-requirement-measurement'
+import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
@@ -20607,6 +20611,18 @@ export class OrcaRuntimeService {
 
   async showRepo(repoSelector: string): Promise<Repo> {
     return await this.resolveRepoSelector(repoSelector)
+  }
+
+  async measureEnvironmentRequirements(
+    repoSelector: string
+  ): Promise<EnvironmentRequirementsMeasurement> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return measureEnvironmentRequirements(repo, {
+      userDataPath: app.getPath('userData'),
+      projectRuntime: repo.connectionId
+        ? undefined
+        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+    })
   }
 
   async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
