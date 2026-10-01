@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   WORKSPACE_ACTIVITY_ORDER,
   activeViewForWorkspaceActivity,
-  getVisibleWorkspaceActivities
+  getVisibleWorkspaceActivities,
+  isWorkspaceActivityCurrent
 } from './workspace-activity-items'
 
 /**
@@ -14,14 +15,17 @@ import {
  * Wave C gave the noun to the durable actor, as an opt-in "Agents" rail entry.
  * Wave D (2026-09-24, here) folds that entry into Workspace: the durable agents are the Workspace
  * roster, and no rail entry routes to the retired Agents page any more.
+ * Convergence (2026-10-01): Workspace opens on Resume; the roster is one of its destinations.
  */
 describe('the Agents product noun', () => {
   it('is reached through Workspace, the rail entry that owns the roster', () => {
-    expect(activeViewForWorkspaceActivity('agent-workspace')).toBe('conversations')
+    expect(activeViewForWorkspaceActivity('agent-workspace')).toBe('resumeCenter')
+    expect(isWorkspaceActivityCurrent('agent-workspace', 'conversations')).toBe(true)
   })
 
   it('is not held by the runtime feed, which answers to its own name', () => {
     expect(activeViewForWorkspaceActivity('activity')).toBe('activity')
+    expect(isWorkspaceActivityCurrent('activity', 'conversations')).toBe(false)
   })
 
   it('routes no rail entry to the retired Agents page', () => {
@@ -47,7 +51,6 @@ describe('the Agents product noun', () => {
     expect([...WORKSPACE_ACTIVITY_ORDER]).toEqual([
       'agent-workspace',
       'workspace',
-      'backlog',
       'tasks',
       'automations',
       'activity',

@@ -161,8 +161,12 @@ async function visibleListHeight(page: Page): Promise<number> {
 
 async function openBacklog(page: Page): Promise<number> {
   await expect(page.locator('[data-workspace-activity="workspace"]')).toBeVisible()
+  // Backlog lives inside Workspace navigation (spec §3); the timer covers only the Backlog click.
+  await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+  const backlogItem = page.locator('[data-workspace-nav-item="backlog"]:visible').first()
+  await expect(backlogItem).toBeVisible()
   const started = Date.now()
-  await page.locator('[data-workspace-activity="backlog"]').first().click()
+  await backlogItem.click()
   await expect(page.locator('[data-backlog-page][data-backlog-status="ready"]')).toBeVisible({
     timeout: 60_000
   })

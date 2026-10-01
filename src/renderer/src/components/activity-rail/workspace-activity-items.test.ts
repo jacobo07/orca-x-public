@@ -15,22 +15,16 @@ describe('getVisibleWorkspaceActivities', () => {
     // Arrange / Act
     const visible = getVisibleWorkspaceActivities(DEFAULTS)
 
-    // Assert — the four SidebarNav gated on before the rail existed, led by the agent Workspace,
-    // with the default-on Backlog third.
-    expect(visible).toEqual([
-      'agent-workspace',
-      'workspace',
-      'backlog',
-      'tasks',
-      'automations',
-      'mobile'
-    ])
+    // Assert — the four SidebarNav gated on before the rail existed, led by the agent Workspace.
+    expect(visible).toEqual(['agent-workspace', 'workspace', 'tasks', 'automations', 'mobile'])
   })
 
-  it('shows Backlog by default and hides it only on an explicit false', () => {
-    expect(getVisibleWorkspaceActivities(DEFAULTS)).toContain('backlog')
-    expect(getVisibleWorkspaceActivities({ showBacklogButton: true })).toContain('backlog')
-    expect(getVisibleWorkspaceActivities({ showBacklogButton: false })).not.toContain('backlog')
+  it('has no global Backlog entry, even for a profile that stored showBacklogButton', () => {
+    // Backlog moved inside Workspace navigation (workspace convergence, spec §3).
+    const ids: readonly string[] = WORKSPACE_ACTIVITY_ORDER
+    expect(ids).not.toContain('backlog')
+    const legacy: Partial<GlobalSettings> = { showBacklogButton: true }
+    expect(getVisibleWorkspaceActivities(legacy)).not.toContain('backlog')
   })
 
   it('shows the agent Workspace to a profile still holding the retired Chats and Agents keys', () => {
@@ -101,7 +95,6 @@ describe('getVisibleWorkspaceActivities', () => {
       getVisibleWorkspaceActivities({
         showAgentWorkspaceButton: false,
         showWorkspaceButton: false,
-        showBacklogButton: false,
         showTasksButton: false,
         showAutomationsButton: false,
         showMobileButton: false
@@ -112,10 +105,9 @@ describe('getVisibleWorkspaceActivities', () => {
 
 describe('activeViewForWorkspaceActivity', () => {
   it('maps every ordered activity to a top-level view', () => {
-    // The agent Workspace is the page the Chats entry opened; its route id never moved.
-    expect(activeViewForWorkspaceActivity('agent-workspace')).toBe('conversations')
+    // Workspace opens on its home, Resume.
+    expect(activeViewForWorkspaceActivity('agent-workspace')).toBe('resumeCenter')
     expect(activeViewForWorkspaceActivity('activity')).toBe('activity')
-    expect(activeViewForWorkspaceActivity('backlog')).toBe('backlog')
     for (const activity of WORKSPACE_ACTIVITY_ORDER) {
       expect(activeViewForWorkspaceActivity(activity)).toBeTruthy()
     }

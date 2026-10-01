@@ -1616,13 +1616,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     destination === 'backlog'
       ? get().openBacklogPage()
       : set((state) => {
-      const rosterTab = rosterTabForWorkspaceDestination(destination)
-      return {
-        activeView: viewForWorkspaceDestination(destination),
-        previousViewBeforeConversations: workspaceReturnTarget(state),
-        ...(rosterTab ? { workspaceRosterTab: rosterTab } : {})
-      }
-    }),
+          const rosterTab = rosterTabForWorkspaceDestination(destination)
+          return {
+            activeView: viewForWorkspaceDestination(destination),
+            previousViewBeforeConversations: workspaceReturnTarget(state),
+            ...(rosterTab ? { workspaceRosterTab: rosterTab } : {})
+          }
+        }),
   workspaceRosterTab: 'agents',
   setWorkspaceRosterTab: (tab) => set({ workspaceRosterTab: tab }),
   conversationAgentScope: null,

@@ -256,7 +256,9 @@ async function expectCountsEqualLedger(page: Page): Promise<void> {
 async function openBacklog(page: Page): Promise<void> {
   // Station control: the rail is on screen before anything inside it is reasoned about.
   await expect(page.locator('[data-workspace-activity="workspace"]')).toBeVisible()
-  await page.locator('[data-workspace-activity="backlog"]').first().click()
+  // Backlog lives inside Workspace navigation (spec §3), not on the global rail.
+  await page.locator('[data-workspace-activity="agent-workspace"]').first().click()
+  await page.locator('[data-workspace-nav-item="backlog"]:visible').first().click()
   await expect(page.locator('[data-backlog-page]')).toBeVisible()
 }
 

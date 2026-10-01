@@ -170,7 +170,6 @@ describe('WorkspaceActivityRailSection', () => {
     const dispatched: Record<WorkspaceActivityId, ReturnType<typeof vi.fn>> = {
       'agent-workspace': mocks.openWorkspaceHome,
       workspace: mocks.openWorkspacePage,
-      backlog: mocks.openBacklogPage,
       tasks: mocks.openTaskPage,
       automations: mocks.openAutomationsPage,
       activity: mocks.openActivityPage,
@@ -261,7 +260,6 @@ describe('WorkspaceActivityRailSection', () => {
     renderRail({
       showAgentWorkspaceButton: false,
       showWorkspaceButton: false,
-      showBacklogButton: false,
       showTasksButton: false,
       showAutomationsButton: false,
       showMobileButton: false
@@ -270,34 +268,17 @@ describe('WorkspaceActivityRailSection', () => {
     expect(container.querySelector('[data-workspace-activity-rail]')).toBeNull()
   })
 
-  it('shows Backlog by default, third, and opens the Backlog page on click', () => {
-    renderRail()
+  it('has no global Backlog entry: Backlog lives inside Workspace (spec §3)', () => {
+    // A profile that stored the retired flag as true must not resurrect it.
+    renderRail({ showBacklogButton: true })
 
+    // Station control: the rail is present and Workspace, which holds Backlog, is in it.
+    expect(activity('agent-workspace')).not.toBeNull()
+    expect(activity('backlog')).toBeNull()
     const order = [...container.querySelectorAll('[data-workspace-activity]')].map((node) =>
       node.getAttribute('data-workspace-activity')
     )
-    expect(order.slice(0, 3)).toEqual(['agent-workspace', 'workspace', 'backlog'])
-    expect(activity('backlog')?.getAttribute('aria-label')).toBe('Backlog')
-
-    act(() => activity('backlog')?.click())
-    expect(mocks.openBacklogPage).toHaveBeenCalledTimes(1)
-  })
-
-  it('omits Backlog when its flag is false, and hides it through that flag', () => {
-    // Station control: the rail itself is present, only the Backlog entry is gone.
-    renderRail({ showBacklogButton: false })
-    expect(container.querySelector('[data-workspace-activity-rail]')).not.toBeNull()
-    expect(activity('backlog')).toBeNull()
-
-    renderRail()
-    const entry = activity('backlog')?.closest('div')
-    const hide = [...(entry?.parentElement?.querySelectorAll('button') ?? [])].find((button) =>
-      button.textContent?.includes('Hide from sidebar')
-    )
-    expect(hide).toBeDefined()
-    act(() => hide?.click())
-
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ showBacklogButton: false })
+    expect(order.slice(0, 3)).toEqual(['agent-workspace', 'workspace', 'tasks'])
   })
 
   it('leads with Workspace and calls the launcher Terminals', () => {
@@ -347,15 +328,10 @@ describe('WorkspaceActivityRailSection', () => {
     expect(activity('agent-workspace')?.getAttribute('aria-current')).toBeNull()
   })
 
-  it('on Backlog, the most specific visible entry is current', () => {
-    renderRail({}, 'backlog')
-    expect(activity('backlog')?.getAttribute('aria-current')).toBe('page')
-    expect(activity('agent-workspace')?.getAttribute('aria-current')).toBeNull()
-
-    // Backlog's own entry hidden: Workspace, which holds Backlog as a destination, takes over.
-    renderRail({ showBacklogButton: false }, 'backlog')
-    expect(activity('backlog')).toBeNull()
+  it('on Backlog, Workspace is the one current entry', () => {
+    renderRail({ showBacklogButton: true }, 'backlog')
     expect(activity('agent-workspace')?.getAttribute('aria-current')).toBe('page')
+    expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
   })
 
   it('hides Workspace through its own key, not the Chats one', () => {
