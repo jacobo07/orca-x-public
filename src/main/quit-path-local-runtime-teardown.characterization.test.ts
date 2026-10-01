@@ -168,6 +168,17 @@ function readMainSources(): Map<string, string> {
   return files
 }
 
+let mainSweep: { files: Map<string, string>; hits: string[] } | undefined
+
+// Why: both sweep tests judge one reading; sweeping twice doubled the cost and timed out on a loaded host.
+function readMainSweep(): { files: Map<string, string>; hits: string[] } {
+  if (!mainSweep) {
+    const files = readMainSources()
+    mainSweep = { files, hits: filesNamingStopLiterals(files) }
+  }
+  return mainSweep
+}
+
 describe('dws characterization (a), narrowed 2026-09-30: a desktop quit kills only the LOCAL PTYs it hosts and calls no remote runtime', () => {
   it('will-quit calls killAllPty(), which kills only the in-process LocalPtyProvider', () => {
     expect(judgeLocalTeardown(readWillQuitSource(), readKillAllPtySource())).toEqual({ ok: true })
@@ -248,15 +259,13 @@ describe('dws characterization (a), narrowed 2026-09-30: a desktop quit kills on
 
   // Both sweeps read every src/main file; the 5 s default timed out on a loaded host with the assertion green.
   it('no src/main module outside the RPC server definitions names a stop-class method literal', () => {
-    const files = readMainSources()
+    const { files, hits } = readMainSweep()
     expect(files.size).toBeGreaterThanOrEqual(MAIN_FILE_POPULATION_FLOOR)
-    const hits = filesNamingStopLiterals(files)
     expect(hits).toEqual(Object.keys(STOP_LITERAL_ALLOWLIST).sort())
   }, 30_000)
 
   it('every allowlist entry has a reason and still names a stop-class literal', () => {
-    const files = readMainSources()
-    const hits = new Set(filesNamingStopLiterals(files))
+    const hits = new Set(readMainSweep().hits)
     for (const [file, reason] of Object.entries(STOP_LITERAL_ALLOWLIST)) {
       expect(reason.trim().length, file).toBeGreaterThan(0)
       expect(hits.has(file), `${file} is stale: no stop-class literal left`).toBe(true)
