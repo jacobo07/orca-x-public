@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { isWorkspaceView } from './workspace-destinations'
 
 type ActiveView = AppState['activeView']
 
@@ -26,9 +27,7 @@ const PROJECT_SCOPED_APPLICATION_VIEWS = new Set<ActiveView>([
   'automations',
   'skills',
   'artifacts',
-  'mobile',
-  // Reachable with no project open, for Unassigned capture.
-  'backlog'
+  'mobile'
 ])
 
 /**
@@ -56,7 +55,8 @@ export function canShowRightSidebarForView(
   activeView: ActiveView,
   hasActiveProject: boolean
 ): boolean {
-  if (RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView)) {
+  // Every Workspace destination draws its own context column (WorkspaceFrame).
+  if (RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView) || isWorkspaceView(activeView)) {
     return false
   }
   // Why the workspace view is exempt from the project check: activeWorktreeId briefly goes null

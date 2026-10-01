@@ -142,7 +142,7 @@ export function WorkspaceActivityRailSection({
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
-  const openConversationsPage = useAppStore((s) => s.openConversationsPage)
+  const openWorkspaceHome = useAppStore((s) => s.openWorkspaceHome)
   const openBacklogPage = useAppStore((s) => s.openBacklogPage)
 
   const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
@@ -168,7 +168,8 @@ export function WorkspaceActivityRailSection({
     (activity: WorkspaceActivityId): void => {
       switch (activity) {
         case 'agent-workspace':
-          return openConversationsPage()
+          // Workspace opens on its home, Resume Center (workspace-convergence.md §2.3).
+          return openWorkspaceHome()
         case 'workspace':
           return openWorkspacePage()
         case 'tasks':
@@ -203,10 +204,10 @@ export function WorkspaceActivityRailSection({
       openArtifactsPage,
       openAutomationsPage,
       openBacklogPage,
-      openConversationsPage,
       openMobilePage,
       openSkillsPage,
       openTaskPage,
+      openWorkspaceHome,
       openWorkspacePage
     ]
   )
@@ -234,7 +235,7 @@ export function WorkspaceActivityRailSection({
       data-workspace-activity-rail=""
     >
       {visible.map((activity) => {
-        const active = isWorkspaceActivityCurrent(activity, activeView)
+        const active = isWorkspaceActivityCurrent(activity, activeView, visible)
         // Tasks is the one activity with secondary actions, so it renders its own variant rather
         // than teaching the generic button about providers it will never have.
         return activity === 'tasks' ? (

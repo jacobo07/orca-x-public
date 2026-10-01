@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TopLevelView } from '../../../../shared/ui-chrome-types'
+import { isWorkspaceView } from '@/lib/workspace-destinations'
 
 /**
  * The view a page's Back returns to, or terminals when the recorded one is no longer offered.
@@ -12,12 +13,12 @@ export function resolvePageReturnTarget<V extends TopLevelView>(
   return recorded === 'activity' && settings?.experimentalActivity !== true ? 'terminal' : recorded
 }
 
-/** Resume Center is entered from Workspace, so re-entering Workspace from it keeps the outer target. */
+/** Moves between Workspace destinations keep the outer target, so Back always leaves Workspace. */
 export function workspaceReturnTarget(state: {
   activeView: TopLevelView
   previousViewBeforeConversations: Exclude<TopLevelView, 'conversations'>
 }): Exclude<TopLevelView, 'conversations'> {
-  return state.activeView === 'conversations' || state.activeView === 'resumeCenter'
+  return isWorkspaceView(state.activeView) || state.activeView === 'conversations'
     ? state.previousViewBeforeConversations
     : state.activeView
 }

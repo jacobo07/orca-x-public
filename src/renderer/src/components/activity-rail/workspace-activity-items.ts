@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TopLevelView } from '../../../../shared/ui-chrome-types'
+import { isWorkspaceView } from '@/lib/workspace-destinations'
 
 /**
  * Which application-level surfaces the activity rail offers, and in what order.
@@ -85,21 +86,25 @@ export function activeViewForWorkspaceActivity(activity: WorkspaceActivityId): T
   return ACTIVE_VIEW_BY_ACTIVITY[activity]
 }
 
-/** Views that are destinations inside Workspace; its global entry stays current on all of them. */
-export const WORKSPACE_VIEWS: ReadonlySet<TopLevelView> = new Set<TopLevelView>([
-  'resumeCenter',
-  'conversations',
-  'backlog',
-  'workstation'
-])
-
+/**
+ * Exactly one entry is current. Workspace covers every Workspace view, except where a more specific
+ * visible entry names that view itself (Backlog has its own global entry as well as its Workspace
+ * destination: two doors, one page).
+ */
 export function isWorkspaceActivityCurrent(
   activity: WorkspaceActivityId,
-  activeView: TopLevelView
+  activeView: TopLevelView,
+  visible: readonly WorkspaceActivityId[]
 ): boolean {
-  return activity === 'agent-workspace'
-    ? WORKSPACE_VIEWS.has(activeView)
-    : activeView === ACTIVE_VIEW_BY_ACTIVITY[activity]
+  if (activity !== 'agent-workspace') {
+    return activeView === ACTIVE_VIEW_BY_ACTIVITY[activity]
+  }
+  if (!isWorkspaceView(activeView)) {
+    return false
+  }
+  return !visible.some(
+    (other) => other !== 'agent-workspace' && ACTIVE_VIEW_BY_ACTIVITY[other] === activeView
+  )
 }
 
 function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySettings): boolean {

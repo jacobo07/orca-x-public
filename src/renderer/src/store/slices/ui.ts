@@ -148,6 +148,13 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
 import { resolvePageReturnTarget, workspaceReturnTarget } from './page-return-target'
+import {
+  rosterTabForWorkspaceDestination,
+  viewForWorkspaceDestination,
+  WORKSPACE_HOME,
+  type WorkspaceDestination,
+  type WorkspaceRosterTab
+} from '@/lib/workspace-destinations'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -771,6 +778,13 @@ export type UISlice = {
   /** Leave Workspace for the view it was entered from (terminals when that view is gone). */
   closeConversationsPage: () => void
   openResumeCenter: () => void
+  /** Workspace's home (Resume Center): what the global Workspace entry opens. */
+  openWorkspaceHome: () => void
+  /** Any Workspace destination; Agents/Threads/Projects keep the agent scope and pick the roster list. */
+  openWorkspaceDestination: (destination: WorkspaceDestination) => void
+  /** Which list the conversation surface's roster shows. Window-local, not persisted. */
+  workspaceRosterTab: WorkspaceRosterTab
+  setWorkspaceRosterTab: (tab: WorkspaceRosterTab) => void
   /** The agent the conversations surface is opened FOR, or null for Brainstorming. Window-local
    *  and never persisted: a restart returns to Brainstorming, and Agents is the way back. */
   conversationAgentScope: string | null
@@ -1569,7 +1583,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: 'backlog',
       previousViewBeforeBacklog:
-        state.activeView === 'backlog' ? state.previousViewBeforeBacklog : state.activeView
+        state.activeView === 'backlog' ? state.previousViewBeforeBacklog : state.activeView,
+      // Backlog is also a Workspace destination: Workspace's Back must leave to the same place.
+      previousViewBeforeConversations: workspaceReturnTarget(state)
     })),
   closeBacklogPage: () =>
     set((state) => ({
@@ -1589,7 +1605,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: resolvePageReturnTarget(state.previousViewBeforeConversations, state.settings)
     })),
-  openResumeCenter: () => set({ activeView: 'resumeCenter' }),
+  openResumeCenter: () =>
+    set((state) => ({
+      activeView: 'resumeCenter',
+      previousViewBeforeConversations: workspaceReturnTarget(state)
+    })),
+  openWorkspaceHome: () => get().openWorkspaceDestination(WORKSPACE_HOME),
+  openWorkspaceDestination: (destination) =>
+    set((state) => {
+      const rosterTab = rosterTabForWorkspaceDestination(destination)
+      return {
+        activeView: viewForWorkspaceDestination(destination),
+        previousViewBeforeConversations: workspaceReturnTarget(state),
+        ...(rosterTab ? { workspaceRosterTab: rosterTab } : {})
+      }
+    }),
+  workspaceRosterTab: 'agents',
+  setWorkspaceRosterTab: (tab) => set({ workspaceRosterTab: tab }),
   conversationAgentScope: null,
   // The same surface as Brainstorming, scoped: one chat stack, not an agent-shaped second one.
   openAgentChat: (agentId) =>
