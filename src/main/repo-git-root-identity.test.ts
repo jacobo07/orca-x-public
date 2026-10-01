@@ -88,7 +88,11 @@ describe('probeGitRootIdentity', () => {
       status: 'resolved',
       identity: { rootCommit: SHA, commonDir: '/home/me/proj/.git', shallow: false }
     })
-    expect(exec).toHaveBeenNthCalledWith(1, [...GIT_ROOT_PROBE_ARGV.shallowAndCommonDir], '/home/me/proj')
+    expect(exec).toHaveBeenNthCalledWith(
+      1,
+      [...GIT_ROOT_PROBE_ARGV.shallowAndCommonDir],
+      '/home/me/proj'
+    )
     expect(gitExecFileAsync).not.toHaveBeenCalled()
   })
 })

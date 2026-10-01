@@ -35,9 +35,10 @@ describe('classifyGitRootProbe', () => {
   })
 
   it('settles shallow without consulting the root step', () => {
-    expect(
-      classifyGitRootProbe({ shallowAndCommonDir: ok('true\n.git\n') }, '/srv/r')
-    ).toEqual({ status: 'settled-none', reason: 'shallow' })
+    expect(classifyGitRootProbe({ shallowAndCommonDir: ok('true\n.git\n') }, '/srv/r')).toEqual({
+      status: 'settled-none',
+      reason: 'shallow'
+    })
     expect(nextGitRootProbeStep({ shallowAndCommonDir: ok('true\n.git\n') })).toBeNull()
   })
 
@@ -110,7 +111,9 @@ describe('normalizeGitCommonDir', () => {
   })
 
   it('keeps posix paths case-sensitive', () => {
-    expect(normalizeGitCommonDir('/srv/r', '.git')).not.toBe(normalizeGitCommonDir('/srv/R', '.git'))
+    expect(normalizeGitCommonDir('/srv/r', '.git')).not.toBe(
+      normalizeGitCommonDir('/srv/R', '.git')
+    )
   })
 
   it('strips a trailing carriage return', () => {
@@ -166,6 +169,10 @@ describe('GIT_ROOT_PROBE_ARGV', () => {
       '--format=%H',
       'HEAD'
     ])
-    expect(GIT_ROOT_PROBE_ARGV.anyRef).toEqual(['for-each-ref', '--count=1', '--format=%(objectname)'])
+    expect(GIT_ROOT_PROBE_ARGV.anyRef).toEqual([
+      'for-each-ref',
+      '--count=1',
+      '--format=%(objectname)'
+    ])
   })
 })

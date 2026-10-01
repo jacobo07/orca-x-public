@@ -264,7 +264,13 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await runGit([...nested, 'worktree', 'add', '-q', '-b', 'compat-root', 'root-linked-wt'])
 
     const pathGitSaw = (sub: string): string =>
-      image ? (sub === '.' ? '/repo' : `/repo/${sub}`) : sub === '.' ? repoPath : join(repoPath, sub)
+      image
+        ? sub === '.'
+          ? '/repo'
+          : `/repo/${sub}`
+        : sub === '.'
+          ? repoPath
+          : join(repoPath, sub)
 
     async function probe(sub: string): Promise<GitRootProbeResult> {
       const steps: GitRootProbeSteps = {}
