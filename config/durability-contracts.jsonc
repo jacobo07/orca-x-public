@@ -79,6 +79,7 @@
       "writer": "src/main/runtime/device-registry.ts",
       "tier": "crash-durable",
       "lostIf": "Every pairing at once: the file was published by a rename with no fsync, so a power loss could leave it empty or torn, and the loader then treated an unreadable file as no devices. The writer now fsyncs before the rename, and an unparseable file is preserved as orca-devices.json.corrupt-<ms> while the registry fails closed; an I/O read failure leaves the file in place and the registry unavailable.",
+      "onFailure": "save() does not catch: the storage error reaches the caller with its code. A grant (addDevice, rotatePendingDevice, a widened pairing reach) persists before the in-memory swap, so a grant whose write fails is never valid and pairing reports the error. A revoke (removeDevice) swaps memory first, so a failed write can never leave the device valid; the error still propagates and the next successful save persists the removal. Proven by src/main/runtime/device-registry-durability.test.ts (V-REV-GRANT-ORDER, V-REV-SAVE-FAILURE, injected rename failure).",
       "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts), so on Windows the proven claim is that the contents reached disk before the rename, not that the rename itself survives a power loss.",
@@ -91,6 +92,7 @@
       "writer": "src/main/runtime/device-registry.ts",
       "tier": "crash-durable",
       "lostIf": "Only the refusal reason: a revoked token reads unknown_token instead of device_revoked, and is still refused because its device row is gone from orca-devices.json. A missing or unreadable file never makes the registry unavailable and never authorizes anyone. Devices are written first, so a failed write here can lose a reason but never resurrect a device.",
+      "onFailure": "The tombstone write runs inside save() after the device write and throws to the caller; tombstonesDirty stays set, so the next successful save writes the tombstones again. The device row is already gone from memory and from orca-devices.json, so its token stays refused. Proven by src/main/runtime/device-registry-durability.test.ts (V-REV-TOMBSTONE-SAVE-FAILURE: a directory in place of the file makes the write fail).",
       "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts).",
