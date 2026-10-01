@@ -1,3 +1,5 @@
+import type { TuiAgentDetectionCommand } from './tui-agent-detection-commands'
+
 export const EVALUATED_REQUIREMENT_KINDS = [
   'command',
   'agent',
@@ -97,6 +99,30 @@ export type RequirementsParseResult =
     }
   | { status: 'absent' }
   | { status: 'unparseable'; reason: RequirementsUnparseableReason }
+
+// What a probe executor is asked to measure: the evaluated rows reduced to what a host needs, so a
+// relay stays catalog-free (the client sends the agent's detection commands) and never sees prose.
+export type RequirementVersionDemand = 'none' | 'wanted' | 'unsupported'
+type ProbeRequestBase = { id: string; platforms?: RequirementPlatform[] }
+export type RequirementProbeRequest =
+  | (ProbeRequestBase & {
+      kind: 'command'
+      name: string
+      versionArg: RequirementVersionArg
+      version: RequirementVersionDemand
+    })
+  | (ProbeRequestBase & {
+      kind: 'agent'
+      provider: string
+      commands: TuiAgentDetectionCommand[]
+    })
+  | (ProbeRequestBase & {
+      kind: 'platform'
+      os?: RequirementPlatform['os']
+      arch?: RequirementPlatform['arch']
+    })
+  | (ProbeRequestBase & { kind: 'env'; name: string })
+  | (ProbeRequestBase & { kind: 'credential'; provider: CredentialRequirement['provider'] })
 
 export type RequirementProbeOutcome = 'found' | 'absent' | 'skipped-platform' | 'refused' | 'failed'
 

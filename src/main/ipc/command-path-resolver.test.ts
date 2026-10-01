@@ -2,7 +2,57 @@ import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { isCommandOnLocalPath } from './command-path-resolver'
+import { isCommandOnLocalPath, resolveCommandOnLocalPath } from './command-path-resolver'
+
+describe('resolveCommandOnLocalPath', () => {
+  let cwdDir = ''
+  let pathDir = ''
+  beforeAll(async () => {
+    cwdDir = await mkdtemp(path.join(tmpdir(), 'cmd-resolver-cwd-'))
+    pathDir = await mkdtemp(path.join(tmpdir(), 'cmd-resolver-path-'))
+    await writeFile(path.join(cwdDir, 'planted.EXE'), 'MZ')
+    await writeFile(path.join(pathDir, 'onpath.EXE'), 'MZ')
+  })
+  afterAll(async () => {
+    await rm(cwdDir, { recursive: true, force: true })
+    await rm(pathDir, { recursive: true, force: true })
+  })
+
+  const win32 = (extra: { cwd: string; searchCurrentDirectory?: boolean }) => ({
+    platform: 'win32' as const,
+    env: { Path: pathDir, PATHEXT: '.EXE;.CMD' },
+    ...extra
+  })
+
+  it('skips the current directory', async () => {
+    await expect(
+      resolveCommandOnLocalPath('planted', win32({ cwd: cwdDir, searchCurrentDirectory: false }))
+    ).resolves.toBeNull()
+  })
+
+  it('still searches the current directory by default (preflight behaviour)', async () => {
+    const found = await resolveCommandOnLocalPath('planted', win32({ cwd: cwdDir }))
+    expect(found).not.toBeNull()
+    expect(found).toContain('planted.EXE')
+    await expect(isCommandOnLocalPath('planted', win32({ cwd: cwdDir }))).resolves.toBe(true)
+  })
+
+  it('returns the resolved PATH candidate, not just a boolean', async () => {
+    const found = await resolveCommandOnLocalPath(
+      'onpath',
+      win32({ cwd: cwdDir, searchCurrentDirectory: false })
+    )
+    expect(found).not.toBeNull()
+    expect(found).toContain('onpath.EXE')
+  })
+
+  it('returns null for an empty command and for a missing one', async () => {
+    await expect(resolveCommandOnLocalPath('', win32({ cwd: cwdDir }))).resolves.toBeNull()
+    await expect(
+      resolveCommandOnLocalPath('absent-cmd', win32({ cwd: cwdDir }))
+    ).resolves.toBeNull()
+  })
+})
 
 describe('isCommandOnLocalPath', () => {
   it('returns false for an empty command', async () => {
