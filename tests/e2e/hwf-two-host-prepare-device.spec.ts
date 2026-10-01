@@ -186,13 +186,15 @@ test.describe('two-host prepare this device', () => {
         60_000
       )
       expect(shimAfter).toBe(true)
+      // Activation may have left Settings; reopen it. Before the click the block holds no verdict.
+      await openPrepareSection(orcaPage, repoId)
       const rowBefore = (await rowStates(orcaPage)).shim
       expect(await measureNow(orcaPage)).toBe('rows')
       const l2Row = (await rowStates(orcaPage)).shim
       const api2 = await measureThroughApi(orcaPage, repoId)
       captureJson(captureDir, 'measure-l2', api2)
       console.log(
-        `HWF20_L2 terminal=${tab ? 'tab-present' : 'tab-absent'} started=yes shim=${shimAfter ? 'present' : 'absent'} row=${l2Row} decidedBy=remeasure rowBeforeRemeasure=${rowBefore ?? 'none'}`
+        `HWF20_L2 terminal=${tab ? 'tab-present' : 'tab-absent'} started=yes shim=${shimAfter ? 'present' : 'absent'} row=${l2Row} decidedBy=remeasure startedSignal=${l2.signal} rowBeforeRemeasure=${rowBefore ?? 'none'}`
       )
       expect(tab).toBe(true)
       expect(l2Row).toBe('satisfied')

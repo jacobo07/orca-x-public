@@ -110,23 +110,40 @@ export async function refusalOf(page: Page): Promise<string | null> {
   return (await note.count()) > 0 ? note.first().getAttribute('data-prepare-refusal') : null
 }
 
-/** Review and run -> approval dialog -> Approve; resolves on the started marker or a refusal handle. */
+export type PrepareRunSignal = 'marker' | 'terminal-activated' | 'refused'
+
+/**
+ * Review and run -> approval dialog -> Approve. Resolves on the started marker, a refusal handle, or
+ * (Run 3) the activated `Prepare: <id>` terminal: the runner creates that terminal only after
+ * authorizing, and activating it leaves Settings, so the section's own marker unmounts with it.
+ */
 export async function approveAndRun(
   page: Page,
   requirementId: string
-): Promise<{ started: boolean; refusal: string | null }> {
+): Promise<{ started: boolean; signal: PrepareRunSignal; refusal: string | null }> {
   await block(page).locator(`[data-prepare-run="${requirementId}"]`).click()
   const dialog = page.locator('[data-prepare-approval-dialog]')
   await expect(dialog).toBeVisible({ timeout: 30_000 })
   await expect(dialog).toHaveAttribute('data-requirement-id', requirementId)
   await dialog.locator('[data-prepare-approve]').click()
-  const result = block(page).locator(
-    `[data-prepare-step-started="${requirementId}"], [data-prepare-refusal]`
-  )
-  await expect(result.first()).toBeVisible({ timeout: 60_000 })
-  const started =
-    (await block(page).locator(`[data-prepare-step-started="${requirementId}"]`).count()) > 0
-  return { started, refusal: started ? null : await refusalOf(page) }
+  const marker = block(page).locator(`[data-prepare-step-started="${requirementId}"]`)
+  const refusal = block(page).locator('[data-prepare-refusal]')
+  const title = `Prepare: ${requirementId}`
+  const deadline = Date.now() + 60_000
+  while (Date.now() < deadline) {
+    if ((await marker.count()) > 0) {
+      return { started: true, signal: 'marker', refusal: null }
+    }
+    if ((await refusal.count()) > 0) {
+      return { started: false, signal: 'refused', refusal: await refusalOf(page) }
+    }
+    const sectionGone = (await page.locator('[data-prepare-device-section]').count()) === 0
+    if (sectionGone && (await terminalTabPresent(page, title))) {
+      return { started: true, signal: 'terminal-activated', refusal: null }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  throw new Error(`no started marker, refusal or ${title} terminal within 60 s`)
 }
 
 export async function measureThroughApi(
