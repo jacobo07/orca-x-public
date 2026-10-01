@@ -4,9 +4,44 @@ Rows 60 and 61 of the DWS completion matrix ask whether a remote-less repo on tw
 
 Plane names: LOCAL-HOST (only the laptop observes), REAL-SSH (a real ssh command to GEX44), REAL-TWO-HOST (a real Orca on the laptop driving a real relay on GEX44).
 
-**Status of this run: STOPPED at a product rung (D-20).** L1, L3A and L4A were observed and pass. L2 failed on one product assertion (below); L3B, L4B, L5 and the L5 pending sub-leg did not run. The matrix was NOT edited: rows 60, 61 and 75 keep their previous text until a product fix is decided and the run is repeated.
+**Status: Run 6 passed every leg (L1-L5) on a fresh disposable root after the L2 product fix 80076a795.** Run 5 stopped at L2 (D-20) and is kept below as history, with its characterization; the matrix was edited only after Run 6.
 
-## Run 5 (16-05): one REAL-TWO-HOST run
+## Run 6 (16-05, after fix 80076a795): one REAL-TWO-HOST run
+
+Run 5's L2 failure was a renderer defect: a local-target `fetchRepos()` refreshes the local catalog, which owns local AND direct-SSH rows, but the merge judged Projects by strict `local` host equality while it judged setups by catalog ownership, so the split-off GEX44 replica was carried back into `git-root:R` and SSH-only `repo:` Projects were dropped. 80076a795 (`fix(dws-16): local catalog refresh owns direct-SSH projects as it owns their setups`) makes one ownership rule drive both. The laptop e2e build was rebuilt from that commit (the bundle carries the new `fetchedCatalogOwnsHost`); the relay was not rebuilt (the fix is renderer-only) and its fence still matched. The spec is unchanged (S = fb6ab915d).
+
+| item | value |
+|---|---|
+| harness commit | 28eaff96a |
+| spec commit S | fb6ab915d |
+| product fix | 80076a795 |
+| disposable root | /tmp/orca-hwf-p16-20261001T165645Z (left in place) |
+| remote private sshd | 127.0.0.1:41939 (loopback only) |
+| laptop local forward | 127.0.0.1:47216 (ssh -L over the `gex44` alias) |
+| host key fingerprint (ssh-keygen -lf) | SHA256:p1zXxBFAlrjbkc5nKsEzV1dIu3PkQfiWUyTwtpmX8oo |
+| remote hostname | kobicraft-gex44 |
+| local relay version | 0.1.0+c1eb18e241d9 |
+| run log | `16-05-run2.log` (phase dir), `1 passed (1.9m)`, nothing skipped, failed or flaky |
+
+Seed: nonce `54bf4b4a21579174`, same recipe as Run 5. `SEED_ROOT` GEX44 (`seed-p16`) = laptop (`seed-local-p16`) = `36cbe531dda10f0adbfcb3cb1b3321b37bbc427d`; GEX44 replica head 2a639b8f, fork head b188b882, `SHALLOW_IS_SHALLOW=true`, unborn and late repos present; laptop replica head 4e322a54. Equal, so the legs ran. The git rung was not repeated (optional; Run 5's result stands).
+
+| leg | plane | instrument | observed value | verdict | commit |
+|---|---|---|---|---|---|
+| zero repos at start | REAL-TWO-HOST | `window.__store.repos.length` in a fresh-profile Orca | `HWF16_ZERO_REPOS=yes` | PASS | fb6ab915d |
+| trust pin | REAL-TWO-HOST | phase-14 first-contact dialog | `HWF16_PIN` equals the ssh-keygen fingerprint | PASS | fb6ab915d |
+| relay fence | REAL-SSH | local `.version` against `ls home/.orca-remote` | `HWF16_RELAY_FENCE=match` | PASS | fb6ab915d |
+| L1 one project across hosts (SC1) | REAL-TWO-HOST | connected gate, then list calls every 5 s bounded at 390 s | `project=git-root:36cbe531... setups=local,ssh:<target> waitedMs=5033`; the first probe did not lose the race | PASS | fb6ab915d, 80076a795 |
+| L3A Settings rows (SC2 UI) | REAL-TWO-HOST | station `[data-replica-topology-section]`, then data handles | `station=ok grouped=2 sshHealth=reachable` (host-health positive control) | PASS | fb6ab915d |
+| L4A CLI (SC2 CLI) | REAL-TWO-HOST | `out/cli/index.js project setups --project <id> --json` against the e2e app's runtime | `plane=REAL-TWO-HOST replicas=2 hosts=local,ssh:<target>` | PASS | fb6ab915d |
+| L2 same-host fork kept apart (SC1 collision) | REAL-TWO-HOST | fork, shallow, unborn added over ssh; bounded list-call wait | `laptop=git-root:36cbe531... gex44Replica=repo:<id> fork=repo:<id> inSourceRepoIds=no waitedMs=5185` | PASS | fb6ab915d, 80076a795 |
+| shallow / unborn controls | REAL-TWO-HOST | store `gitRootIdentity` / `gitRootIdentityNoneReason` | `HWF16_SHALLOW reason=shallow`, `HWF16_UNBORN reason=unborn` | PASS | fb6ab915d |
+| L3B collisions in Settings | REAL-TWO-HOST | station, then `[data-replica-collisions]` items | `station=ok colliding=2` | PASS | fb6ab915d |
+| L4B CLI collision | REAL-TWO-HOST | CLI `identityCollisions` | `collision=same-host-duplicate` naming the GEX44 replica and the fork | PASS | fb6ab915d |
+| L5 unreachable host keeps its replica | REAL-TWO-HOST | carrier killed, list calls every 2 s for 20 s, station then `data-replica-host-health` | `listed=yes rootKept=yes health=connecting` (not `reachable`, not absent) | PASS | fb6ab915d |
+| L5 never-probed repo | REAL-TWO-HOST | `p16-late` added without a list call, carrier killed | `HWF16_L5_PENDING=identity-pending` (the probe did not win the race) | PASS | fb6ab915d |
+| containment | REAL-SSH | witnesses before and after, `procs` after teardown | witnesses equal; 5 root processes before teardown, `REMAINING=0`, `PROC_COUNT=0` after; `status` after teardown `SSHD_ALIVE=no` (root kept) | PASS | - |
+
+## Run 5 (16-05): one REAL-TWO-HOST run (history: stopped at L2)
 
 | item | value |
 |---|---|
@@ -49,7 +84,7 @@ Equal, so the legs ran. GEX44 also holds a fork (local clone, origin removed, on
 | L3B, L4B, L5, L5-pending | - | - | not reached | NOT RUN | - |
 | containment | REAL-SSH | witnesses before and after, `procs` after teardown | witnesses equal; `PROC_COUNT=0`; `status` after teardown `SSHD_ALIVE=no` (root kept) | PASS | - |
 
-### L2 characterization (product rung, not fixed here)
+### L2 characterization (product rung; fixed afterwards in 80076a795, see Run 6)
 
 After the fork was added, the GEX44 copies were split as phase 16 intends at the SETUP level, but the Project catalog did not follow. State seen on the last of the list calls (394 s):
 
@@ -58,6 +93,8 @@ After the fork was added, the GEX44 copies were split as phase 16 intends at the
 - shallow and unborn settled with their reasons.
 
 So two facts disagree: the replica's setup says it left the git-root project, the git-root project still claims it, and four setups name projects the catalog does not hold. The plan's L2 truth ("neither id is in the git-root project's sourceRepoIds") is not met. `mergeProjectRepo` (`src/shared/project-host-setup-projection.ts:144-157`) only ever appends to `sourceRepoIds`; whether the persisted Project row should be pruned or re-derived when a member's key changes from `git-root:` back to `repo:` is a product decision for the orchestrator. Per D-20 no product fix was improvised and the run was not repeated.
+
+Later root cause (16-06, 80076a795): not `mergeProjectRepo` (main rebuilds the projection per call and publishes a correct catalog) but the renderer's `mergeFetchedProjectCompatibilityForHost`, which applied two ownership rules in one merge (setups by catalog ownership, projects by strict `local` host equality). Run 6 above is the repeat on a fresh root.
 
 ## What this phase cannot know
 
