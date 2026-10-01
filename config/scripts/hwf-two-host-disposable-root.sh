@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# GEX44 provisioner for the phase-15/16 two-host rungs; verbs: create status witness procs teardown install-stub
-# seed-p16 git-compat-p16. Never deletes anything.
+# GEX44 provisioner for the phase-15/16/20 two-host rungs; verbs: create status witness procs teardown install-stub
+# seed-p16 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
 ROOT="${2:-}"
 EXTRA="${3:-}"
+EXTRA2="${4:-}"
 
 case "$ROOT" in
   /tmp/orca-hwf-p1[56]-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p1[56]-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p1[56]-*) ;;
+  /tmp/orca-hwf-p20-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p20-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p20-*) ;;
   *) echo "REFUSED root=$ROOT"; exit 2 ;;
 esac
 
@@ -247,6 +251,171 @@ STUB
       echo "GC_${UP}_REFS_EXIT=$EC"
       echo "GC_${UP}_REFS_OUT=$(printf '%s' "$OUT" | tr '\n' '|')"
     done
+    ;;
+  seed-p20)
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *) echo "REFUSED nonce"; exit 2 ;;
+    esac
+    PROJECT="$ROOT/repos/p20-project"
+    if [ -e "$PROJECT" ]; then echo "REFUSED exists=$PROJECT"; exit 3; fi
+    mkdir -p "$PROJECT"
+    seed_git -C "$PROJECT" init -q
+    printf 'hwf p20 environment contract project\n' > "$PROJECT/README.md"
+    seed_git -C "$PROJECT" add README.md
+    seed_git -C "$PROJECT" commit -q -m 'hwf p20 seed'
+    # Values reach python through the environment only; the nonce is never echoed.
+    ORCA_HWF_ROOT="$ROOT" ORCA_HWF_NONCE="$EXTRA" python3 - <<'PY'
+import os
+root = os.environ["ORCA_HWF_ROOT"]
+nonce = os.environ["ORCA_HWF_NONCE"]
+shim = '"$HOME/p20-bin/orca-hwf-p20-shim"'
+prepare = ('mkdir -p "$HOME/p20-bin" && printf \'#!/bin/sh\\necho orca-hwf-p20-shim 1.0.0\\n\' > '
+           + shim + ' && chmod +x ' + shim)
+yaml_text = "\n".join([
+    "requirements:",
+    "  - id: git-ok",
+    "    kind: command",
+    "    name: git",
+    "    version: \">=2.25\"",
+    "  - id: git-too-new",
+    "    kind: command",
+    "    name: git",
+    "    version: \">=99\"",
+    "  - id: absent-tool",
+    "    kind: command",
+    "    name: orca-hwf-p20-absent-tool",
+    "  - id: mac-only",
+    "    kind: command",
+    "    name: git",
+    "    platforms:",
+    "      - os: darwin",
+    "  - id: shim",
+    "    kind: command",
+    "    name: orca-hwf-p20-shim",
+    "    prepare: |",
+    "      " + prepare,
+    "  - id: gpu",
+    "    kind: gpu",
+    "  - id: token",
+    "    kind: env",
+    "    name: ORCA_HWF_P20_TOKEN",
+    "",
+])
+with open(os.path.join(root, "repos", "p20-project", "orca.yaml"), "w") as f:
+    f.write(yaml_text)
+with open(os.path.join(root, "home", ".profile"), "w") as f:
+    f.write("export ORCA_HWF_P20_TOKEN=HWF20TOK_" + nonce + "\n")
+    f.write('export PATH="$HOME/p20-bin:$PATH"\n')
+# Presence probe for the login shell; the variable test is assembled here so it never appears as shell text above.
+probe = ("case \":$PATH:\" in *\":$HOME/p20-bin:\"*) echo LOGIN_HAS_P20_BIN=yes ;; *) echo LOGIN_HAS_P20_BIN=no ;; esac\n"
+         "if [ -n \"${" + "ORCA_HWF_P20_TOKEN" + "+x}\" ]; then echo LOGIN_HAS_TOKEN=yes; else echo LOGIN_HAS_TOKEN=no; fi\n")
+with open(os.path.join(root, "p20-login-probe.sh"), "w") as f:
+    f.write(probe)
+PY
+    echo "PROJECT_PATH=$PROJECT"
+    echo "CONTRACT_SHA256=$(sha256sum "$PROJECT/orca.yaml" | awk '{print $1}')"
+    ORCA_HWF_YAML="$PROJECT/orca.yaml" python3 - <<'PY'
+import hashlib, os, yaml
+doc = yaml.safe_load(open(os.environ["ORCA_HWF_YAML"]).read())
+row = [r for r in doc["requirements"] if r.get("id") == "shim"][0]
+print("PREPARE_SHA256=" + hashlib.sha256(row["prepare"].encode("utf-8")).hexdigest())
+PY
+    echo "SHIM_DIR=$ROOT/home/p20-bin"
+    echo "SENTINEL_SHA256=$(printf 'HWF20TOK_%s' "$EXTRA" | sha256sum | awk '{print $1}')"
+    via_private_sshd "bash -l $ROOT/p20-login-probe.sh"
+    ;;
+  edit-prepare-p20)
+    if [ ! -f "$ROOT/repos/p20-project/orca.yaml" ]; then echo "REFUSED no-project=$ROOT"; exit 3; fi
+    # Appends a command line inside the prepare block scalar, so the parsed value (and its hash) changes.
+    ORCA_HWF_YAML="$ROOT/repos/p20-project/orca.yaml" python3 - <<'PY'
+import hashlib, os, yaml
+path = os.environ["ORCA_HWF_YAML"]
+def prepare_of(text):
+    doc = yaml.safe_load(text)
+    return [r for r in doc["requirements"] if r.get("id") == "shim"][0]["prepare"]
+text = open(path).read()
+before = prepare_of(text)
+lines = text.split("\n")
+start = lines.index("    prepare: |")
+end = start + 1
+while end < len(lines) and lines[end].startswith("      "):
+    end += 1
+lines.insert(end, "      true # edited")
+new_text = "\n".join(lines)
+after = prepare_of(new_text)
+if after == before:
+    print("EDIT_NOOP=yes")
+    raise SystemExit(4)
+with open(path, "w") as f:
+    f.write(new_text)
+print("PREPARE_SHA256_BEFORE=" + hashlib.sha256(before.encode("utf-8")).hexdigest())
+print("PREPARE_SHA256=" + hashlib.sha256(after.encode("utf-8")).hexdigest())
+PY
+    echo "CONTRACT_SHA256=$(sha256sum "$ROOT/repos/p20-project/orca.yaml" | awk '{print $1}')"
+    ;;
+  stat-shim-p20)
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    SHIM="$ROOT/home/p20-bin/orca-hwf-p20-shim"
+    if [ -f "$SHIM" ]; then
+      echo "SHIM_PRESENT=yes"
+      echo "SHIM_MTIME=$(stat -c %Y "$SHIM")"
+    else
+      echo "SHIM_PRESENT=no"
+      echo "SHIM_MTIME=none"
+    fi
+    ;;
+  serve-p20)
+    if [ ! -f "$ROOT/repos/p20-project/orca.yaml" ]; then echo "REFUSED no-project=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      /home/kobii/orca-x|/home/kobii/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/kobii/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/kobii/?*) ;;
+      *) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+    esac
+    case "$EXTRA2" in
+      ''|*[!A-Za-z0-9_./=\ -]*) echo "REFUSED launch"; exit 2 ;;
+    esac
+    if [ ! -d "$EXTRA" ]; then echo "REFUSED worktree-missing=$EXTRA"; exit 3; fi
+    PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
+    mkdir -p "$ROOT/serve-data"
+    cd "$EXTRA"
+    export PATH="/home/kobii/.orca-toolchain/node24/bin:$PATH"
+    # shellcheck disable=SC2086
+    setsid nohup env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" $EXTRA2 serve --port "$PORT" --bind-host 127.0.0.1 --no-pairing > "$ROOT/serve.log" 2>&1 < /dev/null &
+    echo "SERVE_PORT=$PORT"
+    echo "SERVE_PID=$!"
+    ;;
+  serve-query-p20)
+    if [ ! -f "$ROOT/repos/p20-project/orca.yaml" ]; then echo "REFUSED no-project=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      /home/kobii/orca-x|/home/kobii/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/kobii/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/kobii/?*) ;;
+      *) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+    esac
+    cd "$EXTRA"
+    export PATH="/home/kobii/.orca-toolchain/node24/bin:$PATH"
+    env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" node out/cli/index.js project requirements --repo "$ROOT/repos/p20-project" --json > "$ROOT/serve-query.json" 2> "$ROOT/serve-query.err" && QEC=0 || QEC=$?
+    echo "SERVE_QUERY_EXIT=$QEC"
+    ORCA_HWF_JSON="$ROOT/serve-query.json" python3 - <<'PY'
+import json, os
+try:
+    doc = json.load(open(os.environ["ORCA_HWF_JSON"]))
+except Exception as e:
+    print("HWF20_R1_PARSE=failed " + type(e).__name__)
+    raise SystemExit(0)
+res = doc.get("result", doc)
+m = res.get("measurement") or {}
+os_name = (m.get("platform") or {}).get("os", "none")
+version = "none"
+for p in m.get("probes") or []:
+    if p.get("id") == "git-ok":
+        version = p.get("version") or "none"
+print("HWF20_R1 status=%s hostKey=%s os=%s gitVersion=%s" % (m.get("status"), m.get("hostKey"), os_name, version))
+PY
+    echo "INDEPENDENT_GIT=$(git --version | awk '{print $3}')"
     ;;
   *)
     echo "REFUSED verb=$VERB"; exit 2

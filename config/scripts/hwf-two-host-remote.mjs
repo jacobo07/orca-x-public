@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Laptop driver for the phase-15/16 two-host rungs: ships the committed provisioner to the carrier host as one base64 ssh argument.
+// Laptop driver for the phase-15/16/20 two-host rungs: ships the committed provisioner to the carrier host as one base64 ssh argument.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -16,13 +16,20 @@ const remoteVerbs = new Set([
   'teardown',
   'install-stub',
   'seed-p16',
-  'git-compat-p16'
+  'git-compat-p16',
+  'seed-p20',
+  'edit-prepare-p20',
+  'stat-shim-p20',
+  'serve-p20',
+  'serve-query-p20'
 ])
 // These take no root; every other verb's root argument is checked.
 const ROOTLESS_VERBS = new Set(['new-root', 'new-nonce', 'seed-local-p16'])
-const ROOT_SHAPE = /^\/tmp\/orca-hwf-p1[56]-[0-9A-Za-z]+$/
+const ROOT_SHAPE = /^\/tmp\/orca-hwf-p(?:1[56]|20)-[0-9A-Za-z]+$/
 const NONCE_SHAPE = /^[0-9a-f]{16}$/
 const EXTRA_SHAPE = /^\/[A-Za-z0-9_./-]+$/
+// The serve launch line: words and env assignments only, no quotes or shell metacharacters.
+const LAUNCH_SHAPE = /^[A-Za-z0-9_./= -]+$/
 
 // Same flag set and fixed identity as the provisioner's seed_git, so both hosts mint one first commit (W10).
 const SEED_GIT_FLAGS = [
@@ -67,13 +74,14 @@ function utcStamp() {
     .replace(/\.\d+Z$/, 'Z')
 }
 
-function runRemoteVerb(verb, root, extra, outFile) {
+function runRemoteVerb(verb, root, extras, outFile) {
   const script = readFileSync(path.join(here, 'hwf-two-host-disposable-root.sh'), 'utf8').replace(
     /\r\n/g,
     '\n'
   )
   const b64 = Buffer.from(script, 'utf8').toString('base64')
-  const tail = extra === undefined ? '' : ` ${extra}`
+  // Extras are shape-validated (no quotes), so single quotes keep a launch line as one argument.
+  const tail = extras.map((extra) => ` '${extra}'`).join('')
   const result = spawnSync(
     'ssh',
     [
@@ -94,10 +102,20 @@ function runRemoteVerb(verb, root, extra, outFile) {
   return result.status ?? 1
 }
 
+// PowerShell 5.1 redirection writes UTF-16LE or a UTF-8 BOM; both decode to the same text here.
+function readTextFile(file) {
+  const bytes = readFileSync(file)
+  const text =
+    bytes[0] === 0xff && bytes[1] === 0xfe
+      ? bytes.toString('utf16le').slice(1)
+      : bytes.toString('utf8').replace(/^\uFEFF/, '')
+  return text
+}
+
 function parseKeyValues(text) {
   const out = {}
   for (const line of text.split(/\r?\n/)) {
-    const m = /^([A-Z_]+)=(.*)$/.exec(line)
+    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line)
     if (m) {
       out[m[1]] = m[2]
     }
@@ -155,7 +173,7 @@ if (!ROOTLESS_VERBS.has(verb) && root !== undefined && !ROOT_SHAPE.test(root)) {
 
 if (verb === 'new-root') {
   const phase = argValue(process.argv.slice(3), '--phase') ?? '15'
-  if (phase !== '15' && phase !== '16') {
+  if (phase !== '15' && phase !== '16' && phase !== '20') {
     fail(`REFUSED phase=${phase}`)
   }
   console.log(`/tmp/orca-hwf-p${phase}-${utcStamp()}`)
@@ -191,7 +209,7 @@ if (verb === 'new-root') {
   if (Boolean(seedFile) !== Boolean(localSeedFile)) {
     fail('run-file: --seed and --local-seed go together')
   }
-  const kv = parseKeyValues(readFileSync(createFile, 'utf8'))
+  const kv = parseKeyValues(readTextFile(createFile))
   const run = {
     root,
     port: Number(kv.PORT),
@@ -223,19 +241,50 @@ if (verb === 'new-root') {
       localReplicaHead: local.LOCAL_REPLICA_HEAD
     })
   }
+  const seed20File = argValue(rest, '--seed20')
+  if (seed20File) {
+    const seed = parseKeyValues(readTextFile(seed20File))
+    if (!seed.PROJECT_PATH || !seed.CONTRACT_SHA256 || !seed.SHIM_DIR) {
+      fail(`run-file: ${seed20File} lacks PROJECT_PATH, CONTRACT_SHA256 or SHIM_DIR`)
+    }
+    Object.assign(run, {
+      projectPath: seed.PROJECT_PATH,
+      contractSha256: seed.CONTRACT_SHA256,
+      shimDir: seed.SHIM_DIR
+    })
+  }
+  const sentinelNonce = argValue(rest, '--sentinel-nonce')
+  if (sentinelNonce !== undefined) {
+    if (!NONCE_SHAPE.test(sentinelNonce)) {
+      fail('REFUSED sentinel-nonce')
+    }
+    run.sentinelNonce = sentinelNonce
+  }
   writeFileSync(out, `${JSON.stringify(run, null, 2)}\n`)
   console.log(`run-file written ${out}`)
 } else if (remoteVerbs.has(verb)) {
   if (!root) {
-    fail(`usage: ${verb} <root> [<extra>] [--out <file>]`)
+    fail(`usage: ${verb} <root> [<extra> [<extra2>]] [--out <file>]`)
   }
-  const extra = rest[0] !== undefined && !rest[0].startsWith('--') ? rest[0] : undefined
-  if (extra !== undefined && !NONCE_SHAPE.test(extra) && !EXTRA_SHAPE.test(extra)) {
-    fail(`REFUSED extra=${extra}`)
+  const extras = []
+  for (const candidate of rest.slice(0, 2)) {
+    if (candidate.startsWith('--')) {
+      break
+    }
+    extras.push(candidate)
   }
-  process.exit(runRemoteVerb(verb, root, extra, argValue(rest, '--out')))
+  for (const [i, extra] of extras.entries()) {
+    const ok =
+      NONCE_SHAPE.test(extra) ||
+      EXTRA_SHAPE.test(extra) ||
+      (i === 1 && verb === 'serve-p20' && LAUNCH_SHAPE.test(extra))
+    if (!ok) {
+      fail(`REFUSED extra=${extra}`)
+    }
+  }
+  process.exit(runRemoteVerb(verb, root, extras, argValue(rest, '--out')))
 } else {
   fail(
-    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|git-compat-p16|fetch-key|run-file> ...'
+    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16|20]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|git-compat-p16|seed-p20|edit-prepare-p20|stat-shim-p20|serve-p20|serve-query-p20|fetch-key|run-file> ...'
   )
 }
