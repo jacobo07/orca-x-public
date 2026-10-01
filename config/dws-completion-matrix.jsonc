@@ -1425,17 +1425,68 @@
       "row": "HF Logical workspace identity without a remote",
       "owner": "project-host-setup-projection",
       "done": "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-16",
+      "measuredAt": "2026-10-01",
       "required": true,
       "phases": [
         16
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: project-host-setup-projection.ts:112-116 repo: fallback is per-host"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-topology.spec.ts",
+          "note": "opt-in REAL-TWO-HOST spec for legs L1-L5; a skip reads as NOT RUN"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-replica-legs.ts",
+          "note": "add local/remote replicas, connected gate, bounded grouping wait, store reads, CLI invocation"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-replica-ui.ts",
+          "note": "Settings station control and data-replica-* handle reads"
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/project-root-identity-key.ts",
+          "note": "git-root:<first commit> project key derived from the probed root identity"
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/project-identity-collisions.ts",
+          "note": "same-host duplicate and cross-host collision records"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-16-replica-topology-evidence.md",
+          "note": "Run 6 leg table with planes; Run 5 L2 characterization kept as history"
+        },
+        {
+          "kind": "commit",
+          "sha": "28eaff96a",
+          "note": "two-host harness: p1[56] guard, deterministic seed on both hosts, refusal drill"
+        },
+        {
+          "kind": "commit",
+          "sha": "fb6ab915d",
+          "note": "opt-in two-host replica topology spec and helpers"
+        },
+        {
+          "kind": "commit",
+          "sha": "80076a795",
+          "note": "local catalog refresh owns direct-SSH projects as it owns their setups (Run 5 L2 fix)"
+        },
+        {
+          "kind": "commit",
+          "sha": "8d4973149",
+          "note": "Run 6 evidence: L1-L5 observed"
+        }
+      ],
+      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17)."
     },
     {
       "id": 61,
@@ -1444,15 +1495,61 @@
       "done": "UI and CLI list every replica of a logical workspace with its host and role",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-16",
+      "measuredAt": "2026-10-01",
       "required": true,
       "phases": [
         16
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: ProjectHostSetup exists (project-types.ts:50-70); no replica role/state surface"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-topology.spec.ts",
+          "note": "opt-in REAL-TWO-HOST spec: Settings legs L3A/L3B, CLI legs L4A/L4B, unreachable-host leg L5"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-replica-ui.ts",
+          "note": "station control, data-replica-membership / -collisions / -host-health reads"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-replica-legs.ts",
+          "note": "runs out/cli/index.js project setups --json against the e2e app's runtime"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-16-replica-topology-evidence.md",
+          "note": "Run 6 leg table with planes and the UI-vs-CLI scope asymmetry"
+        },
+        {
+          "kind": "commit",
+          "sha": "0fcc04c09",
+          "note": "orca CLI lists replicas with host and role"
+        },
+        {
+          "kind": "commit",
+          "sha": "290e9fc4b",
+          "note": "replica host health from one presenter, never Ready when unknown"
+        },
+        {
+          "kind": "commit",
+          "sha": "e13591a87",
+          "note": "replica roles and identity collisions in project host settings"
+        },
+        {
+          "kind": "commit",
+          "sha": "fb6ab915d",
+          "note": "opt-in two-host replica topology spec and helpers"
+        },
+        {
+          "kind": "commit",
+          "sha": "8d4973149",
+          "note": "Run 6 evidence: L3 and L4 observed"
+        }
+      ],
+      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6). Observed: Settings for the project shows the replica section with 2 grouped rows and the SSH row's host health reachable while connected (L3A), then 2 colliding items after a same-host fork (L3B); orca project setups --json, run against the e2e app's runtime (L4 plane REAL-TWO-HOST, not LOCAL-HOST), lists both replicas with hostId, provenance and membership (L4A) and a same-host-duplicate record naming both GEX44 setups (L4B); with the carrier killed the replica stays listed with health connecting, never reachable, and a never-probed repo reads identity-pending (L5). Open leg keeping this PARTIAL: the CLI lists one runtime's replicas; replicas owned by other paired Orca servers are not listed by the CLI; no phase owns the fan-out."
     },
     {
       "id": 62,
@@ -1693,7 +1790,7 @@
         {
           "kind": "file",
           "path": "config/scripts/hwf-two-host-disposable-root.sh",
-          "note": "GEX44 provisioner: create, status, witness, procs, teardown; refuses any root outside /tmp/orca-hwf-p15-*"
+          "note": "GEX44 provisioner: create, status, witness, procs, teardown, seed-p16; refuses any root outside /tmp/orca-hwf-p1[56]-*"
         },
         {
           "kind": "file",
@@ -1709,6 +1806,11 @@
           "kind": "file",
           "path": "docs/dws/phase-15-remote-first-evidence.md",
           "note": "the runs with their planes, witnesses and teardown counts"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-16-replica-topology-evidence.md",
+          "note": "phase 16 Run 6 through the same harness: rows 60 and 61 legs, witnesses and teardown counts"
         },
         {
           "kind": "commit",
@@ -1731,7 +1833,7 @@
           "note": "Run 3 evidence and the verdict table"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. PARTIAL, never PASS: the harness exercises only row 59 so far; owed rows 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH."
+      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. Phase 16 (Run 6, root /tmp/orca-hwf-p16-20261001T165645Z, REAL-TWO-HOST, guard widened to p1[56]) then exercised rows 60 and 61 through the same harness (both PARTIAL, one passing spec, witnesses equal, zero root processes after teardown). PARTIAL, never PASS: the harness exercises rows 59, 60 and 61 so far; owed rows 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH."
     },
     {
       "id": 76,
