@@ -383,7 +383,8 @@ PY
     cd "$EXTRA"
     export PATH="/home/kobii/.orca-toolchain/node24/bin:$PATH"
     # shellcheck disable=SC2086
-    setsid nohup env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" $EXTRA2 serve --port "$PORT" --bind-host 127.0.0.1 --no-pairing > "$ROOT/serve.log" 2>&1 < /dev/null &
+    # A dev-tree app picks its userData from ORCA_DEV_USER_DATA_PATH; the CLI finds it through ORCA_USER_DATA_PATH.
+    setsid nohup env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_USER_DATA_PATH="$ROOT/serve-data" $EXTRA2 serve --port "$PORT" --bind-host 127.0.0.1 --no-pairing > "$ROOT/serve.log" 2>&1 < /dev/null &
     echo "SERVE_PORT=$PORT"
     echo "SERVE_PID=$!"
     ;;
@@ -397,7 +398,10 @@ PY
     esac
     cd "$EXTRA"
     export PATH="/home/kobii/.orca-toolchain/node24/bin:$PATH"
-    env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" node out/cli/index.js project requirements --repo "$ROOT/repos/p20-project" --json > "$ROOT/serve-query.json" 2> "$ROOT/serve-query.err" && QEC=0 || QEC=$?
+    # A fresh runtime holds no repos, so the project is added before it is measured.
+    env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_CLI_INVOCATION=1 node out/cli/index.js repo add --path "$ROOT/repos/p20-project" --json > "$ROOT/serve-repo-add.json" 2>&1 && AEC=0 || AEC=$?
+    echo "SERVE_REPO_ADD_EXIT=$AEC"
+    env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_CLI_INVOCATION=1 node out/cli/index.js project requirements --repo "$ROOT/repos/p20-project" --json > "$ROOT/serve-query.json" 2> "$ROOT/serve-query.err" && QEC=0 || QEC=$?
     echo "SERVE_QUERY_EXIT=$QEC"
     ORCA_HWF_JSON="$ROOT/serve-query.json" python3 - <<'PY'
 import json, os

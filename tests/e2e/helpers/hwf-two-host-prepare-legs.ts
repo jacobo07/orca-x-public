@@ -7,6 +7,7 @@ import { expect, type Locator, type Page } from '@stablyai/playwright-test'
 
 import { prepareApprovalPreimage } from '../../../src/shared/environment-prepare-plan'
 import type { EnvironmentRequirementsMeasurement } from '../../../src/shared/environment-requirements-measurement'
+import { resolveSshHostIdentityStatus } from '../../../src/shared/ssh-host-key-pin-shape'
 import { openProjectHostSettings } from './hwf-two-host-replica-ui'
 import { execOnOwningHost, type HwfRun } from './hwf-two-host-ssh-target'
 
@@ -216,6 +217,38 @@ export async function terminalTabPresent(page: Page, titlePrefix: string): Promi
       )
     )
   }, titlePrefix)
+}
+
+/**
+ * The identity the prepare authority reads: the product's resolver over the saved target and main's
+ * live state. Runs 1-2 measured that the public live state carries no hostIdentity of its own.
+ */
+export async function liveHostIdentity(
+  page: Page,
+  targetId: string
+): Promise<{ identity: string; live: string }> {
+  const inputs = await page.evaluate(async (id) => {
+    const targets = (await window.api.ssh.listTargets()) as {
+      id: string
+      host: string
+      port: number
+      hostKeyPin?: unknown
+    }[]
+    const target = targets.find((t) => t.id === id)
+    const live = (await window.api.ssh.getState({ targetId: id }))?.hostIdentity
+    return {
+      target: target
+        ? { host: target.host, port: target.port, hostKeyPin: target.hostKeyPin }
+        : null,
+      live: live ?? null
+    }
+  }, targetId)
+  return {
+    identity: inputs.target
+      ? resolveSshHostIdentityStatus(inputs.target, inputs.live ?? undefined)
+      : 'absent',
+    live: inputs.live ?? 'absent'
+  }
 }
 
 export async function storeDump(page: Page): Promise<unknown> {

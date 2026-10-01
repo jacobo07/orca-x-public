@@ -14,6 +14,7 @@ import {
   editPrepare,
   independentGitVersion,
   invokeRunStep,
+  liveHostIdentity,
   measureNow,
   measureThroughApi,
   openPrepareSection,
@@ -111,12 +112,8 @@ test.describe('two-host prepare this device', () => {
       expect(fenceMatch).toBe(true)
       await waitForSshConnected(orcaPage, targetId, { timeoutMs: 60_000 })
       const repoId = await addRemoteRepo(orcaPage, connected, run.projectPath, 'HWF20 project')
-      // Live identity from main's connection state (the renderer mirror does not carry it).
-      const identity = await orcaPage.evaluate(
-        async (id) => (await window.api.ssh.getState({ targetId: id }))?.hostIdentity ?? 'absent',
-        targetId
-      )
-      console.log(`HWF20_IDENTITY=${identity}`)
+      const { identity, live } = await liveHostIdentity(orcaPage, targetId)
+      console.log(`HWF20_IDENTITY=${identity} live=${live}`)
       expect(identity).toBe('pinned')
 
       // L1: the person measures; every seeded state shows on the rows.
