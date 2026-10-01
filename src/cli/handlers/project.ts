@@ -14,7 +14,13 @@ import type { RepoKind } from '../../shared/repo-types'
 import type { ProjectHostSetupWithReplicaTopology } from '../../shared/replica-topology'
 import type { CommandHandler } from '../dispatch'
 import type { EnvironmentRequirementsMeasurement } from '../../shared/environment-requirements-measurement'
-import { formatEnvironmentRequirements } from '../environment-requirements-format'
+import { buildPreparePlan } from '../../shared/environment-prepare-plan'
+import { nodePrepareSha256Hex } from '../../shared/environment-prepare-node-hash'
+import {
+  formatEnvironmentRequirements,
+  formatPrepareRun,
+  formatPreparePlan
+} from '../environment-requirements-format'
 import {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -163,6 +169,71 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       { repo: getRequiredStringFlag(flags, 'repo') }
     )
     printResult(result, json, formatEnvironmentRequirements)
+  },
+  'project prepare': async ({ flags, client, json }) => {
+    const repo = getRequiredStringFlag(flags, 'repo')
+    const wantsPlan = flags.get('plan') === true
+    const approvedHash = getOptionalStringFlag(flags, 'approve')
+    const requirementId = getOptionalStringFlag(flags, 'requirement')
+    if (wantsPlan === (approvedHash !== undefined)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Use exactly one of --plan or --approve <hash>'
+      )
+    }
+    if (wantsPlan !== (requirementId === undefined)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--requirement goes with --approve <hash>, and --plan takes no --requirement'
+      )
+    }
+    if (approvedHash !== undefined && !/^[0-9a-f]{64}$/.test(approvedHash)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--approve takes the 64-hex hash from --plan'
+      )
+    }
+    // Why: the host key is read fresh from the host that will run the step, never typed.
+    const measured = await client.call<EnvironmentRequirementsMeasurement>(
+      'environment.measureRequirements',
+      { repo }
+    )
+    const { measurement, contractSource, contract, requirements } = measured.result
+    if (approvedHash === undefined || requirementId === undefined) {
+      const plan = await buildPreparePlan(
+        {
+          contractSource,
+          hostKey: measurement.hostKey,
+          requirements,
+          measurement,
+          approvals: {},
+          contract
+        },
+        { sha256Hex: nodePrepareSha256Hex }
+      )
+      const approvals = plan.steps.map((step) => ({
+        requirementId: step.requirementId,
+        hash: step.approvalHash,
+        hostKey: plan.hostKey
+      }))
+      printResult({ ...measured, result: { plan, approvals } }, json, (value) =>
+        formatPreparePlan(value.plan, repo)
+      )
+      return
+    }
+    // Why: only a requirement id and the approval hash travel; the host re-reads orca.yaml.
+    const outcome = await client.call<
+      { status: 'started' } | { status: 'refused'; reason: string }
+    >('environment.runPrepareStep', {
+      repo,
+      requirementId,
+      approvedContentHash: approvedHash,
+      approvedHostKey: measurement.hostKey
+    })
+    printResult(outcome, json, formatPrepareRun)
+    if (outcome.result.status !== 'started') {
+      process.exitCode = 1
+    }
   }
 }
 

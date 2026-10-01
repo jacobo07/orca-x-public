@@ -1,3 +1,4 @@
+import type { PreparePlan, PrepareStepLabel } from '../shared/environment-prepare-plan'
 import type { EnvironmentRequirementsMeasurement } from '../shared/environment-requirements-measurement'
 import type {
   EnvironmentRequirement,
@@ -28,6 +29,52 @@ function describeProbe(probe: RequirementProbeResult | undefined): string {
   }
   const detail = [probe.version, probe.resolvedPath, probe.reason].filter(Boolean).join('  ')
   return detail ? `${probe.outcome}  ${detail}` : probe.outcome
+}
+
+const LABEL_WORDS: Record<PrepareStepLabel, string> = {
+  'asks-for-elevation': 'asks for elevated privileges',
+  'script-content-not-covered':
+    "runs a repository script; the script's own contents are not covered by the approval"
+}
+
+/** Every declared prepare step with the exact text and the hash that approves it, never run here. */
+export function formatPreparePlan(plan: PreparePlan, repoSelector: string): string {
+  const lines = [`Host: ${plan.hostKey}`]
+  if (plan.contractVerdict) {
+    lines.push(
+      `Contract: ${plan.contractVerdict.reason === 'contract-unparseable' ? 'UNPARSEABLE' : 'UNREADABLE'} (not the same as none declared)`
+    )
+    return lines.join('\n')
+  }
+  if (plan.steps.length === 0) {
+    lines.push('No prepare steps declared.')
+  }
+  for (const step of plan.steps) {
+    const state = plan.rows.find((row) => row.id === step.requirementId)?.verdict.state
+    lines.push(
+      '',
+      `Step ${step.requirementId} (${state ?? 'unknown'})`,
+      'Runs exactly this text in a terminal on that host:',
+      '----- begin exact text -----',
+      step.bytes,
+      '----- end exact text -----',
+      `as JSON: ${JSON.stringify(step.bytes)}`
+    )
+    if (step.labels.length > 0) {
+      lines.push(`labels: ${step.labels.map((label) => LABEL_WORDS[label]).join('; ')}`)
+    }
+    lines.push(
+      `approval hash: ${step.approvalHash}`,
+      `approve with: orca project prepare --repo ${repoSelector} --requirement ${step.requirementId} --approve ${step.approvalHash}`
+    )
+  }
+  return lines.join('\n')
+}
+
+export function formatPrepareRun(
+  value: { status: 'started' } | { status: 'refused'; reason: string }
+): string {
+  return value.status === 'started' ? 'started' : `refused: ${value.reason}`
 }
 
 export function formatEnvironmentRequirements(value: EnvironmentRequirementsMeasurement): string {

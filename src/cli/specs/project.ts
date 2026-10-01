@@ -127,5 +127,21 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'orca project requirements --repo path:/work/app',
       'orca project requirements --repo id:abc --json'
     ]
+  },
+  {
+    path: ['project', 'prepare'],
+    summary: "Show or run a repo's declared orca.yaml prepare steps on the host that owns it",
+    usage:
+      'orca project prepare --repo <selector> --plan [--json] | orca project prepare --repo <selector> --requirement <id> --approve <hash> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'plan', 'requirement', 'approve'],
+    notes: [
+      '--plan only prints each declared step with its exact text, labels and the hash that approves it.',
+      '--approve runs exactly one step: the host re-reads orca.yaml and refuses if the text no longer matches the hash.',
+      'Exit code 0 when the step started, 1 when the host refused it.'
+    ],
+    examples: [
+      'orca project prepare --repo path:/work/app --plan',
+      'orca project prepare --repo path:/work/app --requirement node --approve <hash-from-plan>'
+    ]
   }
 ]

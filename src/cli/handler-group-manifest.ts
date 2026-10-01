@@ -56,7 +56,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'project setup-create',
       'project setup-update',
       'project setup-delete',
-      'project requirements'
+      'project requirements',
+      'project prepare'
     ],
     load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
   },

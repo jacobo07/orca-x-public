@@ -39,6 +39,7 @@ export const BOOLEAN_FLAGS = new Set([
   'mobile-pairing',
   'no-pairing',
   'parent-current',
+  'plan',
   'provision',
   'ready',
   'recipe-json',
