@@ -78,10 +78,10 @@ async function probeSshAgentMenu(page: Page): Promise<HwfClientProbe['sshAgentMe
 
 export type HwfProviderPaths = { codex: string; claude: string }
 
-type RootProc = { pid: number; ppid: number; cwd: string; argv: string }
+export type RootProc = { pid: number; ppid: number; cwd: string; argv: string }
 
 // Why: the committed provisioner's `procs` verb is the one instrument for "what runs under the root, and where".
-function listRootProcs(run: HwfRun): RootProc[] {
+export function listRootProcs(run: HwfRun): RootProc[] {
   const result = spawnSync(
     process.execPath,
     [path.join(process.cwd(), 'config', 'scripts', 'hwf-two-host-remote.mjs'), 'procs', run.root],
@@ -130,20 +130,20 @@ export async function launchProviderOnOwningHost(
   run: HwfRun,
   probe: HwfClientProbe,
   providers: HwfProviderPaths
-): Promise<void> {
+): Promise<number | null> {
   const anyProvider = providers.codex.startsWith('/') || providers.claude.startsWith('/')
   if (!anyProvider) {
     console.log('HWF_AGENT_A_LAUNCH=NOT_RUN reason=provider-binary-absent')
-    return
+    return null
   }
   if (probe.sshAgentMenu === 'absent') {
     console.log('HWF_AGENT_A_LAUNCH=NOT_RUN reason=no-launch-surface-on-ssh-worktree')
-    return
+    return null
   }
   const launchAs = probe.sshAgentMenu
   if (!providers[launchAs].startsWith('/')) {
     console.log('HWF_AGENT_A_LAUNCH=NOT_RUN reason=provider-binary-absent')
-    return
+    return null
   }
   await page.evaluate(async (agent) => {
     await window.__store?.getState().updateSettings({ defaultTuiAgent: agent })
@@ -160,6 +160,7 @@ export async function launchProviderOnOwningHost(
   const stillAlive = listRootProcs(run).some((candidate) => candidate.pid === proc.pid)
   expect(stillAlive).toBe(true)
   console.log(`HWF_AGENT_A_LAUNCH=observed provider=${launchAs} pid=${proc.pid} cwd=${proc.cwd}`)
+  return proc.pid
 }
 
 // Supplementary only: a stub command proves launch placement, never a provider.

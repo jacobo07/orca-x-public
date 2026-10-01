@@ -18,6 +18,8 @@ import {
   assertGitCommitOnOwningHost,
   assertTerminalOnOwningHost
 } from './helpers/hwf-two-host-owning-host-legs'
+import { runAgentLeg } from './helpers/hwf-two-host-reconnect-agent-leg'
+import { runShellLeg } from './helpers/hwf-two-host-reconnect-legs'
 import { bootHwfSession } from './helpers/hwf-two-host-session'
 import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
@@ -250,5 +252,28 @@ test.describe('two-host remote-first continuity', () => {
     } finally {
       await session.dispose()
     }
+  })
+
+  // Why: the only injected event is the laptop's ssh -L carrier; Orca's own reconnect ladder must bring the host back.
+  test.describe('reconnect keeps the same remote shell and agent', () => {
+    test('reconnect keeps the shell', async ({ orcaPage, electronApp }) => {
+      test.setTimeout(900_000)
+      const session = await bootHwfSession(orcaPage, electronApp, { web: true })
+      try {
+        await runShellLeg(orcaPage, session)
+      } finally {
+        await session.dispose()
+      }
+    })
+
+    test('reconnect keeps the agent and the outage hook', async ({ orcaPage, electronApp }) => {
+      test.setTimeout(900_000)
+      const session = await bootHwfSession(orcaPage, electronApp, { web: true })
+      try {
+        await runAgentLeg(orcaPage, session, readHwfProbeFile())
+      } finally {
+        await session.dispose()
+      }
+    })
   })
 })

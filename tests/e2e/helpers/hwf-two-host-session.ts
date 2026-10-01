@@ -1,7 +1,7 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 
-import { startHwfCarrier } from './hwf-two-host-carrier'
+import { startHwfCarrier, type HwfCarrier } from './hwf-two-host-carrier'
 import {
   connectHwfTargetWithTrust,
   disconnectHwfTarget,
@@ -22,6 +22,7 @@ export type HwfSession = {
   executionHostId: `ssh:${string}`
   worktree: { id: string; path: string }
   web: WebClient | null
+  carrier: HwfCarrier
   dispose: () => Promise<void>
 }
 
@@ -79,7 +80,7 @@ export async function bootHwfSession(
         )
         .toBe(true)
     }
-    return { run, targetId, executionHostId, worktree: worktree!, web, dispose }
+    return { run, targetId, executionHostId, worktree: worktree!, web, carrier, dispose }
   } catch (error) {
     await dispose()
     throw error
