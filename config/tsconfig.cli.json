@@ -3,6 +3,8 @@
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",
+    // Why: a composite project must list the JSON fixtures its shared tests import.
+    "../src/shared/__fixtures__/**/*.json",
     "../src/main/agent-state-file-reader.ts",
     "../src/main/agent-hooks/hook-stdin-contract.ts",
     "../src/main/agent-hooks/hook-config-write-path.ts",
