@@ -5,6 +5,7 @@ import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { logAbsenceScan, scanLaptopForContentNonces } from './helpers/hwf-two-host-absence-scan'
 import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
+import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 import {
   approvalHashFor,
   approveAndRun,
@@ -199,25 +200,12 @@ test.describe('two-host prepare this device', () => {
       expect(tab).toBe(true)
       expect(l2Row).toBe('satisfied')
 
-      // L5: no copy of the host-side token reached this laptop.
+      // L5 captures while the app is live; the scan itself runs after the app has exited (below).
       const l5States = await rowStates(orcaPage)
       captureJson(captureDir, 'store', await storeDump(orcaPage))
       const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
       const cli = runCliJson(['project', 'requirements', '--repo', `id:${repoId}`], userData)
       captureJson(captureDir, 'cli-requirements', cli)
-      const scan = scanLaptopForContentNonces({
-        roots: [
-          { dir: userData },
-          { dir: os.tmpdir(), modifiedSinceMs: startedAtMs - 60_000 },
-          { dir: captureDir }
-        ],
-        nonces: [`HWF20TOK_${run.sentinelNonce}`],
-        userDataRoot: userData
-      })
-      logAbsenceScan(scan)
-      console.log(`HWF20_L5 envRow=${l5States.token} cli=${cli.ok ? 'ok' : 'unreachable'}`)
-      expect(scan.verdict).toBe('PASS')
-      expect(l5States.token).toBe('satisfied')
 
       // L6: with the carrier gone, a re-measure reads no observation, never absence.
       await carrier.kill()
@@ -241,6 +229,26 @@ test.describe('two-host prepare this device', () => {
           .map(([k, v]) => `${k}:${v}`)
           .join(',')} outcome=${l6Outcome}`
       )
+
+      // L5 scan: Run 4 found Chromium holding Network/Cookies(-journal) exclusively while the app ran,
+      // so the scanner (unchanged) read INCONCLUSIVE. Scanning after exit leaves nothing locked.
+      await closeElectronAppForE2E(electronApp)
+      await cleanupE2EDaemons(userData)
+      const scan = scanLaptopForContentNonces({
+        roots: [
+          { dir: userData },
+          { dir: os.tmpdir(), modifiedSinceMs: startedAtMs - 60_000 },
+          { dir: captureDir }
+        ],
+        nonces: [`HWF20TOK_${run.sentinelNonce}`],
+        userDataRoot: userData
+      })
+      logAbsenceScan(scan)
+      console.log(
+        `HWF20_L5 envRow=${l5States.token} cli=${cli.ok ? 'ok' : 'unreachable'} scannedAfter=app-exit`
+      )
+      expect(scan.verdict).toBe('PASS')
+      expect(l5States.token).toBe('satisfied')
       expect(ids.length).toBeGreaterThan(0)
       expect(noObs.length).toBe(ids.length)
       expect(missing.length).toBe(0)
