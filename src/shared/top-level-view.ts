@@ -16,7 +16,8 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   conversations: true,
   agents: true,
   resumeCenter: true,
-  backlog: true
+  backlog: true,
+  workstation: true
 }
 
 export function isTopLevelView(value: unknown): value is TopLevelView {

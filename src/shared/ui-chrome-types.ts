@@ -142,3 +142,5 @@ export type TopLevelView =
   | 'resumeCenter'
   /** The Universal Backlog (universal-backlog.md). An older build falls back to 'terminal'. */
   | 'backlog'
+  /** Workspace › Workstation: execution nodes projected from the host registry. Older builds fall back to 'terminal'. */
+  | 'workstation'

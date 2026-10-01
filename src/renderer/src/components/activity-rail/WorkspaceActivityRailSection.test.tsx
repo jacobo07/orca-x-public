@@ -76,16 +76,15 @@ vi.mock('@/components/ui/context-menu', () => ({
 }))
 
 import { WorkspaceActivityRailSection } from './WorkspaceActivityRailSection'
-import { AgentWorkspaceRailEntry } from './AgentWorkspaceRailEntry'
 import { WORKSPACE_ACTIVITY_ORDER, type WorkspaceActivityId } from './workspace-activity-items'
 
 let container: HTMLDivElement
 let root: Root
 
-function renderRail(settings: Record<string, unknown> = {}): void {
+function renderRail(settings: Record<string, unknown> = {}, activeView = 'terminal'): void {
   mocks.state = {
     settings,
-    activeView: 'terminal',
+    activeView,
     updateSettings: mocks.updateSettings,
     openTaskPage: mocks.openTaskPage,
     openAutomationsPage: mocks.openAutomationsPage,
@@ -313,20 +312,39 @@ describe('WorkspaceActivityRailSection', () => {
     expect(mocks.openConversationsPage).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves Workspace out when the caller draws it below Explorer', () => {
-    // Control: the same render without the flag does include it.
-    renderRail()
-    expect(activity('agent-workspace')).not.toBeNull()
+  it('labeled rows keep the same entries, order, dispatch and badge as the icons', () => {
+    mocks.unreadCount = 4
+    renderRail({ experimentalActivity: true })
+    const iconOrder = [...container.querySelectorAll('[data-workspace-activity]')].map((node) =>
+      node.getAttribute('data-workspace-activity')
+    )
 
     act(() => {
       root.render(
         <TooltipProvider>
-          <WorkspaceActivityRailSection omitAgentWorkspace />
+          <WorkspaceActivityRailSection layout="row" />
         </TooltipProvider>
       )
     })
-    expect(activity('agent-workspace')).toBeNull()
-    expect(activity('workspace')).not.toBeNull()
+    const rowOrder = [...container.querySelectorAll('[data-workspace-activity]')].map((node) =>
+      node.getAttribute('data-workspace-activity')
+    )
+    expect(rowOrder).toEqual(iconOrder)
+    expect(activity('automations')?.textContent).toContain('Automations')
+    expect(activity('activity')?.getAttribute('aria-label')).toContain('4')
+    expect(activity('activity')?.textContent).toContain('4')
+
+    act(() => activity('automations')?.click())
+    expect(mocks.openAutomationsPage).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Workspace current on every Workspace destination, and only there', () => {
+    for (const view of ['resumeCenter', 'conversations', 'backlog', 'workstation']) {
+      renderRail({}, view)
+      expect(activity('agent-workspace')?.getAttribute('aria-current'), view).toBe('page')
+    }
+    renderRail({}, 'tasks')
+    expect(activity('agent-workspace')?.getAttribute('aria-current')).toBeNull()
   })
 
   it('hides Workspace through its own key, not the Chats one', () => {
@@ -340,42 +358,10 @@ describe('WorkspaceActivityRailSection', () => {
 
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showAgentWorkspaceButton: false })
   })
-})
 
-describe('AgentWorkspaceRailEntry', () => {
-  function renderEntry(settings: Record<string, unknown>, activeView = 'terminal'): void {
-    mocks.state = {
-      settings,
-      activeView,
-      updateSettings: mocks.updateSettings,
-      openConversationsPage: mocks.openConversationsPage
-    }
-    act(() => {
-      root.render(
-        <TooltipProvider>
-          <AgentWorkspaceRailEntry />
-        </TooltipProvider>
-      )
-    })
-  }
-
-  it('opens the agent Workspace and marks itself current on that page', () => {
-    renderEntry({}, 'conversations')
-
-    expect(activity('agent-workspace')?.getAttribute('aria-current')).toBe('page')
-    act(() => activity('agent-workspace')?.click())
-    expect(mocks.openConversationsPage).toHaveBeenCalledTimes(1)
-  })
-
-  it('is absent once hidden, and offers the hide that got it there', () => {
-    renderEntry({ showAgentWorkspaceButton: false })
+  it('is absent once hidden', () => {
+    renderRail({ showAgentWorkspaceButton: false })
+    expect(container.querySelector('[data-workspace-activity-rail]')).not.toBeNull()
     expect(activity('agent-workspace')).toBeNull()
-
-    renderEntry({})
-    const hide = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Hide from sidebar')
-    )
-    act(() => hide?.click())
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ showAgentWorkspaceButton: false })
   })
 })

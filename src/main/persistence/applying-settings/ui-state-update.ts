@@ -153,6 +153,8 @@ export function updatePersistedUI(
     terminalRailCollapsed:
       (sanitizedUpdates.terminalRailCollapsed ?? operations.state.ui?.terminalRailCollapsed) ===
       true,
+    globalNavCollapsed:
+      (sanitizedUpdates.globalNavCollapsed ?? operations.state.ui?.globalNavCollapsed) === true,
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
     ),

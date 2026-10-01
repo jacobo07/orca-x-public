@@ -473,6 +473,7 @@ export function getDefaultUIState(): PersistedUIState {
     markdownTocPanelWidth: 240,
     terminalRailWidth: TERMINAL_RAIL_DEFAULT_WIDTH,
     terminalRailCollapsed: false,
+    globalNavCollapsed: false,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
     sortBy: 'recent',

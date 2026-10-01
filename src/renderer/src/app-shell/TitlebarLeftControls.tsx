@@ -1,13 +1,6 @@
 import { ArrowLeft, ArrowRight, MoreHorizontal, PanelLeft } from 'lucide-react'
-import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
 import {
   canGoBackWorktreeHistory,
@@ -26,7 +19,6 @@ import type { AppChromeLayout } from './use-app-chrome-layout'
  */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
-  const updateSettings = useAppStore((s) => s.updateSettings)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
@@ -43,58 +35,32 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
       }`}
     >
       <div className="flex h-full items-center">
-        {isMac && !layout.isFullScreen ? (
-          <div className="titlebar-traffic-light-pad" />
-        ) : hasCustomTitleBar ? (
-          /* Why: Windows/Linux remove the native title bar, so render the logo plus the menu strip.
-             The ··· fallback stays for the case where the strip has no items to show — before the
-             menu is registered, or on a runtime that has none. */
-          <>
-            <img src={logo} alt="" aria-hidden className="titlebar-logo" />
-            <AppMenuStrip
-              fallback={
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      className="titlebar-icon-button"
-                      aria-label={translate('auto.App.8b0b8eb54f', 'Application menu')}
-                      onClick={() => window.api.ui.popupMenu()}
-                    >
-                      <MoreHorizontal size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate('auto.App.8b0b8eb54f', 'Application menu')}
-                  </TooltipContent>
-                </Tooltip>
-              }
-            />
-          </>
+        {/* The traffic lights, app mark and name sit in GlobalNavSidebar, which owns the window's
+            left edge on every route. */}
+        {!isMac && hasCustomTitleBar ? (
+          /* Why: Windows/Linux remove the native title bar, so render the menu strip. The ···
+             fallback stays for the case where the strip has no items to show — before the menu is
+             registered, or on a runtime that has none. */
+          <AppMenuStrip
+            fallback={
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="titlebar-icon-button"
+                    aria-label={translate('auto.App.8b0b8eb54f', 'Application menu')}
+                    onClick={() => window.api.ui.popupMenu()}
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {translate('auto.App.8b0b8eb54f', 'Application menu')}
+                </TooltipContent>
+              </Tooltip>
+            }
+          />
         ) : (
           <div className="pl-2" />
-        )}
-        {layout.showSidebar && !hasCustomTitleBar && layout.showTitlebarAppName && (
-          <ContextMenu>
-            <ContextMenuTrigger asChild>
-              <div
-                className="titlebar-app-name"
-                aria-label={translate('auto.App.5096cbbc86', 'Orca')}
-              >
-                <span className="titlebar-app-name-main">
-                  {translate('auto.App.5096cbbc86', 'Orca')}
-                </span>
-              </div>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem
-                onSelect={() => {
-                  void updateSettings({ showTitlebarAppName: false })
-                }}
-              >
-                {translate('auto.App.e81217c1b7', 'Hide App Name')}
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
         )}
         {layout.showSidebar && (
           <Tooltip>

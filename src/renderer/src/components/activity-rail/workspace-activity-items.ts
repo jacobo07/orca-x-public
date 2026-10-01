@@ -85,6 +85,23 @@ export function activeViewForWorkspaceActivity(activity: WorkspaceActivityId): T
   return ACTIVE_VIEW_BY_ACTIVITY[activity]
 }
 
+/** Views that are destinations inside Workspace; its global entry stays current on all of them. */
+export const WORKSPACE_VIEWS: ReadonlySet<TopLevelView> = new Set<TopLevelView>([
+  'resumeCenter',
+  'conversations',
+  'backlog',
+  'workstation'
+])
+
+export function isWorkspaceActivityCurrent(
+  activity: WorkspaceActivityId,
+  activeView: TopLevelView
+): boolean {
+  return activity === 'agent-workspace'
+    ? WORKSPACE_VIEWS.has(activeView)
+    : activeView === ACTIVE_VIEW_BY_ACTIVITY[activity]
+}
+
 function isVisible(activity: WorkspaceActivityId, settings: WorkspaceActivitySettings): boolean {
   switch (activity) {
     // Default-on: only an explicit false hides them, so a profile that never set the key keeps them.

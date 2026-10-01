@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/context-menu'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from '@/components/right-sidebar/right-sidebar-titlebar-drag-regions'
+import { GlobalNavRow } from '@/components/global-nav/GlobalNavRow'
 import type { WorkspaceActivityId } from './workspace-activity-items'
 
 /**
@@ -84,6 +85,9 @@ function activityLabel(activity: WorkspaceActivityId): string {
  */
 export type ActivityBadge = { count: number } | { dot: true } | null
 
+/** `icon`: the 40px rail cell. `row`: a labeled global-navigation row. Same behaviour either way. */
+export type ActivityItemLayout = 'icon' | 'row'
+
 export function WorkspaceActivityRailButton({
   activity,
   active,
@@ -91,7 +95,8 @@ export function WorkspaceActivityRailButton({
   disabled = false,
   onPrefetch,
   badge = null,
-  badgeLabel
+  badgeLabel,
+  layout = 'icon'
 }: {
   activity: WorkspaceActivityId
   active: boolean
@@ -101,10 +106,43 @@ export function WorkspaceActivityRailButton({
   badge?: ActivityBadge
   /** Appended to the accessible name so a badge is not conveyed by colour and position alone. */
   badgeLabel?: string
+  layout?: ActivityItemLayout
 }): React.JSX.Element {
   const Icon = ACTIVITY_ICONS[activity]
   const baseLabel = activityLabel(activity)
   const label = badge && badgeLabel ? `${baseLabel} — ${badgeLabel}` : baseLabel
+
+  if (layout === 'row') {
+    return (
+      <GlobalNavRow
+        icon={<Icon size={16} />}
+        label={baseLabel}
+        accessibleLabel={label}
+        active={active}
+        disabled={disabled}
+        onSelect={onSelect}
+        onPrefetch={onPrefetch}
+        dataAttributes={{ 'data-workspace-activity': activity, 'data-global-nav-item': activity }}
+        trailing={
+          badge && 'count' in badge ? (
+            <span
+              aria-hidden="true"
+              className="min-w-[18px] rounded-full bg-primary px-1.5 text-center text-[10px] leading-[18px] font-semibold text-primary-foreground"
+            >
+              {badge.count}
+            </span>
+          ) : badge && 'dot' in badge && badgeLabel ? (
+            <span
+              aria-hidden="true"
+              className="rounded-full border border-border px-1.5 text-[10px] leading-[16px] text-muted-foreground"
+            >
+              {badgeLabel}
+            </span>
+          ) : null
+        }
+      />
+    )
+  }
 
   return (
     <Tooltip>
@@ -114,6 +152,7 @@ export function WorkspaceActivityRailButton({
           // Why a data hook: the accessible name is translated, so selecting by it passes in one
           // locale and silently stops matching in every other.
           data-workspace-activity={activity}
+          data-global-nav-item={activity}
           aria-current={active ? 'page' : undefined}
           aria-disabled={disabled || undefined}
           aria-label={label}

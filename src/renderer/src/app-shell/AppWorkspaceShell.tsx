@@ -3,7 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
 import Sidebar from '../components/Sidebar'
 import RightSidebar from '../components/right-sidebar'
-import { WorkspaceActivityRailColumn } from '../components/activity-rail/WorkspaceActivityRailColumn'
+import { GlobalNavSidebar } from '../components/global-nav/GlobalNavSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
@@ -121,6 +121,7 @@ export function AppWorkspaceShell(props: {
     layout.floatingWorkspaceDock === 'bottom' && floatingWorkspace.enabled && floatingWorkspace.open
 
   // Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view.
+  // Global navigation is its own column (GlobalNavSidebar), so a suppressed panel leaves nothing behind.
   const sidePanel = layout.showRightSidebarControls ? (
     <RecoverableRenderErrorBoundary
       boundaryId="right-sidebar"
@@ -138,12 +139,7 @@ export function AppWorkspaceShell(props: {
     >
       <RightSidebar />
     </RecoverableRenderErrorBoundary>
-  ) : (
-    // The panel is suppressed on full-page surfaces, but the rail it hosts is how you leave them.
-    // Exactly one of these two renders, so this is a relocation and not a second rail; the column
-    // returns null itself unless the rail belongs on this edge.
-    <WorkspaceActivityRailColumn />
-  )
+  ) : null
 
   return (
     // Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake.
@@ -158,6 +154,7 @@ export function AppWorkspaceShell(props: {
       )}
     >
       <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+        <GlobalNavSidebar />
         {dockedLeft ? sidePanel : null}
         {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the side-panel column. */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">

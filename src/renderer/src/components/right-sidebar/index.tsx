@@ -24,8 +24,6 @@ import {
 } from '@/lib/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { ActivityBarPositionMenu } from './activity-bar-position-menu'
-import { WorkspaceActivityRailSection } from '@/components/activity-rail/WorkspaceActivityRailSection'
-import { AgentWorkspaceRailEntry } from '@/components/activity-rail/AgentWorkspaceRailEntry'
 import { LeftNavProjectsSwitch } from './left-nav-projects-switch'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
@@ -112,22 +110,16 @@ function RightSidebarInner(): React.JSX.Element {
     [visibleItems, topActivityStripWidth, effectiveTab]
   )
 
-  // Only omit Workspace from the section when the strip really has an Explorer to place it under.
-  const workspaceBelowExplorer =
-    geometry.activityBarLeads && visibleItems.some((item) => item.id === 'explorer')
+  // Application destinations live in GlobalNavSidebar; this strip selects what the panel shows.
   const sideActivityBarIcons = visibleItems.map((item) => (
-    <React.Fragment key={item.id}>
-      <ActivityBarButton
-        item={item}
-        active={effectiveTab === item.id}
-        onClick={() => selectActivityTab(item.id)}
-        layout="side"
-        statusIndicator={item.id === 'checks' ? checksStatus : null}
-      />
-      {/* Workspace sits directly below Explorer (Owner, 2026-09-24), and only on the leading strip,
-          where application navigation already lives. */}
-      {item.id === 'explorer' && workspaceBelowExplorer ? <AgentWorkspaceRailEntry /> : null}
-    </React.Fragment>
+    <ActivityBarButton
+      key={item.id}
+      item={item}
+      active={effectiveTab === item.id}
+      onClick={() => selectActivityTab(item.id)}
+      layout="side"
+      statusIndicator={item.id === 'checks' ? checksStatus : null}
+    />
   ))
 
   const closeButton = rightSidebarOpen ? (
@@ -166,12 +158,6 @@ function RightSidebarInner(): React.JSX.Element {
           )}
         >
           <TooltipProvider delayDuration={400}>
-            {/* Why only when leading: docked left this strip is the window's own edge, which is
-                where application-level navigation belongs. Docked right it is a panel gutter, and
-                putting product surfaces there would say the wrong thing about their scope. */}
-            {geometry.activityBarLeads ? (
-              <WorkspaceActivityRailSection omitAgentWorkspace={workspaceBelowExplorer} />
-            ) : null}
             {geometry.activityBarLeads ? <LeftNavProjectsSwitch /> : null}
             {sideActivityBarIcons}
           </TooltipProvider>

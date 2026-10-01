@@ -192,7 +192,9 @@ const TopLevelViewSchema = z.enum([
   // Same debt and reasoning; reachable only by opening the Resume Center from the Workspace.
   'resumeCenter',
   // Same debt and reasoning; the Backlog rail entry is default-on, so publishing is reachable.
-  'backlog'
+  'backlog',
+  // Same debt and reasoning; reachable from the Workspace navigation.
+  'workstation'
 ])
 const UiUpdateFields = z
   .object({
@@ -208,6 +210,7 @@ const UiUpdateFields = z
     markdownTocPanelWidth: z.number().finite().optional(),
     terminalRailWidth: z.number().finite().optional(),
     terminalRailCollapsed: z.boolean().optional(),
+    globalNavCollapsed: z.boolean().optional(),
     combinedDiffFileTreeWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),

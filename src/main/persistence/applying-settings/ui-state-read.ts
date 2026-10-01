@@ -63,6 +63,7 @@ export function getPersistedUI(
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(state.ui?.markdownTocPanelWidth),
     terminalRailWidth: clampTerminalRailWidth(state.ui?.terminalRailWidth),
     terminalRailCollapsed: state.ui?.terminalRailCollapsed === true,
+    globalNavCollapsed: state.ui?.globalNavCollapsed === true,
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(state.ui?.combinedDiffFileTreeWidth),
     visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(state.ui?.visibleWorkspaceHostIds),
     workspaceHostOrder: normalizeExecutionHostOrder(state.ui?.workspaceHostOrder),

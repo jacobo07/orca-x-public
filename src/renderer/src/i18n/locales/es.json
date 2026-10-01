@@ -15356,5 +15356,11 @@
         "other": "No capturado. Tu texto se conserva aquí; inténtalo de nuevo."
       }
     }
+  },
+  "globalNav": {
+    "label": "Navegación de Orca",
+    "home": "Inicio",
+    "expand": "Expandir navegación",
+    "collapse": "Contraer navegación"
   }
 }

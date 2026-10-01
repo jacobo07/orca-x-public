@@ -17236,5 +17236,11 @@
         "other": "Not captured. Your text is kept here; try again."
       }
     }
+  },
+  "globalNav": {
+    "label": "Orca navigation",
+    "home": "Home",
+    "expand": "Expand navigation",
+    "collapse": "Collapse navigation"
   }
 }

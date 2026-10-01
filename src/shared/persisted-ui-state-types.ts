@@ -52,6 +52,8 @@ export type PersistedUIState = {
   terminalRailWidth?: number
   /** Terminal rail folded to its toolbar. */
   terminalRailCollapsed?: boolean
+  /** Global navigation shown as icons only. A user choice, never derived from the route. */
+  globalNavCollapsed?: boolean
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'

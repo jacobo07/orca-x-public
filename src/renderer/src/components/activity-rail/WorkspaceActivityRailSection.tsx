@@ -16,15 +16,16 @@ import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadC
 import { useMobileSidebarOnboardingBadge } from '@/components/sidebar/mobile-sidebar-onboarding-badge'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
-  activeViewForWorkspaceActivity,
   getVisibleWorkspaceActivities,
+  isWorkspaceActivityCurrent,
   type WorkspaceActivityId
 } from './workspace-activity-items'
 import {
   ActivityRailItemWithHide,
   HIDE_SETTING_BY_ACTIVITY,
   WorkspaceActivityRailButton,
-  type ActivityBadge
+  type ActivityBadge,
+  type ActivityItemLayout
 } from './workspace-activity-rail-button'
 
 /**
@@ -70,12 +71,14 @@ function TasksActivityRailButton({
   active,
   onSelect,
   onSelectProvider,
-  onHide
+  onHide,
+  layout
 }: {
   active: boolean
   onSelect: () => void
   onSelectProvider: (provider: TaskProvider) => void
   onHide: () => void
+  layout: ActivityItemLayout
 }): React.JSX.Element {
   const { canBrowseTasks, visibleTaskProviders, prefetchTasks } = useVisibleTaskProviders()
   // Why providers are gated but hide is not: with no git repo there is nothing to open, but the
@@ -93,6 +96,7 @@ function TasksActivityRailButton({
             onSelect={onSelect}
             disabled={!canBrowseTasks}
             onPrefetch={prefetchTasks}
+            layout={layout}
           />
         </div>
       </ContextMenuTrigger>
@@ -122,11 +126,11 @@ function TasksActivityRailButton({
   )
 }
 
-/** `omitAgentWorkspace`: the caller draws that entry itself (below Explorer in the panel strip). */
+/** The application destinations of the global navigation, as icons or labeled rows. */
 export function WorkspaceActivityRailSection({
-  omitAgentWorkspace = false
+  layout = 'icon'
 }: {
-  omitAgentWorkspace?: boolean
+  layout?: ActivityItemLayout
 } = {}): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const activeView = useAppStore((s) => s.activeView)
@@ -141,13 +145,7 @@ export function WorkspaceActivityRailSection({
   const openConversationsPage = useAppStore((s) => s.openConversationsPage)
   const openBacklogPage = useAppStore((s) => s.openBacklogPage)
 
-  const visible = React.useMemo(
-    () =>
-      getVisibleWorkspaceActivities(settings).filter(
-        (activity) => !(omitAgentWorkspace && activity === 'agent-workspace')
-      ),
-    [settings, omitAgentWorkspace]
-  )
+  const visible = React.useMemo(() => getVisibleWorkspaceActivities(settings), [settings])
   const showsActivity = visible.includes('activity')
   const showsMobile = visible.includes('mobile')
   const activityUnreadCount = useActivityUnreadCount(showsActivity, 'sidebar-badge')
@@ -229,9 +227,14 @@ export function WorkspaceActivityRailSection({
   }
 
   return (
-    <div className="flex flex-col items-center" data-workspace-activity-rail="">
+    <div
+      className={
+        layout === 'row' ? 'flex flex-col items-stretch gap-0.5' : 'flex flex-col items-center'
+      }
+      data-workspace-activity-rail=""
+    >
       {visible.map((activity) => {
-        const active = activeView === activeViewForWorkspaceActivity(activity)
+        const active = isWorkspaceActivityCurrent(activity, activeView)
         // Tasks is the one activity with secondary actions, so it renders its own variant rather
         // than teaching the generic button about providers it will never have.
         return activity === 'tasks' ? (
@@ -241,6 +244,7 @@ export function WorkspaceActivityRailSection({
             onSelect={() => openTaskPage()}
             onSelectProvider={(taskSource) => openTaskPage({ taskSource })}
             onHide={() => hideActivity('tasks')}
+            layout={layout}
           />
         ) : (
           <ActivityRailItemWithHide
@@ -258,12 +262,11 @@ export function WorkspaceActivityRailSection({
                   ? translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')
                   : String(activityUnreadCount)
               }
+              layout={layout}
             />
           </ActivityRailItemWithHide>
         )
       })}
-      {/* Scope seam: application surfaces above, contextual selectors below. */}
-      <div className="my-1 h-px w-5 shrink-0 bg-border" aria-hidden="true" />
     </div>
   )
 }

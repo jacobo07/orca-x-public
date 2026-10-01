@@ -642,6 +642,8 @@ export type UISlice = {
   terminalRailCollapsed: boolean
   setTerminalRailWidth: (width: number) => void
   toggleTerminalRailCollapsed: () => void
+  globalNavCollapsed: boolean
+  toggleGlobalNavCollapsed: () => void
   agentSendPopoverTargetMode: AgentSendPopoverTargetMode | null
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
@@ -1050,6 +1052,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setTerminalRailWidth: (width) => set({ terminalRailWidth: clampTerminalRailWidth(width) }),
   toggleTerminalRailCollapsed: () =>
     set((s) => ({ terminalRailCollapsed: !s.terminalRailCollapsed })),
+  globalNavCollapsed: false,
+  toggleGlobalNavCollapsed: () => set((s) => ({ globalNavCollapsed: !s.globalNavCollapsed })),
   agentSendPopoverTargetMode: null,
   openAgentSendPopoverTargetMode: (args) => {
     const targets = deriveRunningAgentSendTargets(get(), args.worktreeId)
@@ -2597,6 +2601,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ),
         terminalRailWidth: clampTerminalRailWidth(ui.terminalRailWidth, s.terminalRailWidth),
         terminalRailCollapsed: ui.terminalRailCollapsed === true,
+        globalNavCollapsed: ui.globalNavCollapsed === true,
         combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
           ui.combinedDiffFileTreeWidth,
           undefined,

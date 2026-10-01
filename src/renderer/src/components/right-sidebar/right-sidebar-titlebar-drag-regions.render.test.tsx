@@ -329,26 +329,16 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expect(markup).not.toContain('data-rail-section')
   })
 
-  it('draws Workspace directly below Explorer on the leading strip, exactly once', () => {
+  it('keeps application destinations out of the leading strip: they live in GlobalNavSidebar', () => {
     mockAppState.activityBarPosition = 'side'
     mockAppState.sidePanelDock = 'left'
 
     const markup = renderToStaticMarkup(<RightSidebar />)
-    const explorerAt = markup.indexOf('aria-label="Explorer')
-    const workspaceAt = markup.indexOf('data-workspace-activity="agent-workspace"')
-    const sessionsAt = markup.indexOf('aria-label="Sessions')
 
-    // Station control: the leading strip rendered its application section at all.
-    expect(markup).toContain('data-rail-section=""')
-    expect(explorerAt).toBeGreaterThan(-1)
-    expect(workspaceAt).toBeGreaterThan(explorerAt)
-    expect(sessionsAt).toBeGreaterThan(workspaceAt)
-    // The section above the panel tabs is told not to draw a second copy.
-    expect(markup).toContain('data-omits-workspace="true"')
-    expect(markup.split('data-workspace-activity="agent-workspace"')).toHaveLength(2)
-    expectNoDrag(
-      markup.match(/<button[^>]+data-workspace-activity="agent-workspace"[^>]*>/)?.[0] ?? ''
-    )
+    // Station control: the leading strip rendered its panel tabs.
+    expect(markup.indexOf('aria-label="Explorer')).toBeGreaterThan(-1)
+    expect(markup).not.toContain('data-workspace-activity=')
+    expect(markup).not.toContain('data-rail-section')
   })
 
   it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {

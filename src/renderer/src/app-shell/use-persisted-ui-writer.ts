@@ -21,6 +21,7 @@ export function usePersistedUIWriter(): void {
       markdownTocPanelWidth: s.markdownTocPanelWidth,
       terminalRailWidth: s.terminalRailWidth,
       terminalRailCollapsed: s.terminalRailCollapsed,
+      globalNavCollapsed: s.globalNavCollapsed,
       combinedDiffFileTreeWidth: s.combinedDiffFileTreeWidth,
       groupBy: s.groupBy,
       sortBy: s.sortBy,
