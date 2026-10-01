@@ -79,14 +79,58 @@ describe('project host compatibility across a repo: to git-root: merge', () => {
     ]
   }
 
-  it('CHARACTERIZATION: carries one predecessor, leaves a ghost row and an unremapped setup', () => {
+  it('carries both predecessors, remaps the independent setup and leaves no ghost row', () => {
     const result = mergeProjectHostSetupCompatibilityState(previous, repos)
 
     const root = result.projects.find((entry) => entry.id === ROOT_ID)
-    expect(root?.connectedApplications?.map((entry) => entry.id)).toEqual(['capp_aaaaaaaa'])
+    expect(root?.connectedApplications?.map((entry) => entry.id)).toEqual([
+      'capp_aaaaaaaa',
+      'capp_bbbbbbbb'
+    ])
     expect(result.projectHostSetups.find((setup) => setup.id === 'b-extra')?.projectId).toBe(
-      'repo:b'
+      ROOT_ID
     )
-    expect(result.projects.map((entry) => entry.id)).toContain('repo:b')
+    expect(result.projects.map((entry) => entry.id)).toEqual([ROOT_ID])
+  })
+
+  it('keeps the preference of the predecessor that holds the local repo', () => {
+    // `b` is newer (the primary) and holds the ssh replica; `a` holds the local one.
+    const newerRemote = {
+      ...previous,
+      projects: previous.projects.map((entry) =>
+        entry.id === 'repo:b'
+          ? {
+              ...entry,
+              updatedAt: 99,
+              localWindowsRuntimePreference: { kind: 'windows-host' as const }
+            }
+          : entry
+      )
+    }
+
+    const result = mergeProjectHostSetupCompatibilityState(newerRemote, repos)
+
+    expect(
+      result.projects.find((entry) => entry.id === ROOT_ID)?.localWindowsRuntimePreference
+    ).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
+  })
+
+  it('returns the dependents it was handed, remapped, and none it was not handed', () => {
+    const agents = [
+      { id: 'agent_1', name: 'On b', role: '', projectId: 'repo:b', createdAt: 1, updatedAt: 1 },
+      { id: 'agent_2', name: 'Free', role: '', projectId: null, createdAt: 1, updatedAt: 1 }
+    ]
+    const worktreeMeta = { 'b::/srv/b-feature': { projectId: 'repo:b' } } as never
+
+    const withDependents = mergeProjectHostSetupCompatibilityState(
+      { ...previous, agents, worktreeMeta },
+      repos
+    )
+    const without = mergeProjectHostSetupCompatibilityState(previous, repos)
+
+    expect(withDependents.agents?.map((agent) => agent.projectId)).toEqual([ROOT_ID, null])
+    expect(withDependents.worktreeMeta?.['b::/srv/b-feature']?.projectId).toBe(ROOT_ID)
+    expect(without).not.toHaveProperty('agents')
+    expect(without).not.toHaveProperty('worktreeMeta')
   })
 })

@@ -48,7 +48,7 @@ describe('a worktree follows its project from repo: to git-root:', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('CHARACTERIZATION: leaves WorktreeMeta.projectId on a vanished project id (live sync)', async () => {
+  it('moves WorktreeMeta.projectId with its project (live sync)', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'a', path: '/srv/a', gitRemoteIdentity: null }))
     store.addRepo(
@@ -67,11 +67,11 @@ describe('a worktree follows its project from repo: to git-root:', () => {
     store.updateRepo('b', { gitRootIdentity: rootOf('b') }, 'ssh:srv')
 
     expect(store.getProjects().map((project) => project.id)).toEqual([ROOT_ID])
-    expect(store.getWorktreeMeta(WORKTREE_A)?.projectId).toBe('repo:a')
-    expect(store.getWorktreeMeta(WORKTREE_B)?.projectId).toBe('repo:b')
+    expect(store.getWorktreeMeta(WORKTREE_A)?.projectId).toBe(ROOT_ID)
+    expect(store.getWorktreeMeta(WORKTREE_B)?.projectId).toBe(ROOT_ID)
   })
 
-  it('CHARACTERIZATION: leaves WorktreeMeta.projectId on a vanished project id (load path)', async () => {
+  it('moves WorktreeMeta.projectId with its project (load path)', async () => {
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       repos: [
@@ -117,7 +117,7 @@ describe('a worktree follows its project from repo: to git-root:', () => {
     const store = await createStore()
 
     expect(store.getProjects().map((project) => project.id)).toEqual([ROOT_ID])
-    expect(store.getWorktreeMeta(WORKTREE_A)?.projectId).toBe('repo:a')
-    expect(store.getWorktreeMeta(WORKTREE_B)?.projectId).toBe('repo:b')
+    expect(store.getWorktreeMeta(WORKTREE_A)?.projectId).toBe(ROOT_ID)
+    expect(store.getWorktreeMeta(WORKTREE_B)?.projectId).toBe(ROOT_ID)
   })
 })

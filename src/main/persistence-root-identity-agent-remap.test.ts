@@ -46,7 +46,7 @@ describe('an agent follows its project from repo: to git-root:', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('CHARACTERIZATION: strands an agent of the repo that joins an existing git-root: project (live sync)', async () => {
+  it('moves an agent of the repo that joins an existing git-root: project (live sync)', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'a', path: '/srv/a', gitRemoteIdentity: null }))
     store.addRepo(
@@ -66,11 +66,14 @@ describe('an agent follows its project from repo: to git-root:', () => {
 
     expect(store.getProjects().map((project) => project.id)).toEqual([ROOT_ID])
     expect(store.getProjects()[0]?.sourceRepoIds).toEqual(['a', 'b'])
-    // Stranded: the agent still names a project id that no longer exists.
-    expect(store.getAgents().map((agent) => agent.projectId)).toEqual(['repo:b'])
+    expect(store.getAgents().map((agent) => agent.projectId)).toEqual([ROOT_ID])
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getAgents().map((agent) => agent.projectId)).toEqual([ROOT_ID])
   })
 
-  it('CHARACTERIZATION: strands an agent of the unclaimed predecessor on load (both roots persisted)', async () => {
+  it('moves the agents of every claimed predecessor on load (both roots persisted)', async () => {
     const now = 1
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
@@ -131,7 +134,6 @@ describe('an agent follows its project from repo: to git-root:', () => {
     const store = await createStore()
 
     expect(store.getProjects().map((project) => project.id)).toEqual([ROOT_ID])
-    // The predecessor that was claimed is followed by the profile rebuild only; the load path leaves both.
-    expect(store.getAgents().map((agent) => agent.projectId)).toEqual(['repo:a', 'repo:b'])
+    expect(store.getAgents().map((agent) => agent.projectId)).toEqual([ROOT_ID, ROOT_ID])
   })
 })

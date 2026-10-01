@@ -2359,6 +2359,9 @@ export class Store {
     const compatibilityState = mergeProjectHostSetupCompatibilityState(this.state, this.state.repos)
     this.state.projects = compatibilityState.projects
     this.state.projectHostSetups = compatibilityState.projectHostSetups
+    // Why: dependents keyed by a project id move with it, or an id change strands them for good.
+    this.state.agents = compatibilityState.agents ?? this.state.agents
+    this.state.worktreeMeta = compatibilityState.worktreeMeta ?? this.state.worktreeMeta
   }
 
   private projectHostSetupOperations: ProjectHostSetupPersistenceOperations | null = null

@@ -55,7 +55,8 @@ export type PersistedState = {
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   /** Durable product actors. The one catalog declared in config/durable-actor-catalogs.jsonc;
-   *  their projectId is remapped by rebuildRepoBackedProjectState when a Project id is promoted. */
+   *  their projectId is remapped (remapAgentProjectIds) by the store's live sync, its load path and
+   *  rebuildRepoBackedProjectState when a Project id is promoted. */
   agents: Agent[]
   folderWorkspaces: FolderWorkspace[]
   /** Folder-workspace review notes, keyed by FolderWorkspace.id. Top-level, NOT nested in
