@@ -1068,9 +1068,17 @@ function mergeFetchedReposForHost(
 ): readonly Repo[] {
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
   const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
+  const fetchedRepoIds = new Set(fetchedWithProjectGroups.map((repo) => repo.id))
   const preserved = previous.filter((repo) => {
     const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
+    if (
+      !fetchedCatalogOwnsHost(hostId, existingHostId) ||
+      fetchedIdentities.has(getRepoHostIdentity(repo))
+    ) {
+      return true
+    }
+    // Why: an SSH row whose id moved host awaits re-adoption evidence; an id gone from the catalog was removed.
+    return existingHostId !== hostId && fetchedRepoIds.has(repo.id)
   })
   return reconcileFetchedRepos(
     previous,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
 
 // The 16-05 real two-host run: a remote-less repo on the laptop and on a direct-SSH host groups
 // as `git-root:R`; a same-root fork on that SSH host then demotes the SSH replica to `repo:`.
@@ -122,6 +123,25 @@ describe('same-host fork demotes a cross-host root project (local catalog)', () 
 
     expect(projectView(store)).toEqual({ [ROOT_PROJECT_ID]: ['repo-a', 'repo-b'] })
     expectSetupsAgreeWithProjects(store)
+  })
+
+  // 16-REVIEW MR-1: the local catalog owns direct-SSH rows, so a fork removed elsewhere must not survive.
+  it('prunes a direct-SSH repo removed elsewhere on the next local fetch', async () => {
+    mainRepos = [...mainRepos, sshRepo('repo-f', '/srv/repo-f/.git')]
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
+    await store.getState().fetchRepos()
+    expect(projectView(store)).toMatchObject({ 'repo:repo-f': ['repo-f'] })
+
+    mainRepos = mainRepos.filter((repo) => repo.id !== 'repo-f')
+    await store.getState().fetchRepos()
+
+    const repoIds = store.getState().repos.map((repo) => repo.id)
+    expect(repoIds.sort()).toEqual(['repo-a', 'repo-b'])
+    expect(projectView(store)).toEqual({ [ROOT_PROJECT_ID]: ['repo-a', 'repo-b'] })
+    const shown = getProjectHostSetupProjectionFromState(store.getState())
+    expect(shown.projects.map((project) => project.id)).toEqual([ROOT_PROJECT_ID])
+    expect(shown.identityCollisions).toEqual(mainCatalog().identityCollisions)
   })
 
   it('lists the same projects after a reload into a fresh renderer', async () => {
