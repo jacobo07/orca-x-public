@@ -10,6 +10,7 @@ import {
 import { activateWebSshWorktree, assertTerminalOnOwningHost } from './hwf-two-host-owning-host-legs'
 import {
   classifyInWindow,
+  classifyOutageHook,
   dropAndRestoreCarrier,
   dropLine,
   outageWindowOnRemoteClock,
@@ -131,24 +132,8 @@ export async function runAgentLeg(
     const hookPty = await waitForActivePanePtyId(page, 45_000)
     const paneKey = await readActivePaneKey(page)
     const claudeRe = /(^|[/\s])claude(\s|$)/
-    // Why: the launcher returns the first claude it sees, which may belong to an earlier app run in the same root; this run's agent is the one that was not there before.
-    const knownClaude = new Set(
-      listRootProcs(run)
-        .filter((proc) => claudeRe.test(proc.argv))
-        .map((proc) => proc.pid)
-    )
-    const launched = await launchProviderOnOwningHost(page, run, surfaces, providers)
-    let agentPid: number | null = null
-    for (let i = 0; launched !== null && i < 20 && agentPid === null; i += 1) {
-      agentPid =
-        listRootProcs(run).find(
-          (proc) => claudeRe.test(proc.argv) && proc.cwd === run.repo && !knownClaude.has(proc.pid)
-        )?.pid ?? null
-      if (agentPid === null) {
-        await sleep(3_000)
-      }
-    }
-    expect(launched === null || agentPid !== null).toBe(true)
+    // Why: the launcher snapshots provider pids before its click and returns only a pid new to this run.
+    const agentPid = await launchProviderOnOwningHost(page, run, surfaces, providers)
     if (agentPid === null) {
       writeHwfLeg({
         leg,
@@ -211,9 +196,9 @@ export async function runAgentLeg(
     const hookLog = readOutageHookLog(run)
     const window = outageWindowOnRemoteClock(drop.tKillMs, drop.tRestoreMs, skew.skewS)
     const klass = hookLog ? classifyInWindow(hookLog.epoch, window) : 'edge'
-    const outcome = klass === 'in' ? (delivered ? 'delivered' : 'lost') : 'edge'
+    const outcome = classifyOutageHook({ hookLog, windowClass: klass, storeSawIt: delivered })
     console.log(
-      `HWF_OUTAGE_HOOK=${outcome} remote_epoch=${Math.floor(hookLog?.epoch ?? 0)} curl_exit=${hookLog?.exit ?? 'none'} class=${klass} store_a=${delivered} store_b=${deliveredB}`
+      `HWF_OUTAGE_HOOK=${outcome} remote_epoch=${Math.floor(hookLog?.epoch ?? 0)} curl_exit=${hookLog?.exit ?? 'none'} http=${hookLog?.http ?? 'none'} class=${klass} store_a=${delivered} store_b=${deliveredB}`
     )
     saveEvidence('15-03-outage-hook.txt', readRemoteFile(run, 'outage-hook.log'))
     console.log(`HWF_B_OUTAGE_ROW=${deliveredB ? 'seen' : 'unseen'}`)

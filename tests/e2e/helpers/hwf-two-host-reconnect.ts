@@ -189,12 +189,13 @@ const OUTAGE_HOOK_SCRIPT = [
   'echo $$ > "$ROOT/outage-emitter.pid"',
   'sleep "$DELAY"',
   'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ]; then',
-  '  echo "$(date +%s.%N) ENV_MISSING" >> "$ROOT/outage-hook.log"; sleep 120; exit 0',
+  '  echo "$(date +%s.%N) ENV_MISSING 000" >> "$ROOT/outage-hook.log"; sleep 120; exit 0',
   'fi',
   `PAYLOAD=$(printf '{"hook_event_name":"UserPromptSubmit","prompt":"%s"}' "$PROMPT")`,
-  'curl -sS -X POST "http://127.0.0.1:$ORCA_AGENT_HOOK_PORT/hook/codex" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Orca-Agent-Hook-Token: $ORCA_AGENT_HOOK_TOKEN" --data-urlencode "paneKey=$ORCA_PANE_KEY" --data-urlencode "tabId=$ORCA_TAB_ID" --data-urlencode "worktreeId=$ORCA_WORKTREE_ID" --data-urlencode "env=$ORCA_AGENT_HOOK_ENV" --data-urlencode "version=$ORCA_AGENT_HOOK_VERSION" --data-urlencode "payload=$PAYLOAD" > /dev/null',
+  // Why: curl's exit code alone cannot tell a 401 from a 204; the HTTP status is logged beside it.
+  `HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$ORCA_AGENT_HOOK_PORT/hook/codex" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Orca-Agent-Hook-Token: $ORCA_AGENT_HOOK_TOKEN" --data-urlencode "paneKey=$ORCA_PANE_KEY" --data-urlencode "tabId=$ORCA_TAB_ID" --data-urlencode "worktreeId=$ORCA_WORKTREE_ID" --data-urlencode "env=$ORCA_AGENT_HOOK_ENV" --data-urlencode "version=$ORCA_AGENT_HOOK_VERSION" --data-urlencode "payload=$PAYLOAD")`,
   'RC=$?',
-  'echo "$(date +%s.%N) $RC" >> "$ROOT/outage-hook.log"',
+  'echo "$(date +%s.%N) $RC ${HTTP:-000}" >> "$ROOT/outage-hook.log"',
   'sleep 120'
 ].join('\n')
 
@@ -221,11 +222,37 @@ export async function scheduleOutageHook(
   return prompt
 }
 
-// Last line of the outage-hook log: `<remote epoch> <curl exit>` or `<epoch> ENV_MISSING`.
-export function readOutageHookLog(run: HwfRun): { epoch: number; exit: string } | null {
+export type OutageHookLog = { epoch: number; exit: string; http: string }
+
+// Last line of the outage-hook log: `<remote epoch> <curl exit|ENV_MISSING> <http status>`; an older two-field line reads http `none`.
+export function readOutageHookLog(run: HwfRun): OutageHookLog | null {
   const result = execOnOwningHost(run, 'tail -n 1 outage-hook.log 2>/dev/null; true')
-  const match = /^(\d+(?:\.\d+)?) (\S+)\s*$/m.exec(result.out)
-  return match ? { epoch: Number(match[1]), exit: match[2] } : null
+  const match = /^(\d+(?:\.\d+)?) (\S+)(?: (\S+))?\s*$/m.exec(result.out)
+  return match ? { epoch: Number(match[1]), exit: match[2], http: match[3] ?? 'none' } : null
+}
+
+export type OutageHookClass = 'delivered' | 'rejected' | 'lost' | 'env-missing' | 'edge'
+
+// delivered = 2xx at the post AND the row reached the store; rejected = a non-2xx answer; lost = curl never connected or the store never saw an accepted post.
+export function classifyOutageHook(args: {
+  hookLog: OutageHookLog | null
+  windowClass: 'in' | 'out' | 'edge'
+  storeSawIt: boolean
+}): OutageHookClass {
+  const { hookLog, windowClass, storeSawIt } = args
+  if (hookLog?.exit === 'ENV_MISSING') {
+    return 'env-missing'
+  }
+  if (!hookLog || windowClass !== 'in') {
+    return 'edge'
+  }
+  if (hookLog.exit !== '0' || hookLog.http === '000') {
+    return 'lost'
+  }
+  if (!/^2\d\d$/.test(hookLog.http)) {
+    return 'rejected'
+  }
+  return storeSawIt ? 'delivered' : 'lost'
 }
 
 export function readRemoteFile(run: HwfRun, name: string): string {

@@ -1,8 +1,8 @@
-import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 import { expect, type Page } from '@stablyai/playwright-test'
 
+import { listRootProcs, snapshotRootPids, type RootProc } from './hwf-two-host-root-procs'
 import type { HwfRun } from './hwf-two-host-ssh-target'
 import { execInTerminal, waitForTerminalOutput } from './terminal'
 
@@ -78,34 +78,18 @@ async function probeSshAgentMenu(page: Page): Promise<HwfClientProbe['sshAgentMe
 
 export type HwfProviderPaths = { codex: string; claude: string }
 
-export type RootProc = { pid: number; ppid: number; cwd: string; argv: string }
-
-// Why: the committed provisioner's `procs` verb is the one instrument for "what runs under the root, and where".
-export function listRootProcs(run: HwfRun): RootProc[] {
-  const result = spawnSync(
-    process.execPath,
-    [path.join(process.cwd(), 'config', 'scripts', 'hwf-two-host-remote.mjs'), 'procs', run.root],
-    { encoding: 'utf8' }
-  )
-  const procs: RootProc[] = []
-  for (const line of (result.stdout ?? '').split(/\r?\n/)) {
-    const match = /^PROC (\d+) (-?\d+) (\S+) (.*)$/.exec(line)
-    if (match) {
-      procs.push({ pid: Number(match[1]), ppid: Number(match[2]), cwd: match[3], argv: match[4] })
-    }
-  }
-  return procs
-}
+export { listRootProcs, type RootProc }
 
 async function waitForRootProc(
   run: HwfRun,
   pattern: RegExp,
-  timeoutMs: number
+  timeoutMs: number,
+  knownPids: ReadonlySet<number> = new Set()
 ): Promise<RootProc | null> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const found = listRootProcs(run).find(
-      (proc) => pattern.test(proc.argv) && proc.cwd === run.repo
+      (proc) => pattern.test(proc.argv) && proc.cwd === run.repo && !knownPids.has(proc.pid)
     )
     if (found) {
       return found
@@ -148,19 +132,36 @@ export async function launchProviderOnOwningHost(
   await page.evaluate(async (agent) => {
     await window.__store?.getState().updateSettings({ defaultTuiAgent: agent })
   }, launchAs)
+  const providerRe = new RegExp(`(^|[/\\s])${launchAs}(\\s|$)`)
+  const knownPids = snapshotRootPids(run, providerRe)
+  const tabsBefore = await countActiveWorktreeTabs(page)
   await launchFromNewTab(page, launchAs)
-  const proc = await waitForRootProc(run, new RegExp(`(^|[/\\s])${launchAs}(\\s|$)`), 60_000)
+  // The click must have produced a tab; otherwise any process found below was not launched by it.
+  await expect
+    .poll(() => countActiveWorktreeTabs(page), { timeout: 15_000, message: 'no new tab after launch' })
+    .toBeGreaterThan(tabsBefore)
+  const proc = await waitForRootProc(run, providerRe, 60_000, knownPids)
   if (!proc) {
     console.log(
-      `HWF_AGENT_A_LAUNCH=NOT_OBSERVED provider=${launchAs} reason=no-process-with-cwd-repo`
+      `HWF_AGENT_A_LAUNCH=NOT_OBSERVED provider=${launchAs} reason=no-new-process-with-cwd-repo preexisting=${knownPids.size}`
     )
-    throw new Error(`no ${launchAs} process with cwd ${run.repo} under the root`)
+    throw new Error(`no new ${launchAs} process with cwd ${run.repo} under the root`)
   }
   await new Promise((resolve) => setTimeout(resolve, 10_000))
   const stillAlive = listRootProcs(run).some((candidate) => candidate.pid === proc.pid)
   expect(stillAlive).toBe(true)
-  console.log(`HWF_AGENT_A_LAUNCH=observed provider=${launchAs} pid=${proc.pid} cwd=${proc.cwd}`)
+  console.log(
+    `HWF_AGENT_A_LAUNCH=observed provider=${launchAs} pid=${proc.pid} cwd=${proc.cwd} new_tab=yes preexisting=${knownPids.size}`
+  )
   return proc.pid
+}
+
+function countActiveWorktreeTabs(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    const id = state?.activeWorktreeId
+    return id ? (state?.tabsByWorktree[id]?.length ?? 0) : 0
+  })
 }
 
 // Supplementary only: a stub command proves launch placement, never a provider.
