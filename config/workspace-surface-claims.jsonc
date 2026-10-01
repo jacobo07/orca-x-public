@@ -17,6 +17,7 @@
     "src/renderer/src/components/conversations",
     "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx",
     "src/renderer/src/components/settings/ReplicaTopologyDetails.tsx",
+    "src/renderer/src/components/settings/PrepareThisDeviceSection.tsx",
     "mobile/src/workspace"
   ],
   "presenters": [
@@ -35,6 +36,10 @@
     {
       "module": "src/renderer/src/components/settings/replica-host-health-presentation.ts",
       "toneType": "ReplicaHostHealthTone"
+    },
+    {
+      "module": "src/renderer/src/components/settings/environment-requirement-presentation.ts",
+      "toneType": "EnvironmentRequirementTone"
     }
   ],
   "claims": {
