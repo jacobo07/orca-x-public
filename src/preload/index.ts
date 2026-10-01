@@ -3210,6 +3210,10 @@ const api = {
     }
   } satisfies PreloadApi['durableExit'],
 
+  environment: {
+    measureRequirements: (args) => ipcRenderer.invoke('environment:measureRequirements', args)
+  } satisfies PreloadApi['environment'],
+
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),
     create: (args) => ipcRenderer.invoke('conversations:create', args),

@@ -7,6 +7,8 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { EnvironmentRequirementsMeasurement } from '../../../shared/environment-requirements-measurement'
+import { unwrapRuntimeRpcResult } from '../runtime/runtime-rpc-result'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
@@ -877,6 +879,17 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onParkPhaseRequest: () => () => {},
       respondParkPhase: () => {},
       onParkFromMenu: () => () => {}
+    },
+    // Why explicit: the web client has no local host; the active runtime owns the repo and answers.
+    environment: {
+      measureRequirements: async ({ repoId }) =>
+        unwrapRuntimeRpcResult(
+          await callRuntimeEnvelope<EnvironmentRequirementsMeasurement>(
+            'environment.measureRequirements',
+            { repo: `id:${repoId}` },
+            60_000
+          )
+        )
     },
     cache: {
       getGitHub: () =>

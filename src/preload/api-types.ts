@@ -66,6 +66,7 @@ import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/worksp
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
 import type { ProjectWorkingSetApi } from './api/project-working-set-api'
 import type { DurableExitApi } from './api/durable-exit-api'
+import type { EnvironmentRequirementsApi } from './api/environment-requirements-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
 // Flattens contracts that share one PreloadApi key: an intersection is not type-identical to the flat shape.
@@ -131,6 +132,7 @@ export type PreloadApi = {
   remoteWorkspace: WorkspaceSessionApi['remoteWorkspace']
   workingSet: ProjectWorkingSetApi['workingSet']
   durableExit: DurableExitApi['durableExit']
+  environment: EnvironmentRequirementsApi['environment']
   conversations: ConversationApi['conversations']
   agentFederation: AgentFederationApi['agentFederation']
   agents: AgentDirectoryApi['agents']

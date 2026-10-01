@@ -19,17 +19,13 @@ import type {
   RequirementDiagnostic
 } from '../shared/environment-requirement-types'
 
-export type ContractSource = { hostKey: string; path: string; contentHash: string }
-export type ContractReadState = 'parsed' | 'absent' | 'unreadable' | 'unparseable'
+import type {
+  ContractReadState,
+  ContractSource,
+  EnvironmentRequirementsMeasurement
+} from '../shared/environment-requirements-measurement'
 
-export type EnvironmentRequirementsMeasurement = {
-  // Null when no bytes were read (the file is absent or could not be read).
-  contractSource: ContractSource | null
-  contract: ContractReadState
-  requirements: EnvironmentRequirement[]
-  diagnostics: RequirementDiagnostic[]
-  measurement: HostMeasurement
-}
+export type { ContractSource, EnvironmentRequirementsMeasurement }
 
 export type EnvironmentMeasurementDeps = {
   hostname: string

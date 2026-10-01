@@ -113,5 +113,19 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'Repo-backed setups remove the registered repo compatibility record.'
     ],
     examples: ['orca project setup-delete --setup github:stablyai/orca::gpu --json']
+  },
+  {
+    path: ['project', 'requirements'],
+    summary: "Measure a repo's orca.yaml requirements on the host that owns it",
+    usage: 'orca project requirements --repo <selector> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo'],
+    notes: [
+      'Only measures: reads orca.yaml and probes the host. No prepare command is ever run.',
+      'A host that cannot be measured is reported by name, never as zero requirements.'
+    ],
+    examples: [
+      'orca project requirements --repo path:/work/app',
+      'orca project requirements --repo id:abc --json'
+    ]
   }
 ]

@@ -58,6 +58,7 @@ Projects:
   project setup-create      Create independent project host setup metadata
   project setup-update      Update project host setup metadata
   project setup-delete      Remove a project host setup
+  project requirements      Measure a repo's orca.yaml requirements on its host (runs nothing)
 
 Repos:
   repo list                 List repos registered in Orca
@@ -258,6 +259,7 @@ Common Commands:
   orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-delete --setup <setup-id> [--json]
+  orca project requirements --repo <selector> [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]

@@ -13,6 +13,8 @@ import type {
 import type { RepoKind } from '../../shared/repo-types'
 import type { ProjectHostSetupWithReplicaTopology } from '../../shared/replica-topology'
 import type { CommandHandler } from '../dispatch'
+import type { EnvironmentRequirementsMeasurement } from '../../shared/environment-requirements-measurement'
+import { formatEnvironmentRequirements } from '../environment-requirements-format'
 import {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -154,6 +156,13 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     printResult(result, json, formatProjectHostSetupDeleteResult)
+  },
+  'project requirements': async ({ flags, client, json }) => {
+    const result = await client.call<EnvironmentRequirementsMeasurement>(
+      'environment.measureRequirements',
+      { repo: getRequiredStringFlag(flags, 'repo') }
+    )
+    printResult(result, json, formatEnvironmentRequirements)
   }
 }
 
