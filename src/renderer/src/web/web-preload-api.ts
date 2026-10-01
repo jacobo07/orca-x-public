@@ -889,6 +889,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
             { repo: `id:${repoId}` },
             60_000
           )
+        ),
+      runPrepareStep: async ({ repoId, requirementId, approvedContentHash, approvedHostKey }) =>
+        unwrapRuntimeRpcResult(
+          await callRuntimeEnvelope(
+            'environment.runPrepareStep',
+            { repo: `id:${repoId}`, requirementId, approvedContentHash, approvedHostKey },
+            60_000
+          )
         )
     },
     cache: {

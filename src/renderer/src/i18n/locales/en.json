@@ -11536,6 +11536,16 @@
         "FloatingWorkspaceDockSetting": {
           "floating": "Floating",
           "bottom": "Bottom"
+        },
+        "PrepareStepApprovalDialog": {
+          "asksForElevation": "This step asks for elevated privileges.",
+          "scriptNotCovered": "This step runs a script from the repository. The script's own contents are not covered by this approval.",
+          "title": "Run this setup step?",
+          "description": "Orca will run the text below in a terminal on {{value0}} for {{value1}}. Approving records this exact text for this host only.",
+          "pending": "Recording the approval…",
+          "failed": "Orca could not record the approval, so nothing was run. Try again.",
+          "cancel": "Cancel",
+          "approve": "Approve and run"
         }
       },
       "right": {

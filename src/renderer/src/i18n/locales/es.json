@@ -10342,6 +10342,16 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "PrepareStepApprovalDialog": {
+          "asksForElevation": "Este paso solicita privilegios elevados.",
+          "scriptNotCovered": "Este paso ejecuta un script del repositorio. El contenido del propio script no está cubierto por esta aprobación.",
+          "title": "¿Ejecutar este paso de preparación?",
+          "description": "Orca ejecutará el texto de abajo en una terminal de {{value0}} para {{value1}}. Aprobar registra este texto exacto solo para este host.",
+          "pending": "Registrando la aprobación…",
+          "failed": "Orca no pudo registrar la aprobación, así que no se ejecutó nada. Inténtalo de nuevo.",
+          "cancel": "Cancelar",
+          "approve": "Aprobar y ejecutar"
         }
       },
       "right": {

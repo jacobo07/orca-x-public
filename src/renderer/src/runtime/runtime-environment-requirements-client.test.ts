@@ -5,7 +5,10 @@ import {
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
-import { measureRequirementsForRuntimeTarget } from './runtime-environment-requirements-client'
+import {
+  measureRequirementsForRuntimeTarget,
+  runPrepareStepForRuntimeTarget
+} from './runtime-environment-requirements-client'
 
 const measurement: EnvironmentRequirementsMeasurement = {
   contractSource: null,
@@ -22,16 +25,18 @@ const measurement: EnvironmentRequirementsMeasurement = {
 }
 
 const measureRequirements = vi.fn()
+const runPrepareStep = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const remote = { kind: 'environment', environmentId: 'env-1' } as const
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   measureRequirements.mockReset()
+  runPrepareStep.mockReset()
   runtimeEnvironmentCall.mockReset()
   vi.stubGlobal('window', {
     api: {
-      environment: { measureRequirements },
+      environment: { measureRequirements, runPrepareStep },
       runtimeEnvironments: {
         call: (args: RuntimeEnvironmentCallRequest) =>
           createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
@@ -90,5 +95,69 @@ describe('measureRequirementsForRuntimeTarget', () => {
     await expect(measureRequirementsForRuntimeTarget(remote, 'r1')).rejects.toMatchObject({
       code: 'repo_not_found'
     })
+  })
+})
+
+const APPROVAL = {
+  requirementId: 'node',
+  approvedContentHash: 'c'.repeat(64),
+  approvedHostKey: 'local@abc'
+}
+
+describe('runPrepareStepForRuntimeTarget', () => {
+  it('asks the local host through IPC and sends no command text', async () => {
+    runPrepareStep.mockResolvedValueOnce({ status: 'started', terminal: { handle: 'h' } })
+    await expect(
+      runPrepareStepForRuntimeTarget({ kind: 'local' }, 'r1', APPROVAL)
+    ).resolves.toEqual({ status: 'started' })
+    expect(runPrepareStep).toHaveBeenCalledWith({ repoId: 'r1', ...APPROVAL })
+    expect(Object.keys(runPrepareStep.mock.calls[0][0])).not.toContain('command')
+  })
+
+  it('asks the remote runtime with the strict parameter set', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'x',
+      ok: true,
+      result: { status: 'refused', reason: 'approval-missing' }
+    })
+    await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
+      status: 'refused',
+      reason: 'approval-missing'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'environment.runPrepareStep',
+        params: { repo: 'id:r1', ...APPROVAL }
+      })
+    )
+  })
+
+  it('old runtime refuses prepare', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'x',
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method' }
+    })
+    await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
+      status: 'refused',
+      reason: 'host-predates-prepare'
+    })
+  })
+
+  it('any other failure is a refusal named unreachable, never started', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'x',
+      ok: false,
+      error: { code: 'runtime_unavailable', message: 'down' }
+    })
+    await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
+      status: 'refused',
+      reason: 'unreachable'
+    })
+    runPrepareStep.mockRejectedValueOnce(new Error('ipc'))
+    await expect(
+      runPrepareStepForRuntimeTarget({ kind: 'local' }, 'r1', APPROVAL)
+    ).resolves.toEqual({ status: 'refused', reason: 'unreachable' })
   })
 })
