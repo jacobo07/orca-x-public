@@ -1185,6 +1185,7 @@ import {
 } from '../providers/ssh-git-dispatch'
 import { detectGitHubAvatarIcon, detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
+import { linkRepoToRootProject } from '../project-root-identity-link'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type {
   CodexAccountService,
@@ -19771,12 +19772,16 @@ export class OrcaRuntimeService {
     )
   }
 
-  private completeProjectHostSetup(
+  private async completeProjectHostSetup(
     args: ProjectHostSetupExistingFolderArgs,
     initialRepo: Repo,
     repoWasCreated: boolean
-  ): ProjectHostSetupResult {
+  ): Promise<ProjectHostSetupResult> {
     try {
+      // Why: a git-root id is proven on the target host, never inferred from the request.
+      if (this.store) {
+        await linkRepoToRootProject(this.store, initialRepo, args.projectId)
+      }
       return this.linkRepoToProjectHostSetup(args, initialRepo)
     } catch (err) {
       if (repoWasCreated) {
