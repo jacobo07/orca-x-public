@@ -136,3 +136,56 @@ describe('carryProjectStateThroughIdentityChange', () => {
     expect([...result.remappedProjectIds]).toEqual([['repo:r1', 'git:host/acme/left']])
   })
 })
+
+describe('repo: to git-root: merge hand-over', () => {
+  const ROOT_ID = `git-root:${'a'.repeat(40)}`
+  const application = (id: string) => ({
+    id: `capp_${id}`,
+    label: id,
+    origin: `https://${id}.example.com`,
+    signInOrigins: [],
+    addedAt: 1
+  })
+  const merged = () => makeProject({ id: ROOT_ID, sourceRepoIds: ['a', 'b'] })
+  const predecessorA = () =>
+    makeProject({
+      id: 'repo:a',
+      sourceRepoIds: ['a'],
+      updatedAt: 20,
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+      connectedApplications: [application('aaaaaaaa')]
+    })
+  const predecessorB = () =>
+    makeProject({
+      id: 'repo:b',
+      sourceRepoIds: ['b'],
+      updatedAt: 10,
+      localWindowsRuntimePreference: { kind: 'windows-host' },
+      connectedApplications: [application('bbbbbbbb')]
+    })
+
+  it('CHARACTERIZATION: carries one predecessor and drops the user state of the other', () => {
+    const result = carryProjectStateThroughIdentityChange(
+      [merged()],
+      [predecessorA(), predecessorB()]
+    )
+
+    expect(result.projects[0]).toMatchObject({
+      id: ROOT_ID,
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+    expect(result.projects[0]?.connectedApplications?.map((entry) => entry.id)).toEqual([
+      'capp_aaaaaaaa'
+    ])
+    expect([...result.remappedProjectIds]).toEqual([['repo:a', ROOT_ID]])
+  })
+
+  it('CHARACTERIZATION: a git-root: row that already exists claims no orphaned predecessor', () => {
+    const existing = makeProject({ id: ROOT_ID, sourceRepoIds: ['a', 'b'], updatedAt: 5 })
+
+    const result = carryProjectStateThroughIdentityChange([merged()], [existing, predecessorB()])
+
+    expect(result.projects[0]?.connectedApplications).toBeUndefined()
+    expect(result.remappedProjectIds.size).toBe(0)
+  })
+})
