@@ -1,10 +1,12 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { EVALUATED_REQUIREMENT_KINDS } from './environment-requirement-types'
 import { parseOrcaYamlRequirements } from './orca-yaml-requirements'
 
 const doc = readFileSync(join(__dirname, '../../docs/reference/orca-yaml-requirements.md'), 'utf8')
+const authorityPath = join(__dirname, '../main/environment-prepare-authority.ts')
+const authorityExists = existsSync(authorityPath)
 
 function kindRows(): { kind: string; status: string }[] {
   return doc
@@ -51,19 +53,41 @@ describe('docs/reference/orca-yaml-requirements.md', () => {
     expect(new Set(rows.map((r) => r.kind)).size).toBe(rows.length)
   })
 
-  it('the kinds marked LIVE are exactly the evaluated kinds', () => {
+  it('the kinds marked LIVE are the evaluated kinds, plus prepare once its authority exists', () => {
     const live = kindRows()
       .filter((row) => row.status === 'LIVE')
       .map((row) => row.kind)
       .sort()
-    expect(live).toEqual([...EVALUATED_REQUIREMENT_KINDS].sort())
+    const expected: string[] = [...EVALUATED_REQUIREMENT_KINDS]
+    if (authorityExists) {
+      expected.push('prepare')
+    }
+    expect(live).toEqual(expected.sort())
   })
 
-  it('prepare is PLANNED in this plan', () => {
-    expect(kindRows().find((row) => row.kind === 'prepare')?.status).toBe('PLANNED')
+  it('prepare is LIVE iff the authority that enforces it exists', () => {
+    expect(kindRows().find((row) => row.kind === 'prepare')?.status).toBe(
+      authorityExists ? 'LIVE' : 'PLANNED'
+    )
   })
 
-  it('does not claim that prepare commands run', () => {
-    expect(doc).not.toMatch(/only approved prepare commands run/i)
+  // The doc claim and its enforcement land together: each sentence exists iff the authority does.
+  it.each([
+    ['Only approved prepare commands run', /only approved prepare commands run/i],
+    ['the runtime-host sentence', /the grant itself is the caller's, not recorded host-side/],
+    ['the unreadable approval refusal', /approval-unreadable/],
+    ['the check-to-spawn window', /Window: between the final re-read/]
+  ])('%s appears iff the authority exists', (_label, pattern) => {
+    expect(pattern.test(doc)).toBe(authorityExists)
+  })
+
+  it.runIf(authorityExists)('names every refusal reason the authority can return', () => {
+    const authority = readFileSync(authorityPath, 'utf8')
+    const union = /export type PrepareRefusalReason =([\s\S]*?)\n\n/.exec(authority)
+    const reasons = [...(union?.[1] ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1])
+    expect(reasons.length).toBeGreaterThan(5)
+    for (const reason of reasons) {
+      expect(doc, reason).toContain(reason)
+    }
   })
 })

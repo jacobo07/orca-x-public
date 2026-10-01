@@ -165,3 +165,8 @@ export async function measureEnvironmentRequirements(
   const measurement = await measureHost(repo, hostKey, requirements, deps)
   return { contractSource, contract, requirements, diagnostics, measurement }
 }
+
+// Why: the prepare runner re-reads the contract and re-measures a single requirement itself, so it
+// needs these two steps on their own rather than the whole measurement.
+export { readContract as readEnvironmentContract, measureHost as measureEnvironmentHost }
+export type { MeasurableRepo, ContractRead }

@@ -73,6 +73,8 @@ export type PersistedTrustedOrcaHookRepo = {
   archive?: PersistedTrustedOrcaHookEntry
   issueCommand?: PersistedTrustedOrcaHookEntry
   vmRecipe?: PersistedTrustedOrcaHookEntry
+  // Keyed by requirement id; repo-wide `all` never covers a prepare step.
+  prepare?: Record<string, PersistedTrustedOrcaHookEntry>
 }
 
 export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>

@@ -1209,6 +1209,12 @@ import {
   measureEnvironmentRequirements,
   type EnvironmentRequirementsMeasurement
 } from '../environment-requirement-measurement'
+import { createEnvironmentPrepareDeps } from './environment-prepare-runtime-deps'
+import {
+  runEnvironmentPrepareStep,
+  type RunEnvironmentPrepareStepArgs,
+  type RunEnvironmentPrepareStepResult
+} from './environment-prepare-step-runner'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
@@ -20623,6 +20629,23 @@ export class OrcaRuntimeService {
         ? undefined
         : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
     })
+  }
+
+  // The one effect boundary for prepare commands: desktop IPC and the launch RPC both end here.
+  async runEnvironmentPrepareStep(
+    args: RunEnvironmentPrepareStepArgs
+  ): Promise<RunEnvironmentPrepareStepResult> {
+    const store = this.requireStore()
+    return runEnvironmentPrepareStep(
+      args,
+      createEnvironmentPrepareDeps({
+        resolveRepo: (selector) => this.resolveRepoSelector(selector),
+        getTrustedOrcaHooks: () => store.getUI().trustedOrcaHooks,
+        createTerminal: (selector, options) => this.createTerminal(selector, options),
+        userDataPath: app.getPath('userData'),
+        projectRuntimeFor: (repo) => resolveLocalProjectRuntimeForRepo(store, repo)
+      })
+    )
   }
 
   async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
