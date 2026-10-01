@@ -16,6 +16,7 @@
   "surfaces": [
     "src/renderer/src/components/conversations",
     "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx",
+    "src/renderer/src/components/settings/ReplicaTopologyDetails.tsx",
     "mobile/src/workspace"
   ],
   "presenters": [
@@ -30,9 +31,18 @@
     {
       "module": "src/renderer/src/components/conversations/agent-federation-presentation.ts",
       "toneType": "FederationTone"
+    },
+    {
+      "module": "src/renderer/src/components/settings/replica-host-health-presentation.ts",
+      "toneType": "ReplicaHostHealthTone"
     }
   ],
   "claims": {
+    "replica-host-health": {
+      "producer": "src/renderer/src/components/settings/replica-host-health-presentation.ts#describeReplicaHostHealth",
+      "absent": "auto.components.settings.RepositoryPane.hostStateUnknown",
+      "why": "Host health is the renderer's own SSH or runtime connection state for that host; a host it has no state for reads Unknown, never Ready."
+    },
     "agent-context-project-name": {
       "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
       "absent": "workspace.context.reading",

@@ -18,6 +18,7 @@ import { translate } from '@/i18n/i18n'
 import { buildSetupHostOptions } from './repository-host-setup-options'
 import { deriveRepositoryHostSetupRowState } from './repository-host-setup-row-state'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
+import { ReplicaHostHealthLine } from './ReplicaTopologyDetails'
 
 type RepositoryHostSetupsSectionProps = {
   repo: Repo
@@ -205,6 +206,7 @@ export function RepositoryHostSetupsSection({
       <div className="divide-y divide-border rounded-md border border-border">
         {projectHostSetups.map((setup) => {
           const {
+            health,
             setupReady,
             setupStateLabel,
             setupHostLabel,
@@ -248,6 +250,7 @@ export function RepositoryHostSetupsSection({
                       'Path pending'
                     )}
                 </p>
+                <ReplicaHostHealthLine health={health} />
                 {runtimeOwnerWorkspaceWindowClosed ? (
                   // Why: no runtime RPC can open a remote desktop window, so the only
                   // honest affordance is telling the user what to do on that host.
