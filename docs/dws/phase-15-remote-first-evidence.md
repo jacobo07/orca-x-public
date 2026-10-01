@@ -53,3 +53,35 @@ Observations carried forward:
 - With `relayGracePeriodSeconds` omitted the product default applies (0, unlimited while PTYs live), so each run leaves a detached relay and PTY shell until the provisioner's `teardown` stops them.
 - The app log printed `recovery failed Error: terminal_liveness_unavailable` twice per run without failing the leg; not investigated here.
 - Both provider binaries (`codex`, `claude`) are present on the throwaway login PATH, which matters for the agent leg in 15-02.
+
+## Run 2 (15-02): row 59 legs on the owning host
+
+Plane: REAL-TWO-HOST for every client leg (a fresh-profile Orca on this laptop, Client A direct over ssh2, Client B the paired web client through the HUB), with an independent `ssh gex44` read inside the root as the instrument for fs and git. Claim level for the agent half: **agent process + hook routing on the owning host, no model turn** (D-13). OD-1 default taken: no prompt was ever sent to a provider and no credential was copied or created.
+
+Fence: disposable root /tmp/orca-hwf-p15-20261001T000006Z, private sshd 127.0.0.1:43001, host key SHA256:nStxsKJCsJviLsuVY20enFMTgAYpAp8FepE3QeRjVAA, local forward 127.0.0.1:61013, relay relay-0.1.0+c1eb18e241d9.
+
+Probe values (measured before any leg used them, 15-02-probe.txt): `HWF_PROBE_WEB_GIT_COMMIT=function`, `HWF_PROBE_WEB_AGENT_STATUS=present`, `HWF_PROBE_SSH_AGENT_MENU=claude` (the Codex item is not offered on the SSH worktree; Claude is), `CURL=/usr/bin/curl`, `PROVIDER_CODEX=/usr/local/bin/codex`, `PROVIDER_CLAUDE=/usr/local/bin/claude`. Consequence: Client B's git leg and hook leg were required, and part a launched `claude`.
+
+| leg | client | plane | instrument | observed value | verdict | commit |
+|---|---|---|---|---|---|---|
+| terminal | A | REAL-TWO-HOST | split-marker printf of hostname and pwd | `host=kobicraft-gex44 pwd=<root>/repos/p15-repo` | PASS | d44e30dbb |
+| terminal | B (web) | REAL-TWO-HOST | same, typed through the web client | same values; one bounded retype needed (keystrokes before the remote shell was ready are dropped) | PASS | d44e30dbb |
+| fs create/write/rename/copy/delete | A | REAL-TWO-HOST | ssh read of contents then absence; full SshMutationExpectation | `HWF_FS_A=ok` | PASS | d44e30dbb |
+| fs create/write/rename/copy/delete | B (web) | REAL-TWO-HOST | ssh read of contents then absence | `HWF_FS_B=ok` | PASS | d44e30dbb |
+| git stage+commit | A | REAL-TWO-HOST | ssh `rev-parse HEAD` and `log -1 --format=%s` against the client's history read | client sha equals remote sha (c58e7f61eafb862f978590a24b49196879069d14) | PASS | d44e30dbb |
+| git stage+commit | B (web) | REAL-TWO-HOST | same | client sha equals remote sha (c8c6eb63a7ee92f2136bd33fd67c701dfd8eed2e); ssh HEAD after the run equals it | PASS | d44e30dbb |
+| laptop absence | both | LOCAL-HOST scan of a REAL-TWO-HOST run | content nonces: seed plus every fs and git content nonce, controls planted | `verdict=PASS control=found hits=0 files=30755 unreadable=6` | PASS (scope as in Run 1) | d44e30dbb |
+| agent part a (real provider launch) | A | REAL-TWO-HOST | `procs` verb: argv contains `claude`, cwd = host-only repo, alive 10 s later | `observed provider=claude pid=1894171 cwd=<root>/repos/p15-repo`, no prompt, no login | PASS | 4984de149 |
+| agent part b (hook routing) | A | REAL-TWO-HOST | codex hook posted from the remote PTY to the relay hook endpoint, desktop store poll | `HWF_HOOK_A=ok` (row keyed to the HUB pane key) | PASS | 4984de149 |
+| agent part b (hook routing) | B (web) | REAL-TWO-HOST | web store poll by the unique prompt nonce | `HWF_HOOK_B=ok` | PASS, see note | 4984de149 |
+| supplementary stub launch | A | REAL-TWO-HOST | `procs` verb on the root-resident stub | `observed pid=1894361 cwd=<root>/repos/p15-repo (supplementary; not a provider)` | supplementary only | 4984de149 |
+
+Observations, not fixes:
+
+- The web client re-keys a delivered hook row to its own `web-terminal-*` pane, so the row exists in the web store under a different key than the HUB pane key. The web leg therefore matches on the unique prompt nonce; key equality is asserted on the desktop only.
+- `git.stage` takes a worktree-relative path on the desktop IPC and an absolute path on the paired web shim (a relative one is refused as outside the runtime worktree). Left as is.
+- Part a launched `claude`, not `codex`, because the New-tab menu on the SSH worktree offers only Claude. Part a is therefore observed for one provider. A model turn was not run (OD-1), so row 59 stays bounded by D-13/D-15: process and hook routing are proven, a provider turn is not.
+- The app log printed `recovery failed Error: terminal_liveness_unavailable` twice per run again; not investigated (it belongs to 15-03).
+- The paired web client's worktree list (`[data-worktree-sidebar]`) is not mounted on its landing surface, so readiness is taken from the web store seeing the host worktree and activation goes through the store.
+
+Containment. Witnesses equal before and after: known_hosts eee39ff279a28b40862a2a1e01e663a84d09d9c1527f9438fa8cda0ff014694f, `/home/kobii/orca-x` HEAD f9a721fda491096b74f0115d78632356e526d096, real-home `.orca-remote` listing absent. Root-scoped processes before teardown: 29 (sshd, stacked detached relays from this plan's runs, their PTY shells and the launched agent processes); after teardown `REMAINING=0` and `PROC_COUNT=0`, `SSHD_ALIVE=no`. The throwaway home holds only what Orca and the CLIs created (`.claude`, `.codex`, `.orca*`, `.npm`), no credential file was placed there by the harness. No pairing link, token or private key is in this file.
