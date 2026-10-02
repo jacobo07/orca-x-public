@@ -26,6 +26,11 @@
       "title": "Reviews and approvals",
       "unreadable": "Commit cannot be read now",
       "useCurrent": "Use current commit"
+    },
+    "tab": {
+      "agents": "Agents",
+      "threads": "Threads",
+      "projects": "Projects"
     }
   },
   "durableExit": {
