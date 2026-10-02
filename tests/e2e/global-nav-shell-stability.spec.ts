@@ -48,6 +48,19 @@ async function showView(page: Page, view: string): Promise<void> {
 
 const ROUTES = ['conversations', 'resumeCenter', 'backlog', 'automations', 'tasks', 'settings']
 
+// Resume Center's own destinations (resume-center.full.desktop.at-rest.r01); Back is a control.
+const RESUME_CENTER_ITEMS = [
+  'home',
+  'cognitive-workspace',
+  'projects',
+  'agents',
+  'tasks',
+  'knowledge',
+  'runtime',
+  'audit',
+  'settings'
+]
+
 test('every major route keeps the same global navigation', async ({ sharedPage }) => {
   test.setTimeout(180_000)
 
@@ -66,7 +79,15 @@ test('every major route keeps the same global navigation', async ({ sharedPage }
     await showView(sharedPage, view)
     const reading = await readNav(sharedPage)
     expect(reading.navCount, `${view}: global navigation columns`).toBe(1)
-    expect(reading.items, `${view}: destination list`).toEqual(baseline.items)
+    // The one exception (Owner, 2026-10-02): Resume Center swaps the destinations, never the column.
+    const resume = view === 'resumeCenter'
+    expect(reading.items, `${view}: destination list`).toEqual(
+      resume ? RESUME_CENTER_ITEMS : baseline.items
+    )
+    await expect(sharedPage.locator('[data-global-nav]')).toHaveAttribute(
+      'data-global-nav-variant',
+      resume ? 'resume-center' : 'global'
+    )
     expect(reading.width, `${view}: column width`).toBe(baseline.width)
   }
 

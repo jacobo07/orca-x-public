@@ -44,9 +44,24 @@ async function expectDestination(page: Page, destination: string): Promise<void>
     'aria-current',
     'page'
   )
-  // Workspace stays the current global entry on every one of its destinations.
-  await expect(page.locator(WORKSPACE_ENTRY).first()).toHaveAttribute('aria-current', 'page')
+  // Resume Center has its own left navigation (Owner, 2026-10-02) where Cognitive Workspace is
+  // current; on every other destination the global Workspace entry is.
+  const current = destination === 'resume' ? RESUME_CENTER_CURRENT : WORKSPACE_ENTRY
+  await expect(page.locator(current).first()).toHaveAttribute('aria-current', 'page')
 }
+
+const RESUME_CENTER_CURRENT = '[data-global-nav-item="cognitive-workspace"]'
+const RESUME_CENTER_ITEMS = [
+  'home',
+  'cognitive-workspace',
+  'projects',
+  'agents',
+  'tasks',
+  'knowledge',
+  'runtime',
+  'audit',
+  'settings'
+]
 
 // Rows animate their highlight (transition-colors); a capture taken mid-transition shows the
 // previous destination as current. Every screenshot waits for paint to settle.
@@ -84,10 +99,18 @@ test('every Workspace destination renders in one frame under one unchanged globa
     // Positive control: the instrument found the column, so later equality is not empty == empty.
     expect(baseline.count).toBe(1)
     expect(baseline.items).toEqual(expect.arrayContaining(['home', 'agent-workspace', 'settings']))
+    // One column on every step; its destinations are the global ones everywhere but Resume Center.
     const expectShellUnchanged = async (step: string): Promise<void> => {
+      const resume = (await activeView(page)) === 'resumeCenter'
       const reading = await readGlobalNav(page)
       expect(reading.count, `${step}: global navigation columns`).toBe(1)
-      expect(reading.items, `${step}: global destinations`).toEqual(baseline.items)
+      expect(reading.items, `${step}: global destinations`).toEqual(
+        resume ? RESUME_CENTER_ITEMS : baseline.items
+      )
+      await expect(page.locator('[data-global-nav]')).toHaveAttribute(
+        'data-global-nav-variant',
+        resume ? 'resume-center' : 'global'
+      )
     }
 
     // ── Home: the global entry lands on Resume, never on the conversation roster ────────────────
@@ -103,17 +126,34 @@ test('every Workspace destination renders in one frame under one unchanged globa
     // The owners the frame replaced are gone, everywhere in the window.
     await expect(page.locator('[data-testid^="workspace-tab-"]')).toHaveCount(0)
     await expect(page.getByTestId('workspace-open-resume-center')).toHaveCount(0)
+    // The titled Mission Brief sits in the frame column, below Workspace navigation.
+    const brief = page.locator(`${FRAME_COLUMN} [data-testid="mission-brief-compact"]`)
+    await expect(brief).toBeVisible()
+    await expect(brief.getByTestId('mission-brief-compact-title')).toBeVisible()
+    const navBox = await wideNav.boundingBox()
+    const briefBox = await brief.boundingBox()
+    expect(briefBox!.y).toBeGreaterThanOrEqual(navBox!.y + navBox!.height)
     await settledShot(page, testInfo.outputPath('w2-resume.png'))
-    // Painted, not only attributed: once settled, Workspace wears the current-row fill and Home,
-    // the view the app launched on, does not. The pointer leaves the row first, so a hover fill
-    // cannot stand in for the current one.
+    // Painted, not only attributed: once settled, Cognitive Workspace wears the current-row fill
+    // and Home, the view the app launched on, does not. The pointer leaves the row first, so a
+    // hover fill cannot stand in for the current one.
     await page.mouse.move(1000, 55)
     await page.waitForFunction(() =>
       document.getAnimations().every((animation) => animation.playState !== 'running')
     )
-    expect(await paintedBackground(page, WORKSPACE_ENTRY)).not.toBe(
+    expect(await paintedBackground(page, RESUME_CENTER_CURRENT)).not.toBe(
       await paintedBackground(page, '[data-global-nav-item="home"]')
     )
+
+    // ── Back leaves Resume Center for the view it was entered from; the entry re-opens it ───────
+    await page.locator('[data-global-nav-control="back"]').click()
+    await expect.poll(() => activeView(page)).not.toBe('resumeCenter')
+    await expect(page.locator(FRAME)).toHaveCount(0)
+    await expect(page.locator('[data-global-nav-control="back"]')).toHaveCount(0)
+    await expectShellUnchanged('after Back')
+    await page.locator(WORKSPACE_ENTRY).first().click()
+    await expect.poll(() => activeView(page)).toBe('resumeCenter')
+    await expectDestination(page, 'resume')
 
     // ── Agents ──────────────────────────────────────────────────────────────────────────────────
     await page.locator('[data-workspace-nav-item="agents"]').click()
