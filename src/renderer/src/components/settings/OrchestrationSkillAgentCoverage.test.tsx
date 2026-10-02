@@ -48,7 +48,8 @@ describe('OrchestrationSkillAgentCoverage', () => {
     )
 
     expect(markup).toContain('Claude')
-    expect(markup).toContain('Codex')
+    // The `codex` agent's product label (agent-catalog.tsx).
+    expect(markup).toContain('ChatGPT')
     expect(markup).toContain('Ready')
     expect(markup).toContain('Missing')
     expect(markup).not.toContain('View details')
