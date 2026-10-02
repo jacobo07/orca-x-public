@@ -1741,17 +1741,88 @@
       "row": "HF Prepare this device",
       "owner": "preflight + orca.yaml setup",
       "done": "satisfied/missing/incompatible/unsupported/needs-authorization/unknown; only authorized actions run; no secrets",
-      "state": "ABSENT",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "phase-20",
+      "measuredAt": "2026-10-02",
       "required": true,
       "phases": [
         20
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: none"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-prepare-device.spec.ts",
+          "note": "opt-in two-host Test A: legs L1, L3, L4, L2, L5, L6 through the Settings handles and the approval dialog"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-prepare-legs.ts",
+          "note": "measure, approve-and-run, refusal, shim stat and capture helpers"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-20-environment-contract-evidence.md",
+          "note": "leg table with planes and observed values, Runs 1-7, what this phase does not claim"
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/environment-requirement-state.ts",
+          "note": "six-state classifier; an unreadable contract on an unmeasured host reads unknown(<host status>)"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/environment-prepare-authority.ts",
+          "note": "authorizes a prepare step at the effect: recorded approval, unchanged bytes, same host"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/environment-prepare-step-runner.ts",
+          "note": "one runner for RPC and IPC prepare launches"
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/components/settings/PrepareStepApprovalDialog.tsx",
+          "note": "approval dialog that waits for the recorded approval"
+        },
+        {
+          "kind": "commit",
+          "sha": "accab0819",
+          "note": "six-state requirement classifier, prepare plan and pinned approval hash"
+        },
+        {
+          "kind": "commit",
+          "sha": "efa7a3a33",
+          "note": "authorize prepare steps at the effect on the host that runs them"
+        },
+        {
+          "kind": "commit",
+          "sha": "74a518ac4",
+          "note": "launch RPC and IPC for prepare steps through one runner"
+        },
+        {
+          "kind": "commit",
+          "sha": "0149d3b16",
+          "note": "prepare this device section in project settings"
+        },
+        {
+          "kind": "commit",
+          "sha": "38e1ab4b9",
+          "note": "opt-in two-host spec for prepare this device"
+        },
+        {
+          "kind": "commit",
+          "sha": "b6411fa6f",
+          "note": "an unreadable contract on an unreachable host names the host (L6 fix)"
+        },
+        {
+          "kind": "commit",
+          "sha": "2e37f2436",
+          "note": "phase 20 Run 7 evidence: all six legs pass"
+        }
+      ],
+      "reason": "measured 2026-10-02 (phase 20, Run 7, REAL-TWO-HOST): a fresh-profile Windows Orca built from b6411fa6f drove a seeded GEX44 contract over real ssh2 with a pinned host key on fresh root /tmp/orca-hwf-p20-20261002T000826Z, 1 passed. L1 every state as seeded (satisfied, incompatible, missing, unsupported, needs-authorization, unknown, env satisfied), git 2.43.0 equal to an independent ssh read, contract sha equal to the seed. L3 a stale approval refused contract-changed, shim absent. L4 an approval for another host refused approval-for-another-host, shim absent. L2 an approved step ran on GEX44 (shim created) and a user re-measure read it satisfied; the terminal evidence is tab-present, a store read. L5 no sentinel on the laptop (absence scan PASS, control found, 0 hits, scanned after app exit). L6 carrier killed: every row unknown with reason unreachable, zero missing (Runs 5-6 read contract-unreadable before b6411fa6f). Not observed REAL: runtime-host prepare, local prepare and folder workspaces prepare are LOCAL-HOST units only (R1 measured a runtime host but ran no prepare step); WSL NOT_RUN (no distro). D-09 narrowing: contract differs on <host> is LOCAL-HOST only (component test), and the no-replica source preference is deferred to phases 17-19."
     },
     {
       "id": 70,
