@@ -51,7 +51,11 @@ export function readSleepContinuityInputs(
     hostKind !== 'runtime' &&
     !repo?.connectionId &&
     getRuntimeEnvironmentIdForWorktree(state, worktreeId) === null
-  const probe = local ? window.api?.agentStatus?.readTranscriptPresence : undefined
+  // No window (a non-renderer context) is a client without the probe: unknown, never a throw.
+  const probe =
+    local && typeof window !== 'undefined'
+      ? window.api?.agentStatus?.readTranscriptPresence
+      : undefined
   return { location, probe: probe ? (request) => probe(request) : null }
 }
 
