@@ -121,7 +121,8 @@ test('every Workspace destination renders in one frame under one unchanged globa
     const wideNav = page.locator(`${FRAME_COLUMN} [data-workspace-nav="list"]`)
     await expect(wideNav).toBeVisible()
     const destinationCount = await wideNav.locator('[data-workspace-nav-item]').count()
-    expect(destinationCount).toBeGreaterThanOrEqual(5)
+    // Resume · Agents · Threads · Projects · Backlog · Workstation.
+    expect(destinationCount).toBe(6)
     // The owners the frame replaced are gone, everywhere in the window.
     await expect(page.locator('[data-testid^="workspace-tab-"]')).toHaveCount(0)
     await expect(page.getByTestId('workspace-open-resume-center')).toHaveCount(0)
@@ -228,6 +229,30 @@ test('every Workspace destination renders in one frame under one unchanged globa
     await expect(page.locator(`${FRAME_COLUMN} [data-backlog-summary]`)).toBeVisible()
     await expectShellUnchanged('backlog')
     await settledShot(page, testInfo.outputPath('w2-backlog.png'))
+
+    // ── Workstation: every host, what Orca has observed, what is set up there ───────────────────
+    await page.locator('[data-workspace-nav-item="workstation"]').click()
+    await expect.poll(() => activeView(page)).toBe('workstation')
+    await expectDestination(page, 'workstation')
+    await expectShellUnchanged('workstation')
+    const thisMachine = page.locator('[data-workstation-reachability="this-machine"]')
+    await expect(thisMachine).toHaveCount(1)
+    // The walk's own repo is set up on this machine.
+    await expect(thisMachine.locator('[data-workstation-project]')).not.toHaveCount(0)
+    await expect(page.locator(`${FRAME_COLUMN} [data-workstation-summary]`)).toBeVisible()
+    // A host added the way the app adds one, never connected: Orca has not observed it.
+    const unseenId = await page.evaluate(async () => {
+      const { target } = await window.api.ssh.addTarget({
+        target: { label: 'Unseen host', host: '192.0.2.10', port: 22, username: 'nobody' }
+      })
+      window.__store!.getState().setSshTargetsMetadata(await window.api.ssh.listTargets())
+      return target.id
+    })
+    const unseen = page.locator(`[data-workstation-host="ssh:${encodeURIComponent(unseenId)}"]`)
+    await expect(unseen).toHaveAttribute('data-workstation-reachability', 'unknown')
+    await expect(unseen.locator('[data-workstation-reachability-label]')).not.toHaveText('')
+    await expect(page.locator('[data-workstation-empty]')).toHaveCount(0)
+    await settledShot(page, testInfo.outputPath('w2-workstation.png'))
 
     // ── Leave through the frame, re-enter: Resume is still home ─────────────────────────────────
     await page.locator('[data-workspace-nav-item="agents"]').click()

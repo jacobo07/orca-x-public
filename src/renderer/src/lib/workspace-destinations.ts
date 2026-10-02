@@ -26,7 +26,8 @@ export const WORKSPACE_DESTINATIONS: readonly WorkspaceDestination[] = [
   'agents',
   'threads',
   'projects',
-  'backlog'
+  'backlog',
+  'workstation'
 ]
 
 export const WORKSPACE_HOME: WorkspaceDestination = 'resume'

@@ -17255,5 +17255,68 @@
     "audit": "Audit",
     "notAvailableYet": "Not available yet",
     "experimental": "Experimental"
+  },
+  "workstation": {
+    "page": {
+      "subtitle": "Every host Orca knows, what Orca has observed about it, and what runs there.",
+      "hosts": "Hosts"
+    },
+    "reachability": {
+      "thisMachine": "This machine",
+      "reachable": "Connected",
+      "connecting": "Connecting",
+      "failed": "Connection failed",
+      "blocked": "Version mismatch",
+      "unknown": "Not connected · state unknown"
+    },
+    "kind": {
+      "local": "This computer",
+      "ssh": "SSH host",
+      "runtime": "Orca server",
+      "unregistered": "Host no longer configured"
+    },
+    "failure": {
+      "auth": "Authentication failed.",
+      "reconnect": "Reconnecting failed.",
+      "error": "The last connection attempt failed."
+    },
+    "blocked": {
+      "clientTooOld": "This Orca is older than the host needs.",
+      "serverTooOld": "The host runs an older Orca than this one needs."
+    },
+    "setup": {
+      "ready": "Set up",
+      "notSetUp": "Not set up",
+      "settingUp": "Setting up",
+      "error": "Setup failed",
+      "unsupported": "Unsupported"
+    },
+    "agent": {
+      "needsYou": "Needs you",
+      "working": "Working",
+      "done": "Done",
+      "idle": "Idle",
+      "unknown": "Unknown while the host is not connected"
+    },
+    "projects": {
+      "title": "Projects",
+      "none": "No projects set up on this host."
+    },
+    "agents": {
+      "title": "Agents",
+      "none": "No agents running.",
+      "noneSeen": "None that Orca can see while the host is not connected."
+    },
+    "empty": {
+      "noRemote": "Only this machine so far.",
+      "addSsh": "Add an SSH host",
+      "pairServer": "Pair an Orca server"
+    },
+    "summary": {
+      "title": "Workstation summary",
+      "hosts": "Hosts",
+      "projects": "Projects set up",
+      "agents": "Agents"
+    }
   }
 }

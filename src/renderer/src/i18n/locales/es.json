@@ -15372,6 +15372,69 @@
     "notAvailableYet": "Aún no disponible",
     "experimental": "Experimental"
   },
+  "workstation": {
+    "page": {
+      "subtitle": "Cada host que Orca conoce, lo que Orca ha observado de él y lo que se ejecuta allí.",
+      "hosts": "Hosts"
+    },
+    "reachability": {
+      "thisMachine": "Este equipo",
+      "reachable": "Conectado",
+      "connecting": "Conectando",
+      "failed": "Falló la conexión",
+      "blocked": "Versiones incompatibles",
+      "unknown": "Sin conexión · estado desconocido"
+    },
+    "kind": {
+      "local": "Este ordenador",
+      "ssh": "Host SSH",
+      "runtime": "Servidor de Orca",
+      "unregistered": "Host ya no configurado"
+    },
+    "failure": {
+      "auth": "Falló la autenticación.",
+      "reconnect": "Falló la reconexión.",
+      "error": "Falló el último intento de conexión."
+    },
+    "blocked": {
+      "clientTooOld": "Este Orca es más antiguo de lo que el host necesita.",
+      "serverTooOld": "El host ejecuta un Orca más antiguo de lo que este necesita."
+    },
+    "setup": {
+      "ready": "Configurado",
+      "notSetUp": "Sin configurar",
+      "settingUp": "Configurando",
+      "error": "Falló la configuración",
+      "unsupported": "No compatible"
+    },
+    "agent": {
+      "needsYou": "Te necesita",
+      "working": "Trabajando",
+      "done": "Terminado",
+      "idle": "Inactivo",
+      "unknown": "Desconocido mientras el host no esté conectado"
+    },
+    "projects": {
+      "title": "Proyectos",
+      "none": "No hay proyectos configurados en este host."
+    },
+    "agents": {
+      "title": "Agentes",
+      "none": "No hay agentes en ejecución.",
+      "noneSeen": "Ninguno que Orca pueda ver mientras el host no esté conectado."
+    },
+    "empty": {
+      "noRemote": "Por ahora solo este equipo.",
+      "addSsh": "Añadir un host SSH",
+      "pairServer": "Emparejar un servidor de Orca"
+    },
+    "summary": {
+      "title": "Resumen de la estación de trabajo",
+      "hosts": "Hosts",
+      "projects": "Proyectos configurados",
+      "agents": "Agentes"
+    }
+  },
   "workspace": {
     "tab": {
       "agents": "Agentes",

@@ -46,7 +46,15 @@ async function showView(page: Page, view: string): Promise<void> {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))))
 }
 
-const ROUTES = ['conversations', 'resumeCenter', 'backlog', 'automations', 'tasks', 'settings']
+const ROUTES = [
+  'conversations',
+  'resumeCenter',
+  'backlog',
+  'workstation',
+  'automations',
+  'tasks',
+  'settings'
+]
 
 // Resume Center's own destinations (resume-center.full.desktop.at-rest.r01); Back is a control.
 const RESUME_CENTER_ITEMS = [

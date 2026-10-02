@@ -30,6 +30,7 @@ const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
 const ConversationsPage = lazy(() => import('../components/conversations/ConversationsPage'))
 const ResumeCenterPage = lazy(() => import('../components/resume-center/ResumeCenterPage'))
 const BacklogPage = lazy(() => import('../components/backlog/BacklogPage'))
+const WorkstationPage = lazy(() => import('../components/workstation/WorkstationPage'))
 const WorkspaceLauncher = lazy(() =>
   import('../components/workspace-launcher/WorkspaceLauncher').then((module) => ({
     default: module.WorkspaceLauncher
@@ -90,6 +91,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'conversations' ? <ConversationsPage /> : null}
       {activeView === 'resumeCenter' ? <ResumeCenterPage /> : null}
       {activeView === 'backlog' ? <BacklogPage /> : null}
+      {activeView === 'workstation' ? <WorkstationPage /> : null}
       {activeView === 'workspace' ? <WorkspaceLauncher /> : null}
       {activeView === 'terminal' && creationLayoutActive && activePendingCreationId ? (
         <WorktreeCreationPanel

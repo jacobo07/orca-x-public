@@ -69,7 +69,14 @@ function openManageHost(row: HostHeaderRow): void {
   state.openSettingsPage()
 }
 
-export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JSX.Element {
+export function HostSectionHeaderMenu({
+  row,
+  alwaysVisible = false
+}: {
+  row: HostHeaderRow
+  /** Off a hover-revealing sidebar row (e.g. a page card), the trigger stays visible. */
+  alwaysVisible?: boolean
+}): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
@@ -188,7 +195,11 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
               variant="ghost"
               size="icon-xs"
               type="button"
-              className="size-5 shrink-0 text-muted-foreground can-hover:opacity-0 transition-opacity focus-visible:opacity-100 group-hover/host-header:opacity-100 data-[state=open]:opacity-100"
+              className={
+                alwaysVisible
+                  ? 'size-5 shrink-0 text-muted-foreground'
+                  : 'size-5 shrink-0 text-muted-foreground can-hover:opacity-0 transition-opacity focus-visible:opacity-100 group-hover/host-header:opacity-100 data-[state=open]:opacity-100'
+              }
               aria-label={translate(
                 'auto.components.sidebar.HostSectionHeaderMenu.4f2c8a9b10',
                 'Host actions for {{value0}}',
