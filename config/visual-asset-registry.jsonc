@@ -151,6 +151,34 @@
       // Shopify glyph (drawn here as a bag; the app renders a terminal glyph), the card surface
       // (--card, not r01's #111315), and the attention amber hue (--agent-question).
       "notes": "Rendered from docs/visual/producers/mission-brief.full.desktop.needs-you.html at 1200x1000 CSS, 1.25x, clipped to .card (1205x980). Pixel gate vs r01: 0 boxes off at 2 px tolerance; rules worst 1 px. r01 remains the lineage; this is the implementer reference for the Panel/Header/Rows/Actions port."
+    },
+    {
+      "assetId": "resume-center.full.desktop.at-rest.r01",
+      "surface": "resume-center",
+      "subsurface": "full",
+      "device": "desktop",
+      "state": "at-rest",
+      "revision": 1,
+      "class": "north-star",
+      "truth": "target",
+      "targetLabel": true,
+      "producer": "generated",
+      "status": "candidate",
+      "file": "resume-center/resume-center.full.desktop.at-rest.r01.png",
+      "sha256": "6c7f0b52de6d84980156850be32a478b7ab3ac97552ddc143e5975404b44afc9",
+      "date": "2026-10-02",
+      "provenance": {
+        "tool": "unknown image tool (Owner-supplied download)",
+        "thread": "unknown: supplied by the Owner as a file, not produced in a recorded thread",
+        "sourcePath": "<DOWNLOADS>/Session Center.jpg (sha256 b310037d4528ac72eec9f6d3b433310fc5c6601ae8b6743e35ff69c4641d6aff), re-encoded to PNG without resampling",
+        "requestedSize": "unknown",
+        "actualSize": "1512x1042"
+      },
+      // Conflicts with docs/reference/workspace-convergence.md §2.2/§2.4: its global nav lists
+      // Home/Cognitive Workspace/Projects/Agents/Tasks/Knowledge/Runtime/Audit/Settings and its right
+      // column is Snapshot / Acciones rápidas / Detección de aplicaciones / Consejos, with no
+      // Workspace navigation. Not adopted as IA until the Owner rules on that conflict.
+      "notes": "Owner's Resume Center ('Session Center') reference. Content is illustrative: the greeting, workspace/session counts, agent names and 'GEX44 Online' have no record behind them and are not reproduced as data."
     }
   ]
 }
