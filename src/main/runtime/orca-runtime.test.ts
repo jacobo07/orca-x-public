@@ -13873,7 +13873,11 @@ describe('OrcaRuntimeService', () => {
           origin: 'runtime-rpc'
         },
         {
-          resolveRepo: async () => ({ id: TEST_REPO_ID, path: TEST_WORKTREE_PATH, connectionId: null }),
+          resolveRepo: async () => ({
+            id: TEST_REPO_ID,
+            path: TEST_WORKTREE_PATH,
+            connectionId: null
+          }),
           hostKeyFor: () => hostKey,
           readContract: async () => file,
           measureRequirement: async () => 'missing',
