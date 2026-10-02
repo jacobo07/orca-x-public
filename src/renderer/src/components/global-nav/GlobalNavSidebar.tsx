@@ -3,7 +3,7 @@ import logo from '../../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/context-menu'
 import { WorkspaceActivityRailSection } from '@/components/activity-rail/WorkspaceActivityRailSection'
 import { isMac } from '@/app-shell/app-window-chrome'
-import { GlobalNavRow } from './GlobalNavRow'
+import { GlobalNavEntry } from './global-nav-entry'
+import { ResumeCenterNavEntries } from './ResumeCenterNavEntries'
 
 /**
  * The application's global navigation: one component, the window's left edge, every route.
@@ -20,6 +21,9 @@ import { GlobalNavRow } from './GlobalNavRow'
  * Collapsed is the person's choice (`globalNavCollapsed`), never the route's — a route that changes
  * this column is the defect it exists to prevent. It also owns the top-left window chrome (macOS
  * traffic lights, the app mark), because it is what sits there now.
+ *
+ * One route swaps the destinations, by Owner decision (2026-10-02): Resume Center shows its own set
+ * with Back. The column itself — width, collapse, header, Settings — is the same.
  */
 export function GlobalNavSidebar(): React.JSX.Element {
   const collapsed = useAppStore((s) => s.globalNavCollapsed)
@@ -32,6 +36,7 @@ export function GlobalNavSidebar(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const displayName = useAppStore((s) => s.orcaProfileAuthStatus?.cloud?.displayName?.trim())
   const trafficLights = isMac && !isFullScreen
+  const resumeCenter = activeView === 'resumeCenter'
   const appName = translate('auto.App.5096cbbc86', 'Orca')
   const homeLabel = translate('globalNav.home', 'Home')
   const settingsLabel = translate('menu.settings', 'Settings')
@@ -42,6 +47,7 @@ export function GlobalNavSidebar(): React.JSX.Element {
   return (
     <nav
       data-global-nav=""
+      data-global-nav-variant={resumeCenter ? 'resume-center' : 'global'}
       data-global-nav-collapsed={collapsed ? 'true' : 'false'}
       aria-label={translate('globalNav.label', 'Orca navigation')}
       className={cn(
@@ -56,14 +62,18 @@ export function GlobalNavSidebar(): React.JSX.Element {
           data-global-nav-header=""
         >
           {trafficLights ? <div className="titlebar-traffic-light-pad -ml-3" /> : null}
-          {!trafficLights ? <img src={logo} alt="" aria-hidden className="size-4 shrink-0" /> : null}
+          {!trafficLights ? (
+            <img src={logo} alt="" aria-hidden className="size-4 shrink-0" />
+          ) : null}
           {!collapsed && showAppName ? (
             <ContextMenu>
               <ContextMenuTrigger asChild>
                 <span className="truncate text-[13px] font-semibold">{appName}</span>
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <ContextMenuItem onSelect={() => void updateSettings({ showTitlebarAppName: false })}>
+                <ContextMenuItem
+                  onSelect={() => void updateSettings({ showTitlebarAppName: false })}
+                >
                   {translate('auto.App.e81217c1b7', 'Hide App Name')}
                 </ContextMenuItem>
               </ContextMenuContent>
@@ -77,15 +87,21 @@ export function GlobalNavSidebar(): React.JSX.Element {
             collapsed ? 'items-center' : 'px-2'
           )}
         >
-          <NavEntry
-            collapsed={collapsed}
-            id="home"
-            icon={<House size={collapsed ? 18 : 16} />}
-            label={homeLabel}
-            active={activeView === 'terminal'}
-            onSelect={() => setActiveView('terminal')}
-          />
-          <WorkspaceActivityRailSection layout={collapsed ? 'icon' : 'row'} />
+          {resumeCenter ? (
+            <ResumeCenterNavEntries collapsed={collapsed} />
+          ) : (
+            <>
+              <GlobalNavEntry
+                collapsed={collapsed}
+                id="home"
+                icon={<House size={collapsed ? 18 : 16} />}
+                label={homeLabel}
+                active={activeView === 'terminal'}
+                onSelect={() => setActiveView('terminal')}
+              />
+              <WorkspaceActivityRailSection layout={collapsed ? 'icon' : 'row'} />
+            </>
+          )}
         </div>
 
         <div
@@ -94,7 +110,7 @@ export function GlobalNavSidebar(): React.JSX.Element {
             collapsed ? 'items-center' : 'px-2'
           )}
         >
-          <NavEntry
+          <GlobalNavEntry
             collapsed={collapsed}
             id="settings"
             icon={<Settings size={collapsed ? 18 : 16} />}
@@ -116,7 +132,7 @@ export function GlobalNavSidebar(): React.JSX.Element {
               <span className="truncate">{displayName}</span>
             </div>
           ) : null}
-          <NavEntry
+          <GlobalNavEntry
             collapsed={collapsed}
             id="toggle"
             icon={collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={16} />}
@@ -128,65 +144,5 @@ export function GlobalNavSidebar(): React.JSX.Element {
         </div>
       </TooltipProvider>
     </nav>
-  )
-}
-
-function NavEntry({
-  collapsed,
-  id,
-  icon,
-  label,
-  active,
-  onSelect,
-  structural = false
-}: {
-  collapsed: boolean
-  id: string
-  icon: React.ReactNode
-  label: string
-  active: boolean
-  onSelect: () => void
-  /** Chrome control, not a destination: excluded from the destination list the shell gate compares. */
-  structural?: boolean
-}): React.JSX.Element {
-  const dataAttributes: Record<string, string> = structural
-    ? { 'data-global-nav-control': id }
-    : { 'data-global-nav-item': id }
-  if (!collapsed) {
-    return (
-      <GlobalNavRow
-        icon={icon}
-        label={label}
-        active={active}
-        onSelect={onSelect}
-        dataAttributes={dataAttributes}
-      />
-    )
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          {...dataAttributes}
-          aria-current={active ? 'page' : undefined}
-          aria-label={label}
-          onClick={onSelect}
-          className={cn(
-            'relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-            active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
-          )}
-        >
-          {icon}
-          {active ? (
-            <div className="absolute top-[25%] right-0 bottom-[25%] w-[2px] rounded-l bg-foreground" />
-          ) : null}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
   )
 }

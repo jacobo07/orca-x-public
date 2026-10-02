@@ -4476,7 +4476,8 @@
           "196c1b5362": "Abrir tareas de GitLab",
           "0ccba862b8": "Abrir tareas de GitHub",
           "fee535205b": "Tareas",
-          "d599269755": "Ocultar de la barra lateral"
+          "d599269755": "Ocultar de la barra lateral",
+          "workspace": "Espacio de trabajo"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Limpiar",
@@ -14884,7 +14885,7 @@
     "breadcrumb": {
       "workspace": "Workspace"
     },
-    "title": "Resume Center",
+    "title": "Centro de reanudación",
     "greeting": {
       "morning": "Buenos días",
       "afternoon": "Buenas tardes",
@@ -15108,7 +15109,7 @@
       "remote": "Los registros de misión de otro host aún no se leen.",
       "unknownWorkspace": "No se pudo localizar este espacio de trabajo."
     },
-    "title": "Mission Brief",
+    "title": "Informe de misión",
     "unlocks": {
       "none": "Nada se vuelve alcanzable solo con esta fase"
     },
@@ -15361,5 +15362,24 @@
   "workspaceFrame": {
     "breadcrumb": "Ruta de navegación",
     "details": "Detalles"
+  },
+  "resumeNav": {
+    "back": "Volver",
+    "cognitiveWorkspace": "Espacio de trabajo cognitivo",
+    "knowledge": "Conocimiento",
+    "runtime": "Ejecución",
+    "audit": "Auditoría",
+    "notAvailableYet": "Aún no disponible",
+    "experimental": "Experimental"
+  },
+  "workspace": {
+    "tab": {
+      "agents": "Agentes",
+      "threads": "Hilos",
+      "projects": "Proyectos"
+    }
+  },
+  "activityRail": {
+    "terminals": "Terminales"
   }
 }

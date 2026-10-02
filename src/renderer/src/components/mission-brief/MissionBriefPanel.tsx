@@ -41,8 +41,16 @@ export function MissionBriefPanel({
   // Full + read: refresh sits beside the read time in the header, so there is no toolbar row.
   const fullBrief = !compact && result?.status === 'read'
 
+  // The read header carries the title; every other state needs one too, or the card is an
+  // unlabelled sentence nobody recognises as the Mission Brief.
+  const untitled = compact && result?.status !== 'read'
   const toolbar = fullBrief ? null : (
     <div className="flex items-center justify-end gap-2">
+      {untitled ? (
+        <h2 className="mr-auto text-sm font-semibold" data-testid="mission-brief-compact-title">
+          {translate('missionBrief.title', 'Mission Brief')}
+        </h2>
+      ) : null}
       {compact && onOpenFull && result?.status === 'read' ? (
         <Button
           size="sm"

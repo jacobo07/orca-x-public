@@ -17246,5 +17246,14 @@
   "workspaceFrame": {
     "breadcrumb": "Breadcrumb",
     "details": "Details"
+  },
+  "resumeNav": {
+    "back": "Back",
+    "cognitiveWorkspace": "Cognitive Workspace",
+    "knowledge": "Knowledge",
+    "runtime": "Runtime",
+    "audit": "Audit",
+    "notAvailableYet": "Not available yet",
+    "experimental": "Experimental"
   }
 }
