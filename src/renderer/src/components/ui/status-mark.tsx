@@ -49,15 +49,17 @@ export const STATUS_MARK: Record<StatusState, MarkSpec> = {
 export function StatusMark({
   state,
   label,
-  className
+  className,
+  ...data
 }: {
   state: StatusState
   label?: string
   className?: string
-}): React.JSX.Element {
+} & Record<`data-${string}`, string>): React.JSX.Element {
   const spec = STATUS_MARK[state]
   return (
     <span
+      {...data}
       data-status-mark={state}
       data-status-shape={spec.shape}
       className={cn('inline-block size-2 shrink-0 rounded-full', spec.className, className)}

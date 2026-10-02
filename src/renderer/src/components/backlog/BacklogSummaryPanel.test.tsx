@@ -230,7 +230,7 @@ describe('BacklogSummaryPanel', () => {
     const mark = (id: string) =>
       q(`[data-backlog-item-id="${id}"] [data-backlog-chip="state"] [data-backlog-tone-mark]`)
     expect(mark('bli_blocked')?.getAttribute('data-backlog-tone-mark')).toBe('critical')
-    expect(mark('bli_blocked')?.getAttribute('data-mark')).toBe('filled')
+    expect(mark('bli_blocked')?.getAttribute('data-status-shape')).toBe('filled')
     expect(mark('bli_a')?.getAttribute('data-backlog-tone-mark')).toBe('pressured')
     expect(mark('bli_ready')).toBeNull()
     expect(

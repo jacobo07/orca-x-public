@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, SquareTerminal } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import type { DeskTab } from '../../../../shared/desk-continuity-projection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceRowModel } from './resume-center-model'
+import { StatusMark, type StatusState } from '@/components/ui/status-mark'
 import {
   describeResidency,
   describeResumeVerdict,
@@ -16,12 +16,12 @@ import { resumeDeskTab } from './resume-center-wake'
 import { describeWakePhase, isWakeInFlight, useWakeState } from './resume-center-wake-copy'
 import { PanePreviewThumb } from './PanePreviewThumb'
 
-// Filled only for a reading we hold; unknown is hollow and more contrasty than idle (STYLEGUIDE).
-const TONE_MARK: Record<ContinuityTone, string> = {
-  warm: 'bg-[var(--status-success)] border-transparent',
-  dormant: 'bg-transparent border-muted-foreground',
-  stopped: 'bg-transparent border-muted-foreground',
-  unknown: 'bg-transparent border-[var(--status-unknown)]'
+// STYLEGUIDE: dormant/parked/not running are IDLE; only a live reading is HEALTHY.
+const TONE_STATE: Record<ContinuityTone, StatusState> = {
+  warm: 'HEALTHY',
+  dormant: 'IDLE',
+  stopped: 'IDLE',
+  unknown: 'UNKNOWN'
 }
 
 export function ResidencyMark({
@@ -29,10 +29,9 @@ export function ResidencyMark({
 }: {
   residency: DeskTab['residency']
 }): React.JSX.Element {
-  const tone = residencyTone(residency)
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-      <span aria-hidden className={cn('size-2 rounded-full border', TONE_MARK[tone])} />
+      <StatusMark state={TONE_STATE[residencyTone(residency)]} />
       {describeResidency(residency)}
     </span>
   )

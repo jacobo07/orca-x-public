@@ -119,6 +119,16 @@ two render identically while meaning opposite things. So:
   unmeasured number is not a zero, and rendering it as one is a claim the code cannot support —
   see _UX rules_ on copy that overclaims.
 
+### Drawing a status mark
+
+The dot for one of the six system states is `StatusMark` (`components/ui/status-mark.tsx`); its
+token and shape are bound to `config/status-semantics.jsonc` by a test, and
+`status-mark-sweep.test.ts` fails on a hand-drawn status dot anywhere else. Share it because the
+**meaning** is shared, never because the shape is: a dot answering a different question (the agent
+chat's turn-location chip says where a turn may run, not whether something is well) stays its own
+family and is named in the sweep with that reason. A running session on a host Orca cannot vouch
+for is `UNKNOWN` on every surface; the host's failure is drawn on the host.
+
 ### Adding a status color
 
 Don't. Check the six states first; almost everything is one of them wearing a different word. If a
