@@ -1,9 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import { Separator } from '@/components/ui/separator'
+import { StatusMark } from '@/components/ui/status-mark'
 import { cn } from '@/lib/utils'
 import { hostReachabilityLabel } from '@/lib/host-reachability-labels'
-import { reachabilityTone } from './workstation-labels'
-import { HOST_REACHABILITIES } from '@/lib/host-reachability'
+import { HOST_REACHABILITIES, hostReachabilityStatus } from '@/lib/host-reachability'
 import type { WorkstationSummary } from './workstation-projection'
 
 const ROW = 'flex items-baseline justify-between gap-3 py-1 text-[12px]'
@@ -20,7 +20,7 @@ export function WorkstationSummaryPanel({
       data-workstation-summary=""
       className="w-full shrink-0 rounded-xl border border-border bg-card p-4"
     >
-      <h2 className="text-sm font-medium">
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         {translate('workstation.summary.title', 'Workstation summary')}
       </h2>
       <Separator className="my-3" />
@@ -34,10 +34,7 @@ export function WorkstationSummaryPanel({
         {HOST_REACHABILITIES.filter((r) => summary.byReachability[r] > 0).map((r) => (
           <div key={r} className={cn(ROW, 'pl-3 text-muted-foreground')}>
             <dt className="flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className={cn('inline-block size-2 rounded-full', reachabilityTone(r))}
-              />
+              <StatusMark state={hostReachabilityStatus(r)} />
               {hostReachabilityLabel(r)}
             </dt>
             <dd className="tabular-nums" data-workstation-summary-reachability={r}>

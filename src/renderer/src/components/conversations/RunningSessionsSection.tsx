@@ -1,23 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { cn } from '@/lib/utils'
+import { StatusMark } from '@/components/ui/status-mark'
 import { useAppStore } from '@/store'
 
-import {
-  describeRunningSessionLiveness,
-  type RunningSessionTone
-} from './running-session-presentation'
+import { describeRunningSessionLiveness } from './running-session-presentation'
 import type { WorkspaceRunningSession } from './workspace-running-sessions'
 import { AgentMonogram } from './workspace-roster-rows'
-
-const TONE_DOT: Record<RunningSessionTone, string> = {
-  ready: 'bg-[var(--status-success)]',
-  caution: 'bg-[var(--status-warning)]',
-  refused: 'bg-[var(--status-error)]',
-  neutral: 'bg-muted-foreground/60',
-  // STYLEGUIDE: UNKNOWN is a hollow mark, never a filled grey one.
-  unknown: 'border border-[var(--status-unknown)] bg-transparent'
-}
 
 /** Leaves Workspace for the pane itself, the way the agent board reveals a card. */
 function revealSession(session: WorkspaceRunningSession): void {
@@ -73,12 +61,7 @@ export function RunningSessionsSection({
                     {session.agentType} · {session.hostLabel} · {session.worktreeName}
                   </span>
                 </span>
-                <span
-                  className={cn('size-2 shrink-0 rounded-full', TONE_DOT[liveness.tone])}
-                  role="img"
-                  aria-label={liveness.label}
-                  title={liveness.label}
-                />
+                <StatusMark state={liveness.status} label={liveness.label} />
               </button>
             </li>
           )

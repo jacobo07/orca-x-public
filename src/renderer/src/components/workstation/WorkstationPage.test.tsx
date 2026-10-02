@@ -146,6 +146,23 @@ describe('WorkstationPage', () => {
     expect(card('local')!.textContent).toContain('No agents running')
   })
 
+  it('draws an unobserved host with the hollow UNKNOWN mark, on the card and in the summary', () => {
+    mocks.hostOptions = [LOCAL, BOX]
+    render()
+    const mark = (scope: Element): Element | null =>
+      scope.querySelector('[data-workstation-reachability-label] [data-status-mark]')
+    expect(mark(card('ssh:box')!)?.getAttribute('data-status-mark')).toBe('UNKNOWN')
+    expect(mark(card('ssh:box')!)?.getAttribute('data-status-shape')).toBe('hollow')
+    // Control: this machine is observed, so it is filled.
+    expect(mark(card('local')!)?.getAttribute('data-status-shape')).toBe('filled')
+    const row = container
+      .querySelector('[data-workstation-summary-reachability="unknown"]')!
+      .closest('div')!
+    expect(row.querySelector('[data-status-mark]')?.getAttribute('data-status-shape')).toBe(
+      'hollow'
+    )
+  })
+
   it('a setup on a host the registry lost gets a card, with no host menu to act on it', () => {
     ;(mocks.state.projectHostSetups as { hostId: string }[])[0].hostId = 'ssh:gone'
     render()

@@ -1,23 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { ProjectHostSetupState } from '../../../../shared/project-types'
-import type { HostReachability } from '@/lib/host-reachability'
 import type { WorkstationAgentState, WorkstationNode } from './workstation-projection'
-
-/** Status tokens only (STYLEGUIDE); the word beside it carries the meaning, never colour alone. */
-export function reachabilityTone(reachability: HostReachability): string {
-  switch (reachability) {
-    case 'this-machine':
-    case 'reachable':
-      return 'bg-[var(--status-success)]'
-    case 'connecting':
-    case 'blocked':
-      return 'bg-[var(--status-warning)]'
-    case 'failed':
-      return 'bg-[var(--status-error)]'
-    case 'unknown':
-      return 'bg-[var(--status-unknown)]'
-  }
-}
 
 export function hostKindLabel(node: WorkstationNode): string {
   switch (node.host?.kind) {

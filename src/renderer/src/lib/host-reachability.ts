@@ -1,6 +1,7 @@
 import type { ExecutionHostKind } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import type { StatusState } from '@/components/ui/status-mark'
 
 /**
  * What Orca has OBSERVED about a host — the one derivation every host-bound surface reads
@@ -68,4 +69,20 @@ export function deriveHostReachability(host: HostReachabilityEvidence): HostReac
 /** Only an observed host can vouch for what runs on it; every other state leaves that unknown. */
 export function hostVouches(reachability: HostReachability): boolean {
   return reachability === 'this-machine' || reachability === 'reachable'
+}
+
+/** The STYLEGUIDE system state every surface draws for a reachability; the label names the rest. */
+export function hostReachabilityStatus(reachability: HostReachability): StatusState {
+  switch (reachability) {
+    case 'this-machine':
+    case 'reachable':
+      return 'HEALTHY'
+    case 'connecting':
+    case 'blocked':
+      return 'PRESSURED'
+    case 'failed':
+      return 'CRITICAL'
+    case 'unknown':
+      return 'UNKNOWN'
+  }
 }

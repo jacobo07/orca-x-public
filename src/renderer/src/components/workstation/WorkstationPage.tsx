@@ -1,20 +1,15 @@
 import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { StatusMark } from '@/components/ui/status-mark'
 import { useWorkspaceRunningSessions } from '../conversations/use-workspace-running-sessions'
 import { HostSectionHeaderMenu } from '../sidebar/HostSectionHeaderMenu'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
 import { WorkspaceFrame } from '../workspace-frame/WorkspaceFrame'
+import { hostReachabilityStatus, hostVouches } from '@/lib/host-reachability'
 import { hostReachabilityLabel } from '@/lib/host-reachability-labels'
-import {
-  agentStateLabel,
-  failureLabel,
-  hostKindLabel,
-  reachabilityTone,
-  setupStateLabel
-} from './workstation-labels'
+import { agentStateLabel, failureLabel, hostKindLabel, setupStateLabel } from './workstation-labels'
 import { buildWorkstation, type WorkstationNode } from './workstation-projection'
 import { WorkstationSummaryPanel } from './WorkstationSummaryPanel'
 
@@ -63,7 +58,7 @@ export default function WorkstationPage(): React.JSX.Element {
 
 function HostCard({ node }: { node: WorkstationNode }): React.JSX.Element {
   const failure = failureLabel(node)
-  const vouches = node.reachability === 'this-machine' || node.reachability === 'reachable'
+  const vouches = hostVouches(node.reachability)
   return (
     <li
       data-workstation-host={node.hostId}
@@ -85,10 +80,7 @@ function HostCard({ node }: { node: WorkstationNode }): React.JSX.Element {
           data-workstation-reachability-label=""
           className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
         >
-          <span
-            aria-hidden
-            className={cn('inline-block size-2 rounded-full', reachabilityTone(node.reachability))}
-          />
+          <StatusMark state={hostReachabilityStatus(node.reachability)} />
           {hostReachabilityLabel(node.reachability)}
         </span>
         {node.host ? (
@@ -117,7 +109,7 @@ function HostCard({ node }: { node: WorkstationNode }): React.JSX.Element {
       ) : null}
 
       <section className="mt-3" data-workstation-section="projects">
-        <h3 className="text-xs font-medium text-muted-foreground">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           {translate('workstation.projects.title', 'Projects')}
         </h3>
         {node.projects.length === 0 ? (
@@ -148,7 +140,7 @@ function HostCard({ node }: { node: WorkstationNode }): React.JSX.Element {
       </section>
 
       <section className="mt-3" data-workstation-section="agents">
-        <h3 className="text-xs font-medium text-muted-foreground">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           {translate('workstation.agents.title', 'Agents')}
         </h3>
         {node.agents.length === 0 ? (

@@ -60,14 +60,14 @@ describe('running sessions in Workspace', () => {
     expect(session.liveness).not.toBe('host-offline')
     expect(session.hostReachability).toBe('unknown')
     const shown = describeRunningSessionLiveness(session)
-    expect(shown.tone).toBe('unknown')
+    expect(shown.status).toBe('UNKNOWN')
     expect(shown.label).toBe('Not connected · state unknown')
   })
 
   it('a failed connection attempt says so, and is not called offline either', () => {
     const shown = describeRunningSessionLiveness(on('ssh:refused'))
     expect(shown.label).toBe('Connection failed')
-    expect(shown.tone).toBe('refused')
+    expect(shown.status).toBe('CRITICAL')
   })
 
   it('a session on a host the registry lost has no reading: unknown', () => {
