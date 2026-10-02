@@ -5,34 +5,19 @@ import type {
   ProjectHostSetupState
 } from '../../../../shared/project-types'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import {
+  HOST_REACHABILITIES,
+  deriveHostReachability,
+  hostVouches,
+  isSshConnectionFailure,
+  type HostReachability,
+  type SshConnectionFailure
+} from '@/lib/host-reachability'
 import type {
   RunningSessionLiveness,
   WorkspaceRunningSession
 } from '../conversations/workspace-running-sessions'
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
-
-/**
- * What Orca has observed about a host (docs/reference/workspace-workstation.md §2). The registry's
- * health is a CONNECTION state — 'disconnected' only says Orca holds no connection — so it is read
- * here, never shown as reachability: no current observation is `unknown`.
- */
-export type WorkstationReachability =
-  | 'this-machine'
-  | 'reachable'
-  | 'connecting'
-  | 'failed'
-  | 'blocked'
-  | 'unknown'
-
-export const WORKSTATION_REACHABILITIES: readonly WorkstationReachability[] = [
-  'this-machine',
-  'reachable',
-  'connecting',
-  'failed',
-  'blocked',
-  'unknown'
-]
 
 /** An agent on a host that is not reachable has no voucher, so its last state is not shown. */
 export type WorkstationAgentState = Exclude<RunningSessionLiveness, 'host-offline'> | 'unknown'
@@ -57,9 +42,9 @@ export type WorkstationNode = {
   /** null = a setup or session names a host the registry does not know. */
   host: SidebarHostOption | null
   label: string
-  reachability: WorkstationReachability
+  reachability: HostReachability
   /** Why Orca's last attempt failed, when it did. */
-  failure: SshFailure | 'runtime-error' | null
+  failure: SshConnectionFailure | 'runtime-error' | null
   blocked: Extract<RuntimeCompatVerdict, { kind: 'blocked' }>['reason'] | null
   projects: WorkstationProject[]
   agents: WorkstationAgent[]
@@ -67,51 +52,16 @@ export type WorkstationNode = {
 
 export type WorkstationSummary = {
   hosts: number
-  byReachability: Record<WorkstationReachability, number>
+  byReachability: Record<HostReachability, number>
   projectsSetUp: number
   agents: number
 }
 
-type SshFailure = Extract<SshConnectionStatus, 'auth-failed' | 'error' | 'reconnection-failed'>
-
-function isSshFailure(status: SshConnectionStatus | undefined): status is SshFailure {
-  return status === 'auth-failed' || status === 'error' || status === 'reconnection-failed'
-}
-
-export function deriveReachability(
-  host: Pick<SidebarHostOption, 'kind' | 'health' | 'connectionStatus'>
-): WorkstationReachability {
-  if (host.kind === 'local') {
-    return 'this-machine'
-  }
-  if (host.health === 'blocked') {
-    return 'blocked'
-  }
-  if (host.health === 'connecting') {
-    return 'connecting'
-  }
-  if (host.kind === 'ssh') {
-    if (host.connectionStatus === 'connected') {
-      return 'reachable'
-    }
-    return isSshFailure(host.connectionStatus) ? 'failed' : 'unknown'
-  }
-  // Runtime: 'available' is only reported with a live status (execution-host-registry.ts).
-  if (host.health === 'available') {
-    return 'reachable'
-  }
-  return host.health === 'error' ? 'failed' : 'unknown'
-}
-
 function failureOf(host: SidebarHostOption): WorkstationNode['failure'] {
-  if (host.kind === 'ssh' && isSshFailure(host.connectionStatus)) {
+  if (host.kind === 'ssh' && isSshConnectionFailure(host.connectionStatus)) {
     return host.connectionStatus
   }
   return host.kind === 'runtime' && host.health === 'error' ? 'runtime-error' : null
-}
-
-function vouches(reachability: WorkstationReachability): boolean {
-  return reachability === 'this-machine' || reachability === 'reachable'
 }
 
 export function buildWorkstation(input: {
@@ -147,7 +97,7 @@ export function buildWorkstation(input: {
       hostId: host.id,
       host,
       label: host.label,
-      reachability: deriveReachability(host),
+      reachability: deriveHostReachability(host),
       failure: failureOf(host),
       blocked:
         host.health === 'blocked' && host.compatibility?.kind === 'blocked'
@@ -173,7 +123,7 @@ export function buildWorkstation(input: {
       title: session.title,
       projectName: session.projectId ? (projectName.get(session.projectId) ?? null) : null,
       state:
-        vouches(node.reachability) && session.liveness !== 'host-offline'
+        hostVouches(node.reachability) && session.liveness !== 'host-offline'
           ? session.liveness
           : 'unknown'
     })
@@ -189,8 +139,8 @@ export function buildWorkstation(input: {
   }
 
   const byReachability = Object.fromEntries(
-    WORKSTATION_REACHABILITIES.map((reachability) => [reachability, 0])
-  ) as Record<WorkstationReachability, number>
+    HOST_REACHABILITIES.map((reachability) => [reachability, 0])
+  ) as Record<HostReachability, number>
   for (const node of ordered) {
     byReachability[node.reachability] += 1
   }

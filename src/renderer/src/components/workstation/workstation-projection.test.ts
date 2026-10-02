@@ -3,7 +3,7 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../share
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { WorkspaceRunningSession } from '../conversations/workspace-running-sessions'
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
-import { buildWorkstation, deriveReachability } from './workstation-projection'
+import { buildWorkstation } from './workstation-projection'
 
 const SSH = 'ssh:box' as ExecutionHostId
 const RUNTIME = 'runtime:env' as ExecutionHostId
@@ -60,52 +60,6 @@ function session(
     ...overrides
   } as WorkspaceRunningSession
 }
-
-describe('deriveReachability (spec §2)', () => {
-  it.each([
-    ['local is this machine', { kind: 'local', health: 'local' }, 'this-machine'],
-    [
-      'ssh connected is reachable',
-      { kind: 'ssh', health: 'available', connectionStatus: 'connected' },
-      'reachable'
-    ],
-    ['ssh never observed is unknown', { kind: 'ssh', health: 'disconnected' }, 'unknown'],
-    [
-      'ssh disconnected is unknown, not down',
-      { kind: 'ssh', health: 'disconnected', connectionStatus: 'disconnected' },
-      'unknown'
-    ],
-    [
-      'ssh connecting',
-      { kind: 'ssh', health: 'connecting', connectionStatus: 'deploying-relay' },
-      'connecting'
-    ],
-    [
-      'ssh auth failed',
-      { kind: 'ssh', health: 'error', connectionStatus: 'auth-failed' },
-      'failed'
-    ],
-    [
-      'ssh reconnection failed',
-      { kind: 'ssh', health: 'error', connectionStatus: 'reconnection-failed' },
-      'failed'
-    ],
-    ['runtime with a live status', { kind: 'runtime', health: 'available' }, 'reachable'],
-    ['runtime never probed is unknown', { kind: 'runtime', health: 'disconnected' }, 'unknown'],
-    ['runtime error', { kind: 'runtime', health: 'error' }, 'failed'],
-    ['runtime version skew', { kind: 'runtime', health: 'blocked' }, 'blocked']
-  ] as const)('%s', (_name, input, expected) => {
-    expect(deriveReachability(input)).toBe(expected)
-  })
-
-  it('reads the observation, not the health: connected with stale health is still reachable only by status', () => {
-    // Control pair differing only in connectionStatus.
-    expect(
-      deriveReachability({ kind: 'ssh', health: 'available', connectionStatus: 'connected' })
-    ).toBe('reachable')
-    expect(deriveReachability({ kind: 'ssh', health: 'available' })).toBe('unknown')
-  })
-})
 
 describe('buildWorkstation', () => {
   it('groups projects and agents under their host, this machine first', () => {

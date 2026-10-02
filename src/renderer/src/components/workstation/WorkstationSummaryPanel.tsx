@@ -2,7 +2,8 @@ import { translate } from '@/i18n/i18n'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { reachabilityLabel, reachabilityTone } from './workstation-labels'
-import { WORKSTATION_REACHABILITIES, type WorkstationSummary } from './workstation-projection'
+import { HOST_REACHABILITIES } from '@/lib/host-reachability'
+import type { WorkstationSummary } from './workstation-projection'
 
 const ROW = 'flex items-baseline justify-between gap-3 py-1 text-[12px]'
 
@@ -29,7 +30,7 @@ export function WorkstationSummaryPanel({
             {summary.hosts}
           </dd>
         </div>
-        {WORKSTATION_REACHABILITIES.filter((r) => summary.byReachability[r] > 0).map((r) => (
+        {HOST_REACHABILITIES.filter((r) => summary.byReachability[r] > 0).map((r) => (
           <div key={r} className={cn(ROW, 'pl-3 text-muted-foreground')}>
             <dt className="flex items-center gap-1.5">
               <span

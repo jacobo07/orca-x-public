@@ -1,12 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import type { ProjectHostSetupState } from '../../../../shared/project-types'
-import type {
-  WorkstationAgentState,
-  WorkstationNode,
-  WorkstationReachability
-} from './workstation-projection'
+import type { HostReachability } from '@/lib/host-reachability'
+import type { WorkstationAgentState, WorkstationNode } from './workstation-projection'
 
-export function reachabilityLabel(reachability: WorkstationReachability): string {
+export function reachabilityLabel(reachability: HostReachability): string {
   switch (reachability) {
     case 'this-machine':
       return translate('workstation.reachability.thisMachine', 'This machine')
@@ -24,7 +21,7 @@ export function reachabilityLabel(reachability: WorkstationReachability): string
 }
 
 /** Status tokens only (STYLEGUIDE); the word beside it carries the meaning, never colour alone. */
-export function reachabilityTone(reachability: WorkstationReachability): string {
+export function reachabilityTone(reachability: HostReachability): string {
   switch (reachability) {
     case 'this-machine':
     case 'reachable':
