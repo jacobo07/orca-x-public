@@ -11,6 +11,7 @@ export function GlobalNavRow({
   onSelect,
   onPrefetch,
   trailing,
+  hint,
   dataAttributes
 }: {
   icon: React.ReactNode
@@ -21,6 +22,8 @@ export function GlobalNavRow({
   onSelect: () => void
   onPrefetch?: () => void
   trailing?: React.ReactNode
+  /** Second line under the label, so a long localized label is not squeezed by it. */
+  hint?: string
   dataAttributes: Record<string, string>
 }): React.JSX.Element {
   return (
@@ -31,7 +34,8 @@ export function GlobalNavRow({
       aria-disabled={disabled || undefined}
       aria-label={accessibleLabel ?? label}
       className={cn(
-        'flex h-9 w-full shrink-0 items-center gap-3 rounded-md px-3 text-left text-[13px] transition-colors',
+        // Why min-h, not h: a long localized label wraps instead of losing its end.
+        'flex min-h-9 w-full shrink-0 items-center gap-3 rounded-md px-3 py-1 text-left text-[13px] transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
         active
           ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
@@ -49,7 +53,14 @@ export function GlobalNavRow({
       <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden>
         {icon}
       </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span data-global-nav-label className="line-clamp-2 break-words">
+          {label}
+        </span>
+        {hint ? (
+          <span className="truncate text-[10px] text-sidebar-foreground/50">{hint}</span>
+        ) : null}
+      </span>
       {trailing}
     </button>
   )

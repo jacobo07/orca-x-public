@@ -134,6 +134,17 @@ test('every Workspace destination renders in one frame under one unchanged globa
     const briefBox = await brief.boundingBox()
     expect(briefBox!.y).toBeGreaterThanOrEqual(navBox!.y + navBox!.height)
     await settledShot(page, testInfo.outputPath('w2-resume.png'))
+    // Every destination's name reads in full, in any locale; a hint beside it must not squeeze it.
+    const labels = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('[data-global-nav-item] [data-global-nav-label]')].map(
+        (node) => ({
+          text: node.textContent,
+          clipped: node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight
+        })
+      )
+    )
+    expect(labels.length).toBeGreaterThanOrEqual(RESUME_CENTER_ITEMS.length)
+    expect(labels.filter((label) => label.clipped).map((label) => label.text)).toEqual([])
     // Painted, not only attributed: once settled, Cognitive Workspace wears the current-row fill
     // and Home, the view the app launched on, does not. The pointer leaves the row first, so a
     // hover fill cannot stand in for the current one.

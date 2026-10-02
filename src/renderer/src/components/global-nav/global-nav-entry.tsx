@@ -39,11 +39,7 @@ export function GlobalNavEntry({
         active={active}
         disabled={disabled}
         onSelect={onSelect}
-        trailing={
-          hint ? (
-            <span className="shrink-0 text-[10px] text-sidebar-foreground/50">{hint}</span>
-          ) : undefined
-        }
+        hint={hint}
         dataAttributes={dataAttributes}
       />
     )
