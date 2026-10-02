@@ -1517,6 +1517,8 @@ type RuntimePtyWorktreeRecord = {
 
 type TerminalCreateOptions = {
   command?: string
+  // Why: the approved prepare bytes run as typed; set only by the prepare runner, never from RPC params.
+  rawCommand?: true
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
   env?: Record<string, string>
@@ -26694,6 +26696,7 @@ export class OrcaRuntimeService {
     // Why: raw shell commands like `codex exec` must remain user-authored shell.
     // Only unmanaged, repo-backed, bare agent launches get Settings defaults.
     const callerSuppliedLaunch =
+      opts.rawCommand ||
       opts.env ||
       opts.launchConfig ||
       opts.launchAgent ||

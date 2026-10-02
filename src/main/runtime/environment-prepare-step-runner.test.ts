@@ -106,7 +106,8 @@ describe('runEnvironmentPrepareStep', () => {
     expect(createTerminal).toHaveBeenCalledWith('id:r1::/work/r1', {
       command: 'mkdir x',
       title: 'Prepare: shim',
-      activate: true
+      activate: true,
+      rawCommand: true
     })
   })
 

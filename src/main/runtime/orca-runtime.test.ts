@@ -11,6 +11,9 @@ import { homedir, tmpdir } from 'node:os'
 import { basename, join, win32 } from 'node:path'
 
 import { workspaceConsentKey } from '../workspace-execution-consent'
+import { prepareApprovalHash } from '../../shared/environment-prepare-plan'
+import { nodePrepareSha256Hex } from '../../shared/environment-prepare-node-hash'
+import { runEnvironmentPrepareStep } from './environment-prepare-step-runner'
 import { ipcMain } from 'electron'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
@@ -13825,6 +13828,73 @@ describe('OrcaRuntimeService', () => {
       spawn.mock.invocationCallOrder[0]!
     )
   })
+
+  // Why: an approved prepare command is exact text. A prepare that equals a bare agent launch must
+  // reach the PTY unchanged and must not reach the folder-trust producer.
+  it.each(['claude', 'codex'] as const)(
+    'spawns an approved `prepare: %s` as the literal bytes through the real createTerminal',
+    async (agent) => {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-prepare' })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          agentCmdOverrides: {},
+          agentDefaultArgs: { [agent]: '--dangerously-skip-permissions' },
+          agentDefaultEnv: { [agent]: { PREPARE_LEAK: 'yes' } }
+        })
+      })
+      const internal = runtime as unknown as {
+        markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
+      }
+      internal.markLocalWorkspaceTrustedForAgent = vi.fn()
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const hostKey = 'local@0123456789abcdef'
+      const text = `requirements:\n  - id: login\n    kind: command\n    name: ${agent}\n    prepare: ${JSON.stringify(agent)}\n`
+      const file = {
+        state: 'read' as const,
+        text,
+        contentHash: createHash('sha256').update(text).digest('hex')
+      }
+      const hash = await prepareApprovalHash('login', hostKey, agent, nodePrepareSha256Hex)
+
+      const result = await runEnvironmentPrepareStep(
+        {
+          repoSelector: 'id:repo-1',
+          requirementId: 'login',
+          approvedContentHash: hash,
+          approvedHostKey: hostKey,
+          origin: 'runtime-rpc'
+        },
+        {
+          resolveRepo: async () => ({ id: TEST_REPO_ID, path: TEST_WORKTREE_PATH, connectionId: null }),
+          hostKeyFor: () => hostKey,
+          readContract: async () => file,
+          measureRequirement: async () => 'missing',
+          readHostIdentity: async () => 'local',
+          readPersistedApproval: () => ({ status: 'absent' }),
+          workspaceSelector: () => `path:${TEST_WORKTREE_PATH}`,
+          createTerminal: (selector, options) => runtime.createTerminal(selector, options),
+          sha256Hex: nodePrepareSha256Hex
+        }
+      )
+
+      expect(result.status).toBe('started')
+      const spawnCall = spawn.mock.calls[0]?.[0] as
+        | { command?: string; env?: Record<string, string> }
+        | undefined
+      expect(spawnCall?.command).toBe(agent)
+      expect(spawnCall?.env?.PREPARE_LEAK).toBeUndefined()
+      expect(internal.markLocalWorkspaceTrustedForAgent).not.toHaveBeenCalled()
+      expect(markCodexProjectTrustedMock).not.toHaveBeenCalled()
+    }
+  )
 
   // Why: `cursor` on PATH is the Cursor desktop launcher; only `cursor-agent` is
   // the CLI Orca can host (issue #11926).

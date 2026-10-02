@@ -49,7 +49,7 @@ export type PrepareStepRunnerDeps<R extends PrepareRunnerRepo = PrepareRunnerRep
   workspaceSelector: (repo: R) => string
   createTerminal: (
     selector: string,
-    options: { command: string; title: string; activate: boolean }
+    options: { command: string; title: string; activate: boolean; rawCommand: true }
   ) => Promise<RuntimeTerminalCreate>
   sha256Hex: Sha256Hex
   // Test seam; production uses the default, which is authorizePrepareStep itself.
@@ -124,7 +124,8 @@ export async function runEnvironmentPrepareStep<R extends PrepareRunnerRepo>(
   const terminal = await deps.createTerminal(deps.workspaceSelector(repo), {
     command: decision.bytes,
     title: `Prepare: ${args.requirementId}`,
-    activate: true
+    activate: true,
+    rawCommand: true
   })
   return { status: 'started', terminal }
 }

@@ -60,4 +60,38 @@ describe('terminal.create RPC idempotency', () => {
     )
     expect(result).toEqual({ terminal })
   })
+
+  // Why: rawCommand skips the agent rewrite and the folder-trust check; only the prepare runner may set it.
+  it('never forwards rawCommand from wire params to createTerminal', async () => {
+    const terminal = { handle: 'terminal-1', worktreeId: 'worktree-1', title: null }
+    const createTerminal = vi.fn(async () => terminal)
+    const dedupeTerminalCreate = vi.fn(
+      async (
+        _clientIdentity: string,
+        _worktree: string | undefined,
+        _mutationId: string | undefined,
+        _reconcileExisting: boolean,
+        run: (worktree: string | undefined, handle: string | undefined) => Promise<typeof terminal>
+      ) => run('id:worktree-1', undefined)
+    )
+    const method = TERMINAL_METHODS.find((candidate) => candidate.name === 'terminal.create')
+    if (!method?.params) {
+      throw new Error('terminal.create method missing')
+    }
+    const parsed = method.params.parse({
+      worktree: 'id:worktree-1',
+      command: 'claude',
+      rawCommand: true
+    })
+
+    await method.handler(
+      parsed,
+      { runtime: { createTerminal, dedupeTerminalCreate } } as unknown as RpcContext,
+      vi.fn()
+    )
+
+    expect(createTerminal).toHaveBeenCalledTimes(1)
+    const options = (createTerminal.mock.calls[0] as unknown as [string, object])[1]
+    expect(options).not.toHaveProperty('rawCommand')
+  })
 })
