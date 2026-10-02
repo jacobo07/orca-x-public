@@ -171,8 +171,13 @@ export function classifyRequirement(
 export function classifyContractRead(
   contract: ContractReadState,
   hostKey: string,
-  measuredAt: number
+  measuredAt: number,
+  hostStatus: HostMeasurement['status'] = 'measured'
 ): RequirementVerdict | null {
+  // Why: an unmeasured host also fails the read; its status is the cause, not the file.
+  if (contract === 'unreadable' && hostStatus !== 'measured') {
+    return verdict({ measuredAt, hostKey }, 'unknown', hostStatus)
+  }
   if (contract === 'unreadable' || contract === 'unparseable') {
     return verdict({ measuredAt, hostKey }, 'unknown', `contract-${contract}`)
   }

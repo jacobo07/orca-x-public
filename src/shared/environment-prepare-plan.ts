@@ -139,7 +139,8 @@ export async function buildPreparePlan(
     contractVerdict: classifyContractRead(
       input.contract ?? 'parsed',
       input.hostKey,
-      input.measurement.at
+      input.measurement.at,
+      input.measurement.status
     ),
     rows,
     steps

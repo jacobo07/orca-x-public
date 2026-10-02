@@ -41,9 +41,14 @@ const LABEL_WORDS: Record<PrepareStepLabel, string> = {
 export function formatPreparePlan(plan: PreparePlan, repoSelector: string): string {
   const lines = [`Host: ${plan.hostKey}`]
   if (plan.contractVerdict) {
-    lines.push(
-      `Contract: ${plan.contractVerdict.reason === 'contract-unparseable' ? 'UNPARSEABLE' : 'UNREADABLE'} (not the same as none declared)`
-    )
+    const { reason } = plan.contractVerdict
+    const verdict =
+      reason === 'contract-unparseable'
+        ? 'UNPARSEABLE'
+        : reason === 'contract-unreadable'
+          ? 'UNREADABLE'
+          : `NOT READ (host ${reason})`
+    lines.push(`Contract: ${verdict} (not the same as none declared)`)
     return lines.join('\n')
   }
   if (plan.steps.length === 0) {

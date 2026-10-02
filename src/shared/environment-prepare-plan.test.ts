@@ -145,6 +145,23 @@ describe('buildPreparePlan', () => {
     })
     expect(result.steps).toEqual([])
   })
+
+  // 20-04 L6: a killed ssh carrier fails the contract read; the plan must say the host was unreachable.
+  it('attributes an unreadable contract on an unreachable host to the host', async () => {
+    const result = await buildPreparePlan(
+      {
+        contractSource: null,
+        hostKey: HOST,
+        requirements: [],
+        measurement: { status: 'unreachable', at: 1, hostKey: HOST, detail: 'x' },
+        approvals: {},
+        contract: 'unreadable'
+      },
+      { sha256Hex }
+    )
+    expect(result.contractVerdict).toMatchObject({ state: 'unknown', reason: 'unreachable' })
+    expect(result.steps).toEqual([])
+  })
 })
 
 describe('prepareApprovalHash', () => {

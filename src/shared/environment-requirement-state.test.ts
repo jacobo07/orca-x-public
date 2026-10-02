@@ -281,6 +281,27 @@ describe('classifyContractRead', () => {
     })
   })
 
+  // 20-04 L6: a dead carrier fails the contract read too; the host's status is the cause, not the file.
+  it('names the host status when an unreadable contract comes from an unmeasured host', () => {
+    expect(classifyContractRead('unreadable', HOST, 3, 'unreachable')).toMatchObject({
+      state: 'unknown',
+      reason: 'unreachable'
+    })
+    expect(classifyContractRead('unreadable', HOST, 3, 'timed-out')).toMatchObject({
+      state: 'unknown',
+      reason: 'timed-out'
+    })
+  })
+
+  it('keeps contract-unreadable on a measured host and contract-unparseable on any host', () => {
+    expect(classifyContractRead('unreadable', HOST, 3, 'measured')).toMatchObject({
+      reason: 'contract-unreadable'
+    })
+    expect(classifyContractRead('unparseable', HOST, 3, 'unreachable')).toMatchObject({
+      reason: 'contract-unparseable'
+    })
+  })
+
   it('has no verdict for a parsed or absent contract', () => {
     expect(classifyContractRead('parsed', HOST, 3)).toBeNull()
     expect(classifyContractRead('absent', HOST, 3)).toBeNull()

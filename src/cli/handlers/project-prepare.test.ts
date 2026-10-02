@@ -167,6 +167,27 @@ describe('orca project prepare --plan', () => {
     expect(unreadable.output).toContain('UNREADABLE')
     expect(unreadable.output).not.toContain('No prepare steps declared')
   })
+
+  // 20-04 L6: a dead carrier fails the read too; the CLI names the host, not the file.
+  it('says the host was not reached when the contract read failed on an unreachable host', async () => {
+    const { output } = await run(
+      [
+        ['repo', 'id:r1'],
+        ['plan', true]
+      ],
+      {
+        measure: measurement({
+          contract: 'unreadable',
+          contractSource: null,
+          requirements: [],
+          measurement: { status: 'unreachable', at: 1, hostKey: KAT_HOST, detail: 'x' }
+        })
+      }
+    )
+    expect(output).toContain('NOT READ (host unreachable)')
+    expect(output).not.toContain('UNREADABLE')
+    expect(output).not.toContain('No prepare steps declared')
+  })
 })
 
 describe('orca project prepare --requirement --approve', () => {
