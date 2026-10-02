@@ -70,6 +70,22 @@ describe('PrepareStepApprovalDialog', () => {
     expect(pre?.textContent).toBe(BYTES)
   })
 
+  it('shows hidden and direction-changing characters as code points, never drawn', async () => {
+    const rlo = String.fromCodePoint(0x202e)
+    const zwsp = String.fromCodePoint(0x200b)
+    const trojan = `pnpm install ${rlo}# && echo ok${zwsp}`
+    await renderDialog({
+      step: { requirementId: 'node', bytes: trojan, labels: ['hidden-characters'] }
+    })
+    const text = handle('data-prepare-approval-bytes')?.textContent ?? ''
+    expect(text).toBe('pnpm install <U+202E># && echo ok<U+200B>')
+    expect(text).not.toContain(rlo)
+    expect(text).not.toContain(zwsp)
+    const label = handle('data-prepare-step-label')
+    expect(label?.getAttribute('data-prepare-step-label')).toBe('hidden-characters')
+    expect(label?.textContent).toMatch(/hidden/i)
+  })
+
   it('names the labels in words and the host', async () => {
     await renderDialog()
     const labels = [...document.querySelectorAll('[data-prepare-step-label]')].map((el) =>

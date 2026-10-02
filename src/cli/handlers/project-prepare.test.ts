@@ -126,6 +126,35 @@ describe('orca project prepare --plan', () => {
     expect(output).toContain('repository script')
   })
 
+  it('writes hidden and direction-changing characters as code points and labels the step', async () => {
+    const rlo = String.fromCodePoint(0x202e)
+    const zwsp = String.fromCodePoint(0x200b)
+    const trojan = `pnpm install ${rlo}# && echo ok${zwsp}`
+    const { output } = await run(
+      [
+        ['repo', 'id:r1'],
+        ['plan', true]
+      ],
+      {
+        measure: measurement({
+          requirements: [
+            {
+              id: 'shim',
+              kind: 'command',
+              name: 'shim',
+              versionArg: '--version',
+              prepare: trojan
+            }
+          ]
+        })
+      }
+    )
+    expect(output).toContain('pnpm install <U+202E># && echo ok<U+200B>')
+    expect(output).not.toContain(rlo)
+    expect(output).not.toContain(zwsp)
+    expect(output).toContain('hidden')
+  })
+
   it('--json prints the plan and the approvals', async () => {
     const { output } = await run([
       ['repo', 'id:r1'],

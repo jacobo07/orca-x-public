@@ -9,7 +9,10 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import type { PrepareStepLabel } from '../../../../shared/environment-prepare-plan'
+import {
+  escapeHiddenCharacters,
+  type PrepareStepLabel
+} from '../../../../shared/environment-prepare-plan'
 
 export type PrepareStepApprovalDialogProps = {
   open: boolean
@@ -23,15 +26,23 @@ export type PrepareStepApprovalDialogProps = {
 }
 
 function labelText(label: PrepareStepLabel): string {
-  return label === 'asks-for-elevation'
-    ? translate(
+  switch (label) {
+    case 'asks-for-elevation':
+      return translate(
         'auto.components.settings.PrepareStepApprovalDialog.asksForElevation',
         'This step asks for elevated privileges.'
       )
-    : translate(
+    case 'script-content-not-covered':
+      return translate(
         'auto.components.settings.PrepareStepApprovalDialog.scriptNotCovered',
         "This step runs a script from the repository. The script's own contents are not covered by this approval."
       )
+    case 'hidden-characters':
+      return translate(
+        'auto.components.settings.PrepareStepApprovalDialog.hiddenCharacters',
+        'This text contains hidden or direction-changing characters, shown as <U+XXXX> code points. They run exactly as written.'
+      )
+  }
 }
 
 export function PrepareStepApprovalDialog({
@@ -90,7 +101,7 @@ export function PrepareStepApprovalDialog({
             data-prepare-approval-bytes=""
             className="scrollbar-sleek max-h-48 overflow-auto rounded-md border border-border bg-muted px-2 py-1.5 font-mono text-xs whitespace-pre-wrap break-all select-text"
           >
-            {step.bytes}
+            {escapeHiddenCharacters(step.bytes)}
           </pre>
           {step.labels.map((label) => (
             <div

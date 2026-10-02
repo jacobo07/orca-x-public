@@ -1,3 +1,4 @@
+import { escapeHiddenCharacters } from '../shared/environment-prepare-plan'
 import type { PreparePlan, PrepareStepLabel } from '../shared/environment-prepare-plan'
 import type { EnvironmentRequirementsMeasurement } from '../shared/environment-requirements-measurement'
 import type {
@@ -34,7 +35,9 @@ function describeProbe(probe: RequirementProbeResult | undefined): string {
 const LABEL_WORDS: Record<PrepareStepLabel, string> = {
   'asks-for-elevation': 'asks for elevated privileges',
   'script-content-not-covered':
-    "runs a repository script; the script's own contents are not covered by the approval"
+    "runs a repository script; the script's own contents are not covered by the approval",
+  'hidden-characters':
+    'contains hidden or direction-changing characters, written below as <U+XXXX> code points'
 }
 
 /** Every declared prepare step with the exact text and the hash that approves it, never run here. */
@@ -61,9 +64,9 @@ export function formatPreparePlan(plan: PreparePlan, repoSelector: string): stri
       `Step ${step.requirementId} (${state ?? 'unknown'})`,
       'Runs exactly this text in a terminal on that host:',
       '----- begin exact text -----',
-      step.bytes,
+      escapeHiddenCharacters(step.bytes),
       '----- end exact text -----',
-      `as JSON: ${JSON.stringify(step.bytes)}`
+      `as JSON: ${escapeHiddenCharacters(JSON.stringify(step.bytes))}`
     )
     if (step.labels.length > 0) {
       lines.push(`labels: ${step.labels.map((label) => LABEL_WORDS[label]).join('; ')}`)

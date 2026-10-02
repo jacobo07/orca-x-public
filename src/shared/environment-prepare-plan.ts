@@ -7,7 +7,46 @@ import { isEvaluatedRequirement } from './environment-requirement-types'
 // Injected so main/CLI (node crypto) and the renderer (Web Crypto) can each supply one digest.
 export type Sha256Hex = (bytes: Uint8Array) => Promise<string>
 
-export type PrepareStepLabel = 'asks-for-elevation' | 'script-content-not-covered'
+export type PrepareStepLabel =
+  | 'asks-for-elevation'
+  | 'script-content-not-covered'
+  | 'hidden-characters'
+
+// Why: bidi controls, zero-width/format characters and C0/C1 controls (except \n and \t) change what
+// a person sees without changing what runs. Display-only: the hashed and run bytes stay verbatim.
+function isHiddenCodePoint(codePoint: number): boolean {
+  return (
+    codePoint <= 0x08 ||
+    (codePoint >= 0x0b && codePoint <= 0x1f) ||
+    (codePoint >= 0x7f && codePoint <= 0x9f) ||
+    (codePoint >= 0x200b && codePoint <= 0x200f) ||
+    (codePoint >= 0x202a && codePoint <= 0x202e) ||
+    codePoint === 0x2060 ||
+    (codePoint >= 0x2066 && codePoint <= 0x2069) ||
+    codePoint === 0xfeff
+  )
+}
+
+export function hasHiddenCharacters(text: string): boolean {
+  for (const char of text) {
+    if (isHiddenCodePoint(char.codePointAt(0)!)) {
+      return true
+    }
+  }
+  return false
+}
+
+// What a person is shown for the exact text: hidden code points as `<U+202E>`, everything else as is.
+export function escapeHiddenCharacters(text: string): string {
+  let out = ''
+  for (const char of text) {
+    const codePoint = char.codePointAt(0)!
+    out += isHiddenCodePoint(codePoint)
+      ? `<U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}>`
+      : char
+  }
+  return out
+}
 
 export type PrepareStep = {
   requirementId: string
@@ -86,15 +125,15 @@ function firstCommandToken(command: string): string | null {
 
 function labelsFor(bytes: string): PrepareStepLabel[] {
   const token = firstCommandToken(bytes)
-  if (!token) {
-    return []
-  }
   const labels: PrepareStepLabel[] = []
-  if (isElevation(token)) {
+  if (token && isElevation(token)) {
     labels.push('asks-for-elevation')
   }
-  if (isRelativeScriptPath(token)) {
+  if (token && isRelativeScriptPath(token)) {
     labels.push('script-content-not-covered')
+  }
+  if (hasHiddenCharacters(bytes)) {
+    labels.push('hidden-characters')
   }
   return labels
 }

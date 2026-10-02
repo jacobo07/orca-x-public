@@ -11545,7 +11545,8 @@
           "pending": "Recording the approval…",
           "failed": "Orca could not record the approval, so nothing was run. Try again.",
           "cancel": "Cancel",
-          "approve": "Approve and run"
+          "approve": "Approve and run",
+          "hiddenCharacters": "This text contains hidden or direction-changing characters, shown as <U+XXXX> code points. They run exactly as written."
         },
         "PrepareThisDeviceSection": {
           "noRequirements": "No requirements declared",

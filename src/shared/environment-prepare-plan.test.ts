@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   buildPreparePlan,
+  escapeHiddenCharacters,
   prepareApprovalHash,
   prepareApprovalPreimage
 } from './environment-prepare-plan'
@@ -118,6 +119,33 @@ describe('buildPreparePlan', () => {
     expect(labels.e).toEqual([])
   })
 
+  // Trojan Source: a right-to-left override, an isolate and a zero-width space inside the command.
+  const TROJAN = 'pnpm install \u202E# && echo ok\u2066 \u200Bz'
+  // sha256 of `prepare:shim\n<HOST>\n<TROJAN>`, computed outside the code under test.
+  const TROJAN_SHA256 = '93786262a9a35bc0cd12ca755cccd5b7299440c505c495a8f4c7385bf8f7b438'
+
+  it('labels hidden characters and leaves the hashed and run bytes untouched', async () => {
+    const result = await plan([shim(TROJAN)], measured([{ id: 'shim', outcome: 'absent' }]))
+    expect(result.steps[0].labels).toContain('hidden-characters')
+    expect(result.steps[0].bytes).toBe(TROJAN)
+    expect(result.steps[0].approvalHash).toBe(TROJAN_SHA256)
+  })
+
+  it('labels hidden characters even when the command token is empty or elevated', async () => {
+    const reqs = [
+      { ...shim('\uFEFF'), id: 'a' },
+      { ...shim('s\u200Budo apt-get install x'), id: 'b' },
+      { ...shim('echo plain'), id: 'c' },
+      { ...shim('printf a\tb\nc'), id: 'd' }
+    ] as EnvironmentRequirement[]
+    const result = await plan(reqs, measured(reqs.map((r) => ({ id: r.id, outcome: 'absent' }))))
+    const labels = Object.fromEntries(result.steps.map((s) => [s.requirementId, s.labels]))
+    expect(labels.a).toContain('hidden-characters')
+    expect(labels.b).toContain('hidden-characters')
+    expect(labels.c).not.toContain('hidden-characters')
+    expect(labels.d).not.toContain('hidden-characters')
+  })
+
   it('copies only declared fields', async () => {
     const dirty = measured([
       { id: 'shim', outcome: 'absent', extra: 'zz-sentinel-zz' } as RequirementProbeResult
@@ -180,5 +208,29 @@ describe('prepareApprovalHash', () => {
   it('preimage is prepare:id LF hostKey LF bytes with no trimming', () => {
     const preimage = new TextDecoder().decode(prepareApprovalPreimage('shim', HOST, ' x \n'))
     expect(preimage).toBe(`prepare:shim\n${HOST}\n x \n`)
+  })
+})
+
+describe('escapeHiddenCharacters', () => {
+  it.each([
+    ['\u202E', '<U+202E>'],
+    ['\u2066', '<U+2066>'],
+    ['\u2069', '<U+2069>'],
+    ['\u200B', '<U+200B>'],
+    ['\u200D', '<U+200D>'],
+    ['\u2060', '<U+2060>'],
+    ['\uFEFF', '<U+FEFF>'],
+    ['\u0000', '<U+0000>'],
+    ['\u001B', '<U+001B>'],
+    ['\r', '<U+000D>'],
+    ['\u007F', '<U+007F>'],
+    ['\u0085', '<U+0085>']
+  ])('writes hidden code point #%# as a visible escape', (hidden, shown) => {
+    expect(escapeHiddenCharacters(`a${hidden}b`)).toBe(`a${shown}b`)
+  })
+
+  it('leaves newline, tab, ordinary text and astral characters alone', () => {
+    const text = 'printf "caf\u00E9"\n\tgit status \u{1F600}'
+    expect(escapeHiddenCharacters(text)).toBe(text)
   })
 })
