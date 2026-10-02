@@ -126,6 +126,21 @@ describe('PrepareStepApprovalDialog', () => {
     expect(handle('data-prepare-approval-dialog')).not.toBeNull()
   })
 
+  it('logs the cause of a failed approval write under a stable prefix', async () => {
+    const cause = new Error('raw disk message')
+    onApprove.mockRejectedValueOnce(cause)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await renderDialog()
+      await act(async () => handle<HTMLButtonElement>('data-prepare-approve')!.click())
+      await flush()
+      expect(logged).toHaveBeenCalledWith('[prepare-approval] write failed', cause)
+      expect(handle('data-prepare-approval-error')?.textContent).not.toContain('raw disk message')
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
   it('cancel only cancels', async () => {
     await renderDialog()
     await act(async () => handle<HTMLButtonElement>('data-prepare-cancel')!.click())

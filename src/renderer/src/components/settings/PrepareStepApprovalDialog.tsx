@@ -62,8 +62,9 @@ export function PrepareStepApprovalDialog({
     setFailed(false)
     try {
       await onApprove()
-    } catch {
-      // Why: the cause stays in logs; the person is told the product consequence, never the raw text.
+    } catch (error) {
+      // Why: the cause goes to the log; the person is told the product consequence, never the raw text.
+      console.error('[prepare-approval] write failed', error)
       setFailed(true)
       setPending(false)
       return
