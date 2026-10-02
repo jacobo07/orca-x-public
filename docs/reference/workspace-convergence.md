@@ -44,6 +44,26 @@ owns state; every surface is a projection.
 7. Workstation projects nodes from the host registry: identity, health (UNKNOWN unless observed),
    projects placed, live sessions. Only existing actions are exposed.
 
+### 2.A Amendment — Resume Center exception (Owner ruling 2026-10-02; LIVE `1b344b550`, `fea36a47f`, `27a8e6713`)
+
+Supersedes §2.1–§2.3 on `resumeCenter` only; every other view keeps them unchanged.
+
+- **Its own left navigation**, following reference `resume-center.full.desktop.at-rest.r01`: still the
+  one `GlobalNavSidebar` column, same position and width, with `data-global-nav-variant="resume-center"`
+  (`"global"` everywhere else). Entries, in order: Back (a control, `data-global-nav-control="back"`, not
+  a destination) · Home · Cognitive Workspace (current) · Projects · Agents · Tasks · Knowledge · Runtime
+  · Audit · Settings.
+- **Back** leaves Workspace for the view it was entered from (`closeConversationsPage`); the global
+  variant returns.
+- **Knowledge and Audit** have no owner in Orca (§2.2 still holds for them): shown disabled and labelled
+  "Not available yet", never controls that do nothing. Tasks and Runtime keep the gating they have
+  elsewhere (Tasks needs a provider; Runtime = Activity, behind `experimentalActivity`).
+- **Right column** = Workspace navigation (§2.4) then the titled compact Mission Brief, then the desk
+  summary.
+- Labels wrap to two lines rather than truncate, so long localized names (es "Espacio de trabajo
+  cognitivo") and their "not available yet" hint stay readable. Product names are translated; EN and ES
+  only.
+
 ## 3. Capability inventory — activity rail → global navigation
 
 | Capability (source) | Destination |
@@ -67,7 +87,12 @@ owns state; every surface is a projection.
 
 - e2e `global-nav-shell-stability`: identical `[data-global-nav-item]` id list and identical nav
   width on terminal, Workspace (every destination), Tasks, Automations, Settings. Mutation: hide one
-  item only on `conversations` → red.
+  item only on `conversations` → red. Exception (§2.A): on `resumeCenter` the list is the Resume
+  Center variant's, asserted exactly.
+- e2e `workspace-navigation-convergence` (§2.A): Cognitive Workspace current and painted; titled
+  Mission Brief below the column's navigation; no destination label overflows; Back leaves to the
+  entry view and the entry re-opens Resume. Mutations: Back a no-op → red; on the pre-fix bundle the
+  overflow check lists the three clipped es labels.
 - Workspace entry lands on `resumeCenter`; Mission Brief visible without a click when a workspace
   exists. Mutations: route to `conversations`; drop auto-select → red.
 - Visual: real-app captures registered as `current`, geometry gate (image-calco `gate_boxes.py`)
