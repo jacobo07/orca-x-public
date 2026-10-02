@@ -62,8 +62,12 @@ its agents: their state reads "unknown while the host is not connected", not the
   no renderer producer exists. The page does not claim them.
 - dws-only: replica roles, replica health presenter, Prepare this device — arrive with the dws merge.
 - `RepositoryHostSetupsSection` "Ready" wording: fixed on dws (`290e9fc4b`); not touched here.
-- `projectRunningSessions` labelling a never-observed host's agents `host-offline` on the Agents
-  list: recorded debt; the Workstation page does not inherit it (§2).
+- ~~`projectRunningSessions` labelling a never-observed host's agents `host-offline`~~ FIXED
+  `4d0c8ecd8` (`host-unvouched`). Marks: `StatusMark` (`38a85ec17`); a session on a host Orca cannot
+  vouch for is `UNKNOWN` on Agents and Workstation alike, the host's failure drawn on the host
+  (`e8f83eb47`, `agents-workstation-status-agreement.test.ts`). Real-app: the walk reads the
+  marks' computed fill/ring in light and dark (`5186bd227`). Not observed in the real app: an Agents
+  row for a session on an unobserved host (no cheap producer of a running agent there).
 
 ## 5. Acceptance
 
