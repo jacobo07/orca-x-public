@@ -255,6 +255,21 @@ describe('PrepareThisDeviceSection', () => {
     expect(q('[data-prepare-step-started]')).toBeNull()
   })
 
+  it('says an unconfirmed launch may have started and never says "Not started"', async () => {
+    hoisted.runStep = vi.fn().mockResolvedValue({ status: 'unknown' })
+    await renderSection()
+    await clickMeasure('laptop')
+    await act(async () => q('[data-prepare-run="setup-tool"]')!.click())
+    await act(async () => q('[data-prepare-approve]')!.click())
+    await settle()
+    const note = q('[data-prepare-step-unknown]')
+    expect(note).not.toBeNull()
+    expect(note?.textContent).toMatch(/may have started/i)
+    expect(note?.textContent).not.toMatch(/not started/i)
+    expect(q('[data-prepare-refusal]')).toBeNull()
+    expect(q('[data-prepare-step-started]')).toBeNull()
+  })
+
   it('offers a run button only for a declared step that can be acted on', async () => {
     await renderSection()
     await clickMeasure('laptop')

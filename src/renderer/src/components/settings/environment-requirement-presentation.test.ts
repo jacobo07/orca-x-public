@@ -49,11 +49,19 @@ describe('presentPrepareRefusal', () => {
     for (const reason of [
       ...PREPARE_HOST_REFUSAL_REASONS,
       'host-predates-prepare',
-      'unreachable'
+      'unreachable',
+      'host-refused-unknown'
     ] as const) {
       const text = presentPrepareRefusal(reason)
       expect(text.length).toBeGreaterThan(0)
       expect(text).not.toBe(reason)
     }
+  })
+
+  it('describes a code that no union member names instead of returning undefined', () => {
+    const text = presentPrepareRefusal('a-reason-from-a-newer-host' as never)
+    expect(typeof text).toBe('string')
+    expect(text.length).toBeGreaterThan(0)
+    expect(text).not.toContain('a-reason-from-a-newer-host')
   })
 })

@@ -160,6 +160,20 @@ export function PrepareThisDeviceSection({
         </p>
       )
     }
+    if (note.outcome.status === 'unknown') {
+      return (
+        <p
+          data-prepare-step-unknown={note.requirementId}
+          role="alert"
+          className="px-3 py-2 text-xs text-muted-foreground"
+        >
+          {translate(
+            'auto.components.settings.PrepareThisDeviceSection.unknown',
+            'Orca stopped waiting for that host, so the step may have started. Check its terminals before running it again, then measure again.'
+          )}
+        </p>
+      )
+    }
     return (
       <p
         data-prepare-refusal={note.outcome.reason}

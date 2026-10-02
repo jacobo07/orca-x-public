@@ -145,19 +145,68 @@ describe('runPrepareStepForRuntimeTarget', () => {
     })
   })
 
-  it('any other failure is a refusal named unreachable, never started', async () => {
+  it('a failure after the request was sent is unknown, never "not started"', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'x',
       ok: false,
       error: { code: 'runtime_unavailable', message: 'down' }
     })
     await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
-      status: 'refused',
-      reason: 'unreachable'
+      status: 'unknown'
+    })
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('Runtime call timed out'))
+    await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
+      status: 'unknown'
     })
     runPrepareStep.mockRejectedValueOnce(new Error('ipc'))
     await expect(
       runPrepareStepForRuntimeTarget({ kind: 'local' }, 'r1', APPROVAL)
-    ).resolves.toEqual({ status: 'refused', reason: 'unreachable' })
+    ).resolves.toEqual({ status: 'unknown' })
+  })
+
+  it('a failure provably before the request was sent is unreachable', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        environment: { measureRequirements, runPrepareStep },
+        runtimeEnvironments: {
+          call: (args: RuntimeEnvironmentCallRequest) => {
+            if (args.method === 'status.get') {
+              return Promise.reject(new Error('no route to host'))
+            }
+            return runtimeEnvironmentCall(args)
+          }
+        }
+      }
+    })
+    await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
+      status: 'refused',
+      reason: 'unreachable'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('a refusal reason this client does not know is described, not passed through', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'x',
+      ok: true,
+      result: { status: 'refused', reason: 'quota-exceeded' }
+    })
+    await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
+      status: 'refused',
+      reason: 'host-refused-unknown'
+    })
+  })
+
+  it.each([
+    { status: 'queued' },
+    { status: 'refused' },
+    { status: 'refused', reason: 7 },
+    null,
+    'started'
+  ])('an answer shape this client does not understand is unknown: %j', async (answer) => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({ id: 'x', ok: true, result: answer })
+    await expect(runPrepareStepForRuntimeTarget(remote, 'r1', APPROVAL)).resolves.toEqual({
+      status: 'unknown'
+    })
   })
 })

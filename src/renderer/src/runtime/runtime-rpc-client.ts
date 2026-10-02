@@ -54,6 +54,8 @@ export async function callRuntimeRpc<TResult>(
     skipCompatibilityCheck?: boolean
     signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
+    // Why: lets a caller tell "failed before the request left" from "sent, answer lost".
+    onRequestSent?: () => void
   } = {}
 ): Promise<TResult> {
   const expectedEnvironmentPairingRevision =
@@ -79,6 +81,7 @@ export async function callRuntimeRpc<TResult>(
   const nextParams = options.suppressFeatureInteraction
     ? withBrowserPaneUiRuntimeRpcSource(params)
     : params
+  options.onRequestSent?.()
   const response =
     target.kind === 'local'
       ? await window.api.runtime.call({ method, params: nextParams })

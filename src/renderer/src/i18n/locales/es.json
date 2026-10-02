@@ -10366,7 +10366,8 @@
           "description": "Requisitos declarados en orca.yaml, medidos en cada host que tiene este proyecto.",
           "measuring": "Midiendo…",
           "measureAgain": "Medir de nuevo",
-          "measure": "Medir"
+          "measure": "Medir",
+          "unknown": "Orca dejó de esperar a ese host, así que el paso pudo haberse iniciado. Revisa sus terminales antes de ejecutarlo de nuevo y vuelve a medir."
         },
         "EnvironmentRequirementPresentation": {
           "stateSatisfied": "Cumplido",
@@ -10414,7 +10415,8 @@
           "refusalAlreadySatisfied": "Este requisito ya se cumple",
           "refusalNotApplicable": "Este requisito no aplica a ese host",
           "refusalHostPredates": "El Orca de ese host es demasiado antiguo para ejecutar pasos de preparación",
-          "refusalUnreachable": "No se pudo contactar con ese host"
+          "refusalUnreachable": "No se pudo contactar con ese host",
+          "refusalNotDescribed": "El host se negó por un motivo que esta versión de Orca no describe"
         }
       },
       "right": {

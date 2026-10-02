@@ -11560,7 +11560,8 @@
           "description": "Requirements declared in orca.yaml, measured on each host that has this project.",
           "measuring": "Measuring…",
           "measureAgain": "Measure again",
-          "measure": "Measure"
+          "measure": "Measure",
+          "unknown": "Orca stopped waiting for that host, so the step may have started. Check its terminals before running it again, then measure again."
         },
         "EnvironmentRequirementPresentation": {
           "stateSatisfied": "Satisfied",
@@ -11608,7 +11609,8 @@
           "refusalAlreadySatisfied": "This requirement is already satisfied",
           "refusalNotApplicable": "This requirement does not apply to that host",
           "refusalHostPredates": "That host's Orca is too old to run setup steps",
-          "refusalUnreachable": "That host could not be reached"
+          "refusalUnreachable": "That host could not be reached",
+          "refusalNotDescribed": "The host refused for a reason this Orca does not describe"
         }
       },
       "right": {

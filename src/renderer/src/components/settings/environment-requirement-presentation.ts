@@ -170,5 +170,11 @@ export function presentPrepareRefusal(reason: PrepareRefusalReasonCode): string 
       )
     case 'unreachable':
       return translate(`${KEY}.refusalUnreachable`, 'That host could not be reached')
+    case 'host-refused-unknown':
+    default:
+      return translate(
+        `${KEY}.refusalNotDescribed`,
+        'The host refused for a reason this Orca does not describe'
+      )
   }
 }
