@@ -48,6 +48,22 @@ async function expectDestination(page: Page, destination: string): Promise<void>
   await expect(page.locator(WORKSPACE_ENTRY).first()).toHaveAttribute('aria-current', 'page')
 }
 
+// Rows animate their highlight (transition-colors); a capture taken mid-transition shows the
+// previous destination as current. Every screenshot waits for paint to settle.
+async function settledShot(page: Page, path: string): Promise<void> {
+  await page.waitForFunction(() =>
+    document.getAnimations().every((animation) => animation.playState !== 'running')
+  )
+  await page.screenshot({ path })
+}
+
+async function paintedBackground(page: Page, selector: string): Promise<string> {
+  return page
+    .locator(selector)
+    .first()
+    .evaluate((node) => getComputedStyle(node).backgroundColor)
+}
+
 async function setWindow(app: ElectronApplication, width: number, height: number): Promise<void> {
   await app.evaluate(
     ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height),
@@ -87,7 +103,17 @@ test('every Workspace destination renders in one frame under one unchanged globa
     // The owners the frame replaced are gone, everywhere in the window.
     await expect(page.locator('[data-testid^="workspace-tab-"]')).toHaveCount(0)
     await expect(page.getByTestId('workspace-open-resume-center')).toHaveCount(0)
-    await page.screenshot({ path: testInfo.outputPath('w2-resume.png') })
+    await settledShot(page, testInfo.outputPath('w2-resume.png'))
+    // Painted, not only attributed: once settled, Workspace wears the current-row fill and Home,
+    // the view the app launched on, does not. The pointer leaves the row first, so a hover fill
+    // cannot stand in for the current one.
+    await page.mouse.move(1000, 55)
+    await page.waitForFunction(() =>
+      document.getAnimations().every((animation) => animation.playState !== 'running')
+    )
+    expect(await paintedBackground(page, WORKSPACE_ENTRY)).not.toBe(
+      await paintedBackground(page, '[data-global-nav-item="home"]')
+    )
 
     // ── Agents ──────────────────────────────────────────────────────────────────────────────────
     await page.locator('[data-workspace-nav-item="agents"]').click()
@@ -117,7 +143,7 @@ test('every Workspace destination renders in one frame under one unchanged globa
       page.locator('[data-testid="conversations-page"] [data-testid="agent-context-rail"]')
     ).toHaveCount(0)
     await expect(page.getByTestId('workspace-context-toggle')).toHaveCount(0)
-    await page.screenshot({ path: testInfo.outputPath('w2-agent-open.png') })
+    await settledShot(page, testInfo.outputPath('w2-agent-open.png'))
 
     // Back leaves the agent for the Agents list it came from.
     await page.getByTestId('agent-chat-back').click()
@@ -153,7 +179,7 @@ test('every Workspace destination renders in one frame under one unchanged globa
     await expect(page.locator('[data-backlog-page]')).toBeVisible()
     await expect(page.locator(`${FRAME_COLUMN} [data-backlog-summary]`)).toBeVisible()
     await expectShellUnchanged('backlog')
-    await page.screenshot({ path: testInfo.outputPath('w2-backlog.png') })
+    await settledShot(page, testInfo.outputPath('w2-backlog.png'))
 
     // ── Leave through the frame, re-enter: Resume is still home ─────────────────────────────────
     await page.locator('[data-workspace-nav-item="agents"]').click()
@@ -180,7 +206,7 @@ test('every Workspace destination renders in one frame under one unchanged globa
     await details.click()
     await expect(details).toHaveAttribute('aria-pressed', 'true')
     await expect(page.locator('[data-workspace-frame-column="overlay"]')).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath('w2-narrow-details.png') })
+    await settledShot(page, testInfo.outputPath('w2-narrow-details.png'))
     // Navigation stays reachable while folded.
     await strip.locator('[data-workspace-nav-item="agents"]').click()
     await expectDestination(page, 'agents')
