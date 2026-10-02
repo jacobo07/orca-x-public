@@ -1,7 +1,7 @@
-import type { Page } from '@stablyai/playwright-test'
 import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { settlePaint } from './helpers/settled-paint'
 import { waitForActivePaneHookDescriptor } from './helpers/terminal'
 
 // PRODUCT REALITY — Workspace owns its shell, leads back out, and shows the real estate.
@@ -16,18 +16,6 @@ test.setTimeout(300_000)
 // Rendered only while the worktree sidebar is mounted and open (`.worktree-sidebar-scrollbar` is CSS-only).
 const WORKTREE_LIST = '[data-sidebar-resize-handle]'
 const SIDE_PANEL = '[data-side-panel-content]'
-
-/** Screenshots taken mid-transition showed a faded popover and a tab underline still sliding. */
-async function settleAnimations(page: Page): Promise<void> {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
-        .map((animation) => animation.finished.catch(() => undefined))
-    )
-  )
-}
 
 test('Workspace owns its shell and shows the running agent and the project estate', async ({
   testRepoPath
@@ -73,7 +61,7 @@ test('Workspace owns its shell and shows the running agent and the project estat
     await expect(running).toHaveCount(1)
     await expect(running).toHaveAttribute('data-pane-key', pane.paneKey)
     await expect(running).toHaveAttribute('data-liveness', 'working')
-    await settleAnimations(page)
+    await settlePaint(page)
     await page.screenshot({ path: testInfo.outputPath('workspace-agents.png') })
 
     const projectsTab = page.locator('[data-workspace-nav-item="projects"]')
@@ -82,7 +70,7 @@ test('Workspace owns its shell and shows the running agent and the project estat
     const projectCount = await page.evaluate(() => window.__store!.getState().projects.length)
     expect(projectCount).toBeGreaterThan(0)
     await expect(page.getByTestId('workspace-project')).toHaveCount(projectCount)
-    await settleAnimations(page)
+    await settlePaint(page)
     await page.screenshot({ path: testInfo.outputPath('workspace-projects.png') })
 
     await page.getByTestId('workspace-new-agent').click()
@@ -91,7 +79,7 @@ test('Workspace owns its shell and shows the running agent and the project estat
     await expect(projectList).toBeVisible()
     await expect(page.getByTestId('new-agent-project-option')).toHaveCount(projectCount)
     expect(await page.getByTestId('new-agent-dialog').locator('select').count()).toBe(0)
-    await settleAnimations(page)
+    await settlePaint(page)
     await page.screenshot({ path: testInfo.outputPath('workspace-project-picker.png') })
     // One Escape per layer: the popover's layer stays registered until its exit animation ends.
     await page.keyboard.press('Escape')
@@ -104,7 +92,7 @@ test('Workspace owns its shell and shows the running agent and the project estat
       .toBe(true)
     await page.getByTestId('new-agent-project').click()
     await expect(projectList).toBeVisible()
-    await settleAnimations(page)
+    await settlePaint(page)
     const darkPaint = await projectList.evaluate((list) => {
       // Canvas resolves any CSS color space (tokens may be oklch) to sRGB bytes.
       const context = document.createElement('canvas').getContext('2d')!

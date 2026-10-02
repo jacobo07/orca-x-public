@@ -5,6 +5,7 @@ import path from 'node:path'
 import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { settlePaint } from './helpers/settled-paint'
 
 // SC3 evidence (D-24) and the two UI-SPEC overflow backstops, in the real Electron app. The ledger
 // is SEEDED here through backlog.capture / backlog.transition: setup, not the thing under test
@@ -72,18 +73,6 @@ async function seedLedger(page: Page, seeds: Seed[]): Promise<void> {
   expect(failures).toEqual([])
 }
 
-/** Wait until every finite document animation has finished, then two frames. */
-async function settle(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const finite = document.getAnimations().filter((animation) => {
-      const end = animation.effect?.getComputedTiming().endTime
-      return typeof end === 'number' && Number.isFinite(end)
-    })
-    await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)))
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-  })
-}
-
 async function resizeWindow(
   app: ElectronApplication,
   page: Page,
@@ -100,7 +89,7 @@ async function resizeWindow(
   if (Math.abs(before - width) > 40) {
     await expect.poll(() => page.evaluate(() => window.innerWidth)).not.toBe(before)
   }
-  await settle(page)
+  await settlePaint(page)
   return page.evaluate(() => [window.innerWidth, window.innerHeight] as [number, number])
 }
 
@@ -116,7 +105,7 @@ async function setDarkTheme(page: Page): Promise<void> {
 async function shoot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
   // The theme is asserted at every shot, never assumed from an earlier one.
   expect(await page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(true)
-  await settle(page)
+  await settlePaint(page)
   await page.screenshot({ path: testInfo.outputPath(name) })
 }
 

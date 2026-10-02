@@ -5,6 +5,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { parseProjectMdRecord } from '../../src/main/mission-brief/project-md-record'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal } from './helpers/orca-restart'
+import { settlePaint } from './helpers/settled-paint'
 
 /**
  * The Mission Brief in a running Orca, over real mission records.
@@ -266,10 +267,7 @@ test.describe('@mission-brief-visual', () => {
         orcaPage.getByTestId('mission-brief-dialog').getByTestId('mission-brief-view-path')
       ).toHaveText(viewPathEs)
       // Radix animates the dialog in; a capture before it settles is the previous frame.
-      await orcaPage.waitForFunction(() =>
-        document.getAnimations().every((animation) => animation.playState !== 'running')
-      )
-      await orcaPage.evaluate(() => document.fonts.ready)
+      await settlePaint(orcaPage)
       await card.screenshot({ path: `pr-evidence/visual/mission-brief-${name}-full.es.dark.png` })
       const geometry = await card.evaluate((root) => {
         const base = root.getBoundingClientRect()

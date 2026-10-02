@@ -1,6 +1,7 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { settlePaint } from './helpers/settled-paint'
 
 // PRODUCT REALITY — Workspace convergence W2 (docs/reference/workspace-convergence.md §2).
 //
@@ -66,9 +67,7 @@ const RESUME_CENTER_ITEMS = [
 // Rows animate their highlight (transition-colors); a capture taken mid-transition shows the
 // previous destination as current. Every screenshot waits for paint to settle.
 async function settledShot(page: Page, path: string): Promise<void> {
-  await page.waitForFunction(() =>
-    document.getAnimations().every((animation) => animation.playState !== 'running')
-  )
+  await settlePaint(page)
   await page.screenshot({ path })
 }
 
@@ -136,12 +135,12 @@ test('every Workspace destination renders in one frame under one unchanged globa
     await settledShot(page, testInfo.outputPath('w2-resume.png'))
     // Every destination's name reads in full, in any locale; a hint beside it must not squeeze it.
     const labels = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>('[data-global-nav-item] [data-global-nav-label]')].map(
-        (node) => ({
-          text: node.textContent,
-          clipped: node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight
-        })
-      )
+      [
+        ...document.querySelectorAll<HTMLElement>('[data-global-nav-item] [data-global-nav-label]')
+      ].map((node) => ({
+        text: node.textContent,
+        clipped: node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight
+      }))
     )
     expect(labels.length).toBeGreaterThanOrEqual(RESUME_CENTER_ITEMS.length)
     expect(labels.filter((label) => label.clipped).map((label) => label.text)).toEqual([])
@@ -149,9 +148,7 @@ test('every Workspace destination renders in one frame under one unchanged globa
     // and Home, the view the app launched on, does not. The pointer leaves the row first, so a
     // hover fill cannot stand in for the current one.
     await page.mouse.move(1000, 55)
-    await page.waitForFunction(() =>
-      document.getAnimations().every((animation) => animation.playState !== 'running')
-    )
+    await settlePaint(page)
     expect(await paintedBackground(page, RESUME_CENTER_CURRENT)).not.toBe(
       await paintedBackground(page, '[data-global-nav-item="home"]')
     )
