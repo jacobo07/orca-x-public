@@ -14938,5 +14938,13 @@
       "finished": "완료. 시작됨:",
       "leftAsleep": "잠든 상태로 둠:"
     }
+  },
+  "workspaceNav": {
+    "label": "워크스페이스",
+    "workstation": "워크스테이션"
+  },
+  "workspaceFrame": {
+    "breadcrumb": "이동 경로",
+    "details": "세부 정보"
   }
 }

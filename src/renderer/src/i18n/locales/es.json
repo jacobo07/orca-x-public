@@ -15145,15 +15145,6 @@
     "rail": {
       "label": "Backlog"
     },
-    "settings": {
-      "showButton": {
-        "title": "Mostrar botón de Backlog",
-        "description": "Muestra el botón de Backlog en la barra de actividad.",
-        "keywordBacklog": "backlog",
-        "keywordIntent": "intención",
-        "keywordIdeas": "ideas"
-      }
-    },
     "page": {
       "title": "Backlog",
       "close": "Cerrar backlog",
@@ -15362,5 +15353,13 @@
     "home": "Inicio",
     "expand": "Expandir navegación",
     "collapse": "Contraer navegación"
+  },
+  "workspaceNav": {
+    "label": "Espacio de trabajo",
+    "workstation": "Estación de trabajo"
+  },
+  "workspaceFrame": {
+    "breadcrumb": "Ruta de navegación",
+    "details": "Detalles"
   }
 }

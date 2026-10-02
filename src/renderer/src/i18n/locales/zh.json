@@ -14947,5 +14947,13 @@
       "finished": "完成。已启动：",
       "leftAsleep": "保持休眠："
     }
+  },
+  "workspaceNav": {
+    "label": "工作区",
+    "workstation": "工作站"
+  },
+  "workspaceFrame": {
+    "breadcrumb": "面包屑导航",
+    "details": "详情"
   }
 }

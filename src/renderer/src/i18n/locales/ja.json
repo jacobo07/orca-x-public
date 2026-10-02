@@ -14927,5 +14927,13 @@
       "finished": "完了。起動済み:",
       "leftAsleep": "スリープのまま:"
     }
+  },
+  "workspaceNav": {
+    "label": "ワークスペース",
+    "workstation": "ワークステーション"
+  },
+  "workspaceFrame": {
+    "breadcrumb": "パンくずリスト",
+    "details": "詳細"
   }
 }

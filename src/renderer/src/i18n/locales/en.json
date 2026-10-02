@@ -17025,15 +17025,6 @@
     "rail": {
       "label": "Backlog"
     },
-    "settings": {
-      "showButton": {
-        "title": "Show Backlog Button",
-        "description": "Show the Backlog button in the activity rail.",
-        "keywordBacklog": "backlog",
-        "keywordIntent": "intent",
-        "keywordIdeas": "ideas"
-      }
-    },
     "page": {
       "title": "Backlog",
       "close": "Close backlog",
@@ -17242,5 +17233,13 @@
     "home": "Home",
     "expand": "Expand navigation",
     "collapse": "Collapse navigation"
+  },
+  "workspaceNav": {
+    "label": "Workspace",
+    "workstation": "Workstation"
+  },
+  "workspaceFrame": {
+    "breadcrumb": "Breadcrumb",
+    "details": "Details"
   }
 }

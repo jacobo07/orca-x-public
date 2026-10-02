@@ -89,10 +89,10 @@ describe('backlog locale catalogs', () => {
       (file) => [relative(RENDERER_ROOT, file), readFileSync(file, 'utf8')] as [string, string]
     )
     const keys = referencedKeys(sources)
-    // Floor: the rail label, the Settings row and the page copy are all referenced literally.
+    // Floor: the Workspace nav label and the page copy are referenced literally.
     expect(keys.size).toBeGreaterThan(140)
     expect(keys.has('backlog.rail.label')).toBe(true)
-    expect(keys.has('backlog.settings.showButton.keywordIdeas')).toBe(true)
+    expect(keys.has('backlog.page.title')).toBe(true)
     const enKeys = leaves(enBacklog, 'backlog', new Map())
     const esKeys = leaves(esBacklog, 'backlog', new Map())
     const absent = [...keys]
