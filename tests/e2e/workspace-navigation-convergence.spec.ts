@@ -252,7 +252,61 @@ test('every Workspace destination renders in one frame under one unchanged globa
     await expect(unseen).toHaveAttribute('data-workstation-reachability', 'unknown')
     await expect(unseen.locator('[data-workstation-reachability-label]')).not.toHaveText('')
     await expect(page.locator('[data-workstation-empty]')).toHaveCount(0)
+    // The pixels, not the attribute: UNKNOWN paints only its --status-unknown ring; this machine is
+    // filled with --status-success. Read from the live CSSOM so a token or class change shows here.
+    const paint = (hostId: string): Promise<Record<string, string>> =>
+      page.evaluate((id) => {
+        const probe = (token: string): string => {
+          const el = document.createElement('span')
+          el.style.color = `var(${token})`
+          document.body.append(el)
+          const color = getComputedStyle(el).color
+          el.remove()
+          return color
+        }
+        const card = document.querySelector(`[data-workstation-host="${id}"]`)!
+        const mark = card.querySelector('[data-workstation-reachability-label] [data-status-mark]')!
+        const style = getComputedStyle(mark)
+        return {
+          state: mark.getAttribute('data-status-mark') ?? '',
+          fill: style.backgroundColor,
+          ring: style.borderTopWidth === '0px' ? 'none' : style.borderTopColor,
+          unknown: probe('--status-unknown'),
+          success: probe('--status-success')
+        }
+      }, hostId)
+    const unseenPaint = await paint(`ssh:${encodeURIComponent(unseenId)}`)
+    expect(unseenPaint.state).toBe('UNKNOWN')
+    expect(unseenPaint.fill).toBe('rgba(0, 0, 0, 0)')
+    expect(unseenPaint.ring).toBe(unseenPaint.unknown)
+    const localPaint = await paint('local')
+    expect(localPaint.state).toBe('HEALTHY')
+    expect(localPaint.fill).toBe(localPaint.success)
+    expect(localPaint.ring).toBe('none')
+    await expect(
+      page.locator(
+        `${FRAME_COLUMN} [data-workstation-summary-reachability="unknown"] >> xpath=.. >> [data-status-shape="hollow"]`
+      )
+    ).toHaveCount(1)
     await settledShot(page, testInfo.outputPath('w2-workstation.png'))
+    // Leaving and returning re-renders from the same producer: nothing about the host drifts.
+    await page.locator('[data-workspace-nav-item="agents"]').click()
+    await expectDestination(page, 'agents')
+    await page.locator('[data-workspace-nav-item="workstation"]').click()
+    await expectDestination(page, 'workstation')
+    expect(await paint(`ssh:${encodeURIComponent(unseenId)}`)).toEqual(unseenPaint)
+    await page.evaluate(() => window.__store!.getState().updateSettingsOrThrow({ theme: 'dark' }))
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+      .toBe(true)
+    const darkPaint = await paint(`ssh:${encodeURIComponent(unseenId)}`)
+    expect(darkPaint.fill).toBe('rgba(0, 0, 0, 0)')
+    expect(darkPaint.ring).toBe(darkPaint.unknown)
+    await settledShot(page, testInfo.outputPath('w2-workstation-dark.png'))
+    await page.evaluate(() => window.__store!.getState().updateSettingsOrThrow({ theme: 'light' }))
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+      .toBe(false)
 
     // ── Leave through the frame, re-enter: Resume is still home ─────────────────────────────────
     await page.locator('[data-workspace-nav-item="agents"]').click()
