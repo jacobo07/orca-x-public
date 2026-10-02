@@ -13,8 +13,10 @@ import { AgentMonogram } from './workspace-roster-rows'
 const TONE_DOT: Record<RunningSessionTone, string> = {
   ready: 'bg-[var(--status-success)]',
   caution: 'bg-[var(--status-warning)]',
-  refused: 'bg-destructive',
-  neutral: 'bg-muted-foreground/60'
+  refused: 'bg-[var(--status-error)]',
+  neutral: 'bg-muted-foreground/60',
+  // STYLEGUIDE: UNKNOWN is a hollow mark, never a filled grey one.
+  unknown: 'border border-[var(--status-unknown)] bg-transparent'
 }
 
 /** Leaves Workspace for the pane itself, the way the agent board reveals a card. */
@@ -52,7 +54,7 @@ export function RunningSessionsSection({
       ) : null}
       <ul className="flex flex-col gap-0.5">
         {sessions.map((session) => {
-          const liveness = describeRunningSessionLiveness(session.liveness)
+          const liveness = describeRunningSessionLiveness(session)
           return (
             <li key={session.paneKey}>
               <button

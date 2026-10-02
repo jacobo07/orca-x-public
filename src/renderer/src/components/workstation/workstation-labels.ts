@@ -3,23 +3,6 @@ import type { ProjectHostSetupState } from '../../../../shared/project-types'
 import type { HostReachability } from '@/lib/host-reachability'
 import type { WorkstationAgentState, WorkstationNode } from './workstation-projection'
 
-export function reachabilityLabel(reachability: HostReachability): string {
-  switch (reachability) {
-    case 'this-machine':
-      return translate('workstation.reachability.thisMachine', 'This machine')
-    case 'reachable':
-      return translate('workstation.reachability.reachable', 'Connected')
-    case 'connecting':
-      return translate('workstation.reachability.connecting', 'Connecting')
-    case 'failed':
-      return translate('workstation.reachability.failed', 'Connection failed')
-    case 'blocked':
-      return translate('workstation.reachability.blocked', 'Version mismatch')
-    case 'unknown':
-      return translate('workstation.reachability.unknown', 'Not connected · state unknown')
-  }
-}
-
 /** Status tokens only (STYLEGUIDE); the word beside it carries the meaning, never colour alone. */
 export function reachabilityTone(reachability: HostReachability): string {
   switch (reachability) {

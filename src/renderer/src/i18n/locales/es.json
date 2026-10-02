@@ -15372,18 +15372,18 @@
     "notAvailableYet": "Aún no disponible",
     "experimental": "Experimental"
   },
+  "hostReachability": {
+    "thisMachine": "Este equipo",
+    "reachable": "Conectado",
+    "connecting": "Conectando",
+    "failed": "Falló la conexión",
+    "blocked": "Versiones incompatibles",
+    "unknown": "Sin conexión · estado desconocido"
+  },
   "workstation": {
     "page": {
       "subtitle": "Cada host que Orca conoce, lo que Orca ha observado de él y lo que se ejecuta allí.",
       "hosts": "Hosts"
-    },
-    "reachability": {
-      "thisMachine": "Este equipo",
-      "reachable": "Conectado",
-      "connecting": "Conectando",
-      "failed": "Falló la conexión",
-      "blocked": "Versiones incompatibles",
-      "unknown": "Sin conexión · estado desconocido"
     },
     "kind": {
       "local": "Este ordenador",

@@ -17256,18 +17256,18 @@
     "notAvailableYet": "Not available yet",
     "experimental": "Experimental"
   },
+  "hostReachability": {
+    "thisMachine": "This machine",
+    "reachable": "Connected",
+    "connecting": "Connecting",
+    "failed": "Connection failed",
+    "blocked": "Version mismatch",
+    "unknown": "Not connected · state unknown"
+  },
   "workstation": {
     "page": {
       "subtitle": "Every host Orca knows, what Orca has observed about it, and what runs there.",
       "hosts": "Hosts"
-    },
-    "reachability": {
-      "thisMachine": "This machine",
-      "reachable": "Connected",
-      "connecting": "Connecting",
-      "failed": "Connection failed",
-      "blocked": "Version mismatch",
-      "unknown": "Not connected · state unknown"
     },
     "kind": {
       "local": "This computer",

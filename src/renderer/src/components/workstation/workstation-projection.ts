@@ -20,7 +20,7 @@ import type {
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 
 /** An agent on a host that is not reachable has no voucher, so its last state is not shown. */
-export type WorkstationAgentState = Exclude<RunningSessionLiveness, 'host-offline'> | 'unknown'
+export type WorkstationAgentState = Exclude<RunningSessionLiveness, 'host-unvouched'> | 'unknown'
 
 export type WorkstationProject = {
   setupId: string
@@ -123,7 +123,7 @@ export function buildWorkstation(input: {
       title: session.title,
       projectName: session.projectId ? (projectName.get(session.projectId) ?? null) : null,
       state:
-        hostVouches(node.reachability) && session.liveness !== 'host-offline'
+        hostVouches(node.reachability) && session.liveness !== 'host-unvouched'
           ? session.liveness
           : 'unknown'
     })

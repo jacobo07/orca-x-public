@@ -7,11 +7,11 @@ import { useWorkspaceRunningSessions } from '../conversations/use-workspace-runn
 import { HostSectionHeaderMenu } from '../sidebar/HostSectionHeaderMenu'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
 import { WorkspaceFrame } from '../workspace-frame/WorkspaceFrame'
+import { hostReachabilityLabel } from '@/lib/host-reachability-labels'
 import {
   agentStateLabel,
   failureLabel,
   hostKindLabel,
-  reachabilityLabel,
   reachabilityTone,
   setupStateLabel
 } from './workstation-labels'
@@ -89,7 +89,7 @@ function HostCard({ node }: { node: WorkstationNode }): React.JSX.Element {
             aria-hidden
             className={cn('inline-block size-2 rounded-full', reachabilityTone(node.reachability))}
           />
-          {reachabilityLabel(node.reachability)}
+          {hostReachabilityLabel(node.reachability)}
         </span>
         {node.host ? (
           <HostSectionHeaderMenu

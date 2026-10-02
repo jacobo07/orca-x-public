@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import { deriveHostReachability } from '@/lib/host-reachability'
 import { useAppStore } from '@/store'
 import { useLiveDashboardSnapshot } from '../dashboard/useLiveDashboardSnapshot'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
@@ -13,7 +14,10 @@ export function useWorkspaceRunningSessions(): readonly WorkspaceRunningSession[
   const { hostOptions } = useSidebarHostScopeOptions()
   return useMemo(() => {
     const hosts = new Map(
-      hostOptions.map((host) => [host.id, { label: host.label, health: host.health }] as const)
+      hostOptions.map(
+        (host) =>
+          [host.id, { label: host.label, reachability: deriveHostReachability(host) }] as const
+      )
     )
     const projectIdByRepoId = new Map(setups.map((setup) => [setup.repoId, setup.projectId]))
     return projectRunningSessions(snapshot.cards, hosts, projectIdByRepoId)

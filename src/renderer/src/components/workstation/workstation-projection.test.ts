@@ -53,6 +53,7 @@ function session(
     title: overrides.paneKey,
     liveness: 'working',
     hostLabel: overrides.hostId,
+    hostReachability: 'reachable',
     projectId: 'p1',
     worktreeName: 'main',
     lastChangedAt: 0,
@@ -93,7 +94,14 @@ describe('buildWorkstation', () => {
       hosts: [local, host({ id: SSH })],
       setups: [],
       projects: [],
-      sessions: [session({ paneKey: 'a', hostId: SSH, liveness: 'host-offline' })]
+      sessions: [
+        session({
+          paneKey: 'a',
+          hostId: SSH,
+          liveness: 'host-unvouched',
+          hostReachability: 'unknown'
+        })
+      ]
     })
     expect(seen.nodes[1].agents[0].state).toBe('needs-you')
     expect(unseen.nodes[1].agents[0].state).toBe('unknown')

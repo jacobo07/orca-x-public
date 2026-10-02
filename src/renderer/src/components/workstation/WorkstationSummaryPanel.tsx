@@ -1,7 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import { reachabilityLabel, reachabilityTone } from './workstation-labels'
+import { hostReachabilityLabel } from '@/lib/host-reachability-labels'
+import { reachabilityTone } from './workstation-labels'
 import { HOST_REACHABILITIES } from '@/lib/host-reachability'
 import type { WorkstationSummary } from './workstation-projection'
 
@@ -37,7 +38,7 @@ export function WorkstationSummaryPanel({
                 aria-hidden
                 className={cn('inline-block size-2 rounded-full', reachabilityTone(r))}
               />
-              {reachabilityLabel(r)}
+              {hostReachabilityLabel(r)}
             </dt>
             <dd className="tabular-nums" data-workstation-summary-reachability={r}>
               {summary.byReachability[r]}
