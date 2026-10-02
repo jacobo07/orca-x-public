@@ -1,33 +1,32 @@
-// Words for a running terminal session. HEALTHY is reserved for an agent at work on a host Orca
-// observes; on any other host the sentence and the mark are the host's reachability, said the way
-// Workstation says it, because the agent's last state cannot be vouched for.
+// Words for a running terminal session. On a host Orca does not observe, the sentence is the host's
+// reachability, said the way Workstation says it; the mark stays UNKNOWN (running-session-status).
 
 import { translate } from '@/i18n/i18n'
 import type { StatusState } from '@/components/ui/status-mark'
-import { hostReachabilityStatus } from '@/lib/host-reachability'
 import { hostReachabilityLabel } from '@/lib/host-reachability-labels'
 
+import { runningSessionStatus } from './running-session-status'
 import type { WorkspaceRunningSession } from './workspace-running-sessions'
+
+function livenessLabel(
+  session: Pick<WorkspaceRunningSession, 'liveness' | 'hostReachability'>
+): string {
+  switch (session.liveness) {
+    case 'working':
+      return translate('workspace.sessions.working', 'Working')
+    case 'needs-you':
+      return translate('workspace.sessions.needsYou', 'Needs you')
+    case 'done':
+      return translate('workspace.sessions.done', 'Done')
+    case 'idle':
+      return translate('workspace.sessions.idle', 'Idle')
+    case 'host-unvouched':
+      return hostReachabilityLabel(session.hostReachability)
+  }
+}
 
 export function describeRunningSessionLiveness(
   session: Pick<WorkspaceRunningSession, 'liveness' | 'hostReachability'>
 ): { label: string; status: StatusState } {
-  switch (session.liveness) {
-    case 'working':
-      return { label: translate('workspace.sessions.working', 'Working'), status: 'HEALTHY' }
-    case 'needs-you':
-      return {
-        label: translate('workspace.sessions.needsYou', 'Needs you'),
-        status: 'NEEDS_APPROVAL'
-      }
-    case 'done':
-      return { label: translate('workspace.sessions.done', 'Done'), status: 'IDLE' }
-    case 'idle':
-      return { label: translate('workspace.sessions.idle', 'Idle'), status: 'IDLE' }
-    case 'host-unvouched':
-      return {
-        label: hostReachabilityLabel(session.hostReachability),
-        status: hostReachabilityStatus(session.hostReachability)
-      }
-  }
+  return { label: livenessLabel(session), status: runningSessionStatus(session.liveness) }
 }

@@ -64,10 +64,11 @@ describe('running sessions in Workspace', () => {
     expect(shown.label).toBe('Not connected · state unknown')
   })
 
-  it('a failed connection attempt says so, and is not called offline either', () => {
+  // The failure is the host's (drawn on the host); the agent's own state is unobserved.
+  it('a failed connection attempt says so in words, and the session mark stays UNKNOWN', () => {
     const shown = describeRunningSessionLiveness(on('ssh:refused'))
     expect(shown.label).toBe('Connection failed')
-    expect(shown.status).toBe('CRITICAL')
+    expect(shown.status).toBe('UNKNOWN')
   })
 
   it('a session on a host the registry lost has no reading: unknown', () => {

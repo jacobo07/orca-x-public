@@ -79,7 +79,7 @@ describe('buildWorkstation', () => {
     expect(nodes.map((node) => node.hostId)).toEqual([LOCAL_EXECUTION_HOST_ID, SSH])
     expect(nodes[0].projects.map((p) => [p.name, p.path])).toEqual([['Orca', '/src/s1']])
     expect(nodes[1].agents).toEqual([
-      { paneKey: 'a', title: 'a', projectName: 'Orca', state: 'working' }
+      { paneKey: 'a', title: 'a', projectName: 'Orca', state: 'working', status: 'HEALTHY' }
     ])
   })
 

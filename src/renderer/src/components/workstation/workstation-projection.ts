@@ -13,6 +13,8 @@ import {
   type HostReachability,
   type SshConnectionFailure
 } from '@/lib/host-reachability'
+import type { StatusState } from '@/components/ui/status-mark'
+import { runningSessionStatus } from '../conversations/running-session-status'
 import type {
   RunningSessionLiveness,
   WorkspaceRunningSession
@@ -35,6 +37,8 @@ export type WorkstationAgent = {
   title: string
   projectName: string | null
   state: WorkstationAgentState
+  /** Same mapping Agents draws (running-session-status); never derived here. */
+  status: StatusState
 }
 
 export type WorkstationNode = {
@@ -118,14 +122,15 @@ export function buildWorkstation(input: {
   }
   for (const session of input.sessions) {
     const node = nodeFor(session.hostId)
+    const liveness: RunningSessionLiveness = hostVouches(node.reachability)
+      ? session.liveness
+      : 'host-unvouched'
     node.agents.push({
       paneKey: session.paneKey,
       title: session.title,
       projectName: session.projectId ? (projectName.get(session.projectId) ?? null) : null,
-      state:
-        hostVouches(node.reachability) && session.liveness !== 'host-unvouched'
-          ? session.liveness
-          : 'unknown'
+      state: liveness === 'host-unvouched' ? 'unknown' : liveness,
+      status: runningSessionStatus(liveness)
     })
   }
 

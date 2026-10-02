@@ -167,7 +167,8 @@ function HostCard({ node }: { node: WorkstationNode }): React.JSX.Element {
                     <span className="text-xs text-muted-foreground"> · {agent.projectName}</span>
                   ) : null}
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
+                <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <StatusMark state={agent.status} />
                   {agentStateLabel(agent.state)}
                 </span>
               </li>

@@ -1,6 +1,28 @@
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import { hostVouches, type HostReachability } from '@/lib/host-reachability'
+import {
+  deriveHostReachability,
+  hostVouches,
+  type HostReachability,
+  type HostReachabilityEvidence
+} from '@/lib/host-reachability'
+
+export type RunningSessionHostIndex = ReadonlyMap<
+  ExecutionHostId,
+  { label: string; reachability: HostReachability }
+>
+
+/** The host readings sessions are joined to — derived the same way Workstation derives them. */
+export function indexHostReachability(
+  hosts: readonly (HostReachabilityEvidence & { id: ExecutionHostId; label: string })[]
+): RunningSessionHostIndex {
+  return new Map(
+    hosts.map((host) => [
+      host.id,
+      { label: host.label, reachability: deriveHostReachability(host) }
+    ])
+  )
+}
 
 /**
  * 'host-unvouched' outranks the agent's own state: a host Orca is not observing cannot vouch for
@@ -44,7 +66,7 @@ const BUCKET_LIVENESS: Record<DashboardCard['bucket'], RunningSessionLiveness> =
  */
 export function projectRunningSessions(
   cards: readonly DashboardCard[],
-  hosts: ReadonlyMap<ExecutionHostId, { label: string; reachability: HostReachability }>,
+  hosts: RunningSessionHostIndex,
   projectIdByRepoId: ReadonlyMap<string, string>
 ): WorkspaceRunningSession[] {
   return cards
