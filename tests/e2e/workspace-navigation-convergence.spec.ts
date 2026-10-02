@@ -147,7 +147,9 @@ test('every Workspace destination renders in one frame under one unchanged globa
     // ── Backlog: a Workspace destination, its summary in the frame column ───────────────────────
     await page.locator('[data-workspace-nav-item="backlog"]').click()
     await expect.poll(() => activeView(page)).toBe('backlog')
-    await expect(page.locator(FRAME)).toHaveAttribute('data-workspace-destination', 'backlog')
+    // Workspace, not a global Backlog entry, is current: Backlog has no global door (spec §3).
+    await expectDestination(page, 'backlog')
+    await expect(page.locator('[data-workspace-activity="backlog"]')).toHaveCount(0)
     await expect(page.locator('[data-backlog-page]')).toBeVisible()
     await expect(page.locator(`${FRAME_COLUMN} [data-backlog-summary]`)).toBeVisible()
     await expectShellUnchanged('backlog')
