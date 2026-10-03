@@ -3449,14 +3449,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         return issue
       } catch (err) {
         console.error('Failed to fetch issue:', err)
-        set((s) => ({
-          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
-            data: null,
-            fetchedAt: Date.now()
-          })
-        }))
-        debouncedSaveCache(get())
-        return null
+        // Why: a failed lookup is unknown, not "no issue"; caching it would hide a real issue for the TTL.
+        return get().issueCache[cacheKey]?.data ?? null
       } finally {
         inflightIssueRequests.delete(cacheKey)
       }
