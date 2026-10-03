@@ -3269,11 +3269,16 @@ export function registerPtyHandlers(
 
   // Why write off: bytes sent but never received after a confirmed wedge are gone (no ACK can repay them); hand back restore markers so panes repaint from the snapshot.
   function writeOffLostRendererDelivery(
-    report: PtyRendererDeliveryStateReport
+    report: PtyRendererDeliveryStateReport,
+    reporterWebContentsId: number | undefined
   ): PtyDeliveryWriteOff[] {
     const writtenOff: PtyDeliveryWriteOff[] = []
     for (const [id, accounting] of rendererDeliveryAccountingByPty) {
       if (accounting.sentChars - accounting.ackedChars <= 0) {
+        continue
+      }
+      // Why skip: a PTY delivered to another window is unknown to this reporter, and absent from its report reads as "received 0" (R-05-H).
+      if (liveDeliveryWindowFor(id)?.webContents.id !== reporterWebContentsId) {
         continue
       }
       const received = report.receivedCharsByPty?.[id]
@@ -7754,7 +7759,7 @@ export function registerPtyHandlers(
   // Why invoke + renderer-initiated: the field wedge (v1.4.121-rc.0) kills every main→renderer push channel while invoke survives, so the resync rides here plus a write-off lane.
   ipcMain.handle(
     'pty:reportRendererDeliveryState',
-    (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
+    (event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
       // Extra repair lane for the lost-ACK variant: identical max-merge to the resync response, so a heal is only reached when merging cannot drain.
       let creditedAny = false
       for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
@@ -7775,7 +7780,11 @@ export function registerPtyHandlers(
         (lastAckReceivedAtMs === null ||
           Date.now() - lastAckReceivedAtMs >= PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS)
       ) {
-        writtenOff = writeOffLostRendererDelivery(args)
+        // Why the registration window when the sender is unidentifiable: it was this handler set's only receiver before multi-window, and every other window's PTY stays unknown to it.
+        writtenOff = writeOffLostRendererDelivery(
+          args,
+          event?.sender?.id ?? mainWindow.webContents.id
+        )
         creditedAny ||= writtenOff.length > 0
       }
       schedulePendingDataAfterCreditReport(creditedAny)
