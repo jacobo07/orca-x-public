@@ -57,7 +57,8 @@ describe('orchestration skill agent coverage', () => {
         [source('/Users/test/.agents/skills', null)]
       )
     ).toEqual([
-      { agent: 'codex', label: 'Codex', installed: true },
+      // Why: the catalog shows OpenAI's Codex CLI as ChatGPT (fe30a7426); the id stays `codex`.
+      { agent: 'codex', label: 'ChatGPT', installed: true },
       { agent: 'gemini', label: 'Gemini', installed: true },
       { agent: 'droid', label: 'Droid', installed: true }
     ])
