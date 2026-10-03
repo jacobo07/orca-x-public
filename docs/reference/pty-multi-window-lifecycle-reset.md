@@ -89,8 +89,10 @@ The real-app oracle was itself blind: `probeDirectWrite` substring-matches `echo
 echoed command satisfied it, and its Ctrl+C prefix made bash drop the first byte (`cho MARKER`
 ran on GEX44 under a green probe). The survivor test now uses `probeDirectWriteOutput` (a line
 exactly equal to the marker). The remaining substring liveness sites are frozen in
-`config/e2e-terminal-liveness-substring-baseline.txt` (31 sites at 5f4fd7257),
-`pnpm check:e2e-terminal-liveness` fails on a new one, and the list only shrinks.
+`config/e2e-terminal-liveness-substring-baseline.txt` (31 sites at 5f4fd7257) as a count per file
+and probe function, not per site: `pnpm check:e2e-terminal-liveness` fails when a file's count for
+a probe function grows, so migrating one site and adding another in the same file and function
+passes. The counts only shrink.
 
 ## Acceptance
 
