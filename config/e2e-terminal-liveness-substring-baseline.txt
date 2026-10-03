@@ -1,0 +1,24 @@
+# Substring terminal-liveness probe sites in tests/e2e: path<TAB>callee<TAB>count.
+# Shrink-only: migrate a site to a fresh-output probe (probeDirectWriteOutput, ...), then prune.
+# Prune with: node config/scripts/check-e2e-terminal-liveness-probes.mjs --prune
+# Never add an entry or raise a count to get green; new liveness probes must use fresh output.
+tests/e2e/agent-session-live-force-exit-resume.spec.ts	waitForTerminalOutput	1
+tests/e2e/agent-session-quit-resume.spec.ts	waitForTerminalOutput	1
+tests/e2e/daemon-live-session-preservation.spec.ts	waitForTerminalOutput	2
+tests/e2e/daemon-slow-health-check-preservation.spec.ts	waitForTerminalOutput	2
+tests/e2e/daemon-slow-init-pty-gate.spec.ts	waitForTerminalOutput	2
+tests/e2e/golden-quit-relaunch-session.spec.ts	waitForTerminalOutput	1
+tests/e2e/headless-serve-desktop-activation.spec.ts	waitForTerminalOutput	2
+tests/e2e/helpers/terminal-input-probes.ts	probeDirectWrite	1
+tests/e2e/helpers/terminal-input-probes.ts	waitForTerminalOutput	2
+tests/e2e/restart-restore-terminal-input.spec.ts	probeDirectWrite	1
+tests/e2e/restart-restore-terminal-input.spec.ts	probeKeyboardType	1
+tests/e2e/restart-restore-terminal-input.spec.ts	probeOwnershipRebuildRevival	1
+tests/e2e/restart-restore-terminal-input.spec.ts	waitForTerminalOutput	2
+tests/e2e/resume-center-restore-no-wake.spec.ts	waitForTerminalOutput	1
+tests/e2e/ssh-docker-relay-perf.spec.ts	waitForTerminalOutput	1
+tests/e2e/terminal-pane-content-retention.spec.ts	waitForTerminalOutput	3
+tests/e2e/terminal-restart-persistence.spec.ts	waitForTerminalOutput	3
+tests/e2e/terminal-shortcuts.spec.ts	waitForTerminalOutput	2
+tests/e2e/terminal-tab-close-running-confirm-mouse.spec.ts	waitForTerminalOutput	1
+tests/e2e/terminal-tab-close-running-confirm.spec.ts	waitForTerminalOutput	1
