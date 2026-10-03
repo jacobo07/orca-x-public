@@ -19,7 +19,7 @@ export type PanePreviewState =
   | { status: 'idle' | 'loading' }
   | { status: 'done'; result: PanePreviewResult }
 
-/** Fetches a pane's recorded screen only while `enabled`: previews load on expand, never at first paint. */
+/** Fetches a pane's recorded screen only while `enabled`: on expand, or once its strip is seen in view. */
 export function usePanePreview(request: PanePreviewRequest, enabled: boolean): PanePreviewState {
   const [state, setState] = useState<PanePreviewState>({ status: 'idle' })
   const key = cacheKey(request)

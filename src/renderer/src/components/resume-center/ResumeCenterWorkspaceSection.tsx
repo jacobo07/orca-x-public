@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronUp, FolderGit2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, FolderGit2, GitBranch, Server } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
@@ -11,10 +12,14 @@ import { useCachedMissionSignal } from '../mission-brief/use-mission-brief'
 import type { WorkspaceRowModel } from './resume-center-model'
 import { describeWindow, describeWorkspaceName } from './resume-center-presentation'
 import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
+import { workspaceAgentCount, workspaceBranch } from './resume-center-workspace-facts'
+import { useSeenInView } from './use-seen-in-view'
 import { ClaimValue } from './ClaimValue'
 import { PanePreviewThumb } from './PanePreviewThumb'
 import { ResumeCenterTabRow } from './ResumeCenterTabRow'
 import { ResumeCenterOrphanRow } from './ResumeCenterOrphanRow'
+
+const CHIP = 'inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5'
 
 export function ResumeCenterWorkspaceSection({
   row,
@@ -26,13 +31,19 @@ export function ResumeCenterWorkspaceSection({
   onSelect: () => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(true)
+  const sectionRef = useRef<HTMLElement>(null)
+  // Why: previews replay recorded history; only sections the person can see pay for it.
+  const inView = useSeenInView(sectionRef)
   const missionSignal = useCachedMissionSignal(row.hostId, row.key)
+  const branch = useAppStore((s) => workspaceBranch(s.worktreesByRepo, row.key))
   const firstTab = row.tabs[0]
   const firstPane = firstTab?.panes[0]
   const name = describeWorkspaceName(row.identity, row.key)
   const path = row.identity.kind === 'known' ? row.identity.path : null
+  const agents = workspaceAgentCount(row)
   return (
     <section
+      ref={sectionRef}
       data-testid="resume-center-workspace"
       data-workspace-key={row.key}
       data-selected={selected ? 'true' : undefined}
@@ -40,9 +51,11 @@ export function ResumeCenterWorkspaceSection({
       className={cn('rounded-lg border bg-card/40', selected ? 'border-ring' : 'border-border')}
     >
       <header className="flex items-start gap-3 px-4 py-3">
-        <FolderGit2 className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+          <FolderGit2 className="size-4 text-muted-foreground" aria-hidden />
+        </span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-medium">
+          <h3 className="truncate text-sm font-semibold">
             {/* Why a button: selecting a row opens its Mission Brief, reachable from the keyboard. */}
             <button
               type="button"
@@ -54,24 +67,24 @@ export function ResumeCenterWorkspaceSection({
               {name}
             </button>
           </h3>
-          {path ? (
-            <p className="truncate font-mono text-[11px] text-muted-foreground">{path}</p>
-          ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            <span className="rounded-full border border-border px-2 py-0.5">
-              {describeWindow(row.window, row.windowOrder)}
-            </span>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            {path ? <span className="min-w-0 truncate font-mono">{path}</span> : null}
+            {branch ? (
+              <span className={CHIP} data-testid="resume-center-workspace-branch">
+                <GitBranch className="size-3" aria-hidden />
+                <ClaimValue testId="resume-center-workspace-branch-name">{branch}</ClaimValue>
+              </span>
+            ) : null}
             {row.hostId !== 'local' ? (
-              <span className="rounded-full border border-border px-2 py-0.5">
+              <span className={CHIP}>
+                <Server className="size-3" aria-hidden />
                 {getExecutionHostLabel(row.hostId)}
               </span>
             ) : null}
+            <span className={CHIP}>{describeWindow(row.window, row.windowOrder)}</span>
             {missionSignal ? (
               <span
-                className={cn(
-                  'rounded-full border px-2 py-0.5',
-                  MISSION_TONE_CLASS[signalTone(missionSignal.signal)]
-                )}
+                className={cn(CHIP, MISSION_TONE_CLASS[signalTone(missionSignal.signal)])}
                 title={missionSignal.action ?? undefined}
               >
                 <ClaimValue testId="resume-center-workspace-mission-signal">
@@ -80,6 +93,13 @@ export function ResumeCenterWorkspaceSection({
               </span>
             ) : null}
           </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            <ClaimValue testId="resume-center-workspace-file-count">{row.openFileCount}</ClaimValue>{' '}
+            {translate('resumeCenter.workspace.files', 'open files')}
+            {' · '}
+            <ClaimValue testId="resume-center-workspace-agent-count">{agents}</ClaimValue>{' '}
+            {translate('resumeCenter.workspace.agents', 'agent tabs')}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground">
           {row.lastVisitedAt !== null ? (
@@ -122,9 +142,10 @@ export function ResumeCenterWorkspaceSection({
               hostId={row.hostId}
               tabId={firstTab.tabId}
               leafId={firstPane.leafId}
-              enabled
+              enabled={inView}
               title={firstPane.title ?? firstTab.title}
-              className="h-40 w-56"
+              placement="hero"
+              className="h-48 w-52"
             />
           ) : null}
           <ul className="flex min-w-0 flex-1 flex-col gap-2">

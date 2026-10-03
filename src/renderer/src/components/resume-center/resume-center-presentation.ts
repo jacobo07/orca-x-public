@@ -95,6 +95,19 @@ export function describePreviewAbsence(result: PanePreviewResult): string | null
   }
 }
 
+export function describePaneCount(count: number): string {
+  return count === 1
+    ? translate('resumeCenter.tab.panes_one', '{{count}} pane', { count })
+    : translate('resumeCenter.tab.panes_other', '{{count}} panes', { count })
+}
+
+/** The words after the window count in the greeting; the number itself is rendered as a claim. */
+export function describeWindowsWith(count: number): string {
+  return count === 1
+    ? translate('resumeCenter.greeting.windows_one', 'window with')
+    : translate('resumeCenter.greeting.windows_other', 'windows with')
+}
+
 /** Morning before 12, afternoon before 20, evening after: from this machine's clock. */
 export function describeGreeting(hour: number, name: string | null): string {
   const key =

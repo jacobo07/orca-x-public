@@ -13,6 +13,7 @@ export function PanePreviewThumb({
   leafId,
   enabled,
   title,
+  placement = 'expanded',
   className
 }: {
   hostId: string
@@ -20,6 +21,7 @@ export function PanePreviewThumb({
   leafId: string | null
   enabled: boolean
   title: string
+  placement?: 'hero' | 'inline' | 'expanded'
   className?: string
 }): React.JSX.Element {
   const state = usePanePreview({ hostId, tabId, leafId }, enabled)
@@ -32,6 +34,9 @@ export function PanePreviewThumb({
     <figure
       data-testid="resume-center-pane-preview"
       data-preview-status={state.status === 'done' ? state.result.status : state.status}
+      data-preview-placement={placement}
+      data-tab-id={tabId}
+      data-leaf-id={leafId ?? undefined}
       className={cn(
         'relative flex h-24 w-40 shrink-0 flex-col overflow-hidden rounded-md border border-border bg-background',
         className

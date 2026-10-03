@@ -1,3 +1,4 @@
+import { Play } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import type { WorkspaceRowModel } from './resume-center-model'
@@ -33,13 +34,20 @@ export function ResumeCenterResumeAll({
           </Button>
         ) : null}
         <Button
-          size="sm"
-          variant="outline"
           data-testid="resume-center-resume-all-start"
           disabled={state.status === 'running'}
           onClick={() => void runResumeAll(planResumeAll(rows), 0)}
+          className="h-auto items-start gap-2.5 px-4 py-2 text-left"
         >
-          {translate('resumeCenter.resumeAll.start', 'Resume all')}
+          <Play className="mt-0.5 size-4" aria-hidden />
+          <span className="flex flex-col">
+            <span className="text-[13px] font-medium">
+              {translate('resumeCenter.resumeAll.start', 'Resume all')}
+            </span>
+            <span className="text-[11px] font-normal opacity-70">
+              {translate('resumeCenter.resumeAll.hint', 'Wakes sleeping sessions, one at a time')}
+            </span>
+          </span>
         </Button>
       </div>
       <p

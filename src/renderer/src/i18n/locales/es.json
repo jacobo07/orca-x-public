@@ -14874,7 +14874,9 @@
       "sessions": "sesiones",
       "open": "Abrir",
       "collapse": "Contraer",
-      "expand": "Expandir"
+      "expand": "Expandir",
+      "files": "archivos abiertos",
+      "agents": "pestañas de agente"
     },
     "window": {
       "bound": "Ventana",
@@ -14891,13 +14893,16 @@
       "afternoon": "Buenas tardes",
       "evening": "Buenas noches",
       "sessions": "sesiones en tu escritorio",
-      "running": "en ejecución"
+      "running": "en ejecución",
+      "windows_one": "ventana con",
+      "windows_other": "ventanas con"
     },
     "refresh": "Actualizar",
     "search": "Buscar workspaces y sesiones",
     "sort": {
       "window": "Por ventana",
-      "recent": "Más reciente"
+      "recent": "Más reciente",
+      "label": "Ordenar"
     },
     "state": {
       "loading": "Leyendo tu escritorio…",
@@ -14920,9 +14925,16 @@
       "dismiss": "Descartar"
     },
     "tab": {
-      "panes": "{{count}} paneles"
+      "panes_one": "{{count}} panel",
+      "panes_other": "{{count}} paneles",
+      "shell": "Terminal"
     },
     "resumeAction": "Reanudar",
+    "restoreLayout": {
+      "title": "Restaurar solo layout",
+      "hint": "{{name}}, sin iniciar nada",
+      "none": "Selecciona un workspace"
+    },
     "orphan": {
       "title": "Sesión de {{agent}}, pestaña cerrada",
       "note": "No hay pestaña que restaurar; Reanudar la abre en una pestaña nueva."
@@ -14942,6 +14954,7 @@
     },
     "resumeAll": {
       "start": "Reanudar todo",
+      "hint": "Despierta las sesiones dormidas, de una en una",
       "continue": "Continuar",
       "running": "Reanudando de una en una:",
       "stopped": "En pausa. Iniciadas:",

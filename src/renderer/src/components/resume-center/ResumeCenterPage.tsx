@@ -1,14 +1,27 @@
 import { useMemo, useState } from 'react'
-import { RefreshCw, Search } from 'lucide-react'
+import { LayoutPanelLeft, RefreshCw, Search } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { WorkspaceFrame } from '../workspace-frame/WorkspaceFrame'
 import { MissionBriefDialog } from '../mission-brief/MissionBriefDialog'
 import { MissionBriefPanel } from '../mission-brief/MissionBriefPanel'
 import { buildResumeCenterModel, type ResumeCenterSort } from './resume-center-model'
-import { describeGreeting, describeWorkspaceName } from './resume-center-presentation'
+import {
+  describeGreeting,
+  describeWindowsWith,
+  describeWorkspaceName
+} from './resume-center-presentation'
+import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
+import { greetingWindowCount } from './resume-center-workspace-facts'
 import { useDeskContinuity } from './use-desk-continuity'
 import { clearPanePreviewCache } from './use-pane-preview'
 import { ClaimValue } from './ClaimValue'
@@ -19,6 +32,11 @@ import { ResumeCenterWorkspaceSection } from './ResumeCenterWorkspaceSection'
 function firstName(displayName: string | undefined): string | null {
   const first = displayName?.trim().split(/\s+/)[0]
   return first ? first : null
+}
+
+const SORT_LABEL: Record<ResumeCenterSort, () => string> = {
+  window: () => translate('resumeCenter.sort.window', 'By window'),
+  recent: () => translate('resumeCenter.sort.recent', 'Most recent')
 }
 
 export default function ResumeCenterPage(): React.JSX.Element {
@@ -59,6 +77,7 @@ export default function ResumeCenterPage(): React.JSX.Element {
   const selectedName = selectedRow
     ? describeWorkspaceName(selectedRow.identity, selectedRow.key)
     : ''
+  const windows = model ? greetingWindowCount(model) : null
 
   const context = model ? (
     <div data-testid="resume-center-aside" className="flex flex-col gap-3">
@@ -78,13 +97,19 @@ export default function ResumeCenterPage(): React.JSX.Element {
 
   return (
     <WorkspaceFrame context={context} testId="resume-center-page">
-      <header className="flex flex-wrap items-end justify-between gap-4 px-6 pb-4 pt-5">
+      <header className="flex flex-wrap items-start justify-between gap-4 px-6 pb-4 pt-5">
         <div>
           <h1 className="text-2xl font-semibold">
             {describeGreeting(new Date().getHours(), firstName(displayName))}
           </h1>
           {model ? (
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground" data-testid="resume-center-greeting">
+              {windows !== null ? (
+                <>
+                  <ClaimValue testId="resume-center-greeting-windows">{windows}</ClaimValue>{' '}
+                  {describeWindowsWith(windows)}{' '}
+                </>
+              ) : null}
               <ClaimValue testId="resume-center-greeting-sessions">{model.totals.tabs}</ClaimValue>{' '}
               {translate('resumeCenter.greeting.sessions', 'sessions on your desk')}
               {' · '}
@@ -97,17 +122,44 @@ export default function ResumeCenterPage(): React.JSX.Element {
         </div>
         <div className="flex items-start gap-2">
           {deskRows.length > 0 ? <ResumeCenterResumeAll rows={deskRows} /> : null}
+          {/* Why the selected workspace only: a desk-wide layout restore has no owner yet. */}
           <Button
             variant="outline"
-            size="sm"
+            data-testid="resume-center-restore-layout"
+            disabled={!selectedRow || selectedRow.identity.kind === 'missing'}
+            onClick={() => {
+              if (selectedRow) {
+                void restoreWorkspaceLayoutOnly(selectedRow)
+              }
+            }}
+            className="h-auto max-w-64 items-start gap-2.5 px-4 py-2 text-left"
+          >
+            <LayoutPanelLeft className="mt-0.5 size-4" aria-hidden />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[13px] font-medium">
+                {translate('resumeCenter.restoreLayout.title', 'Restore layout only')}
+              </span>
+              <span className="truncate text-[11px] font-normal text-muted-foreground">
+                {selectedRow
+                  ? translate('resumeCenter.restoreLayout.hint', '{{name}}, starts nothing', {
+                      name: selectedName
+                    })
+                  : translate('resumeCenter.restoreLayout.none', 'Select a workspace')}
+              </span>
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             data-testid="resume-center-refresh"
+            aria-label={translate('resumeCenter.refresh', 'Refresh')}
+            title={translate('resumeCenter.refresh', 'Refresh')}
             onClick={() => {
               clearPanePreviewCache()
               refresh()
             }}
           >
             <RefreshCw className="size-3.5" aria-hidden />
-            {translate('resumeCenter.refresh', 'Refresh')}
           </Button>
         </div>
       </header>
@@ -122,21 +174,23 @@ export default function ResumeCenterPage(): React.JSX.Element {
             className="h-8 pl-7 text-[13px]"
           />
         </div>
-        <div role="group" className="flex rounded-md border border-border text-[12px]">
-          {(['window', 'recent'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={sort === option}
-              onClick={() => setSort(option)}
-              className="px-2.5 py-1 aria-pressed:bg-accent"
-            >
-              {option === 'window'
-                ? translate('resumeCenter.sort.window', 'By window')
-                : translate('resumeCenter.sort.recent', 'Most recent')}
-            </button>
-          ))}
-        </div>
+        <Select value={sort} onValueChange={(value) => setSort(value as ResumeCenterSort)}>
+          <SelectTrigger
+            size="sm"
+            data-testid="resume-center-sort"
+            aria-label={translate('resumeCenter.sort.label', 'Sort')}
+            className="w-44 text-[13px]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(['window', 'recent'] as const).map((option) => (
+              <SelectItem key={option} value={option}>
+                {SORT_LABEL[option]()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="scrollbar-sleek flex min-h-0 flex-1 gap-4 overflow-y-auto px-6 pb-6">

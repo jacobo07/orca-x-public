@@ -113,7 +113,7 @@ export type DeskProjection = {
 
 const MAX_LAYOUT_DEPTH = 64
 
-function worktreeIdOfKey(key: string): string | null {
+export function worktreeIdOfKey(key: string): string | null {
   if (key.startsWith('folder:')) {
     return null
   }

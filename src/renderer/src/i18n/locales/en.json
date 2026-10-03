@@ -16755,7 +16755,9 @@
       "sessions": "sessions",
       "open": "Open",
       "collapse": "Collapse",
-      "expand": "Expand"
+      "expand": "Expand",
+      "files": "open files",
+      "agents": "agent tabs"
     },
     "window": {
       "bound": "Window",
@@ -16772,13 +16774,16 @@
       "afternoon": "Good afternoon",
       "evening": "Good evening",
       "sessions": "sessions on your desk",
-      "running": "running"
+      "running": "running",
+      "windows_one": "window with",
+      "windows_other": "windows with"
     },
     "refresh": "Refresh",
     "search": "Search workspaces and sessions",
     "sort": {
       "window": "By window",
-      "recent": "Most recent"
+      "recent": "Most recent",
+      "label": "Sort"
     },
     "state": {
       "loading": "Reading your desk…",
@@ -16801,9 +16806,16 @@
       "dismiss": "Dismiss"
     },
     "tab": {
-      "panes": "{{count}} panes"
+      "panes_one": "{{count}} pane",
+      "panes_other": "{{count}} panes",
+      "shell": "Terminal"
     },
     "resumeAction": "Resume",
+    "restoreLayout": {
+      "title": "Restore layout only",
+      "hint": "{{name}}, starts nothing",
+      "none": "Select a workspace"
+    },
     "orphan": {
       "title": "{{agent}} session, tab closed",
       "note": "No tab to restore; Resume opens it in a new tab."
@@ -16823,6 +16835,7 @@
     },
     "resumeAll": {
       "start": "Resume all",
+      "hint": "Wakes sleeping sessions, one at a time",
       "continue": "Continue",
       "running": "Resuming one at a time:",
       "stopped": "Paused. Started:",

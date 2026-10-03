@@ -187,6 +187,26 @@
       "absent": "omitted",
       "why": "Same total as the summary; the line is not drawn until the desk is read."
     },
+    "resume-center-greeting-windows": {
+      "producer": "src/renderer/src/components/resume-center/resume-center-workspace-facts.ts#greetingWindowCount",
+      "absent": "omitted",
+      "why": "The recorded window count; when no window list was recorded the clause is left out, never drawn as zero."
+    },
+    "resume-center-workspace-branch-name": {
+      "producer": "src/renderer/src/components/resume-center/resume-center-workspace-facts.ts#workspaceBranch",
+      "absent": "omitted",
+      "why": "The branch the worktree records now; folders, unknown worktrees and detached heads show no chip."
+    },
+    "resume-center-workspace-file-count": {
+      "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
+      "absent": "omitted",
+      "why": "Editor files the saved session holds open for that workspace."
+    },
+    "resume-center-workspace-agent-count": {
+      "producer": "src/renderer/src/components/resume-center/resume-center-workspace-facts.ts#workspaceAgentCount",
+      "absent": "omitted",
+      "why": "Tabs that recorded the agent they launched (labelled agent tabs); orphan sessions are listed as their own rows."
+    },
     "resume-center-greeting-running": {
       "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
       "absent": "omitted",

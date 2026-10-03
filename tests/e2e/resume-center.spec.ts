@@ -73,7 +73,9 @@ async function readRowPreview(
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
     await toggle.click()
   }
-  const preview = row.getByTestId('resume-center-pane-preview').first()
+  const preview = row
+    .locator('[data-testid="resume-center-pane-preview"][data-preview-placement="expanded"]')
+    .first()
   return {
     status: await preview.getAttribute('data-preview-status'),
     text: (await preview.textContent()) ?? ''
