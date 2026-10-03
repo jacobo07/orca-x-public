@@ -455,4 +455,17 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.status).toBe(1)
     })
   })
+
+  describe('changed-file scope (WR-07)', () => {
+    it('includes a file renamed and edited since the base in the lint and format scope', () => {
+      // Arrange: makeRepo renames src/old-name.mjs to src/new-name.mjs with an edit after the base commit
+      const fx = makeRepo()
+      // Act
+      const run = runGate(fx)
+      // Assert
+      const changed = readFileSync(join(run.dir, 'changed-files.txt'), 'utf8').split('\n')
+      expect(changed).toContain('src/new-name.mjs')
+      expect(run.summary).toMatch(/^CHANGED_FILES \d+ since /m)
+    })
+  })
 })

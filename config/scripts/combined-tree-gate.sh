@@ -365,7 +365,7 @@ assert_tree units || finish 99
 # Why the explicit status: a failed diff must not leave CHANGED empty, which reads as "no changed files".
 CHANGED=()
 changed_ok=1
-if changed_text=$(git diff --name-only --diff-filter=AM "$BASE..HEAD" -- '*.ts' '*.tsx' '*.mjs'); then
+if changed_text=$(git diff --name-only --diff-filter=AMR "$BASE..HEAD" -- '*.ts' '*.tsx' '*.mjs'); then
   [ -z "$changed_text" ] || mapfile -t CHANGED <<< "$changed_text"
 else
   changed_ok=0
