@@ -105,6 +105,23 @@ function judgeHeader(lines, fail) {
   return head
 }
 
+/** Every phase boundary must have re-read HEAD and tracked dirt, and found the start HEAD and none. */
+function judgeTree(lines, manifest, head, fail) {
+  const phases = ['build', ...manifest.specs.map((s) => `spec-${s.name}`), 'units', 'gates', 'end']
+  judgeNamed(
+    linesByName(lines, 'TREE_AT'),
+    'TREE_AT',
+    phases,
+    (_phase, line) => {
+      const m = /^TREE_AT \S+ head=(\S+) dirty=(\S+)$/.exec(line)
+      if (!m || m[1] !== head || m[2] !== '0') {
+        fail(line)
+      }
+    },
+    fail
+  )
+}
+
 function judgeSpecs(lines, manifest, fail) {
   const floors = new Map(manifest.specs.map((s) => [s.name, s.minPassed]))
   judgeNamed(
@@ -199,6 +216,7 @@ export function evaluateSummary(summaryText, manifest) {
     }
   }
   const head = judgeHeader(lines, fail)
+  judgeTree(lines, manifest, head, fail)
   judgeSpecs(lines, manifest, fail)
   judgeUnits(lines, manifest, fail)
   judgeGates(lines, manifest, fail)

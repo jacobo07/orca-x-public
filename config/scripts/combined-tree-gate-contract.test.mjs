@@ -18,6 +18,15 @@ const RAW = readFileSync(new URL('../combined-tree-gate.jsonc', import.meta.url)
 const MANIFEST = loadManifest(RAW)
 const SHA = '0123456789abcdef0123456789abcdef01234567'
 
+const treeAt = (phase, head = SHA, dirty = 0) => `TREE_AT ${phase} head=${head} dirty=${dirty}`
+const treePhases = (manifest) => [
+  'build',
+  ...manifest.specs.map((s) => `spec-${s.name}`),
+  'units',
+  'gates',
+  'end'
+]
+
 function greenLines(manifest = MANIFEST) {
   return [
     'CTG_START fixture 2026-10-03T00:00:00Z',
@@ -26,6 +35,7 @@ function greenLines(manifest = MANIFEST) {
     'MEM_AVAILABLE_GB=53',
     'PREFLIGHT_OK',
     `BUILD_real_EXIT=0 head=${SHA.slice(0, 9)} dirty=0`,
+    ...treePhases(manifest).map((phase) => treeAt(phase)),
     ...manifest.specs.map(
       (s) =>
         `SPEC_RESULT ${s.name} label=real exit=0 verdict=PRODUCT_RUN  ${s.minPassed} passed (1.0m);`
@@ -188,6 +198,41 @@ describe('evaluateSummary: header', () => {
   it('reads a nonzero build as RED', () => {
     const line = `BUILD_real_EXIT=1 head=${SHA.slice(0, 9)} dirty=0`
     expectRed(swap(greenLines(), 'BUILD_real_EXIT=', line), line)
+  })
+})
+
+describe('evaluateSummary: tree assertions (CR-01)', () => {
+  it('reads a missing closing TREE_AT as RED', () => {
+    expectRed(drop(greenLines(), 'TREE_AT end '), 'MISSING TREE_AT end')
+  })
+
+  it('reads a summary with no TREE_AT line at all as RED', () => {
+    const result = judge(drop(greenLines(), 'TREE_AT '))
+    expect(result.verdict).toBe('RED')
+    expect(result.failures).toContain('MISSING TREE_AT spec-mission-brief')
+  })
+
+  it.each(['build', 'spec-reload-freeze-frame', 'units', 'gates', 'end'])(
+    'reads a TREE_AT %s on another head as RED naming its line',
+    (phase) => {
+      const line = treeAt(phase, 'f'.repeat(40))
+      expectRed(swap(greenLines(), `TREE_AT ${phase} `, line), line)
+    }
+  )
+
+  it.each(['units', 'end'])('reads a dirty TREE_AT %s as RED naming its line', (phase) => {
+    const line = treeAt(phase, SHA, 2)
+    expectRed(swap(greenLines(), `TREE_AT ${phase} `, line), line)
+  })
+
+  it('reads an unreadable tree state as RED', () => {
+    const line = `TREE_AT gates head=unknown dirty=unknown`
+    expectRed(swap(greenLines(), 'TREE_AT gates ', line), line)
+  })
+
+  it('reads a duplicated or unexpected TREE_AT phase as RED', () => {
+    expectRed([...greenLines(), treeAt('end')], 'DUPLICATE TREE_AT end')
+    expectRed([...greenLines(), treeAt('lunch')], 'UNEXPECTED TREE_AT lunch')
   })
 })
 
@@ -381,7 +426,8 @@ describe('minted lines round-trip through the verdict', () => {
   const header = [
     `HEAD=${SHA} dirty=0`,
     'LOCK_OK 0e3e7a3189836879',
-    `BUILD_real_EXIT=0 head=${SHA.slice(0, 9)} dirty=0`
+    `BUILD_real_EXIT=0 head=${SHA.slice(0, 9)} dirty=0`,
+    ...treePhases(MANIFEST).map((phase) => treeAt(phase))
   ]
   const passLog = (n) => `\u001b[32m  ${n} passed\u001b[39m\u001b[2m (1.0m)\u001b[22m\n`
   const unitLog = (n) =>

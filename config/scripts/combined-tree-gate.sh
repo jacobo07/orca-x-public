@@ -5,7 +5,8 @@
 # only orchestrates and appends node's output.
 #
 # Linux test plane only (GEX44); run and dry-run refuse elsewhere. Runs IN PLACE in the tree that
-# holds this script, with HEAD re-asserted before every spec.
+# holds this script. HEAD and tracked dirt are re-asserted (TREE_AT lines) after the build, every
+# spec, the unit groups and the gates, and again at the end; the verdict needs every one clean.
 #
 # Usage:
 #   combined-tree-gate.sh --label <label> --expect <sha-prefix> [--manifest <path>]           real run
@@ -64,6 +65,16 @@ ctg_verdict() {
   esac
   echo "TIP_VERDICT NO_VERDICT contract exit=$rc disagrees with its last line"
   return 2
+}
+
+# tree_dirt: count of tracked changes, or `unknown` when git fails (never 0 on failure).
+tree_dirt() {
+  local out
+  out=$(git status --porcelain --untracked-files=no) || {
+    echo unknown
+    return 0
+  }
+  printf '%s' "$out" | grep -c . || true
 }
 
 MODE=run
@@ -155,7 +166,7 @@ preflight() {
 
   HEAD=$(git rev-parse HEAD)
   case "$HEAD" in "$EXPECT"*) ;; *) refuse 91 "REFUSED_HEAD_MISMATCH expected=$EXPECT head=$HEAD" ;; esac
-  DIRTY=$(git status --porcelain --untracked-files=no | wc -l)
+  DIRTY=$(tree_dirt)
   [ "$DIRTY" = 0 ] || refuse 92 "REFUSED_DIRTY_TREE dirty=$DIRTY"
   git rev-parse --verify --quiet "$BASE^{commit}" > /dev/null || refuse 97 "REFUSED_MANIFEST base $BASE is not a commit here"
 
@@ -201,6 +212,15 @@ foreign_playwright() {
   done
 }
 
+# assert_tree <phase>: mints TREE_AT; fails when HEAD is not the start HEAD or the tree is dirty.
+assert_tree() {
+  local h d
+  h=$(git rev-parse HEAD) || h=unknown
+  d=$(tree_dirt)
+  log_line "TREE_AT $1 head=$h dirty=$d"
+  [ "$h" = "$HEAD" ] && [ "$d" = 0 ]
+}
+
 # finish <code>: append the verdict and CTG_END; exit <code>, or the verdict's code when <code> is 0.
 finish() {
   local out verdict_rc code=$1
@@ -213,7 +233,7 @@ finish() {
 }
 
 log_line "CTG_START $LABEL $(date -u +%FT%TZ)"
-log_line "HEAD=$HEAD dirty=$(git status --porcelain --untracked-files=no | wc -l)"
+log_line "HEAD=$HEAD dirty=$(tree_dirt)"
 log_line "LOCK_OK $LOCK"
 log_line "CTG_MANIFEST sha256=$(sha256sum "$MANIFEST" | cut -c1-16) $MANIFEST"
 log_line "MEM_AVAILABLE_GB=$(free -g | awk '/^Mem:/ {print $7}')"
@@ -237,7 +257,8 @@ rc=$?
   timeout 900 node node_modules/typescript/bin/tsc -p config/tsconfig.cli.json --outDir out --composite false \
     --incremental false >> "$build_log" 2>&1 || rc=$?
 }
-log_line "BUILD_real_EXIT=$rc head=$(git rev-parse --short=9 HEAD) dirty=$(git status --porcelain --untracked-files=no | wc -l)"
+built_head=$(git rev-parse HEAD) || built_head=unknown
+log_line "BUILD_real_EXIT=$rc head=${built_head:0:9} dirty=$(tree_dirt)"
 [ "$rc" = 0 ] || finish 0
 
 for line in "${PLAN[@]}"; do
@@ -246,9 +267,9 @@ for line in "${PLAN[@]}"; do
 done
 
 moved=0
+assert_tree build || moved=1
 for spec in "${SPECS[@]}"; do
-  if [ "$moved" = 1 ] || [ "$(git rev-parse HEAD)" != "$HEAD" ]; then
-    moved=1
+  if [ "$moved" = 1 ]; then
     append node "$CONTRACT" spec-result --name "$spec" --exit 99 --head-moved "${HEAD:0:9}"
     continue
   fi
@@ -261,6 +282,7 @@ for spec in "${SPECS[@]}"; do
   # Only this tree's Electron: other trees share node_modules, so a shared-package pattern kills theirs.
   pkill -f "$TREE/out/main" 2> /dev/null
   sleep 2
+  assert_tree "spec-$spec" || moved=1
 done
 # Why stop here: units and gates of a tree that moved under the run describe no single revision.
 [ "$moved" = 1 ] && finish 99
@@ -274,6 +296,7 @@ for line in "${UNITS[@]}"; do
   append node "$CONTRACT" unit-result --manifest "$MANIFEST" --group "$group" --exit "$rc" \
     --log "$RUN/unit-$group.log" --json "$RUN/unit-$group.json" --failures-out "$RUN/unit-$group-failures.txt"
 done
+assert_tree units || finish 99
 
 mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE..HEAD" -- '*.ts' '*.tsx' '*.mjs')
 printf '%s\n' "${CHANGED[@]}" > "$RUN/changed-files.txt"
@@ -294,5 +317,7 @@ for line in "${GATES[@]}"; do
   rc=$?
   append node "$CONTRACT" gate-result --name "$name" --exit "$rc" --log "$RUN/gate-$name.log"
 done
+assert_tree gates || finish 99
+assert_tree end || finish 99
 
 finish 0
