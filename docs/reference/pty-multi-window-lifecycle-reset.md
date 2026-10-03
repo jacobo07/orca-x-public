@@ -59,6 +59,12 @@ Two more registries are still newest-window-only and are not changed here: the h
 reset (`rendererGateReset*`, `did-finish-load` + `render-process-gone`) and the orphan-sweep
 `did-finish-load` handler. Both move to the newest window on each registration.
 
+The real-app oracle was itself blind: `probeDirectWrite` substring-matches `echo MARKER`, so the
+echoed command satisfied it, and its Ctrl+C prefix made bash drop the first byte (`cho MARKER`
+ran on GEX44 under a green probe). The survivor test now uses `probeDirectWriteOutput` (a line
+exactly equal to the marker). 60 other e2e files still match terminal text by substring; any that
+claim "the terminal is alive" from it are unproven (debt).
+
 ## Acceptance
 
 - RED unit tests in `src/main/ipc/pty-multi-window-lifecycle-reset.test.ts`, each failing on the

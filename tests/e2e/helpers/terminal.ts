@@ -118,6 +118,30 @@ export async function getTerminalContent(page: Page, charLimit = 4000): Promise<
   )
 }
 
+/**
+ * The buffer of the tab that owns `ptyId`, whichever tab or worktree is active. With a second window
+ * open, synced selection can move the "active tab" away from the pane a test is probing.
+ */
+export async function getTerminalContentForPty(
+  page: Page,
+  ptyId: string,
+  charLimit = 4000
+): Promise<string> {
+  return page.evaluate(
+    ({ ptyId, charLimit }) => {
+      const ptyIdsByTabId = window.__store?.getState().ptyIdsByTabId ?? {}
+      const tabId = Object.keys(ptyIdsByTabId).find((id) => ptyIdsByTabId[id]?.includes(ptyId))
+      const manager = tabId ? window.__paneManagers?.get(tabId) : undefined
+      const panes = manager?.getPanes?.() ?? []
+      return panes
+        .map((pane) => pane.serializeAddon?.serialize?.() ?? '')
+        .join('\r\n')
+        .slice(-charLimit)
+    },
+    { ptyId, charLimit }
+  )
+}
+
 export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Promise<string> {
   let resolvedPtyId: string | null = null
   await expect

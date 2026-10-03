@@ -24,7 +24,7 @@
  */
 
 import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
-import { getTerminalContent, sendToTerminal, waitForTerminalOutput } from './terminal'
+import { getTerminalContentForPty, sendToTerminal, waitForTerminalOutput } from './terminal'
 import { terminalHasOutputLine } from './terminal-output-line'
 import { buildSettledShellProbeInputSequence } from '../terminal-probe-input-sequence'
 
@@ -52,7 +52,8 @@ export async function probeDirectWrite(
  * the marker, so a terminal that rendered its input and then froze passed the plain probe.
  * For an idle prompt only: POSIX gets Ctrl+U alone, because bash's SIGINT handling flushes the tty
  * input queue and dropped the command's first byte (GEX44: `cho MARKER` ran under an `echo` echo).
- * Retrying cannot hide a frozen terminal: it never prints the output line.
+ * Retrying cannot hide a frozen terminal: it never prints the output line. Reads the pane that owns
+ * `ptyId`: with two windows the synced "active tab" was not the survivor's (GEX44, output on screen).
  */
 export async function probeDirectWriteOutput(
   page: Page,
@@ -70,10 +71,13 @@ export async function probeDirectWriteOutput(
     }
     try {
       await expect
-        .poll(async () => terminalHasOutputLine(await getTerminalContent(page), marker), {
-          timeout: Math.ceil(timeoutMs / attempts),
-          message: `Terminal printed no line equal to "${marker}"`
-        })
+        .poll(
+          async () => terminalHasOutputLine(await getTerminalContentForPty(page, ptyId), marker),
+          {
+            timeout: Math.ceil(timeoutMs / attempts),
+            message: `Terminal printed no line equal to "${marker}"`
+          }
+        )
         .toBe(true)
       return true
     } catch {
