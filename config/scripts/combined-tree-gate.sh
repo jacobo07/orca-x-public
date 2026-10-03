@@ -32,11 +32,13 @@
 #   config/scripts/combined-tree-gate.sh --label p2-tip --expect "$(git rev-parse --short=9 HEAD)"
 #
 # Exit: 0 GREEN (dry-run: planned), 1 RED, 2 NO_VERDICT or usage, 90 tree, 91 HEAD mismatch,
-#       92 dirty, 93 run dir exists, 94 lock, 95 busy, 96 env/toolchain/platform, 97 manifest,
-#       99 HEAD moved during the run.
+#       92 dirty, 93 run dir exists, 94 lockfile, 95 busy (foreign Playwright), 96 env/toolchain/platform,
+#       97 manifest, 98 another run holds this checkout's lock, 99 tree moved or dirtied during the run.
 # pipefail: a failing git or node in a pipeline must never read as the empty/clean answer.
 set -u -o pipefail
 
+SELF=$(readlink -f "$0")
+ARGS=("$@")
 TREE=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null) || {
   echo "REFUSED_TREE $(dirname "$0") is not inside a git work tree"
   exit 90
@@ -114,6 +116,16 @@ if [ "$MODE" = verdict-only ]; then
 fi
 [[ "$LABEL" =~ ^[A-Za-z0-9._-]+$ ]] || refuse 2 "REFUSED_USAGE --label <[A-Za-z0-9._-]+> is required"
 [[ "$EXPECT" =~ ^[0-9a-f]{7,40}$ ]] || refuse 2 "REFUSED_USAGE --expect <7-40 hex sha prefix> is required"
+
+# One real run per checkout: runs share out/ and the working tree. flock -o keeps the lock out of the
+# spec processes, so a daemon that outlives the run cannot hold it.
+if [ "$MODE" = run ] && [ -z "${CTG_LOCK_HELD:-}" ]; then
+  gitdir=$(git -C "$TREE" rev-parse --absolute-git-dir) || refuse 90 "REFUSED_TREE cannot resolve the git dir"
+  CTG_LOCK_HELD=1 flock -n -o -E 98 "$gitdir/ctg.lock" "$SELF" "${ARGS[@]}"
+  lock_rc=$?
+  [ "$lock_rc" = 98 ] && echo "REFUSED_LOCKED another combined-tree gate run holds $gitdir/ctg.lock"
+  exit "$lock_rc"
+fi
 cd "$TREE" || exit 90
 
 # Why a snapshot: the plan, every unit result and the verdict read the manifest; a file edited mid-run

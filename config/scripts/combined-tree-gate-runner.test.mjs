@@ -468,4 +468,40 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.summary).toMatch(/^CHANGED_FILES \d+ since /m)
     })
   })
+
+  describe('single run per checkout (WR-09)', () => {
+    function holdLock(fx) {
+      const ready = join(fx.root, 'lock-ready')
+      const holder = spawn(
+        'flock',
+        ['-x', join(fx.repo, '.git', 'ctg.lock'), 'sh', '-c', `echo up > ${ready}; sleep 120`],
+        { stdio: 'ignore', detached: true }
+      )
+      liveChildren.push(holder.pid)
+      for (let i = 0; i < 100 && !existsSync(ready); i++) {
+        spawnSync('sleep', ['0.1'])
+      }
+      expect(existsSync(ready)).toBe(true)
+    }
+
+    it('refuses (98) a second run while another run holds the checkout lock', () => {
+      // Arrange
+      const fx = makeRepo()
+      holdLock(fx)
+      // Act
+      const run = runGate(fx)
+      // Assert
+      expect(run.status, run.stdout).toBe(98)
+      expect(run.stdout).toContain('REFUSED_LOCKED')
+      expect(existsSync(run.dir)).toBe(false)
+    })
+
+    it('still plans a dry-run while the lock is held, and runs once it is free (controls)', () => {
+      const fx = makeRepo()
+      holdLock(fx)
+      expect(runGate(fx, { args: ['--dry-run'] }).status).toBe(0)
+      const free = makeRepo()
+      expect(runGate(free).status).toBe(0)
+    })
+  })
 })
