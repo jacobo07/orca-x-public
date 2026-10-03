@@ -1,6 +1,5 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { importsOf, stringLiterals } from './check-workspace-surface-claims.mjs'
 
@@ -8,7 +7,7 @@ import { importsOf, stringLiterals } from './check-workspace-surface-claims.mjs'
 // place when the Workstream projection lands with a real UWCP producer. The roots swept here are
 // wider than config/workspace-surface-claims.jsonc on purpose (that file is agent/turn-scoped).
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 
 export const SURFACE_ROOTS = ['src/renderer/src', 'mobile/src']
 export const PRODUCER_ROOTS = [
@@ -22,11 +21,67 @@ export const PRODUCER_ROOTS = [
 // 6395; 90% of 6395 = 5755.5, rounded down to a multiple of 50.
 export const MIN_SCANNED_FILES = 5750
 
-// Frozen: path + exact literal text -> a one-line reason a reader can disagree with. Holds only the
-// dws Phase 3 Cancel Workstream refusal (a command that lists no Workstream); the stale-entry clause
-// (case 2) keeps it from becoming a permanent excuse if a hit is exempted here without cause.
+// Frozen: path + exact literal text -> a one-line reason a reader can disagree with. Holds the dws
+// Phase 3 Cancel Workstream refusal (a command that lists no Workstream) and the Mission Brief's
+// GSD planning workstream chooser (a different noun: a directory under `.planning/workstreams/`,
+// no UWCP id, no producer); the stale-entry clause (case 2) keeps it from becoming a permanent
+// excuse if a hit is exempted here without cause.
 const PHASE_4 = 'remove when Phase 4 inverts this file'
+const GSD_NOUN =
+  'Mission Brief names a GSD planning workstream (a `.planning/workstreams/<name>` directory chosen per mission), not a UWCP Workstream; lists none'
 export const NOT_A_WORKSTREAM_SURFACE = Object.freeze({
+  'src/shared/mission-brief-types.ts': [
+    {
+      text: '.planning/workstreams/',
+      reason: `the directory the request's \`workstream\` names, read from the workspace's own GSD files; ${GSD_NOUN}`
+    },
+    {
+      text: 'choose-workstream',
+      reason: `result status asking the user to pick among the names found under that directory; ${GSD_NOUN}`
+    }
+  ],
+  'src/renderer/src/components/mission-brief/MissionBriefPanel.tsx': [
+    {
+      text: 'choose-workstream',
+      reason: `renders the chooser for the result status above; ${GSD_NOUN}`
+    },
+    {
+      text: 'missionBrief.state.chooseWorkstream',
+      reason: `i18n key of the chooser's prompt; ${GSD_NOUN}`
+    }
+  ],
+  'src/renderer/src/components/mission-brief/mission-brief-presentation.ts': [
+    {
+      text: 'choose-workstream',
+      reason: `maps the result status to the chooser state; ${GSD_NOUN}`
+    }
+  ],
+  'src/renderer/src/components/mission-brief/use-mission-brief.ts': [
+    {
+      text: 'chosenWorkstreams',
+      reason: `per-workspace memory of the chosen GSD directory name; ${GSD_NOUN}`
+    },
+    {
+      text: 'workstream',
+      reason: `the chosen directory name passed with the brief request; ${GSD_NOUN}`
+    },
+    {
+      text: 'chooseWorkstream',
+      reason: `the hook's setter for that chosen name; ${GSD_NOUN}`
+    }
+  ],
+  'src/renderer/src/i18n/locales/en.json': [
+    {
+      text: '"chooseWorkstream": "This workspace runs several missions. Which one?",',
+      reason: `English copy of the chooser prompt: it says "missions", not Workstreams; ${GSD_NOUN}`
+    }
+  ],
+  'src/renderer/src/i18n/locales/es.json': [
+    {
+      text: '"chooseWorkstream": "Este espacio de trabajo tiene varias misiones. ¿Cuál?",',
+      reason: `Spanish copy of the chooser prompt: it says "misiones", not Workstreams; ${GSD_NOUN}`
+    }
+  ],
   'src/shared/execution-effect-refusals.ts': [
     {
       text: 'WORKSTREAM_AUTHORITY_UNAVAILABLE',
@@ -130,7 +185,8 @@ export function listSweepFiles(root, roots, jsonRoots) {
   return { files, perRoot }
 }
 
-const DECLARATION = /\b(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|const|let|var|class|interface|type|enum)\s+(\w+)/g
+const DECLARATION =
+  /\b(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|const|let|var|class|interface|type|enum)\s+(\w+)/g
 
 /** Pure: files -> repo-relative paths, read(p) -> source|null. Four shapes, all on the stem. */
 export function sweepWorkstreamProducers({ files, read }) {
@@ -156,7 +212,12 @@ export function sweepWorkstreamProducers({ files, read }) {
       if (matchesName || matchesSpecifier) {
         const needle = matchesName ? entry.name : entry.specifier
         const index = source.indexOf(needle)
-        hits.push({ file, line: lineOf(source, index === -1 ? 0 : index), shape: 'import', text: needle })
+        hits.push({
+          file,
+          line: lineOf(source, index === -1 ? 0 : index),
+          shape: 'import',
+          text: needle
+        })
       }
     }
     for (const match of source.matchAll(DECLARATION)) {
@@ -204,7 +265,10 @@ describe('dws characterization (c): no Orca surface lists Workstreams — Phase 
       const entries = Array.isArray(entry) ? entry : [entry]
       for (const e of entries) {
         const stillMatches = sweep.hits.some((hit) => hit.file === file && hit.text === e.text)
-        expect(stillMatches, `NOT_A_WORKSTREAM_SURFACE[${file}] "${e.text}" no longer matches a real hit — stale entry`).toBe(true)
+        expect(
+          stillMatches,
+          `NOT_A_WORKSTREAM_SURFACE[${file}] "${e.text}" no longer matches a real hit — stale entry`
+        ).toBe(true)
       }
     }
   })
@@ -223,16 +287,27 @@ describe('dws characterization (c): no Orca surface lists Workstreams — Phase 
         "import { listWorkstreams } from '@/lib/workstream-client'\nlistWorkstreams()"
       ]
     ])
-    const result = sweepWorkstreamProducers({ files: [...map.keys()], read: (p) => map.get(p) ?? null })
+    const result = sweepWorkstreamProducers({
+      files: [...map.keys()],
+      read: (p) => map.get(p) ?? null
+    })
     expect(result.hits.some((h) => h.shape === 'import')).toBe(true)
   })
 
   it('synthetic positive control: declaration shape fires on a Workstream-named export', () => {
     const map = new Map([
-      ['src/renderer/src/components/workstreams/WorkstreamRow.tsx', 'export function WorkstreamRow() {}']
+      [
+        'src/renderer/src/components/workstreams/WorkstreamRow.tsx',
+        'export function WorkstreamRow() {}'
+      ]
     ])
-    const result = sweepWorkstreamProducers({ files: [...map.keys()], read: (p) => map.get(p) ?? null })
-    expect(result.hits.some((h) => h.shape === 'declaration' && h.text === 'WorkstreamRow')).toBe(true)
+    const result = sweepWorkstreamProducers({
+      files: [...map.keys()],
+      read: (p) => map.get(p) ?? null
+    })
+    expect(result.hits.some((h) => h.shape === 'declaration' && h.text === 'WorkstreamRow')).toBe(
+      true
+    )
   })
 
   it('synthetic positive control: string shape fires on a workstream.list RPC/IPC call', () => {
@@ -242,22 +317,34 @@ describe('dws characterization (c): no Orca surface lists Workstreams — Phase 
         "window.api.invoke('workstream.list')"
       ]
     ])
-    const result = sweepWorkstreamProducers({ files: [...map.keys()], read: (p) => map.get(p) ?? null })
+    const result = sweepWorkstreamProducers({
+      files: [...map.keys()],
+      read: (p) => map.get(p) ?? null
+    })
     expect(result.hits.some((h) => h.shape === 'string' && h.text === 'workstream.list')).toBe(true)
   })
 
   it('synthetic positive control: copy shape fires on a localized "workstreams" string', () => {
     const map = new Map([['src/renderer/src/i18n/en.json', '{\n  "workstreams": "Workstreams"\n}']])
-    const result = sweepWorkstreamProducers({ files: [...map.keys()], read: (p) => map.get(p) ?? null })
+    const result = sweepWorkstreamProducers({
+      files: [...map.keys()],
+      read: (p) => map.get(p) ?? null
+    })
     expect(result.hits.some((h) => h.shape === 'copy')).toBe(true)
   })
 
   it('synthetic green control: "work stream", "stream" and "upstreamWork" produce zero hits — the stem must be contiguous', () => {
     const map = new Map([
-      ['src/renderer/src/components/unrelated/Stream.tsx', "const upstreamWork = 'work stream'\nexport function stream() {}"],
+      [
+        'src/renderer/src/components/unrelated/Stream.tsx',
+        "const upstreamWork = 'work stream'\nexport function stream() {}"
+      ],
       ['src/renderer/src/components/unrelated/locale.json', '{\n  "label": "work stream"\n}']
     ])
-    const result = sweepWorkstreamProducers({ files: [...map.keys()], read: (p) => map.get(p) ?? null })
+    const result = sweepWorkstreamProducers({
+      files: [...map.keys()],
+      read: (p) => map.get(p) ?? null
+    })
     expect(result.hits).toEqual([])
   })
 })
