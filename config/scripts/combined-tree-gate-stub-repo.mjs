@@ -36,6 +36,7 @@ case "\${STUB_MUTATE:-}" in
   commit) git -c user.email=a@b -c user.name=n commit -q --allow-empty -m moved ;;
   dirty) echo more >> src/tracked.ts ;;
   untracked) echo x > src/stray.ts ;;
+  shadow) echo x > src/tracked.js ;;
 esac
 exit 0
 `
@@ -158,7 +159,11 @@ export function makeRepo({
     `${Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n')}\nedited\n`
   )
   write(repo, 'package.json', JSON.stringify({ engines: { node: nodeEngine } }))
-  write(repo, '.gitignore', 'node_modules/\nout/\n')
+  write(
+    repo,
+    '.gitignore',
+    'node_modules/\nout/\nsrc/**/*.js\nsrc/**/*.d.ts\n/electron.vite.config.js\n.env*\n'
+  )
   write(repo, 'pnpm-lock.yaml', lockText)
   write(repo, 'src/tracked.ts', 'export {}\n')
   write(repo, 'src/foo/a.test.ts', 'export {}\n')

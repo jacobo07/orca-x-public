@@ -80,10 +80,11 @@ ctg_verdict() {
 # Untracked paths that are not build inputs: agent session state, and the evidence dir when it sits in the tree.
 DIRT_EXCLUDE=(':(exclude).claude')
 
-# tree_dirt: tracked changes plus untracked files outside .gitignore (the build, tsc and the unit filters
-# read them), or `unknown` when git fails (never 0 on failure).
+# tree_dirt: tracked changes, untracked files outside .gitignore (the build, tsc and the unit filters read
+# them) and gitignored files that shadow a committed source in the build (see shadowing_files); or `unknown`
+# when git fails (never 0 on failure).
 tree_dirt() {
-  local tracked untracked
+  local tracked untracked shadows
   tracked=$(git status --porcelain --untracked-files=no) || {
     echo unknown
     return 0
@@ -92,7 +93,29 @@ tree_dirt() {
     echo unknown
     return 0
   }
-  printf '%s\n%s' "$tracked" "$untracked" | grep -c . || true
+  shadows=$(shadowing_files) || {
+    echo unknown
+    return 0
+  }
+  printf '%s\n%s\n%s' "$tracked" "$untracked" "$shadows" | grep -c . || true
+}
+
+# shadowing_files: ignored files the build resolves ahead of, or in addition to, the committed tree: a
+# .js beside a tracked .ts/.tsx (vite prefers .js), an untracked .d.ts, an extra vite config, an .env file.
+shadowing_files() {
+  local listed file
+  listed=$(git ls-files --others --ignored --exclude-standard -- src ':(glob).env*' \
+    ':(glob)electron.vite.config.*' ':(glob)vite.config.*' "${DIRT_EXCLUDE[@]}") || return 1
+  while IFS= read -r file; do
+    case "$file" in
+      src/*.d.ts) echo "$file" ;;
+      src/*.js)
+        [ -z "$(git ls-files -- ":(literal)${file%.js}.ts" ":(literal)${file%.js}.tsx")" ] || echo "$file"
+        ;;
+      src/*) ;;
+      ?*) echo "$file" ;;
+    esac
+  done <<< "$listed"
 }
 
 MODE=run

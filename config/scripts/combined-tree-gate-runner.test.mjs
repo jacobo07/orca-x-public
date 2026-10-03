@@ -264,6 +264,35 @@ linux('combined-tree-gate.sh against a stub tree', () => {
     })
   })
 
+  describe('ignored files the build prefers over committed sources (WR-22)', () => {
+    it.each([
+      ['a .js next to a tracked .ts', 'src/tracked.js'],
+      ['a stray declaration file', 'src/types.d.ts'],
+      ['a build config in the ignored extension', 'electron.vite.config.js'],
+      ['an env file the build loads', '.env.local']
+    ])('refuses (92) a tree holding %s', (_label, file) => {
+      const fx = makeRepo()
+      write(fx.repo, file, 'export {}\n')
+      const run = runGate(fx, { args: ['--dry-run'] })
+      expect(run.status, run.stdout).toBe(92)
+      expect(run.stdout).toContain('REFUSED_DIRTY_TREE dirty=1')
+    })
+
+    it('ignores an ignored .js with no .ts sibling, and build output (controls)', () => {
+      const fx = makeRepo()
+      write(fx.repo, 'src/lone.js', '//\n')
+      write(fx.repo, 'out/main/index.js', '//\n')
+      expect(runGate(fx, { args: ['--dry-run'] }).status).toBe(0)
+    })
+
+    it('reads a shadowing file that appears during a spec as RED', () => {
+      const fx = makeRepo()
+      const run = runGate(fx, { env: { STUB_MUTATE_AT: 'spec', STUB_MUTATE: 'shadow' } })
+      expect(run.status).toBe(99)
+      expect(run.summary).toContain(`TREE_AT spec-alpha head=${run.head} dirty=1\n`)
+    })
+  })
+
   describe('git failures fail closed (WR-06)', () => {
     it('refuses (92) instead of reading a failing git status as a clean tree', () => {
       const run = runGate(makeRepo(), { args: ['--dry-run'], env: { STUB_GIT_FAIL: 'status' } })
