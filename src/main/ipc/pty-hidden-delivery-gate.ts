@@ -10,17 +10,20 @@
  * interest, which suppresses the gate for that PTY.
  */
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { UNATTRIBUTED_RENDERER_WINDOW } from './pty-renderer-window-claims'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
   GlobalSettings,
   'terminalMainSideEffectAuthority' | 'terminalHiddenDeliveryGate'
 >
 
-const hiddenRendererPtys = new Set<string>()
+// Why a setter key per entry: a window's reload or crash must withdraw only what that window set (WR-02).
+// Value = window key of the last `hidden: true` writer.
+const hiddenRendererPtys = new Map<string, number>()
 // Why: sidecar consumers (paste-draft pacing, background agent launches,
 // automation observers) need live bytes even while no visible view exists. Any
-// registered interest suppresses the gate for that PTY.
-const deliveryInterestRendererPtys = new Set<string>()
+// registered interest suppresses the gate for that PTY; value = window keys holding it.
+const deliveryInterestRendererPtys = new Map<string, Set<number>>()
 // Why: reveal must restore from the model only when bytes were actually
 // dropped. Doubles as the one-shot marker latch: the first gated drop emits a
 // restore marker, and the latch is consumed only by unmark (which re-emits)
@@ -46,8 +49,11 @@ export function isHiddenPtyDeliveryGateEnabled(
  *  memory: a hidden remount or renderer reload re-marks an already-dropped
  *  PTY, and erasing the latch there would make the eventual reveal skip the
  *  restore. Unmark is the only consumer of the latch. */
-export function markHiddenRendererPty(id: string): void {
-  hiddenRendererPtys.add(id)
+export function markHiddenRendererPty(
+  id: string,
+  setterKey: number = UNATTRIBUTED_RENDERER_WINDOW
+): void {
+  hiddenRendererPtys.set(id, setterKey)
 }
 
 /** Clears the hidden bit. Returns whether bytes were dropped while hidden so
@@ -65,14 +71,24 @@ export function isHiddenRendererPty(id: string): boolean {
 /** For freeze diagnostics only: hidden ptys must appear in the per-pty report
  *  table even when the gate dropped every byte before any send/accounting. */
 export function getHiddenRendererPtyIds(): string[] {
-  return [...hiddenRendererPtys]
+  return [...hiddenRendererPtys.keys()]
 }
 
 /** Renderer-side ref-counted interest, surfaced as boolean transitions. */
-export function setRendererPtyDeliveryInterest(id: string, interested: boolean): void {
+export function setRendererPtyDeliveryInterest(
+  id: string,
+  interested: boolean,
+  setterKey: number = UNATTRIBUTED_RENDERER_WINDOW
+): void {
+  const holders = deliveryInterestRendererPtys.get(id) ?? new Set<number>()
   if (interested) {
-    deliveryInterestRendererPtys.add(id)
-  } else {
+    holders.add(setterKey)
+    deliveryInterestRendererPtys.set(id, holders)
+    return
+  }
+  // Why only this setter's hold: each window's ref-count reports its own transitions, so another window's hold stands.
+  holders.delete(setterKey)
+  if (holders.size === 0) {
     deliveryInterestRendererPtys.delete(id)
   }
 }
@@ -115,18 +131,27 @@ export function resetRendererScopedHiddenPtyDeliveryState(): void {
 }
 
 /** One window's renderer replaced: same contract as the global reset (drop
- *  memory kept), limited to the PTYs `shouldReset` selects. Returns how many
- *  hidden/interest entries it removed. */
+ *  memory kept), limited to the hidden marks and interest holds whose PTY and
+ *  setter window `shouldReset` selects. Returns how many entries it removed. */
 export function resetRendererScopedHiddenPtyDeliveryStateFor(
-  shouldReset: (id: string) => boolean
+  shouldReset: (id: string, setterKey: number) => boolean
 ): number {
   let removed = 0
-  for (const registry of [hiddenRendererPtys, deliveryInterestRendererPtys]) {
-    for (const id of registry) {
-      if (shouldReset(id)) {
-        registry.delete(id)
+  for (const [id, setterKey] of hiddenRendererPtys) {
+    if (shouldReset(id, setterKey)) {
+      hiddenRendererPtys.delete(id)
+      removed += 1
+    }
+  }
+  for (const [id, holders] of deliveryInterestRendererPtys) {
+    for (const holder of holders) {
+      if (shouldReset(id, holder)) {
+        holders.delete(holder)
         removed += 1
       }
+    }
+    if (holders.size === 0) {
+      deliveryInterestRendererPtys.delete(id)
     }
   }
   return removed

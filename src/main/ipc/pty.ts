@@ -304,6 +304,12 @@ const ptyRendererOwnership = createPtyRendererOwnership({
   }
 })
 
+/** Which window an IPC sender is; a sender with no numeric id is unattributed and fails closed on any reset. */
+function rendererClaimWindowKey(event: { sender?: { id?: unknown } } | null | undefined): number {
+  const senderId = event?.sender?.id
+  return typeof senderId === 'number' ? senderId : UNATTRIBUTED_RENDERER_WINDOW
+}
+
 /** A recorded owner id is not a live renderer: closed windows never release their ownership. */
 function isLiveRendererWebContentsId(webContentsId: number | undefined): boolean {
   // Why: the headless host registers a webContents with no id, and Electron's fromId throws on a non-number.
@@ -2427,18 +2433,20 @@ function anotherLiveRendererWindow(windowKey: number): boolean {
   return false
 }
 
-/** Reload/crash of one window: clears hidden/interest marks of PTYs it owns plus unowned and dead-owned ones. */
+/** Reload/crash of one window: clears the hidden/interest entries it set, plus dead-setter, unattributed and dead-owned ones. */
 function resetRendererWindowDeliveryGate(
   windowKey: number,
   options?: { keepUnowned: boolean }
 ): void {
-  // Why unowned and dead-owned too: no live owner will re-report them, so keeping their marks would gate them forever (fail closed).
-  const removed = resetRendererScopedHiddenPtyDeliveryStateFor((id) => {
+  // Why per setter (WR-02): a live window's entries on an unowned PTY are its own claim; this window's death says nothing about them.
+  const removed = resetRendererScopedHiddenPtyDeliveryStateFor((id, setterKey) => {
     const owner = ptyRendererOwnership.ownerWebContentsIdFor(id)
-    if (owner === null) {
-      return options?.keepUnowned !== true
+    // Why: no live owner will re-report a dead-owned PTY, so keeping its marks would gate it forever (fail closed).
+    const ownerGone = owner !== null && (owner === windowKey || !isLiveRendererWebContentsId(owner))
+    if (setterKey === UNATTRIBUTED_RENDERER_WINDOW) {
+      return owner === null ? options?.keepUnowned !== true : ownerGone
     }
-    return owner === windowKey || !isLiveRendererWebContentsId(owner)
+    return setterKey === windowKey || !isLiveRendererWebContentsId(setterKey) || ownerGone
   })
   if (removed > 0) {
     invalidatePendingPtyDrainPolicy()
@@ -2719,12 +2727,16 @@ export function registerPtyHandlers(
   const rendererCreditBeforeExitByPty = new Map<string, boolean>()
   const rendererDeliveryRestoreNeededPtys = new Set<string>()
 
-  function transitionHiddenRendererPtyDeliveryState(id: string, hidden: boolean) {
+  function transitionHiddenRendererPtyDeliveryState(
+    id: string,
+    hidden: boolean,
+    setterKey: number
+  ) {
     const settings = getSettings?.()
     const wasDroppable = shouldDropHiddenRendererPtyData(id, settings)
     let droppedWhileHidden = false
     if (hidden) {
-      markHiddenRendererPty(id)
+      markHiddenRendererPty(id, setterKey)
     } else {
       droppedWhileHidden = unmarkHiddenRendererPty(id).droppedWhileHidden
     }
@@ -2732,8 +2744,16 @@ export function registerPtyHandlers(
     return { droppable, droppedWhileHidden, policyChanged: wasDroppable !== droppable }
   }
 
-  function transitionSpawnHiddenRendererPtyDeliveryState(id: string, hidden: boolean): void {
-    const transition = transitionHiddenRendererPtyDeliveryState(id, hidden)
+  function transitionSpawnHiddenRendererPtyDeliveryState(
+    id: string,
+    hidden: boolean,
+    spawnEvent: Parameters<typeof rendererClaimWindowKey>[0]
+  ): void {
+    const transition = transitionHiddenRendererPtyDeliveryState(
+      id,
+      hidden,
+      rendererClaimWindowKey(spawnEvent)
+    )
     if (transition.policyChanged) {
       invalidatePendingPtyDrainPolicy(id)
     }
@@ -6855,7 +6875,7 @@ export function registerPtyHandlers(
             ? effectiveSessionAppId
             : null
         if (preSpawnHiddenMarkId !== null) {
-          transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, true)
+          transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, true, spawnEvent)
         }
         releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
@@ -6958,7 +6978,7 @@ export function registerPtyHandlers(
           }
           // Why: a stale hidden mark on this session id would gate a later visible attach that reuses it.
           if (preSpawnHiddenMarkId !== null) {
-            transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, false)
+            transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, false, spawnEvent)
           }
           const rawMessage = err instanceof Error ? err.message : String(err)
           if (rawMessage === 'agent_session_exited_during_start' && rejectedRegistrationCandidate) {
@@ -7065,10 +7085,10 @@ export function registerPtyHandlers(
         }
         if (initiallyHidden) {
           // Why marked synchronously here: provider data events dispatch on later tasks, so this still lands ahead of the first byte's delivery decision (idempotent if already marked pre-spawn).
-          transitionSpawnHiddenRendererPtyDeliveryState(result.id, true)
+          transitionSpawnHiddenRendererPtyDeliveryState(result.id, true, spawnEvent)
           if (preSpawnHiddenMarkId !== null && preSpawnHiddenMarkId !== result.id) {
             // Defense: never strand a mark on an id the provider renamed.
-            transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, false)
+            transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, false, spawnEvent)
           }
           // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
           syncPtyBackgroundedDelivery(result.id, 'spawn')
@@ -7798,10 +7818,6 @@ export function registerPtyHandlers(
     reopenRendererPtyDispatcher()
   })
 
-  /** Which window made a visibility/activity claim; unattributable claims fail closed on any reset. */
-  const rendererClaimWindowKey = (event: IpcMainEvent | undefined): number =>
-    typeof event?.sender?.id === 'number' ? event.sender.id : UNATTRIBUTED_RENDERER_WINDOW
-
   ipcMain.removeAllListeners('pty:setActiveRendererPty')
   ipcMain.on('pty:setActiveRendererPty', (event, args: { id: string; active: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
@@ -7859,14 +7875,18 @@ export function registerPtyHandlers(
   })
 
   ipcMain.removeAllListeners('pty:setHiddenRendererPty')
-  ipcMain.on('pty:setHiddenRendererPty', (_event, args: { id: string; hidden: boolean }) => {
+  ipcMain.on('pty:setHiddenRendererPty', (event, args: { id: string; hidden: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
     mainDeliveryBreadcrumbs.record(args.hidden === true ? 'gate-mark' : 'gate-unmark', {
       id: redactPtyIdForDiagnostics(args.id)
     })
-    const transition = transitionHiddenRendererPtyDeliveryState(args.id, args.hidden === true)
+    const transition = transitionHiddenRendererPtyDeliveryState(
+      args.id,
+      args.hidden === true,
+      rendererClaimWindowKey(event)
+    )
     if (args.hidden === true) {
       closeStartupQueryAuthorityForPty(args.id)
       // Why: drop bytes queued for a newly hidden PTY instead of holding them under ACK starvation; reveal restores from the snapshot.
@@ -7913,14 +7933,14 @@ export function registerPtyHandlers(
   })
 
   ipcMain.removeAllListeners('pty:setPtyDeliveryInterest')
-  ipcMain.on('pty:setPtyDeliveryInterest', (_event, args: { id: string; interested: boolean }) => {
+  ipcMain.on('pty:setPtyDeliveryInterest', (event, args: { id: string; interested: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
     // Why: any delivery interest suppresses the hidden-delivery gate (raw-byte consumers keep receiving while hidden); not synced to the daemon pacer so interest churn can't un-pace a flood.
     const settings = getSettings?.()
     const wasDroppable = shouldDropHiddenRendererPtyData(args.id, settings)
-    setRendererPtyDeliveryInterest(args.id, args.interested === true)
+    setRendererPtyDeliveryInterest(args.id, args.interested === true, rendererClaimWindowKey(event))
     if (wasDroppable !== shouldDropHiddenRendererPtyData(args.id, settings)) {
       invalidatePendingPtyDrainPolicy(args.id)
     }
