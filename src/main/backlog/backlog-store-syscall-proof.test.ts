@@ -8,13 +8,18 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { open as actualOpen } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { isBacklogItemId } from '../../shared/backlog-identity'
 
 /** The rename is recorded too: an fsync moved after the rename still fsyncs a file. */
-const syscalls: ('fsync:file' | 'fsync:directory' | 'rename' | 'link')[] = []
+const syscalls: string[] = []
+
+// Directory entries name the directory itself; file and name-publishing entries name their parent.
+function backlogRelative(path: string): string {
+  return relative(root, path) || '.'
+}
 
 // When set, a competing writer lands its bytes on the final name just before the publish call.
 const competitor = { bytes: null as string | null }
@@ -33,6 +38,7 @@ vi.mock('node:fs/promises', async () => {
     open: async (...args: Parameters<typeof NodeFsPromises.open>) => {
       const handle = await actual.open(...args)
       const isDirectory = (await handle.stat()).isDirectory()
+      const openedPath = String(args[0])
       return new Proxy(handle, {
         get(target, property, receiver) {
           if (property !== 'sync') {
@@ -41,7 +47,11 @@ vi.mock('node:fs/promises', async () => {
           // Recorded only after the real call returns: an fsync that throws is not a barrier.
           return async () => {
             const result = await target.sync()
-            syscalls.push(isDirectory ? 'fsync:directory' : 'fsync:file')
+            syscalls.push(
+              isDirectory
+                ? `fsync:directory:${backlogRelative(openedPath)}`
+                : `fsync:file:${backlogRelative(dirname(openedPath))}`
+            )
             return result
           }
         }
@@ -50,17 +60,28 @@ vi.mock('node:fs/promises', async () => {
     rename: async (...args: Parameters<typeof NodeFsPromises.rename>) => {
       await plantCompetitor(args[1])
       const result = await actual.rename(...args)
-      syscalls.push('rename')
+      syscalls.push(`rename:${backlogRelative(dirname(String(args[1])))}`)
       return result
     },
     link: async (...args: Parameters<typeof NodeFsPromises.link>) => {
       await plantCompetitor(args[1])
       const result = await actual.link(...args)
-      syscalls.push('link')
+      syscalls.push(`link:${backlogRelative(dirname(String(args[1])))}`)
       return result
     }
   }
 })
+
+// The first capture creates the record's directory under the root, so the root's own entry for it is
+// made durable (IN-03, db892d492) before the record is written: that is the leading directory fsync.
+function expectRecordDurableBeforeItsName(directory: string, publish: 'link' | 'rename'): void {
+  const record = syscalls.indexOf(`fsync:file:${directory}`)
+  const name = syscalls.indexOf(`${publish}:${directory}`)
+  const entry = syscalls.lastIndexOf(`fsync:directory:${directory}`)
+  expect(record).toBeGreaterThanOrEqual(0)
+  expect(name).toBeGreaterThan(record)
+  expect(entry).toBeGreaterThan(name)
+}
 
 /** Probe rather than assume: Windows cannot open a directory for fsync. */
 async function directoryFsyncSupported(directory: string): Promise<boolean> {
@@ -100,8 +121,13 @@ it('fsyncs the item before publishing its name', async () => {
 
   expect(outcome.outcome).toBe('published')
   expect(syscalls).toEqual(
-    supported ? ['fsync:file', 'link', 'fsync:directory'] : ['fsync:file', 'link']
+    supported
+      ? ['fsync:directory:.', 'fsync:file:items', 'link:items', 'fsync:directory:items']
+      : ['fsync:file:items', 'link:items']
   )
+  if (supported) {
+    expectRecordDurableBeforeItsName('items', 'link')
+  }
 })
 
 it('never replaces a record that lands on the name after the existence check', async () => {
@@ -161,8 +187,18 @@ it('fsyncs an ingested candidate before publishing its name', async () => {
 
   expect(result.outcome).toBe('published')
   expect(syscalls).toEqual(
-    supported ? ['fsync:file', 'link', 'fsync:directory'] : ['fsync:file', 'link']
+    supported
+      ? [
+          'fsync:directory:.',
+          'fsync:file:candidates',
+          'link:candidates',
+          'fsync:directory:candidates'
+        ]
+      : ['fsync:file:candidates', 'link:candidates']
   )
+  if (supported) {
+    expectRecordDurableBeforeItsName('candidates', 'link')
+  }
 })
 
 async function seededStore() {
@@ -190,8 +226,13 @@ it('fsyncs a fenced mutate before publishing it', async () => {
 
   expect(outcome.outcome).toBe('published')
   expect(syscalls).toEqual(
-    supported ? ['fsync:file', 'rename', 'fsync:directory'] : ['fsync:file', 'rename']
+    supported
+      ? ['fsync:file:items', 'rename:items', 'fsync:directory:items']
+      : ['fsync:file:items', 'rename:items']
   )
+  if (supported) {
+    expectRecordDurableBeforeItsName('items', 'rename')
+  }
 })
 
 it('never renames a vetoed mutate', async () => {
@@ -209,5 +250,5 @@ it('never renames a vetoed mutate', async () => {
   })
 
   expect(outcome).toEqual({ outcome: 'superseded', expectedRevision: 1, actualRevision: 2 })
-  expect(syscalls).toEqual(['fsync:file'])
+  expect(syscalls).toEqual(['fsync:file:items'])
 })
