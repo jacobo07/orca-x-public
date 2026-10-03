@@ -85,11 +85,11 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
   return Math.max(parsed, 0)
 })()
 
+// Why a pid, not the app: after close() Playwright disposes the app's impl, so app.process() throws.
 async function removeUserDataDirAfterShutdown(
   userDataDir: string,
-  app: ElectronApplication
+  mainPid: number | undefined
 ): Promise<void> {
-  const mainPid = app.process().pid
   assertE2EProfileDisposed(
     'orca-app',
     await disposeE2EProfile(userDataDir, { ownedPids: mainPid ? [mainPid] : [] })
@@ -249,6 +249,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
+    const mainPid = app.process().pid
     forwardElectronProcessLogs(app, testInfo)
     try {
       const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
@@ -256,7 +257,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     } catch (error) {
       await closeElectronAppForE2E(app)
       // The isolation failure stays the reported error; a disposal failure is printed beside it.
-      await removeUserDataDirAfterShutdown(userDataDir, app).catch((cleanupError: unknown) => {
+      await removeUserDataDirAfterShutdown(userDataDir, mainPid).catch((cleanupError: unknown) => {
         console.error(`[e2e-cleanup] also failed after setup failed: ${String(cleanupError)}`)
       })
       throw error
@@ -265,7 +266,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.
     await closeElectronAppForE2E(app)
-    await removeUserDataDirAfterShutdown(userDataDir, app)
+    await removeUserDataDirAfterShutdown(userDataDir, mainPid)
   },
 
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.

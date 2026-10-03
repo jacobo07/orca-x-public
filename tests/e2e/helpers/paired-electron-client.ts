@@ -61,8 +61,8 @@ function readDirectSshAttemptTargetIds(probePath: string): string[] {
   }
 }
 
-async function removeProfile(userDataDir: string, app: ElectronApplication): Promise<void> {
-  const mainPid = app.process().pid
+// Why a pid, not the app: after close() Playwright disposes the app's impl, so app.process() throws.
+async function removeProfile(userDataDir: string, mainPid: number | undefined): Promise<void> {
   const result = await disposeE2EProfile(userDataDir, { ownedPids: mainPid ? [mainPid] : [] })
   expect.soft(e2eProfileResidue('paired-electron-client', result), 'profile disposal').toBeNull()
 }
@@ -162,6 +162,7 @@ export async function launchPairedElectronClient(
       ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE: directSshProbePath
     }
   })
+  const mainPid = app.process().pid
 
   try {
     assertElectronResolvedIsolatedHome(
@@ -234,7 +235,7 @@ export async function launchPairedElectronClient(
       captureDirectSshAttempts,
       dispose: async () => {
         await closeElectronAppForE2E(app)
-        await removeProfile(userDataDir, app)
+        await removeProfile(userDataDir, mainPid)
       },
       getDirectSshAttemptTargetIds: async () => {
         return readDirectSshAttemptTargetIds(directSshProbePath).filter(
@@ -246,7 +247,7 @@ export async function launchPairedElectronClient(
     }
   } catch (error) {
     await closeElectronAppForE2E(app)
-    await removeProfile(userDataDir, app).catch((cleanupError: unknown) => {
+    await removeProfile(userDataDir, mainPid).catch((cleanupError: unknown) => {
       console.error(`[e2e-cleanup] also failed after setup failed: ${String(cleanupError)}`)
     })
     throw error

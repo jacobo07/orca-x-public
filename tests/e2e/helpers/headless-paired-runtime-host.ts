@@ -187,6 +187,7 @@ async function readPairingOffer(app: ElectronApplication): Promise<RuntimeDeskto
 export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedRuntimeHost> {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-headless-paired-'))
   let app: ElectronApplication | undefined
+  let mainPid: number | undefined
   try {
     writeFileSync(
       path.join(userDataDir, 'orca-data.json'),
@@ -217,6 +218,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       ],
       env: isolation.env
     })
+    mainPid = app.process().pid
     const [offer] = await Promise.all([
       readPairingOffer(app),
       app
@@ -229,7 +231,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       offer,
       dispose: async () => {
         await closeElectronAppForE2E(app)
-        await disposeHostProfile(userDataDir, app)
+        await disposeHostProfile(userDataDir, mainPid)
       }
     }
   } catch (error) {
@@ -237,18 +239,15 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       await closeElectronAppForE2E(app)
     }
     // The launch failure stays the reported error; a disposal failure is printed beside it.
-    await disposeHostProfile(userDataDir, app).catch((cleanupError: unknown) => {
+    await disposeHostProfile(userDataDir, mainPid).catch((cleanupError: unknown) => {
       console.error(`[e2e-cleanup] also failed after setup failed: ${String(cleanupError)}`)
     })
     throw error
   }
 }
 
-async function disposeHostProfile(
-  userDataDir: string,
-  app: ElectronApplication | undefined
-): Promise<void> {
-  const mainPid = app?.process().pid
+// Why a pid, not the app: after close() Playwright disposes the app's impl, so app.process() throws.
+async function disposeHostProfile(userDataDir: string, mainPid: number | undefined): Promise<void> {
   const result = await disposeE2EProfile(userDataDir, { ownedPids: mainPid ? [mainPid] : [] })
   expect
     .soft(e2eProfileResidue('headless-paired-runtime-host', result), 'profile disposal')
