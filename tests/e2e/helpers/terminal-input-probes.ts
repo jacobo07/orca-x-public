@@ -50,27 +50,37 @@ export async function probeDirectWrite(
 /**
  * Like probeDirectWrite, but the echoed command line does not count: `echo MARKER` already contains
  * the marker, so a terminal that rendered its input and then froze passed the plain probe.
+ * For an idle prompt only: POSIX gets Ctrl+U alone, because bash's SIGINT handling flushes the tty
+ * input queue and dropped the command's first byte (GEX44: `cho MARKER` ran under an `echo` echo).
+ * Retrying cannot hide a frozen terminal: it never prints the output line.
  */
 export async function probeDirectWriteOutput(
   page: Page,
   ptyId: string,
   marker: string,
-  timeoutMs = 10_000
+  timeoutMs = 10_000,
+  attempts = 3
 ): Promise<boolean> {
-  for (const input of buildSettledShellProbeInputSequence(`echo ${marker}\r`)) {
-    await sendToTerminal(page, ptyId, input)
+  const command = `echo ${marker}\r`
+  const inputs =
+    process.platform === 'win32' ? buildSettledShellProbeInputSequence(command) : [`\x15${command}`]
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    for (const input of inputs) {
+      await sendToTerminal(page, ptyId, input)
+    }
+    try {
+      await expect
+        .poll(async () => terminalHasOutputLine(await getTerminalContent(page), marker), {
+          timeout: Math.ceil(timeoutMs / attempts),
+          message: `Terminal printed no line equal to "${marker}"`
+        })
+        .toBe(true)
+      return true
+    } catch {
+      // Next attempt; a lost first byte leaves an error line, never the marker on its own.
+    }
   }
-  try {
-    await expect
-      .poll(async () => terminalHasOutputLine(await getTerminalContent(page), marker), {
-        timeout: timeoutMs,
-        message: `Terminal printed no line equal to "${marker}"`
-      })
-      .toBe(true)
-    return true
-  } catch {
-    return false
-  }
+  return false
 }
 
 /** Probe the full chain: focus the visible xterm and type through the keyboard. */
