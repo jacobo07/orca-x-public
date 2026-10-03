@@ -54,12 +54,28 @@ died; a page that was merely *joined* by another window has not died.
   over a per-window gate in main (2026-10-03). Unhandled chunks are buffered and ACKed instead of
   dropping into a listener-less page.
 - **C8 — Gate reset and orphan sweep belong to every window.** Each window's `did-finish-load` and
-  `render-process-gone` run that window's hidden-gate reset, scoped to the PTYs it owns plus
-  unowned ones (drop memory kept), and its `did-finish-load` runs its local orphan sweep (only when
-  it registered on a `LocalPtyProvider`). Registering another window removes neither; `destroyed`
-  or re-registration removes the window's own. Both live in the C2 per-window lifecycle record.
+  `render-process-gone` run that window's hidden-gate reset, scoped to the PTYs it owns, PTYs whose
+  recorded owner is no longer a live renderer (a closed window never releases its ownership), and
+  unowned ones (drop memory kept). A window's **first** `did-finish-load` keeps unowned PTYs while
+  another live window is registered, because that load is a page starting, not dying (C1); with no
+  other live window it clears them, as before. Its `did-finish-load` also runs its local orphan
+  sweep (only when it registered on a `LocalPtyProvider`). Registering another window removes
+  neither; `destroyed` or re-registration removes the window's own. Both live in the C2 per-window
+  lifecycle record.
 
 ## Out of scope (debt, recorded)
+
+**Unowned PTYs: C8 still overrides C3 on a reload or crash (review WR-02, deferred).** Hidden marks
+and interest holds are per PTY and carry no reporting window. Unowned PTYs (spawned by main with no
+sender: background and runtime-owned work) can be shown by any window, so "unowned" is not "nobody's".
+A later reload or crash of window B still clears an unowned PTY's mark and interest that a live
+window A set. Failure: A holds interest on unowned U (an automation observer) and has U hidden; B
+reloads and both entries go; A reports interest only on ref-count transitions
+(`pty-hidden-delivery-gate.ts` `setRendererPtyDeliveryInterest`), so it never re-sends it; the user
+shows U in A and hides it again, `pty:setHiddenRendererPty` re-marks it with no interest held, and
+`shouldDropHiddenRendererPtyData` drops the bytes A's sidecar is waiting for. Only a window's first
+load is fixed (C1). The fix is attributing marks and holds to the reporting sender (the
+`PtyRendererWindowClaims` shape) and withdrawing only the reset window's entries; not built here.
 
 Delivery accounting and the dispatcher-ready gate stay process-wide: a reload of one window still
 holds sends for all windows until that page handshakes (C5 makes that the reloading page's own

@@ -2250,6 +2250,8 @@ type RendererLifecycleResetListeners = {
   // Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so this window's marks reset when its renderer is replaced (drop memory preserved).
   onGateResetLoad: () => void
   onGateResetGone: () => void
+  // Why: a window's first load is its page starting, not dying (D6 C1); carried across re-registration.
+  loadedOnce: boolean
   // Why optional: only a window registered on a LocalPtyProvider sweeps; daemon sessions survive reloads by design.
   onOrphanSweepLoad?: () => void
 }
@@ -2411,12 +2413,25 @@ function attachRendererOrphanSweep(windowKey: number, handler: () => void): void
   listeners.webContents.on('did-finish-load', handler)
 }
 
-/** Reload/crash of one window: clears hidden/interest marks of PTYs it owns plus unowned ones. */
-function resetRendererWindowDeliveryGate(windowKey: number): void {
+/** Whether a window other than this one is registered and still has a live renderer. */
+function anotherLiveRendererWindow(windowKey: number): boolean {
+  for (const otherKey of rendererLifecycleResetListeners.keys()) {
+    if (otherKey !== windowKey && isLiveRendererWebContentsId(otherKey)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Reload/crash of one window: clears hidden/interest marks of PTYs it owns plus unowned and dead-owned ones. */
+function resetRendererWindowDeliveryGate(windowKey: number, options?: { keepUnowned: boolean }): void {
   // Why unowned and dead-owned too: no live owner will re-report them, so keeping their marks would gate them forever (fail closed).
   const removed = resetRendererScopedHiddenPtyDeliveryStateFor((id) => {
     const owner = ptyRendererOwnership.ownerWebContentsIdFor(id)
-    return owner === windowKey || owner === null || !isLiveRendererWebContentsId(owner)
+    if (owner === null) {
+      return options?.keepUnowned !== true
+    }
+    return owner === windowKey || !isLiveRendererWebContentsId(owner)
   })
   if (removed > 0) {
     invalidatePendingPtyDrainPolicy()
@@ -2427,6 +2442,7 @@ function resetRendererWindowDeliveryGate(windowKey: number): void {
 
 function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
   const windowKey = webContents.id
+  const loadedOnce = rendererLifecycleResetListeners.get(windowKey)?.loadedOnce ?? false
   // Why: registering a window resets nothing for the others (D6 C1); re-registering the same window drops only its own stale claims.
   if (rendererLifecycleResetListeners.has(windowKey)) {
     removeRendererLifecycleResetListeners(windowKey)
@@ -2452,8 +2468,16 @@ function registerRendererLifecycleResetHandlers(webContents: WebContents): void 
         reopenRendererPtyDispatcher()
       }
     },
-    onGateResetLoad: () => resetRendererWindowDeliveryGate(windowKey),
-    onGateResetGone: () => resetRendererWindowDeliveryGate(windowKey)
+    onGateResetLoad: () => {
+      const firstLoad = !listeners.loadedOnce
+      listeners.loadedOnce = true
+      // Why: unowned marks are unattributed; on a page start they belong to the live windows that set them (D6 C1).
+      resetRendererWindowDeliveryGate(windowKey, {
+        keepUnowned: firstLoad && anotherLiveRendererWindow(windowKey)
+      })
+    },
+    onGateResetGone: () => resetRendererWindowDeliveryGate(windowKey),
+    loadedOnce
   }
   rendererLifecycleResetListeners.set(windowKey, listeners)
   webContents.on('did-start-navigation', listeners.onNavigation)

@@ -221,9 +221,66 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     expect(isHiddenRendererPty(pb)).toBe(true)
   })
 
+  function extraWindow(id: number): { webContents: MockWebContents } {
+    return {
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isVisible: () => true,
+      isMinimized: () => false,
+      webContents: { id, on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
+    } as never
+  }
+
+  it("opening: a new window's first load keeps the unowned PTY state a live window set (C1)", async () => {
+    // Arrange
+    installObservableDaemonTestProvider()
+    registerPtyHandlers(mainWindow as never)
+    const unowned = await spawnFrom(null, 'opening-u')
+    markHidden(mainWindowIpcEvent, unowned)
+    holdInterest(mainWindowIpcEvent, unowned)
+    const opening = extraWindow(3)
+    registerPtyHandlers(opening as never)
+    const openingEvent = { sender: opening.webContents }
+    const own = await spawnFrom(openingEvent, 'opening-own')
+    markHidden(openingEvent, own)
+    expect(getHiddenRendererPtyDeliveryDebug().deliveryInterestPtyCount).toBe(1)
+
+    // Act
+    withLiveRenderers([PTY_IPC_TEST_MAIN_WEB_CONTENTS_ID, 3], () =>
+      fireSurviving(opening.webContents, 'did-finish-load')
+    )
+
+    // Assert
+    expect(isHiddenRendererPty(unowned)).toBe(true)
+    expect(getHiddenRendererPtyDeliveryDebug().deliveryInterestPtyCount).toBe(1)
+    // Control: the reset ran — the opening window's own mark went.
+    expect(isHiddenRendererPty(own)).toBe(false)
+  })
+
+  it('lone window: a first load with no other live window still clears unowned leftovers', async () => {
+    // Arrange: every earlier window reads as closed.
+    installObservableDaemonTestProvider()
+    const lone = extraWindow(4)
+    registerPtyHandlers(lone as never)
+    const unowned = await spawnFrom(null, 'lone-u')
+    markHidden(null, unowned)
+    holdInterest(null, unowned)
+
+    // Act
+    withLiveRenderers([4], () => fireSurviving(lone.webContents, 'did-finish-load'))
+
+    // Assert
+    expect(isHiddenRendererPty(unowned)).toBe(false)
+    expect(getHiddenRendererPtyDeliveryDebug().deliveryInterestPtyCount).toBe(0)
+  })
+
   it("unowned: either window's reload clears an unowned PTY's hidden mark (fail closed)", async () => {
     // Arrange
     const { pa, second } = await twoDaemonWindowsWithHiddenPtys('unowned')
+    // Why primed: a window's first load is not a reload and keeps unowned state (C1).
+    fireWithBothWindowsLive(first, 'did-finish-load')
+    fireWithBothWindowsLive(second.webContents, 'did-finish-load')
+    markHidden(mainWindowIpcEvent, pa)
     const unowned = await spawnFrom(null, 'unowned-u')
     markHidden(null, unowned)
 
