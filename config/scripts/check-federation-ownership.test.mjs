@@ -2,7 +2,6 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_BASE,
@@ -15,21 +14,47 @@ import {
   runOwnershipSweep
 } from './check-federation-ownership.mjs'
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const SCRIPT = path.join(REPO_ROOT, 'config', 'scripts', 'check-federation-ownership.mjs')
 const GIT_DIR = 'C:\\Program Files\\Git\\cmd'
 const REAL_TIMEOUT = 120_000
 
+// Why probe: the real-git cases measure DEFAULT_HEAD, a ref only the checkout that integrated federation holds.
+// A host without it must report those cases as skipped, naming the ref, instead of failing on a git error.
+function headResolves(runGit, head) {
+  try {
+    runGit(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])
+    return true
+  } catch {
+    return false
+  }
+}
+const FEDERATION_HEAD_PRESENT = headResolves(
+  createGitRunner(process.env.GIT_EXE || 'git', REPO_ROOT),
+  DEFAULT_HEAD
+)
+const realIt = FEDERATION_HEAD_PRESENT ? it : it.skip
+const needsHead = (title) =>
+  FEDERATION_HEAD_PRESENT ? title : `${title} [SKIPPED: ref ${DEFAULT_HEAD} is absent on this host]`
+
 function spawnSweep(args) {
-  const env = { ...process.env, Path: `${GIT_DIR};${process.env.Path || ''}`, PATH: `${GIT_DIR};${process.env.PATH || ''}` }
-  const r = spawnSync(process.execPath, [SCRIPT, ...args], { cwd: REPO_ROOT, env, encoding: 'utf8' })
+  const env = {
+    ...process.env,
+    Path: `${GIT_DIR};${process.env.Path || ''}`,
+    PATH: `${GIT_DIR};${process.env.PATH || ''}`
+  }
+  const r = spawnSync(process.execPath, [SCRIPT, ...args], {
+    cwd: REPO_ROOT,
+    env,
+    encoding: 'utf8'
+  })
   return { status: r.status, stdout: r.stdout || '' }
 }
 
 function controlFile(name, paths) {
   const dir = mkdtempSync(path.join(tmpdir(), `p7-${name}-${process.pid}-`))
   const file = path.join(dir, 'changed.txt')
-  writeFileSync(file, paths.join('\n') + '\n')
+  writeFileSync(file, `${paths.join('\n')}\n`)
   return file
 }
 
@@ -50,7 +75,12 @@ describe('judgeIntersection', () => {
   })
 
   it('Test 2: an owned changed path with an empty allow-list is a VIOLATION', () => {
-    const r = judgeIntersection({ owned: ['b.ts'], changed: ['b.ts'], allowList: [], touchingCommitsByPath: {} })
+    const r = judgeIntersection({
+      owned: ['b.ts'],
+      changed: ['b.ts'],
+      allowList: [],
+      touchingCommitsByPath: {}
+    })
     expect(r.verdict).toBe('VIOLATION')
     expect(r.violations).toEqual([{ path: 'b.ts', reason: 'not-allow-listed' }])
   })
@@ -67,7 +97,12 @@ describe('judgeIntersection', () => {
   })
 
   it('Test 4: an allow-list entry that no longer intersects is a stale entry', () => {
-    const r = judgeIntersection({ owned: ['a.ts'], changed: ['z.ts'], allowList: [entry('a.ts')], touchingCommitsByPath: {} })
+    const r = judgeIntersection({
+      owned: ['a.ts'],
+      changed: ['z.ts'],
+      allowList: [entry('a.ts')],
+      touchingCommitsByPath: {}
+    })
     expect(r.verdict).toBe('VIOLATION')
     expect(r.violations).toEqual([{ path: 'a.ts', reason: 'stale-allow-list-entry' }])
   })
@@ -79,7 +114,9 @@ describe('judgeIntersection', () => {
       allowList: [],
       touchingCommitsByPath: {}
     })
-    expect(r.violations).toEqual([{ path: 'src/main/runtime/orchestration/new-file.ts', reason: 'subsystem-prefix' }])
+    expect(r.violations).toEqual([
+      { path: 'src/main/runtime/orchestration/new-file.ts', reason: 'subsystem-prefix' }
+    ])
     expect(SUBSYSTEM_PREFIXES).toContain('src/main/conversation/')
   })
 
@@ -88,7 +125,12 @@ describe('judgeIntersection', () => {
     ['short reason', entry('a.ts', ['abc1234'], 'too short')],
     ['empty sha list', entry('a.ts', [], REASON)]
   ])('Test 6: a malformed allow-list entry (%s) is BLOCKED', (_name, bad) => {
-    const r = judgeIntersection({ owned: ['a.ts'], changed: ['a.ts'], allowList: [bad], touchingCommitsByPath: {} })
+    const r = judgeIntersection({
+      owned: ['a.ts'],
+      changed: ['a.ts'],
+      allowList: [bad],
+      touchingCommitsByPath: {}
+    })
     expect(r.verdict).toBe('BLOCKED')
     expect(r.rung).toBe('allow-list-malformed')
   })
@@ -98,10 +140,14 @@ describe('listChangedPaths in a throwaway repository', () => {
   it('Test 6b: a rename hides nothing; the OLD owned path is reported and judged', () => {
     const repo = mkdtempSync(path.join(tmpdir(), `p7-rename-${process.pid}-`))
     const git = (...args) =>
-      execFileSync(process.env.GIT_EXE || 'git', ['-c', 'user.name=dws-test', '-c', 'user.email=dws-test@invalid', ...args], {
-        cwd: repo,
-        encoding: 'utf8'
-      })
+      execFileSync(
+        process.env.GIT_EXE || 'git',
+        ['-c', 'user.name=dws-test', '-c', 'user.email=dws-test@invalid', ...args],
+        {
+          cwd: repo,
+          encoding: 'utf8'
+        }
+      )
     git('init', '-q')
     mkdirSync(path.join(repo, 'owned'))
     writeFileSync(path.join(repo, 'owned', 'a.txt'), 'line one\nline two\nline three\nline four\n')
@@ -116,7 +162,12 @@ describe('listChangedPaths in a throwaway repository', () => {
     const changed = listChangedPaths({ runGit, head: base })
     expect(changed).toEqual(['moved/a.txt', 'owned/a.txt'])
 
-    const r = judgeIntersection({ owned: ['owned/a.txt'], changed, allowList: [], touchingCommitsByPath: {} })
+    const r = judgeIntersection({
+      owned: ['owned/a.txt'],
+      changed,
+      allowList: [],
+      touchingCommitsByPath: {}
+    })
     expect(r.violations).toEqual([{ path: 'owned/a.txt', reason: 'not-allow-listed' }])
 
     // Control: with rename detection on, the old path vanishes, so the temp repo really exercises the rename.
@@ -128,34 +179,87 @@ describe('listChangedPaths in a throwaway repository', () => {
 })
 
 describe('sweep against real git data', () => {
-  it('Test 7: control input yields exactly the federation subsystem file as the violation', { timeout: REAL_TIMEOUT }, () => {
-    const file = controlFile('t7', ['src/main/runtime/orchestration/review-records.ts', 'src/cli/handler-group-manifest.ts'])
-    const r = spawnSweep(['--changed-paths-file', file])
-    expect(r.status).toBe(1)
-    const violations = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('VIOLATION '))
-    expect(violations.map((l) => l.split(' ')[1])).toEqual(['src/main/runtime/orchestration/review-records.ts'])
-    expect(r.stdout).toContain('ALLOWED src/cli/handler-group-manifest.ts')
+  realIt(
+    needsHead(
+      'Test 7: control input yields exactly the federation subsystem file as the violation'
+    ),
+    { timeout: REAL_TIMEOUT },
+    () => {
+      const file = controlFile('t7', [
+        'src/main/runtime/orchestration/review-records.ts',
+        'src/cli/handler-group-manifest.ts'
+      ])
+      const r = spawnSweep(['--changed-paths-file', file])
+      expect(r.status).toBe(1)
+      const violations = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('VIOLATION '))
+      expect(violations.map((l) => l.split(' ')[1])).toEqual([
+        'src/main/runtime/orchestration/review-records.ts'
+      ])
+      expect(r.stdout).toContain('ALLOWED src/cli/handler-group-manifest.ts')
+    }
+  )
+
+  realIt(
+    needsHead('Test 8: the real dws-changed set is green with exactly the one allowed touch'),
+    { timeout: REAL_TIMEOUT },
+    () => {
+      const r = spawnSweep([])
+      expect(r.status).toBe(0)
+      expect(Number(/owned=(\d+)/.exec(r.stdout)[1])).toBeGreaterThanOrEqual(90)
+      const allowed = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('ALLOWED '))
+      expect(allowed.map((l) => l.split(' ')[1])).toEqual(['src/cli/handler-group-manifest.ts'])
+    }
+  )
+
+  realIt(
+    needsHead('Test 10: an empty range (base equal to head) is BLOCKED owned-below-floor'),
+    { timeout: REAL_TIMEOUT },
+    () => {
+      const r = spawnSweep(['--base', DEFAULT_HEAD, '--head', DEFAULT_HEAD])
+      expect(r.status).toBe(2)
+      expect(r.stdout).toContain('BLOCKED owned-below-floor')
+    }
+  )
+
+  it(
+    'Test 12: an unresolvable head is BLOCKED head-unresolvable',
+    { timeout: REAL_TIMEOUT },
+    () => {
+      const r = spawnSweep(['--head', 'refs/heads/does-not-exist-p7'])
+      expect(r.status).toBe(2)
+      expect(r.stdout).toContain('BLOCKED head-unresolvable')
+    }
+  )
+
+  it('Test 12b: the head probe tells a present ref from an absent one', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), `p8-headprobe-${process.pid}-`))
+    const gitExe = process.env.GIT_EXE || 'git'
+    const git = (...args) =>
+      execFileSync(
+        gitExe,
+        ['-c', 'user.name=dws-test', '-c', 'user.email=dws-test@invalid', ...args],
+        { cwd: repo, encoding: 'utf8' }
+      )
+    git('init', '-q')
+    writeFileSync(path.join(repo, 'f.txt'), 'x\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'tip')
+    git('branch', 'orca-x/probe-present')
+    const runGit = createGitRunner(gitExe, repo)
+    expect(headResolves(runGit, 'orca-x/probe-present')).toBe(true)
+    expect(headResolves(runGit, 'orca-x/probe-absent')).toBe(false)
   })
 
-  it('Test 8: the real dws-changed set is green with exactly the one allowed touch', { timeout: REAL_TIMEOUT }, () => {
-    const r = spawnSweep([])
-    expect(r.status).toBe(0)
-    expect(Number(/owned=(\d+)/.exec(r.stdout)[1])).toBeGreaterThanOrEqual(90)
-    const allowed = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('ALLOWED '))
-    expect(allowed.map((l) => l.split(' ')[1])).toEqual(['src/cli/handler-group-manifest.ts'])
-  })
-
-  it('Test 10: an empty range (base equal to head) is BLOCKED owned-below-floor', { timeout: REAL_TIMEOUT }, () => {
-    const r = spawnSweep(['--base', DEFAULT_HEAD, '--head', DEFAULT_HEAD])
-    expect(r.status).toBe(2)
-    expect(r.stdout).toContain('BLOCKED owned-below-floor')
-  })
-
-  it('Test 12: an unresolvable head is BLOCKED head-unresolvable', { timeout: REAL_TIMEOUT }, () => {
-    const r = spawnSweep(['--head', 'refs/heads/does-not-exist-p7'])
-    expect(r.status).toBe(2)
-    expect(r.stdout).toContain('BLOCKED head-unresolvable')
-  })
+  // Runs only where the skipped cases above cannot: it is the measured reason they were skipped.
+  ;(FEDERATION_HEAD_PRESENT ? it.skip : it)(
+    `Test 12c: with ${DEFAULT_HEAD} absent the sweep refuses and names it`,
+    { timeout: REAL_TIMEOUT },
+    () => {
+      const r = spawnSweep([])
+      expect(r.status).toBe(2)
+      expect(r.stdout).toContain(`BLOCKED head-unresolvable ${DEFAULT_HEAD}`)
+    }
+  )
 })
 
 describe('sweep BLOCKED rungs and the floor drill', () => {
@@ -163,39 +267,56 @@ describe('sweep BLOCKED rungs and the floor drill', () => {
     const repo = mkdtempSync(path.join(tmpdir(), `p7-ancestry-${process.pid}-`))
     const gitExe = process.env.GIT_EXE || 'git'
     const git = (...args) =>
-      execFileSync(gitExe, ['-c', 'user.name=dws-test', '-c', 'user.email=dws-test@invalid', ...args], { cwd: repo, encoding: 'utf8' })
+      execFileSync(
+        gitExe,
+        ['-c', 'user.name=dws-test', '-c', 'user.email=dws-test@invalid', ...args],
+        { cwd: repo, encoding: 'utf8' }
+      )
     git('init', '-q')
     writeFileSync(path.join(repo, 'f.txt'), 'x\n')
     git('add', '.')
     git('commit', '-q', '-m', 'tip')
     const emptyTree = git('hash-object', '-t', 'tree', '--stdin').trim()
     const unrelated = git('commit-tree', emptyTree, '-m', 'unrelated').trim()
-    const r = runOwnershipSweep({ runGit: createGitRunner(gitExe, repo), argv: ['--base', unrelated, '--head', 'HEAD'] })
+    const r = runOwnershipSweep({
+      runGit: createGitRunner(gitExe, repo),
+      argv: ['--base', unrelated, '--head', 'HEAD']
+    })
     expect(r.code).toBe(2)
     expect(r.out.join('\n')).toContain('BLOCKED base-not-ancestor')
   })
 
-  it('Test 11: the floor is what stops a blind sweep (mutation drill)', { timeout: REAL_TIMEOUT }, () => {
-    const realGit = createGitRunner(process.env.GIT_EXE || 'git', REPO_ROOT)
-    const { paths } = deriveFederationOwnedPaths({ runGit: realGit, base: DEFAULT_BASE, head: DEFAULT_HEAD })
-    const outsidePrefixes = paths.find((p) => !SUBSYSTEM_PREFIXES.some((prefix) => p.startsWith(prefix)))
-    expect(outsidePrefixes).toBeTruthy()
-    const file = controlFile('t11', [outsidePrefixes])
-    // Blind git: the derivation sees no federation commits at all.
-    const blindGit = (args) => (args[0] === 'rev-list' ? '' : realGit(args))
-    const argv = ['--allow-list', 'none', '--changed-paths-file', file]
+  realIt(
+    needsHead('Test 11: the floor is what stops a blind sweep (mutation drill)'),
+    { timeout: REAL_TIMEOUT },
+    () => {
+      const realGit = createGitRunner(process.env.GIT_EXE || 'git', REPO_ROOT)
+      const { paths } = deriveFederationOwnedPaths({
+        runGit: realGit,
+        base: DEFAULT_BASE,
+        head: DEFAULT_HEAD
+      })
+      const outsidePrefixes = paths.find(
+        (p) => !SUBSYSTEM_PREFIXES.some((prefix) => p.startsWith(prefix))
+      )
+      expect(outsidePrefixes).toBeTruthy()
+      const file = controlFile('t11', [outsidePrefixes])
+      // Blind git: the derivation sees no federation commits at all.
+      const blindGit = (args) => (args[0] === 'rev-list' ? '' : realGit(args))
+      const argv = ['--allow-list', 'none', '--changed-paths-file', file]
 
-    const guarded = runOwnershipSweep({ runGit: blindGit, argv })
-    expect(guarded.code).toBe(2)
-    expect(guarded.out.join('\n')).toContain('BLOCKED owned-below-floor')
+      const guarded = runOwnershipSweep({ runGit: blindGit, argv })
+      expect(guarded.code).toBe(2)
+      expect(guarded.out.join('\n')).toContain('BLOCKED owned-below-floor')
 
-    // Same blind derivation with the floor lowered to 0 reports OK for a genuinely owned path.
-    const unguarded = runOwnershipSweep({ runGit: blindGit, argv, floor: 0 })
-    expect(unguarded.code).toBe(0)
-    expect(unguarded.out.join('\n')).toContain('verdict=OK')
+      // Same blind derivation with the floor lowered to 0 reports OK for a genuinely owned path.
+      const unguarded = runOwnershipSweep({ runGit: blindGit, argv, floor: 0 })
+      expect(unguarded.code).toBe(0)
+      expect(unguarded.out.join('\n')).toContain('verdict=OK')
 
-    // Control: the honest derivation flags the same path.
-    const honest = runOwnershipSweep({ runGit: realGit, argv })
-    expect(honest.code).toBe(1)
-  })
+      // Control: the honest derivation flags the same path.
+      const honest = runOwnershipSweep({ runGit: realGit, argv })
+      expect(honest.code).toBe(1)
+    }
+  )
 })
