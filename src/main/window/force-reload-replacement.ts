@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, type WebContents } from 'electron'
+import { BrowserWindow, dialog, webContents as webContentsModule, type WebContents } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
 import { replaceWindowRenderer, type RendererReplacementResult } from './renderer-replacement'
 
@@ -74,6 +74,28 @@ export function showSharedRendererNotice(webContents: ReplacementTarget): void {
     )
   }
   const window = parentWindowOf(webContents)
+  void (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)).catch(
+    () => {
+      // Best-effort: the window may close while the notice is opening.
+    }
+  )
+}
+
+export function describeReplacementAbandoned(): { message: string; detail: string } {
+  return {
+    message: translateMain('menu.forceReloadAbandonedTitle', 'This window could not be restarted'),
+    detail: translateMain(
+      'menu.forceReloadAbandonedDetail',
+      'Its page did not stop when asked, so Orca left the window as it was. If it stays unresponsive, close the window and open a new one.'
+    )
+  }
+}
+
+/** The replacer gave up: without this the user sees a Force Reload that silently did nothing. */
+export function showReplacementAbandonedNotice(webContentsId: number): void {
+  const target = webContentsModule.fromId(webContentsId)
+  const window = target && !target.isDestroyed() ? BrowserWindow.fromWebContents(target) : null
+  const options: Electron.MessageBoxOptions = { type: 'warning', ...describeReplacementAbandoned() }
   void (window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)).catch(
     () => {
       // Best-effort: the window may close while the notice is opening.

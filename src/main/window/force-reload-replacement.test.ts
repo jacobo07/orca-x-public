@@ -16,6 +16,7 @@ vi.mock('../i18n/main-i18n', () => ({
 
 import {
   confirmRendererReplacement,
+  describeReplacementAbandoned,
   replaceUnansweringRenderer,
   sharesRendererProcess,
   type ForceReloadReplacementDeps
@@ -126,5 +127,13 @@ describe('confirmRendererReplacement', () => {
     const answer = await confirmRendererReplacement(target(22) as never)
     expect(showMessageBox.mock.calls.length).toBe(1)
     expect(answer).toBe(false)
+  })
+})
+describe('describeReplacementAbandoned', () => {
+  it('says the window was left as it was and where to go next, never that it restarted', () => {
+    const { message, detail } = describeReplacementAbandoned()
+    expect(message).toMatch(/could not be restarted/i)
+    expect(detail).toMatch(/left the window as it was/i)
+    expect(detail).toMatch(/open a new one/i)
   })
 })
