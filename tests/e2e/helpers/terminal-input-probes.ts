@@ -65,6 +65,7 @@ export async function probeDirectWriteOutput(
   const command = `echo ${marker}\r`
   const inputs =
     process.platform === 'win32' ? buildSettledShellProbeInputSequence(command) : [`\x15${command}`]
+  const gateSamples: unknown[] = []
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     for (const input of inputs) {
       await sendToTerminal(page, ptyId, input)
@@ -81,7 +82,18 @@ export async function probeDirectWriteOutput(
         .toBe(true)
       return true
     } catch {
-      // Next attempt; a lost first byte leaves an error line, never the marker on its own.
+      // Why sample main's gate: output held behind a closed dispatcher gate looks identical to lost output.
+      gateSamples.push(
+        await page.evaluate(async () => {
+          const s = await window.api.pty.getRendererDeliveryDebugSnapshot()
+          return {
+            ready: s.rendererPtyDispatcherReady,
+            forced: s.rendererDispatcherReadyForcedCount,
+            resets: s.rendererLifecycleResetCount,
+            pendingChars: s.pendingChars
+          }
+        })
+      )
     }
   }
   // Why: a false here has been the oracle twice (lost byte, wrong pane); record what it actually read.
@@ -99,7 +111,9 @@ export async function probeDirectWriteOutput(
       )
     }
   }, ptyId)
-  console.log(`[probeDirectWriteOutput] ${marker} not found for ${ptyId}: ${JSON.stringify(seen)}`)
+  console.log(
+    `[probeDirectWriteOutput] ${marker} not found for ${ptyId}: ${JSON.stringify({ ...seen, gateSamples })}`
+  )
   return false
 }
 
