@@ -41,6 +41,7 @@ import {
   type PtyMainDeliveryDiagnostics,
   type PtyPerPtyDeliveryDiagnostics,
   EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
+  PTY_DELIVERY_DIAGNOSTICS_MAX_PTYS,
   createPtyDeliveryBreadcrumbRing,
   redactPtyIdForDiagnostics
 } from '../../shared/pty-delivery-diagnostics'
@@ -2938,8 +2939,6 @@ export function registerPtyHandlers(
     }
   }
 
-  const DELIVERY_DIAGNOSTICS_MAX_PTYS = 30
-
   // Built only when the debug snapshot is read (never on the data path): the per-pty table + breadcrumb history says WHICH pty is wedged and WHEN, unlike aggregate counters.
   function buildMainDeliveryDiagnostics(): PtyMainDeliveryDiagnostics {
     const now = Date.now()
@@ -2979,7 +2978,7 @@ export function registerPtyHandlers(
       windowMinimized: windowAlive ? mainWindow.isMinimized() : null,
       msSinceLastPowerSuspend: lastPowerSuspendAtMs === null ? null : now - lastPowerSuspendAtMs,
       msSinceLastPowerResume: lastPowerResumeAtMs === null ? null : now - lastPowerResumeAtMs,
-      perPty: perPty.slice(0, DELIVERY_DIAGNOSTICS_MAX_PTYS),
+      perPty: perPty.slice(0, PTY_DELIVERY_DIAGNOSTICS_MAX_PTYS),
       breadcrumbs: mainDeliveryBreadcrumbs.snapshot()
     }
   }

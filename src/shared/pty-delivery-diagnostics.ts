@@ -69,6 +69,9 @@ export function redactPtyIdForDiagnostics(id: string): string {
   return id.length <= 12 ? id : `…${id.slice(-12)}`
 }
 
+/** Rows kept in `perPty`; below it the table lists every PTY main tracks. */
+export const PTY_DELIVERY_DIAGNOSTICS_MAX_PTYS = 30
+
 export type PtyPerPtyDeliveryDiagnostics = {
   id: string
   sentChars: number
