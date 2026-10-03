@@ -34,7 +34,8 @@ capability r01 does not draw) · **INTENTIONAL** (a deliberate product differenc
 | Hero: Resume all (primary) | same, primary | ALIGNED | wake admission, one at a time |
 | Hero: Restore layout only | same, for the selected workspace | INTENTIONAL | a desk-wide layout restore has no owner |
 | Hero: More options (snapshots, settings) | **Snapshots** for the selected workspace | INTENTIONAL | the only option with a real effect; a one-item menu is chrome |
-| Tabs Orca X / Cursor / Others | absent | UNSUPPORTED | W5: Cursor continuity via hook-service events |
+| — | **Open in** for the selected workspace (the user's Open-in apps, Cursor among them) | EXTENSION | W5: the sidebar's `shell:openInExternalEditor` authority, reached from here; local and SSH, refused for a runtime host or an unknown folder |
+| Tabs Orca X / Cursor / Others | absent | UNSUPPORTED | no producer sees a Cursor window: the Cursor hook reports only from inside an Orca pane (no `ORCA_PANE_KEY` outside), and only agent turns |
 | Search sessions | same | ALIGNED | metadata only, never terminal content |
 | Sort dropdown | "By window" / "Most recent" | ALIGNED | the two sorts the model has |
 | List / grid toggle | absent | UNSUPPORTED | no grid layout exists |
@@ -43,7 +44,7 @@ capability r01 does not draw) · **INTENTIONAL** (a deliberate product differenc
 
 | r01 element | Orca at 1512 | Class | Producer / reason |
 |---|---|---|---|
-| App prefix in title ("Orca X · …") | name only | UNSUPPORTED | W5 app detection |
+| App prefix in title ("Orca X · …") | name only | UNSUPPORTED | no app-detection producer (see Tabs) |
 | Name, path | same | ALIGNED | desk identity (`describeWorkspace`) |
 | Branch chip | same; absent for folders | ALIGNED | `Worktree.branch` |
 | Host chip ("GEX44") | shown for non-local hosts only | REAL-DATA | desk host id |
@@ -71,7 +72,7 @@ capability r01 does not draw) · **INTENTIONAL** (a deliberate product differenc
 | Workspace / session / terminal counts | same + windows, running, sleeping, unknown | ALIGNED + EXTENSION | desk totals |
 | Workspace names | same, whole desk regardless of search | ALIGNED | unfiltered desk rows (W3) |
 | Quick actions card | absent | INTENTIONAL | Resume all / Restore duplicate the hero; "View previous snapshots" = Snapshots; "Create new snapshot" is the dialog's Save; "Select sessions…" has no producer |
-| App detection card, Configure integration | absent | UNSUPPORTED | W5 |
+| App detection card, Configure integration | absent | UNSUPPORTED | no app-detection producer; the one integration that exists is "Open in", in the hero |
 | Tips card, "don't show again" | tip with "Dismiss" | INTENTIONAL | dismissal is per visit; the label does not promise permanence |
 
 ## Themes and widths (W4, `9a6449085`)
@@ -104,3 +105,15 @@ capability r01 does not draw) · **INTENTIONAL** (a deliberate product differenc
   | `WorkingSetsDialog` mounted twice (Sidebar + root) | working-set `:170` via `:279` | strict mode: 2 `working-sets-dialog`, before the Linux-only red at `:330` |
 
   The zero-window greeting mutant is covered only by the `greetingWindowCount` unit.
+
+## Evidence (W5, Open in)
+
+- Unit `resume-center-open-in.test.ts` 5/5 (local, SSH `ssh:<id>` → `connectionId`, runtime refused,
+  missing / unknown / pathless refused, unparseable host refused); mutants ssh→local, runtime→local,
+  identity check dropped: all red.
+- Windows `resume-center-open-in.spec.ts`: the main handler of `shell:openInExternalEditor` is
+  replaced by a recorder; selecting the NON-auto-selected of two repos and choosing Cursor records
+  exactly `{ path: <that repo>, command: 'cursor', connectionId: null }`. Real-app mutant "hero takes
+  the auto-selected row" CAUGHT (asked for `…second…`, expected `…first…`).
+- `resume-center-r01-reality.spec` sweeps the fourth hero action at 1512×1042 light/dark and
+  1512 → 800: PASS on Windows.

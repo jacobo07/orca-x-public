@@ -16799,6 +16799,11 @@
       "title": "Snapshots",
       "hint": "{{name}}, saved layouts"
     },
+    "openIn": {
+      "title": "Open in",
+      "hint": "{{name}}, in another app",
+      "unavailable": "Not available for this workspace"
+    },
     "snapshot": {
       "title": "Current snapshot",
       "saved": "Desk saved {{when}}",

@@ -27,6 +27,7 @@ import { greetingWindowCount } from './resume-center-workspace-facts'
 import { useDeskContinuity } from './use-desk-continuity'
 import { clearPanePreviewCache } from './use-pane-preview'
 import { ClaimValue } from './ClaimValue'
+import { ResumeCenterOpenIn } from './ResumeCenterOpenIn'
 import { ResumeCenterResumeAll } from './ResumeCenterResumeAll'
 import { ResumeCenterSummaryPanel } from './ResumeCenterSummaryPanel'
 import { ResumeCenterWorkspaceSection } from './ResumeCenterWorkspaceSection'
@@ -135,7 +136,7 @@ export default function ResumeCenterPage(): React.JSX.Element {
             </p>
           ) : null}
         </div>
-        {/* Why wrap + min-w-0: three actions outgrow the centre column below ~1180px; they wrap, never clip. */}
+        {/* Why wrap + min-w-0: four actions outgrow the centre column below ~1180px; they wrap, never clip. */}
         <div className="flex min-w-0 flex-wrap items-start gap-2">
           {deskRows.length > 0 ? <ResumeCenterResumeAll rows={deskRows} /> : null}
           {/* Why the selected workspace only: a desk-wide layout restore has no owner yet. */}
@@ -194,6 +195,7 @@ export default function ResumeCenterPage(): React.JSX.Element {
               </span>
             </span>
           </Button>
+          <ResumeCenterOpenIn row={selectedRow} name={selectedName} />
           <Button
             variant="ghost"
             size="icon"

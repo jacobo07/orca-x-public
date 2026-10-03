@@ -26,7 +26,7 @@ ahead of its status.
 | Release at exit | Park & Exit (`src/main/durable-exit/`) |
 | Host headroom | `observeDispatchHostResources` (orchestration) |
 | Live-session collision | `gateLiveSessionMaterialization` |
-| Cursor hooks | `src/main/cursor/hook-service.ts` |
+| Open in an external app | `shell:openInExternalEditor` (`src/main/ipc/shell.ts`) |
 
 ## Semantics
 
@@ -68,10 +68,11 @@ ahead of its status.
   (`applied | already-applied | target-not-empty | owned-by-window | failed`), and a desk is
   restored only when every member is. Retention is bounded, and deletion removes the record before
   any member no other record references. PLANNED.
-- **Cursor** is shown per workspace, not per window, because Cursor exposes no window identity.
-  Events arrive through the existing Cursor hook service's authenticated endpoint, and every field
-  is untrusted. "Open in Cursor" is offered only for a root that canonicalizes to an existing
-  directory Orca knows, and is launched with an argv (no shell). Exact conversation resume in
-  Cursor is UNSUPPORTED (undocumented). Claude Code sessions run inside Cursor resume in Orca
-  through the collision gate, one row per session. Remote-SSH and WSL Cursor are UNSUPPORTED.
-  PLANNED.
+- **Cursor.** *Open in* is LIVE: the hero's "Open in" hands the selected workspace to the user's
+  Open-in apps (Cursor among them) through the sidebar's `shell:openInExternalEditor` authority, which
+  validates an absolute (and, locally, existing) path and launches with an argv; SSH goes through that authority's
+  Remote-SSH arm, a runtime host or unknown folder is refused (`resume-center-open-in.ts`). *Showing*
+  Cursor windows or workspaces is UNSUPPORTED: the managed Cursor hook reports only from inside an
+  Orca pane (it exits without `ORCA_PANE_KEY`) and subscribes to agent turns only, so no producer sees
+  a Cursor window Orca did not start, nor an idle one. Exact conversation resume in Cursor is
+  UNSUPPORTED (undocumented).

@@ -9,7 +9,7 @@ import { waitForActiveTerminalManager } from './helpers/terminal'
  *
  * r01 is 1512×1042, so the page is sized to that content area and captured light and dark. What
  * only the real layout can show: every hero action stays reachable as the page narrows (a third
- * action joined the row in W3), and inline snapshots replay history only once their strip can be
+ * action joined the row in W3, a fourth in W5), and inline snapshots replay history only once their strip can be
  * seen — hidden below `lg` or below the fold, they must stay idle.
  */
 
@@ -20,6 +20,7 @@ const HERO_ACTIONS = [
   '[data-testid="resume-center-resume-all"] button',
   '[data-testid="resume-center-restore-layout"]',
   '[data-testid="resume-center-snapshots"]',
+  '[data-testid="resume-center-open-in"]',
   '[data-testid="resume-center-refresh"]'
 ]
 const SWEEP = [1512, 1366, 1280, 1180, 1100, 1024, 960, 900, 800]
@@ -116,7 +117,7 @@ async function rowFactCollisions(page: Page): Promise<string[]> {
         problems.push(`${id}: residency past the row edge`)
       }
       for (const fact of [panes, residency]) {
-        const line = parseFloat(getComputedStyle(fact).lineHeight) || 16
+        const line = Number.parseFloat(getComputedStyle(fact).lineHeight) || 16
         if (fact.getBoundingClientRect().height > line * 1.5) {
           problems.push(`${id}: ${fact.dataset.rowFact} wrapped`)
         }

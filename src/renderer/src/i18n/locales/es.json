@@ -14918,6 +14918,11 @@
       "title": "Snapshots",
       "hint": "{{name}}, layouts guardados"
     },
+    "openIn": {
+      "title": "Abrir en",
+      "hint": "{{name}}, en otra app",
+      "unavailable": "No disponible para este workspace"
+    },
     "snapshot": {
       "title": "Snapshot actual",
       "saved": "Escritorio guardado {{when}}",
