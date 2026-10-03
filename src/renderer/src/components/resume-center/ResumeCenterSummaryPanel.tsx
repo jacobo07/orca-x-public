@@ -1,8 +1,11 @@
 import { useState } from 'react'
+import { History } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
-import type { ResumeCenterModel } from './resume-center-model'
+import type { DeskSavedReading } from '../../../../shared/desk-continuity-read-types'
+import type { ResumeCenterModel, WorkspaceRowModel } from './resume-center-model'
+import { describeDeskSaved, describeWorkspaceName } from './resume-center-presentation'
 import { ClaimValue } from './ClaimValue'
 
 function Stat({
@@ -22,23 +25,51 @@ function Stat({
 
 export function ResumeCenterSummaryPanel({
   model,
+  deskRows,
+  deskSaved,
   className
 }: {
   model: ResumeCenterModel
+  /** Unfiltered: like the totals, the snapshot describes the whole desk, not the search. */
+  deskRows: readonly WorkspaceRowModel[]
+  deskSaved: DeskSavedReading
   className?: string
 }): React.JSX.Element {
   const [tipDismissed, setTipDismissed] = useState(false)
   const { totals } = model
+  const saved = describeDeskSaved(deskSaved, Date.now())
+  const names = [
+    ...new Set(deskRows.map((row) => describeWorkspaceName(row.identity, row.key)))
+  ].join(', ')
   return (
     <aside
       data-testid="resume-center-summary"
       className={cn('flex w-72 shrink-0 flex-col gap-3', className)}
-      aria-label={translate('resumeCenter.summary.title', 'Desk summary')}
+      aria-label={translate('resumeCenter.snapshot.title', 'Current snapshot')}
     >
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-card/40 p-4">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          {translate('resumeCenter.summary.title', 'Desk summary')}
+        <h3 className="flex items-center gap-2 text-[13px] font-medium">
+          <History className="size-3.5 text-muted-foreground" aria-hidden />
+          {translate('resumeCenter.snapshot.title', 'Current snapshot')}
         </h3>
+        <p
+          data-testid="resume-center-desk-saved"
+          data-desk-saved={deskSaved.kind}
+          data-desk-saved-at={deskSaved.kind === 'observed' ? deskSaved.at : undefined}
+          title={saved.exact ?? undefined}
+          className="text-[12px] font-medium"
+        >
+          {saved.text}
+        </p>
+        {names ? (
+          <p
+            data-testid="resume-center-snapshot-names"
+            title={names}
+            className="line-clamp-2 text-[11px] text-muted-foreground"
+          >
+            {names}
+          </p>
+        ) : null}
         <Stat label={translate('resumeCenter.summary.windows', 'Windows')}>
           {model.windowsRecorded ? (
             <ClaimValue testId="resume-center-window-count">{model.windowCount}</ClaimValue>

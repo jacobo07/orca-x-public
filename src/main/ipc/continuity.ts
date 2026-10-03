@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type {
@@ -24,6 +25,7 @@ export function registerContinuityHandlers(store: Store): void {
         store,
         listLocalSessionIds: async () =>
           (await getLocalPtyProvider().listProcesses()).map((session) => session.id),
+        statSavedDesk: () => stat(store.getDataFilePath()),
         now: Date.now
       })
   )

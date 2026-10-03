@@ -16795,8 +16795,13 @@
       "noMatch": "Nothing matches that search.",
       "empty": "No workspaces with sessions on this desk."
     },
+    "snapshot": {
+      "title": "Current snapshot",
+      "saved": "Desk saved {{when}}",
+      "never": "Desk not saved yet",
+      "unknown": "Save time unknown"
+    },
     "summary": {
-      "title": "Desk summary",
       "windows": "Windows",
       "windowsUnrecorded": "Not recorded",
       "workspaces": "Workspaces",

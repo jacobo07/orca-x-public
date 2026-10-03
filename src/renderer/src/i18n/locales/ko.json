@@ -14896,7 +14896,6 @@
       "empty": "이 데스크에 세션이 있는 워크스페이스가 없습니다."
     },
     "summary": {
-      "title": "데스크 요약",
       "windows": "창",
       "windowsUnrecorded": "기록 없음",
       "workspaces": "워크스페이스",

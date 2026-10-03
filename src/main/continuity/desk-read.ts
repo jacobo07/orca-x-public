@@ -2,7 +2,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { DeskReadResult } from '../../shared/desk-continuity-read-types'
+import type { DeskReadResult, DeskSavedReading } from '../../shared/desk-continuity-read-types'
 import {
   projectDesk,
   type DeskHostInput,
@@ -24,7 +24,19 @@ export type DeskReadDeps = {
   store: DeskReadStore
   /** Ids of the sessions the local terminal host is running now. Throws when it cannot be asked. */
   listLocalSessionIds: () => Promise<string[]>
+  /** Stat of the profile file the desk is saved in. */
+  statSavedDesk: () => Promise<{ mtimeMs: number }>
   now: () => number
+}
+
+async function readDeskSaved(deps: DeskReadDeps): Promise<DeskSavedReading> {
+  try {
+    return { kind: 'observed', at: (await deps.statSavedDesk()).mtimeMs }
+  } catch (error) {
+    return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
+      ? { kind: 'never' }
+      : { kind: 'unknown' }
+  }
 }
 
 export function describeWorkspace(store: DeskReadStore, key: string): DeskWorkspaceIdentity {
@@ -71,7 +83,7 @@ function readWindows(store: DeskReadStore): ReturnType<typeof normalizeWindowTop
  */
 export async function readDesk(deps: DeskReadDeps): Promise<DeskReadResult> {
   const { store } = deps
-  const local = await localLiveness(deps)
+  const [local, deskSaved] = await Promise.all([localLiveness(deps), readDeskSaved(deps)])
   const hosts: DeskHostInput[] = store.getWorkspaceSessionHostIds().map((hostId) => {
     const liveness: DeskLiveness =
       hostId === 'local' ? local : { kind: 'unknown', reason: 'not-asked' }
@@ -89,6 +101,7 @@ export async function readDesk(deps: DeskReadDeps): Promise<DeskReadResult> {
   return {
     status: 'loaded',
     readAt: deps.now(),
+    deskSaved,
     projection: projectDesk({
       hosts,
       windows: readWindows(store),

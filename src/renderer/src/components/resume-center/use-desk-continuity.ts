@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DeskProjection } from '../../../../shared/desk-continuity-projection'
+import type { DeskSavedReading } from '../../../../shared/desk-continuity-read-types'
 
 export type DeskContinuityState =
   | { status: 'loading' }
-  | { status: 'loaded'; projection: DeskProjection; readAt: number }
+  | { status: 'loaded'; projection: DeskProjection; readAt: number; deskSaved: DeskSavedReading }
   | { status: 'unavailable' }
   | { status: 'failed' }
 
@@ -22,7 +23,12 @@ export function useDeskContinuity(): { state: DeskContinuityState; refresh: () =
         }
         setState(
           result.status === 'loaded'
-            ? { status: 'loaded', projection: result.projection, readAt: result.readAt }
+            ? {
+                status: 'loaded',
+                projection: result.projection,
+                readAt: result.readAt,
+                deskSaved: result.deskSaved
+              }
             : { status: 'unavailable' }
         )
       },

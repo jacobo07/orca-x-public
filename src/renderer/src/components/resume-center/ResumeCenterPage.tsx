@@ -86,21 +86,27 @@ export default function ResumeCenterPage(): React.JSX.Element {
     : ''
   const windows = model ? greetingWindowCount(model) : null
 
-  const context = model ? (
-    <div data-testid="resume-center-aside" className="flex flex-col gap-3">
-      {selectedRow ? (
-        <MissionBriefPanel
-          hostId={selectedRow.hostId}
-          workspaceKey={selectedRow.key}
-          projectName={selectedName}
-          row={selectedRow}
-          variant="compact"
-          onOpenFull={() => setFullBriefOpen(true)}
+  const context =
+    model && state.status === 'loaded' ? (
+      <div data-testid="resume-center-aside" className="flex flex-col gap-3">
+        {selectedRow ? (
+          <MissionBriefPanel
+            hostId={selectedRow.hostId}
+            workspaceKey={selectedRow.key}
+            projectName={selectedName}
+            row={selectedRow}
+            variant="compact"
+            onOpenFull={() => setFullBriefOpen(true)}
+          />
+        ) : null}
+        <ResumeCenterSummaryPanel
+          model={model}
+          deskRows={deskRows}
+          deskSaved={state.deskSaved}
+          className="w-full"
         />
-      ) : null}
-      <ResumeCenterSummaryPanel model={model} className="w-full" />
-    </div>
-  ) : null
+      </div>
+    ) : null
 
   return (
     <WorkspaceFrame context={context} testId="resume-center-page">

@@ -14914,8 +14914,13 @@
       "noMatch": "Nada coincide con esa búsqueda.",
       "empty": "No hay workspaces con sesiones en este escritorio."
     },
+    "snapshot": {
+      "title": "Snapshot actual",
+      "saved": "Escritorio guardado {{when}}",
+      "never": "El escritorio aún no se ha guardado",
+      "unknown": "Hora de guardado desconocida"
+    },
     "summary": {
-      "title": "Resumen del escritorio",
       "windows": "Ventanas",
       "windowsUnrecorded": "No registrado",
       "workspaces": "Workspaces",

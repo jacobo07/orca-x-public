@@ -1,11 +1,15 @@
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import type {
   DeskResidency,
   DeskWindowMembership,
   DeskWorkspaceIdentity
 } from '../../../../shared/desk-continuity-projection'
 import type { DormantResumeContinuity } from '../../../../shared/terminal-tab-types'
-import type { PanePreviewResult } from '../../../../shared/desk-continuity-read-types'
+import type {
+  DeskSavedReading,
+  PanePreviewResult
+} from '../../../../shared/desk-continuity-read-types'
 
 /**
  * Words and tones for the Resume Center, from the desk projection's own answers. A process is
@@ -113,6 +117,29 @@ export function describeWindowsWith(count: number): string {
   return count === 1
     ? translate('resumeCenter.greeting.windows_one', 'window with')
     : translate('resumeCenter.greeting.windows_other', 'windows with')
+}
+
+/** When the desk last reached disk. A write time, never "last close": the file says nothing about why. */
+export function describeDeskSaved(
+  reading: DeskSavedReading,
+  now: number
+): { text: string; exact: string | null } {
+  switch (reading.kind) {
+    case 'observed':
+      return {
+        text: translate('resumeCenter.snapshot.saved', 'Desk saved {{when}}', {
+          when: formatUiRelativeTime(reading.at - now, 'short')
+        }),
+        exact: new Date(reading.at).toLocaleString(getIntlLocale())
+      }
+    case 'never':
+      return { text: translate('resumeCenter.snapshot.never', 'Desk not saved yet'), exact: null }
+    case 'unknown':
+      return {
+        text: translate('resumeCenter.snapshot.unknown', 'Save time unknown'),
+        exact: null
+      }
+  }
 }
 
 /** Morning before 12, afternoon before 20, evening after: from this machine's clock. */

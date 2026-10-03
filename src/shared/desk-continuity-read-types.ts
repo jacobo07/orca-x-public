@@ -1,8 +1,19 @@
 import type { DeskProjection } from './desk-continuity-projection'
 
+/**
+ * When the desk last reached disk: the profile file's write time. It says nothing about why it was
+ * written (a close, a debounced save), so a surface must not call it "last close".
+ * - `never`: no profile file exists yet;
+ * - `unknown`: the file could not be inspected, which is not the same as never saved.
+ */
+export type DeskSavedReading =
+  | { kind: 'observed'; at: number }
+  | { kind: 'never' }
+  | { kind: 'unknown' }
+
 /** What the continuity read answers. A client with no desktop store says so; it never answers an empty desk. */
 export type DeskReadResult =
-  | { status: 'loaded'; projection: DeskProjection; readAt: number }
+  | { status: 'loaded'; projection: DeskProjection; readAt: number; deskSaved: DeskSavedReading }
   | { status: 'unavailable' }
 
 /** A pane is named by where it lives on the desk, never by a path or a session id. */

@@ -14885,7 +14885,6 @@
       "empty": "このデスクにはセッションのあるワークスペースがありません。"
     },
     "summary": {
-      "title": "デスクの概要",
       "windows": "ウィンドウ",
       "windowsUnrecorded": "記録なし",
       "workspaces": "ワークスペース",

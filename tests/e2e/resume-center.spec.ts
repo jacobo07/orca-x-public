@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { statSync } from 'node:fs'
+import path from 'node:path'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, getActiveTabId, waitForActiveWorktree } from './helpers/store'
@@ -84,7 +87,8 @@ async function readRowPreview(
 
 test.describe('@resume-center', () => {
   test('the Resume Center lists the desk and shows each tab its own recorded screen', async ({
-    orcaPage
+    orcaPage,
+    electronApp
   }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -148,6 +152,22 @@ test.describe('@resume-center', () => {
         sibling.marker
       )
     }
+
+    // "Desk saved" is the profile file's own write time: a read time or a guess never equals it.
+    const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+    const dataFile = path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
+    const saved = orcaPage.getByTestId('resume-center-desk-saved')
+    await expect
+      .poll(
+        async () => {
+          await refreshDesk(orcaPage)
+          const kind = await saved.getAttribute('data-desk-saved')
+          const at = Number(await saved.getAttribute('data-desk-saved-at'))
+          return kind === 'observed' && at === statSync(dataFile).mtimeMs ? 'file-mtime' : kind
+        },
+        { timeout: 30_000, intervals: [2_000], message: 'Desk saved never matched the profile file' }
+      )
+      .toBe('file-mtime')
 
     await orcaPage.screenshot({ path: 'pr-evidence/resume-center.png' })
   })

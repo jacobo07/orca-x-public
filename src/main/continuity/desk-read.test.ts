@@ -40,11 +40,19 @@ function store(overrides: Partial<DeskReadStore> = {}): DeskReadStore {
   }
 }
 
-const deps = (s: DeskReadStore, list: () => Promise<string[]>) => ({
+const deps = (
+  s: DeskReadStore,
+  list: () => Promise<string[]>,
+  statSavedDesk: () => Promise<{ mtimeMs: number }> = async () => ({ mtimeMs: 500 })
+) => ({
   store: s,
   listLocalSessionIds: list,
+  statSavedDesk,
   now: () => 1000
 })
+
+const errno = (code: string): NodeJS.ErrnoException =>
+  Object.assign(new Error(code), { code }) as NodeJS.ErrnoException
 
 describe('readDesk', () => {
   it('observes local liveness and names the workspace from the repo', async () => {
@@ -111,6 +119,36 @@ describe('readDesk', () => {
     }
     expect(result.projection.windowsRecorded).toBe(false)
     expect(result.projection.hosts.map((h) => h.kind)).toEqual(['loaded', 'unreadable'])
+  })
+
+  it('reports when the saved desk was last written, from the file, not the read', async () => {
+    const result = await readDesk(
+      deps(
+        store(),
+        async () => [],
+        async () => ({ mtimeMs: 500 })
+      )
+    )
+    expect(result.status === 'loaded' && result.deskSaved).toEqual({ kind: 'observed', at: 500 })
+  })
+
+  it('says never for an absent desk file and unknown for any other stat failure', async () => {
+    const absent = await readDesk(
+      deps(
+        store(),
+        async () => [],
+        async () => Promise.reject(errno('ENOENT'))
+      )
+    )
+    const denied = await readDesk(
+      deps(
+        store(),
+        async () => [],
+        async () => Promise.reject(errno('EACCES'))
+      )
+    )
+    expect(absent.status === 'loaded' && absent.deskSaved).toEqual({ kind: 'never' })
+    expect(denied.status === 'loaded' && denied.deskSaved).toEqual({ kind: 'unknown' })
   })
 
   it('says missing for a removed repo or folder and unknown for an unparsable key', async () => {
