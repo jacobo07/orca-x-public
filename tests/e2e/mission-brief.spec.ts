@@ -49,7 +49,8 @@ async function openResumeCenter(page: Page): Promise<void> {
 }
 
 function workspaceRow(page: Page, repoPath: string) {
-  return page.getByTestId('resume-center-workspace').filter({ hasText: repoPath })
+  // Why the folder name: the row draws the path with '/' on Windows, so the native path never matches.
+  return page.getByTestId('resume-center-workspace').filter({ hasText: path.basename(repoPath) })
 }
 
 /** The goal the repo's PROJECT.md states; `undefined` when a workstream's PROJECT.md may be read instead. */
