@@ -196,7 +196,8 @@ export type MissionBriefResult =
 
 /**
  * Whether a workspace holds the records a brief would read, decided by the same gate the read uses
- * before any GSD run. `present` promises a brief exists, never what it says.
+ * before any GSD run. `present` means records exist, not that a brief can be read (GSD may be
+ * absent) and never what it would say.
  */
 export type MissionRecordsPresence = 'present' | 'absent' | 'remote' | 'unknown'
 

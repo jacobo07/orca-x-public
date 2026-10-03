@@ -12,6 +12,8 @@ import { missionBriefKey } from './use-mission-brief'
  * brief (host + workspace), so a row can only ever show its own workspace's answer.
  */
 const presence = new Map<string, MissionRecordsPresence>()
+// Why: main refuses a request over its cap; a large desk is split instead of losing every chip.
+const PROBE_CHUNK = 500
 const listeners = new Set<() => void>()
 let generation = 0
 
@@ -37,8 +39,14 @@ export async function probeMissionRecordsInto(
   for (const row of rows) {
     byHost.set(row.hostId, [...(byHost.get(row.hostId) ?? []), row.key])
   }
+  const requests = [...byHost].flatMap(([hostId, keys]) =>
+    Array.from({ length: Math.ceil(keys.length / PROBE_CHUNK) }, (_, i) => ({
+      hostId,
+      workspaceKeys: keys.slice(i * PROBE_CHUNK, (i + 1) * PROBE_CHUNK)
+    }))
+  )
   await Promise.all(
-    [...byHost].map(async ([hostId, workspaceKeys]) => {
+    requests.map(async ({ hostId, workspaceKeys }) => {
       const result = await window.api.missionBrief
         .probe({ hostId, workspaceKeys })
         .catch(() => null)

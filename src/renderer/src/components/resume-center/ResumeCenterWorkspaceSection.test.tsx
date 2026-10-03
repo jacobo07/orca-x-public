@@ -112,6 +112,13 @@ describe('Mission Brief is discoverable on the row before any brief is read', ()
     expect(chip('alpha')).toBeNull()
   })
 
+  it('splits a desk larger than one request into several probes', async () => {
+    const many = Array.from({ length: 1001 }, (_, i) => row(`r::/w/${i}`, `ws${i}`))
+    probe.mockResolvedValue({ status: 'probed', presence: {} })
+    await probeMissionRecordsInto(many)
+    expect(probe.mock.calls.map(([request]) => request.workspaceKeys.length)).toEqual([500, 500, 1])
+  })
+
   it('draws nothing after a refresh clears the answers, until the new probe lands', async () => {
     renderRows()
     await act(() => probeMissionRecordsInto([A, B]))

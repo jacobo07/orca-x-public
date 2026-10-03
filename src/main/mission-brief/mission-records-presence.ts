@@ -53,6 +53,7 @@ export function createMissionRecordsProbe(
         ? 'present'
         : 'absent'
     } catch {
+      // Why only a throw: the production readers already fold every fs error into absence.
       return 'unknown'
     }
   }
