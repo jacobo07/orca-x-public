@@ -58,7 +58,7 @@ describe('planLines', () => {
     expect(specs.map((l) => l.split(' ')[1])).toEqual(MANIFEST.specs.map((s) => s.name))
     expect(lines.filter((l) => l.startsWith('PLAN_UNIT ')).length).toBe(MANIFEST.unitGroups.length)
     expect(lines.filter((l) => l.startsWith('PLAN_GATE ')).length).toBe(MANIFEST.staticGates.length)
-    expect(lines.at(-1)).toBe('PLAN_COUNTS specs=14 units=3 gates=9')
+    expect(lines.at(-1)).toBe('PLAN_COUNTS specs=15 units=3 gates=9')
     expect(lines).toContain('PLAN_GATE oxfmt 1 node_modules/.bin/oxfmt --check')
     expect(lines).toContain('PLAN_UNIT pty 67 1 src/main/ipc/pty')
   })

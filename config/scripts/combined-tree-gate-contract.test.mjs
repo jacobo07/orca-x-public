@@ -127,13 +127,13 @@ describe('evaluateSummary: specs by name and floor', () => {
     )
   })
 
-  it('reads a duplicated spec plus a missing one as RED although the count is still 14', () => {
+  it('reads a duplicated spec plus a missing one as RED although the count is still 15', () => {
     const lines = swap(
       greenLines(),
       'SPEC_RESULT resume-center-open-in ',
       spec('resume-center-snapshots', 'exit=0 verdict=PRODUCT_RUN  1 passed (1.0m);')
     )
-    expect(lines.filter((l) => l.startsWith('SPEC_RESULT ')).length).toBe(14)
+    expect(lines.filter((l) => l.startsWith('SPEC_RESULT ')).length).toBe(15)
     expectRed(lines, 'DUPLICATE SPEC_RESULT resume-center-snapshots')
     expect(judge(lines).failures).toContain('MISSING SPEC_RESULT resume-center-open-in')
   })

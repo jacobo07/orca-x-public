@@ -14,6 +14,8 @@
   "requiredEnv": [{ "name": "MISSION_BRIEF_REPOS", "pathList": true }],
   "specs": [
     { "name": "force-reload-renderer-replacement", "minPassed": 3 },
+    // R-05: seen red on d3d85fa63 (p8-01-red-0b3278fb8), 3/3 green at d34d33584 (p8-01-green-d34d33584).
+    { "name": "window-close-survivor-terminal-output", "minPassed": 1 },
     { "name": "reload-freeze-frame", "minPassed": 4 },
     { "name": "renderer-crash-recovery-terminal-input", "minPassed": 1 },
     { "name": "resume-center-r01-reality", "minPassed": 1 },
