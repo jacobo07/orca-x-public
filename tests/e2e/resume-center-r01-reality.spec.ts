@@ -43,6 +43,19 @@ async function waitForViewport(page: Page, width: number): Promise<void> {
   await settlePaint(page)
 }
 
+/** Rows the hero actions occupy; r01 draws them as one row, and reachability alone cannot see a wrap. */
+async function heroRowTops(page: Page): Promise<number[]> {
+  return page.evaluate((selectors) => {
+    const tops = selectors
+      .map((selector) => document.querySelector<HTMLElement>(selector))
+      .filter((el): el is HTMLElement => el !== null)
+      .map((el) => Math.round(el.getBoundingClientRect().top))
+      .sort((a, b) => a - b)
+    // Why clustering, not rounding: two tops 1 px apart can straddle a rounding boundary.
+    return tops.filter((top, i) => i === 0 || top - tops[i - 1] > 8)
+  }, HERO_ACTIONS)
+}
+
 /** Why each clause: a visible box can still sit past the edge, under a sibling, or clip its label. */
 async function unreachableActions(page: Page): Promise<string[]> {
   return page.evaluate((selectors) => {
@@ -219,6 +232,10 @@ test.describe('@resume-center', () => {
         .toBe(theme === 'dark')
       await settlePaint(orcaPage)
       expect(await unreachableActions(orcaPage), `${theme} 1512×1042`).toEqual([])
+      expect(
+        await heroRowTops(orcaPage),
+        `${theme} 1512×1042: hero actions on one row`
+      ).toHaveLength(1)
       await orcaPage.screenshot({ path: testInfo.outputPath(`r01-1512x1042-${theme}.png`) })
     }
     await orcaPage.evaluate(() =>
