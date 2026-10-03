@@ -82,6 +82,11 @@ export function settleReloadPreparation(
   return { proceed: answer.outcome === 'prepared' }
 }
 
+/** Main stopped waiting: a late answer is told not to proceed, so the renderer releases its bypass. */
+export function abandonReloadPreparation(webContentsId: number): void {
+  pendingByWebContentsId.get(webContentsId)?.finish('timeout')
+}
+
 export function resetReloadPreparationForTest(): void {
   for (const pending of pendingByWebContentsId.values()) {
     pending.finish('gone')
