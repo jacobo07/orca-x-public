@@ -178,3 +178,23 @@ output at the pending cap, and the survivor's output round trip is gated by C7, 
   red 3/3 at the same line but as a null matcher error: the helper read a missing table row as
   unknown. Main builds the rows from the claim unions, so a missing row under the row cap is no
   claim; fixed in `75ffb11f3` before the run above.
+
+## Evidence (unit, GEX44, review fix WR-01/WR-02 @`9009831b7`)
+
+Logs: `/home/kobii/closure-runs/p1-review-fix/`. Unit plane only (MAIN_STATE via test doubles).
+
+- **WR-01 (dead owner).** New `dead owner` test (did-finish-load and render-process-gone): window A
+  owns daemon PTY X with a hidden mark and an interest hold, A is destroyed, then B reloads or
+  crashes. RED at `15482c64f`: 2/2 `expected true to be false` (`wr01-red.log`). The scope, crash and
+  unowned tests now declare both windows live; the electron mock read every window as dead, which
+  the fix would treat as closed. Assertions unchanged. Mutant, predicate reverted to
+  `owner === windowKey || owner === null`: the 2 dead-owner tests red (`wr01-mutant.log`).
+- **WR-02 (first load).** New `opening` test: a new window's first load keeps an unowned PTY's mark
+  and interest that the live first window set, and still clears its own (control). RED at
+  `e461af11c`: `expected false to be true` (`wr02-red.log`). New `lone window` test: a first load
+  with no other live window still clears unowned leftovers. The `unowned` test now primes one load
+  per window, because its subject is a reload. Mutants: no first-load skip makes `opening` red;
+  skip without the live-other check makes `lone window` red (`wr02-mutant-*.log`). Each test passes
+  run alone (`wr02-isolated-*.log`).
+- `src/main/ipc/pty` filter: 67 files, 622 pass, 6 skip, 0 fail (`pty-filter-full.log`). tsc node
+  exit 0 (seeded control exit 1, TS2322). oxlint exit 0 on touched files (seeded control exit 1).
