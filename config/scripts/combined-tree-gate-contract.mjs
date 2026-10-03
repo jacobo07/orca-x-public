@@ -14,7 +14,7 @@
 //   node config/scripts/combined-tree-gate-contract.mjs unit-result --manifest <m> --group <g> --exit <rc>
 //        --log <path> --json <path> --failures-out <path>
 //   node config/scripts/combined-tree-gate-contract.mjs gate-result --name <n> --exit <rc> --log <path>
-//        [--no-changed-files]
+//        [--no-changed-files | --changed-files-unknown]
 //
 // The *-result commands mint one summary line each (P1 grammar, byte-compatible) and always print it.
 // Exit: 0 GREEN or printed, 1 RED, 2 no verdict (unreadable or invalid input) or usage error.
@@ -315,7 +315,17 @@ export function unitRegressions(group, jsonText, knownFailures) {
 }
 
 /** One GATE line: the last non-empty log line, ANSI-stripped, at most 160 characters. */
-export function mintGateResult({ name, exit, log, noChangedFiles = false }) {
+export function mintGateResult({
+  name,
+  exit,
+  log,
+  noChangedFiles = false,
+  changedFilesUnknown = false
+}) {
+  if (changedFilesUnknown) {
+    // Why: a file list that could not be computed proves nothing was checked.
+    return `GATE ${name} exit=unknown changed files could not be computed`
+  }
   if (noChangedFiles) {
     return `GATE ${name} exit=0 no changed files`
   }
@@ -444,8 +454,18 @@ const COMMANDS = {
       return 2
     }
     const noChangedFiles = args.includes('--no-changed-files')
-    const log = noChangedFiles ? null : readOrNull(option(args, '--log') ?? '')
-    console.log(mintGateResult({ name, exit: option(args, '--exit'), log, noChangedFiles }))
+    const changedFilesUnknown = args.includes('--changed-files-unknown')
+    const log =
+      noChangedFiles || changedFilesUnknown ? null : readOrNull(option(args, '--log') ?? '')
+    console.log(
+      mintGateResult({
+        name,
+        exit: option(args, '--exit'),
+        log,
+        noChangedFiles,
+        changedFilesUnknown
+      })
+    )
     return 0
   }
 }

@@ -432,4 +432,27 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.summary).toContain(`TREE_AT spec-alpha head=${run.head} dirty=1\n`)
     })
   })
+
+  describe('git failures fail closed (WR-06)', () => {
+    it('refuses (92) instead of reading a failing git status as a clean tree', () => {
+      const run = runGate(makeRepo(), { args: ['--dry-run'], env: { STUB_GIT_FAIL: 'status' } })
+      expect(run.status).toBe(92)
+      expect(run.stdout).toContain('REFUSED_DIRTY_TREE dirty=unknown')
+    })
+
+    it('refuses (90) when HEAD cannot be read', () => {
+      const run = runGate(makeRepo(), { args: ['--dry-run'], env: { STUB_GIT_FAIL: 'rev-parse' } })
+      expect(run.status).toBe(90)
+      expect(run.stdout).toContain('REFUSED_TREE cannot read HEAD')
+    })
+
+    it('reads a failing git diff as RED changed-files gates, never as "no changed files"', () => {
+      const fx = makeRepo()
+      const run = runGate(fx, { env: { STUB_GIT_FAIL: 'diff' } })
+      expect(run.summary).toMatch(/^GATE lint exit=unknown /m)
+      expect(run.summary).not.toContain('no changed files')
+      expect(run.verdictLine).toMatch(/^TIP_VERDICT RED /)
+      expect(run.status).toBe(1)
+    })
+  })
 })

@@ -411,6 +411,11 @@ describe('mintGateResult', () => {
     )
   })
 
+  it('records a changed-files gate whose file list could not be computed as not passing', () => {
+    const line = mintGateResult({ name: 'oxlint', exit: '', log: null, changedFilesUnknown: true })
+    expect(line).toBe('GATE oxlint exit=unknown changed files could not be computed')
+  })
+
   it('never reads an unreadable gate log as a pass', () => {
     const line = mintGateResult({ name: 'tsc-node', exit: '0', log: null })
     expect(line.split(' ')[2]).not.toBe('exit=0')

@@ -34,7 +34,8 @@
 # Exit: 0 GREEN (dry-run: planned), 1 RED, 2 NO_VERDICT or usage, 90 tree, 91 HEAD mismatch,
 #       92 dirty, 93 run dir exists, 94 lock, 95 busy, 96 env/toolchain/platform, 97 manifest,
 #       99 HEAD moved during the run.
-set -u
+# pipefail: a failing git or node in a pipeline must never read as the empty/clean answer.
+set -u -o pipefail
 
 TREE=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null) || {
   echo "REFUSED_TREE $(dirname "$0") is not inside a git work tree"
@@ -187,7 +188,7 @@ preflight() {
     done
   done
 
-  HEAD=$(git rev-parse HEAD)
+  HEAD=$(git rev-parse HEAD) || refuse 90 "REFUSED_TREE cannot read HEAD"
   case "$HEAD" in "$EXPECT"*) ;; *) refuse 91 "REFUSED_HEAD_MISMATCH expected=$EXPECT head=$HEAD" ;; esac
   DIRTY=$(tree_dirt)
   [ "$DIRTY" = 0 ] || refuse 92 "REFUSED_DIRTY_TREE dirty=$DIRTY"
@@ -361,15 +362,30 @@ for line in "${UNITS[@]}"; do
 done
 assert_tree units || finish 99
 
-mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE..HEAD" -- '*.ts' '*.tsx' '*.mjs')
+# Why the explicit status: a failed diff must not leave CHANGED empty, which reads as "no changed files".
+CHANGED=()
+changed_ok=1
+if changed_text=$(git diff --name-only --diff-filter=AM "$BASE..HEAD" -- '*.ts' '*.tsx' '*.mjs'); then
+  [ -z "$changed_text" ] || mapfile -t CHANGED <<< "$changed_text"
+else
+  changed_ok=0
+fi
 printf '%s\n' "${CHANGED[@]}" > "$RUN/changed-files.txt"
-log_line "CHANGED_FILES ${#CHANGED[@]} since $BASE ($RUN/changed-files.txt)"
+if [ "$changed_ok" = 1 ]; then
+  log_line "CHANGED_FILES ${#CHANGED[@]} since $BASE ($RUN/changed-files.txt)"
+else
+  log_line "CHANGED_FILES unknown since $BASE (git diff failed)"
+fi
 
 for line in "${GATES[@]}"; do
   read -r -a t <<< "$line"
   name=${t[1]}
   argv=("${t[@]:3}")
   if [ "${t[2]}" = 1 ]; then
+    if [ "$changed_ok" = 0 ]; then
+      append node "$CONTRACT" gate-result --name "$name" --changed-files-unknown
+      continue
+    fi
     if [ "${#CHANGED[@]}" = 0 ]; then
       append node "$CONTRACT" gate-result --name "$name" --no-changed-files
       continue
