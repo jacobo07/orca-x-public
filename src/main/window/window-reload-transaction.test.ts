@@ -1,11 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { replaceUnansweringRenderer } = vi.hoisted(() => ({
+  replaceUnansweringRenderer: vi.fn(async (): Promise<string> => 'replaced')
+}))
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: () => null }
 }))
+vi.mock('./force-reload-replacement', () => ({ replaceUnansweringRenderer }))
 
 import { resetReloadPreparationForTest, settleReloadPreparation } from './reload-preparation'
 import {
+  FORCE_RELOAD_PREPARE_TIMEOUT_MS,
   GRACEFUL_RELOAD_PREPARE_TIMEOUT_MS,
   requestWindowReload,
   resetWindowReloadTransactionsForTest
@@ -163,7 +169,12 @@ describe('requestWindowReload', () => {
     const reloadA = requestWindowReload(a as never, { kind: 'graceful' })
     await waitForPrepareRequest(a)
 
-    await expect(requestWindowReload(b as never, { kind: 'force' })).resolves.toBe('reloaded')
+    const forceB = requestWindowReload(b as never, { kind: 'force' })
+    settleReloadPreparation(17, {
+      requestId: await waitForPrepareRequest(b),
+      outcome: 'prepared'
+    })
+    await expect(forceB).resolves.toBe('reloaded')
 
     expect(b.reloadIgnoringCache).toHaveBeenCalledTimes(1)
     expect(a.capturePage).not.toHaveBeenCalled()
@@ -184,7 +195,132 @@ describe('requestWindowReload', () => {
     expect(webContents.capturePage).not.toHaveBeenCalled()
     // The closed window's transaction is gone, not left to swallow a later request under that id.
     const next = createWebContents(18)
-    await expect(requestWindowReload(next as never, { kind: 'force' })).resolves.toBe('reloaded')
+    const force = requestWindowReload(next as never, { kind: 'force' })
+    settleReloadPreparation(18, { requestId: await waitForPrepareRequest(next), outcome: 'prepared' })
+    await expect(force).resolves.toBe('reloaded')
     expect(next.reloadIgnoringCache).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Force Reload', () => {
+  beforeEach(() => {
+    replaceUnansweringRenderer.mockReset()
+    replaceUnansweringRenderer.mockResolvedValue('replaced')
+  })
+  afterEach(() => {
+    resetReloadPreparationForTest()
+    resetWindowReloadTransactionsForTest()
+    vi.useRealTimers()
+  })
+
+  it('keeps the same-process cache-bypass reload for a renderer that answers', async () => {
+    const webContents = createWebContents(31)
+    const onBeforeReload = vi.fn()
+    const result = requestWindowReload(webContents as never, { kind: 'force', onBeforeReload })
+
+    settleReloadPreparation(31, {
+      requestId: await waitForPrepareRequest(webContents),
+      outcome: 'prepared'
+    })
+
+    await expect(result).resolves.toBe('reloaded')
+    expect(webContents.order).toEqual(['prepare', 'capture', 'reloadIgnoringCache'])
+    expect(onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 31 })
+    expect(replaceUnansweringRenderer).not.toHaveBeenCalled()
+  })
+
+  it('replaces a renderer that refused to prepare, and never reloads it in place', async () => {
+    const webContents = createWebContents(32)
+    const onBeforeReload = vi.fn()
+    const result = requestWindowReload(webContents as never, { kind: 'force', onBeforeReload })
+
+    settleReloadPreparation(32, {
+      requestId: await waitForPrepareRequest(webContents),
+      outcome: 'refused'
+    })
+
+    await expect(result).resolves.toBe('replaced')
+    expect(replaceUnansweringRenderer).toHaveBeenCalledWith(webContents)
+    expect(webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+    expect(webContents.reload).not.toHaveBeenCalled()
+    // The replacer owns the mark for a replacement; this hook marks a same-process reload.
+    expect(onBeforeReload).not.toHaveBeenCalled()
+  })
+
+  it('gives a silent renderer 1.5 s, then replaces it and tells a late answer not to proceed', async () => {
+    vi.useFakeTimers()
+    const webContents = createWebContents(33)
+    const result = requestWindowReload(webContents as never, { kind: 'force' })
+    // Read directly: vi.waitFor advances fake timers, which would spend part of the bound.
+    const requestId = webContents.sent[0].payload.requestId
+
+    await vi.advanceTimersByTimeAsync(FORCE_RELOAD_PREPARE_TIMEOUT_MS - 1)
+    expect(replaceUnansweringRenderer).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(result).resolves.toBe('replaced')
+    // A late answer must release the renderer's unload bypass, or a Cancel would leave it armed.
+    expect(settleReloadPreparation(33, { requestId, outcome: 'prepared' })).toEqual({
+      proceed: false
+    })
+    expect(webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+  })
+
+  it('leaves the window untouched when the user cancels the replacement', async () => {
+    replaceUnansweringRenderer.mockResolvedValue('cancelled')
+    const webContents = createWebContents(34)
+    const result = requestWindowReload(webContents as never, { kind: 'force' })
+    settleReloadPreparation(34, {
+      requestId: await waitForPrepareRequest(webContents),
+      outcome: 'refused'
+    })
+
+    await expect(result).resolves.toBe('cancelled')
+    expect(webContents.capturePage).not.toHaveBeenCalled()
+    expect(webContents.reload).not.toHaveBeenCalled()
+    expect(webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+  })
+
+  it('escalates a Reload still preparing: 1.5 s from the Force, not the 5 s Reload bound', async () => {
+    vi.useFakeTimers()
+    const webContents = createWebContents(35)
+    const graceful = requestWindowReload(webContents as never, { kind: 'graceful' })
+    await waitForPrepareRequest(webContents)
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    const force = requestWindowReload(webContents as never, { kind: 'force' })
+    await vi.advanceTimersByTimeAsync(FORCE_RELOAD_PREPARE_TIMEOUT_MS)
+
+    await expect(force).resolves.toBe('replaced')
+    await expect(graceful).resolves.toBe('replaced')
+    expect(replaceUnansweringRenderer).toHaveBeenCalledTimes(1)
+    // One preparation for the joined requests, never a second one for the Force.
+    expect(webContents.sent).toHaveLength(1)
+  })
+
+  it('an escalated Reload whose renderer then answers reloads once, bypassing the cache', async () => {
+    const webContents = createWebContents(36)
+    const graceful = requestWindowReload(webContents as never, { kind: 'graceful' })
+    const requestId = await waitForPrepareRequest(webContents)
+
+    const force = requestWindowReload(webContents as never, { kind: 'force' })
+    settleReloadPreparation(36, { requestId, outcome: 'prepared' })
+
+    await expect(force).resolves.toBe('reloaded')
+    await expect(graceful).resolves.toBe('reloaded')
+    expect(webContents.reload).not.toHaveBeenCalled()
+    expect(webContents.reloadIgnoringCache).toHaveBeenCalledTimes(1)
+    expect(replaceUnansweringRenderer).not.toHaveBeenCalled()
+  })
+
+  it('a Reload that is not escalated still reports a refusal instead of replacing', async () => {
+    const webContents = createWebContents(37)
+    const graceful = requestWindowReload(webContents as never, { kind: 'graceful' })
+    settleReloadPreparation(37, {
+      requestId: await waitForPrepareRequest(webContents),
+      outcome: 'refused'
+    })
+    await expect(graceful).resolves.toBe('refused')
+    expect(replaceUnansweringRenderer).not.toHaveBeenCalled()
   })
 })

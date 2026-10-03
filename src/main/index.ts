@@ -243,6 +243,8 @@ import {
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { createWebContentsTimedFlags } from './window/web-contents-timed-flags'
 import { showReloadNotPerformedNotice } from './window/reload-not-performed-notice'
+import { createRendererReplacementHooks } from './window/renderer-replacement-hooks'
+import { showReplacementAbandonedNotice } from './window/force-reload-replacement'
 import {
   broadcastToAppWindowRenderers,
   getPrimaryAppWindowRenderer
@@ -449,6 +451,12 @@ function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void
 // Why: a reload intent must not leak to a later load; the recovery reload re-fires did-finish-load, so its flag spares live PTYs from the orphan sweep (#5787).
 const expectedRendererReload = createWebContentsTimedFlags()
 const recoveryReloadInFlight = createWebContentsTimedFlags()
+// Why: a Force Reload replacement crashes its renderer on purpose; that exit is neither a crash nor a recovery.
+const rendererReplacement = createRendererReplacementHooks({
+  spareLivePtysOnNextLoad: (webContentsId) => markRecoveryReloadInFlight(webContentsId),
+  recordBreadcrumb: (name) => recordDurableCrashBreadcrumb(name),
+  showAbandonedNotice: showReplacementAbandonedNotice
+})
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlags()
 const skillShareDeepLinks = new SkillShareDeepLinkState()
@@ -824,6 +832,8 @@ function getExpectedTeardownScope(
     isQuittingForUpdate: isQuittingForUpdate(),
     isExpectedRendererReload:
       webContentsId !== undefined && expectedRendererReload.matches(webContentsId),
+    isRendererReplacement:
+      webContentsId !== undefined && rendererReplacement.isRendererReplacementInFlight(webContentsId),
     includeSystemSessionEnd
   })
 }
@@ -1509,7 +1519,9 @@ function openMainWindow(
     onBeforeRecoveryReload: (webContentsId) => {
       markRecoveryReloadInFlight(webContentsId)
       recordDurableCrashBreadcrumb('renderer_recovery_reload')
-    }
+    },
+    onBeforeRendererReplacement: rendererReplacement.onBeforeRendererReplacement,
+    onRendererReplacementAbandoned: rendererReplacement.onRendererReplacementAbandoned
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
@@ -1546,6 +1558,7 @@ function openMainWindow(
   const rendererWebContentsId = window.webContents.id
   const onFirstWindowLoad = (): void => {
     clearExpectedRendererReload(rendererWebContentsId)
+    rendererReplacement.settle(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
     logStartupMilestone('did-finish-load')
     if (!store) {

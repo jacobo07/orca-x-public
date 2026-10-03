@@ -6,15 +6,19 @@ const {
   getFocusedWindowMock,
   getFocusedWebContentsMock,
   fromWebContentsMock,
-  sendActionToFirstResponderMock
+  sendActionToFirstResponderMock,
+  replaceUnansweringRenderer
 } = vi.hoisted(() => ({
   buildFromTemplateMock: vi.fn(),
   setApplicationMenuMock: vi.fn(),
   getFocusedWindowMock: vi.fn(),
   getFocusedWebContentsMock: vi.fn(),
   fromWebContentsMock: vi.fn(() => null),
-  sendActionToFirstResponderMock: vi.fn()
+  sendActionToFirstResponderMock: vi.fn(),
+  replaceUnansweringRenderer: vi.fn(async () => 'replaced')
 }))
+
+vi.mock('../window/force-reload-replacement', () => ({ replaceUnansweringRenderer }))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -40,6 +44,7 @@ import {
   settleReloadPreparation
 } from '../window/reload-preparation'
 import {
+  FORCE_RELOAD_PREPARE_TIMEOUT_MS,
   GRACEFUL_RELOAD_PREPARE_TIMEOUT_MS,
   resetWindowReloadTransactionsForTest
 } from '../window/window-reload-transaction'
@@ -153,6 +158,8 @@ describe('registerAppMenu', () => {
     getFocusedWindowMock.mockReset()
     getFocusedWebContentsMock.mockReset()
     sendActionToFirstResponderMock.mockReset()
+    replaceUnansweringRenderer.mockReset()
+    replaceUnansweringRenderer.mockResolvedValue('replaced')
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
   })
 
@@ -261,7 +268,8 @@ describe('registerAppMenu', () => {
 
     expect(webContents.reload).not.toHaveBeenCalled()
     expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
-    expect(order).toEqual(['capture', 'reloadIgnoringCache'])
+    // Force prepares too: an answering renderer keeps the same-process cache-bypass reload.
+    expect(order).toEqual(['prepare', 'capture', 'reloadIgnoringCache'])
   })
 
   it('still reloads when the freeze-frame capture fails', async () => {
@@ -352,7 +360,7 @@ describe('registerAppMenu', () => {
       expect(options.onReloadNotPerformed).not.toHaveBeenCalled()
     })
 
-    it('Force Reload overrides a Reload that is still preparing, and the window reloads once', async () => {
+    it('Force Reload escalates a Reload that is still preparing, and the window reloads once', async () => {
       const { webContents } = createFocusedWebContents(302, { prepare: 'silent' })
       const options = buildMenuOptions()
       getFocusedWindowMock.mockReturnValue({ webContents })
@@ -360,21 +368,40 @@ describe('registerAppMenu', () => {
 
       clickView('Reload')
       await vi.waitFor(() => expect(webContents.send).toHaveBeenCalledTimes(1))
-      const [staleRequestId] = requestIdsSentTo(webContents)
+      const [requestId] = requestIdsSentTo(webContents)
       clickView('Force Reload')
-      await vi.waitFor(() => expect(webContents.reloadIgnoringCache).toHaveBeenCalledTimes(1))
 
-      // A reload is on its way, so the renderer keeps its unload bypass — but this answer must not
-      // cause a second reload.
-      expect(settleReloadPreparation(302, { requestId: staleRequestId, outcome: 'prepared' })).toEqual(
-        { proceed: true }
-      )
+      // The renderer answers inside Force's bound: one in-place reload, bypassing the cache.
+      expect(settleReloadPreparation(302, { requestId, outcome: 'prepared' })).toEqual({
+        proceed: true
+      })
+      await vi.waitFor(() => expect(webContents.reloadIgnoringCache).toHaveBeenCalledTimes(1))
       await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(webContents.send).toHaveBeenCalledTimes(1)
       expect(webContents.reload).not.toHaveBeenCalled()
-      expect(webContents.reloadIgnoringCache).toHaveBeenCalledTimes(1)
+      expect(replaceUnansweringRenderer).not.toHaveBeenCalled()
       expect(options.onReloadNotPerformed).not.toHaveBeenCalled()
       expect(options.onBeforeReload).toHaveBeenCalledTimes(1)
       expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 302 })
+    })
+
+    it('Force Reload of a Reload whose renderer never answers replaces the renderer', async () => {
+      vi.useFakeTimers()
+      const { webContents } = createFocusedWebContents(304, { prepare: 'silent' })
+      const options = buildMenuOptions()
+      getFocusedWindowMock.mockReturnValue({ webContents })
+      registerAppMenu(options)
+
+      clickView('Reload')
+      clickView('Force Reload')
+      await vi.advanceTimersByTimeAsync(FORCE_RELOAD_PREPARE_TIMEOUT_MS)
+
+      expect(replaceUnansweringRenderer).toHaveBeenCalledTimes(1)
+      expect(replaceUnansweringRenderer).toHaveBeenCalledWith(webContents)
+      expect(webContents.reload).not.toHaveBeenCalled()
+      expect(webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+      // The escalated Reload is not "left as it was": Force took it over.
+      expect(options.onReloadNotPerformed).not.toHaveBeenCalled()
     })
 
     it('a Reload after the previous one finished starts a fresh preparation', async () => {
@@ -389,6 +416,29 @@ describe('registerAppMenu', () => {
 
       expect(webContents.send).toHaveBeenCalledTimes(2)
     })
+  })
+
+  describe('Force Reload of a renderer that does not prepare', () => {
+    it.each(['refused', 'silent'] as const)(
+      'replaces a renderer whose preparation is %s instead of reloading it in place',
+      async (prepare) => {
+        vi.useFakeTimers()
+        const { webContents } = createFocusedWebContents(310, { prepare })
+        const options = buildMenuOptions()
+        getFocusedWindowMock.mockReturnValue({ webContents })
+        registerAppMenu(options)
+
+        getSubmenu(getTemplate(), 'View')
+          .find((item) => item.label?.startsWith('Force Reload\t'))
+          ?.click?.({} as never, {} as never, {} as never)
+        await vi.advanceTimersByTimeAsync(FORCE_RELOAD_PREPARE_TIMEOUT_MS)
+
+        expect(replaceUnansweringRenderer).toHaveBeenCalledWith(webContents)
+        expect(webContents.capturePage).not.toHaveBeenCalled()
+        expect(webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+        expect(options.onBeforeReload).not.toHaveBeenCalled()
+      }
+    )
   })
 
   describe.each([

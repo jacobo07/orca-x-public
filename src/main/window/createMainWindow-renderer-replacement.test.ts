@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('electron', async () =>
-  (await import('./createMainWindow-test-harness')).electronModuleMock()
-)
+const { showMessageBox } = vi.hoisted(() => ({ showMessageBox: vi.fn() }))
+
+vi.mock('electron', async () => {
+  const electron = (await import('./createMainWindow-test-harness')).electronModuleMock()
+  return {
+    ...electron,
+    BrowserWindow: Object.assign(electron.BrowserWindow, { fromWebContents: () => null }),
+    dialog: { showMessageBox }
+  }
+})
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
@@ -13,9 +20,17 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+vi.mock('../i18n/main-i18n', () => ({
+  translateMain: (_key: string, fallback: string) => fallback
+}))
 
 import { createMainWindow } from './createMainWindow'
 import { RENDERER_REPLACEMENT_EXIT_TIMEOUT_MS, replaceWindowRenderer } from './renderer-replacement'
+import { resetReloadPreparationForTest } from './reload-preparation'
+import {
+  FORCE_RELOAD_PREPARE_TIMEOUT_MS,
+  resetWindowReloadTransactionsForTest
+} from './window-reload-transaction'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
 
 // Measured on Electron 43.1.0: a forced renderer exits as `crashed` 133, ~80 ms after the call.
@@ -24,21 +39,32 @@ const replacedExit = { reason: 'crashed', exitCode: 133 } as Electron.RenderProc
 function createReplaceableWindow(id: number) {
   const windowHandlers: Record<string, (...args: any[]) => void> = {}
   const order: string[] = []
+  let destroyed = false
   const webContents = {
     id,
     on: vi.fn((event, handler) => {
       windowHandlers[event] = handler
     }),
+    once: vi.fn(),
+    removeListener: vi.fn(),
+    isDestroyed: () => destroyed,
+    getOSProcessId: () => 7000 + id,
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
+    // A hung renderer: it never answers the reload-preparation request this sends.
     send: vi.fn(),
+    reload: vi.fn(() => {
+      order.push('reload')
+    }),
+    reloadIgnoringCache: vi.fn(() => {
+      order.push('reloadIgnoringCache')
+    }),
     forcefullyCrashRenderer: vi.fn(() => {
       order.push('crash')
     })
   }
-  let destroyed = false
   const browserWindowInstance = {
     webContents,
     on: vi.fn((event, handler) => {
@@ -62,12 +88,28 @@ function createReplaceableWindow(id: number) {
     return browserWindowInstance
   })
   const emitGone = (): void => windowHandlers['render-process-gone']?.({} as never, replacedExit)
+  const pressForceReload = (): void => {
+    const isDarwin = process.platform === 'darwin'
+    windowHandlers['before-input-event']?.(
+      { preventDefault: vi.fn() } as never,
+      {
+        type: 'keyDown',
+        code: 'KeyR',
+        key: 'R',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: true
+      } as never
+    )
+  }
   return {
     webContents,
     browserWindowInstance,
     windowHandlers,
     order,
     emitGone,
+    pressForceReload,
     destroy: () => {
       destroyed = true
     }
@@ -77,6 +119,9 @@ function createReplaceableWindow(id: number) {
 describe('createMainWindow renderer replacement', () => {
   beforeEach(() => {
     resetMainWindowMocks()
+    resetReloadPreparationForTest()
+    resetWindowReloadTransactionsForTest()
+    showMessageBox.mockReset()
     vi.useFakeTimers()
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -161,5 +206,43 @@ describe('createMainWindow renderer replacement', () => {
 
     await expect(replaceWindowRenderer(505)).resolves.toBe('unsupported')
     expect(win.webContents.forcefullyCrashRenderer).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+Shift+R on a renderer that does not answer asks, then replaces it after it exits', async () => {
+    const win = createReplaceableWindow(506)
+    const onBeforeReload = vi.fn()
+    showMessageBox.mockResolvedValue({ response: 1 })
+    createMainWindow(null, { onBeforeReload })
+    win.order.length = 0
+
+    win.pressForceReload()
+    await vi.advanceTimersByTimeAsync(FORCE_RELOAD_PREPARE_TIMEOUT_MS)
+
+    expect(win.webContents.send).toHaveBeenCalledWith(
+      'app:prepareForReload',
+      expect.objectContaining({ requestId: expect.any(String) })
+    )
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(win.order).toEqual(['crash'])
+
+    win.emitGone()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(win.order).toEqual(['crash', 'load'])
+    // No same-process reload of a hung renderer, and no mark for one.
+    expect(win.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+    expect(onBeforeReload).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+Shift+R cancelled at the confirm leaves the hung window untouched', async () => {
+    const win = createReplaceableWindow(507)
+    showMessageBox.mockResolvedValue({ response: 0 })
+    createMainWindow(null)
+    win.order.length = 0
+
+    win.pressForceReload()
+    await vi.advanceTimersByTimeAsync(FORCE_RELOAD_PREPARE_TIMEOUT_MS + RENDERER_REPLACEMENT_EXIT_TIMEOUT_MS)
+
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(win.order).toEqual([])
   })
 })
