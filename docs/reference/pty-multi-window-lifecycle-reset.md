@@ -72,8 +72,9 @@ newest-window single slots, are per window now (C8).
 The real-app oracle was itself blind: `probeDirectWrite` substring-matches `echo MARKER`, so the
 echoed command satisfied it, and its Ctrl+C prefix made bash drop the first byte (`cho MARKER`
 ran on GEX44 under a green probe). The survivor test now uses `probeDirectWriteOutput` (a line
-exactly equal to the marker). 60 other e2e files still match terminal text by substring; any that
-claim "the terminal is alive" from it are unproven (debt).
+exactly equal to the marker). The remaining substring liveness sites are frozen in
+`config/e2e-terminal-liveness-substring-baseline.txt` (31 sites at 5f4fd7257),
+`pnpm check:e2e-terminal-liveness` fails on a new one, and the list only shrinks.
 
 ## Acceptance
 

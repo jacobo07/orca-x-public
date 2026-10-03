@@ -56,6 +56,9 @@ jobs:
       - name: Check E2E fixture binding
         run: pnpm run check:e2e-fixture-binding
 
+      - name: Check E2E terminal liveness probes
+        run: pnpm run check:e2e-terminal-liveness
+
       # Both gates guard one invariant from opposite ends: at most one durable product actor
       # catalog may exist, and exactly one module may mint an identity into it. They join the
       # per-gate list here rather than arriving as a new workflow, and rather than riding in on
