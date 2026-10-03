@@ -304,6 +304,12 @@ const ptyRendererOwnership = createPtyRendererOwnership({
   }
 })
 
+/** A recorded owner id is not a live renderer: closed windows never release their ownership. */
+function isLiveRendererWebContentsId(webContentsId: number): boolean {
+  const owner = webContents.fromId(webContentsId)
+  return owner !== undefined && owner !== null && !owner.isDestroyed()
+}
+
 /** Record which renderer owns a PTY's output. Exported for the window lifecycle to release on close. */
 export function releasePtyRendererOwnershipForWindow(webContentsId: number): string[] {
   return ptyRendererOwnership.releaseWindow(webContentsId)
@@ -2407,10 +2413,10 @@ function attachRendererOrphanSweep(windowKey: number, handler: () => void): void
 
 /** Reload/crash of one window: clears hidden/interest marks of PTYs it owns plus unowned ones. */
 function resetRendererWindowDeliveryGate(windowKey: number): void {
-  // Why unowned too: no live window will claim them, so keeping their marks would gate them forever (fail closed).
+  // Why unowned and dead-owned too: no live owner will re-report them, so keeping their marks would gate them forever (fail closed).
   const removed = resetRendererScopedHiddenPtyDeliveryStateFor((id) => {
     const owner = ptyRendererOwnership.ownerWebContentsIdFor(id)
-    return owner === windowKey || owner === null
+    return owner === windowKey || owner === null || !isLiveRendererWebContentsId(owner)
   })
   if (removed > 0) {
     invalidatePendingPtyDrainPolicy()
@@ -4382,10 +4388,7 @@ export function registerPtyHandlers(
             ptyId: id,
             reloadingWebContentsId: mainWindow.webContents.id,
             ownerWebContentsIdFor: (ptyId) => ptyRendererOwnership.ownerWebContentsIdFor(ptyId),
-            isRendererAlive: (webContentsId) => {
-              const owner = webContents.fromId(webContentsId)
-              return owner !== undefined && owner !== null && !owner.isDestroyed()
-            }
+            isRendererAlive: isLiveRendererWebContentsId
           })
       })
     })

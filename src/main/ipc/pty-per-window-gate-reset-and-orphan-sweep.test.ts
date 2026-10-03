@@ -6,7 +6,7 @@ import { webContents as electronWebContents } from 'electron'
 import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, releasePtyRendererOwnershipForWindow } from './pty'
-import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
+import { getHiddenRendererPtyDeliveryDebug, isHiddenRendererPty } from './pty-hidden-delivery-gate'
 import {
   PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID,
   PTY_IPC_TEST_MAIN_WEB_CONTENTS_ID
@@ -135,11 +135,11 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     return id
   }
 
-  /** Why: the electron mock resolves no renderer, so the sweep's spare check would read every other window as dead. */
-  function withLiveRenderer(webContentsId: number, act: () => void): void {
+  /** Why: the electron mock resolves no renderer, so every liveness check would read every window as dead. */
+  function withLiveRenderers(webContentsIds: readonly number[], act: () => void): void {
     const mocked = electronWebContents as unknown as { fromId: (id: number) => unknown }
     const original = mocked.fromId
-    mocked.fromId = (id) => (id === webContentsId ? { isDestroyed: () => false } : null)
+    mocked.fromId = (id) => (webContentsIds.includes(id) ? { isDestroyed: () => false } : null)
     try {
       act()
     } finally {
@@ -170,6 +170,12 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     )(event, { id, hidden: true })
   }
 
+  function holdInterest(event: unknown, id: string): void {
+    latestIpcListener<(e: unknown, a: { id: string; interested: boolean }) => void>(
+      'pty:setPtyDeliveryInterest'
+    )(event, { id, interested: true })
+  }
+
   it("tracer: the first window's reload clears its own hidden mark after a second window opened", async () => {
     // Arrange
     registerPtyHandlers(mainWindow as never)
@@ -183,12 +189,20 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     // Assert
     expect(isHiddenRendererPty(pa)).toBe(false)
   })
+  /** Both windows open: a dead owner's PTYs are reset by anyone, so "the other window's" needs it live. */
+  function fireWithBothWindowsLive(webContents: MockWebContents, event: string): void {
+    withLiveRenderers(
+      [PTY_IPC_TEST_MAIN_WEB_CONTENTS_ID, PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID],
+      () => fireSurviving(webContents, event)
+    )
+  }
+
   it("scope: the second window's reload clears only its own hidden marks", async () => {
     // Arrange
     const { pa, pb, second } = await twoDaemonWindowsWithHiddenPtys('scope')
 
     // Act
-    fireSurviving(second.webContents, 'did-finish-load')
+    fireWithBothWindowsLive(second.webContents, 'did-finish-load')
 
     // Assert
     expect(isHiddenRendererPty(pa)).toBe(true)
@@ -200,7 +214,7 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     const { pa, pb } = await twoDaemonWindowsWithHiddenPtys('crash')
 
     // Act
-    fireSurviving(first, 'render-process-gone')
+    fireWithBothWindowsLive(first, 'render-process-gone')
 
     // Assert
     expect(isHiddenRendererPty(pa)).toBe(false)
@@ -214,16 +228,38 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     markHidden(null, unowned)
 
     // Act + Assert: the second window's reload
-    fireSurviving(second.webContents, 'did-finish-load')
+    fireWithBothWindowsLive(second.webContents, 'did-finish-load')
     expect(isHiddenRendererPty(unowned)).toBe(false)
     // Control: a PTY the first window owns is not the second window's to clear.
     expect(isHiddenRendererPty(pa)).toBe(true)
 
     // Act + Assert: the first window's reload
     markHidden(null, unowned)
-    fireSurviving(first, 'did-finish-load')
+    fireWithBothWindowsLive(first, 'did-finish-load')
     expect(isHiddenRendererPty(unowned)).toBe(false)
   })
+
+  it.each(['did-finish-load', 'render-process-gone'])(
+    "dead owner: after the owning window closed, the other window's %s clears its surviving PTY's mark and interest",
+    async (event) => {
+      // Arrange: the daemon PTY outlives its window (close is a Detach).
+      const { pa, second } = await twoDaemonWindowsWithHiddenPtys(`dead-owner-${event}`)
+      holdInterest(mainWindowIpcEvent, pa)
+      fireSurviving(first, 'destroyed')
+      // Control: closing the window alone leaves both entries in place.
+      expect(isHiddenRendererPty(pa)).toBe(true)
+      expect(getHiddenRendererPtyDeliveryDebug().deliveryInterestPtyCount).toBe(1)
+
+      // Act
+      withLiveRenderers([PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID], () =>
+        fireSurviving(second.webContents, event)
+      )
+
+      // Assert
+      expect(isHiddenRendererPty(pa)).toBe(false)
+      expect(getHiddenRendererPtyDeliveryDebug().deliveryInterestPtyCount).toBe(0)
+    }
+  )
 
   it("sweep: the first window's reload kills its own orphaned local PTY after a second window opened", async () => {
     // Arrange
@@ -240,7 +276,7 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     await spawnFrom(foreignWindowIpcEvent)
 
     // Act: the first load only advances the generation; the second sweeps the earlier load's PTYs.
-    withLiveRenderer(PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID, () => {
+    withLiveRenderers([PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID], () => {
       fireSurviving(first, 'did-finish-load')
       fireSurviving(first, 'did-finish-load')
     })
