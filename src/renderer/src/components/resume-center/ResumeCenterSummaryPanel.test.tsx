@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import type { DeskSavedReading } from '../../../../shared/desk-continuity-read-types'
 import type { ResumeCenterModel, WorkspaceRowModel } from './resume-center-model'
 import { ResumeCenterSummaryPanel } from './ResumeCenterSummaryPanel'
@@ -68,5 +69,40 @@ describe('ResumeCenterSummaryPanel current snapshot', () => {
     savedLine({ kind: 'unknown' })
     expect(screen.getByTestId('resume-center-snapshot-names').textContent).toBe('alpha, beta')
     expect(screen.getByRole('complementary', { name: 'Current snapshot' })).toBeTruthy()
+  })
+})
+
+describe('ResumeCenterSummaryPanel tip', () => {
+  afterEach(() => {
+    delete (window as { api?: unknown }).api
+  })
+
+  it('dismissal is the persisted one, not a local flag', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    Object.assign(window, { api: { ui: { set: setMock } } })
+    useAppStore.setState({ persistedUIReady: true, resumeCenterTipDismissed: false })
+    savedLine({ kind: 'unknown' })
+
+    fireEvent.click(screen.getByTestId('resume-center-tip-dismiss'))
+
+    expect(screen.queryByTestId('resume-center-tip')).toBeNull()
+    expect(setMock).toHaveBeenCalledWith({ resumeCenterTipDismissed: true })
+  })
+
+  it('stays away when hydrated as dismissed, and before hydration', () => {
+    useAppStore.setState({ persistedUIReady: true, resumeCenterTipDismissed: true })
+    savedLine({ kind: 'unknown' })
+    expect(screen.queryByTestId('resume-center-tip')).toBeNull()
+    cleanup()
+
+    useAppStore.setState({ persistedUIReady: false, resumeCenterTipDismissed: false })
+    savedLine({ kind: 'unknown' })
+    expect(screen.queryByTestId('resume-center-tip')).toBeNull()
+    cleanup()
+
+    // Positive control: the same render shows it once hydrated and not dismissed.
+    useAppStore.setState({ persistedUIReady: true, resumeCenterTipDismissed: false })
+    savedLine({ kind: 'unknown' })
+    expect(screen.getByTestId('resume-center-tip')).toBeTruthy()
   })
 })

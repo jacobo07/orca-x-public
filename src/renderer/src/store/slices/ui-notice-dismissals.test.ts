@@ -220,6 +220,31 @@ describe('createUISlice mobile emulator tab intro dismissal', () => {
   })
 })
 
+describe('createUISlice Resume Center tip dismissal', () => {
+  it('persists the Resume Center tip dismissal once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setMock } } })
+    const store = createUIStore()
+
+    store.getState().dismissResumeCenterTip()
+    store.getState().dismissResumeCenterTip()
+
+    expect(store.getState().resumeCenterTipDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ resumeCenterTipDismissed: true })
+  })
+
+  it('hydrates only an explicit Resume Center tip dismissal', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ resumeCenterTipDismissed: true }))
+    expect(store.getState().resumeCenterTipDismissed).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ resumeCenterTipDismissed: undefined }))
+    expect(store.getState().resumeCenterTipDismissed).toBe(false)
+  })
+})
+
 describe('createUISlice browser import hint dismissal', () => {
   it('persists browser import hint dismissal changes once', () => {
     const setMock = vi.fn(() => Promise.resolve())

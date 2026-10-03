@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import { History } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import type { DeskSavedReading } from '../../../../shared/desk-continuity-read-types'
 import type { ResumeCenterModel, WorkspaceRowModel } from './resume-center-model'
@@ -35,7 +35,9 @@ export function ResumeCenterSummaryPanel({
   deskSaved: DeskSavedReading
   className?: string
 }): React.JSX.Element {
-  const [tipDismissed, setTipDismissed] = useState(false)
+  // Why persistedUIReady: before hydration a dismissed tip would flash back for one frame.
+  const showTip = useAppStore((s) => s.persistedUIReady && !s.resumeCenterTipDismissed)
+  const dismissTip = useAppStore((s) => s.dismissResumeCenterTip)
   const { totals } = model
   const saved = describeDeskSaved(deskSaved, Date.now())
   const names = [
@@ -115,8 +117,11 @@ export function ResumeCenterSummaryPanel({
         </div>
       ) : null}
 
-      {tipDismissed ? null : (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card/40 p-4 text-[12px] text-muted-foreground">
+      {showTip ? (
+        <div
+          data-testid="resume-center-tip"
+          className="flex flex-col gap-2 rounded-lg border border-border bg-card/40 p-4 text-[12px] text-muted-foreground"
+        >
           <p>
             {translate(
               'resumeCenter.tip.body',
@@ -125,13 +130,14 @@ export function ResumeCenterSummaryPanel({
           </p>
           <button
             type="button"
-            onClick={() => setTipDismissed(true)}
+            data-testid="resume-center-tip-dismiss"
+            onClick={dismissTip}
             className="self-start text-[11px] underline-offset-2 hover:underline"
           >
             {translate('resumeCenter.tip.dismiss', 'Dismiss')}
           </button>
         </div>
-      )}
+      ) : null}
     </aside>
   )
 }
