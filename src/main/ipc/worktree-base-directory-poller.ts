@@ -1,6 +1,11 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import {
+  listNestedContainer,
+  rethrowUnlessAbsent,
+  unlistableBaseSnapshot
+} from './worktree-base-directory-listing-errors'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -151,9 +156,9 @@ async function snapshotBase(
   let rootEntries
   try {
     rootEntries = await readdir(rootPath, { withFileTypes: true })
-  } catch {
-    // Root vanished: an empty snapshot diffs into delete events for every
-    // previously-known worktree dir, matching the old watcher's error path.
+  } catch (error) {
+    // Only an absent root diffs into deletes for every known worktree; any other failure rethrows so poll() keeps the previous snapshot.
+    rethrowUnlessAbsent(error)
     return { markers, gateDirs, gateSignatures }
   }
 
@@ -169,12 +174,7 @@ async function snapshotBase(
     if (nestedRepoNames.has(normalizeRuntimePathForComparison(entry.name))) {
       gateDirs.push(entryPath)
       gateSignatures.push(await dirSignature(entryPath))
-      let subEntries
-      try {
-        subEntries = await readdir(entryPath, { withFileTypes: true })
-      } catch {
-        subEntries = []
-      }
+      const subEntries = await listNestedContainer(entryPath)
       for (const sub of subEntries) {
         if (sub.isDirectory() || sub.isSymbolicLink()) {
           candidates.push(join(entryPath, sub.name))
@@ -215,7 +215,9 @@ async function startBasePoller(
   let disposed = false
   let ticking = false
   let tickCount = 0
-  let snapshot = await snapshotBase(target.path, getRepos())
+  let snapshot = await snapshotBase(target.path, getRepos()).catch(() =>
+    unlistableBaseSnapshot(target.path)
+  )
   let parkedWhileHidden = false
   const onEvents = (events: WorktreeBasePollEvent[]): void => {
     registration.noteActivity()
