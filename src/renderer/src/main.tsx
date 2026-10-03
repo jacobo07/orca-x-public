@@ -10,6 +10,7 @@ import {
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency-diagnostic'
+import { ensurePtyDispatcher } from './components/terminal-pane/pty-dispatcher'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
@@ -20,6 +21,10 @@ import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPre
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+// Why at boot, not on the first terminal: main's PTY delivery gate is process-wide, so a window
+// that never mounts a terminal never handshakes, and its reload held every window's output until
+// the 10 s watchdog (D6, docs/reference/pty-multi-window-lifecycle-reset.md).
+ensurePtyDispatcher()
 
 if (
   import.meta.env.DEV &&

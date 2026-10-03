@@ -2312,13 +2312,13 @@
     "src/renderer/src/components/terminal-pane/terminal-delivery-watchdog.ts#interval#scheduleWatchdogTimer": {
       "responsibility": "terminal-push-delivery-watchdog",
       "cadence": "watchdogConfig.intervalMs",
-      "lifetime": "while-active",
+      "lifetime": "persistent",
       "scaling": "per-window",
       "hidden": "unknown",
       "dormant": "n/a",
       "spawns": "none",
       "disposition": "justified",
-      "note": "terminal-delivery-watchdog.ts scheduleWatchdogTimer: module-singleton interval that heals dead push-delivery listeners across all PTYs at once, serialized via tickInFlight. While any pane is on screen it also sends one pty:reportRendererDeliveryState invoke per tick carrying every on-screen PTY id (one call per window, not per pane) to catch a visible pane frozen while its model advances"
+      "note": "Started at renderer boot (main.tsx ensurePtyDispatcher, D6) in every window, terminal or not; a tick with no attached or on-screen PTY returns without IPC. terminal-delivery-watchdog.ts scheduleWatchdogTimer: module-singleton interval that heals dead push-delivery listeners across all PTYs at once, serialized via tickInFlight. While any pane is on screen it also sends one pty:reportRendererDeliveryState invoke per tick carrying every on-screen PTY id (one call per window, not per pane) to catch a visible pane frozen while its model advances"
     },
     "src/renderer/src/components/terminal-pane/terminal-pane-recovery.ts#self-rescheduling-timeout#scheduleRecoveryRetry": {
       "responsibility": "terminal-pane-recovery-retry",
