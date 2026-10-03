@@ -53,6 +53,11 @@ died; a page that was merely *joined* by another window has not died.
   `forced:0`, pending 136 → 408 chars, then a late watchdog flush. Owner chose the renderer fix
   over a per-window gate in main (2026-10-03). Unhandled chunks are buffered and ACKed instead of
   dropping into a listener-less page.
+- **C8 — Gate reset and orphan sweep belong to every window.** Each window's `did-finish-load` and
+  `render-process-gone` run that window's hidden-gate reset, scoped to the PTYs it owns plus
+  unowned ones (drop memory kept), and its `did-finish-load` runs its local orphan sweep (only when
+  it registered on a `LocalPtyProvider`). Registering another window removes neither; `destroyed`
+  or re-registration removes the window's own. Both live in the C2 per-window lifecycle record.
 
 ## Out of scope (debt, recorded)
 
@@ -61,9 +66,8 @@ holds sends for all windows until that page handshakes (C5 makes that the reload
 handshake, not the watchdog), and the reset clears pending bytes for *every* PTY, including ones a
 surviving window shows. Making the gate per window is a separate change.
 
-Two more registries are still newest-window-only and are not changed here: the hidden-delivery gate
-reset (`rendererGateReset*`, `did-finish-load` + `render-process-gone`) and the orphan-sweep
-`did-finish-load` handler. Both move to the newest window on each registration.
+The hidden-delivery gate reset and the orphan-sweep `did-finish-load` handler, formerly the last
+newest-window single slots, are per window now (C8).
 
 The real-app oracle was itself blind: `probeDirectWrite` substring-matches `echo MARKER`, so the
 echoed command satisfied it, and its Ctrl+C prefix made bash drop the first byte (`cho MARKER`
@@ -110,3 +114,22 @@ Run `/home/kobii/gate8-run-1d3e97557/summary.txt` (14:27–14:30Z, tree clean, b
   spec does not discriminate C1–C6; their proof is the unit suite above. Whether C1 alone was
   ever visible in the real app is unshown.
 - Restore: tree clean at `1d3e97557`, rebuild exit 0.
+
+## Evidence (unit, GEX44 @`af63f4722`)
+
+- `src/main/ipc/pty-per-window-gate-reset-and-orphan-sweep.test.ts` 7/7: tracer (A's reload clears
+  its mark after B opened), scope, crash, unowned (fail closed, with an owned control), sweep (A's
+  own PTY killed; B's spared while B is live — control: with B read as dead it is killed), destroy,
+  re-registration. RED before the fix: tracer `expected true to be false`; sweep `expected "vi.fn()"
+  to be called at least once`; destroy left the sweep listener attached; scope red with the
+  predicate reverted to "every PTY".
+- `src/main/ipc/pty*` filter: baseline @741ca9985 65 files, 612 tests (606 pass, 6 skip, 0 fail);
+  after 66 files, 619 tests (613 pass, 6 skip, 0 fail). Failure lists identical (both empty).
+  Existing tests unmodified except one C2 comment that recorded this debt.
+- tsc node 0; oxlint 0 on touched files.
+- Mutants, both CAUGHT (`/home/kobii/closure-runs/p1-01-mutants-af63f4722/summary.txt`), source
+  restored with `git diff --quiet` after each:
+  - **M1, single slot restored** (registering a window strips every other window's gate-reset and
+    sweep listeners): tracer, crash, unowned, sweep red.
+  - **M2, global reset restored**: scope, crash, unowned red.
+- Unit plane only. No real-app run discriminates C8 yet.
