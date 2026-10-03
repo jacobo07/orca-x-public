@@ -24,15 +24,17 @@ import {
   waitForPaneCount
 } from './helpers/terminal'
 import {
+  mainProbeDirectWriteOutput,
+  mainProbeOwnershipRebuildRevivalOutput,
+  mainProbeTransportPasteOutput,
+  probeKeyboardTypeOutput
+} from './helpers/terminal-fresh-output-probes'
+import {
   buildFrozenPaneReport,
   mainGetAllTerminalContent,
   mainGetStorePtyIds,
-  mainProbeDirectWrite,
-  mainProbeOwnershipRebuildRevival,
-  mainProbeTransportPaste,
   mainRendererStoreReady,
-  mainWaitForPaneMounted,
-  probeKeyboardType
+  mainWaitForPaneMounted
 } from './helpers/terminal-input-probes'
 
 // Why 2, not more: the renderer recovery circuit breaker allows 3 recoveries
@@ -114,7 +116,7 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
     // otherwise a post-crash failure would be uninterpretable.
     const baselinePtyId = await discoverActivePtyId(orcaPage)
     expect(
-      await probeKeyboardType(orcaPage, 'KB_BASELINE_OK'),
+      await probeKeyboardTypeOutput(orcaPage, baselinePtyId, 'KB_BASELINE'),
       'baseline keyboard input must reach the PTY before any crash is forced'
     ).toBe(true)
 
@@ -148,9 +150,10 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
         await expect
           .poll(
             async () => {
-              transportAlive = await mainProbeTransportPaste(
+              // A fresh marker per attempt: each attempt's own write must print.
+              transportAlive = await mainProbeTransportPasteOutput(
                 electronApp,
-                `PASTE_POST_${cycle}_OK`,
+                `PASTE_POST_${cycle}`,
                 5_000
               )
               return transportAlive
@@ -163,15 +166,15 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
       }
       const directAlive =
         postPtyIds.length > 0 &&
-        (await mainProbeDirectWrite(electronApp, postPtyIds[0], `DIRECT_POST_${cycle}_OK`))
+        (await mainProbeDirectWriteOutput(electronApp, postPtyIds[0], `DIRECT_POST_${cycle}`))
 
       if (!transportAlive || !directAlive) {
         const revived =
           postPtyIds.length > 0 &&
-          (await mainProbeOwnershipRebuildRevival(
+          (await mainProbeOwnershipRebuildRevivalOutput(
             electronApp,
             postPtyIds[0],
-            `REVIVED_POST_${cycle}_OK`
+            `REVIVED_POST_${cycle}`
           ))
         const crashReason =
           (await readMainProcessCrashProbe(electronApp)).processGone?.reason ?? 'unknown'

@@ -88,7 +88,7 @@ export async function getStorePtyIds(page: Page): Promise<string[]> {
 
 // ─── Main-process-based probes (post-renderer-crash) ────────────────
 
-async function mainRendererEval<T>(
+export async function mainRendererEval<T>(
   electronApp: ElectronApplication,
   expression: string
 ): Promise<T> {
@@ -178,94 +178,6 @@ export async function mainWaitForPaneMounted(
       { timeout: timeoutMs, message: 'no terminal pane mounted after renderer recovery' }
     )
     .toBeGreaterThan(0)
-}
-
-async function mainWaitForMarker(
-  electronApp: ElectronApplication,
-  marker: string,
-  timeoutMs: number
-): Promise<boolean> {
-  try {
-    await expect
-      .poll(async () => (await mainGetAllTerminalContent(electronApp)).includes(marker), {
-        timeout: timeoutMs
-      })
-      .toBe(true)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Full-chain probe without CDP: xterm's input() feeds terminal.onData →
- * transport.sendInput → pty:write, the identical path keystrokes take past
- * the DOM keyboard layer (which the pre-crash Playwright baseline covers).
- * Why input() and not paste(): bracketed paste mode would wrap the payload
- * and make the shell insert the control chars literally instead of executing.
- */
-export async function mainProbeTransportPaste(
-  electronApp: ElectronApplication,
-  marker: string,
-  timeoutMs = 10_000
-): Promise<boolean> {
-  try {
-    const inputs = buildSettledShellProbeInputSequence(`echo ${marker}\r`)
-    const fed = await mainRendererEval<boolean>(
-      electronApp,
-      `(() => {
-        const managers = window.__paneManagers
-        if (!managers) { return false }
-        for (const manager of managers.values()) {
-          const pane = manager.getActivePane?.() ?? (manager.getPanes?.() ?? [])[0]
-          if (pane?.terminal?.input) {
-            for (const input of ${JSON.stringify(inputs)}) {
-              pane.terminal.input(input, true)
-            }
-            return true
-          }
-        }
-        return false
-      })()`
-    )
-    if (!fed) {
-      return false
-    }
-  } catch {
-    return false
-  }
-  return mainWaitForMarker(electronApp, marker, timeoutMs)
-}
-
-export async function mainProbeDirectWrite(
-  electronApp: ElectronApplication,
-  ptyId: string,
-  marker: string,
-  timeoutMs = 10_000
-): Promise<boolean> {
-  try {
-    const inputs = buildSettledShellProbeInputSequence(`echo ${marker}\r`)
-    await mainRendererEval<void>(
-      electronApp,
-      `for (const input of ${JSON.stringify(inputs)}) { window.api.pty.write(${JSON.stringify(ptyId)}, input) }`
-    )
-  } catch {
-    return false
-  }
-  return mainWaitForMarker(electronApp, marker, timeoutMs)
-}
-
-export async function mainProbeOwnershipRebuildRevival(
-  electronApp: ElectronApplication,
-  ptyId: string,
-  marker: string
-): Promise<boolean> {
-  try {
-    await mainRendererEval<void>(electronApp, `window.api.pty.listSessions()`)
-  } catch {
-    return false
-  }
-  return mainProbeDirectWrite(electronApp, ptyId, marker)
 }
 
 // ─── Failure report ─────────────────────────────────────────────────
