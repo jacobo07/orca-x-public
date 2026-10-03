@@ -84,7 +84,7 @@ describe('evaluateSummary: GREEN control', () => {
     const manifest = {
       ...MANIFEST,
       unitGroups: MANIFEST.unitGroups.map((g) =>
-        g.regressionDiff ? { ...g, knownFailures: ['known flake'] } : g
+        g.regressionDiff ? { ...g, knownFailures: ['a.test.ts::known flake'] } : g
       )
     }
     const lines = swap(
@@ -184,6 +184,20 @@ describe('evaluateSummary: unit groups', () => {
   it('reads a missing regressions line as RED', () => {
     expectRed(drop(greenLines(), 'UNIT_PTY_REGRESSIONS'), 'MISSING UNIT_PTY_REGRESSIONS pty')
   })
+
+  it.each(['124', '2', '137'])(
+    'reads a regression-diffed group that exited %s as RED although known failures are recorded (WR-10)',
+    (code) => {
+      const manifest = {
+        ...MANIFEST,
+        unitGroups: MANIFEST.unitGroups.map((g) =>
+          g.regressionDiff ? { ...g, knownFailures: ['a.test.ts::known flake'] } : g
+        )
+      }
+      const line = `UNIT pty exit=${code}  Test Files 67 passed (67); Tests 623 passed (623);`
+      expectRed(swap(greenLines(manifest), 'UNIT pty ', line), line, manifest)
+    }
+  )
 
   it('reads pty exit=1 with no recorded known failures as RED even with 0 regressions', () => {
     const line = 'UNIT pty exit=1  Test Files 67 passed (67); Tests 623 passed (623);'
@@ -360,7 +374,7 @@ describe('mintUnitResult and unitRegressions', () => {
     )
   })
 
-  it('counts failed assertions and assertion-less failed files, minus known failures', () => {
+  it('counts failed assertions and failed files, minus known failures keyed by file and name', () => {
     const json = vitestJson([
       [
         '/t/a.test.ts',
@@ -374,9 +388,40 @@ describe('mintUnitResult and unitRegressions', () => {
       ['/t/b.test.ts', 'failed', []],
       ['/t/c.test.ts', 'passed', [['c ok', 'passed']]]
     ])
-    const result = unitRegressions('pty', json, ['a known'])
+    const result = unitRegressions('pty', json, ['a.test.ts::a known'], { root: '/t' })
     expect(result.line).toBe('UNIT_PTY_REGRESSIONS 2')
-    expect(result.failuresText).toBe('a fails\na known\nFILE_FAILED /t/b.test.ts\n')
+    expect(result.failuresText).toBe(
+      'a.test.ts::a fails\na.test.ts::a known\nb.test.ts::FILE_FAILED\n'
+    )
+  })
+
+  it('counts a file whose hook failed although every assertion in it passed (WR-10)', () => {
+    const json = vitestJson([['/t/a.test.ts', 'failed', [['a ok', 'passed']]]])
+    const result = unitRegressions('pty', json, [], { root: '/t' })
+    expect(result.line).toBe('UNIT_PTY_REGRESSIONS 1')
+    expect(result.failuresText).toBe('a.test.ts::FILE_FAILED\n')
+  })
+
+  it('does not let a known failure in one file excuse the same name failing in another (WR-10)', () => {
+    const json = vitestJson([
+      ['/t/a.test.ts', 'failed', [['shared name', 'failed']]],
+      ['/t/b.test.ts', 'failed', [['shared name', 'failed']]]
+    ])
+    const result = unitRegressions('pty', json, ['a.test.ts::shared name'], { root: '/t' })
+    expect(result.line).toBe('UNIT_PTY_REGRESSIONS 1')
+  })
+
+  it('counts unhandled errors and an unattributed failed run as regressions no baseline excuses (WR-10)', () => {
+    const clean = vitestJson([['/t/a.test.ts', 'passed', [['a ok', 'passed']]]])
+    expect(unitRegressions('pty', clean, [], { root: '/t', unhandled: true }).line).toBe(
+      'UNIT_PTY_REGRESSIONS 1'
+    )
+    const failedRun = JSON.stringify({ success: false, testResults: [] })
+    const result = unitRegressions('pty', failedRun, [
+      'UNHANDLED_ERRORS',
+      'RUN_FAILED_WITHOUT_ATTRIBUTION'
+    ])
+    expect(result.line).toBe('UNIT_PTY_REGRESSIONS 1')
   })
 
   it('writes NONE when nothing failed', () => {
@@ -504,5 +549,44 @@ describe('mint CLI', () => {
       'UNIT_PTY_REGRESSIONS 0'
     ])
     expect(readFileSync(join(dir, 'failures.txt'), 'utf8')).toBe('NONE\n')
+  })
+})
+
+describe('unit-result CLI unhandled errors (WR-10)', () => {
+  it('counts a vitest "Unhandled Errors" block as a regression although the JSON shows none', () => {
+    // Arrange
+    const dir = mkdtempSync(join(tmpdir(), 'ctg-unhandled-'))
+    writeFileSync(join(dir, 'unit.log'), `${VITEST_LOG}\n Unhandled Errors \n`)
+    writeFileSync(
+      join(dir, 'unit.json'),
+      vitestJson([['/t/c.test.ts', 'passed', [['c ok', 'passed']]]])
+    )
+    const manifest = fileURLToPath(new URL('../combined-tree-gate.jsonc', import.meta.url))
+    const printed = []
+    const log = console.log
+    console.log = (line) => printed.push(line)
+    // Act
+    try {
+      runCli([
+        'unit-result',
+        '--manifest',
+        manifest,
+        '--group',
+        'pty',
+        '--exit',
+        '1',
+        '--log',
+        join(dir, 'unit.log'),
+        '--json',
+        join(dir, 'unit.json'),
+        '--failures-out',
+        join(dir, 'failures.txt')
+      ])
+    } finally {
+      console.log = log
+    }
+    // Assert
+    expect(printed.at(-1)).toBe('UNIT_PTY_REGRESSIONS 1')
+    expect(readFileSync(join(dir, 'failures.txt'), 'utf8')).toBe('UNHANDLED_ERRORS\n')
   })
 })

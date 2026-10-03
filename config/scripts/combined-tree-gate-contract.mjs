@@ -21,6 +21,7 @@
 
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { relative, sep } from 'node:path'
 import process from 'node:process'
 import { isEntryPoint } from './check-mobile-capability-aperture.mjs'
 import { loadManifest, planLines } from './combined-tree-gate-manifest.mjs'
@@ -174,7 +175,8 @@ function judgeUnits(lines, manifest, fail) {
       const g = groups.get(name)
       const m = /^UNIT \S+ exit=(\S+)(.*)$/.exec(line)
       // Why: only a regression-diffed group with a recorded baseline may fail; with none, exit decides.
-      const tolerated = g.regressionDiff && g.knownFailures.length > 0
+      // Why exit 1 only: a timeout (124) or a signal says the run did not finish, whatever the JSON shows.
+      const tolerated = g.regressionDiff && g.knownFailures.length > 0 && m?.[1] === '1'
       if (!m || (m[1] !== '0' && !tolerated)) {
         fail(line)
       }
@@ -280,8 +282,20 @@ export function mintUnitResult({ group, exit, log }) {
   return `UNIT ${group} exit=${exitToken(exit)} ${sum}`
 }
 
-/** Failed assertions (plus assertion-less failed files) from vitest JSON, minus known failures. */
-export function unitRegressions(group, jsonText, knownFailures) {
+const relativeFile = (name, root) =>
+  typeof name === 'string' ? relative(root, name).split(sep).join('/') : '?'
+
+/**
+ * Regressions from vitest JSON: failed assertions and failed files (a hook can fail with every
+ * assertion green), keyed `<file relative to root>::<name>` so a known failure in one file cannot excuse
+ * another. Unhandled errors and an unattributed failed run are never excusable.
+ */
+export function unitRegressions(
+  group,
+  jsonText,
+  knownFailures,
+  { root = process.cwd(), unhandled = false } = {}
+) {
   const token = regressionsToken(group)
   let data
   try {
@@ -296,21 +310,29 @@ export function unitRegressions(group, jsonText, knownFailures) {
   if (!isObject(data) || !Array.isArray(data.testResults)) {
     return { line: `${token} unknown JSON has no testResults array`, failuresText: 'UNKNOWN\n' }
   }
-  const failed = data.testResults
-    .flatMap((f) => f?.assertionResults ?? [])
-    .filter((a) => a?.status === 'failed')
-    .map((a) => a.fullName)
-    .sort()
+  const failed = []
   for (const f of data.testResults) {
-    if (f?.status === 'failed' && !f.assertionResults?.length) {
-      failed.push(`FILE_FAILED ${f.name ?? '?'}`)
+    const file = relativeFile(f?.name, root)
+    const bad = (f?.assertionResults ?? []).filter((a) => a?.status === 'failed')
+    failed.push(...bad.map((a) => `${file}::${a.fullName}`))
+    if (f?.status === 'failed' && bad.length === 0) {
+      failed.push(`${file}::FILE_FAILED`)
     }
   }
+  failed.sort()
+  const unexcusable = []
+  if (unhandled) {
+    unexcusable.push('UNHANDLED_ERRORS')
+  }
+  if (data.success === false && failed.length === 0) {
+    unexcusable.push('RUN_FAILED_WITHOUT_ATTRIBUTION')
+  }
   const known = new Set(knownFailures)
-  const regressions = failed.filter((name) => !known.has(name))
+  const regressions = [...failed.filter((name) => !known.has(name)), ...unexcusable]
+  const all = [...failed, ...unexcusable]
   return {
     line: `${token} ${regressions.length}`,
-    failuresText: failed.length > 0 ? `${failed.join('\n')}\n` : 'NONE\n'
+    failuresText: all.length > 0 ? `${all.join('\n')}\n` : 'NONE\n'
   }
 }
 
@@ -400,7 +422,8 @@ function unitResultCommand(args) {
     return 2
   }
   const exit = option(args, '--exit')
-  console.log(mintUnitResult({ group, exit, log: readOrNull(option(args, '--log') ?? '') }))
+  const unitLog = readOrNull(option(args, '--log') ?? '')
+  console.log(mintUnitResult({ group, exit, log: unitLog }))
   let manifestGroup
   try {
     manifestGroup = readManifest(args).unitGroups.find((g) => g.name === group)
@@ -411,10 +434,12 @@ function unitResultCommand(args) {
   if (!manifestGroup?.regressionDiff) {
     return 0
   }
+  const unhandled = /Unhandled (Errors|Rejection)/.test(stripAnsi(unitLog ?? ''))
   const result = unitRegressions(
     group,
     readOrNull(option(args, '--json') ?? ''),
-    manifestGroup.knownFailures
+    manifestGroup.knownFailures,
+    { unhandled }
   )
   const out = option(args, '--failures-out')
   if (out) {
