@@ -14,7 +14,11 @@ import {
   useMissionRecordsPresence
 } from '../mission-brief/use-mission-records-presence'
 import type { WorkspaceRowModel } from './resume-center-model'
-import { describeWindow, describeWorkspaceName } from './resume-center-presentation'
+import {
+  describeSessionsWord,
+  describeWindow,
+  describeWorkspaceName
+} from './resume-center-presentation'
 import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
 import { workspaceAgentCount, workspaceBranch } from './resume-center-workspace-facts'
 import { useSeenInView } from './use-seen-in-view'
@@ -148,7 +152,7 @@ export function ResumeCenterWorkspaceSection({
             <ClaimValue testId="resume-center-workspace-session-count">
               {row.counts.tabs}
             </ClaimValue>{' '}
-            {translate('resumeCenter.workspace.sessions', 'sessions')}
+            {describeSessionsWord(row.counts.tabs)}
           </span>
           <Button
             size="sm"

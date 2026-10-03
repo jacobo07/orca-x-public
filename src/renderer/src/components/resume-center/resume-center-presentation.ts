@@ -101,6 +101,13 @@ export function describePaneCount(count: number): string {
     : translate('resumeCenter.tab.panes_other', '{{count}} panes', { count })
 }
 
+/** The word after a workspace's session count; the number itself is rendered as a claim. */
+export function describeSessionsWord(count: number): string {
+  return count === 1
+    ? translate('resumeCenter.workspace.sessions_one', 'session')
+    : translate('resumeCenter.workspace.sessions_other', 'sessions')
+}
+
 /** The words after the window count in the greeting; the number itself is rendered as a claim. */
 export function describeWindowsWith(count: number): string {
   return count === 1

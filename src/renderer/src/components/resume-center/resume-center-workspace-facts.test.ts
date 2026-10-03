@@ -6,7 +6,11 @@ import {
   workspaceAgentCount,
   workspaceBranch
 } from './resume-center-workspace-facts'
-import { describePaneCount, describeWindowsWith } from './resume-center-presentation'
+import {
+  describePaneCount,
+  describeSessionsWord,
+  describeWindowsWith
+} from './resume-center-presentation'
 
 function worktree(id: string, branch: string | undefined): Worktree {
   return { id, branch } as unknown as Worktree
@@ -53,6 +57,8 @@ describe('count words', () => {
     expect(describePaneCount(3)).toBe('3 panes')
     expect(describeWindowsWith(1)).toBe('window with')
     expect(describeWindowsWith(2)).toBe('windows with')
+    expect(describeSessionsWord(1)).toBe('session')
+    expect(describeSessionsWord(6)).toBe('sessions')
   })
 })
 

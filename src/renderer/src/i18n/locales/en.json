@@ -16752,7 +16752,8 @@
     },
     "workspace": {
       "missing": "Workspace no longer exists",
-      "sessions": "sessions",
+      "sessions_one": "session",
+      "sessions_other": "sessions",
       "open": "Open",
       "collapse": "Collapse",
       "expand": "Expand",

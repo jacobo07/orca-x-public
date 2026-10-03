@@ -14871,7 +14871,8 @@
     },
     "workspace": {
       "missing": "El workspace ya no existe",
-      "sessions": "sesiones",
+      "sessions_one": "sesión",
+      "sessions_other": "sesiones",
       "open": "Abrir",
       "collapse": "Contraer",
       "expand": "Expandir",
