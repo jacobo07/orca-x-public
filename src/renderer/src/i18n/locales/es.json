@@ -14914,6 +14914,10 @@
       "noMatch": "Nada coincide con esa búsqueda.",
       "empty": "No hay workspaces con sesiones en este escritorio."
     },
+    "snapshots": {
+      "title": "Snapshots",
+      "hint": "{{name}}, layouts guardados"
+    },
     "snapshot": {
       "title": "Snapshot actual",
       "saved": "Escritorio guardado {{when}}",

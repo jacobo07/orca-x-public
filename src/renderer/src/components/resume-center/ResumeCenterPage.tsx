@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LayoutPanelLeft, RefreshCw, Search } from 'lucide-react'
+import { History, LayoutPanelLeft, RefreshCw, Search } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -21,7 +21,8 @@ import {
   describeWindowsWith,
   describeWorkspaceName
 } from './resume-center-presentation'
-import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
+import type { WorkingSetsModalData } from '../working-set/WorkingSetsDialog'
+import { restoreWorkspaceLayoutOnly, workingSetOwnerKey } from './resume-center-restore'
 import { greetingWindowCount } from './resume-center-workspace-facts'
 import { useDeskContinuity } from './use-desk-continuity'
 import { clearPanePreviewCache } from './use-pane-preview'
@@ -42,6 +43,7 @@ const SORT_LABEL: Record<ResumeCenterSort, () => string> = {
 
 export default function ResumeCenterPage(): React.JSX.Element {
   const displayName = useAppStore((s) => s.orcaProfileAuthStatus?.cloud?.displayName)
+  const openModal = useAppStore((s) => s.openModal)
   const { state, refresh } = useDeskContinuity()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<ResumeCenterSort>('window')
@@ -155,6 +157,36 @@ export default function ResumeCenterPage(): React.JSX.Element {
               <span className="truncate text-[11px] font-normal text-muted-foreground">
                 {selectedRow
                   ? translate('resumeCenter.restoreLayout.hint', '{{name}}, starts nothing', {
+                      name: selectedName
+                    })
+                  : translate('resumeCenter.restoreLayout.none', 'Select a workspace')}
+              </span>
+            </span>
+          </Button>
+          {/* Why one button, not r01's "More options" menu: Snapshots is the only option with an effect. */}
+          <Button
+            variant="outline"
+            data-testid="resume-center-snapshots"
+            disabled={!selectedRow || selectedRow.identity.kind === 'missing'}
+            onClick={() => {
+              if (selectedRow) {
+                const data: WorkingSetsModalData = {
+                  ownerKey: workingSetOwnerKey(selectedRow.key),
+                  displayName: selectedName
+                }
+                openModal('working-sets', data)
+              }
+            }}
+            className="h-auto max-w-64 items-start gap-2.5 px-4 py-2 text-left"
+          >
+            <History className="mt-0.5 size-4" aria-hidden />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[13px] font-medium">
+                {translate('resumeCenter.snapshots.title', 'Snapshots')}
+              </span>
+              <span className="truncate text-[11px] font-normal text-muted-foreground">
+                {selectedRow
+                  ? translate('resumeCenter.snapshots.hint', '{{name}}, saved layouts', {
                       name: selectedName
                     })
                   : translate('resumeCenter.restoreLayout.none', 'Select a workspace')}

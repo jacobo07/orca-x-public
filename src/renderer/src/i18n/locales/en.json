@@ -16795,6 +16795,10 @@
       "noMatch": "Nothing matches that search.",
       "empty": "No workspaces with sessions on this desk."
     },
+    "snapshots": {
+      "title": "Snapshots",
+      "hint": "{{name}}, saved layouts"
+    },
     "snapshot": {
       "title": "Current snapshot",
       "saved": "Desk saved {{when}}",

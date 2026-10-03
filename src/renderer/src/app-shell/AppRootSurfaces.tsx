@@ -37,6 +37,7 @@ const AddProjectFromFolderDialog = lazy(
 )
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
 const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
+const WorkingSetsDialog = lazy(() => import('../components/working-set/WorkingSetsDialog'))
 const PreservedBranchBatchReviewModal = lazy(
   () => import('../components/sidebar/PreservedBranchBatchReviewModal')
 )
@@ -305,6 +306,12 @@ export function AppRootSurfaces(props: {
         {activeModal === 'preserved-branch-review' ? (
           <ModalBoundary boundaryId="modal.preserved-branch-review" resetKey>
             <PreservedBranchBatchReviewModal />
+          </ModalBoundary>
+        ) : null}
+        {/* Why root: Workspace pages (Resume Center) open Snapshots without mounting the Sidebar. */}
+        {activeModal === 'working-sets' ? (
+          <ModalBoundary boundaryId="modal.working-sets" resetKey>
+            <WorkingSetsDialog />
           </ModalBoundary>
         ) : null}
       </Suspense>

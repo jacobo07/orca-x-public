@@ -37,6 +37,11 @@ async function readLiveSessionIds(hostId: string): Promise<ReadonlySet<string> |
   }
 }
 
+/** The key the sidebar's Snapshots menu saves under: a bare worktree id, or the `folder:` key. */
+export function workingSetOwnerKey(rowKey: string): string {
+  return rowKey.startsWith('worktree:') ? rowKey.slice('worktree:'.length) : rowKey
+}
+
 /**
  * The Resume Center's Open: bring the workspace and its rows back without starting anything. Rows
  * are made dormant BEFORE activation, because activation is what mounts them.
