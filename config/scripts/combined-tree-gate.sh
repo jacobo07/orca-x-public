@@ -1,17 +1,34 @@
 #!/usr/bin/env bash
-# Combined-tree gate: judges a combined-tree run against config/combined-tree-gate.jsonc by name and
-# count. The verdict lives in combined-tree-gate-contract.mjs; this script only orchestrates.
+# Combined-tree gate: builds this tree, runs the spine specs, unit groups and static gates listed in
+# config/combined-tree-gate.jsonc, and judges the run by name and count. Every summary line except
+# the header is minted, and the verdict computed, by combined-tree-gate-contract.mjs; this script
+# only orchestrates and appends node's output.
 #
-# Linux test plane only (GEX44); run and dry-run refuse elsewhere.
+# Linux test plane only (GEX44); run and dry-run refuse elsewhere. Runs IN PLACE in the tree that
+# holds this script, with HEAD re-asserted before every spec.
 #
 # Usage:
-#   combined-tree-gate.sh --verdict-only <summary.txt> [--manifest <path>]
+#   combined-tree-gate.sh --label <label> --expect <sha-prefix> [--manifest <path>]           real run
+#   combined-tree-gate.sh --label <label> --expect <sha-prefix> [--manifest <path>] --dry-run  plan only
+#   combined-tree-gate.sh --verdict-only <summary.txt> [--manifest <path>]                    re-judge
+# Run and dry-run share one preflight, so a dry-run is never laxer than a run. A dry-run prints
+# DRY_RUN, the plan and WOULD_WRITE <dir>; it never builds or starts Electron.
 #
-# Env contract (no host path is written in this file):
-#   CTG_TOOLCHAIN_BIN  optional; prepended to PATH so `node` is the toolchain node.
+# Env contract (no host path is written in this file; unset required values refuse, never default):
+#   CTG_RUNS_DIR        required; existing directory that receives <label>-<sha9>/ (never reused).
+#   CTG_TOOLCHAIN_BIN   optional; prepended to PATH. `node` must then match package.json engines.node.
+#   CTG_LOCK_OWNER      optional; directory whose pnpm-lock.yaml must match this tree's. Default: the
+#                       parent of the resolved node_modules (the owner of a shared node_modules).
+#   plus every requiredEnv of the manifest (MISSION_BRIEF_REPOS: colon-separated existing dirs).
 #
-# Exit: 0 GREEN, 1 RED, 2 NO_VERDICT, 90 tree, 91 HEAD mismatch, 92 dirty, 93 run dir exists,
-#       94 lock, 95 busy, 96 env/toolchain/platform, 97 manifest, 99 HEAD moved.
+# Worked GEX44 invocation:
+#   CTG_RUNS_DIR=$HOME/closure-runs CTG_TOOLCHAIN_BIN=$HOME/.orca-toolchain/node24/bin \
+#   MISSION_BRIEF_REPOS=$HOME/mb-fixtures/gsd-long-smoke:$HOME/mb-fixtures/wt-exec:$HOME/mb-fixtures/cognitive-resource-os \
+#   config/scripts/combined-tree-gate.sh --label p2-tip --expect "$(git rev-parse --short=9 HEAD)"
+#
+# Exit: 0 GREEN (dry-run: planned), 1 RED, 2 NO_VERDICT or usage, 90 tree, 91 HEAD mismatch,
+#       92 dirty, 93 run dir exists, 94 lock, 95 busy, 96 env/toolchain/platform, 97 manifest,
+#       99 HEAD moved during the run.
 set -u
 
 TREE=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null) || {
@@ -21,6 +38,13 @@ TREE=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null) || {
 CONTRACT=$TREE/config/scripts/combined-tree-gate-contract.mjs
 MANIFEST=$TREE/config/combined-tree-gate.jsonc
 [ -n "${CTG_TOOLCHAIN_BIN:-}" ] && export PATH="$CTG_TOOLCHAIN_BIN:$PATH"
+
+refuse() {
+  local code=$1
+  shift
+  echo "$*"
+  exit "$code"
+}
 
 # ctg_verdict <summary>: prints the contract's verdict; returns 0/1/2.
 # Why the line check: an entry guard that never fires exits 0 having printed nothing.
@@ -42,34 +66,233 @@ ctg_verdict() {
   return 2
 }
 
-MODE=
+MODE=run
 SUMMARY=
+LABEL=
+EXPECT=
 while [ $# -gt 0 ]; do
   case "$1" in
-    --verdict-only)
-      MODE=verdict-only
-      SUMMARY=${2:-}
-      shift 2 || shift
-      ;;
-    --manifest)
-      MANIFEST=${2:-}
-      shift 2 || shift
-      ;;
-    *)
-      echo "REFUSED_USAGE unknown argument: $1"
-      exit 2
-      ;;
+    --verdict-only) MODE=verdict-only SUMMARY=${2:-} ;;
+    --manifest) MANIFEST=${2:-} ;;
+    --label) LABEL=${2:-} ;;
+    --expect) EXPECT=${2:-} ;;
+    --dry-run) MODE=dry-run ;;
+    *) refuse 2 "REFUSED_USAGE unknown argument: $1" ;;
   esac
+  case "$1" in --dry-run) shift ;; *) shift 2 || shift ;; esac
+done
+case "$MANIFEST" in /*) ;; *) MANIFEST=$PWD/$MANIFEST ;; esac
+
+if [ "$MODE" = verdict-only ]; then
+  [ -n "$SUMMARY" ] || refuse 2 "TIP_VERDICT NO_VERDICT --verdict-only needs a summary path"
+  ctg_verdict "$SUMMARY"
+  exit $?
+fi
+[[ "$LABEL" =~ ^[A-Za-z0-9._-]+$ ]] || refuse 2 "REFUSED_USAGE --label <[A-Za-z0-9._-]+> is required"
+[[ "$EXPECT" =~ ^[0-9a-f]{7,40}$ ]] || refuse 2 "REFUSED_USAGE --expect <7-40 hex sha prefix> is required"
+cd "$TREE" || exit 90
+
+SPECS=()
+UNITS=()
+GATES=()
+PLAN=()
+BASE=
+
+# preflight: the ten refusals, in order; each check reached only by its own cause.
+preflight() {
+  [ "$(uname -s)" = Linux ] || refuse 96 "REFUSED_PLATFORM $(uname -s): the combined-tree gate runs on the Linux test plane only"
+
+  local want have
+  want=$(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).engines?.node ?? ""))' \
+    "$TREE/package.json" 2>/dev/null)
+  have=$(node --version 2>/dev/null | sed -E 's/^v([0-9]+)\..*/\1/')
+  [[ "$want" =~ ^[0-9]+$ ]] || refuse 96 "REFUSED_TOOLCHAIN package.json engines.node '$want' is not a bare major (node $(node --version 2>&1))"
+  [ "$have" = "$want" ] || refuse 96 "REFUSED_TOOLCHAIN node major '$have' at $(command -v node) != engines.node $want"
+
+  local text rc line counts=
+  local -a t
+  text=$(node "$CONTRACT" plan --manifest "$MANIFEST" 2>&1)
+  rc=$?
+  [ "$rc" = 0 ] || refuse 97 "REFUSED_MANIFEST $MANIFEST: $text"
+  mapfile -t PLAN <<< "$text"
+  for line in "${PLAN[@]}"; do
+    read -r -a t <<< "$line"
+    case "${t[0]}" in
+      PLAN_BASE) BASE=${t[1]} ;;
+      PLAN_ENV | PLAN_REQUIRE_ENV) ;;
+      PLAN_SPEC) SPECS+=("${t[1]}") ;;
+      PLAN_UNIT) UNITS+=("$line") ;;
+      PLAN_GATE) GATES+=("$line") ;;
+      PLAN_COUNTS) counts=$line ;;
+      *) refuse 97 "REFUSED_MANIFEST unexpected plan line: $line" ;;
+    esac
+  done
+  [ "$counts" = "PLAN_COUNTS specs=${#SPECS[@]} units=${#UNITS[@]} gates=${#GATES[@]}" ] ||
+    refuse 97 "REFUSED_MANIFEST plan counts '$counts' disagree with its lines"
+  local spec
+  for spec in "${SPECS[@]}"; do
+    [ -f "tests/e2e/$spec.spec.ts" ] || refuse 97 "REFUSED_MANIFEST spec $spec has no tests/e2e/$spec.spec.ts"
+  done
+
+  [ -n "${CTG_RUNS_DIR:-}" ] || refuse 96 "REFUSED missing env CTG_RUNS_DIR"
+  [ -d "$CTG_RUNS_DIR" ] || refuse 96 "REFUSED env CTG_RUNS_DIR=$CTG_RUNS_DIR is not a directory"
+
+  local name value entry
+  local -a parts
+  for line in "${PLAN[@]}"; do
+    read -r -a t <<< "$line"
+    [ "${t[0]}" = PLAN_REQUIRE_ENV ] || continue
+    name=${t[1]}
+    value=${!name:-}
+    [ -n "$value" ] || refuse 96 "REFUSED missing env $name (the manifest requires it)"
+    [ "${t[2]}" = 1 ] || continue
+    case "$value" in :* | *: | *::*) refuse 96 "REFUSED env $name has an empty entry" ;; esac
+    IFS=: read -r -a parts <<< "$value"
+    for entry in "${parts[@]}"; do
+      [ -d "$entry" ] || refuse 96 "REFUSED env $name entry '$entry' is not an existing directory"
+    done
+  done
+
+  HEAD=$(git rev-parse HEAD)
+  case "$HEAD" in "$EXPECT"*) ;; *) refuse 91 "REFUSED_HEAD_MISMATCH expected=$EXPECT head=$HEAD" ;; esac
+  DIRTY=$(git status --porcelain --untracked-files=no | wc -l)
+  [ "$DIRTY" = 0 ] || refuse 92 "REFUSED_DIRTY_TREE dirty=$DIRTY"
+  git rev-parse --verify --quiet "$BASE^{commit}" > /dev/null || refuse 97 "REFUSED_MANIFEST base $BASE is not a commit here"
+
+  local owner here there
+  [ -e node_modules ] || refuse 94 "REFUSED_LOCK no node_modules in $TREE"
+  owner=${CTG_LOCK_OWNER:-$(dirname "$(readlink -f node_modules)")}
+  [ -f pnpm-lock.yaml ] || refuse 94 "REFUSED_LOCK no pnpm-lock.yaml in $TREE"
+  [ -f "$owner/pnpm-lock.yaml" ] || refuse 94 "REFUSED_LOCK no pnpm-lock.yaml in lock owner $owner"
+  here=$(sha256sum pnpm-lock.yaml | cut -c1-16)
+  there=$(sha256sum "$owner/pnpm-lock.yaml" | cut -c1-16)
+  [ "$here" = "$there" ] || refuse 94 "LOCK_MISMATCH here=$here node_modules_owner=$there ($owner)"
+  LOCK=$here
+
+  RUN=$CTG_RUNS_DIR/$LABEL-${HEAD:0:9}
+  [ ! -e "$RUN" ] || refuse 93 "REFUSED_RUN_DIR_EXISTS $RUN (evidence is never overwritten or appended)"
+}
+
+preflight
+if [ "$MODE" = dry-run ]; then
+  echo DRY_RUN
+  printf '%s\n' "${PLAN[@]}"
+  echo "WOULD_WRITE $RUN"
+  exit 0
+fi
+
+mkdir "$RUN" || refuse 93 "REFUSED_RUN_DIR_EXISTS $RUN"
+S=$RUN/summary.txt
+log_line() { printf '%s\n' "$*" | tee -a "$S"; }
+# append <cmd...>: node mints the line; bash only appends it.
+append() { "$@" 2>&1 | tee -a "$S"; }
+
+# Foreign `playwright test` processes: neither cmdline nor cwd in this tree. `[p]` keeps the pattern
+# from matching any shell whose own cmdline carries the literal pattern.
+foreign_playwright() {
+  local pid cwd cmd
+  for pid in $(pgrep -f '[p]laywright(/cli\.js)? test'); do
+    [ "$pid" = "$$" ] && continue
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null) || continue
+    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null)
+    case "$cmd" in *"$TREE"*) continue ;; esac
+    [ "$cwd" = "$TREE" ] && continue
+    echo "$pid $cmd"
+  done
+}
+
+# finish <code>: append the verdict and CTG_END; exit <code>, or the verdict's code when <code> is 0.
+finish() {
+  local out verdict_rc code=$1
+  out=$(ctg_verdict "$S")
+  verdict_rc=$?
+  printf '%s\n' "$out" | tee -a "$S"
+  log_line "CTG_END $LABEL $(date -u +%FT%TZ)"
+  [ "$code" = 0 ] && code=$verdict_rc
+  exit "$code"
+}
+
+log_line "CTG_START $LABEL $(date -u +%FT%TZ)"
+log_line "HEAD=$HEAD dirty=$(git status --porcelain --untracked-files=no | wc -l)"
+log_line "LOCK_OK $LOCK"
+log_line "CTG_MANIFEST sha256=$(sha256sum "$MANIFEST" | cut -c1-16) $MANIFEST"
+log_line "MEM_AVAILABLE_GB=$(free -g | awk '/^Mem:/ {print $7}')"
+waited=0
+while busy=$(foreign_playwright) && [ -n "$busy" ]; do
+  if [ "$waited" -ge 1800 ]; then
+    log_line "RESOURCE_BUSY after ${waited}s: $(echo "$busy" | head -1 | cut -c1-200)"
+    exit 95
+  fi
+  log_line "WAIT_FOREIGN_PLAYWRIGHT waited=${waited}s $(echo "$busy" | head -1 | cut -c1-160)"
+  sleep 60
+  waited=$((waited + 60))
+done
+log_line PREFLIGHT_OK
+
+build_log=$RUN/build-real.log
+VITE_EXPOSE_STORE=true timeout 1500 node_modules/.bin/electron-vite build --mode e2e > "$build_log" 2>&1
+rc=$?
+[ "$rc" = 0 ] && { timeout 600 node config/scripts/build-relay.mjs >> "$build_log" 2>&1 || rc=$?; }
+[ "$rc" = 0 ] && {
+  timeout 900 node node_modules/typescript/bin/tsc -p config/tsconfig.cli.json --outDir out --composite false \
+    --incremental false >> "$build_log" 2>&1 || rc=$?
+}
+log_line "BUILD_real_EXIT=$rc head=$(git rev-parse --short=9 HEAD) dirty=$(git status --porcelain --untracked-files=no | wc -l)"
+[ "$rc" = 0 ] || finish 0
+
+for line in "${PLAN[@]}"; do
+  read -r -a t <<< "$line"
+  [ "${t[0]}" = PLAN_ENV ] && export "${t[1]}=${t[2]}"
 done
 
-case "$MODE" in
-  verdict-only)
-    [ -n "$SUMMARY" ] || { echo "TIP_VERDICT NO_VERDICT --verdict-only needs a summary path"; exit 2; }
-    ctg_verdict "$SUMMARY"
-    exit $?
-    ;;
-  *)
-    echo "usage: combined-tree-gate.sh --verdict-only <summary.txt> [--manifest <path>]"
-    exit 2
-    ;;
-esac
+moved=0
+for spec in "${SPECS[@]}"; do
+  if [ "$moved" = 1 ] || [ "$(git rev-parse HEAD)" != "$HEAD" ]; then
+    moved=1
+    append node "$CONTRACT" spec-result --name "$spec" --exit 99 --head-moved "${HEAD:0:9}"
+    continue
+  fi
+  log=$RUN/spec-$spec-real.log
+  SKIP_BUILD=1 timeout 1500 xvfb-run -a -s "-screen 0 2560x1600x24" node_modules/.bin/playwright test \
+    --config tests/playwright.config.ts --project=electron-headless --project=electron-headful --workers=1 \
+    --reporter=list --output "$RUN/results/$spec-real" "tests/e2e/$spec.spec.ts" > "$log" 2>&1
+  rc=$?
+  append node "$CONTRACT" spec-result --name "$spec" --exit "$rc" --log "$log"
+  # Only this tree's Electron: other trees share node_modules, so a shared-package pattern kills theirs.
+  pkill -f "$TREE/out/main" 2> /dev/null
+  sleep 2
+done
+# Why stop here: units and gates of a tree that moved under the run describe no single revision.
+[ "$moved" = 1 ] && finish 99
+
+for line in "${UNITS[@]}"; do
+  read -r -a t <<< "$line"
+  group=${t[1]}
+  timeout 900 node_modules/.bin/vitest run --config config/vitest.config.ts "${t[@]:4}" --reporter=default \
+    --reporter=json "--outputFile.json=$RUN/unit-$group.json" > "$RUN/unit-$group.log" 2>&1
+  rc=$?
+  append node "$CONTRACT" unit-result --manifest "$MANIFEST" --group "$group" --exit "$rc" \
+    --log "$RUN/unit-$group.log" --json "$RUN/unit-$group.json" --failures-out "$RUN/unit-$group-failures.txt"
+done
+
+mapfile -t CHANGED < <(git diff --name-only --diff-filter=AM "$BASE..HEAD" -- '*.ts' '*.tsx' '*.mjs')
+printf '%s\n' "${CHANGED[@]}" > "$RUN/changed-files.txt"
+log_line "CHANGED_FILES ${#CHANGED[@]} since $BASE ($RUN/changed-files.txt)"
+
+for line in "${GATES[@]}"; do
+  read -r -a t <<< "$line"
+  name=${t[1]}
+  argv=("${t[@]:3}")
+  if [ "${t[2]}" = 1 ]; then
+    if [ "${#CHANGED[@]}" = 0 ]; then
+      append node "$CONTRACT" gate-result --name "$name" --no-changed-files
+      continue
+    fi
+    argv+=("${CHANGED[@]}")
+  fi
+  timeout 900 "${argv[@]}" > "$RUN/gate-$name.log" 2>&1
+  rc=$?
+  append node "$CONTRACT" gate-result --name "$name" --exit "$rc" --log "$RUN/gate-$name.log"
+done
+
+finish 0
