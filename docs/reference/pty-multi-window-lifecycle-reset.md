@@ -47,6 +47,12 @@ died; a page that was merely *joined* by another window has not died.
   and resets accounting like a reload, but no page will ever handshake for it: if other windows
   remain and none is mid-reload, the gate reopens at once instead of waiting for the watchdog.
   With one window, behaviour is unchanged (C4).
+- **C7 — Every page handshakes at boot** (renderer `main.tsx` → `ensurePtyDispatcher()`). The
+  renderer used to handshake lazily, from its first terminal, so a window showing none never
+  reopened the gate: GEX44 sampled main after the other window's Force Reload at `ready:false`,
+  `forced:0`, pending 136 → 408 chars, then a late watchdog flush. Owner chose the renderer fix
+  over a per-window gate in main (2026-10-03). Unhandled chunks are buffered and ACKed instead of
+  dropping into a listener-less page.
 
 ## Out of scope (debt, recorded)
 
@@ -74,7 +80,8 @@ claim "the terminal is alive" from it are unproven (debt).
 - Every existing `pty-*.test.ts` passes unmodified (C4).
 - Mutants: registration reset restored; claims cleared globally instead of per window; listeners
   moved instead of kept — each turns a named test red.
-- Real app, GEX44: `force-reload-renderer-replacement.spec.ts` 3/3, including `:307`.
+- Real app, GEX44: `force-reload-renderer-replacement.spec.ts` 3/3, including `:307`, and red
+  when the boot handshake (C7) is removed.
 
 ## Evidence (2026-10-03, Windows)
 
@@ -88,4 +95,18 @@ claim "the terminal is alive" from it are unproven (debt).
 - Mutants, all CAUGHT: registration reset restored (C1, C3, C6); claims cleared globally (C3,
   C6); listeners moved (C2, C5, C6); close does not reopen (C6); reset window's handshake
   refused (C5).
-- Real app: PENDING.
+- Real app: see below.
+
+## Evidence (2026-10-03, real app, GEX44 @`1d3e97557`)
+
+Run `/home/kobii/gate8-run-1d3e97557/summary.txt` (14:27–14:30Z, tree clean, build exit 0):
+
+- `force-reload-renderer-replacement.spec.ts` survivor test 3/3 PASS (≈19 s each) with the
+  output-line probe; whole spec 3/3 PASS (1.0 min).
+- Mutant **no boot handshake** (`main.tsx` `ensurePtyDispatcher()` removed): RED. Main's gate
+  sampled `ready:false forced:0 resets:3`, pending 136 → 272 → 408 chars — the pre-fix pattern.
+  **C7 is what makes the survivor pass in the real app.**
+- Mutant **registration reset restored** (D6 C1): the survivor test still PASSES. The real-app
+  spec does not discriminate C1–C6; their proof is the unit suite above. Whether C1 alone was
+  ever visible in the real app is unshown.
+- Restore: tree clean at `1d3e97557`, rebuild exit 0.
