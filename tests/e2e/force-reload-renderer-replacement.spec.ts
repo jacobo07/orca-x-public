@@ -391,6 +391,11 @@ test.describe('Force Reload renderer replacement', () => {
     expect((await readMainProbe(electronApp)).gone).toEqual([
       { webContentsId: replacedBefore.webContentsId, reason: 'crashed' }
     ])
+    const claimsAfterReplace = await readMainPtyWindowClaims(orcaPage, ptyId)
+    expect(
+      claimsAfterReplace.visibleClaimWindowIds,
+      "D6 C3 [MAIN_STATE]: replacing the other window's renderer withdrew the survivor window's visible claim"
+    ).toContain(survivorId)
     // Its terminal still round-trips through the PTY, over its own (unbroken) CDP session.
     expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_AFTER')).toBe(true)
   })
