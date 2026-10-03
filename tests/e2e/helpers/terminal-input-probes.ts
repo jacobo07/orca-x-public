@@ -24,7 +24,8 @@
  */
 
 import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
-import { sendToTerminal, waitForTerminalOutput } from './terminal'
+import { getTerminalContent, sendToTerminal, waitForTerminalOutput } from './terminal'
+import { terminalHasOutputLine } from './terminal-output-line'
 import { buildSettledShellProbeInputSequence } from '../terminal-probe-input-sequence'
 
 // ─── Page-based probes (healthy CDP session) ────────────────────────
@@ -40,6 +41,32 @@ export async function probeDirectWrite(
   }
   try {
     await waitForTerminalOutput(page, marker, timeoutMs)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Like probeDirectWrite, but the echoed command line does not count: `echo MARKER` already contains
+ * the marker, so a terminal that rendered its input and then froze passed the plain probe.
+ */
+export async function probeDirectWriteOutput(
+  page: Page,
+  ptyId: string,
+  marker: string,
+  timeoutMs = 10_000
+): Promise<boolean> {
+  for (const input of buildSettledShellProbeInputSequence(`echo ${marker}\r`)) {
+    await sendToTerminal(page, ptyId, input)
+  }
+  try {
+    await expect
+      .poll(async () => terminalHasOutputLine(await getTerminalContent(page), marker), {
+        timeout: timeoutMs,
+        message: `Terminal printed no line equal to "${marker}"`
+      })
+      .toBe(true)
     return true
   } catch {
     return false

@@ -14,8 +14,12 @@ import type { ElectronApplication, JSHandle, Page } from '@stablyai/playwright-t
 import type { BrowserWindow } from 'electron'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, getStoreState, waitForActiveWorktree } from './helpers/store'
-import { discoverActivePtyId, waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
-import { probeDirectWrite } from './helpers/terminal-input-probes'
+import {
+  discoverActivePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneCount
+} from './helpers/terminal'
+import { probeDirectWrite, probeDirectWriteOutput } from './helpers/terminal-input-probes'
 
 type DialogCall = {
   type: string | null
@@ -122,7 +126,9 @@ async function evalInWindow<T>(
   return electronApp.evaluate(
     async (_electron, { target, expr, timeout }) => {
       const answer = target.webContents.executeJavaScript(expr, true)
-      const late = new Promise<'no-answer'>((resolve) => setTimeout(() => resolve('no-answer'), timeout))
+      const late = new Promise<'no-answer'>((resolve) =>
+        setTimeout(() => resolve('no-answer'), timeout)
+      )
       return Promise.race([answer, late]).catch(() => 'no-answer' as const)
     },
     { target: window, expr: expression, timeout: timeoutMs }
@@ -272,7 +278,9 @@ test.describe('Force Reload renderer replacement', () => {
     await new Promise((resolve) => setTimeout(resolve, 3_000))
     const cancelled = await windowFacts(electronApp, window)
     expect(cancelled.pid, 'Cancel must not replace the renderer').toBe(before.pid)
-    expect((await readMainProbe(electronApp)).gone, 'Cancel must not crash the renderer').toEqual([])
+    expect((await readMainProbe(electronApp)).gone, 'Cancel must not crash the renderer').toEqual(
+      []
+    )
     expect(await evalInWindow(electronApp, window, '1', 1_000)).toBe('no-answer')
 
     // Confirm.
@@ -301,7 +309,7 @@ test.describe('Force Reload renderer replacement', () => {
       window,
       'Object.values(window.__store.getState().ptyIdsByTabId).flat()'
     )
-    expect(ptyIdsAfter, "the replaced window lost its terminal session").toContain(ptyId)
+    expect(ptyIdsAfter, 'the replaced window lost its terminal session').toContain(ptyId)
   })
 
   test("another window's renderer and terminal survive a window's replacement", async ({
@@ -314,7 +322,8 @@ test.describe('Force Reload renderer replacement', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     await waitForPaneCount(orcaPage, 1, 30_000)
     const ptyId = await discoverActivePtyId(orcaPage)
-    expect(await probeDirectWrite(orcaPage, ptyId, 'SURVIVOR_BASELINE_OK')).toBe(true)
+    // Why output lines: the echoed `echo MARKER` alone matched before, so a frozen survivor passed.
+    expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_BASELINE_OK')).toBe(true)
 
     const secondPage = await Promise.all([
       electronApp.waitForEvent('window', { timeout: 60_000 }),
@@ -330,9 +339,10 @@ test.describe('Force Reload renderer replacement', () => {
     await armMainProbe(electronApp, [1])
     const survivorBefore = await windowFacts(electronApp, survivor)
     const replacedBefore = await windowFacts(electronApp, replaced)
-    expect(replacedBefore.pid, 'two windows sharing one renderer would make this a refusal test').not.toBe(
-      survivorBefore.pid
-    )
+    expect(
+      replacedBefore.pid,
+      'two windows sharing one renderer would make this a refusal test'
+    ).not.toBe(survivorBefore.pid)
 
     await hangRenderer(secondPage)
     await expectHung(electronApp, replaced)
@@ -363,6 +373,6 @@ test.describe('Force Reload renderer replacement', () => {
       { webContentsId: replacedBefore.webContentsId, reason: 'crashed' }
     ])
     // Its terminal still round-trips through the PTY, over its own (unbroken) CDP session.
-    expect(await probeDirectWrite(orcaPage, ptyId, 'SURVIVOR_AFTER_OK')).toBe(true)
+    expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_AFTER_OK')).toBe(true)
   })
 })
