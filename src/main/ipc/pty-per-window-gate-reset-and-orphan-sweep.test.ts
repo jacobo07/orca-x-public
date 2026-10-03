@@ -5,7 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { webContents as electronWebContents } from 'electron'
 import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers, releasePtyRendererOwnershipForWindow } from './pty'
+import {
+  registerHeadlessPtyRuntime,
+  registerPtyHandlers,
+  releasePtyRendererOwnershipForWindow
+} from './pty'
 import { getHiddenRendererPtyDeliveryDebug, isHiddenRendererPty } from './pty-hidden-delivery-gate'
 import {
   PTY_IPC_TEST_FOREIGN_WEB_CONTENTS_ID,
@@ -255,6 +259,35 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     expect(getHiddenRendererPtyDeliveryDebug().deliveryInterestPtyCount).toBe(1)
     // Control: the reset ran — the opening window's own mark went.
     expect(isHiddenRendererPty(own)).toBe(false)
+  })
+
+  it('headless: a window opened beside the headless runtime survives its first load (CR-01)', async () => {
+    // Arrange: `orca serve` registers a webContents with no id, then promotes to a desktop window.
+    installObservableDaemonTestProvider()
+    registerHeadlessPtyRuntime(undefined as never)
+    const opened = extraWindow(5)
+    registerPtyHandlers(opened as never)
+    const unowned = await spawnFrom(null, 'headless-u')
+    markHidden(null, unowned)
+    const mocked = electronWebContents as unknown as { fromId: (id: unknown) => unknown }
+    const original = mocked.fromId
+    // Why: Electron's fromId throws on a non-number id.
+    mocked.fromId = (id) => {
+      if (typeof id !== 'number') {
+        throw new TypeError('Error processing argument at index 0, conversion failure from undefined')
+      }
+      return id === 5 ? { isDestroyed: () => false } : null
+    }
+
+    try {
+      // Act + Assert
+      expect(() => fireSurviving(opened.webContents, 'did-finish-load')).not.toThrow()
+    } finally {
+      mocked.fromId = original
+    }
+
+    // Assert: the headless host is no live window, so this lone first load clears unowned leftovers.
+    expect(isHiddenRendererPty(unowned)).toBe(false)
   })
 
   it('lone window: a first load with no other live window still clears unowned leftovers', async () => {

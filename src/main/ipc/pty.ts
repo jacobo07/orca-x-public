@@ -305,7 +305,11 @@ const ptyRendererOwnership = createPtyRendererOwnership({
 })
 
 /** A recorded owner id is not a live renderer: closed windows never release their ownership. */
-function isLiveRendererWebContentsId(webContentsId: number): boolean {
+function isLiveRendererWebContentsId(webContentsId: number | undefined): boolean {
+  // Why: the headless host registers a webContents with no id, and Electron's fromId throws on a non-number.
+  if (typeof webContentsId !== 'number' || !Number.isInteger(webContentsId)) {
+    return false
+  }
   const owner = webContents.fromId(webContentsId)
   return owner !== undefined && owner !== null && !owner.isDestroyed()
 }
