@@ -182,7 +182,7 @@ import {
   markHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
   resetHiddenRendererPtyDeliveryDebugCounters,
-  resetRendererScopedHiddenPtyDeliveryState,
+  resetRendererScopedHiddenPtyDeliveryStateFor,
   setRendererPtyDeliveryInterest,
   shouldDropHiddenRendererPtyData,
   unmarkHiddenRendererPty
@@ -2225,12 +2225,6 @@ let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let localBackgroundStreamUnsub: (() => void) | null = null
 let localWriteUnavailableUnsub: (() => void) | null = null
-let didFinishLoadHandler: (() => void) | null = null
-let didFinishLoadWebContents: WebContents | null = null
-// Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so they reset when the renderer is replaced (drop memory preserved).
-let rendererGateResetLoadHandler: (() => void) | null = null
-let rendererGateResetGoneHandler: (() => void) | null = null
-let rendererGateResetWebContents: WebContents | null = null
 // Why: the backgrounded-delivery dedupe map lives in the registerPtyHandlers closure but teardown funnels through module-scope clearProviderPtyState.
 let clearBackgroundedDeliverySyncForPty: (id: string) => void = () => {}
 // Why: after daemon keep-tail thinning main's mirror holds only the kept tail, so recovery must keep consulting the daemon's complete model until exit.
@@ -2246,6 +2240,11 @@ type RendererLifecycleResetListeners = {
   onNavigation: (details: RendererNavigationDetails) => void
   onGone: () => void
   onDestroyed: () => void
+  // Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so this window's marks reset when its renderer is replaced (drop memory preserved).
+  onGateResetLoad: () => void
+  onGateResetGone: () => void
+  // Why optional: only a window registered on a LocalPtyProvider sweeps; daemon sessions survive reloads by design.
+  onOrphanSweepLoad?: () => void
 }
 // Why keyed by window (D6 C2): every window keeps its own reset listeners for its whole life.
 const rendererLifecycleResetListeners = new Map<number, RendererLifecycleResetListeners>()
@@ -2350,6 +2349,8 @@ let resetRendererDeliveryAccountingForLifecycleReset = (): void => {}
 let clearRendererDispatcherReadyWatchdog = (): void => {}
 // Bridged so a window close can reopen the closure-owned delivery gate when no page is still reloading.
 let reopenRendererPtyDispatcher = (): void => {}
+// Bridged so a module-scope per-window gate reset can resync the closure-owned daemon pacer.
+let resyncBackgroundedDeliveriesForGateReset = (): void => {}
 
 export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
   return readPtyRendererDeliveryDebugSnapshot()
@@ -2357,14 +2358,6 @@ export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugS
 
 export function resetPtyRendererDeliveryDebug(): void {
   resetPtyRendererDeliveryDebugSnapshot()
-}
-
-function clearDidFinishLoadHandler(): void {
-  if (didFinishLoadHandler && didFinishLoadWebContents) {
-    didFinishLoadWebContents.removeListener('did-finish-load', didFinishLoadHandler)
-  }
-  didFinishLoadHandler = null
-  didFinishLoadWebContents = null
 }
 
 /** Drops one window's renderer claims; returns whether the active (drain-priority) set changed. */
@@ -2394,6 +2387,35 @@ function removeRendererLifecycleResetListeners(windowKey: number): void {
   listeners.webContents.removeListener('did-start-navigation', listeners.onNavigation)
   listeners.webContents.removeListener('render-process-gone', listeners.onGone)
   listeners.webContents.removeListener('destroyed', listeners.onDestroyed)
+  listeners.webContents.removeListener('did-finish-load', listeners.onGateResetLoad)
+  listeners.webContents.removeListener('render-process-gone', listeners.onGateResetGone)
+  if (listeners.onOrphanSweepLoad) {
+    listeners.webContents.removeListener('did-finish-load', listeners.onOrphanSweepLoad)
+  }
+}
+
+/** Binds a window's local orphan sweep to the lifecycle record its registration just created. */
+function attachRendererOrphanSweep(windowKey: number, handler: () => void): void {
+  const listeners = rendererLifecycleResetListeners.get(windowKey)
+  if (!listeners) {
+    return
+  }
+  listeners.onOrphanSweepLoad = handler
+  listeners.webContents.on('did-finish-load', handler)
+}
+
+/** Reload/crash of one window: clears hidden/interest marks of PTYs it owns plus unowned ones. */
+function resetRendererWindowDeliveryGate(windowKey: number): void {
+  // Why unowned too: no live window will claim them, so keeping their marks would gate them forever (fail closed).
+  const removed = resetRendererScopedHiddenPtyDeliveryStateFor((id) => {
+    const owner = ptyRendererOwnership.ownerWebContentsIdFor(id)
+    return owner === windowKey || owner === null
+  })
+  if (removed > 0) {
+    invalidatePendingPtyDrainPolicy()
+  }
+  // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
+  resyncBackgroundedDeliveriesForGateReset()
 }
 
 function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
@@ -2422,29 +2444,16 @@ function registerRendererLifecycleResetHandlers(webContents: WebContents): void 
       if (rendererLifecycleResetListeners.size > 0 && rendererWindowsAwaitingHandshake.size === 0) {
         reopenRendererPtyDispatcher()
       }
-    }
+    },
+    onGateResetLoad: () => resetRendererWindowDeliveryGate(windowKey),
+    onGateResetGone: () => resetRendererWindowDeliveryGate(windowKey)
   }
   rendererLifecycleResetListeners.set(windowKey, listeners)
   webContents.on('did-start-navigation', listeners.onNavigation)
   webContents.on('render-process-gone', listeners.onGone)
   webContents.on('destroyed', listeners.onDestroyed)
-}
-
-function clearRendererGateResetHandlers(): void {
-  if (rendererGateResetWebContents) {
-    if (rendererGateResetLoadHandler) {
-      rendererGateResetWebContents.removeListener('did-finish-load', rendererGateResetLoadHandler)
-    }
-    if (rendererGateResetGoneHandler) {
-      rendererGateResetWebContents.removeListener(
-        'render-process-gone',
-        rendererGateResetGoneHandler
-      )
-    }
-  }
-  rendererGateResetLoadHandler = null
-  rendererGateResetGoneHandler = null
-  rendererGateResetWebContents = null
+  webContents.on('did-finish-load', listeners.onGateResetLoad)
+  webContents.on('render-process-gone', listeners.onGateResetGone)
 }
 
 // Why: Restart daemon must detach listeners AFTER synthetic pty:exit events fan out but BEFORE replaceDaemonProvider swaps the adapter; this export narrows that window to the caller.
@@ -2483,6 +2492,7 @@ export function registerPtyHandlers(
   resetRendererDeliveryAccountingForLifecycleReset = () => {}
   invalidatePendingPtyDrainPriority = () => {}
   invalidatePendingPtyDrainPolicy = () => {}
+  resyncBackgroundedDeliveriesForGateReset = () => {}
   registerRendererLifecycleResetHandlers(mainWindow.webContents)
 
   // Why: output belongs to the window that asked for the terminal, not to whichever window
@@ -2828,6 +2838,7 @@ export function registerPtyHandlers(
       syncPtyBackgroundedDelivery(id, 'gate-reset')
     }
   }
+  resyncBackgroundedDeliveriesForGateReset = resyncBackgroundedDeliveriesAfterGateReset
 
   function getRendererInFlightCharsForPty(id: string): number {
     const accounting = rendererDeliveryAccountingByPty.get(id)
@@ -4351,28 +4362,10 @@ export function registerPtyHandlers(
     })
   }
 
-  // Why: reload/crash orphans delivery-interest holds and hidden marks; reset so surviving PTYs aren't stuck force-fed or gated — each pane's first sync re-marks.
-  clearRendererGateResetHandlers()
-  const resetRendererPtyDeliveryGateState = (): void => {
-    const gateDebug = getHiddenRendererPtyDeliveryDebug()
-    resetRendererScopedHiddenPtyDeliveryState()
-    if (gateDebug.hiddenDeliveryGatedPtyCount > 0 || gateDebug.deliveryInterestPtyCount > 0) {
-      invalidatePendingPtyDrainPolicy()
-    }
-    // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
-    resyncBackgroundedDeliveriesAfterGateReset()
-  }
-  rendererGateResetLoadHandler = resetRendererPtyDeliveryGateState
-  rendererGateResetGoneHandler = resetRendererPtyDeliveryGateState
-  rendererGateResetWebContents = mainWindow.webContents
-  mainWindow.webContents.on('did-finish-load', rendererGateResetLoadHandler)
-  mainWindow.webContents.on('render-process-gone', rendererGateResetGoneHandler)
-
   // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
-  clearDidFinishLoadHandler()
   if (localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
-    didFinishLoadHandler = () => {
+    attachRendererOrphanSweep(mainWindow.webContents.id, () => {
       // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
       const generation = lp.advanceGeneration()
       if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
@@ -4394,9 +4387,7 @@ export function registerPtyHandlers(
             }
           })
       })
-    }
-    didFinishLoadWebContents = mainWindow.webContents
-    mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
+    })
   }
 
   const assertFolderWorkspacePtyPathUsable = async (

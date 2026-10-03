@@ -187,7 +187,7 @@ describe('pty renderer lifecycle reset with two windows', () => {
       )
       const listenersOf = (event: string): unknown[] =>
         first.on.mock.calls.filter((c: unknown[]) => c[0] === event).map((c: unknown[]) => c[1])
-      // Why identity, not event name: the hidden-gate reset also listens on render-process-gone and is still newest-window-only (recorded debt).
+      // Why identity, not event name: each window's hidden-gate reset also listens on render-process-gone (C8).
       const owned = Object.fromEntries(LIFECYCLE_EVENTS.map((e) => [e, listenersOf(e)]))
       first.removeListener.mockClear()
 

@@ -114,6 +114,24 @@ export function resetRendererScopedHiddenPtyDeliveryState(): void {
   deliveryInterestRendererPtys.clear()
 }
 
+/** One window's renderer replaced: same contract as the global reset (drop
+ *  memory kept), limited to the PTYs `shouldReset` selects. Returns how many
+ *  hidden/interest entries it removed. */
+export function resetRendererScopedHiddenPtyDeliveryStateFor(
+  shouldReset: (id: string) => boolean
+): number {
+  let removed = 0
+  for (const registry of [hiddenRendererPtys, deliveryInterestRendererPtys]) {
+    for (const id of registry) {
+      if (shouldReset(id)) {
+        registry.delete(id)
+        removed += 1
+      }
+    }
+  }
+  return removed
+}
+
 /** Full per-PTY teardown — wired into clearProviderPtyState so every exit
  *  path (local, daemon, SSH, connection teardown) releases gate state. */
 export function clearHiddenRendererPtyDeliveryState(id: string): void {
