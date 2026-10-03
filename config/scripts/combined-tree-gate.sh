@@ -11,7 +11,9 @@
 # Usage:
 #   combined-tree-gate.sh --label <label> --expect <sha-prefix> [--manifest <path>]           real run
 #   combined-tree-gate.sh --label <label> --expect <sha-prefix> [--manifest <path>] --dry-run  plan only
-#   combined-tree-gate.sh --verdict-only <summary.txt> [--manifest <path>]                    re-judge
+#   combined-tree-gate.sh --verdict-only <summary.txt> --manifest <run dir>/manifest.jsonc      re-judge
+# The manifest is snapshotted into the run dir and used from the copy; the verdict names its hash
+# (GREEN head=<sha> manifest=<sha16> committed=<0|1>) and fails when the summary names another.
 # Run and dry-run share one preflight, so a dry-run is never laxer than a run. A dry-run prints
 # DRY_RUN, the plan and WOULD_WRITE <dir>; it never builds or starts Electron.
 #
@@ -103,6 +105,14 @@ fi
 [[ "$EXPECT" =~ ^[0-9a-f]{7,40}$ ]] || refuse 2 "REFUSED_USAGE --expect <7-40 hex sha prefix> is required"
 cd "$TREE" || exit 90
 
+# Why a snapshot: the plan, every unit result and the verdict read the manifest; a file edited mid-run
+# (or kept outside the tree) must not change which contract judges this run. Copied into $RUN below.
+MANIFEST_SRC=$MANIFEST
+SNAP=$(mktemp) || refuse 97 "REFUSED_MANIFEST cannot create a manifest snapshot"
+trap 'rm -f "$SNAP"' EXIT
+cp "$MANIFEST_SRC" "$SNAP" 2> /dev/null || refuse 97 "REFUSED_MANIFEST cannot read $MANIFEST_SRC"
+MANIFEST=$SNAP
+
 SPECS=()
 UNITS=()
 GATES=()
@@ -124,7 +134,7 @@ preflight() {
   local -a t
   text=$(node "$CONTRACT" plan --manifest "$MANIFEST" 2>&1)
   rc=$?
-  [ "$rc" = 0 ] || refuse 97 "REFUSED_MANIFEST $MANIFEST: $text"
+  [ "$rc" = 0 ] || refuse 97 "REFUSED_MANIFEST $MANIFEST_SRC: $text"
   mapfile -t PLAN <<< "$text"
   for line in "${PLAN[@]}"; do
     read -r -a t <<< "$line"
@@ -193,6 +203,14 @@ if [ "$MODE" = dry-run ]; then
 fi
 
 mkdir "$RUN" || refuse 93 "REFUSED_RUN_DIR_EXISTS $RUN"
+cp "$SNAP" "$RUN/manifest.jsonc" || refuse 97 "REFUSED_MANIFEST cannot snapshot $MANIFEST_SRC into $RUN"
+rm -f "$SNAP"
+MANIFEST=$RUN/manifest.jsonc
+# committed=1: the snapshot is byte-identical to the manifest committed at HEAD.
+committed=0
+git show "HEAD:config/combined-tree-gate.jsonc" > "$RUN/manifest-at-head.jsonc" 2> /dev/null &&
+  cmp -s "$RUN/manifest-at-head.jsonc" "$MANIFEST" && committed=1
+rm -f "$RUN/manifest-at-head.jsonc"
 S=$RUN/summary.txt
 log_line() { printf '%s\n' "$*" | tee -a "$S"; }
 # append <cmd...>: node mints the line; bash only appends it.
@@ -235,7 +253,7 @@ finish() {
 log_line "CTG_START $LABEL $(date -u +%FT%TZ)"
 log_line "HEAD=$HEAD dirty=$(tree_dirt)"
 log_line "LOCK_OK $LOCK"
-log_line "CTG_MANIFEST sha256=$(sha256sum "$MANIFEST" | cut -c1-16) $MANIFEST"
+log_line "CTG_MANIFEST sha256=$(sha256sum "$MANIFEST" | cut -c1-16) committed=$committed $MANIFEST"
 log_line "MEM_AVAILABLE_GB=$(free -g | awk '/^Mem:/ {print $7}')"
 waited=0
 while busy=$(foreign_playwright) && [ -n "$busy" ]; do

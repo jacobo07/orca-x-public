@@ -19,6 +19,7 @@
 // The *-result commands mint one summary line each (P1 grammar, byte-compatible) and always print it.
 // Exit: 0 GREEN or printed, 1 RED, 2 no verdict (unreadable or invalid input) or usage error.
 
+import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import process from 'node:process'
 import { isEntryPoint } from './check-mobile-capability-aperture.mjs'
@@ -103,6 +104,21 @@ function judgeHeader(lines, fail) {
     }
   }
   return head
+}
+
+/** The one CTG_MANIFEST line must name the manifest being judged; returns its sha and committed flag. */
+function judgeIdentity(lines, manifestSha, fail) {
+  const found = lines.filter((l) => l.startsWith('CTG_MANIFEST '))
+  if (found.length !== 1) {
+    fail(`${found.length === 0 ? 'MISSING' : 'DUPLICATE'} CTG_MANIFEST`)
+    return { manifest: null, committed: null }
+  }
+  const m = /^CTG_MANIFEST sha256=([0-9a-f]{16}) committed=([01]) .+$/.exec(found[0])
+  if (!m || m[1] !== manifestSha) {
+    fail(found[0])
+    return { manifest: null, committed: null }
+  }
+  return { manifest: m[1], committed: m[2] === '1' }
 }
 
 /** Every phase boundary must have re-read HEAD and tracked dirt, and found the start HEAD and none. */
@@ -207,7 +223,7 @@ function judgeGates(lines, manifest, fail) {
 }
 
 /** Judges summary.txt against the manifest by name and count. Only a complete summary is GREEN. */
-export function evaluateSummary(summaryText, manifest) {
+export function evaluateSummary(summaryText, manifest, manifestSha) {
   const lines = summaryText.split(/\r?\n/)
   const failures = []
   const fail = (reason) => {
@@ -216,11 +232,12 @@ export function evaluateSummary(summaryText, manifest) {
     }
   }
   const head = judgeHeader(lines, fail)
+  const identity = judgeIdentity(lines, manifestSha, fail)
   judgeTree(lines, manifest, head, fail)
   judgeSpecs(lines, manifest, fail)
   judgeUnits(lines, manifest, fail)
   judgeGates(lines, manifest, fail)
-  return { verdict: failures.length === 0 ? 'GREEN' : 'RED', head, failures }
+  return { verdict: failures.length === 0 ? 'GREEN' : 'RED', head, ...identity, failures }
 }
 
 // Why strip ANSI: the list reporter colours the counts line, which hid it from P1's count grep.
@@ -325,19 +342,24 @@ function option(args, name) {
   return i !== -1 && i + 1 < args.length ? args[i + 1] : undefined
 }
 
-function readManifest(args) {
+function readManifestText(args) {
   const path = option(args, '--manifest')
   if (!path) {
     throw new Error('missing --manifest <path>')
   }
-  return loadManifest(readFileSync(path, 'utf8'))
+  return readFileSync(path, 'utf8')
 }
+
+const readManifest = (args) => loadManifest(readManifestText(args))
 
 function verdictCommand(args) {
   let manifest
+  let manifestSha
   let summary
   try {
-    manifest = readManifest(args)
+    const manifestText = readManifestText(args)
+    manifest = loadManifest(manifestText)
+    manifestSha = createHash('sha256').update(manifestText).digest('hex').slice(0, 16)
     const path = option(args, '--summary')
     if (!path) {
       throw new Error('missing --summary <path>')
@@ -347,12 +369,14 @@ function verdictCommand(args) {
     console.log(`TIP_VERDICT NO_VERDICT ${oneLine(error.message)}`)
     return 2
   }
-  const result = evaluateSummary(summary, manifest)
+  const result = evaluateSummary(summary, manifest, manifestSha)
   for (const reason of result.failures) {
     console.log(`VERDICT_FAILURE ${reason}`)
   }
   if (result.verdict === 'GREEN') {
-    console.log(`TIP_VERDICT GREEN head=${result.head}`)
+    console.log(
+      `TIP_VERDICT GREEN head=${result.head} manifest=${result.manifest} committed=${result.committed ? 1 : 0}`
+    )
     return 0
   }
   console.log(`TIP_VERDICT RED ${result.failures[0]}`)

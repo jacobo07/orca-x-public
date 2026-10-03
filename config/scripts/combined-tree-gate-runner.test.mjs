@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   chmodSync,
   copyFileSync,
@@ -47,6 +48,7 @@ if [ -n "\${STUB_SPAWN_PIDFILE:-}" ]; then
   setsid sleep 300 > /dev/null 2>&1 < /dev/null &
   echo $! > "$STUB_SPAWN_PIDFILE"
 fi
+[ -n "\${STUB_CLOBBER:-}" ] && echo '{}' > "$STUB_CLOBBER"
 echo "  1 passed (1.0s)"
 `
 
@@ -154,7 +156,8 @@ function makeRepo({ edit = (m) => m, lockText = 'lockfile: 1\n', installedLock =
   write(
     repo,
     'config/scripts/stub-gate.mjs',
-    `import { spawnSync } from 'node:child_process'\nspawnSync(process.env.STUB_DIR + '/mutate.sh', ['gates'])\nconsole.log('ok')\n`
+    `import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'\nspawnSync(process.env.STUB_DIR + '/mutate.sh', ['gates'])\nconsole.log('ok')\n`
   )
   git('add', '-A')
   git('commit', '-q', '-m', 'tree')
@@ -259,5 +262,51 @@ linux('combined-tree-gate.sh against a stub tree', () => {
     expect(run.status).toBe(99)
     const name = { spec: 'spec-alpha', units: 'units', gates: 'gates' }[phase]
     expect(run.summary).toMatch(new RegExp(`^TREE_AT ${name} head=\\S+ dirty=\\d+$`, 'm'))
+  })
+
+  describe('manifest identity (WR-01)', () => {
+    const sha16 = (path) =>
+      createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16)
+
+    it('names the manifest and whether it is the committed one in the GREEN line', () => {
+      // Arrange
+      const fx = makeRepo()
+      // Act
+      const run = runGate(fx)
+      // Assert
+      const committed = join(fx.repo, 'config/combined-tree-gate.jsonc')
+      expect(run.verdictLine).toBe(
+        `TIP_VERDICT GREEN head=${run.head} manifest=${sha16(committed)} committed=1`
+      )
+      expect(readFileSync(join(run.dir, 'manifest.jsonc'), 'utf8')).toBe(
+        readFileSync(committed, 'utf8')
+      )
+    })
+
+    it('marks a run of an out-of-tree manifest committed=0 with that manifest hash', () => {
+      const fx = makeRepo()
+      const lax = join(fx.root, 'lax.jsonc')
+      const reduced = JSON.parse(
+        readFileSync(join(fx.repo, 'config/combined-tree-gate.jsonc'), 'utf8')
+      )
+      reduced.staticGates = reduced.staticGates.slice(0, 1)
+      writeFileSync(lax, JSON.stringify(reduced))
+      const run = runGate(fx, { args: ['--manifest', lax] })
+      expect(run.verdictLine).toBe(
+        `TIP_VERDICT GREEN head=${run.head} manifest=${sha16(lax)} committed=0`
+      )
+    })
+
+    it('judges the manifest it started with when the file is edited mid-run', () => {
+      const fx = makeRepo()
+      const moving = join(fx.root, 'moving.jsonc')
+      copyFileSync(join(fx.repo, 'config/combined-tree-gate.jsonc'), moving)
+      const started = sha16(moving)
+      const run = runGate(fx, { args: ['--manifest', moving], env: { STUB_CLOBBER: moving } })
+      expect(run.verdictLine).toBe(
+        `TIP_VERDICT GREEN head=${run.head} manifest=${started} committed=1`
+      )
+      expect(run.status).toBe(0)
+    })
   })
 })

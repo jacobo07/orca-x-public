@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parse } from 'jsonc-parser'
 import { describe, expect, it } from 'vitest'
 import {
@@ -17,6 +19,9 @@ import {
 const RAW = readFileSync(new URL('../combined-tree-gate.jsonc', import.meta.url), 'utf8')
 const MANIFEST = loadManifest(RAW)
 const SHA = '0123456789abcdef0123456789abcdef01234567'
+const MANIFEST_SHA = createHash('sha256').update(RAW).digest('hex').slice(0, 16)
+const manifestLine = (sha = MANIFEST_SHA, committed = 1) =>
+  `CTG_MANIFEST sha256=${sha} committed=${committed} /runs/t-012345678/manifest.jsonc`
 
 const treeAt = (phase, head = SHA, dirty = 0) => `TREE_AT ${phase} head=${head} dirty=${dirty}`
 const treePhases = (manifest) => [
@@ -32,6 +37,7 @@ function greenLines(manifest = MANIFEST) {
     'CTG_START fixture 2026-10-03T00:00:00Z',
     `HEAD=${SHA} dirty=0`,
     'LOCK_OK 0e3e7a3189836879',
+    manifestLine(),
     'MEM_AVAILABLE_GB=53',
     'PREFLIGHT_OK',
     `BUILD_real_EXIT=0 head=${SHA.slice(0, 9)} dirty=0`,
@@ -48,7 +54,8 @@ function greenLines(manifest = MANIFEST) {
   ]
 }
 
-const judge = (lines, manifest = MANIFEST) => evaluateSummary(`${lines.join('\n')}\n`, manifest)
+const judge = (lines, manifest = MANIFEST, sha = MANIFEST_SHA) =>
+  evaluateSummary(`${lines.join('\n')}\n`, manifest, sha)
 const swap = (lines, prefix, next) => lines.map((l) => (l.startsWith(prefix) ? next : l))
 const drop = (lines, prefix) => lines.filter((l) => !l.startsWith(prefix))
 const spec = (name, rest) => `SPEC_RESULT ${name} label=real ${rest}`
@@ -66,7 +73,13 @@ describe('evaluateSummary: GREEN control', () => {
     // Act
     const result = judge(lines)
     // Assert
-    expect(result).toEqual({ verdict: 'GREEN', head: SHA, failures: [] })
+    expect(result).toEqual({
+      verdict: 'GREEN',
+      head: SHA,
+      manifest: MANIFEST_SHA,
+      committed: true,
+      failures: []
+    })
   })
 
   it('tolerates a failing regression-diffed group only when its known failures are recorded', () => {
@@ -233,6 +246,48 @@ describe('evaluateSummary: tree assertions (CR-01)', () => {
   it('reads a duplicated or unexpected TREE_AT phase as RED', () => {
     expectRed([...greenLines(), treeAt('end')], 'DUPLICATE TREE_AT end')
     expectRed([...greenLines(), treeAt('lunch')], 'UNEXPECTED TREE_AT lunch')
+  })
+})
+
+describe('evaluateSummary: manifest identity (WR-01)', () => {
+  it('reads a missing CTG_MANIFEST line as RED', () => {
+    expectRed(drop(greenLines(), 'CTG_MANIFEST '), 'MISSING CTG_MANIFEST')
+  })
+
+  it('reads a CTG_MANIFEST of another manifest than the one judged as RED naming its line', () => {
+    const line = manifestLine('f'.repeat(16))
+    expectRed(swap(greenLines(), 'CTG_MANIFEST ', line), line)
+  })
+
+  it('reads a duplicated or malformed CTG_MANIFEST line as RED', () => {
+    expectRed([...greenLines(), manifestLine()], 'DUPLICATE CTG_MANIFEST')
+    const bare = `CTG_MANIFEST sha256=${MANIFEST_SHA} /runs/x/manifest.jsonc`
+    expectRed(swap(greenLines(), 'CTG_MANIFEST ', bare), bare)
+  })
+
+  it('carries committed=0 into the result for a manifest that is not the committed one', () => {
+    const lines = swap(greenLines(), 'CTG_MANIFEST ', manifestLine(MANIFEST_SHA, 0))
+    expect(judge(lines)).toMatchObject({ verdict: 'GREEN', committed: false })
+  })
+
+  it('prints the manifest identity in the GREEN verdict line', () => {
+    // Arrange
+    const dir = mkdtempSync(join(tmpdir(), 'ctg-verdict-'))
+    writeFileSync(join(dir, 'summary.txt'), `${greenLines().join('\n')}\n`)
+    const manifest = fileURLToPath(new URL('../combined-tree-gate.jsonc', import.meta.url))
+    const printed = []
+    const log = console.log
+    console.log = (line) => printed.push(line)
+    // Act
+    let rc
+    try {
+      rc = runCli(['verdict', '--manifest', manifest, '--summary', join(dir, 'summary.txt')])
+    } finally {
+      console.log = log
+    }
+    // Assert
+    expect(rc).toBe(0)
+    expect(printed).toEqual([`TIP_VERDICT GREEN head=${SHA} manifest=${MANIFEST_SHA} committed=1`])
   })
 })
 
@@ -426,6 +481,7 @@ describe('minted lines round-trip through the verdict', () => {
   const header = [
     `HEAD=${SHA} dirty=0`,
     'LOCK_OK 0e3e7a3189836879',
+    manifestLine(),
     `BUILD_real_EXIT=0 head=${SHA.slice(0, 9)} dirty=0`,
     ...treePhases(MANIFEST).map((phase) => treeAt(phase))
   ]
@@ -454,7 +510,7 @@ describe('minted lines round-trip through the verdict', () => {
   }
 
   it('reads a fully minted passing run as GREEN', () => {
-    expect(judge(minted())).toEqual({ verdict: 'GREEN', head: SHA, failures: [] })
+    expect(judge(minted())).toMatchObject({ verdict: 'GREEN', head: SHA, failures: [] })
   })
 
   it('reads a minted all-skipped spec as RED below its floor', () => {
@@ -471,7 +527,7 @@ describe('mint CLI', () => {
       join(dir, 'unit.json'),
       vitestJson([['/t/c.test.ts', 'passed', [['c ok', 'passed']]]])
     )
-    const manifest = new URL('../combined-tree-gate.jsonc', import.meta.url).pathname
+    const manifest = fileURLToPath(new URL('../combined-tree-gate.jsonc', import.meta.url))
     const printed = []
     const log = console.log
     console.log = (line) => printed.push(line)
