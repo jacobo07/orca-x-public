@@ -62,7 +62,7 @@ died; a page that was merely *joined* by another window has not died.
   sweep (only when it registered on a `LocalPtyProvider`). Registering another window removes
   neither; `destroyed` or re-registration removes the window's own. Both live in the C2 per-window
   lifecycle record. `destroyed` does not run the gate reset: a closed window's PTYs keep their hidden
-  marks and interest holds until another window reloads or crashes, which clears them as dead-owned.
+  marks and interest holds until another window loads (including a newly opened one) or crashes, which clears them as dead-owned.
 
 ## Out of scope (debt, recorded)
 
