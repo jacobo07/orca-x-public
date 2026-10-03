@@ -14,6 +14,7 @@ import {
 } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
 import { createPtyRendererOwnership } from './pty-renderer-ownership'
+import { PtyRendererWindowClaims, UNATTRIBUTED_RENDERER_WINDOW } from './pty-renderer-window-claims'
 import { shouldSparePtyFromOrphanSweep } from './pty-orphan-sweep-scope'
 import { createRevealConvergenceScheduler } from './pty-reveal-convergence-scheduler'
 import { getPrimaryAppWindowRenderer, isAppWindowRenderer } from './app-window-renderer-registry'
@@ -310,6 +311,13 @@ export function releasePtyRendererOwnershipForWindow(webContentsId: number): str
 const activeRendererPtys = new Set<string>()
 const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
+// Why per window (D6): a reset withdraws only what the dead page claimed; the sets above stay the unions.
+const rendererWindowClaims = new PtyRendererWindowClaims({
+  visible: visibleRendererPtys,
+  active: activeRendererPtys
+})
+/** Windows whose page reset and has not handshaked yet; their handshake may reopen delivery (D6 C5). */
+const rendererWindowsAwaitingHandshake = new Set<number>()
 /** One convergence check per reveal; module-level so PTY exit can forget a reused id. */
 let revealConvergence: ReturnType<typeof createRevealConvergenceScheduler> | null = null
 // Why a second registry rather than a flag on the sets above: those answer "which pane is showing
@@ -2135,8 +2143,8 @@ export function clearProviderPtyState(
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
-  const activeChanged = activeRendererPtys.delete(id)
-  visibleRendererPtys.delete(id)
+  const activeChanged = activeRendererPtys.has(id)
+  rendererWindowClaims.forgetPty(id)
   rendererVisibilityKnownPtys.delete(id)
   // Why here too: PTY ids are reused, and a stale viewer claim would make a fresh PTY inherit the
   // previous one's presentability instead of starting unknown.
@@ -2219,8 +2227,6 @@ let localBackgroundStreamUnsub: (() => void) | null = null
 let localWriteUnavailableUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
-let rendererLifecycleResetWebContents: WebContents | null = null
-let rendererLifecycleResetHandler: (() => void) | null = null
 // Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so they reset when the renderer is replaced (drop memory preserved).
 let rendererGateResetLoadHandler: (() => void) | null = null
 let rendererGateResetGoneHandler: (() => void) | null = null
@@ -2234,8 +2240,15 @@ type RendererNavigationDetails = {
   isSameDocument: boolean
 }
 
-// Why: navigation details identify the triggering frame; querying aggregate load state can misclassify an overlapping subframe load.
-let rendererDidStartNavigationHandler: ((details: RendererNavigationDetails) => void) | null = null
+type RendererLifecycleResetListeners = {
+  webContents: WebContents
+  // Why: navigation details identify the triggering frame; querying aggregate load state can misclassify an overlapping subframe load.
+  onNavigation: (details: RendererNavigationDetails) => void
+  onGone: () => void
+  onDestroyed: () => void
+}
+// Why keyed by window (D6 C2): every window keeps its own reset listeners for its whole life.
+const rendererLifecycleResetListeners = new Map<number, RendererLifecycleResetListeners>()
 
 // Why: Restart daemon must re-bind provider→renderer listeners after replaceDaemonProvider swaps localProvider, else subscribers stay bound to the disposed adapter and new PTY data silently drops.
 let rebindProviderListeners: (() => void) | null = null
@@ -2335,6 +2348,8 @@ let resetPtyRendererDeliveryDebugSnapshot = (): void => {}
 let resetRendererDeliveryAccountingForLifecycleReset = (): void => {}
 // Bridged so a re-registration can cancel the prior closure's dispatcher-ready watchdog before wiring its own.
 let clearRendererDispatcherReadyWatchdog = (): void => {}
+// Bridged so a window close can reopen the closure-owned delivery gate when no page is still reloading.
+let reopenRendererPtyDispatcher = (): void => {}
 
 export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
   return readPtyRendererDeliveryDebugSnapshot()
@@ -2352,56 +2367,67 @@ function clearDidFinishLoadHandler(): void {
   didFinishLoadWebContents = null
 }
 
-function markRendererPtysHiddenForRendererLifecycleReset(): void {
+/** Drops one window's renderer claims; returns whether the active (drain-priority) set changed. */
+function withdrawRendererWindowClaims(windowKey: number): boolean {
   // A reload/crash in the breadcrumb history is load-bearing context for any freeze report.
   mainDeliveryBreadcrumbs.record('renderer-lifecycle-reset')
-  // Why: renderer-owned hints die with the page; clear visibility so surviving daemon/SSH PTYs fail closed until the new renderer reports.
-  const activePriorityChanged = activeRendererPtys.size > 0
-  activeRendererPtys.clear()
-  visibleRendererPtys.clear()
+  // Why: renderer-owned hints die with the page; only its own claims go, so its PTYs fail closed until the new page reports while other windows' terminals stay visible (D6 C3).
+  return rendererWindowClaims.withdrawWindow(windowKey).active.length > 0
+}
+
+function resetRendererWindowLifecycle(windowKey: number): void {
+  const activePriorityChanged = withdrawRendererWindowClaims(windowKey)
   // Why: the dead page never ACKs its in-flight bytes, so leaked accounting would delivery-gate surviving PTYs forever after a reload/crash.
   resetRendererDeliveryAccountingForLifecycleReset()
+  rendererWindowsAwaitingHandshake.add(windowKey)
   if (activePriorityChanged) {
     invalidatePendingPtyDrainPriority()
   }
 }
 
-function clearRendererLifecycleResetHandlers(): void {
-  if (!rendererLifecycleResetWebContents) {
+function removeRendererLifecycleResetListeners(windowKey: number): void {
+  const listeners = rendererLifecycleResetListeners.get(windowKey)
+  if (!listeners) {
     return
   }
-  if (rendererDidStartNavigationHandler) {
-    rendererLifecycleResetWebContents.removeListener(
-      'did-start-navigation',
-      rendererDidStartNavigationHandler
-    )
-  }
-  if (rendererLifecycleResetHandler) {
-    rendererLifecycleResetWebContents.removeListener(
-      'render-process-gone',
-      rendererLifecycleResetHandler
-    )
-    rendererLifecycleResetWebContents.removeListener('destroyed', rendererLifecycleResetHandler)
-  }
-  rendererLifecycleResetWebContents = null
-  rendererLifecycleResetHandler = null
-  rendererDidStartNavigationHandler = null
+  rendererLifecycleResetListeners.delete(windowKey)
+  listeners.webContents.removeListener('did-start-navigation', listeners.onNavigation)
+  listeners.webContents.removeListener('render-process-gone', listeners.onGone)
+  listeners.webContents.removeListener('destroyed', listeners.onDestroyed)
 }
 
 function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
-  clearRendererLifecycleResetHandlers()
-  markRendererPtysHiddenForRendererLifecycleReset()
-  rendererLifecycleResetWebContents = webContents
-  rendererLifecycleResetHandler = markRendererPtysHiddenForRendererLifecycleReset
-  rendererDidStartNavigationHandler = (details) => {
-    if (!details.isMainFrame || details.isSameDocument) {
-      return
+  const windowKey = webContents.id
+  // Why: registering a window resets nothing for the others (D6 C1); re-registering the same window drops only its own stale claims.
+  if (rendererLifecycleResetListeners.has(windowKey)) {
+    removeRendererLifecycleResetListeners(windowKey)
+    if (withdrawRendererWindowClaims(windowKey)) {
+      invalidatePendingPtyDrainPriority()
     }
-    markRendererPtysHiddenForRendererLifecycleReset()
   }
-  webContents.on('did-start-navigation', rendererDidStartNavigationHandler)
-  webContents.on('render-process-gone', rendererLifecycleResetHandler)
-  webContents.on('destroyed', rendererLifecycleResetHandler)
+  const listeners: RendererLifecycleResetListeners = {
+    webContents,
+    onNavigation: (details) => {
+      if (!details.isMainFrame || details.isSameDocument) {
+        return
+      }
+      resetRendererWindowLifecycle(windowKey)
+    },
+    onGone: () => resetRendererWindowLifecycle(windowKey),
+    onDestroyed: () => {
+      removeRendererLifecycleResetListeners(windowKey)
+      resetRendererWindowLifecycle(windowKey)
+      // Why: no page will handshake for a closed window; holding the survivors until the watchdog would freeze them.
+      rendererWindowsAwaitingHandshake.delete(windowKey)
+      if (rendererLifecycleResetListeners.size > 0 && rendererWindowsAwaitingHandshake.size === 0) {
+        reopenRendererPtyDispatcher()
+      }
+    }
+  }
+  rendererLifecycleResetListeners.set(windowKey, listeners)
+  webContents.on('did-start-navigation', listeners.onNavigation)
+  webContents.on('render-process-gone', listeners.onGone)
+  webContents.on('destroyed', listeners.onDestroyed)
 }
 
 function clearRendererGateResetHandlers(): void {
@@ -3025,6 +3051,13 @@ export function registerPtyHandlers(
   }
   // Why the bridge: let a later re-registration cancel this closure's watchdog (armed via a hoisted fn, so this assignment can precede its definition).
   clearRendererDispatcherReadyWatchdog = clearDispatcherReadyWatchdog
+  reopenRendererPtyDispatcher = () => {
+    // Why: real handshake landed (or no page is left to send one) — cancel the self-heal watchdog so it can't later force-open the gate.
+    clearDispatcherReadyWatchdog()
+    rendererPtyDispatcherReady = true
+    pendingData.reactivateBlocked()
+    schedulePendingDataFlush(0)
+  }
 
   function isLikelyInteractiveRedraw(data: string): boolean {
     if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
@@ -7712,33 +7745,43 @@ export function registerPtyHandlers(
   // Why: renderer signals its pty:data listener is live; until then sends are held so boot-window bytes can't drop into a listener-less page and pin the gate.
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
-    // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
-    if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents)) {
+    // Why (D6 C5): an older window whose page reset owns its own handshake; any other straggler from a dying window must not reset the new window, because the reconcile below destructively clears delivery accounting.
+    const senderId = event?.sender?.id
+    const resetWindowAnswered =
+      typeof senderId === 'number' &&
+      rendererWindowsAwaitingHandshake.has(senderId) &&
+      rendererLifecycleResetListeners.get(senderId)?.webContents === event.sender
+    if (!resetWindowAnswered && !isPtyWriteEventFromMainWindow(event, mainWindow.webContents)) {
       return
+    }
+    if (typeof senderId === 'number') {
+      rendererWindowsAwaitingHandshake.delete(senderId)
     }
     // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.
     if (rendererPtyDispatcherReady) {
       resetRendererDeliveryAccountingForLifecycleReset()
     }
-    // Why: real handshake landed — cancel the self-heal watchdog so it can't later force-open the gate.
-    clearDispatcherReadyWatchdog()
-    rendererPtyDispatcherReady = true
-    pendingData.reactivateBlocked()
-    schedulePendingDataFlush(0)
+    reopenRendererPtyDispatcher()
   })
 
+  /** Which window made a visibility/activity claim; unattributable claims fail closed on any reset. */
+  const rendererClaimWindowKey = (event: IpcMainEvent | undefined): number =>
+    typeof event?.sender?.id === 'number' ? event.sender.id : UNATTRIBUTED_RENDERER_WINDOW
+
   ipcMain.removeAllListeners('pty:setActiveRendererPty')
-  ipcMain.on('pty:setActiveRendererPty', (_event, args: { id: string; active: boolean }) => {
+  ipcMain.on('pty:setActiveRendererPty', (event, args: { id: string; active: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
     // Why: renderer scheduling hint only — active panes just get first chance at the bounded output reserve; reads/state/notifications continue for inactive terminals.
-    if (args.active) {
-      if (activeRendererPtys.has(args.id)) {
-        return
-      }
-      activeRendererPtys.add(args.id)
-    } else if (!activeRendererPtys.delete(args.id)) {
+    if (
+      !rendererWindowClaims.set(
+        'active',
+        rendererClaimWindowKey(event),
+        args.id,
+        args.active === true
+      )
+    ) {
       return
     }
     invalidatePendingPtyDrainPriority(args.id)
@@ -7759,11 +7802,14 @@ export function registerPtyHandlers(
     // Why: data produced while no renderer can see this PTY must keep that origin through batching, even if the user switches back before the flush lands.
     rendererVisibilityKnownPtys.add(args.id)
     const wasVisible = visibleRendererPtys.has(args.id)
+    rendererWindowClaims.set(
+      'visible',
+      rendererClaimWindowKey(event),
+      args.id,
+      args.visible === true
+    )
     if (args.visible) {
-      visibleRendererPtys.add(args.id)
       closeStartupQueryAuthorityForPty(args.id)
-    } else {
-      visibleRendererPtys.delete(args.id)
     }
     revealConvergence?.onVisibility(args.id, args.visible === true, wasVisible)
     // Why the sender matters: this claim is about one window's pane. Dropping it made every
