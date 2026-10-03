@@ -15,7 +15,6 @@
 {
   "surfaces": [
     "src/renderer/src/components/conversations",
-    "src/renderer/src/components/activity-rail/AgentWorkspaceRailEntry.tsx",
     "mobile/src/workspace",
     "src/renderer/src/components/resume-center",
     "src/renderer/src/components/mission-brief",
@@ -33,10 +32,6 @@
     {
       "module": "src/renderer/src/components/conversations/agent-federation-presentation.ts",
       "toneType": "FederationTone"
-    },
-    {
-      "module": "src/renderer/src/components/conversations/running-session-presentation.ts",
-      "toneType": "RunningSessionTone"
     },
     {
       "module": "src/renderer/src/components/resume-center/resume-center-presentation.ts",
