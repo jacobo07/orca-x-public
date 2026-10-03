@@ -398,4 +398,38 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(runGate(fx, { args: ['--dry-run'], env: { CTG_LOCK_OWNER: owner } }).status).toBe(94)
     })
   })
+
+  describe('untracked files (WR-05)', () => {
+    it('refuses a tree holding an untracked source file that the build would read', () => {
+      const fx = makeRepo()
+      write(fx.repo, 'src/untracked-import.ts', 'export {}\n')
+      const run = runGate(fx, { args: ['--dry-run'] })
+      expect(run.status).toBe(92)
+      expect(run.stdout).toContain('REFUSED_DIRTY_TREE dirty=1')
+    })
+
+    it('ignores gitignored files and the agent session directory (controls)', () => {
+      const fx = makeRepo()
+      write(fx.repo, 'out/main/index.js', '//\n')
+      write(fx.repo, '.claude/state.json', '{}\n')
+      const run = runGate(fx, { args: ['--dry-run'] })
+      expect(run.status, run.stdout).toBe(0)
+    })
+
+    it('does not count its own evidence directory when it sits inside the tree', () => {
+      const fx = makeRepo()
+      const inside = join(fx.repo, 'ctg-evidence')
+      mkdirSync(inside)
+      const run = runGate(fx, { env: { CTG_RUNS_DIR: inside } })
+      expect(run.status, run.stdout).toBe(0)
+      expect(run.verdictLine).toMatch(/^TIP_VERDICT GREEN /)
+    })
+
+    it('reads a file that appears untracked during a spec as RED', () => {
+      const fx = makeRepo()
+      const run = runGate(fx, { env: { STUB_MUTATE_AT: 'spec', STUB_MUTATE: 'untracked' } })
+      expect(run.status).toBe(99)
+      expect(run.summary).toContain(`TREE_AT spec-alpha head=${run.head} dirty=1\n`)
+    })
+  })
 })

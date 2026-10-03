@@ -71,14 +71,22 @@ ctg_verdict() {
   return 2
 }
 
-# tree_dirt: count of tracked changes, or `unknown` when git fails (never 0 on failure).
+# Untracked paths that are not build inputs: agent session state, and the evidence dir when it sits in the tree.
+DIRT_EXCLUDE=(':(exclude).claude')
+
+# tree_dirt: tracked changes plus untracked files outside .gitignore (the build, tsc and the unit filters
+# read them), or `unknown` when git fails (never 0 on failure).
 tree_dirt() {
-  local out
-  out=$(git status --porcelain --untracked-files=no) || {
+  local tracked untracked
+  tracked=$(git status --porcelain --untracked-files=no) || {
     echo unknown
     return 0
   }
-  printf '%s' "$out" | grep -c . || true
+  untracked=$(git ls-files --others --exclude-standard -- . "${DIRT_EXCLUDE[@]}") || {
+    echo unknown
+    return 0
+  }
+  printf '%s\n%s' "$tracked" "$untracked" | grep -c . || true
 }
 
 MODE=run
@@ -159,6 +167,9 @@ preflight() {
 
   [ -n "${CTG_RUNS_DIR:-}" ] || refuse 96 "REFUSED missing env CTG_RUNS_DIR"
   [ -d "$CTG_RUNS_DIR" ] || refuse 96 "REFUSED env CTG_RUNS_DIR=$CTG_RUNS_DIR is not a directory"
+  local runs_real
+  runs_real=$(readlink -f "$CTG_RUNS_DIR") || refuse 96 "REFUSED env CTG_RUNS_DIR=$CTG_RUNS_DIR cannot be resolved"
+  case "$runs_real" in "$TREE"/*) DIRT_EXCLUDE+=(":(exclude)${runs_real#"$TREE"/}") ;; esac
 
   local name value entry
   local -a parts
