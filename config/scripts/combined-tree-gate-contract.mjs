@@ -9,10 +9,17 @@
 //
 //   node config/scripts/combined-tree-gate-contract.mjs plan --manifest <path>
 //   node config/scripts/combined-tree-gate-contract.mjs verdict --manifest <path> --summary <path>
+//   node config/scripts/combined-tree-gate-contract.mjs spec-result --name <n> --exit <rc> --log <path>
+//        [--head-moved <sha9>]
+//   node config/scripts/combined-tree-gate-contract.mjs unit-result --manifest <m> --group <g> --exit <rc>
+//        --log <path> --json <path> --failures-out <path>
+//   node config/scripts/combined-tree-gate-contract.mjs gate-result --name <n> --exit <rc> --log <path>
+//        [--no-changed-files]
 //
-// Exit: 0 GREEN (plan: printed), 1 RED, 2 no verdict (unreadable or invalid input).
+// The *-result commands mint one summary line each (P1 grammar, byte-compatible) and always print it.
+// Exit: 0 GREEN or printed, 1 RED, 2 no verdict (unreadable or invalid input) or usage error.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import process from 'node:process'
 import { parse, printParseErrorCode } from 'jsonc-parser'
 import { isEntryPoint } from './check-mobile-capability-aperture.mjs'
@@ -414,6 +421,101 @@ export function evaluateSummary(summaryText, manifest) {
   return { verdict: failures.length === 0 ? 'GREEN' : 'RED', head, failures }
 }
 
+// Why strip ANSI: the list reporter colours the counts line, which hid it from P1's count grep.
+const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+const stripAnsi = (text) => text.replace(ANSI_SGR, '')
+const squeeze = (line) => line.replace(/ +/g, ' ')
+const logLines = (log) =>
+  stripAnsi(log)
+    .split('\n')
+    .map((l) => l.replace(/\r$/, ''))
+const exitToken = (exit) => (/^\d+$/.test(String(exit ?? '')) ? String(exit) : 'unknown')
+const SPEC_COUNT_LINE = /^\s+[0-9]+ (passed|failed|skipped|flaky|did not run|interrupted)/
+
+/** One SPEC_RESULT line; `log` is the Playwright log text, or null when it could not be read. */
+export function mintSpecResult({ name, exit, log, headMoved }) {
+  if (headMoved) {
+    return `SPEC_RESULT ${name} label=real exit=99 verdict=HEAD_MOVED from=${headMoved}`
+  }
+  const text = log ?? ''
+  const sum = logLines(text)
+    .filter((l) => SPEC_COUNT_LINE.test(l))
+    .map((l) => `${squeeze(l)};`)
+    .join('')
+  let verdict = 'PRODUCT_RUN'
+  // Why: a spec tagged for the other project reads "No tests found" and exits like a failure.
+  if (text.includes('No tests found')) {
+    verdict = 'HARNESS_FAILED'
+  } else if (!sum) {
+    verdict = 'NO_RESULT'
+  }
+  return `SPEC_RESULT ${name} label=real exit=${exitToken(exit)} verdict=${verdict} ${sum}`
+}
+
+/** One UNIT line from a vitest default-reporter log (null when unreadable: no counts, so RED). */
+export function mintUnitResult({ group, exit, log }) {
+  const sum = logLines(log ?? '')
+    .filter((l) => /Test Files|Tests {2}/.test(l))
+    .map((l) => `${squeeze(l)};`)
+    .join('')
+  return `UNIT ${group} exit=${exitToken(exit)} ${sum}`
+}
+
+/** Failed assertions (plus assertion-less failed files) from vitest JSON, minus known failures. */
+export function unitRegressions(group, jsonText, knownFailures) {
+  const token = regressionsToken(group)
+  let data
+  try {
+    data = JSON.parse(jsonText ?? '')
+  } catch (error) {
+    return {
+      line: `${token} unknown JSON unreadable: ${oneLine(error.message)}`,
+      failuresText: 'UNKNOWN\n'
+    }
+  }
+  // Why: a report without results says nothing ran; reading that as 0 regressions is a pass by absence.
+  if (!isObject(data) || !Array.isArray(data.testResults)) {
+    return { line: `${token} unknown JSON has no testResults array`, failuresText: 'UNKNOWN\n' }
+  }
+  const failed = data.testResults
+    .flatMap((f) => f?.assertionResults ?? [])
+    .filter((a) => a?.status === 'failed')
+    .map((a) => a.fullName)
+    .sort()
+  for (const f of data.testResults) {
+    if (f?.status === 'failed' && !f.assertionResults?.length) {
+      failed.push(`FILE_FAILED ${f.name ?? '?'}`)
+    }
+  }
+  const known = new Set(knownFailures)
+  const regressions = failed.filter((name) => !known.has(name))
+  return {
+    line: `${token} ${regressions.length}`,
+    failuresText: failed.length > 0 ? `${failed.join('\n')}\n` : 'NONE\n'
+  }
+}
+
+/** One GATE line: the last non-empty log line, ANSI-stripped, at most 160 characters. */
+export function mintGateResult({ name, exit, log, noChangedFiles = false }) {
+  if (noChangedFiles) {
+    return `GATE ${name} exit=0 no changed files`
+  }
+  if (log === null || log === undefined) {
+    // Why: an unreadable log proves nothing ran, so the exit token must not read as a pass.
+    return `GATE ${name} exit=unknown rc=${exitToken(exit)} log unreadable`
+  }
+  const tail = logLines(log).findLast((l) => l.trim()) ?? ''
+  return `GATE ${name} exit=${exitToken(exit)} ${[...tail].slice(0, 160).join('')}`
+}
+
+const readOrNull = (path) => {
+  try {
+    return readFileSync(path, 'utf8')
+  } catch {
+    return null
+  }
+}
+
 const oneLine = (text) => String(text).replace(/\s*\n\s*/g, '; ')
 
 function option(args, name) {
@@ -455,6 +557,37 @@ function verdictCommand(args) {
   return 1
 }
 
+function unitResultCommand(args) {
+  const group = option(args, '--group')
+  if (!group) {
+    console.error('unit-result needs --group <group>')
+    return 2
+  }
+  const exit = option(args, '--exit')
+  console.log(mintUnitResult({ group, exit, log: readOrNull(option(args, '--log') ?? '') }))
+  let manifestGroup
+  try {
+    manifestGroup = readManifest(args).unitGroups.find((g) => g.name === group)
+  } catch (error) {
+    console.log(`${regressionsToken(group)} unknown manifest: ${oneLine(error.message)}`)
+    return 2
+  }
+  if (!manifestGroup?.regressionDiff) {
+    return 0
+  }
+  const result = unitRegressions(
+    group,
+    readOrNull(option(args, '--json') ?? ''),
+    manifestGroup.knownFailures
+  )
+  const out = option(args, '--failures-out')
+  if (out) {
+    writeFileSync(out, result.failuresText)
+  }
+  console.log(result.line)
+  return 0
+}
+
 const COMMANDS = {
   plan(args) {
     try {
@@ -465,7 +598,30 @@ const COMMANDS = {
       return 2
     }
   },
-  verdict: verdictCommand
+  verdict: verdictCommand,
+  'spec-result'(args) {
+    const name = option(args, '--name')
+    if (!name) {
+      console.error('spec-result needs --name <spec>')
+      return 2
+    }
+    const headMoved = option(args, '--head-moved')
+    const log = headMoved ? null : readOrNull(option(args, '--log') ?? '')
+    console.log(mintSpecResult({ name, exit: option(args, '--exit'), log, headMoved }))
+    return 0
+  },
+  'unit-result': unitResultCommand,
+  'gate-result'(args) {
+    const name = option(args, '--name')
+    if (!name) {
+      console.error('gate-result needs --name <gate>')
+      return 2
+    }
+    const noChangedFiles = args.includes('--no-changed-files')
+    const log = noChangedFiles ? null : readOrNull(option(args, '--log') ?? '')
+    console.log(mintGateResult({ name, exit: option(args, '--exit'), log, noChangedFiles }))
+    return 0
+  }
 }
 
 export function runCli(argv) {

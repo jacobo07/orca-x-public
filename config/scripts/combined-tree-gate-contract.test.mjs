@@ -1,7 +1,18 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { parse } from 'jsonc-parser'
 import { describe, expect, it } from 'vitest'
-import { evaluateSummary, loadManifest, planLines } from './combined-tree-gate-contract.mjs'
+import {
+  evaluateSummary,
+  loadManifest,
+  mintGateResult,
+  mintSpecResult,
+  mintUnitResult,
+  planLines,
+  runCli,
+  unitRegressions
+} from './combined-tree-gate-contract.mjs'
 
 const RAW = readFileSync(new URL('../combined-tree-gate.jsonc', import.meta.url), 'utf8')
 const MANIFEST = loadManifest(RAW)
@@ -235,5 +246,216 @@ describe('planLines', () => {
     expect(lines.at(-1)).toBe('PLAN_COUNTS specs=14 units=3 gates=9')
     expect(lines).toContain('PLAN_GATE oxfmt 1 node_modules/.bin/oxfmt --check')
     expect(lines).toContain('PLAN_UNIT pty 67 1 src/main/ipc/pty')
+  })
+})
+
+// Real shapes from the P1 tip logs: the list reporter colours the counts line.
+const COLOURED_SPEC_LOG = [
+  '[e2e-cleanup] orca-app {"state":"CLEANUP_SUCCEEDED","elapsedMs":2043,"attempts":1}',
+  '  \u001b[32m✓\u001b[39m  \u001b[2m2 \u001b[22m[electron-headless] › tests/e2e/mission-brief.spec.ts:219:7 › renders',
+  '',
+  '\u001b[32m  2 passed\u001b[39m\u001b[2m (1.9m)\u001b[22m',
+  ''
+].join('\n')
+const VITEST_LOG = [
+  ' ✓ src/main/ipc/pty-pane-claim-arbitration.test.ts (6 tests) 8078ms',
+  '',
+  '\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m67 passed\u001b[39m\u001b[22m\u001b[90m (67)\u001b[39m',
+  '\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m623 passed\u001b[39m\u001b[22m | 6 skipped (629)',
+  '   Start at  20:46:34',
+  ''
+].join('\n')
+const vitestJson = (files) =>
+  JSON.stringify({
+    numTotalTests: 3,
+    testResults: files.map(([name, status, assertions]) => ({
+      name,
+      status,
+      assertionResults: assertions.map(([fullName, s]) => ({ fullName, status: s }))
+    }))
+  })
+
+describe('mintSpecResult', () => {
+  it('reads a coloured counts line once ANSI is stripped', () => {
+    const line = mintSpecResult({ name: 'mission-brief', exit: '0', log: COLOURED_SPEC_LOG })
+    expect(line).toBe(
+      'SPEC_RESULT mission-brief label=real exit=0 verdict=PRODUCT_RUN  2 passed (1.9m);'
+    )
+  })
+
+  it('joins every counts line in P1 grammar', () => {
+    const log =
+      '  1 failed\n    [electron-headless] › tests/e2e/x.spec.ts:3:1 › t\n  1 skipped\n  2 passed (1.0m)\n'
+    const line = mintSpecResult({ name: 'x', exit: '1', log })
+    expect(line).toBe(
+      'SPEC_RESULT x label=real exit=1 verdict=PRODUCT_RUN  1 failed; 1 skipped; 2 passed (1.0m);'
+    )
+  })
+
+  it('reads "No tests found" as HARNESS_FAILED', () => {
+    const line = mintSpecResult({ name: 'x', exit: '1', log: 'Error: No tests found.\n' })
+    expect(line).toBe('SPEC_RESULT x label=real exit=1 verdict=HARNESS_FAILED ')
+  })
+
+  it('reads a log with no counts line, or no log at all, as NO_RESULT', () => {
+    expect(mintSpecResult({ name: 'x', exit: '124', log: 'Terminated\n' })).toBe(
+      'SPEC_RESULT x label=real exit=124 verdict=NO_RESULT '
+    )
+    expect(mintSpecResult({ name: 'x', exit: '0', log: null })).toBe(
+      'SPEC_RESULT x label=real exit=0 verdict=NO_RESULT '
+    )
+  })
+
+  it('reports a moved HEAD without reading a log', () => {
+    const line = mintSpecResult({ name: 'x', exit: '0', log: null, headMoved: '05b57a67c' })
+    expect(line).toBe('SPEC_RESULT x label=real exit=99 verdict=HEAD_MOVED from=05b57a67c')
+  })
+})
+
+describe('mintUnitResult and unitRegressions', () => {
+  it('prints the vitest counts in P1 grammar', () => {
+    const line = mintUnitResult({ group: 'pty', exit: '0', log: VITEST_LOG })
+    expect(line).toBe(
+      'UNIT pty exit=0  Test Files 67 passed (67); Tests 623 passed | 6 skipped (629);'
+    )
+  })
+
+  it('counts failed assertions and assertion-less failed files, minus known failures', () => {
+    const json = vitestJson([
+      [
+        '/t/a.test.ts',
+        'failed',
+        [
+          ['a fails', 'failed'],
+          ['a known', 'failed'],
+          ['a ok', 'passed']
+        ]
+      ],
+      ['/t/b.test.ts', 'failed', []],
+      ['/t/c.test.ts', 'passed', [['c ok', 'passed']]]
+    ])
+    const result = unitRegressions('pty', json, ['a known'])
+    expect(result.line).toBe('UNIT_PTY_REGRESSIONS 2')
+    expect(result.failuresText).toBe('a fails\na known\nFILE_FAILED /t/b.test.ts\n')
+  })
+
+  it('writes NONE when nothing failed', () => {
+    const result = unitRegressions(
+      'pty',
+      vitestJson([['/t/c.test.ts', 'passed', [['c ok', 'passed']]]]),
+      []
+    )
+    expect(result).toEqual({ line: 'UNIT_PTY_REGRESSIONS 0', failuresText: 'NONE\n' })
+  })
+
+  it('reads unreadable JSON as unknown, never as 0', () => {
+    expect(unitRegressions('pty', null, []).line).toMatch(/^UNIT_PTY_REGRESSIONS unknown /)
+    expect(unitRegressions('pty', '{"testResults":', []).line).toMatch(
+      /^UNIT_PTY_REGRESSIONS unknown /
+    )
+    expect(unitRegressions('pty', '{}', []).line).toMatch(/^UNIT_PTY_REGRESSIONS unknown /)
+  })
+})
+
+describe('mintGateResult', () => {
+  it('prints the last non-empty log line, ANSI-stripped and capped at 160 characters', () => {
+    const log = `checking\n\u001b[32m${'x'.repeat(200)}\u001b[39m\n\n`
+    expect(mintGateResult({ name: 'oxfmt', exit: '1', log })).toBe(
+      `GATE oxfmt exit=1 ${'x'.repeat(160)}`
+    )
+  })
+
+  it('records a changed-files gate with no changed files as passing without a run', () => {
+    expect(mintGateResult({ name: 'oxlint', exit: '', log: null, noChangedFiles: true })).toBe(
+      'GATE oxlint exit=0 no changed files'
+    )
+  })
+
+  it('never reads an unreadable gate log as a pass', () => {
+    const line = mintGateResult({ name: 'tsc-node', exit: '0', log: null })
+    expect(line.split(' ')[2]).not.toBe('exit=0')
+  })
+})
+
+describe('minted lines round-trip through the verdict', () => {
+  const header = [
+    `HEAD=${SHA} dirty=0`,
+    'LOCK_OK 0e3e7a3189836879',
+    `BUILD_real_EXIT=0 head=${SHA.slice(0, 9)} dirty=0`
+  ]
+  const passLog = (n) => `\u001b[32m  ${n} passed\u001b[39m\u001b[2m (1.0m)\u001b[22m\n`
+  const unitLog = (n) =>
+    `\u001b[2m Test Files \u001b[22m ${n} passed (${n})\n      Tests  9 passed (9)\n`
+  const json = vitestJson([['/t/a.test.ts', 'passed', [['ok', 'passed']]]])
+
+  function minted({ skipMissionBrief = false } = {}) {
+    return [
+      ...header,
+      ...MANIFEST.specs.map((s) =>
+        mintSpecResult({
+          name: s.name,
+          exit: '0',
+          log:
+            skipMissionBrief && s.name === 'mission-brief' ? '  2 skipped\n' : passLog(s.minPassed)
+        })
+      ),
+      ...MANIFEST.unitGroups.flatMap((g) => [
+        mintUnitResult({ group: g.name, exit: '0', log: unitLog(g.minPassedFiles) }),
+        ...(g.regressionDiff ? [unitRegressions(g.name, json, g.knownFailures).line] : [])
+      ]),
+      ...MANIFEST.staticGates.map((g) => mintGateResult({ name: g.name, exit: '0', log: 'done\n' }))
+    ]
+  }
+
+  it('reads a fully minted passing run as GREEN', () => {
+    expect(judge(minted())).toEqual({ verdict: 'GREEN', head: SHA, failures: [] })
+  })
+
+  it('reads a minted all-skipped spec as RED below its floor', () => {
+    expectRed(minted({ skipMissionBrief: true }), 'FLOOR SPEC_RESULT mission-brief passed=0 min=2')
+  })
+})
+
+describe('mint CLI', () => {
+  it('writes the failure list and prints both unit lines', () => {
+    // Arrange
+    const dir = mkdtempSync(join(tmpdir(), 'ctg-'))
+    writeFileSync(join(dir, 'unit.log'), VITEST_LOG)
+    writeFileSync(
+      join(dir, 'unit.json'),
+      vitestJson([['/t/c.test.ts', 'passed', [['c ok', 'passed']]]])
+    )
+    const manifest = new URL('../combined-tree-gate.jsonc', import.meta.url).pathname
+    const printed = []
+    const log = console.log
+    console.log = (line) => printed.push(line)
+    // Act
+    let rc
+    try {
+      rc = runCli([
+        'unit-result',
+        '--manifest',
+        manifest,
+        '--group',
+        'pty',
+        '--exit',
+        '0',
+        '--log',
+        join(dir, 'unit.log'),
+        '--json',
+        join(dir, 'unit.json'),
+        '--failures-out',
+        join(dir, 'failures.txt')
+      ])
+    } finally {
+      console.log = log
+    }
+    // Assert
+    expect(rc).toBe(0)
+    expect(printed).toEqual([
+      'UNIT pty exit=0  Test Files 67 passed (67); Tests 623 passed | 6 skipped (629);',
+      'UNIT_PTY_REGRESSIONS 0'
+    ])
+    expect(readFileSync(join(dir, 'failures.txt'), 'utf8')).toBe('NONE\n')
   })
 })
