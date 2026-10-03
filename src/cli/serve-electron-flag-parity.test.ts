@@ -58,16 +58,35 @@ describe('serve flag parity between the CLI spec and the Electron argv rewrite',
     // emit a name nothing reads and every behavioural assertion above would still pass.
     const launchSource = readFileSync(join(process.cwd(), 'src/cli/runtime/launch.ts'), 'utf8')
     const mainSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const start = mainSource.indexOf('function getServeOptions(')
+    const argvSource = readFileSync(
+      join(process.cwd(), 'src/main/startup/serve-mode-argv.ts'),
+      'utf8'
+    )
     // Why bound the anchor: an unresolved indexOf slices to EOF and passes vacuously.
-    expect(start).toBeGreaterThanOrEqual(0)
-    const end = mainSource.indexOf('\n}', start)
-    expect(end).toBeGreaterThan(start)
-    const getServeOptionsBody = mainSource.slice(start, end)
+    const functionBody = (source: string, name: string): string => {
+      const start = source.indexOf(`function ${name}(`)
+      expect(start, `${name} not found`).toBeGreaterThanOrEqual(0)
+      const end = source.indexOf('\n}', start)
+      expect(end, `${name} has no closing brace`).toBeGreaterThan(start)
+      return source.slice(start, end)
+    }
+    const getServeOptionsBody = functionBody(mainSource, 'getServeOptions')
+    // Why follow the helper: getServeOptions may read a flag through a reader exported from
+    // serve-mode-argv (e.g. readServeBindHostArg), so the literal lives in that reader's body.
+    const readerBodies = [...getServeOptionsBody.matchAll(/\b(\w+)\(/g)]
+      .map((match) => match[1]!)
+      .filter((name) => argvSource.includes(`export function ${name}(`))
+      .map((name) => functionBody(argvSource, name))
 
     for (const flag of translatedFlags) {
-      expect(launchSource).toContain(`'--serve-${flag}'`)
-      expect(getServeOptionsBody).toContain(`'--serve-${flag}'`)
+      const literal = `'--serve-${flag}'`
+      expect(launchSource).toContain(literal)
+      const readByMain = [getServeOptionsBody, ...readerBodies].some((body) =>
+        body.includes(literal)
+      )
+      expect(readByMain, `${literal} is not read by getServeOptions or a reader it calls`).toBe(
+        true
+      )
     }
   })
 
