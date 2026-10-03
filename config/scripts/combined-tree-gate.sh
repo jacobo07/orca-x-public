@@ -144,14 +144,19 @@ fi
 [[ "$EXPECT" =~ ^[0-9a-f]{7,40}$ ]] || refuse 2 "REFUSED_USAGE --expect <7-40 hex sha prefix> is required"
 
 # One real run per checkout: runs share out/ and the working tree. flock -o keeps the lock out of the
-# spec processes, so a daemon that outlives the run cannot hold it.
+# spec processes, so a daemon that outlives the run cannot hold it. CTG_LOCK_HELD marks the re-exec only.
 if [ "$MODE" = run ] && [ -z "${CTG_LOCK_HELD:-}" ]; then
+  # Why before the lock: without flock the re-exec dies with 127 instead of the documented refusal.
+  [ "$(uname -s)" = Linux ] && command -v flock > /dev/null && command -v setsid > /dev/null ||
+    refuse 96 "REFUSED_PLATFORM the combined-tree gate needs Linux with flock and setsid"
   gitdir=$(git -C "$TREE" rev-parse --absolute-git-dir) || refuse 90 "REFUSED_TREE cannot resolve the git dir"
   CTG_LOCK_HELD=1 flock -n -o -E 98 "$gitdir/ctg.lock" "$SELF" "${ARGS[@]}"
   lock_rc=$?
   [ "$lock_rc" = 98 ] && echo "REFUSED_LOCKED another combined-tree gate run holds $gitdir/ctg.lock"
   exit "$lock_rc"
 fi
+# Why unset: the marker would otherwise reach every spec, daemon and gate, and let a nested run skip the lock.
+unset CTG_LOCK_HELD
 cd "$TREE" || exit 90
 
 # Why a snapshot: the plan, every unit result and the verdict read the manifest; a file edited mid-run

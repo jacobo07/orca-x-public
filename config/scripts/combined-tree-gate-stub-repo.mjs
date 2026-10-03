@@ -55,6 +55,7 @@ if [ -n "\${STUB_SPAWN_PIDFILE:-}" ]; then
 fi
 [ -n "\${STUB_SPEC_LINGER:-}" ] && sleep "$STUB_SPEC_LINGER"
 echo "\${STUB_SPEC_ONLY:-unset}" > "$STUB_DIR/spec-env"
+echo "\${CTG_LOCK_HELD:-unset}" > "$STUB_DIR/spec-lock-held"
 [ -n "\${STUB_CLOBBER:-}" ] && echo '{}' > "$STUB_CLOBBER"
 echo "  1 passed (1.0s)"
 `

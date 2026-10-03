@@ -1,6 +1,14 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -354,6 +362,28 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.status, run.stdout).toBe(98)
       expect(run.stdout).toContain('REFUSED_LOCKED')
       expect(existsSync(run.dir)).toBe(false)
+    })
+
+    it('does not hand the lock marker to the specs, so a nested gate run still takes the lock', () => {
+      const fx = makeRepo()
+      expect(runGate(fx).status).toBe(0)
+      expect(readFileSync(join(fx.stubs, 'spec-lock-held'), 'utf8').trim()).toBe('unset')
+    })
+
+    it('refuses (96) a host without flock before taking the lock, not with exit 127', () => {
+      // Arrange: a PATH holding only what the script needs ahead of the lock, so `flock` is not found
+      const fx = makeRepo()
+      const bin = join(fx.root, 'bin-without-flock')
+      mkdirSync(bin)
+      for (const tool of ['bash', 'dirname', 'readlink', 'uname']) {
+        symlinkSync(`/usr/bin/${tool}`, join(bin, tool))
+      }
+      symlinkSync(join(fx.stubs, 'git'), join(bin, 'git'))
+      // Act
+      const run = runGate(fx, { env: { PATH: bin } })
+      // Assert
+      expect(run.status, run.stdout + run.stderr).toBe(96)
+      expect(run.stdout).toContain('REFUSED_PLATFORM')
     })
 
     it('still plans a dry-run while the lock is held, and runs once it is free (controls)', () => {
