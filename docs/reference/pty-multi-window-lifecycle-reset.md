@@ -64,6 +64,21 @@ died; a page that was merely *joined* by another window has not died.
   lifecycle record. `destroyed` does not run the gate reset: a closed window's PTYs keep their hidden
   marks and interest holds until another window loads (including a newly opened one) or crashes, which clears them as dead-owned.
 
+- **C9 — Delivery follows the PTY, not the newest registration (R-05).** The provider data/exit
+  listeners and every `pty:*` handler are rebound to the newest `registerPtyHandlers` closure, so
+  that closure's `mainWindow.isDestroyed()` read true after the newest window closed and dropped or
+  wiped output for every other window's PTY (closing window B stopped window A's terminal from
+  receiving output). One resolver, `liveDeliveryWindowFor(ptyId)`, now answers "where does this
+  PTY's output go": its live owner (`ptyRendererOwnership`), else the live fallback (the closure's
+  window, else the newest live app window), else `null`. `deliveryWindowFor` is that resolver with a
+  destroyed last resort so a send still throws into its own catch. Data, batched flush, exit
+  (prepare and finalize), serialize request, write-unavailable and the dispatcher-ready watchdog
+  resolve per PTY at send time; only `null` (no live renderer window at all) keeps the fail-closed
+  wipe (release producers, clear pending and accounting). `pty:modelRestoreNeeded` and
+  `pty:requestDeliveryResync` follow the PTY's window too. Left on the newest closure by design:
+  the debug-snapshot window fields, write authority (`isPtyWriteEventFromMainWindow`, owner-first),
+  `pty:rendererDispatcherReady` (C5) and the per-window orphan sweep (C8).
+
 ## Out of scope (debt, recorded)
 
 **Unowned PTYs: C8 still overrides C3 on a reload or crash (review WR-02, deferred).** Hidden marks
@@ -206,3 +221,26 @@ Logs: `/home/kobii/closure-runs/p1-review-fix/`. Unit plane only (MAIN_STATE via
   throws on a non-number. RED at `9f6f27830` (`TypeError … conversion failure from undefined`),
   GREEN at `fa205fac0`. The guard-removed mutant goes red. `src/main/ipc/pty` filter: 67 files,
   623 pass, 6 skip, 0 fail. Logs: `/home/kobii/closure-runs/p1-review-fix/iter2/`.
+
+## Evidence (R-05, GEX44, closure P8 plan 01)
+
+Plane: **USER_VISIBLE** (real app) and UNIT. Spec `tests/e2e/window-close-survivor-terminal-output.spec.ts`:
+open window B, close B, then a fresh-output probe on a PTY window A owns; a nonce file proves A's PTY
+still ran input after the close, so a missing line is a delivery drop.
+
+- RED, `0b3278fb8` (product `d3d85fa63`), `/home/kobii/closure-runs/p8-01-red-0b3278fb8/summary.txt`:
+  `R05_RED_REPRODUCED reps=2`, both `Error: R-05 [USER_VISIBLE]: closing the newer window dropped the
+  older window's terminal output`; the two-window control before the close passed.
+- Unit, `src/main/ipc/pty-multi-window-delivery-owner.test.ts` (8 tests): 7 RED on the pre-fix `pty.ts`
+  (data, flush, exit, serialize, write-unavailable, restore routing, resync routing; wrong or no
+  recipient), the fail-closed control green before and after. `src/main/ipc/pty` filter 67 files / 623
+  tests before, 68 / 631 after, 0 failed in both (`/home/kobii/closure-runs/p8-01-unit/`).
+  Mutants M1 (data guard back to `mainWindow.isDestroyed()`) and M2 (restore marker back to
+  `mainWindow.webContents`) each turn their named test red; both `RESTORE dirty=0`.
+- GREEN, `d34d33584`, `/home/kobii/closure-runs/p8-01-green-d34d33584/summary.txt`: 3/3 PASS, every spec
+  `REAP survivors=0`. Real-app mutant M1 (data path guard only): RED at the same `R-05 [USER_VISIBLE]`
+  assertion, so the data-path guard alone reproduces the drop in the real app. Restore `dirty=0`, rebuild
+  exit 0, neighbour `force-reload-renderer-replacement` 3 passed.
+- Residual, unchanged: a closed window's `destroyed` reset still clears pending bytes and delivery
+  accounting for every PTY (see "Out of scope"); the unit flush test therefore models the window as
+  destroyed before its `destroyed` event is delivered.
