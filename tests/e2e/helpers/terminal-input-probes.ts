@@ -84,6 +84,22 @@ export async function probeDirectWriteOutput(
       // Next attempt; a lost first byte leaves an error line, never the marker on its own.
     }
   }
+  // Why: a false here has been the oracle twice (lost byte, wrong pane); record what it actually read.
+  const seen = await page.evaluate((ptyId) => {
+    const ptyIdsByTabId = window.__store?.getState().ptyIdsByTabId ?? {}
+    const tabId = Object.keys(ptyIdsByTabId).find((id) => ptyIdsByTabId[id]?.includes(ptyId))
+    const panes = (tabId ? window.__paneManagers?.get(tabId)?.getPanes?.() : undefined) ?? []
+    return {
+      tabId: tabId ?? null,
+      ptyIdsByTabId,
+      managerTabIds: [...(window.__paneManagers?.keys() ?? [])],
+      paneCount: panes.length,
+      tails: panes.map((pane) =>
+        (pane.serializeAddon?.serialize?.() ?? '<no serializer>').slice(-600)
+      )
+    }
+  }, ptyId)
+  console.log(`[probeDirectWriteOutput] ${marker} not found for ${ptyId}: ${JSON.stringify(seen)}`)
   return false
 }
 
