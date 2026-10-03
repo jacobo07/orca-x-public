@@ -27,6 +27,7 @@ import { greetingWindowCount } from './resume-center-workspace-facts'
 import { useDeskContinuity } from './use-desk-continuity'
 import { clearPanePreviewCache } from './use-pane-preview'
 import { ClaimValue } from './ClaimValue'
+import { ResumeCenterMoreOptions } from './ResumeCenterMoreOptions'
 import { ResumeCenterOpenIn } from './ResumeCenterOpenIn'
 import { ResumeCenterResumeAll } from './ResumeCenterResumeAll'
 import { ResumeCenterSummaryPanel } from './ResumeCenterSummaryPanel'
@@ -196,6 +197,7 @@ export default function ResumeCenterPage(): React.JSX.Element {
             </span>
           </Button>
           <ResumeCenterOpenIn row={selectedRow} name={selectedName} />
+          <ResumeCenterMoreOptions row={selectedRow} name={selectedName} />
           <Button
             variant="ghost"
             size="icon"

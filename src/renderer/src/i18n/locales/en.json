@@ -16799,6 +16799,10 @@
       "title": "Snapshots",
       "hint": "{{name}}, saved layouts"
     },
+    "moreOptions": {
+      "title": "More options",
+      "hint": "{{name}}: snapshots, open in"
+    },
     "openIn": {
       "title": "Open in",
       "hint": "{{name}}, in another app",

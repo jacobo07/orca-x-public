@@ -21,6 +21,7 @@ const HERO_ACTIONS = [
   '[data-testid="resume-center-restore-layout"]',
   '[data-testid="resume-center-snapshots"]',
   '[data-testid="resume-center-open-in"]',
+  '[data-testid="resume-center-more-options"]',
   '[data-testid="resume-center-refresh"]'
 ]
 const SWEEP = [1512, 1366, 1280, 1180, 1100, 1024, 960, 900, 800]

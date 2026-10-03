@@ -36,10 +36,13 @@ test.describe('@resume-center', () => {
     await orcaPage.locator('[data-workspace-nav-item="resume"]').click()
     await expect(orcaPage.getByTestId('resume-center-page')).toBeVisible({ timeout: 15_000 })
 
-    // The most recent row is selected on arrival, which enables the button.
-    const button = orcaPage.getByTestId('resume-center-snapshots')
-    await expect(button).toBeEnabled({ timeout: 30_000 })
-    await button.click()
+    // The most recent row is selected on arrival, which enables More options and its Snapshots.
+    const more = orcaPage.getByTestId('resume-center-more-options')
+    await expect(more).toBeEnabled({ timeout: 30_000 })
+    await more.click()
+    const snapshots = orcaPage.getByTestId('resume-center-more-snapshots')
+    await expect(snapshots).toBeEnabled()
+    await snapshots.click()
 
     const dialog = orcaPage.getByTestId('working-sets-dialog')
     await expect(dialog).toBeVisible({ timeout: 15_000 })
