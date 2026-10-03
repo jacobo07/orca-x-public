@@ -53,16 +53,24 @@ died; a page that was merely *joined* by another window has not died.
   `forced:0`, pending 136 → 408 chars, then a late watchdog flush. Owner chose the renderer fix
   over a per-window gate in main (2026-10-03). Unhandled chunks are buffered and ACKed instead of
   dropping into a listener-less page.
-- **C8 — Gate reset and orphan sweep belong to every window.** Each window's `did-finish-load` and
-  `render-process-gone` run that window's hidden-gate reset, scoped to the PTYs it owns, PTYs whose
-  recorded owner is no longer a live renderer (a closed window never releases its ownership), and
-  unowned ones (drop memory kept). A window's **first** `did-finish-load` keeps unowned PTYs while
-  another live window is registered, because that load is a page starting, not dying (C1); with no
-  other live window it clears them, as before. Its `did-finish-load` also runs its local orphan
-  sweep (only when it registered on a `LocalPtyProvider`). Registering another window removes
+- **C8 — Gate reset and orphan sweep belong to every window, and marks and holds belong to their
+  setter (WR-02).** The hidden-delivery gate records which window set each hidden mark (the last
+  `hidden: true` writer; `hidden: false` from anyone clears it) and which windows hold delivery
+  interest (any holder suppresses the gate; a window releases only its own hold). The setter is the
+  sender's window key, taken main-side from `event.sender.id`, never from the payload; a sender with no
+  numeric id is unattributed. Each window's `did-finish-load` and `render-process-gone` run that
+  window's gate reset, which withdraws the marks and holds **that window set**, plus the ones whose
+  setter is no longer a live renderer, plus unattributed ones (fail closed), plus the entries of PTYs
+  whose recorded owner is that window or is no longer live (a closed window never releases its
+  ownership; drop memory kept). A live window's entries on an unowned PTY therefore survive another
+  window's reload or crash. A window's **first** `did-finish-load` also keeps unattributed unowned
+  entries while another live window is registered, because that load is a page starting, not dying
+  (C1); with no other live window it clears them, as before. Its `did-finish-load` also runs its local
+  orphan sweep (only when it registered on a `LocalPtyProvider`). Registering another window removes
   neither; `destroyed` or re-registration removes the window's own. Both live in the C2 per-window
   lifecycle record. `destroyed` does not run the gate reset: a closed window's PTYs keep their hidden
-  marks and interest holds until another window loads (including a newly opened one) or crashes, which clears them as dead-owned.
+  marks and interest holds until another window loads (including a newly opened one) or crashes, which
+  clears them as dead-setter or dead-owned.
 
 - **C9 — Delivery follows the PTY, not the newest registration (R-05).** The provider data/exit
   listeners and every `pty:*` handler are rebound to the newest `registerPtyHandlers` closure, so
@@ -79,19 +87,18 @@ died; a page that was merely *joined* by another window has not died.
   the debug-snapshot window fields, write authority (`isPtyWriteEventFromMainWindow`, owner-first),
   `pty:rendererDispatcherReady` (C5) and the per-window orphan sweep (C8).
 
+- **C10 — A heal report judges only the reporter's own PTYs (R-05-H).** `pty:reportRendererDeliveryState`
+  with `heal: true` writes off bytes main sent but the renderer never received. Main's delivery
+  accounting is process-wide, and a PTY absent from the report read as "received 0", so window A's
+  heal report wrote off window B's in-flight bytes and dropped B's pending output. The write-off now
+  skips every PTY whose delivery target (`liveDeliveryWindowFor`, C9) is not the reporting sender: a
+  PTY another window owns is unknown to the reporter. A report with no identifiable sender is judged
+  as the registration window's (the only receiver before multi-window), so it still cannot write off
+  another window's PTY. The ACK-silence gate is unchanged.
+
 ## Out of scope (debt, recorded)
 
-**Unowned PTYs: C8 still overrides C3 on a reload or crash (review WR-02, deferred).** Hidden marks
-and interest holds are per PTY and carry no reporting window. Unowned PTYs (spawned by main with no
-sender: background and runtime-owned work) can be shown by any window, so "unowned" is not "nobody's".
-A later reload or crash of window B still clears an unowned PTY's mark and interest that a live
-window A set. Failure: A holds interest on unowned U (an automation observer) and has U hidden; B
-reloads and both entries go; A reports interest only on ref-count transitions
-(`pty-hidden-delivery-gate.ts` `setRendererPtyDeliveryInterest`), so it never re-sends it; the user
-shows U in A and hides it again, `pty:setHiddenRendererPty` re-marks it with no interest held, and
-`shouldDropHiddenRendererPtyData` drops the bytes A's sidecar is waiting for. Only a window's first
-load is fixed (C1). The fix is attributing marks and holds to the reporting sender (the
-`PtyRendererWindowClaims` shape) and withdrawing only the reset window's entries; not built here.
+Unowned PTYs and C3 (WR-02) are closed: see C8 and the WR-02 evidence section below.
 
 Delivery accounting and the dispatcher-ready gate stay process-wide: a reload of one window still
 holds sends for all windows until that page handshakes (C5 makes that the reloading page's own
@@ -244,3 +251,26 @@ still ran input after the close, so a missing line is a delivery drop.
 - Residual, unchanged: a closed window's `destroyed` reset still clears pending bytes and delivery
   accounting for every PTY (see "Out of scope"); the unit flush test therefore models the window as
   destroyed before its `destroyed` event is delivered.
+
+## Evidence (unit, GEX44, closure P8 plan 02: WR-02 and R-05-H)
+
+Plane: **UNIT** (MAIN_STATE through test doubles). No real-app oracle discriminates either; none was run.
+Logs and mutant diffs: `/home/kobii/closure-runs/p8-02-unit/`.
+
+- **WR-02.** `src/main/ipc/pty-hidden-gate-sender-attribution.test.ts` (7 tests). RED on the unfixed
+  tree (`wr02-red.log`): `reload` and `crash` fail on the post-reset assertion that window A's hidden
+  marks and its interest hold on an unowned PTY survive window B's reset (`expected false to be true`;
+  the same assertions pass before the reset), and `hold ownership` fails (`expected +0 to be 1`: B
+  releasing its hold dropped A's). Controls pass both before and after: own marks cleared by their own
+  window, a closed window's entries cleared by another window's reload, unattributed entries cleared,
+  last writer's unmark clears. Fix `8d0dca3ff`. Mutants (`MUTANT_RESULT` in `summary.txt`, each anchor
+  count 1, `RESTORE dirty=0`): W1 reset predicate ignoring the setter turns `reload` and `crash` red; W2
+  release dropping every holder turns `hold ownership` red. The per-window suite
+  `pty-per-window-gate-reset-and-orphan-sweep.test.ts` is unmodified and green.
+- **R-05-H.** `src/main/ipc/pty-delivery-heal-window-scope.test.ts` (3 tests). RED on the unfixed tree
+  (`heal-red.log`): A's report naming only its own PTY also wrote off B's PTY (`writtenOff` held both
+  ids), and B's report symmetrically; the single-window control passes before and after. Fix
+  `92a507665`. Mutant H1 (sender scope removed) turns both two-window tests red, `RESTORE dirty=0`.
+  `pty-delivery-health-heal.test.ts` is unmodified and green.
+- `src/main/ipc/pty` filter: 68 files / 631 tests before, 69 / 638 after WR-02, 70 / 641 after R-05-H,
+  0 failed throughout (`pty-before.json`, `pty-after-wr02.json`, `pty-after-heal.json`, `pty-final.json`).
