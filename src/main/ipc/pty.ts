@@ -2539,17 +2539,22 @@ export function registerPtyHandlers(
   // Why the fallback is resolved rather than captured: these handlers are re-registered per window,
   // so a closed window can leave its own `mainWindow` behind serving the survivors. An ownerless
   // PTY delivered into a destroyed window throws on every send; resolve a live one instead.
-  const liveFallbackDeliveryWindow = (): BrowserWindow => {
+  const liveFallbackWindow = (): BrowserWindow | null => {
     if (!mainWindow.isDestroyed()) {
       return mainWindow
     }
     const renderer = getPrimaryAppWindowRenderer()
     const window = renderer ? BrowserWindow.fromWebContents(renderer) : null
-    return window && !window.isDestroyed() ? window : mainWindow
+    return window && !window.isDestroyed() ? window : null
   }
 
+  // Why null: only "no renderer window is alive for this PTY" may wipe delivery state; a closed registration window is not that.
+  const liveDeliveryWindowFor = (ptyId: string): BrowserWindow | null =>
+    ptyRendererOwnership.ownerWindowFor(ptyId) ?? liveFallbackWindow()
+
+  // Why a destroyed last resort: sends throw into the existing per-send catch instead of dereferencing null.
   const deliveryWindowFor = (ptyId: string): BrowserWindow =>
-    ptyRendererOwnership.ownerWindowFor(ptyId) ?? liveFallbackDeliveryWindow()
+    liveDeliveryWindowFor(ptyId) ?? mainWindow
 
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
     if (connectionId) {
@@ -3215,8 +3220,9 @@ export function registerPtyHandlers(
   }
 
   // Why: data for a fully gated PTY signals delivery may be stuck on lost ACKs (e.g. dropped across suspend); ask the renderer for authoritative totals instead of a wall-clock guess.
-  function requestDeliveryResyncForGatedPty(): void {
-    if (deliveryResyncOutstandingRequestId !== null || mainWindow.isDestroyed()) {
+  function requestDeliveryResyncForGatedPty(ptyId: string): void {
+    const target = liveDeliveryWindowFor(ptyId)
+    if (deliveryResyncOutstandingRequestId !== null || !target) {
       return
     }
     deliveryResyncRequestSerial += 1
@@ -3238,7 +3244,7 @@ export function registerPtyHandlers(
       })
     }, PTY_DELIVERY_RESYNC_TIMEOUT_MS)
     deliveryResyncTimer.unref?.()
-    mainWindow.webContents.send('pty:requestDeliveryResync', { requestId })
+    target.webContents.send('pty:requestDeliveryResync', { requestId })
   }
 
   // Why write off: bytes sent but never received after a confirmed wedge are gone (no ACK can repay them); hand back restore markers so panes repaint from the snapshot.
@@ -3434,10 +3440,11 @@ export function registerPtyHandlers(
     reason: PtyModelRestoreReason,
     markerSeq: number | undefined
   ): void {
-    if (mainWindow.isDestroyed()) {
+    const target = liveDeliveryWindowFor(id)
+    if (!target) {
       return
     }
-    mainWindow.webContents.send('pty:modelRestoreNeeded', {
+    target.webContents.send('pty:modelRestoreNeeded', {
       id,
       reason,
       ...(typeof markerSeq === 'number' ? { markerSeq } : {})
@@ -3634,13 +3641,13 @@ export function registerPtyHandlers(
 
   function armDispatcherReadyWatchdog(): void {
     clearDispatcherReadyWatchdog()
-    if (mainWindow.isDestroyed()) {
+    if (!liveFallbackWindow()) {
       return
     }
     // Why: one-shot self-heal — force the gate open if the reloaded page never signals ready, so a dropped handshake can't hold it forever. Unref'd so it can't keep the process alive.
     dispatcherReadyWatchdogTimer = setTimeout(() => {
       dispatcherReadyWatchdogTimer = null
-      if (rendererPtyDispatcherReady || mainWindow.isDestroyed()) {
+      if (rendererPtyDispatcherReady || !liveFallbackWindow()) {
         return
       }
       rendererPtyDispatcherReady = true
@@ -3653,7 +3660,7 @@ export function registerPtyHandlers(
 
   function flushPendingData(): void {
     flushTimer = null
-    if (mainWindow.isDestroyed()) {
+    if (!liveFallbackWindow()) {
       // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
       producerFlowControl.releaseAll()
       clearDeliveryResyncProbe()
@@ -3847,7 +3854,7 @@ export function registerPtyHandlers(
   }
 
   function preparePtyExitForRenderer(payload: { id: string; code: number }): (() => void) | null {
-    if (mainWindow.isDestroyed()) {
+    if (!liveDeliveryWindowFor(payload.id)) {
       sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
       return () => {}
     }
@@ -3908,7 +3915,7 @@ export function registerPtyHandlers(
   }
 
   function finalizePtyExitForRenderer(payload: { id: string; code: number }): void {
-    if (mainWindow.isDestroyed()) {
+    if (!liveDeliveryWindowFor(payload.id)) {
       rendererCreditBeforeExitByPty.delete(payload.id)
       return
     }
@@ -3982,7 +3989,7 @@ export function registerPtyHandlers(
     const preservesSeq = !payload.transformed && rawLength === payload.data.length
     const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
     const projectionId = projection?.identity.projectionSemanticsId
-    if (mainWindow.isDestroyed()) {
+    if (!liveDeliveryWindowFor(payload.id)) {
       if (projectionId) {
         sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
       }
@@ -4060,7 +4067,7 @@ export function registerPtyHandlers(
           sendModelRestoreNeededMarker(payload.id, 'pending-cap', outputSeq)
         }
         updateProducerFlowControl(payload.id)
-        requestDeliveryResyncForGatedPty()
+        requestDeliveryResyncForGatedPty(payload.id)
         return
       }
       deletePendingPtyData(payload.id)
@@ -4100,7 +4107,7 @@ export function registerPtyHandlers(
     if (
       !canSendPtyDataToRenderer(payload.id, { interactive: activeRendererPtys.has(payload.id) })
     ) {
-      requestDeliveryResyncForGatedPty()
+      requestDeliveryResyncForGatedPty(payload.id)
     }
     if (!flushTimer) {
       schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
@@ -4228,14 +4235,14 @@ export function registerPtyHandlers(
     // just the pane whose write happened to detect the dead endpoint (STA-2373).
     localWriteUnavailableUnsub =
       localProvider.onWriteUnavailable?.((payload) => {
+        const target = liveDeliveryWindowFor(payload.id)
         if (
-          mainWindow.isDestroyed() ||
-          (typeof mainWindow.webContents.isDestroyed === 'function' &&
-            mainWindow.webContents.isDestroyed())
+          !target ||
+          (typeof target.webContents.isDestroyed === 'function' && target.webContents.isDestroyed())
         ) {
           return
         }
-        deliveryWindowFor(payload.id).webContents.send('pty:writeUnavailable', { id: payload.id })
+        target.webContents.send('pty:writeUnavailable', { id: payload.id })
       }) ?? null
 
     // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
@@ -4378,7 +4385,8 @@ export function registerPtyHandlers(
     ptyId: string,
     opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
   ): Promise<SerializeResult> {
-    if (mainWindow.isDestroyed()) {
+    const target = liveDeliveryWindowFor(ptyId)
+    if (!target) {
       return Promise.resolve(null)
     }
 
@@ -4396,7 +4404,7 @@ export function registerPtyHandlers(
       if (opts) {
         payload.opts = opts
       }
-      deliveryWindowFor(ptyId).webContents.send('pty:serializeBuffer:request', payload)
+      target.webContents.send('pty:serializeBuffer:request', payload)
     })
   }
 
