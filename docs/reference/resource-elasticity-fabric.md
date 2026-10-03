@@ -209,8 +209,9 @@ Findings from the first inventory:
 - **Real-app regression proof.** Disabling the git-common run in the built app turns the e2e spec
   red.
 - **Still open.**
-  - A base-root listing error other than ENOENT still reads as "every worktree deleted". The
-    cost is one wasted structure refresh, because the renderer re-lists from git, not lost data.
+  - Closed by d3bc55085 (test `worktree-base-directory-poller-listing-errors.test.ts`): a base-root
+    or nested-container listing error other than ENOENT/ENOTDIR is unknown and keeps the previous
+    snapshot.
   - The quiet tier also stretches the 15-run index backstop to 150 s for idle repos.
 
 ## Second shrink — worktree card decorations share one clock per window
@@ -276,8 +277,9 @@ baseline (3 → 1).
   - a planted per-card interval (gate).
 - **Still open.**
   - Issue lookups are per window: two windows showing one issue start two `gh` processes.
-  - A failed issue lookup is cached as "no issue" for 5 min, because main turns every failure
-    into `null`.
+  - Closed by 4b5d58191 and 3b85d4183 (tests `issues-lookup-failure.test.ts`,
+    `github-issue-failure-not-cached.test.ts`): a failed issue lookup rejects in main and is never
+    cached in the renderer; only a positive not-found answer is cached as "no issue".
 
 ## Third shrink — every pane's process-exit backstop shares one clock and one call per window
 
