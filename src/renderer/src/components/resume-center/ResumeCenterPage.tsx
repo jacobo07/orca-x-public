@@ -232,6 +232,7 @@ export default function ResumeCenterPage(): React.JSX.Element {
                 onSelect={() =>
                   setSelectedId(effectiveSelectedId === rowId(row) ? null : rowId(row))
                 }
+                onShowBrief={() => setSelectedId(rowId(row))}
               />
             ))
           )}

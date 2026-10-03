@@ -61,14 +61,24 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function renderRows(onSelect = vi.fn()) {
+function renderRows(onShowBrief = vi.fn(), onSelect = vi.fn()) {
   render(
     <>
-      <ResumeCenterWorkspaceSection row={A} selected={false} onSelect={onSelect} />
-      <ResumeCenterWorkspaceSection row={B} selected={false} onSelect={vi.fn()} />
+      <ResumeCenterWorkspaceSection
+        row={A}
+        selected={false}
+        onSelect={onSelect}
+        onShowBrief={onShowBrief}
+      />
+      <ResumeCenterWorkspaceSection
+        row={B}
+        selected={false}
+        onSelect={vi.fn()}
+        onShowBrief={vi.fn()}
+      />
     </>
   )
-  return onSelect
+  return { onShowBrief, onSelect }
 }
 
 describe('Mission Brief is discoverable on the row before any brief is read', () => {
@@ -83,13 +93,15 @@ describe('Mission Brief is discoverable on the row before any brief is read', ()
   })
 
   it('opens that workspace brief from the chip, with a name that says so', async () => {
-    const onSelect = renderRows()
+    const { onShowBrief, onSelect } = renderRows()
     await act(() => probeMissionRecordsInto([A, B]))
     const button = chip('alpha')!
     expect(button.tagName).toBe('BUTTON')
     expect(button.getAttribute('aria-label')).toContain('alpha')
     await userEvent.click(button)
-    expect(onSelect).toHaveBeenCalledTimes(1)
+    // Select, never toggle: on the already-selected row a toggle would hide the brief.
+    expect(onShowBrief).toHaveBeenCalledTimes(1)
+    expect(onSelect).not.toHaveBeenCalled()
   })
 
   it('lets a read brief replace the mark with its signal, and a read "no mission" remove it', async () => {

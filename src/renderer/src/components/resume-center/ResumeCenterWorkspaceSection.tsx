@@ -28,11 +28,14 @@ const CHIP = 'inline-flex items-center gap-1 rounded-md border border-border px-
 export function ResumeCenterWorkspaceSection({
   row,
   selected,
-  onSelect
+  onSelect,
+  onShowBrief
 }: {
   row: WorkspaceRowModel
   selected: boolean
   onSelect: () => void
+  /** Selects this row without toggling: the chip must never hide the brief it advertises. */
+  onShowBrief: () => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(true)
   const sectionRef = useRef<HTMLElement>(null)
@@ -99,7 +102,7 @@ export function ResumeCenterWorkspaceSection({
                 type="button"
                 data-testid="resume-center-workspace-mission-chip"
                 data-mission-chip={missionChip.kind}
-                onClick={onSelect}
+                onClick={onShowBrief}
                 aria-label={translate(
                   'resumeCenter.workspace.missionChipLabel',
                   '{{label}}: show the Mission Brief for {{name}}',
