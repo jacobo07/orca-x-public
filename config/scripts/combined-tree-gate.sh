@@ -100,19 +100,16 @@ tree_dirt() {
   printf '%s\n%s\n%s' "$tracked" "$untracked" "$shadows" | grep -c . || true
 }
 
-# shadowing_files: ignored files the build resolves ahead of, or in addition to, the committed tree: a
-# .js beside a tracked .ts/.tsx (vite prefers .js), an untracked .d.ts, an extra vite config, an .env file.
+# shadowing_files: ignored files the build may read instead of, or beside, the committed tree: anything
+# ignored under src/ or tests/ (vite prefers .js over .ts and over a dir's index), config/ except tsc build
+# info, an extra vite config, an .env file.
 shadowing_files() {
   local listed file
-  listed=$(git ls-files --others --ignored --exclude-standard -- src ':(glob).env*' \
+  listed=$(git ls-files --others --ignored --exclude-standard -- src tests config ':(glob).env*' \
     ':(glob)electron.vite.config.*' ':(glob)vite.config.*' "${DIRT_EXCLUDE[@]}") || return 1
   while IFS= read -r file; do
     case "$file" in
-      src/*.d.ts) echo "$file" ;;
-      src/*.js)
-        [ -z "$(git ls-files -- ":(literal)${file%.js}.ts" ":(literal)${file%.js}.tsx")" ] || echo "$file"
-        ;;
-      src/*) ;;
+      config/*.tsbuildinfo) ;;
       ?*) echo "$file" ;;
     esac
   done <<< "$listed"

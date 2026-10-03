@@ -292,7 +292,10 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       ['a .js next to a tracked .ts', 'src/tracked.js'],
       ['a stray declaration file', 'src/types.d.ts'],
       ['a build config in the ignored extension', 'electron.vite.config.js'],
-      ['an env file the build loads', '.env.local']
+      ['an env file the build loads', '.env.local'],
+      ['an ignored .js with no .ts sibling (shadows a dir module)', 'src/lone.js'],
+      ['an ignored source under an ignored src dir', 'src/main/release/x.ts'],
+      ['an ignored source under tests', 'tests/e2e/tmp/x.ts']
     ])('refuses (92) a tree holding %s', (_label, file) => {
       const fx = makeRepo()
       write(fx.repo, file, 'export {}\n')
@@ -301,9 +304,9 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.stdout).toContain('REFUSED_DIRTY_TREE dirty=1')
     })
 
-    it('ignores an ignored .js with no .ts sibling, and build output (controls)', () => {
+    it('ignores tsc build info under config and build output (controls)', () => {
       const fx = makeRepo()
-      write(fx.repo, 'src/lone.js', '//\n')
+      write(fx.repo, 'config/tsconfig.node.tsbuildinfo', '{}\n')
       write(fx.repo, 'out/main/index.js', '//\n')
       expect(runGate(fx, { args: ['--dry-run'] }).status).toBe(0)
     })
