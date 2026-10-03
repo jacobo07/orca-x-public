@@ -75,6 +75,18 @@ describe('loadPullRequestLinkedIssue', () => {
     ).resolves.toMatchObject({ title: 'Cached title', description: '' })
   })
 
+  it('uses the persisted title when the provider lookup rejects', async () => {
+    mocks.getGitHubIssue.mockRejectedValue(new Error('Failed to load issue'))
+
+    await expect(
+      loadPullRequestLinkedIssue({
+        meta: { linkedIssue: 12 },
+        provider: 'github',
+        repoPath: '/repo'
+      })
+    ).resolves.toMatchObject({ number: 12, title: '(title unavailable)', description: '' })
+  })
+
   it('does not attach another provider issue to a Bitbucket PR', async () => {
     await expect(
       loadPullRequestLinkedIssue({

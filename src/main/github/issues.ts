@@ -75,8 +75,17 @@ export async function getIssue(
     )
     const data = JSON.parse(stdout)
     return mapIssueInfo(data)
-  } catch {
-    return null
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err)
+    const classified = classifyListIssuesError(stderr)
+    // Why: only a positive "not found" is an answer; any other failure is unknown and must not read as "no issue".
+    if (classified.type === 'not_found') {
+      return null
+    }
+    // Why: the unknown arm's message embeds raw gh stderr, which must not reach renderer-visible copy.
+    throw new Error(classified.type === 'unknown' ? 'Failed to load issue' : classified.message, {
+      cause: err
+    })
   } finally {
     release()
   }

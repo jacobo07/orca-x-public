@@ -65,10 +65,12 @@ export async function loadPullRequestLinkedIssue(args: {
     return null
   }
 
-  const issue =
+  // Why: github getIssue now rejects on a failed lookup; PR generation keeps its explicit "(title unavailable)" fallback.
+  const issue = await (
     provider === 'github'
-      ? await getGitHubIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
-      : await getGitLabIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
+      ? getGitHubIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
+      : getGitLabIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
+  ).catch(() => null)
 
   return {
     provider,
