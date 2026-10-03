@@ -177,7 +177,8 @@ function probeSocket(socketPath: string): Promise<boolean> {
 function createPreservedDaemonHandle(
   runtimeDir: string,
   protocolVersion = PROTOCOL_VERSION,
-  mode?: 'degraded-new-pty-fallback'
+  mode?: 'degraded-new-pty-fallback',
+  degradedReason?: string
 ): DaemonProcessHandle {
   const handle: DaemonProcessHandle = {
     shutdown: async () => {
@@ -186,6 +187,9 @@ function createPreservedDaemonHandle(
   }
   if (mode) {
     handle.mode = mode
+  }
+  if (degradedReason) {
+    handle.degradedReason = degradedReason
   }
   return handle
 }
@@ -526,12 +530,13 @@ function createOutOfProcessLauncher(
       adoptionClient = null
     }
     const preserveDaemon = async (
-      mode?: 'degraded-new-pty-fallback'
+      mode?: 'degraded-new-pty-fallback',
+      degradedReason?: string
     ): Promise<DaemonProcessHandle> => {
       const connectedClient = adoptionClient ?? undefined
       adoptionClient = null
       return holdDaemonAdoptionLease(
-        createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, mode),
+        createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, mode, degradedReason),
         socketPath,
         tokenPath,
         connectedClient,
@@ -642,9 +647,9 @@ function createOutOfProcessLauncher(
         if (liveSessionCount !== null && liveSessionCount > 0) {
           if (health === 'pty-spawn-unhealthy') {
             console.warn(
-              `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
+              `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}: reason=live_sessions, liveSessions=${liveSessionCount}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
             )
-            return preserveDaemon('degraded-new-pty-fallback')
+            return preserveDaemon('degraded-new-pty-fallback', 'live_sessions')
           }
           console.warn(
             `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
@@ -687,11 +692,13 @@ function createOutOfProcessLauncher(
         // owner and the session host diverge. But refusing outright would leave the user with
         // no daemon at all, and we have just proved something still answers the endpoint —
         // so adopt it in degraded mode: existing sessions keep working, new PTYs run locally.
+        // Why: a degrade that names no reason is indistinguishable from a healthy adoption (R-08).
+        const degradedReason = killOutcome.preservedBy ?? 'unknown'
         console.warn(
-          '[daemon] DEGRADED MODE: adopting a daemon that could not be confirmed stopped. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
+          `[daemon] DEGRADED MODE: adopting a daemon that could not be confirmed stopped: reason=${degradedReason}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
         )
         try {
-          return await preserveDaemon('degraded-new-pty-fallback')
+          return await preserveDaemon('degraded-new-pty-fallback', degradedReason)
         } catch {
           // It died between the probe and the adoption; the endpoint is genuinely free now.
           throw new DaemonEndpointOwnershipError(
@@ -964,10 +971,10 @@ function createOutOfProcessLauncher(
       // local PTYs.
       if (await probeSocket(socketPath)) {
         console.warn(
-          '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
+          '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it: reason=publish_failed. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
         )
         try {
-          return await preserveDaemon('degraded-new-pty-fallback')
+          return await preserveDaemon('degraded-new-pty-fallback', 'publish_failed')
         } catch {
           // It stopped answering between the probe and the adoption; report the launch failure.
         }

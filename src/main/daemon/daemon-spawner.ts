@@ -30,6 +30,8 @@ export type DaemonPidFile = {
 
 export type DaemonProcessHandle = {
   mode?: 'degraded-new-pty-fallback'
+  /** The guard that forced `mode`; a degrade that names none reads as a healthy adoption (R-08). */
+  degradedReason?: string
   releaseAdoptionLease?(): void
   shutdown(): Promise<void>
 }
