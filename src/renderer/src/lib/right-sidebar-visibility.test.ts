@@ -35,9 +35,12 @@ const PROJECT_SCOPED_APP_VIEWS = [
   'automations',
   'skills',
   'artifacts',
-  'mobile',
-  'backlog'
+  'mobile'
 ] as const
+
+// workspace-destinations.ts WORKSPACE_VIEWS: every one renders in WorkspaceFrame with its own
+// context column. Backlog is one of them since cb9578e56; it left the project-scoped list there.
+const WORKSPACE_FRAME_VIEWS = ['resumeCenter', 'conversations', 'backlog', 'workstation'] as const
 
 describe('right sidebar visibility helpers', () => {
   // Workspace owns its context column; with a project open the panel would sit beside it as a
@@ -67,6 +70,15 @@ describe('right sidebar visibility helpers', () => {
   it('names the application surfaces a panel tab should return from', () => {
     for (const view of PROJECT_SCOPED_APP_VIEWS) {
       expect(isProjectScopedApplicationView(view as AppState['activeView'])).toBe(true)
+    }
+  })
+
+  it('every Workspace view suppresses the panel and is not a returnable surface', () => {
+    for (const view of WORKSPACE_FRAME_VIEWS) {
+      const activeView = view as AppState['activeView']
+      expect(canShowRightSidebarForView(activeView, true)).toBe(false)
+      expect(canShowRightSidebarForView(activeView, false)).toBe(false)
+      expect(isProjectScopedApplicationView(activeView)).toBe(false)
     }
   })
 
