@@ -194,5 +194,18 @@ export type MissionBriefResult =
   /** `detail` is the technical cause for a disclosure, never the sentence shown. */
   | { status: 'failed'; stage: 'gsd' | 'read'; reason: MissionBriefFailure; detail: string }
 
+/**
+ * Whether a workspace holds the records a brief would read, decided by the same gate the read uses
+ * before any GSD run. `present` promises a brief exists, never what it says.
+ */
+export type MissionRecordsPresence = 'present' | 'absent' | 'remote' | 'unknown'
+
+export type MissionRecordsProbeRequest = { hostId: string; workspaceKeys: string[] }
+
+/** Keyed by workspace key; a key the probe did not answer is absent from the map, not `absent`. */
+export type MissionRecordsProbeResult =
+  | { status: 'probed'; presence: Record<string, MissionRecordsPresence> }
+  | { status: 'unavailable'; reason: 'invalid-request' | 'client-unsupported' }
+
 /** `install-incomplete`: GSD could not load one of its own files (a partial copy or update). */
 export type MissionBriefFailure = 'install-incomplete' | 'timed-out' | 'bad-output' | 'failed'

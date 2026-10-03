@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron'
-import type { MissionBriefResult } from '../../shared/mission-brief-types'
+import type {
+  MissionBriefResult,
+  MissionRecordsProbeResult
+} from '../../shared/mission-brief-types'
 import type { Store } from '../persistence'
 import { createGsdRunner, gsdToolsAvailable } from '../mission-brief/gsd-tools-runner'
 import {
@@ -10,14 +13,16 @@ import {
   readGitHead
 } from '../mission-brief/mission-brief-host-io'
 import { createMissionBriefReader } from '../mission-brief/mission-brief-read'
+import { createMissionRecordsProbe } from '../mission-brief/mission-records-presence'
 import { locateMissionWorkspace } from '../mission-brief/mission-workspace-location'
 import { readProjectMdRecord } from '../mission-brief/project-md-record'
 import { readRalphMissionsFor } from '../mission-brief/ralph-mission-records'
 import { readStateMdRecord } from '../mission-brief/state-md-record'
 
 export function registerMissionBriefHandlers(store: Store): void {
+  const locate = (workspaceKey: string) => locateMissionWorkspace(store, workspaceKey)
   const read = createMissionBriefReader({
-    locate: (workspaceKey) => locateMissionWorkspace(store, workspaceKey),
+    locate,
     gsdAvailable: () => gsdToolsAvailable(),
     runGsd: createGsdRunner(),
     listDirs,
@@ -30,9 +35,15 @@ export function registerMissionBriefHandlers(store: Store): void {
     fingerprint: planningFingerprint,
     now: Date.now
   })
+  const probe = createMissionRecordsProbe({ locate, listDirs, fileExists })
   ipcMain.removeHandler('missionBrief:read')
   ipcMain.handle(
     'missionBrief:read',
     (_event, request: unknown): Promise<MissionBriefResult> => read(request)
+  )
+  ipcMain.removeHandler('missionBrief:probe')
+  ipcMain.handle(
+    'missionBrief:probe',
+    (_event, request: unknown): Promise<MissionRecordsProbeResult> => probe(request)
   )
 }

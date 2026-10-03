@@ -3212,7 +3212,8 @@ const api = {
     admitWake: (request) => ipcRenderer.invoke('continuity:admitWake', request)
   } satisfies PreloadApi['continuity'],
   missionBrief: {
-    read: (request) => ipcRenderer.invoke('missionBrief:read', request)
+    read: (request) => ipcRenderer.invoke('missionBrief:read', request),
+    probe: (request) => ipcRenderer.invoke('missionBrief:probe', request)
   } satisfies PreloadApi['missionBrief'],
   durableExit: {
     park: (request) => ipcRenderer.invoke('durableExit:park', request),

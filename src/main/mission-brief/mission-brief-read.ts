@@ -12,6 +12,7 @@ import type {
 } from '../../shared/mission-brief-types'
 import type { GsdRunner } from './gsd-tools-runner'
 import type { MissionWorkspaceLocation } from './mission-workspace-location'
+import { hasMissionRecords } from './mission-records-presence'
 
 export type MissionBriefReadDeps = {
   locate: (workspaceKey: string) => MissionWorkspaceLocation
@@ -147,7 +148,8 @@ export function createMissionBriefReader(deps: MissionBriefReadDeps) {
       return { status: 'unavailable', reason: 'workspace-unknown' }
     }
     const planningDir = path.join(location.path, '.planning')
-    if ((await deps.listDirs(planningDir)) === null) {
+    // Why the shared gate: the Resume Center row decides "has a mission" with this same function.
+    if (!(await hasMissionRecords(deps, planningDir))) {
       return { status: 'no-mission' }
     }
     if (!deps.gsdAvailable()) {

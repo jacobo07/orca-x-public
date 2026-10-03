@@ -874,6 +874,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     // Why explicit: mission records live on the desktop's disk, which a web client cannot read.
     missionBrief: {
       read: () =>
+        Promise.resolve({ status: 'unavailable' as const, reason: 'client-unsupported' as const }),
+      probe: () =>
         Promise.resolve({ status: 'unavailable' as const, reason: 'client-unsupported' as const })
     },
     // Why explicit: a web client cannot quit the desktop app or its daemon.
