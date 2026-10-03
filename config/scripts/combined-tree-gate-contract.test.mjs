@@ -110,7 +110,8 @@ describe('evaluateSummary: specs by name and floor', () => {
     ['HEAD_MOVED', 'exit=99 verdict=HEAD_MOVED from=0123456789'],
     ['a failed test', 'exit=1 verdict=PRODUCT_RUN  1 failed; 2 passed (1.0m);'],
     ['a did-not-run test', 'exit=0 verdict=PRODUCT_RUN  1 did not run; 3 passed (1.0m);'],
-    ['an interrupted test', 'exit=0 verdict=PRODUCT_RUN  1 interrupted; 3 passed (1.0m);']
+    ['an interrupted test', 'exit=0 verdict=PRODUCT_RUN  1 interrupted; 3 passed (1.0m);'],
+    ['a flaky test', 'exit=0 verdict=PRODUCT_RUN  1 flaky; 3 passed (1.0m);']
   ])('reads a spec with %s as RED naming its line', (_label, rest) => {
     const line = spec('reload-freeze-frame', rest)
     expectRed(swap(greenLines(), 'SPEC_RESULT reload-freeze-frame ', line), line)
@@ -181,6 +182,10 @@ describe('evaluateSummary: unit groups', () => {
     expectRed(swap(greenLines(), 'UNIT_PTY_REGRESSIONS', line), line)
   })
 
+  it('reads a regressions line for a group that is not regression-diffed as RED', () => {
+    expectRed([...greenLines(), 'UNIT_GATE9_REGRESSIONS 0'], 'UNEXPECTED UNIT_GATE9_REGRESSIONS')
+  })
+
   it('reads a missing regressions line as RED', () => {
     expectRed(drop(greenLines(), 'UNIT_PTY_REGRESSIONS'), 'MISSING UNIT_PTY_REGRESSIONS pty')
   })
@@ -218,6 +223,17 @@ describe('evaluateSummary: header', () => {
 
   it('reads a missing build line as RED', () => {
     expectRed(drop(greenLines(), 'BUILD_real_EXIT='), 'MISSING BUILD_real_EXIT')
+  })
+
+  it('reads a missing LOCK_OK line as RED', () => {
+    expectRed(drop(greenLines(), 'LOCK_OK'), 'MISSING LOCK_OK')
+  })
+
+  it.each([
+    ['another revision', `BUILD_real_EXIT=0 head=${'f'.repeat(9)} dirty=0`],
+    ['a dirty tree', `BUILD_real_EXIT=0 head=${SHA.slice(0, 9)} dirty=1`]
+  ])('reads a build of %s as RED naming its line', (_label, line) => {
+    expectRed(swap(greenLines(), 'BUILD_real_EXIT=', line), line)
   })
 
   it('reads a nonzero build as RED', () => {

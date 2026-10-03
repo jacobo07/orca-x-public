@@ -128,7 +128,12 @@ const baseManifest = (base) => ({
 })
 
 /** A git repo holding the real runner and contract, with every heavy tool replaced by a stub. */
-function makeRepo({ edit = (m) => m, lockText = 'lockfile: 1\n', installedLock = lockText } = {}) {
+function makeRepo({
+  edit = (m) => m,
+  lockText = 'lockfile: 1\n',
+  installedLock = lockText,
+  nodeEngine = NODE_MAJOR
+} = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'ctg-runner-')))
   created.push(root)
   const repo = join(root, 'repo')
@@ -147,7 +152,7 @@ function makeRepo({ edit = (m) => m, lockText = 'lockfile: 1\n', installedLock =
     'src/new-name.mjs',
     `${Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n')}\nedited\n`
   )
-  write(repo, 'package.json', JSON.stringify({ engines: { node: NODE_MAJOR } }))
+  write(repo, 'package.json', JSON.stringify({ engines: { node: nodeEngine } }))
   write(repo, '.gitignore', 'node_modules/\nout/\n')
   write(repo, 'pnpm-lock.yaml', lockText)
   write(repo, 'src/tracked.ts', 'export {}\n')
@@ -197,16 +202,13 @@ import { createHash } from 'node:crypto'\nspawnSync(process.env.STUB_DIR + '/mut
 }
 
 /** Runs the runner in `fx.repo`; returns its exit status, output and the summary it wrote. */
-function runGate(fx, { args = [], env = {} } = {}) {
+function runGate(fx, { args = [], env = {}, verbatim = false } = {}) {
   const head = fx.head()
   const result = spawnSync(
     'bash',
     [
       join(fx.repo, 'config/scripts/combined-tree-gate.sh'),
-      '--label',
-      't',
-      '--expect',
-      head.slice(0, 9),
+      ...(verbatim ? [] : ['--label', 't', '--expect', head.slice(0, 9)]),
       ...args
     ],
     {
@@ -502,6 +504,141 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(runGate(fx, { args: ['--dry-run'] }).status).toBe(0)
       const free = makeRepo()
       expect(runGate(free).status).toBe(0)
+    })
+  })
+
+  describe('verdict boundary guards (WR-08)', () => {
+    const verdictOnly = (stubNode) => {
+      const fx = makeRepo()
+      write(fx.stubs, 'node', `#!/bin/sh\n${stubNode}\n`, 0o755)
+      write(fx.root, 'summary.txt', 'x\n')
+      return runGate(fx, { args: ['--verdict-only', join(fx.root, 'summary.txt')], verbatim: true })
+    }
+
+    it.each([
+      ['printed nothing', 'exit 0', 'printed 0 verdict lines'],
+      [
+        'printed two verdict lines',
+        'echo "TIP_VERDICT GREEN a"; echo "TIP_VERDICT GREEN b"; exit 0',
+        'printed 2 verdict lines'
+      ],
+      [
+        'exited 1 after printing GREEN',
+        'echo "TIP_VERDICT GREEN a"; exit 1',
+        'exit=1 disagrees with its last line'
+      ]
+    ])('reads a contract that %s as NO_VERDICT with exit 2', (_label, script, why) => {
+      const run = verdictOnly(script)
+      expect(run.status).toBe(2)
+      expect(run.stdout).toContain(`TIP_VERDICT NO_VERDICT contract ${why}`)
+    })
+
+    it('passes a well-formed GREEN through with exit 0 (control)', () => {
+      const run = verdictOnly('echo "TIP_VERDICT GREEN head=a manifest=b committed=1"; exit 0')
+      expect(run.status).toBe(0)
+      expect(run.verdictLine).toBe('TIP_VERDICT GREEN head=a manifest=b committed=1')
+    })
+  })
+
+  describe('preflight refusal codes (WR-08)', () => {
+    const dry = (fx, opts = {}) =>
+      runGate(fx, { args: ['--dry-run', ...(opts.args ?? [])], ...opts })
+
+    it('plans a dry-run without building or writing (control)', () => {
+      const fx = makeRepo()
+      const run = dry(fx)
+      expect(run.status, run.stdout).toBe(0)
+      expect(run.stdout).toMatch(
+        /^DRY_RUN\n[\s\S]*PLAN_COUNTS specs=1 units=1 gates=2\nWOULD_WRITE /
+      )
+      expect(existsSync(run.dir)).toBe(false)
+    })
+
+    it.each([
+      ['no label', ['--expect', 'abcdef1'], 2, 'REFUSED_USAGE --label'],
+      ['a malformed sha', ['--label', 't', '--expect', 'zz'], 2, 'REFUSED_USAGE --expect'],
+      [
+        'an unknown argument',
+        ['--label', 't', '--expect', 'abcdef1', '--nope'],
+        2,
+        'unknown argument'
+      ]
+    ])('refuses %s with exit %i', (_label, args, code, text) => {
+      const run = runGate(makeRepo(), { args: ['--dry-run', ...args], verbatim: true })
+      expect(run.status).toBe(code)
+      expect(run.stdout).toContain(text)
+    })
+
+    it('refuses a checkout that is not a git work tree (90)', () => {
+      const fx = makeRepo()
+      const loose = join(fx.root, 'loose')
+      mkdirSync(loose)
+      copyFileSync(join(SCRIPTS, 'combined-tree-gate.sh'), join(loose, 'combined-tree-gate.sh'))
+      const run = spawnSync(
+        'bash',
+        [join(loose, 'combined-tree-gate.sh'), '--label', 't', '--expect', 'abcdef1'],
+        {
+          encoding: 'utf8',
+          env: { PATH: process.env.PATH, GIT_CEILING_DIRECTORIES: fx.root }
+        }
+      )
+      expect(run.status).toBe(90)
+      expect(run.stdout).toContain('REFUSED_TREE')
+    })
+
+    it('refuses a HEAD that is not the expected one (91)', () => {
+      const run = dry(makeRepo(), { args: ['--expect', 'deadbeef'] })
+      expect(run.status).toBe(91)
+      expect(run.stdout).toContain('REFUSED_HEAD_MISMATCH')
+    })
+
+    it('refuses a run dir that already exists (93)', () => {
+      const fx = makeRepo()
+      mkdirSync(join(fx.runs, `t-${fx.head().slice(0, 9)}`))
+      const run = dry(fx)
+      expect(run.status).toBe(93)
+      expect(run.stdout).toContain('REFUSED_RUN_DIR_EXISTS')
+    })
+
+    it('refuses a node whose major is not engines.node (96)', () => {
+      const run = dry(makeRepo({ nodeEngine: '1' }))
+      expect(run.status).toBe(96)
+      expect(run.stdout).toContain('REFUSED_TOOLCHAIN')
+    })
+
+    it('refuses when CTG_RUNS_DIR is unset (96)', () => {
+      const run = dry(makeRepo(), { env: { CTG_RUNS_DIR: '' } })
+      expect(run.status).toBe(96)
+      expect(run.stdout).toContain('REFUSED missing env CTG_RUNS_DIR')
+    })
+
+    it('refuses a required env that is unset or names a missing directory (96)', () => {
+      const fx = makeRepo({
+        edit: (m) => ({ ...m, requiredEnv: [{ name: 'STUB_REQUIRED', pathList: true }] })
+      })
+      expect(dry(fx).stdout).toContain('REFUSED missing env STUB_REQUIRED')
+      const missing = dry(fx, { env: { STUB_REQUIRED: join(fx.root, 'nope') } })
+      expect(missing.status).toBe(96)
+      expect(missing.stdout).toContain('is not an existing directory')
+      expect(dry(fx, { env: { STUB_REQUIRED: fx.root } }).status).toBe(0)
+    })
+
+    it.each([
+      ['an invalid manifest', (m) => ({ ...m, schema: 'x' }), 'REFUSED_MANIFEST'],
+      [
+        'a spec without a file',
+        (m) => ({ ...m, specs: [{ name: 'ghost', minPassed: 1 }] }),
+        'has no tests/e2e/ghost.spec.ts'
+      ],
+      [
+        'a base that is not a commit',
+        (m) => ({ ...m, changedFilesBase: 'deadbeef' }),
+        'is not a commit here'
+      ]
+    ])('refuses %s (97)', (_label, edit, text) => {
+      const run = dry(makeRepo({ edit }))
+      expect(run.status).toBe(97)
+      expect(run.stdout).toContain(text)
     })
   })
 })
