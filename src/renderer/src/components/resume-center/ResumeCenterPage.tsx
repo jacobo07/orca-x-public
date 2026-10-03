@@ -135,7 +135,8 @@ export default function ResumeCenterPage(): React.JSX.Element {
             </p>
           ) : null}
         </div>
-        <div className="flex items-start gap-2">
+        {/* Why wrap + min-w-0: three actions outgrow the centre column below ~1180px; they wrap, never clip. */}
+        <div className="flex min-w-0 flex-wrap items-start gap-2">
           {deskRows.length > 0 ? <ResumeCenterResumeAll rows={deskRows} /> : null}
           {/* Why the selected workspace only: a desk-wide layout restore has no owner yet. */}
           <Button

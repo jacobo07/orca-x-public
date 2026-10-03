@@ -35,7 +35,10 @@ export function ResidencyMark({
   residency: DeskTab['residency']
 }): React.JSX.Element {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+    <span
+      data-row-fact="residency"
+      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-muted-foreground"
+    >
       <StatusMark state={TONE_STATE[residencyTone(residency)]} />
       {describeResidency(residency)}
     </span>
@@ -90,7 +93,8 @@ export function ResumeCenterTabRow({
         >
           <Chevron className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <TabMonogram tab={tab} />
-          <span className="min-w-0 w-44 shrink-0">
+          {/* Why the title shrinks: narrowed, it truncates rather than squeezing the facts into the mark. */}
+          <span className="w-44 min-w-20 shrink">
             <span className="block truncate text-[13px] font-medium">{tab.title}</span>
             <span className="block truncate text-[11px] text-muted-foreground">
               {tab.agent
@@ -98,8 +102,11 @@ export function ResumeCenterTabRow({
                 : translate('resumeCenter.tab.shell', 'Terminal')}
             </span>
           </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
+          <span className="flex min-w-16 flex-1 flex-col gap-0.5 text-[11px] text-muted-foreground">
+            <span
+              data-row-fact="panes"
+              className="inline-flex items-center gap-1 overflow-hidden whitespace-nowrap"
+            >
               <SquareTerminal className="size-3 shrink-0" aria-hidden />
               {describePaneCount(tab.panes.length)}
             </span>

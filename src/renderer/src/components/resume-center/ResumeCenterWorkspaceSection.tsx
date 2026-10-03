@@ -178,8 +178,9 @@ export function ResumeCenterWorkspaceSection({
           </button>
         </div>
       </header>
+      {/* Why stack below lg, not hide: the hero loads with its section, so a hidden one would still fetch. */}
       {expanded ? (
-        <div className="flex gap-3 px-4 pb-4">
+        <div className="flex flex-col gap-3 px-4 pb-4 lg:flex-row">
           {firstTab && firstPane ? (
             <PanePreviewThumb
               hostId={row.hostId}
@@ -188,7 +189,7 @@ export function ResumeCenterWorkspaceSection({
               enabled={inView}
               title={firstPane.title ?? firstTab.title}
               placement="hero"
-              className="h-48 w-52"
+              className="h-32 w-full lg:h-48 lg:w-52"
             />
           ) : null}
           <ul className="flex min-w-0 flex-1 flex-col gap-2">
