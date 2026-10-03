@@ -16796,17 +16796,14 @@
       "empty": "No workspaces with sessions on this desk."
     },
     "snapshots": {
-      "title": "Snapshots",
-      "hint": "{{name}}, saved layouts"
+      "title": "Snapshots"
     },
     "moreOptions": {
       "title": "More options",
       "hint": "{{name}}: snapshots, open in"
     },
     "openIn": {
-      "title": "Open in",
-      "hint": "{{name}}, in another app",
-      "unavailable": "Not available for this workspace"
+      "title": "Open in"
     },
     "snapshot": {
       "title": "Current snapshot",

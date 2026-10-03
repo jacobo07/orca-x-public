@@ -19,8 +19,6 @@ const TABS = 7
 const HERO_ACTIONS = [
   '[data-testid="resume-center-resume-all"] button',
   '[data-testid="resume-center-restore-layout"]',
-  '[data-testid="resume-center-snapshots"]',
-  '[data-testid="resume-center-open-in"]',
   '[data-testid="resume-center-more-options"]',
   '[data-testid="resume-center-refresh"]'
 ]
@@ -237,6 +235,12 @@ test.describe('@resume-center', () => {
         await heroRowTops(orcaPage),
         `${theme} 1512×1042: hero actions on one row`
       ).toHaveLength(1)
+      // Snapshots and Open in live in More options; the standalone buttons must not return.
+      await expect(
+        orcaPage.locator(
+          '[data-testid="resume-center-snapshots"], [data-testid="resume-center-open-in"]'
+        )
+      ).toHaveCount(0)
       await orcaPage.screenshot({ path: testInfo.outputPath(`r01-1512x1042-${theme}.png`) })
     }
     await orcaPage.evaluate(() =>

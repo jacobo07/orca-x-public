@@ -14915,17 +14915,14 @@
       "empty": "No hay workspaces con sesiones en este escritorio."
     },
     "snapshots": {
-      "title": "Snapshots",
-      "hint": "{{name}}, layouts guardados"
+      "title": "Snapshots"
     },
     "moreOptions": {
       "title": "Más opciones",
       "hint": "{{name}}: snapshots, abrir en"
     },
     "openIn": {
-      "title": "Abrir en",
-      "hint": "{{name}}, en otra app",
-      "unavailable": "No disponible para este workspace"
+      "title": "Abrir en"
     },
     "snapshot": {
       "title": "Snapshot actual",
