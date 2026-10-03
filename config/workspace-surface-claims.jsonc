@@ -202,6 +202,11 @@
       "absent": "omitted",
       "why": "Tabs that recorded the agent they launched (labelled agent tabs); orphan sessions are listed as their own rows."
     },
+    "resume-center-workspace-mission-available": {
+      "producer": "src/renderer/src/components/mission-brief/use-mission-records-presence.ts#rowMissionChip",
+      "absent": "omitted",
+      "why": "Main's hasMissionRecords, the brief's own no-mission gate, probed per desk read; a read brief replaces it, and a read \"no mission\" removes it."
+    },
     "resume-center-greeting-running": {
       "producer": "src/shared/desk-continuity-projection.ts#projectDesk",
       "absent": "omitted",
@@ -298,9 +303,9 @@
       "why": "Proven needs a passed verification; a phase marked done without one reads as claimed."
     },
     "resume-center-workspace-mission-signal": {
-      "producer": "src/renderer/src/components/mission-brief/use-mission-brief.ts#useCachedMissionSignal",
+      "producer": "src/renderer/src/components/mission-brief/use-mission-records-presence.ts#rowMissionChip",
       "absent": "omitted",
-      "why": "The signal of a brief already read for that row; a row never selected shows no chip, and the list never reads one."
+      "why": "The signal of a brief already read for that row; the list never reads one, so before a read the row shows only that a brief exists."
     },
     "backlog-open-total": {
       "producer": "src/shared/backlog-view-selector.ts#selectBacklogView",

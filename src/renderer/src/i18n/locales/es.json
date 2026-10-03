@@ -14876,7 +14876,9 @@
       "collapse": "Contraer",
       "expand": "Expandir",
       "files": "archivos abiertos",
-      "agents": "pestañas de agente"
+      "agents": "pestañas de agente",
+      "missionAvailable": "Informe de misión",
+      "missionChipLabel": "{{label}}: mostrar el informe de misión de {{name}}"
     },
     "window": {
       "bound": "Ventana",

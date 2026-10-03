@@ -16757,7 +16757,9 @@
       "collapse": "Collapse",
       "expand": "Expand",
       "files": "open files",
-      "agents": "agent tabs"
+      "agents": "agent tabs",
+      "missionAvailable": "Mission Brief",
+      "missionChipLabel": "{{label}}: show the Mission Brief for {{name}}"
     },
     "window": {
       "bound": "Window",

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, FolderGit2, GitBranch, Server } from 'lucide-react'
+import { ChevronDown, ChevronUp, FolderGit2, GitBranch, Server, Target } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { useAppStore } from '@/store'
@@ -8,7 +8,11 @@ import { cn } from '@/lib/utils'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import { describeSignalShort, signalTone } from '../mission-brief/mission-brief-presentation'
 import { MISSION_TONE_CLASS } from '../mission-brief/mission-tone-class'
-import { useCachedMissionSignal } from '../mission-brief/use-mission-brief'
+import { useCachedMissionBriefResult } from '../mission-brief/use-mission-brief'
+import {
+  rowMissionChip,
+  useMissionRecordsPresence
+} from '../mission-brief/use-mission-records-presence'
 import type { WorkspaceRowModel } from './resume-center-model'
 import { describeWindow, describeWorkspaceName } from './resume-center-presentation'
 import { restoreWorkspaceLayoutOnly } from './resume-center-restore'
@@ -34,7 +38,14 @@ export function ResumeCenterWorkspaceSection({
   const sectionRef = useRef<HTMLElement>(null)
   // Why: previews replay recorded history; only sections the person can see pay for it.
   const inView = useSeenInView(sectionRef)
-  const missionSignal = useCachedMissionSignal(row.hostId, row.key)
+  const missionChip = rowMissionChip(
+    useCachedMissionBriefResult(row.hostId, row.key),
+    useMissionRecordsPresence(row.hostId, row.key)
+  )
+  const missionLabel =
+    missionChip?.kind === 'signal'
+      ? describeSignalShort(missionChip.signal)
+      : translate('resumeCenter.workspace.missionAvailable', 'Mission Brief')
   const branch = useAppStore((s) => workspaceBranch(s.worktreesByRepo, row.key))
   const firstTab = row.tabs[0]
   const firstPane = firstTab?.panes[0]
@@ -82,15 +93,40 @@ export function ResumeCenterWorkspaceSection({
               </span>
             ) : null}
             <span className={CHIP}>{describeWindow(row.window, row.windowOrder)}</span>
-            {missionSignal ? (
-              <span
-                className={cn(CHIP, MISSION_TONE_CLASS[signalTone(missionSignal.signal)])}
-                title={missionSignal.action ?? undefined}
+            {missionChip ? (
+              // Why a button: the chip is how a person learns the brief exists, and it opens it.
+              <button
+                type="button"
+                data-testid="resume-center-workspace-mission-chip"
+                data-mission-chip={missionChip.kind}
+                onClick={onSelect}
+                aria-label={translate(
+                  'resumeCenter.workspace.missionChipLabel',
+                  '{{label}}: show the Mission Brief for {{name}}',
+                  { label: missionLabel, name }
+                )}
+                title={
+                  missionChip.kind === 'signal' ? (missionChip.action ?? undefined) : undefined
+                }
+                className={cn(
+                  CHIP,
+                  'hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  missionChip.kind === 'signal'
+                    ? MISSION_TONE_CLASS[signalTone(missionChip.signal)]
+                    : 'text-foreground'
+                )}
               >
-                <ClaimValue testId="resume-center-workspace-mission-signal">
-                  {describeSignalShort(missionSignal.signal)}
-                </ClaimValue>
-              </span>
+                <Target className="size-3" aria-hidden />
+                {missionChip.kind === 'signal' ? (
+                  <ClaimValue testId="resume-center-workspace-mission-signal">
+                    {missionLabel}
+                  </ClaimValue>
+                ) : (
+                  <ClaimValue testId="resume-center-workspace-mission-available">
+                    {missionLabel}
+                  </ClaimValue>
+                )}
+              </button>
             ) : null}
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">

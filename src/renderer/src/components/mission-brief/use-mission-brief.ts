@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { MissionBriefResult, MissionSignal } from '../../../../shared/mission-brief-types'
+import type { MissionBriefResult } from '../../../../shared/mission-brief-types'
 
 /**
  * The last brief read for each workspace, keyed by host and workspace so one project's brief can
@@ -102,22 +102,17 @@ export function useMissionBrief(
   return { entry, refresh, chooseWorkstream }
 }
 
-/** The signal of a brief already read for this row, or null when none was read. Never reads. */
-export function useCachedMissionSignal(
+/** The last result read for this row (kept while a re-read runs), or null when none was read. Never reads. */
+export function useCachedMissionBriefResult(
   hostId: ExecutionHostId,
   workspaceKey: string
-): { signal: MissionSignal; action: string | null } | null {
+): MissionBriefResult | null {
   const entry = useEntry(missionBriefKey(hostId, workspaceKey))
-  const result =
-    entry?.status === 'loaded' ? entry.result : entry?.status === 'loading' ? entry.previous : null
-  if (result?.status !== 'read') {
-    return null
-  }
-  const { brief } = result
-  return {
-    signal: brief.signal,
-    action: brief.nextAction.kind === 'known' ? brief.nextAction.label : null
-  }
+  return entry?.status === 'loaded'
+    ? entry.result
+    : entry?.status === 'loading'
+      ? entry.previous
+      : null
 }
 
 /** Forget every read brief (tests). */

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LayoutPanelLeft, RefreshCw, Search } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -14,6 +14,7 @@ import {
 import { WorkspaceFrame } from '../workspace-frame/WorkspaceFrame'
 import { MissionBriefDialog } from '../mission-brief/MissionBriefDialog'
 import { MissionBriefPanel } from '../mission-brief/MissionBriefPanel'
+import { probeMissionRecordsInto } from '../mission-brief/use-mission-records-presence'
 import { buildResumeCenterModel, type ResumeCenterSort } from './resume-center-model'
 import {
   describeGreeting,
@@ -57,6 +58,12 @@ export default function ResumeCenterPage(): React.JSX.Element {
         : [],
     [state]
   )
+  // Why per desk read: one batched stat probe marks every row that has a brief, before any click.
+  useEffect(() => {
+    if (deskRows.length > 0) {
+      void probeMissionRecordsInto(deskRows)
+    }
+  }, [deskRows])
   // Why identity by host + key: two hosts can hold a workspace with the same key.
   // undefined = follow the most recent workspace, so the brief is on screen on arrival; null = the
   // person deselected, which is respected rather than re-filled.
