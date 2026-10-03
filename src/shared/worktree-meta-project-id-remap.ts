@@ -1,5 +1,10 @@
 import type { WorktreeMeta } from './worktree/meta-types'
 
+// Why: the normalizer drops corrupt entries after the compatibility merge; reading them here crashed load (W-10).
+export function isReadableWorktreeMeta(meta: unknown): meta is WorktreeMeta {
+  return typeof meta === 'object' && meta !== null && !Array.isArray(meta)
+}
+
 /**
  * Moves each worktree's `projectId` with its project when a project id was replaced. Returns the
  * same record when nothing moved. Without this a worktree keeps naming a project id that no
@@ -15,6 +20,9 @@ export function remapWorktreeMetaProjectIds(
   }
   let remapped: Record<string, WorktreeMeta> | null = null
   for (const [worktreeId, meta] of Object.entries(worktreeMeta)) {
+    if (!isReadableWorktreeMeta(meta)) {
+      continue
+    }
     const projectId = meta.projectId ? remappedProjectIds.get(meta.projectId) : undefined
     if (projectId) {
       remapped ??= { ...worktreeMeta }

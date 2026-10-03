@@ -8,7 +8,10 @@ import {
   carryProjectStateThroughIdentityChange,
   localRepoIdSet
 } from '../../../shared/project-identity-succession'
-import { remapWorktreeMetaProjectIds } from '../../../shared/worktree-meta-project-id-remap'
+import {
+  isReadableWorktreeMeta,
+  remapWorktreeMetaProjectIds
+} from '../../../shared/worktree-meta-project-id-remap'
 
 /** State the compatibility merge reads and, for the optional dependents, remaps. */
 export type ProjectHostSetupCompatibilityState = Pick<
@@ -20,7 +23,9 @@ export type ProjectHostSetupCompatibilityState = Pick<
 function dependentProjectIds(state: ProjectHostSetupCompatibilityState): string {
   return JSON.stringify([
     (state.agents ?? []).map((agent) => agent.projectId),
-    Object.entries(state.worktreeMeta ?? {}).map(([id, meta]) => [id, meta.projectId])
+    Object.entries(state.worktreeMeta ?? {})
+      .filter(([, meta]) => isReadableWorktreeMeta(meta))
+      .map(([id, meta]) => [id, meta.projectId])
   ])
 }
 
