@@ -511,6 +511,17 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(dry(fx, { env: { STUB_REQUIRED: fx.root } }).status).toBe(0)
     })
 
+    it('reads a required env from the exported environment, not from a shell variable (IN-24)', () => {
+      // Arrange: bash sets OPTIND=1 in every script without exporting it, so ${!name} would be satisfied
+      const fx = makeRepo({ edit: (m) => ({ ...m, requiredEnv: [{ name: 'OPTIND' }] }) })
+      // Act
+      const run = dry(fx)
+      // Assert
+      expect(run.status, run.stdout).toBe(96)
+      expect(run.stdout).toContain('REFUSED missing env OPTIND')
+      expect(dry(fx, { env: { OPTIND: '7' } }).status).toBe(0)
+    })
+
     it.each([
       ['an invalid manifest', (m) => ({ ...m, schema: 'x' }), 'REFUSED_MANIFEST'],
       [

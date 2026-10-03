@@ -15,14 +15,16 @@ const GROUP_NAME = /^[a-z][a-z0-9]*$/
 const GATE_NAME = /^[a-z][a-z0-9-]*$/
 const COMMIT = /^[0-9a-f]{7,40}$/
 
-// Why: the runner is bash; a manifest name must not shadow its variables or the process-wide ones.
+// Why: the runner is bash; a manifest name must not shadow its variables, bash's own, or the process-wide
+// ones. Hygiene only: requiredEnv is read from the exported environment (printenv), not from shell scope.
 const RESERVED_ENV = new Set(
   `_ PATH HOME IFS PWD OLDPWD SHELL USER LANG SKIP_BUILD VITE_EXPOSE_STORE TREE CONTRACT MANIFEST
-  MANIFEST_SRC MODE SUMMARY LABEL EXPECT SNAP BASE HEAD DIRTY LOCK RUN S SPECS UNITS GATES PLAN CHANGED`.split(
-    /\s+/
-  )
+  MANIFEST_SRC MODE SUMMARY LABEL EXPECT SNAP BASE HEAD DIRTY LOCK RUN S SPECS UNITS GATES PLAN CHANGED
+  SELF ARGS RUN_ID DIRT_EXCLUDE PPID RANDOM SECONDS LINENO UID EUID HOSTNAME HOSTTYPE OSTYPE MACHTYPE
+  SHLVL GROUPS PIPESTATUS FUNCNAME EPOCHSECONDS EPOCHREALTIME SRANDOM SHELLOPTS PS1 PS2 PS3 PS4
+  PROMPT_COMMAND CDPATH ENV GLOBIGNORE TMOUT TIMEFORMAT`.split(/\s+/)
 )
-const RESERVED_ENV_PREFIXES = ['CTG_', 'LD_', 'DYLD_', 'BASH', 'GIT_', 'NODE_']
+const RESERVED_ENV_PREFIXES = ['CTG_', 'LD_', 'DYLD_', 'BASH', 'GIT_', 'NODE_', 'REAP_', 'SPEC_']
 const isReservedEnv = (name) =>
   RESERVED_ENV.has(name) || RESERVED_ENV_PREFIXES.some((prefix) => name.startsWith(prefix))
 

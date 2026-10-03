@@ -221,7 +221,8 @@ preflight() {
     read -r -a t <<< "$line"
     [ "${t[0]}" = PLAN_REQUIRE_ENV ] || continue
     name=${t[1]}
-    value=${!name:-}
+    # Why printenv: ${!name} reads shell scope, which holds variables the specs never receive.
+    value=$(printenv "$name" 2> /dev/null)
     [ -n "$value" ] || refuse 96 "REFUSED missing env $name (the manifest requires it)"
     [ "${t[2]}" = 1 ] || continue
     case "$value" in :* | *: | *::*) refuse 96 "REFUSED env $name has an empty entry" ;; esac

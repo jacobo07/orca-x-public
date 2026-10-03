@@ -83,7 +83,36 @@ describe('loadManifest: reserved environment names (WR-02)', () => {
     'BASE',
     'HEAD',
     'RUN',
-    'S'
+    'S',
+    'SELF',
+    'ARGS',
+    'RUN_ID',
+    'DIRT_EXCLUDE',
+    'REAP_MECHANISM',
+    'SPEC_PID',
+    // bash's own variables (IN-24)
+    'RANDOM',
+    'SECONDS',
+    'LINENO',
+    'PPID',
+    'UID',
+    'EUID',
+    'HOSTNAME',
+    'HOSTTYPE',
+    'OSTYPE',
+    'MACHTYPE',
+    'SHLVL',
+    'GROUPS',
+    'PIPESTATUS',
+    'FUNCNAME',
+    'EPOCHSECONDS',
+    'SRANDOM',
+    'IFS',
+    'PS1',
+    'PS4',
+    'SHELLOPTS',
+    'BASHOPTS',
+    'PROMPT_COMMAND'
   ]
 
   it.each(RESERVED)('refuses %s in specEnv', (name) => {
