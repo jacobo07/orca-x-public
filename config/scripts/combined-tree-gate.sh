@@ -54,6 +54,9 @@ refuse() {
   exit "$code"
 }
 
+# shellcheck source=combined-tree-gate-reaper.sh
+. "$TREE/config/scripts/combined-tree-gate-reaper.sh" || refuse 90 "REFUSED_TREE cannot load the reaper"
+
 # ctg_verdict <summary>: prints the contract's verdict; returns 0/1/2.
 # Why the line check: an entry guard that never fires exits 0 having printed nothing.
 ctg_verdict() {
@@ -282,22 +285,9 @@ assert_tree() {
   [ "$h" = "$HEAD" ] && [ "$d" = 0 ]
 }
 
-# reap_run_processes: SIGKILL every process this run's specs started, found by the CTG_RUN_ID they
-# inherited. Never by path: a developer's Orca (or its PTY daemon) from this tree carries no marker.
-reap_run_processes() {
-  local dir pid
-  for dir in /proc/[0-9]*; do
-    pid=${dir#/proc/}
-    [ "$pid" = "$$" ] && continue
-    grep -qFazx "CTG_RUN_ID=$RUN_ID" "$dir/environ" 2> /dev/null && kill -KILL "$pid" 2> /dev/null
-  done
-  return 0
-}
-
 # finish <code>: append the verdict and CTG_END; exit <code>, or the verdict's code when <code> is 0.
 finish() {
   local out verdict_rc code=$1
-  reap_run_processes
   out=$(ctg_verdict "$S")
   verdict_rc=$?
   printf '%s\n' "$out" | tee -a "$S"
@@ -344,6 +334,8 @@ for line in "${PLAN[@]}"; do
 done
 
 moved=0
+unit_n=0
+reap_probe
 assert_tree build || moved=1
 for spec in "${SPECS[@]}"; do
   if [ "$moved" = 1 ]; then
@@ -351,12 +343,13 @@ for spec in "${SPECS[@]}"; do
     continue
   fi
   log=$RUN/spec-$spec-real.log
-  env "CTG_RUN_ID=$RUN_ID" "${spec_env[@]}" SKIP_BUILD=1 timeout 1500 xvfb-run -a -s "-screen 0 2560x1600x24" node_modules/.bin/playwright test \
+  unit_n=$((unit_n + 1))
+  spec_run "ctg-$RUN_ID-$unit_n" "$spec" "$log" \
+    env "CTG_RUN_ID=$RUN_ID" "${spec_env[@]}" SKIP_BUILD=1 timeout 1500 xvfb-run -a -s "-screen 0 2560x1600x24" node_modules/.bin/playwright test \
     --config tests/playwright.config.ts --project=electron-headless --project=electron-headful --workers=1 \
-    --reporter=list --output "$RUN/results/$spec-real" "tests/e2e/$spec.spec.ts" > "$log" 2>&1
-  rc=$?
-  append node "$CONTRACT" spec-result --name "$spec" --exit "$rc" --log "$log"
-  reap_run_processes
+    --reporter=list --output "$RUN/results/$spec-real" "tests/e2e/$spec.spec.ts"
+  append node "$CONTRACT" spec-result --name "$spec" --exit "$SPEC_RC" --log "$log"
+  reap_spec "$spec" "ctg-$RUN_ID-$unit_n" "$SPEC_PID"
   sleep 2
   assert_tree "spec-$spec" || moved=1
 done

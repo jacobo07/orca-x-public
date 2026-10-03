@@ -11,6 +11,8 @@
 //   node config/scripts/combined-tree-gate-contract.mjs verdict --manifest <path> --summary <path>
 //   node config/scripts/combined-tree-gate-contract.mjs spec-result --name <n> --exit <rc> --log <path>
 //        [--head-moved <sha9>]
+//   node config/scripts/combined-tree-gate-contract.mjs reap-result --name <n> --mechanism <scope|pgid>
+//        --survivors <n>
 //   node config/scripts/combined-tree-gate-contract.mjs unit-result --manifest <m> --group <g> --exit <rc>
 //        --log <path> --json <path> --failures-out <path>
 //   node config/scripts/combined-tree-gate-contract.mjs gate-result --name <n> --exit <rc> --log <path>
@@ -165,6 +167,22 @@ function judgeSpecs(lines, manifest, fail) {
   )
 }
 
+/** Every spec must have been reaped by a known mechanism and left no process alive. */
+function judgeReaps(lines, manifest, fail) {
+  judgeNamed(
+    linesByName(lines, 'REAP'),
+    'REAP',
+    manifest.specs.map((s) => s.name),
+    (_name, line) => {
+      const m = /^REAP \S+ mechanism=(scope|pgid) survivors=(\d+)$/.exec(line)
+      if (!m || m[2] !== '0') {
+        fail(line)
+      }
+    },
+    fail
+  )
+}
+
 function judgeUnits(lines, manifest, fail) {
   const groups = new Map(manifest.unitGroups.map((g) => [g.name, g]))
   judgeNamed(
@@ -237,6 +255,7 @@ export function evaluateSummary(summaryText, manifest, manifestSha) {
   const identity = judgeIdentity(lines, manifestSha, fail)
   judgeTree(lines, manifest, head, fail)
   judgeSpecs(lines, manifest, fail)
+  judgeReaps(lines, manifest, fail)
   judgeUnits(lines, manifest, fail)
   judgeGates(lines, manifest, fail)
   return { verdict: failures.length === 0 ? 'GREEN' : 'RED', head, ...identity, failures }
@@ -271,6 +290,12 @@ export function mintSpecResult({ name, exit, log, headMoved }) {
     verdict = 'NO_RESULT'
   }
   return `SPEC_RESULT ${name} label=real exit=${exitToken(exit)} verdict=${verdict} ${sum}`
+}
+
+/** One REAP line; a count or mechanism that is not a plain token reads as unknown, which judgeReaps refuses. */
+export function mintReapResult({ name, mechanism, survivors }) {
+  const count = /^\d+$/.test(String(survivors ?? '')) ? String(survivors) : 'unknown'
+  return `REAP ${name} mechanism=${mechanism ?? 'unknown'} survivors=${count}`
 }
 
 /** One UNIT line from a vitest default-reporter log (null when unreadable: no counts, so RED). */
@@ -469,6 +494,21 @@ const COMMANDS = {
     const headMoved = option(args, '--head-moved')
     const log = headMoved ? null : readOrNull(option(args, '--log') ?? '')
     console.log(mintSpecResult({ name, exit: option(args, '--exit'), log, headMoved }))
+    return 0
+  },
+  'reap-result'(args) {
+    const name = option(args, '--name')
+    if (!name) {
+      console.error('reap-result needs --name <spec>')
+      return 2
+    }
+    console.log(
+      mintReapResult({
+        name,
+        mechanism: option(args, '--mechanism'),
+        survivors: option(args, '--survivors')
+      })
+    )
     return 0
   },
   'unit-result': unitResultCommand,

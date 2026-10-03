@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -145,6 +145,59 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.status, run.stdout).toBe(0)
       expect(isAlive(started)).toBe(false)
       expect(isAlive(foreign.pid)).toBe(true)
+    })
+  })
+
+  describe('reaping what Chromium hides (WR-21)', () => {
+    const reaped = (fx, kind, env = {}) => {
+      const pidFile = join(fx.root, 'spawned.pid')
+      const run = runGate(fx, {
+        env: { STUB_SPAWN_PIDFILE: pidFile, STUB_SPAWN_KIND: kind, ...env }
+      })
+      expect(existsSync(pidFile), run.stdout + run.stderr).toBe(true)
+      const pid = Number(readFileSync(pidFile, 'utf8'))
+      liveChildren.push(pid)
+      return { run, pid }
+    }
+    const scopeHost =
+      spawnSync('systemd-run', ['--user', '--scope', '--collect', '--quiet', 'true'], {
+        stdio: 'ignore'
+      }).status === 0
+
+    it('mints a REAP line per spec naming the mechanism, with no survivors (control)', () => {
+      const run = runGate(makeRepo())
+      expect(run.summary).toContain('REAP alpha mechanism=pgid survivors=0\n')
+      expect(run.status, run.stdout).toBe(0)
+    })
+
+    it('reaps a child of the spec that dropped the env marker, by its session', () => {
+      // Arrange: `env -i` removes CTG_RUN_ID, as Chromium does to its own /proc/<pid>/environ
+      const fx = makeRepo()
+      // Act
+      const { run, pid } = reaped(fx, 'group')
+      // Assert
+      expect(run.status, run.stdout).toBe(0)
+      expect(isAlive(pid)).toBe(false)
+      expect(run.summary).toContain('REAP alpha mechanism=pgid survivors=0')
+    })
+
+    it('reaps a detached, marker-free grandchild it saw while the spec ran (Electron shape)', () => {
+      const fx = makeRepo()
+      const { run, pid } = reaped(fx, 'detached', { STUB_SPEC_LINGER: '2' })
+      expect(run.status, run.stdout).toBe(0)
+      expect(isAlive(pid)).toBe(false)
+    })
+
+    it.skipIf(!scopeHost)('reaps a detached, marker-free child through the user scope', () => {
+      const fx = makeRepo()
+      rmSync(join(fx.stubs, 'systemd-run'))
+      const { run, pid } = reaped(fx, 'detached', {
+        XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR,
+        DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS ?? ''
+      })
+      expect(run.summary).toContain('REAP alpha mechanism=scope survivors=0')
+      expect(run.status, run.stdout).toBe(0)
+      expect(isAlive(pid)).toBe(false)
     })
   })
 

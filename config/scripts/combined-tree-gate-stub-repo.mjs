@@ -42,11 +42,17 @@ exit 0
 
 const PLAYWRIGHT_SH = `#!/bin/sh
 "$STUB_DIR/mutate.sh" spec
-# A detached child of the spec, as the PTY daemon is: only its inherited env ties it to the run.
+# STUB_SPAWN_PIDFILE: a child of the spec that outlives it. marker keeps the run's env marker (as the PTY
+# daemon does), group and detached drop it, as Chromium does, and detached also leaves the session.
 if [ -n "\${STUB_SPAWN_PIDFILE:-}" ]; then
-  setsid sleep 300 > /dev/null 2>&1 < /dev/null &
+  case "\${STUB_SPAWN_KIND:-marker}" in
+    marker) setsid sleep 300 > /dev/null 2>&1 < /dev/null & ;;
+    group) env -i sleep 300 > /dev/null 2>&1 < /dev/null & ;;
+    detached) env -i setsid sleep 300 > /dev/null 2>&1 < /dev/null & ;;
+  esac
   echo $! > "$STUB_SPAWN_PIDFILE"
 fi
+[ -n "\${STUB_SPEC_LINGER:-}" ] && sleep "$STUB_SPEC_LINGER"
 echo "\${STUB_SPEC_ONLY:-unset}" > "$STUB_DIR/spec-env"
 [ -n "\${STUB_CLOBBER:-}" ] && echo '{}' > "$STUB_CLOBBER"
 echo "  1 passed (1.0s)"
@@ -163,7 +169,8 @@ export function makeRepo({
   for (const name of [
     'combined-tree-gate.sh',
     'combined-tree-gate-contract.mjs',
-    'combined-tree-gate-manifest.mjs'
+    'combined-tree-gate-manifest.mjs',
+    'combined-tree-gate-reaper.sh'
   ]) {
     copyFileSync(join(SCRIPTS, name), join(repo, 'config/scripts', name))
   }
@@ -180,6 +187,8 @@ import { createHash } from 'node:crypto'\nspawnSync(process.env.STUB_DIR + '/mut
   write(stubs, 'mutate.sh', MUTATE_SH, 0o755)
   write(stubs, 'git', gitWrapper(), 0o755)
   write(stubs, 'pgrep', '#!/bin/sh\nexit 1\n', 0o755)
+  // Why: no user scope, so the runner reaps by session; the scope test removes this stub.
+  write(stubs, 'systemd-run', '#!/bin/sh\nexit 1\n', 0o755)
   write(
     stubs,
     'xvfb-run',

@@ -8,6 +8,7 @@ import {
   evaluateSummary,
   loadManifest,
   mintGateResult,
+  mintReapResult,
   mintSpecResult,
   mintUnitResult,
   runCli,
@@ -44,6 +45,7 @@ function greenLines(manifest = MANIFEST) {
       (s) =>
         `SPEC_RESULT ${s.name} label=real exit=0 verdict=PRODUCT_RUN  ${s.minPassed} passed (1.0m);`
     ),
+    ...manifest.specs.map((s) => `REAP ${s.name} mechanism=scope survivors=0`),
     ...manifest.unitGroups.flatMap((g) => [
       `UNIT ${g.name} exit=0  Test Files ${g.minPassedFiles} passed (${g.minPassedFiles}); Tests 9 passed (9);`,
       ...(g.regressionDiff ? [`UNIT_${g.name.toUpperCase()}_REGRESSIONS 0`] : [])
@@ -345,6 +347,43 @@ const vitestJson = (files) =>
     }))
   })
 
+describe('evaluateSummary: process reaping (WR-21)', () => {
+  const first = MANIFEST.specs[0].name
+
+  it('reads a spec with no REAP line as RED, so an unreaped run cannot be GREEN', () => {
+    expectRed(drop(greenLines(), `REAP ${first} `), `MISSING REAP ${first}`)
+  })
+
+  it.each([
+    ['survivors', `REAP ${first} mechanism=scope survivors=2`],
+    ['an unknown mechanism', `REAP ${first} mechanism=marker survivors=0`],
+    ['an unreadable count', `REAP ${first} mechanism=pgid survivors=unknown`]
+  ])('reads a REAP line with %s as RED naming the line', (_label, line) => {
+    expectRed(swap(greenLines(), `REAP ${first} `, line), line)
+  })
+
+  it('accepts either mechanism, and reads a duplicated or unexpected REAP as RED', () => {
+    expect(
+      judge(swap(greenLines(), `REAP ${first} `, `REAP ${first} mechanism=pgid survivors=0`))
+        .verdict
+    ).toBe('GREEN')
+    expectRed(
+      [...greenLines(), `REAP ${first} mechanism=scope survivors=0`],
+      `DUPLICATE REAP ${first}`
+    )
+    expectRed([...greenLines(), 'REAP ghost mechanism=scope survivors=0'], 'UNEXPECTED REAP ghost')
+  })
+
+  it('mints the REAP grammar and turns a non-count into "unknown"', () => {
+    expect(mintReapResult({ name: 'x', mechanism: 'scope', survivors: '0' })).toBe(
+      'REAP x mechanism=scope survivors=0'
+    )
+    expect(mintReapResult({ name: 'x', mechanism: 'pgid', survivors: 'many' })).toBe(
+      'REAP x mechanism=pgid survivors=unknown'
+    )
+  })
+})
+
 describe('mintSpecResult', () => {
   it('reads a coloured counts line once ANSI is stripped', () => {
     const line = mintSpecResult({ name: 'mission-brief', exit: '0', log: COLOURED_SPEC_LOG })
@@ -506,6 +545,9 @@ describe('minted lines round-trip through the verdict', () => {
           log:
             skipMissionBrief && s.name === 'mission-brief' ? '  2 skipped\n' : passLog(s.minPassed)
         })
+      ),
+      ...MANIFEST.specs.map((s) =>
+        mintReapResult({ name: s.name, mechanism: 'pgid', survivors: '0' })
       ),
       ...MANIFEST.unitGroups.flatMap((g) => [
         mintUnitResult({ group: g.name, exit: '0', log: unitLog(g.minPassedFiles) }),
