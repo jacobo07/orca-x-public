@@ -260,5 +260,52 @@ test.describe('@resume-center', () => {
     }
     await testInfo.attach('hero-sweep.json', { body: JSON.stringify(sweep, null, 2) })
     expect(sweep).toEqual(Object.fromEntries(SWEEP.map((width) => [width, []])))
+
+    // Context: narrowed, the right column folds behind Details; the brief and snapshot must stay reachable.
+    const selectedKey = await orcaPage
+      .locator('[data-testid="resume-center-workspace"][data-selected="true"]')
+      .getAttribute('data-workspace-key')
+    expect(selectedKey, 'precondition: a workspace is selected on arrival').toBeTruthy()
+    const layouts: Record<number, string | null> = {}
+    for (const width of [1024, 800]) {
+      await setContent(electronApp, width, 1042)
+      await waitForViewport(orcaPage, width)
+      const frame = orcaPage.getByTestId('resume-center-page')
+      layouts[width] = await frame.getAttribute('data-workspace-frame-layout')
+      const toggle = frame.locator('[data-workspace-frame-context-toggle]')
+      if (layouts[width] === 'strip') {
+        await expect(frame.getByTestId('resume-center-aside')).toHaveCount(0)
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+        await expect(frame.locator('[data-workspace-frame-column="overlay"]')).toBeVisible()
+      } else {
+        await expect(toggle).toHaveCount(0)
+      }
+      for (const target of [
+        frame.getByTestId('mission-brief-compact'),
+        frame.getByTestId('resume-center-summary')
+      ]) {
+        await target.scrollIntoViewIfNeeded()
+        await expect(target, `${width}: context card visible`).toBeInViewport()
+        const covered = await target.evaluate((el) => {
+          const box = el.getBoundingClientRect()
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 8)
+          return hit && el.contains(hit) ? null : (hit?.tagName ?? 'nothing')
+        })
+        expect(covered, `${width}: context card covered`).toBeNull()
+      }
+      await expect(frame.getByTestId('mission-brief-compact')).toHaveAttribute(
+        'data-workspace-key',
+        selectedKey!
+      )
+      await orcaPage.screenshot({ path: testInfo.outputPath(`r01-context-${width}.png`) })
+      if (layouts[width] === 'strip') {
+        await toggle.click()
+        await expect(frame.locator('[data-workspace-frame-column="overlay"]')).toHaveCount(0)
+      }
+    }
+    await testInfo.attach('context-layouts.json', { body: JSON.stringify(layouts) })
+    // Why: 800 must take the fold path, or this block never exercised the toggle.
+    expect(layouts[800], 'precondition: 800 folds the context column').toBe('strip')
   })
 })
