@@ -4,8 +4,9 @@
  *
  * What this proves, all through the UI (the store is used only to set up tabs and to observe):
  * - Save and Restore reach the real store and the canonical restore; the list survives a restart.
- * - The preview is judged against this host's real launch profiles: a `shell:cmd.exe` row can be
- *   recreated, a row naming a profile this host lacks cannot, and neither is left unknown.
+ * - The preview is judged against this host's real launch profiles: a row naming this host's shell
+ *   profile (`shell:cmd.exe` on Windows, the host default elsewhere) can be recreated, a row naming a
+ *   profile this host lacks cannot, and neither is left unknown.
  * - A preview taken on an empty workspace does not authorize restoring after a tab appears.
  * - Two clicks in one turn restore once; rows keep their order and identity with a repeated title.
  * - Restore navigates to the workspace and starts nothing: no row has a process and main lists no
@@ -20,6 +21,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
+import { HOST_DEFAULT_SHELL_PROFILE_ID } from '../../src/shared/terminal-launch-profiles'
 import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
@@ -41,6 +43,16 @@ declare global {
 const PROVIDER_SESSION_ID = 'e2e-working-set-surface-session'
 const SHARED_LABEL = 'Build'
 const MISSING_PROFILE = 'shell:e2e-profile-this-host-lacks'
+
+type ShellRowFixture = { shellOverride: string | undefined; launchProfileId: string }
+
+// Why: the preview judges rows against this host's real launch profiles, so the row must name one
+// this host mints — never one derived from the user's shell setting.
+function hostShellRowFixture(): ShellRowFixture {
+  return process.platform === 'win32'
+    ? { shellOverride: 'cmd.exe', launchProfileId: 'shell:cmd.exe' }
+    : { shellOverride: undefined, launchProfileId: HOST_DEFAULT_SHELL_PROFILE_ID }
+}
 
 type RowSnapshot = { id: string; title: string; leafId: string | null }
 
@@ -230,12 +242,14 @@ test('saves and restores a workspace snapshot through its menu, starting nothing
     await waitForPaneCount(page, 1, 30_000)
 
     await page.evaluate(
-      ({ wt, missing }) => {
+      ({ wt, missing, shellRow }) => {
         const s = window.__store!.getState()
-        s.createTab(wt, undefined, 'cmd.exe', { launchProfileId: 'shell:cmd.exe' })
+        s.createTab(wt, undefined, shellRow.shellOverride, {
+          launchProfileId: shellRow.launchProfileId
+        })
         s.createTab(wt, undefined, undefined, { launchProfileId: missing })
       },
-      { wt: worktreeId, missing: MISSING_PROFILE }
+      { wt: worktreeId, missing: MISSING_PROFILE, shellRow: hostShellRowFixture() }
     )
     await expect
       .poll(async () => (await readRows(page, worktreeId)).filter((row) => row.leafId).length, {
