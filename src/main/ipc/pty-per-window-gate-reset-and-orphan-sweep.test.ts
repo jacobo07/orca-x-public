@@ -274,7 +274,9 @@ describe('pty hidden-gate reset and orphan sweep with two windows', () => {
     // Why: Electron's fromId throws on a non-number id.
     mocked.fromId = (id) => {
       if (typeof id !== 'number') {
-        throw new TypeError('Error processing argument at index 0, conversion failure from undefined')
+        throw new TypeError(
+          'Error processing argument at index 0, conversion failure from undefined'
+        )
       }
       return id === 5 ? { isDestroyed: () => false } : null
     }

@@ -2428,7 +2428,10 @@ function anotherLiveRendererWindow(windowKey: number): boolean {
 }
 
 /** Reload/crash of one window: clears hidden/interest marks of PTYs it owns plus unowned and dead-owned ones. */
-function resetRendererWindowDeliveryGate(windowKey: number, options?: { keepUnowned: boolean }): void {
+function resetRendererWindowDeliveryGate(
+  windowKey: number,
+  options?: { keepUnowned: boolean }
+): void {
   // Why unowned and dead-owned too: no live owner will re-report them, so keeping their marks would gate them forever (fail closed).
   const removed = resetRendererScopedHiddenPtyDeliveryStateFor((id) => {
     const owner = ptyRendererOwnership.ownerWebContentsIdFor(id)
