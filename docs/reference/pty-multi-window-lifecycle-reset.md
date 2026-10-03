@@ -115,6 +115,7 @@ Run `/home/kobii/gate8-run-1d3e97557/summary.txt` (14:27–14:30Z, tree clean, b
   spec does not discriminate C1–C6; their proof is the unit suite above. Whether C1 alone was
   ever visible in the real app is unshown.
 - Restore: tree clean at `1d3e97557`, rebuild exit 0.
+- Superseded for C1/C3 by the closure P1 evidence below.
 
 ## Evidence (unit, GEX44 @`af63f4722`)
 
@@ -134,3 +135,28 @@ Run `/home/kobii/gate8-run-1d3e97557/summary.txt` (14:27–14:30Z, tree clean, b
     sweep listeners): tracer, crash, unowned, sweep red.
   - **M2, global reset restored**: scope, crash, unowned red.
 - Unit plane only. No real-app run discriminates C8 yet.
+
+## Evidence (real app, GEX44 @`75ffb11f3`, closure P1)
+
+Plane: **MAIN_STATE**. No user-visible signal discriminates C1: the only renderer consumer of a
+background-origin chunk (`meta.background`, `pty-connection.ts` ~7869) acts only when main dropped
+output at the pending cap, and the survivor's output round trip is gated by C7, not by claims.
+
+- Main's delivery debug snapshot now reports, per PTY, `visibleClaimWindowIds` /
+  `activeClaimWindowIds` (`PtyRendererWindowClaims.claimants`). The survivor test reads its own
+  window's claim from its own page (`tests/e2e/helpers/main-pty-window-claims.ts`): a precondition
+  that it holds the claim before a second window exists, then one read after the second window
+  opens (`D6 C1 [MAIN_STATE]`) and one after that window's renderer is replaced (`D6 C3 [MAIN_STATE]`).
+  Keyed on the survivor's window id, never the union `visible` flag.
+- Run `/home/kobii/closure-runs/p1-04-oracle-75ffb11f3/summary.txt` (17:25–17:29Z, tree clean,
+  build exit 0): survivor test 3/3 PASS (19.2–19.3 s); whole spec 3/3 PASS (1.0 min).
+- Mutant **registration reset restored** (gate8's exact anchor, planted once): RED 3/3, each at
+  `Error: D6 C1 [MAIN_STATE]: opening a second window withdrew the survivor window's visible claim`.
+- Mutant **every window's claims withdrawn on a reset** (C3): RED 1/1 at the same `D6 C1` assertion —
+  the new window's first navigation already resets, before the replacement. The `D6 C3` read's own
+  red branch is therefore not reached in the real app; C3 alone stays unit-proven.
+- Restore: both mutants `RESTORE dirty=0` at `75ffb11f3`, rebuild exit 0.
+- An earlier run at `8ed161bb0` (`/home/kobii/closure-runs/p1-04-oracle-8ed161bb0/summary.txt`) went
+  red 3/3 at the same line but as a null matcher error: the helper read a missing table row as
+  unknown. Main builds the rows from the claim unions, so a missing row under the row cap is no
+  claim; fixed in `75ffb11f3` before the run above.
