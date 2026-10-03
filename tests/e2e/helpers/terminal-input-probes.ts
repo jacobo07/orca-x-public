@@ -24,8 +24,7 @@
  */
 
 import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
-import { getTerminalContentForPty, sendToTerminal, waitForTerminalOutput } from './terminal'
-import { terminalHasOutputLine } from './terminal-output-line'
+import { sendToTerminal, waitForTerminalOutput } from './terminal'
 import { buildSettledShellProbeInputSequence } from '../terminal-probe-input-sequence'
 
 // ─── Page-based probes (healthy CDP session) ────────────────────────
@@ -45,76 +44,6 @@ export async function probeDirectWrite(
   } catch {
     return false
   }
-}
-
-/**
- * Like probeDirectWrite, but the echoed command line does not count: `echo MARKER` already contains
- * the marker, so a terminal that rendered its input and then froze passed the plain probe.
- * For an idle prompt only: POSIX gets Ctrl+U alone, because bash's SIGINT handling flushes the tty
- * input queue and dropped the command's first byte (GEX44: `cho MARKER` ran under an `echo` echo).
- * Retrying cannot hide a frozen terminal: it never prints the output line. Reads the pane that owns
- * `ptyId`: with two windows the synced "active tab" was not the survivor's (GEX44, output on screen).
- */
-export async function probeDirectWriteOutput(
-  page: Page,
-  ptyId: string,
-  marker: string,
-  timeoutMs = 10_000,
-  attempts = 3
-): Promise<boolean> {
-  const command = `echo ${marker}\r`
-  const inputs =
-    process.platform === 'win32' ? buildSettledShellProbeInputSequence(command) : [`\x15${command}`]
-  const gateSamples: unknown[] = []
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    for (const input of inputs) {
-      await sendToTerminal(page, ptyId, input)
-    }
-    try {
-      await expect
-        .poll(
-          async () => terminalHasOutputLine(await getTerminalContentForPty(page, ptyId), marker),
-          {
-            timeout: Math.ceil(timeoutMs / attempts),
-            message: `Terminal printed no line equal to "${marker}"`
-          }
-        )
-        .toBe(true)
-      return true
-    } catch {
-      // Why sample main's gate: output held behind a closed dispatcher gate looks identical to lost output.
-      gateSamples.push(
-        await page.evaluate(async () => {
-          const s = await window.api.pty.getRendererDeliveryDebugSnapshot()
-          return {
-            ready: s.rendererPtyDispatcherReady,
-            forced: s.rendererDispatcherReadyForcedCount,
-            resets: s.rendererLifecycleResetCount,
-            pendingChars: s.pendingChars
-          }
-        })
-      )
-    }
-  }
-  // Why: a false here has been the oracle twice (lost byte, wrong pane); record what it actually read.
-  const seen = await page.evaluate((ptyId) => {
-    const ptyIdsByTabId = window.__store?.getState().ptyIdsByTabId ?? {}
-    const tabId = Object.keys(ptyIdsByTabId).find((id) => ptyIdsByTabId[id]?.includes(ptyId))
-    const panes = (tabId ? window.__paneManagers?.get(tabId)?.getPanes?.() : undefined) ?? []
-    return {
-      tabId: tabId ?? null,
-      ptyIdsByTabId,
-      managerTabIds: [...(window.__paneManagers?.keys() ?? [])],
-      paneCount: panes.length,
-      tails: panes.map((pane) =>
-        (pane.serializeAddon?.serialize?.() ?? '<no serializer>').slice(-600)
-      )
-    }
-  }, ptyId)
-  console.log(
-    `[probeDirectWriteOutput] ${marker} not found for ${ptyId}: ${JSON.stringify({ ...seen, gateSamples })}`
-  )
-  return false
 }
 
 /** Probe the full chain: focus the visible xterm and type through the keyboard. */

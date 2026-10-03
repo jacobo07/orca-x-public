@@ -12,6 +12,8 @@
 
 import type { ElectronApplication, JSHandle, Page } from '@stablyai/playwright-test'
 import type { BrowserWindow } from 'electron'
+import type * as NodeFs from 'node:fs'
+import type * as NodePath from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, getStoreState, waitForActiveWorktree } from './helpers/store'
 import {
@@ -19,7 +21,7 @@ import {
   waitForActiveTerminalManager,
   waitForPaneCount
 } from './helpers/terminal'
-import { probeDirectWrite, probeDirectWriteOutput } from './helpers/terminal-input-probes'
+import { probeDirectWriteOutput } from './helpers/terminal-fresh-output-probes'
 
 type DialogCall = {
   type: string | null
@@ -137,8 +139,8 @@ async function evalInWindow<T>(
 
 async function crashReportCount(electronApp: ElectronApplication): Promise<number> {
   return electronApp.evaluate(({ app }) => {
-    const fs = process.getBuiltinModule('node:fs') as typeof import('node:fs')
-    const path = process.getBuiltinModule('node:path') as typeof import('node:path')
+    const fs = process.getBuiltinModule('node:fs') as typeof NodeFs
+    const path = process.getBuiltinModule('node:path') as typeof NodePath
     try {
       const parsed = JSON.parse(
         fs.readFileSync(path.join(app.getPath('userData'), 'crash-reports.json'), 'utf8')
@@ -213,6 +215,7 @@ async function expectWorkspaceReady(
 }
 
 test.describe('Force Reload renderer replacement', () => {
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixture argument before testInfo.
   test.beforeEach(({}, testInfo) => {
     testInfo.setTimeout(240_000)
   })
@@ -252,7 +255,7 @@ test.describe('Force Reload renderer replacement', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     await waitForPaneCount(orcaPage, 1, 30_000)
     const ptyId = await discoverActivePtyId(orcaPage)
-    expect(await probeDirectWrite(orcaPage, ptyId, 'FORCE_BASELINE_OK')).toBe(true)
+    expect(await probeDirectWriteOutput(orcaPage, ptyId, 'FORCE_BASELINE')).toBe(true)
 
     const window = await electronApp.browserWindow(orcaPage)
     await armMainProbe(electronApp, [0])
@@ -323,7 +326,7 @@ test.describe('Force Reload renderer replacement', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
     const ptyId = await discoverActivePtyId(orcaPage)
     // Why output lines: the echoed `echo MARKER` alone matched before, so a frozen survivor passed.
-    expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_BASELINE_OK')).toBe(true)
+    expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_BASELINE')).toBe(true)
 
     const secondPage = await Promise.all([
       electronApp.waitForEvent('window', { timeout: 60_000 }),
@@ -373,6 +376,6 @@ test.describe('Force Reload renderer replacement', () => {
       { webContentsId: replacedBefore.webContentsId, reason: 'crashed' }
     ])
     // Its terminal still round-trips through the PTY, over its own (unbroken) CDP session.
-    expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_AFTER_OK')).toBe(true)
+    expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_AFTER')).toBe(true)
   })
 })
