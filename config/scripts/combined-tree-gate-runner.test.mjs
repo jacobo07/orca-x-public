@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -92,6 +92,15 @@ afterEach(() => {
   }
 })
 
+// Zombies count as gone: a killed child waiting for its reaper is not running.
+function isAlive(pid) {
+  try {
+    return !/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, 'utf8'))
+  } catch {
+    return false
+  }
+}
+
 const sh = (cwd, ...args) => spawnSync(REAL_GIT, args, { cwd, encoding: 'utf8' }).stdout.trim()
 
 function write(root, rel, text, mode) {
@@ -158,7 +167,7 @@ function makeRepo({ edit = (m) => m, lockText = 'lockfile: 1\n', installedLock =
   write(
     repo,
     'config/scripts/stub-gate.mjs',
-    `import { spawnSync } from 'node:child_process'
+    `import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'\nspawnSync(process.env.STUB_DIR + '/mutate.sh', ['gates'])\nconsole.log('ok')\n`
   )
   git('add', '-A')
@@ -330,6 +339,32 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.status, run.stdout).toBe(0)
       expect(readFileSync(join(fx.stubs, 'spec-env'), 'utf8').trim()).toBe('1')
       expect(readFileSync(join(fx.stubs, 'unit-env'), 'utf8').trim()).toBe('unset')
+    })
+  })
+
+  describe('process reaping (WR-03)', () => {
+    it('kills what the run started and leaves a daemon of this tree that it did not start', () => {
+      // Arrange
+      const fx = makeRepo()
+      const pidFile = join(fx.root, 'spawned.pid')
+      const foreign = spawn(
+        'bash',
+        ['-c', 'exec -a "$0" sleep 300', `node ${fx.repo}/out/main/daemon-entry.js`],
+        {
+          stdio: 'ignore',
+          detached: true
+        }
+      )
+      liveChildren.push(foreign.pid)
+      expect(readFileSync(`/proc/${foreign.pid}/cmdline`, 'utf8')).toContain(`${fx.repo}/out/main`)
+      // Act
+      const run = runGate(fx, { env: { STUB_SPAWN_PIDFILE: pidFile } })
+      // Assert
+      const started = Number(readFileSync(pidFile, 'utf8'))
+      liveChildren.push(started)
+      expect(run.status, run.stdout).toBe(0)
+      expect(isAlive(started)).toBe(false)
+      expect(isAlive(foreign.pid)).toBe(true)
     })
   })
 })
