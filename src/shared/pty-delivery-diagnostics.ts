@@ -78,6 +78,9 @@ export type PtyPerPtyDeliveryDiagnostics = {
   hidden: boolean
   visible: boolean
   active: boolean
+  /** Renderer windows (webContents ids) holding the claim (D6); -1 = unattributed. */
+  visibleClaimWindowIds: number[]
+  activeClaimWindowIds: number[]
   msSinceLastSend: number | null
   msSinceLastAck: number | null
 }

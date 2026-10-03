@@ -9,7 +9,9 @@
 /** Why a key: a claim whose sender cannot be identified is withdrawn by any window's reset (fail closed). */
 export const UNATTRIBUTED_RENDERER_WINDOW = -1
 
-type Kind = 'visible' | 'active'
+export type PtyRendererClaimKind = 'visible' | 'active'
+
+type Kind = PtyRendererClaimKind
 
 export class PtyRendererWindowClaims {
   private readonly claims: Record<Kind, Map<number, Set<string>>> = {
@@ -50,6 +52,17 @@ export class PtyRendererWindowClaims {
       }
     }
     return dropped
+  }
+
+  /** Window keys holding this claim on the PTY, ascending; includes UNATTRIBUTED_RENDERER_WINDOW. */
+  claimants(kind: Kind, ptyId: string): number[] {
+    const keys: number[] = []
+    for (const [windowKey, owned] of this.claims[kind]) {
+      if (owned.has(ptyId)) {
+        keys.push(windowKey)
+      }
+    }
+    return keys.sort((a, b) => a - b)
   }
 
   forgetPty(ptyId: string): void {

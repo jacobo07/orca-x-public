@@ -2963,6 +2963,8 @@ export function registerPtyHandlers(
         hidden: isHiddenRendererPty(id),
         visible: visibleRendererPtys.has(id),
         active: activeRendererPtys.has(id),
+        visibleClaimWindowIds: rendererWindowClaims.claimants('visible', id),
+        activeClaimWindowIds: rendererWindowClaims.claimants('active', id),
         msSinceLastSend: accounting ? now - accounting.lastSendAtMs : null,
         msSinceLastAck: accounting?.lastAckAtMs == null ? null : now - accounting.lastAckAtMs
       })

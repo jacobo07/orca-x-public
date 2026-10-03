@@ -22,6 +22,7 @@ import {
   waitForPaneCount
 } from './helpers/terminal'
 import { probeDirectWriteOutput } from './helpers/terminal-fresh-output-probes'
+import { readMainPtyWindowClaims } from './helpers/main-pty-window-claims'
 
 type DialogCall = {
   type: string | null
@@ -327,6 +328,16 @@ test.describe('Force Reload renderer replacement', () => {
     const ptyId = await discoverActivePtyId(orcaPage)
     // Why output lines: the echoed `echo MARKER` alone matched before, so a frozen survivor passed.
     expect(await probeDirectWriteOutput(orcaPage, ptyId, 'SURVIVOR_BASELINE')).toBe(true)
+    const survivor = await electronApp.browserWindow(orcaPage)
+    const survivorId = (await windowFacts(electronApp, survivor)).webContentsId
+    // Why per-window ids: the union `visible` stays true if the second window shows this PTY too.
+    await expect
+      .poll(async () => (await readMainPtyWindowClaims(orcaPage, ptyId)).visibleClaimWindowIds, {
+        timeout: 15_000,
+        message:
+          'precondition [MAIN_STATE]: the survivor window claims its terminal visible before a second window exists'
+      })
+      .toContain(survivorId)
 
     const secondPage = await Promise.all([
       electronApp.waitForEvent('window', { timeout: 60_000 }),
@@ -336,8 +347,13 @@ test.describe('Force Reload renderer replacement', () => {
     await expect
       .poll(async () => getStoreState<boolean>(secondPage, 'persistedUIReady'), { timeout: 60_000 })
       .toBe(true)
+    // Why one read, no poll: claims are re-sent only on transitions, and a poll could outwait a withdraw.
+    const claimsAfterOpen = await readMainPtyWindowClaims(orcaPage, ptyId)
+    expect(
+      claimsAfterOpen.visibleClaimWindowIds,
+      "D6 C1 [MAIN_STATE]: opening a second window withdrew the survivor window's visible claim"
+    ).toContain(survivorId)
 
-    const survivor = await electronApp.browserWindow(orcaPage)
     const replaced = await electronApp.browserWindow(secondPage)
     await armMainProbe(electronApp, [1])
     const survivorBefore = await windowFacts(electronApp, survivor)
