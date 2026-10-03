@@ -33,8 +33,8 @@ capability r01 does not draw) · **INTENTIONAL** (a deliberate product differenc
 | "Last close: today 14:22 · saved automatically" | absent here; save time lives in Current snapshot as "Desk saved …" | UNSUPPORTED | the profile file's write time says when, not why; no close-cause producer |
 | Hero: Resume all (primary) | same, primary | ALIGNED | wake admission, one at a time |
 | Hero: Restore layout only | same, for the selected workspace | INTENTIONAL | a desk-wide layout restore has no owner |
-| Hero: More options (snapshots, settings) | **Snapshots** for the selected workspace | INTENTIONAL | the only option with a real effect; a one-item menu is chrome |
-| — | **Open in** for the selected workspace (the user's Open-in apps, Cursor among them) | EXTENSION | W5: the sidebar's `shell:openInExternalEditor` authority, reached from here; local and SSH, refused for a runtime host or an unknown folder |
+| Hero: More options (snapshots, settings) | **More options** menu for the selected workspace: Snapshots + Open in ▸ | ALIGNED | `e266d5228`: the hero is one row at 1512 (r01); "settings" has no workspace-scoped producer |
+| — | **Open in** submenu (the user's Open-in apps, Cursor among them) | EXTENSION | W5: the sidebar's `shell:openInExternalEditor` authority, reached from More options; local and SSH, refused for a runtime host or an unknown folder |
 | Tabs Orca X / Cursor / Others | absent | UNSUPPORTED | no producer sees a Cursor window: the Cursor hook reports only from inside an Orca pane (no `ORCA_PANE_KEY` outside), and only agent turns |
 | Search sessions | same | ALIGNED | metadata only, never terminal content |
 | Sort dropdown | "By window" / "Most recent" | ALIGNED | the two sorts the model has |
@@ -72,8 +72,9 @@ capability r01 does not draw) · **INTENTIONAL** (a deliberate product differenc
 | Workspace / session / terminal counts | same + windows, running, sleeping, unknown | ALIGNED + EXTENSION | desk totals |
 | Workspace names | same, whole desk regardless of search | ALIGNED | unfiltered desk rows (W3) |
 | Quick actions card | absent | INTENTIONAL | Resume all / Restore duplicate the hero; "View previous snapshots" = Snapshots; "Create new snapshot" is the dialog's Save; "Select sessions…" has no producer |
-| App detection card, Configure integration | absent | UNSUPPORTED | no app-detection producer; the one integration that exists is "Open in", in the hero |
-| Tips card, "don't show again" | tip with "Dismiss" | INTENTIONAL | dismissal is per visit; the label does not promise permanence |
+| App detection card, Configure integration | absent | UNSUPPORTED | no app-detection producer; the one integration that exists is "Open in", under More options |
+| Tips card, "don't show again" | tip with "Dismiss", kept dismissed | ALIGNED | `b799cd1bc`: persisted UI flag `resumeCenterTipDismissed`, hidden until persisted UI hydrates |
+| — | when the frame is narrower than 980 px (measured folded at 1024 and 800, column at 1512) the column folds behind a **Details** toggle in the header | INTENTIONAL | the toggle opens the same compact brief + Current snapshot as an overlay (`f6655e9bf`) |
 
 ## Themes and widths (W4, `9a6449085`)
 
@@ -117,3 +118,27 @@ capability r01 does not draw) · **INTENTIONAL** (a deliberate product differenc
   the auto-selected row" CAUGHT (asked for `…second…`, expected `…first…`).
 - `resume-center-r01-reality.spec` sweeps the fourth hero action at 1512×1042 light/dark and
   1512 → 800: PASS on Windows.
+
+## Evidence (closure wave, 2026-10-03)
+
+The W5 captures showed what the reachability sweep could not: at 1512 the fourth hero action wrapped
+and Refresh sat alone on a second row. Every action was reachable, so the sweep was green; the defect
+was composition. A row-count assertion now judges it.
+
+- **RED** `2a402c67d`: "hero actions on one row" at 1512×1042 — GEX44 FAILED for that reason
+  (expected 1 row, received 2).
+- **Fix** `804029ef3` + `e266d5228`: Snapshots and Open in fold into **More options** (beside the old
+  buttons first, specs re-pinned, then the old buttons removed with an assertion that they are gone).
+- **GEX44** at `e266d5228` (`/home/kobii/conv-w2-run-e266d5228/summary.txt`): r01-reality (now
+  GREEN), snapshots, open-in, resume-center, mission-discovery, restore-no-wake, resume,
+  mission-brief (2), workspace-navigation-convergence, global-nav-shell-stability (2): 10/10 specs PASS.
+- **Context column** `f6655e9bf`: at 1024 and 800 the folded column's Details toggle reaches the
+  selected workspace's compact Mission Brief and Current snapshot, in view and uncovered; 800 must
+  fold. PASS on Windows and on GEX44 (`/home/kobii/conv-w2-run-f6655e9bf/`).
+- **Tip** `b799cd1bc`: dismissal persisted; unit RED first, panel mutant (ignores the flag) red.
+- **Real-app mutants, GEX44** (planted, built, run, restored, verified):
+
+  | mutant | caught by | reason in the red |
+  |---|---|---|
+  | More options takes the auto-selected row | open-in | asked for `…second…`, expected `…first…` |
+  | folded overlay never opens | r01-reality | the overlay `toBeVisible` failed |
