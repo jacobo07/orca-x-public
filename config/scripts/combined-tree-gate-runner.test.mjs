@@ -264,6 +264,21 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.verdictLine).toMatch(/^TIP_VERDICT GREEN /)
     })
 
+    it('refuses (96) an in-tree evidence dir that would exempt source directories (IN-22)', () => {
+      const fx = makeRepo()
+      const run = runGate(fx, { args: ['--dry-run'], env: { CTG_RUNS_DIR: join(fx.repo, 'src') } })
+      expect(run.status, run.stdout).toBe(96)
+      expect(run.stdout).toContain('REFUSED env CTG_RUNS_DIR')
+    })
+
+    it('treats glob characters in an in-tree evidence dir literally (IN-22)', () => {
+      const fx = makeRepo()
+      const inside = join(fx.repo, 'ctg-ev[1]')
+      mkdirSync(inside)
+      const run = runGate(fx, { env: { CTG_RUNS_DIR: inside } })
+      expect(run.status, run.stdout).toBe(0)
+    })
+
     it('reads a file that appears untracked during a spec as RED', () => {
       const fx = makeRepo()
       const run = runGate(fx, { env: { STUB_MUTATE_AT: 'spec', STUB_MUTATE: 'untracked' } })

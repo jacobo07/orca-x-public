@@ -213,7 +213,13 @@ preflight() {
   [ -d "$CTG_RUNS_DIR" ] || refuse 96 "REFUSED env CTG_RUNS_DIR=$CTG_RUNS_DIR is not a directory"
   local runs_real
   runs_real=$(readlink -f "$CTG_RUNS_DIR") || refuse 96 "REFUSED env CTG_RUNS_DIR=$CTG_RUNS_DIR cannot be resolved"
-  case "$runs_real" in "$TREE"/*) DIRT_EXCLUDE+=(":(exclude)${runs_real#"$TREE"/}") ;; esac
+  # Why refuse: an evidence dir that is, or sits under, a source directory would exempt the sources from the dirt check.
+  case "$runs_real" in
+    "$TREE"/src | "$TREE"/src/* | "$TREE"/tests | "$TREE"/tests/* | "$TREE"/config | "$TREE"/config/*)
+      refuse 96 "REFUSED env CTG_RUNS_DIR=$CTG_RUNS_DIR is inside a source directory of this tree"
+      ;;
+    "$TREE"/*) DIRT_EXCLUDE+=(":(exclude,literal)${runs_real#"$TREE"/}") ;;
+  esac
 
   local name value entry
   local -a parts
