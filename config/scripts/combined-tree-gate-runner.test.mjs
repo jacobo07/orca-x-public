@@ -187,7 +187,9 @@ import { createHash } from 'node:crypto'\nspawnSync(process.env.STUB_DIR + '/mut
   write(modules, '.bin/playwright', PLAYWRIGHT_SH, 0o755)
   write(modules, '.bin/vitest', VITEST_SH, 0o755)
   write(modules, 'typescript/bin/tsc', 'process.exit(0)\n')
-  write(modules, '.pnpm/lock.yaml', installedLock)
+  if (installedLock !== null) {
+    write(modules, '.pnpm/lock.yaml', installedLock)
+  }
   symlinkSync(JSONC_PARSER, join(modules, 'jsonc-parser'))
   const runs = join(root, 'runs')
   mkdirSync(runs)
@@ -365,6 +367,35 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       expect(run.status, run.stdout).toBe(0)
       expect(isAlive(started)).toBe(false)
       expect(isAlive(foreign.pid)).toBe(true)
+    })
+  })
+
+  describe('lockfile parity (WR-04)', () => {
+    it('accepts a node_modules whose installed lock equals the tree lockfile (control)', () => {
+      const run = runGate(makeRepo(), { args: ['--dry-run'] })
+      expect(run.status, run.stdout).toBe(0)
+    })
+
+    it('refuses an installed lock that differs from the tree lockfile even with a local node_modules', () => {
+      const fx = makeRepo({ installedLock: 'lockfile: 2\n' })
+      const run = runGate(fx, { args: ['--dry-run'] })
+      expect(run.status).toBe(94)
+      expect(run.stdout).toMatch(/^LOCK_MISMATCH here=\S+ node_modules_installed=\S+/m)
+    })
+
+    it('refuses when there is no installed lock and no other checkout to compare against', () => {
+      const run = runGate(makeRepo({ installedLock: null }), { args: ['--dry-run'] })
+      expect(run.status).toBe(94)
+      expect(run.stdout).toContain('REFUSED_LOCK no meaningful comparison')
+    })
+
+    it('compares against CTG_LOCK_OWNER when the installed lock is absent', () => {
+      const fx = makeRepo({ installedLock: null })
+      const owner = join(fx.root, 'owner')
+      write(owner, 'pnpm-lock.yaml', 'lockfile: 1\n')
+      expect(runGate(fx, { args: ['--dry-run'], env: { CTG_LOCK_OWNER: owner } }).status).toBe(0)
+      write(owner, 'pnpm-lock.yaml', 'lockfile: 9\n')
+      expect(runGate(fx, { args: ['--dry-run'], env: { CTG_LOCK_OWNER: owner } }).status).toBe(94)
     })
   })
 })

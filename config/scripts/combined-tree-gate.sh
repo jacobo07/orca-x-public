@@ -20,8 +20,10 @@
 # Env contract (no host path is written in this file; unset required values refuse, never default):
 #   CTG_RUNS_DIR        required; existing directory that receives <label>-<sha9>/ (never reused).
 #   CTG_TOOLCHAIN_BIN   optional; prepended to PATH. `node` must then match package.json engines.node.
-#   CTG_LOCK_OWNER      optional; directory whose pnpm-lock.yaml must match this tree's. Default: the
-#                       parent of the resolved node_modules (the owner of a shared node_modules).
+#   CTG_LOCK_OWNER      optional; directory whose pnpm-lock.yaml must also match this tree's. Default: the
+#                       parent of a node_modules that links to another checkout. The installed lock
+#                       (node_modules/.pnpm/lock.yaml) is always compared when present; with neither
+#                       comparison available the run refuses.
 #   plus every requiredEnv of the manifest (MISSION_BRIEF_REPOS: colon-separated existing dirs).
 #
 # Worked GEX44 invocation:
@@ -180,14 +182,30 @@ preflight() {
   [ "$DIRTY" = 0 ] || refuse 92 "REFUSED_DIRTY_TREE dirty=$DIRTY"
   git rev-parse --verify --quiet "$BASE^{commit}" > /dev/null || refuse 97 "REFUSED_MANIFEST base $BASE is not a commit here"
 
-  local owner here there
+  local owner here there installed=node_modules/.pnpm/lock.yaml compared=0
   [ -e node_modules ] || refuse 94 "REFUSED_LOCK no node_modules in $TREE"
-  owner=${CTG_LOCK_OWNER:-$(dirname "$(readlink -f node_modules)")}
   [ -f pnpm-lock.yaml ] || refuse 94 "REFUSED_LOCK no pnpm-lock.yaml in $TREE"
-  [ -f "$owner/pnpm-lock.yaml" ] || refuse 94 "REFUSED_LOCK no pnpm-lock.yaml in lock owner $owner"
   here=$(sha256sum pnpm-lock.yaml | cut -c1-16)
-  there=$(sha256sum "$owner/pnpm-lock.yaml" | cut -c1-16)
-  [ "$here" = "$there" ] || refuse 94 "LOCK_MISMATCH here=$here node_modules_owner=$there ($owner)"
+  # Why the installed lock: pnpm records the lock it installed from; a checkout file only says what was
+  # intended, and a local node_modules makes the tree's own lockfile compare equal to itself.
+  if [ -f "$installed" ]; then
+    there=$(sha256sum "$installed" | cut -c1-16)
+    [ "$here" = "$there" ] || refuse 94 "LOCK_MISMATCH here=$here node_modules_installed=$there ($installed)"
+    compared=1
+  fi
+  owner=${CTG_LOCK_OWNER:-}
+  if [ -z "$owner" ]; then
+    owner=$(dirname "$(readlink -f node_modules)") || refuse 94 "REFUSED_LOCK cannot resolve node_modules"
+    [ "$owner" = "$TREE" ] && owner=
+  fi
+  if [ -n "$owner" ]; then
+    [ -f "$owner/pnpm-lock.yaml" ] || refuse 94 "REFUSED_LOCK no pnpm-lock.yaml in lock owner $owner"
+    there=$(sha256sum "$owner/pnpm-lock.yaml" | cut -c1-16)
+    [ "$here" = "$there" ] || refuse 94 "LOCK_MISMATCH here=$here node_modules_owner=$there ($owner)"
+    compared=1
+  fi
+  [ "$compared" = 1 ] ||
+    refuse 94 "REFUSED_LOCK no meaningful comparison: no $installed and node_modules is not a link to another checkout (set CTG_LOCK_OWNER)"
   LOCK=$here
 
   RUN=$CTG_RUNS_DIR/$LABEL-${HEAD:0:9}
