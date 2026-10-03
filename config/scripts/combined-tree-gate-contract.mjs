@@ -336,25 +336,30 @@ export function unitRegressions(
     return { line: `${token} unknown JSON has no testResults array`, failuresText: 'UNKNOWN\n' }
   }
   const failed = []
+  const fileErrors = []
   for (const f of data.testResults) {
     const file = relativeFile(f?.name, root)
     const bad = (f?.assertionResults ?? []).filter((a) => a?.status === 'failed')
     failed.push(...bad.map((a) => `${file}::${a.fullName}`))
-    if (f?.status === 'failed' && bad.length === 0) {
-      failed.push(`${file}::FILE_FAILED`)
+    // Why the message too: a failed file with a failed test is explained by that test, unless vitest also
+    // reports a suite-level error (a throwing hook) for it.
+    const suiteError = String(f?.message ?? '').trim() !== ''
+    if (f?.status === 'failed' && (bad.length === 0 || suiteError)) {
+      fileErrors.push(`${file}::FILE_FAILED`)
     }
   }
-  failed.sort()
+  const listed = [...failed, ...fileErrors].sort()
   const unexcusable = []
   if (unhandled) {
     unexcusable.push('UNHANDLED_ERRORS')
   }
-  if (data.success === false && failed.length === 0) {
+  if (data.success === false && listed.length === 0) {
     unexcusable.push('RUN_FAILED_WITHOUT_ATTRIBUTION')
   }
   const known = new Set(knownFailures)
-  const regressions = [...failed.filter((name) => !known.has(name)), ...unexcusable]
-  const all = [...failed, ...unexcusable]
+  // Why: a suite error is no test, so no baseline entry can name and excuse it.
+  const regressions = [...failed.filter((name) => !known.has(name)), ...fileErrors, ...unexcusable]
+  const all = [...listed, ...unexcusable]
   return {
     line: `${token} ${regressions.length}`,
     failuresText: all.length > 0 ? `${all.join('\n')}\n` : 'NONE\n'

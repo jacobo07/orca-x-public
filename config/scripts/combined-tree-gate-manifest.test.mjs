@@ -101,3 +101,20 @@ describe('loadManifest: reserved environment names (WR-02)', () => {
     expect(MANIFEST.requiredEnv.map((e) => e.name)).toEqual(['MISSION_BRIEF_REPOS'])
   })
 })
+
+describe('loadManifest: knownFailures never baseline a suite error (WR-23)', () => {
+  const withKnown = (entry) => {
+    const m = parse(RAW)
+    const group = m.unitGroups.find((g) => g.regressionDiff)
+    group.knownFailures = [entry]
+    return JSON.stringify(m)
+  }
+
+  it('refuses a ::FILE_FAILED entry', () => {
+    expect(() => loadManifest(withKnown('a.test.ts::FILE_FAILED'))).toThrow(/FILE_FAILED/)
+  })
+
+  it('still accepts a named test (control)', () => {
+    expect(() => loadManifest(withKnown('a.test.ts::a known flake'))).not.toThrow()
+  })
+})

@@ -174,6 +174,8 @@ export function loadManifest(rawText) {
           violations.push(
             `${where}: knownFailures must be non-empty strings in a regressionDiff group`
           )
+        } else if (g.knownFailures.some((f) => f.endsWith('::FILE_FAILED'))) {
+          violations.push(`${where}: knownFailures cannot baseline a suite error (::FILE_FAILED)`)
         }
       }
     },

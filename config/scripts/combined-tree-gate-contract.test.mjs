@@ -340,9 +340,10 @@ const VITEST_LOG = [
 const vitestJson = (files) =>
   JSON.stringify({
     numTotalTests: 3,
-    testResults: files.map(([name, status, assertions]) => ({
+    testResults: files.map(([name, status, assertions, message = '']) => ({
       name,
       status,
+      message,
       assertionResults: assertions.map(([fullName, s]) => ({ fullName, status: s }))
     }))
   })
@@ -455,6 +456,39 @@ describe('mintUnitResult and unitRegressions', () => {
     const result = unitRegressions('pty', json, [], { root: '/t' })
     expect(result.line).toBe('UNIT_PTY_REGRESSIONS 1')
     expect(result.failuresText).toBe('a.test.ts::FILE_FAILED\n')
+  })
+
+  describe('a suite-level error beside a known failing test (WR-23)', () => {
+    const KNOWN = ['a.test.ts::known flake']
+    const flake = [
+      ['known flake', 'failed'],
+      ['fine', 'passed']
+    ]
+
+    it('counts a throwing afterAll in a file that also holds a known failure', () => {
+      // Arrange: vitest 4.1.5 reports such a file as failed with the hook's message and both assertions
+      const json = vitestJson([['/t/a.test.ts', 'failed', flake, 'new hook failure']])
+      // Act
+      const result = unitRegressions('pty', json, KNOWN, { root: '/t' })
+      // Assert
+      expect(result.line).toBe('UNIT_PTY_REGRESSIONS 1')
+      expect(result.failuresText).toContain('a.test.ts::FILE_FAILED')
+    })
+
+    it('does not count a file whose only failure is the known test (control)', () => {
+      const json = vitestJson([['/t/a.test.ts', 'failed', flake]])
+      expect(unitRegressions('pty', json, KNOWN, { root: '/t' }).line).toBe(
+        'UNIT_PTY_REGRESSIONS 0'
+      )
+    })
+
+    it('never lets a recorded FILE_FAILED entry excuse the error', () => {
+      const json = vitestJson([['/t/a.test.ts', 'failed', flake, 'new hook failure']])
+      const known = [...KNOWN, 'a.test.ts::FILE_FAILED']
+      expect(unitRegressions('pty', json, known, { root: '/t' }).line).toBe(
+        'UNIT_PTY_REGRESSIONS 1'
+      )
+    })
   })
 
   it('does not let a known failure in one file excuse the same name failing in another (WR-10)', () => {
