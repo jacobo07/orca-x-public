@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parse } from 'jsonc-parser'
 import { describe, expect, it } from 'vitest'
 import {
   evaluateSummary,
@@ -11,7 +10,6 @@ import {
   mintGateResult,
   mintSpecResult,
   mintUnitResult,
-  planLines,
   runCli,
   unitRegressions
 } from './combined-tree-gate-contract.mjs'
@@ -288,64 +286,6 @@ describe('evaluateSummary: manifest identity (WR-01)', () => {
     // Assert
     expect(rc).toBe(0)
     expect(printed).toEqual([`TIP_VERDICT GREEN head=${SHA} manifest=${MANIFEST_SHA} committed=1`])
-  })
-})
-
-describe('loadManifest', () => {
-  const edited = (edit) => {
-    const m = parse(RAW)
-    edit(m)
-    return JSON.stringify(m)
-  }
-
-  it.each([
-    ['an unknown schema', (m) => (m.schema = 'combined-tree-gate/2'), /schema must be/],
-    ['empty specs', (m) => (m.specs = []), /specs must be a non-empty array/],
-    ['a duplicate spec', (m) => m.specs.push({ ...m.specs[0] }), /specs: duplicate name/],
-    [
-      'a duplicate group',
-      (m) => m.unitGroups.push({ ...m.unitGroups[0] }),
-      /unitGroups: duplicate name/
-    ],
-    [
-      'a duplicate gate',
-      (m) => m.staticGates.push({ ...m.staticGates[0] }),
-      /staticGates: duplicate name/
-    ],
-    ['minPassed 0', (m) => (m.specs[0].minPassed = 0), /minPassed must be an integer >= 1/],
-    [
-      'an argv token with whitespace',
-      (m) => (m.staticGates[0].argv = ['node', 'a b']),
-      /token "a b"/
-    ],
-    ['an argv token with ;', (m) => (m.staticGates[0].argv = ['node', 'x;rm']), /token "x;rm"/],
-    ['an unset base', (m) => delete m.changedFilesBase, /changedFilesBase must be/],
-    ['a group name with a dash', (m) => (m.unitGroups[0].name = 'gate-9'), /unitGroups\[0\] name/]
-  ])('throws for %s', (_label, edit, message) => {
-    expect(() => loadManifest(edited(edit))).toThrow(message)
-  })
-
-  it('names every violation in one error', () => {
-    const raw = edited((m) => {
-      m.schema = 'x'
-      m.specs[0].minPassed = 0
-    })
-    expect(() => loadManifest(raw)).toThrow(/schema must be.*minPassed must be/)
-  })
-})
-
-describe('planLines', () => {
-  it('prints one line per spec, group and gate and counts that agree', () => {
-    // Arrange / Act
-    const lines = planLines(MANIFEST)
-    // Assert
-    const specs = lines.filter((l) => l.startsWith('PLAN_SPEC '))
-    expect(specs.map((l) => l.split(' ')[1])).toEqual(MANIFEST.specs.map((s) => s.name))
-    expect(lines.filter((l) => l.startsWith('PLAN_UNIT ')).length).toBe(MANIFEST.unitGroups.length)
-    expect(lines.filter((l) => l.startsWith('PLAN_GATE ')).length).toBe(MANIFEST.staticGates.length)
-    expect(lines.at(-1)).toBe('PLAN_COUNTS specs=14 units=3 gates=9')
-    expect(lines).toContain('PLAN_GATE oxfmt 1 node_modules/.bin/oxfmt --check')
-    expect(lines).toContain('PLAN_UNIT pty 67 1 src/main/ipc/pty')
   })
 })
 

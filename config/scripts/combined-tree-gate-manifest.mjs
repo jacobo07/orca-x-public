@@ -15,6 +15,17 @@ const GROUP_NAME = /^[a-z][a-z0-9]*$/
 const GATE_NAME = /^[a-z][a-z0-9-]*$/
 const COMMIT = /^[0-9a-f]{7,40}$/
 
+// Why: the runner is bash; a manifest name must not shadow its variables or the process-wide ones.
+const RESERVED_ENV = new Set(
+  `_ PATH HOME IFS PWD OLDPWD SHELL USER LANG SKIP_BUILD VITE_EXPOSE_STORE TREE CONTRACT MANIFEST
+  MANIFEST_SRC MODE SUMMARY LABEL EXPECT SNAP BASE HEAD DIRTY LOCK RUN S SPECS UNITS GATES PLAN CHANGED`.split(
+    /\s+/
+  )
+)
+const RESERVED_ENV_PREFIXES = ['CTG_', 'LD_', 'DYLD_', 'BASH', 'GIT_', 'NODE_']
+const isReservedEnv = (name) =>
+  RESERVED_ENV.has(name) || RESERVED_ENV_PREFIXES.some((prefix) => name.startsWith(prefix))
+
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isCount = (v) => Number.isInteger(v) && v >= 1
 
@@ -70,6 +81,8 @@ function checkEnv(m, violations) {
     for (const [name, value] of Object.entries(specEnv)) {
       if (!ENV_NAME.test(name)) {
         violations.push(`specEnv name ${name} must match ${ENV_NAME}`)
+      } else if (isReservedEnv(name)) {
+        violations.push(`specEnv name ${name} is reserved (runner or process-wide variable)`)
       }
       if (typeof value !== 'string' || !TOKEN.test(value)) {
         violations.push(`specEnv ${name}: value ${JSON.stringify(value)} must match ${TOKEN}`)
@@ -85,6 +98,9 @@ function checkEnv(m, violations) {
     if (!isObject(entry) || typeof entry.name !== 'string' || !ENV_NAME.test(entry.name)) {
       violations.push(`requiredEnv[${i}] needs a name matching ${ENV_NAME}`)
       return
+    }
+    if (isReservedEnv(entry.name)) {
+      violations.push(`requiredEnv ${entry.name} is reserved (runner or process-wide variable)`)
     }
     checkKeys(entry, ['name', 'pathList'], `requiredEnv ${entry.name}`, violations)
     if (entry.pathList !== undefined && typeof entry.pathList !== 'boolean') {

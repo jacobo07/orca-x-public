@@ -49,9 +49,10 @@
         "tests/e2e/helpers/terminal-probe-marker.unit.test.ts",
         "config/scripts/check-e2e-terminal-liveness-probes.test.mjs",
         "config/scripts/combined-tree-gate-contract.test.mjs",
+        "config/scripts/combined-tree-gate-manifest.test.mjs",
         "config/scripts/combined-tree-gate-runner.test.mjs"
       ],
-      "minPassedFiles": 5
+      "minPassedFiles": 6
     },
     {
       "name": "pty",

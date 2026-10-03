@@ -279,9 +279,12 @@ built_head=$(git rev-parse HEAD) || built_head=unknown
 log_line "BUILD_real_EXIT=$rc head=${built_head:0:9} dirty=$(tree_dirt)"
 [ "$rc" = 0 ] || finish 0
 
+# Why not export: specEnv belongs to the specs, so it is passed to them with `env` and never lands in
+# this script's scope, where it could shadow a variable the judging code reads.
+spec_env=()
 for line in "${PLAN[@]}"; do
   read -r -a t <<< "$line"
-  [ "${t[0]}" = PLAN_ENV ] && export "${t[1]}=${t[2]}"
+  [ "${t[0]}" = PLAN_ENV ] && spec_env+=("${t[1]}=${t[2]}")
 done
 
 moved=0
@@ -292,7 +295,7 @@ for spec in "${SPECS[@]}"; do
     continue
   fi
   log=$RUN/spec-$spec-real.log
-  SKIP_BUILD=1 timeout 1500 xvfb-run -a -s "-screen 0 2560x1600x24" node_modules/.bin/playwright test \
+  env "${spec_env[@]}" SKIP_BUILD=1 timeout 1500 xvfb-run -a -s "-screen 0 2560x1600x24" node_modules/.bin/playwright test \
     --config tests/playwright.config.ts --project=electron-headless --project=electron-headful --workers=1 \
     --reporter=list --output "$RUN/results/$spec-real" "tests/e2e/$spec.spec.ts" > "$log" 2>&1
   rc=$?

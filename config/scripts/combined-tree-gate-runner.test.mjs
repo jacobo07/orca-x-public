@@ -48,12 +48,14 @@ if [ -n "\${STUB_SPAWN_PIDFILE:-}" ]; then
   setsid sleep 300 > /dev/null 2>&1 < /dev/null &
   echo $! > "$STUB_SPAWN_PIDFILE"
 fi
+echo "\${STUB_SPEC_ONLY:-unset}" > "$STUB_DIR/spec-env"
 [ -n "\${STUB_CLOBBER:-}" ] && echo '{}' > "$STUB_CLOBBER"
 echo "  1 passed (1.0s)"
 `
 
 const VITEST_SH = `#!/bin/sh
 "$STUB_DIR/mutate.sh" units
+echo "\${STUB_SPEC_ONLY:-unset}" > "$STUB_DIR/unit-env"
 for a in "$@"; do
   case "$a" in --outputFile.json=*) echo '{"testResults":[]}' > "\${a#--outputFile.json=}" ;; esac
 done
@@ -307,6 +309,27 @@ linux('combined-tree-gate.sh against a stub tree', () => {
         `TIP_VERDICT GREEN head=${run.head} manifest=${started} committed=1`
       )
       expect(run.status).toBe(0)
+    })
+  })
+
+  describe('specEnv (WR-02)', () => {
+    it('refuses a manifest whose specEnv names a runner variable before anything runs', () => {
+      // Arrange
+      const fx = makeRepo({ edit: (m) => ({ ...m, specEnv: { MANIFEST: '/tmp/lax.jsonc' } }) })
+      // Act
+      const run = runGate(fx)
+      // Assert
+      expect(run.status).toBe(97)
+      expect(run.stdout).toContain('specEnv name MANIFEST is reserved')
+      expect(existsSync(run.dir)).toBe(false)
+    })
+
+    it('gives specEnv to the specs only, not to the unit groups or gates', () => {
+      const fx = makeRepo({ edit: (m) => ({ ...m, specEnv: { STUB_SPEC_ONLY: '1' } }) })
+      const run = runGate(fx)
+      expect(run.status, run.stdout).toBe(0)
+      expect(readFileSync(join(fx.stubs, 'spec-env'), 'utf8').trim()).toBe('1')
+      expect(readFileSync(join(fx.stubs, 'unit-env'), 'utf8').trim()).toBe('unset')
     })
   })
 })
