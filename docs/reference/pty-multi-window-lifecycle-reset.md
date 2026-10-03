@@ -61,7 +61,8 @@ died; a page that was merely *joined* by another window has not died.
   other live window it clears them, as before. Its `did-finish-load` also runs its local orphan
   sweep (only when it registered on a `LocalPtyProvider`). Registering another window removes
   neither; `destroyed` or re-registration removes the window's own. Both live in the C2 per-window
-  lifecycle record.
+  lifecycle record. `destroyed` does not run the gate reset: a closed window's PTYs keep their hidden
+  marks and interest holds until another window reloads or crashes, which clears them as dead-owned.
 
 ## Out of scope (debt, recorded)
 
@@ -198,3 +199,10 @@ Logs: `/home/kobii/closure-runs/p1-review-fix/`. Unit plane only (MAIN_STATE via
   run alone (`wr02-isolated-*.log`).
 - `src/main/ipc/pty` filter: 67 files, 622 pass, 6 skip, 0 fail (`pty-filter-full.log`). tsc node
   exit 0 (seeded control exit 1, TS2322). oxlint exit 0 on touched files (seeded control exit 1).
+- **CR-01 (re-review, headless entry).** `registerHeadlessPtyRuntime` registers a webContents with no
+  id, so its lifecycle entry is keyed `undefined`. Electron's `fromId(undefined)` throws. The liveness
+  helper now reads any non-integer id as not live, and the headless entry stays registered, because
+  C6 counts it. New `headless` test: register headless, then a window, with a mock `fromId` that
+  throws on a non-number. RED at `9f6f27830` (`TypeError … conversion failure from undefined`),
+  GREEN at `fa205fac0`. The guard-removed mutant goes red. `src/main/ipc/pty` filter: 67 files,
+  623 pass, 6 skip, 0 fail. Logs: `/home/kobii/closure-runs/p1-review-fix/iter2/`.
