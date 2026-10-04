@@ -45,12 +45,14 @@ describe('buildMarkdownDiskFallbackDoc', () => {
   it('builds a read-only markdown document from disk content', () => {
     expect(
       buildMarkdownDiskFallbackDoc({
+        relativePath: 'notes.md',
         content: '# Notes',
         truncated: false,
         tabIsDirty: false
       })
     ).toEqual({
       status: 'ready',
+      relativePath: 'notes.md',
       content: '# Notes',
       localContent: '# Notes',
       baseVersion: '',
@@ -64,6 +66,7 @@ describe('buildMarkdownDiskFallbackDoc', () => {
   it('marks disk content stale when the desktop tab has unsaved changes', () => {
     expect(
       buildMarkdownDiskFallbackDoc({
+        relativePath: 'notes.md',
         content: '# Notes',
         truncated: false,
         tabIsDirty: true
@@ -78,6 +81,7 @@ describe('buildMarkdownDiskFallbackDoc', () => {
   it('warns when the disk read is truncated', () => {
     expect(
       buildMarkdownDiskFallbackDoc({
+        relativePath: 'notes.md',
         content: '# Partial',
         truncated: true,
         tabIsDirty: true

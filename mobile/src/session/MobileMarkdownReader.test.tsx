@@ -41,6 +41,7 @@ vi.mock('../components/MobileRichMarkdownEditor', () => {
 
 const readyDoc: MarkdownDocState = {
   status: 'ready',
+  relativePath: 'notes.md',
   content: '# Notes',
   localContent: '# Notes',
   baseVersion: '1',

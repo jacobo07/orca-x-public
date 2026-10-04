@@ -53,6 +53,18 @@ describe('session route markdown draft journal wiring', () => {
     expect(code).toMatch(/onRefresh=\{\(\) => refreshMarkdownTab\(activeMarkdownTab\)\}/)
   })
 
+  // Why source pins: the journal key must travel with the doc, because a tab closed from the action sheet
+  // leaves its dirty doc behind and Discard & Leave can then reach it only through the doc.
+  it('stamps the journal key on every ready doc it builds, so a doc outlives its tab', () => {
+    expect(code.match(/status: 'ready',\s*relativePath: tab\.relativePath,/g)).toHaveLength(2)
+    expect(code).toMatch(/buildMarkdownDiskFallbackDoc\(\{\s*relativePath: tab\.relativePath,/)
+  })
+
+  it('lists and retires leave drafts through the doc-keyed collector', () => {
+    expect(code).toMatch(/collectDirtyMarkdownDrafts\(markdownDocs, sessionTabs\)/)
+    expect(code).toMatch(/discardDirtyMarkdownDrafts\(drafts, discardMarkdownDraft\)/)
+  })
+
   it('retires every dirty draft before Discard & Leave leaves the session', () => {
     const action = code.match(
       /label: 'Discard & Leave',[\s\S]*?onPress: \(\) => \{([\s\S]*?)\n {12}\}/

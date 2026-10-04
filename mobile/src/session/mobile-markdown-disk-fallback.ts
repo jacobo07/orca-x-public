@@ -10,6 +10,7 @@ export function shouldReadMarkdownFromDiskAfterReadTabFailure(response: RpcFailu
 }
 
 export function buildMarkdownDiskFallbackDoc(args: {
+  relativePath: string
   content: string
   truncated: boolean
   tabIsDirty: boolean
@@ -21,6 +22,7 @@ export function buildMarkdownDiskFallbackDoc(args: {
       : 'Editing needs Orca X desktop running.'
   return {
     status: 'ready' as const,
+    relativePath: args.relativePath,
     content: args.content,
     localContent: args.content,
     baseVersion: '',

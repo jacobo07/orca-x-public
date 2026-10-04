@@ -75,6 +75,8 @@ export type MarkdownDocState =
   | { status: 'loading' }
   | {
       status: 'ready'
+      /** The journal key. It travels with the doc, so a doc outlives the tab that opened it. */
+      relativePath: string
       content: string
       localContent: string
       baseVersion: string
@@ -129,8 +131,8 @@ export type DirtyMarkdownDraft = {
   tabId: string
   title: string
   content: string
-  /** The journal key; null when the tab is already gone, so there is no entry to retire by path. */
-  relativePath: string | null
+  /** The journal key, read from the doc: a tab closed from the action sheet leaves the dirty doc behind. */
+  relativePath: string
 }
 
 export type TerminalCreateResult = {

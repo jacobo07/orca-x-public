@@ -161,6 +161,10 @@ import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileMarkdownReader } from '../../../../src/session/MobileMarkdownReader'
 import { useMobileMarkdownDocDraftJournal } from '../../../../src/session/use-mobile-markdown-doc-draft-journal'
+import {
+  collectDirtyMarkdownDrafts,
+  discardDirtyMarkdownDrafts
+} from '../../../../src/session/dirty-markdown-drafts'
 import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
 import {
   CustomKeyModal,
@@ -1879,6 +1883,7 @@ export default function SessionScreen() {
           setMarkdownDocs((prev) =>
             new Map(prev).set(tab.id, {
               status: 'ready',
+              relativePath: tab.relativePath,
               content: result.content,
               localContent: result.content,
               baseVersion: result.version,
@@ -1910,6 +1915,7 @@ export default function SessionScreen() {
           new Map(prev).set(
             tab.id,
             buildMarkdownDiskFallbackDoc({
+              relativePath: tab.relativePath,
               content: fileResult.content,
               truncated: fileResult.truncated,
               tabIsDirty: tab.isDirty
@@ -2138,21 +2144,10 @@ export default function SessionScreen() {
     [markdownDocs, showToast]
   )
 
-  const getDirtyMarkdownDrafts = useCallback(() => {
-    const drafts: DirtyMarkdownDraft[] = []
-    for (const [tabId, doc] of markdownDocs) {
-      if (doc.status === 'ready' && doc.isDirty) {
-        const tab = sessionTabs.find((candidate) => candidate.id === tabId)
-        drafts.push({
-          tabId,
-          title: tab?.title || 'Markdown',
-          content: doc.localContent,
-          relativePath: tab?.type === 'markdown' ? tab.relativePath : null
-        })
-      }
-    }
-    return drafts
-  }, [markdownDocs, sessionTabs])
+  const getDirtyMarkdownDrafts = useCallback(
+    () => collectDirtyMarkdownDrafts(markdownDocs, sessionTabs),
+    [markdownDocs, sessionTabs]
+  )
 
   const leaveSession = useCallback(() => {
     if (router.canGoBack()) {
@@ -2240,6 +2235,7 @@ export default function SessionScreen() {
         setMarkdownDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'ready',
+            relativePath: tab.relativePath,
             content: result.content,
             localContent: result.content,
             baseVersion: result.version,
@@ -4126,13 +4122,7 @@ export default function SessionScreen() {
     [discardMarkdownDraft, markdownDocs, readMarkdownTab]
   )
   const discardLeaveDrafts = useCallback(
-    (drafts: DirtyMarkdownDraft[]) => {
-      for (const draft of drafts) {
-        if (draft.relativePath) {
-          discardMarkdownDraft({ relativePath: draft.relativePath })
-        }
-      }
-    },
+    (drafts: DirtyMarkdownDraft[]) => discardDirtyMarkdownDrafts(drafts, discardMarkdownDraft),
     [discardMarkdownDraft]
   )
   const activeFileTab = activeSessionTab?.type === 'file' ? activeSessionTab : null

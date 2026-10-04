@@ -46,6 +46,7 @@ type Screen = {
 
 const readyDoc = (content: string, editable = true): MarkdownDocState => ({
   status: 'ready',
+  relativePath: PATH,
   content,
   localContent: content,
   baseVersion: 'host-version',
