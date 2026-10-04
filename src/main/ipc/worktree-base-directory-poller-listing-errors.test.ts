@@ -347,7 +347,7 @@ describe('worktree base poller listing errors', () => {
         target as WorktreeBaseWatchTarget,
         () => target.repos,
         (events) => received.push(events),
-        { pollIntervalMs: POLL_MS, onSnapshotTaken: (tick) => scanTicks.push(tick) }
+        { pollIntervalMs: POLL_MS, onSnapshotTaken: (tick) => void scanTicks.push(tick) }
       )
       cleanups.push(() => poller.unsubscribe())
 
