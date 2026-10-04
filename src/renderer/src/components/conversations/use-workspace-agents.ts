@@ -10,6 +10,8 @@ export type ScopedAgentLookup =
   | { status: 'loading' }
   | { status: 'found'; agent: Agent }
   | { status: 'missing'; agentId: string }
+  // The catalog exists but cannot be read: not "missing", and not a failure a retry could clear.
+  | { status: 'unreadable' }
   | { status: 'failed'; reason: string }
 
 /**
@@ -26,12 +28,18 @@ export function useWorkspaceAgents(agentScope: string | null): {
   const [state, setState] = useState<
     | { status: 'loading' }
     | { status: 'ready'; agents: readonly Agent[] }
+    | { status: 'unreadable' }
     | { status: 'failed'; reason: string }
   >({ status: 'loading' })
 
   const refresh = useCallback(async () => {
     try {
-      setState({ status: 'ready', agents: await window.api.agents.list() })
+      const read = await window.api.agents.roster()
+      setState(
+        read.status === 'readable'
+          ? { status: 'ready', agents: read.agents }
+          : { status: 'unreadable' }
+      )
     } catch (error) {
       setState({ status: 'failed', reason: error instanceof Error ? error.message : String(error) })
     }
@@ -48,6 +56,9 @@ export function useWorkspaceAgents(agentScope: string | null): {
     }
     if (state.status === 'loading') {
       return { status: 'loading' }
+    }
+    if (state.status === 'unreadable') {
+      return { status: 'unreadable' }
     }
     if (state.status === 'failed') {
       return { status: 'failed', reason: state.reason }

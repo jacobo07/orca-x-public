@@ -46,9 +46,9 @@ export type AgentCreationInput = {
 /**
  * Outcomes, not exceptions, for everything that is a statement about the user's request.
  *
- * These live in shared because they cross IPC. The three refusals need three different things said
- * to a person and have three different fixes — look at it again, pick a project, try again — and
- * one thrown Error loses exactly the part that helps. `not-persisted` is the one that matters most:
+ * These live in shared because they cross IPC. The refusals need different things said to a person
+ * and have different fixes — look at it again, pick a project, try again, or nothing a retry can fix —
+ * and one thrown Error loses exactly the part that helps. `not-persisted` is the one that matters most:
  * it is the difference between an agent that exists and one that appeared to.
  */
 export type AgentCreationResult =
@@ -56,3 +56,8 @@ export type AgentCreationResult =
   | { outcome: 'invalid'; reason: string }
   | { outcome: 'project-not-found'; projectId: string }
   | { outcome: 'not-persisted'; reason: string }
+  // The stored catalog cannot be read, so nothing was written. Unlike `not-persisted`, trying again cannot help.
+  | { outcome: 'catalog-unreadable' }
+
+/** EMPTY is only ever a `readable` roster: an unreadable catalog is a failed read, not no agents. */
+export type AgentRosterRead = { status: 'readable'; agents: Agent[] } | { status: 'unreadable' }

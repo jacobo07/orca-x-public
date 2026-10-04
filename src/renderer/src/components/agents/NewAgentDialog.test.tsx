@@ -259,6 +259,21 @@ describe('NewAgentDialog', () => {
     expect(field('new-agent-error').textContent).toContain('disk is full')
   })
 
+  it('says the agent list could not be read, with no retry framing, when the catalog is unreadable', async () => {
+    create.mockResolvedValue({ outcome: 'catalog-unreadable' })
+    render()
+    type('new-agent-name', 'Ada')
+
+    await submit()
+
+    const text = field('new-agent-error').textContent ?? ''
+    expect(text).toContain('could not be read')
+    expect(text).toContain('nothing was changed')
+    expect(text).not.toMatch(/try again|could not be saved/i)
+    expect(onCreated).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
   it('surfaces a rejected call instead of leaving the button spinning forever', async () => {
     create.mockRejectedValue(new Error('the renderer sent a malformed payload'))
     render()

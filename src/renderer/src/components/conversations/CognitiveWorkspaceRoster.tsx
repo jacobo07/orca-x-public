@@ -19,6 +19,7 @@ import { WorkspaceProjectsSection } from './WorkspaceProjectsSection'
 export type WorkspaceAgentsLoad =
   | { status: 'loading' }
   | { status: 'ready' }
+  | { status: 'unreadable' }
   | { status: 'failed'; reason: string }
 
 /**
@@ -156,6 +157,21 @@ function AgentsLoadNotice({ load, empty }: { load: WorkspaceAgentsLoad; empty: b
     return (
       <p className="px-2 text-xs text-muted-foreground" role="status">
         {translate('agents.loading', 'Loading agents…')}
+      </p>
+    )
+  }
+  if (load.status === 'unreadable') {
+    // Not the empty state, and no retry: the file is untouched and would read the same again.
+    return (
+      <p
+        className="px-2 text-xs text-destructive"
+        role="alert"
+        data-testid="workspace-agents-unreadable"
+      >
+        {translate(
+          'agents.unreadable',
+          'Your agent list could not be read, and nothing was changed.'
+        )}
       </p>
     )
   }

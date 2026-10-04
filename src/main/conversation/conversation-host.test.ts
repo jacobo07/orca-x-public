@@ -4,6 +4,9 @@ import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import type { Agent } from '../../shared/agent-types'
 import type { ConversationSummary } from '../../shared/conversation-summary'
 import type { Project } from '../../shared/project-types'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import { AgentPersistenceOperations } from '../persistence/tracking-agents/agent-operations'
+import type { StoreOwnedPersistedState } from '../persistence/loading-store/store-owned-state'
 import {
   createConversationHost,
   type ConversationHostDeps,
@@ -42,6 +45,22 @@ function deps(overrides: Partial<ConversationHostDeps> = {}): ConversationHostDe
 }
 
 describe('createConversationHost', () => {
+  it('fails the paired workspace read, never answers an empty roster, when the agent catalog is unreadable', async () => {
+    // Arrange: the real roster owner over a catalog that exists but is not an array.
+    const operations = new AgentPersistenceOperations({
+      state: {
+        agents: { 0: AGENT },
+        projects: []
+      } as unknown as PersistedState as StoreOwnedPersistedState,
+      scheduleSave: vi.fn(),
+      flushDurableStateOrThrowAsync: vi.fn(async () => {})
+    })
+    const host = createConversationHost(deps({ readAgents: () => operations.getAgents() }))
+
+    // Act + Assert: an older paired client maps a failed read to its error state.
+    await expect(host.readWorkspace()).rejects.toThrow(/unreadable/)
+  })
+
   it('never lets a remote caller choose where a turn runs', async () => {
     const d = deps()
     const host = createConversationHost(d)

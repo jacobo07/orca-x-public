@@ -1,3 +1,4 @@
+import { AgentCatalogUnreadableError } from '../../../shared/agent-catalog-unreadable'
 import { mintAgentId } from '../../../shared/agent-identity'
 import { isReadableAgent } from '../../../shared/agent-project-id-remap'
 import type { Agent, AgentCreationInput, AgentCreationResult } from '../../../shared/agent-types'
@@ -55,9 +56,16 @@ export class AgentPersistenceOperations {
    */
   getAgents(): Agent[] {
     const catalog: unknown = this.state.agents
-    return (Array.isArray(catalog) ? catalog.filter(isRosterAgent) : []).sort(
-      (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
-    )
+    if (catalog === undefined || catalog === null) {
+      return []
+    }
+    // Why: a catalog that is present but not a list is a failed read, so it must not become an empty roster (IN-12).
+    if (!Array.isArray(catalog)) {
+      throw new AgentCatalogUnreadableError()
+    }
+    return catalog
+      .filter(isRosterAgent)
+      .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
   }
 
   /**
@@ -111,7 +119,7 @@ export class AgentPersistenceOperations {
     const catalog: unknown = this.state.agents
     if (catalog !== undefined && catalog !== null && !Array.isArray(catalog)) {
       // Why: appending would mean replacing the unreadable value, which belongs to whoever wrote it.
-      return { outcome: 'not-persisted', reason: 'the stored agent catalog is unreadable' }
+      return { outcome: 'catalog-unreadable' }
     }
     this.state.agents = [...((catalog as Agent[] | undefined | null) ?? []), agent]
     this.operations.scheduleSave()

@@ -73,6 +73,14 @@ export function AgentChatHeader({
         {lookup.status === 'found' && lookup.agent.role ? (
           <p className="truncate text-xs text-muted-foreground">{lookup.agent.role}</p>
         ) : null}
+        {lookup.status === 'unreadable' ? (
+          <p className="text-xs text-destructive" role="alert">
+            {translate(
+              'agents.unreadable',
+              'Your agent list could not be read, and nothing was changed.'
+            )}
+          </p>
+        ) : null}
         {lookup.status === 'failed' ? (
           <p className="text-xs text-destructive" role="alert">
             {translate('agents.readFailed', 'Could not read your agents.')}

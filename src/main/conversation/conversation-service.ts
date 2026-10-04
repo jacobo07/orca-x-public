@@ -8,6 +8,7 @@
 // without a restart and a long-lived service cannot keep answering from the profile that was active
 // when it was constructed.
 
+import { isAgentCatalogUnreadableError } from '../../shared/agent-catalog-unreadable'
 import type { Agent, AgentId } from '../../shared/agent-types'
 import { mintConversationId } from '../../shared/conversation-identity'
 import {
@@ -33,6 +34,21 @@ export type CreateConversationInput = {
 
 export type ConversationAgentRoster = {
   readAgents: () => readonly Agent[]
+}
+
+// Why: an unreadable catalog is no evidence the agent is gone, so it is "unverifiable", never "missing".
+function findAgent(
+  roster: ConversationAgentRoster,
+  agentId: AgentId
+): Agent | 'unreadable' | undefined {
+  try {
+    return roster.readAgents().find((agent) => agent.id === agentId)
+  } catch (error) {
+    if (isAgentCatalogUnreadableError(error)) {
+      return 'unreadable'
+    }
+    throw error
+  }
 }
 
 /** `agent-missing` and `agent-unverifiable` are refusals about the conversation, never Brainstorming. */
@@ -103,7 +119,11 @@ export class ConversationService {
     if (!this.agentRoster) {
       return { outcome: 'agent-unverifiable' }
     }
-    if (!this.agentRoster.readAgents().some((agent) => agent.id === input.agentId)) {
+    const found = findAgent(this.agentRoster, input.agentId)
+    if (found === 'unreadable') {
+      return { outcome: 'agent-unverifiable' }
+    }
+    if (found === undefined) {
       return { outcome: 'agent-not-found', agentId: input.agentId }
     }
     const record = await this.establish(input.title, { projectId: null, agentId: input.agentId })
@@ -123,7 +143,10 @@ export class ConversationService {
     if (!this.agentRoster) {
       return { kind: 'agent-unverifiable', agentId }
     }
-    const agent = this.agentRoster.readAgents().find((entry) => entry.id === agentId)
+    const agent = findAgent(this.agentRoster, agentId)
+    if (agent === 'unreadable') {
+      return { kind: 'agent-unverifiable', agentId }
+    }
     return agent ? { kind: 'agent', agent } : { kind: 'agent-missing', agentId }
   }
 
@@ -170,7 +193,10 @@ export class ConversationService {
     return sortConversationSummaries(summaries)
   }
 
-  private async summarize(store: ConversationStore, id: ConversationId): Promise<ConversationSummary> {
+  private async summarize(
+    store: ConversationStore,
+    id: ConversationId
+  ): Promise<ConversationSummary> {
     const loaded = await store.load(id)
     switch (loaded.outcome) {
       case 'loaded': {

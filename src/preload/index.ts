@@ -3258,6 +3258,7 @@ const api = {
 
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
+    roster: () => ipcRenderer.invoke('agents:roster'),
     create: (args) => ipcRenderer.invoke('agents:create', args)
   } satisfies PreloadApi['agents'],
 

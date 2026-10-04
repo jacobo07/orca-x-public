@@ -1,4 +1,4 @@
-import type { Agent, AgentCreationResult } from '../../shared/agent-types'
+import type { Agent, AgentCreationResult, AgentRosterRead } from '../../shared/agent-types'
 
 /**
  * The durable agent roster.
@@ -16,6 +16,8 @@ export type AgentDirectoryApi = {
   agents: {
     /** Post-succession ownership, sorted by display name and tie-broken by id. */
     list: () => Promise<Agent[]>
+    /** Like `list`, but an unreadable catalog is an answer (`unreadable`), never an empty list. */
+    roster: () => Promise<AgentRosterRead>
     /**
      * Mints the id in main, validates the project relation at effect time, and resolves only once
      * the roster is ON DISK. `created` therefore means created — a caller may render the new row

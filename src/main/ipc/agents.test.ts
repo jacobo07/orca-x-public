@@ -32,6 +32,14 @@ function readerOver(agents: Agent[] | undefined): AgentPersistenceOperations {
   })
 }
 
+// Built by its public code on purpose: the guard recognises the failure by `code`, not by a class that
+// has to be the same instance across module graphs.
+function unreadableCatalogError(): Error {
+  return Object.assign(new Error('the stored agent catalog is unreadable'), {
+    code: 'agent-catalog-unreadable'
+  })
+}
+
 const refuseCreate = async (): Promise<AgentCreationResult> => ({
   outcome: 'invalid',
   reason: 'not under test'
@@ -55,21 +63,25 @@ describe('AgentPersistenceOperations.getAgents', () => {
     const first = agent({ id: 'agent_aaa', name: 'Reliability' })
     const second = agent({ id: 'agent_bbb', name: 'Reliability' })
 
-    expect(readerOver([first, second]).getAgents().map((entry) => entry.id)).toEqual([
-      'agent_aaa',
-      'agent_bbb'
-    ])
-    expect(readerOver([second, first]).getAgents().map((entry) => entry.id)).toEqual([
-      'agent_aaa',
-      'agent_bbb'
-    ])
+    expect(
+      readerOver([first, second])
+        .getAgents()
+        .map((entry) => entry.id)
+    ).toEqual(['agent_aaa', 'agent_bbb'])
+    expect(
+      readerOver([second, first])
+        .getAgents()
+        .map((entry) => entry.id)
+    ).toEqual(['agent_aaa', 'agent_bbb'])
   })
 
   it('does not hand out the array the store is holding', () => {
     // A caller that sorted or spliced the returned value would be mutating PersistedState.
     const stored = [agent({ name: 'Ada' })]
 
-    readerOver(stored).getAgents().push(agent({ name: 'Intruder' }))
+    readerOver(stored)
+      .getAgents()
+      .push(agent({ name: 'Intruder' }))
 
     expect(stored).toHaveLength(1)
   })
@@ -119,6 +131,57 @@ describe('agents:list', () => {
     })
 
     await expect(handlers['agents:list']()).rejects.toThrow('profile is not loaded')
+  })
+})
+
+describe('agents:roster', () => {
+  it('answers readable with the agents the owner read', async () => {
+    const ada = agent({ name: 'Ada' })
+    const handlers = createAgentIpcHandlers({ readAgents: () => [ada], createAgent: refuseCreate })
+
+    await expect(handlers['agents:roster']()).resolves.toEqual({
+      status: 'readable',
+      agents: [ada]
+    })
+  })
+
+  it('answers readable and empty for a catalog that is genuinely empty', async () => {
+    const handlers = createAgentIpcHandlers({ readAgents: () => [], createAgent: refuseCreate })
+
+    await expect(handlers['agents:roster']()).resolves.toEqual({ status: 'readable', agents: [] })
+  })
+
+  it('answers unreadable, never an empty roster, when the catalog cannot be read', async () => {
+    const handlers = createAgentIpcHandlers({
+      readAgents: () => {
+        throw unreadableCatalogError()
+      },
+      createAgent: refuseCreate
+    })
+
+    await expect(handlers['agents:roster']()).resolves.toEqual({ status: 'unreadable' })
+  })
+
+  it('still rejects for any other read failure, which is not a statement about the catalog', async () => {
+    const handlers = createAgentIpcHandlers({
+      readAgents: () => {
+        throw new Error('profile is not loaded')
+      },
+      createAgent: refuseCreate
+    })
+
+    await expect(handlers['agents:roster']()).rejects.toThrow('profile is not loaded')
+  })
+
+  it('keeps agents:list rejecting on an unreadable catalog, so an older caller never sees a false empty', async () => {
+    const handlers = createAgentIpcHandlers({
+      readAgents: () => {
+        throw unreadableCatalogError()
+      },
+      createAgent: refuseCreate
+    })
+
+    await expect(handlers['agents:list']()).rejects.toThrow(/unreadable/)
   })
 })
 

@@ -1,6 +1,12 @@
 import { ipcMain } from 'electron'
 
-import type { Agent, AgentCreationInput, AgentCreationResult } from '../../shared/agent-types'
+import { isAgentCatalogUnreadableError } from '../../shared/agent-catalog-unreadable'
+import type {
+  Agent,
+  AgentCreationInput,
+  AgentCreationResult,
+  AgentRosterRead
+} from '../../shared/agent-types'
 
 /**
  * The durable agent roster, exposed to the renderer as product operations rather than as state.
@@ -20,6 +26,7 @@ import type { Agent, AgentCreationInput, AgentCreationResult } from '../../share
 
 export type AgentIpcHandlers = {
   'agents:list': () => Promise<Agent[]>
+  'agents:roster': () => Promise<AgentRosterRead>
   'agents:create': (args: {
     name?: unknown
     role?: unknown
@@ -59,7 +66,19 @@ export function createAgentIpcHandlers(deps: AgentIpcDeps): AgentIpcHandlers {
   // over the difference, but the declared type says Promise and every caller may reasonably
   // `.catch()` instead of wrapping the call.
   return {
+    // Rejects when the catalog is unreadable, so a caller that only knows this channel gets a failure rather than a false empty.
     'agents:list': async () => deps.readAgents(),
+    // The roster as a person's question: "who are my agents?" has a third answer, "I could not read them".
+    'agents:roster': async () => {
+      try {
+        return { status: 'readable', agents: deps.readAgents() }
+      } catch (error) {
+        if (isAgentCatalogUnreadableError(error)) {
+          return { status: 'unreadable' }
+        }
+        throw error
+      }
+    },
     // Every refusal the OWNER makes comes back as an outcome rather than an exception, because
     // "that project is gone" and "the write did not reach the disk" are statements about the
     // user's request that deserve their own words. A malformed payload still throws: that is a bug

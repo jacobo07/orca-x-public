@@ -30,6 +30,15 @@ function harness(agents: unknown, options: { flushFails?: string } = {}) {
   return { operations, state, flush }
 }
 
+function thrownBy(read: () => unknown): unknown {
+  try {
+    read()
+  } catch (error) {
+    return error
+  }
+  return undefined
+}
+
 describe('the agent roster with corrupt catalog entries', () => {
   it('lists the readable agents, sorted, instead of throwing on a corrupt neighbour', () => {
     // Arrange
@@ -67,8 +76,21 @@ describe('the agent roster with corrupt catalog entries', () => {
   })
 
   it.each([
-    ['an object', {}],
-    ['a string', 'agents'],
+    ['an object', { 0: valid('agent_a', 'Alpha') }],
+    ['a string', 'agents']
+  ])('does not read an unreadable catalog (%s) as an empty roster', (_label, catalog) => {
+    // Arrange
+    const { operations } = harness(catalog)
+
+    // Act
+    const read = (): Agent[] => operations.getAgents()
+
+    // Assert
+    expect(read).toThrow()
+    expect(thrownBy(read)).toMatchObject({ code: 'agent-catalog-unreadable' })
+  })
+
+  it.each([
     ['null', null],
     ['absent', undefined]
   ])('lists nothing when the catalog is %s', (_label, catalog) => {
@@ -95,7 +117,7 @@ describe('the agent roster with corrupt catalog entries', () => {
     expect((state.agents as unknown[])[0]).toBeNull()
   })
 
-  it('refuses to create an agent as not-persisted when the catalog is not an array, and does not overwrite it', async () => {
+  it('refuses to create an agent as catalog-unreadable when the catalog is not an array, and does not overwrite it', async () => {
     // Arrange
     const catalog = { legacy: true }
     const { operations, state, flush } = harness(catalog)
@@ -104,7 +126,7 @@ describe('the agent roster with corrupt catalog entries', () => {
     const result = await operations.createAgent({ name: 'Beta', role: '', projectId: null })
 
     // Assert
-    expect(result.outcome).toBe('not-persisted')
+    expect(result).toEqual({ outcome: 'catalog-unreadable' })
     expect(state.agents).toBe(catalog)
     expect(flush).not.toHaveBeenCalled()
   })

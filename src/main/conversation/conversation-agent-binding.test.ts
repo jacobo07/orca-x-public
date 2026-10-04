@@ -145,4 +145,52 @@ describe('the binding a turn reads', () => {
       agentId: ada.id
     })
   })
+
+  // An unreadable catalog is no evidence the agent is gone, so neither "not found" nor "missing".
+  describe('when the roster reports an unreadable catalog', () => {
+    function unreadableService(): ConversationService {
+      return new ConversationService(() => join(root, 'conversations'), {
+        readAgents: () => {
+          throw Object.assign(new Error('the stored agent catalog is unreadable'), {
+            code: 'agent-catalog-unreadable'
+          })
+        }
+      })
+    }
+
+    it('refuses a create as agent-unverifiable and writes nothing', async () => {
+      const svc = unreadableService()
+
+      const created = await svc.createForAgent({ agentId: mintAgentId(), title: 'x' })
+
+      expect(created).toEqual({ outcome: 'agent-unverifiable' })
+      expect(await svc.list()).toEqual([])
+    })
+
+    it('binds an existing agent chat as agent-unverifiable, never missing or none', async () => {
+      const ada = agent()
+      roster.push(ada)
+      const created = await service().createForAgent({ agentId: ada.id, title: 'x' })
+      if (created.outcome !== 'created') {
+        throw new Error('precondition: create failed')
+      }
+
+      expect(unreadableService().agentFor(created.record)).toEqual({
+        kind: 'agent-unverifiable',
+        agentId: ada.id
+      })
+    })
+
+    it('does not swallow an unrelated roster failure', async () => {
+      const svc = new ConversationService(() => join(root, 'conversations'), {
+        readAgents: () => {
+          throw new Error('profile is not loaded')
+        }
+      })
+
+      await expect(svc.createForAgent({ agentId: mintAgentId(), title: 'x' })).rejects.toThrow(
+        'profile is not loaded'
+      )
+    })
+  })
 })
