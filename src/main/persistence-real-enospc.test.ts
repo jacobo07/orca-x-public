@@ -6,9 +6,12 @@
 // Opt-in through ORCA_ENOSPC_VOLUME (see real-enospc-volume-test-harness.ts and
 // config/scripts/real-enospc-volume.sh). Observations are logged as `REAL_ENOSPC ` lines for the runner.
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultPersistedState } from '../shared/constants'
+import { ORCA_PROFILE_INDEX_SCHEMA_VERSION, type OrcaProfileIndex } from '../shared/orca-profiles'
+import type { PersistedState } from '../shared/persisted-state-types'
 import {
   createStore,
   dataFile,
@@ -150,6 +153,131 @@ describe.skipIf(skipReason !== null)('profile data file on a real full filesyste
     store.flushOrThrow()
 
     expect(publishedRepoIds()).toEqual(['published', 'pending'])
+  })
+})
+
+describe.skipIf(skipReason !== null)('profile project transfer on a real full filesystem', () => {
+  let ballast: string
+
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(volume, 'transfer-'))
+    ballast = join(volume, 'transfer-ballast.bin')
+    const summary = (id: string, name: string): OrcaProfileIndex['profiles'][number] => ({
+      id,
+      name,
+      avatar: { kind: 'initials', initials: name[0], color: 'neutral' },
+      kind: 'local',
+      createdAt: 1,
+      updatedAt: 1,
+      lastOpenedAt: 1
+    })
+    const index: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: 'personal',
+      profiles: [summary('personal', 'Personal'), summary('work', 'Work')]
+    }
+    writeFileSync(join(testState.dir, 'orca-profile-index.json'), JSON.stringify(index), 'utf-8')
+    const defaults = getDefaultPersistedState('/Users/tester')
+    seedProfile('personal', {
+      ...defaults,
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/orca',
+          displayName: 'Orca',
+          badgeColor: '#33aa99',
+          addedAt: 100,
+          kind: 'git',
+          connectionId: null
+        }
+      ]
+    })
+    seedProfile('work', defaults)
+  })
+
+  afterEach(() => {
+    rmSync(ballast, { force: true })
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  function profileDataPath(profileId: string): string {
+    return join(testState.dir, 'profiles', profileId, 'orca-data.json')
+  }
+
+  function seedProfile(profileId: string, state: PersistedState): void {
+    mkdirSync(join(profileDataPath(profileId), '..'), { recursive: true })
+    writeFileSync(profileDataPath(profileId), JSON.stringify(state, null, 2), 'utf-8')
+  }
+
+  function repoPaths(profileId: string): string[] {
+    const parsed = JSON.parse(readFileSync(profileDataPath(profileId), 'utf-8')) as PersistedState
+    return parsed.repos.map((repo) => repo.path)
+  }
+
+  function profileTempFiles(): string[] {
+    return ['personal', 'work'].flatMap((profileId) =>
+      readdirSync(join(profileDataPath(profileId), '..')).filter((name) => name.endsWith('.tmp'))
+    )
+  }
+
+  async function moveProject(): Promise<{ status: string }> {
+    const { transferOrcaProfileProject } = await import('./orca-profiles/profile-project-transfer')
+    return (await transferOrcaProfileProject(
+      { sourceProfileId: 'personal', targetProfileId: 'work', repoId: 'repo-1', mode: 'move' },
+      testState.dir
+    )) as { status: string }
+  }
+
+  it('control: with room a move publishes the project to the target and removes it from the source', async () => {
+    const result = await moveProject()
+
+    expect(result.status).toBe('transferred')
+    expect(repoPaths('work')).toEqual(['/workspace/orca'])
+    expect(repoPaths('personal')).toEqual([])
+    expect(profileTempFiles()).toEqual([])
+  })
+
+  it('a move onto a full volume rejects with the kernel ENOSPC, never loses the project, leaves no temp file and completes once space is freed', async () => {
+    const before = {
+      personal: sha256(profileDataPath('personal')),
+      work: sha256(profileDataPath('work'))
+    }
+    const filled = fillRealEnospcVolume(ballast)
+    expect(
+      filled,
+      'nothing was written as ballast; the volume was full before we began'
+    ).toBeGreaterThan(0)
+
+    const failure = await moveProject().then(
+      () => null,
+      (error: NodeJS.ErrnoException) => error
+    )
+
+    expect(failure, 'the move on a full volume must reject, not resolve').not.toBeNull()
+    expect(failure?.code).toBe('ENOSPC')
+    const after = {
+      personal: sha256(profileDataPath('personal')),
+      work: sha256(profileDataPath('work'))
+    }
+    observed('profile-transfer-move', failure, before.personal, after.personal)
+    console.info(
+      `REAL_ENOSPC case=profile-transfer-move-target target_identical=${before.work === after.work} ` +
+        `target_holds_project=${repoPaths('work').includes('/workspace/orca')} ` +
+        `source_holds_project=${repoPaths('personal').includes('/workspace/orca')}`
+    )
+    // The source is rewritten only after the target, so a project is never in neither profile.
+    expect(after.personal).toBe(before.personal)
+    expect(repoPaths('personal')).toEqual(['/workspace/orca'])
+    expect(after.work === before.work || repoPaths('work').includes('/workspace/orca')).toBe(true)
+    expect(profileTempFiles()).toEqual([])
+
+    rmSync(ballast, { force: true })
+    const retried = await moveProject()
+
+    expect(retried.status).toBe('transferred')
+    expect(repoPaths('work')).toEqual(['/workspace/orca'])
+    expect(repoPaths('personal')).toEqual([])
+    expect(profileTempFiles()).toEqual([])
   })
 })
 
