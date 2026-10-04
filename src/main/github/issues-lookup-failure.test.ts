@@ -24,10 +24,10 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
   return {
     ...actual,
-    getIssueGitHubApiRepository: async () => ({
-      host: 'github.com' as const,
-      ...(await getIssueOwnerRepoMock())
-    })
+    getIssueGitHubApiRepository: async () => {
+      const ownerRepo = await getIssueOwnerRepoMock()
+      return ownerRepo ? { host: 'github.com' as const, ...ownerRepo } : null
+    }
   }
 })
 
@@ -83,6 +83,33 @@ describe('getIssue lookup failure', () => {
     // Assert
     await expect(lookup).rejects.toBeInstanceOf(Error)
     expect(releaseMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects instead of resolving null when a connection-backed request has no resolvable owner/repo', async () => {
+    // Arrange
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+
+    // Act
+    const lookup = getIssue('/remote/repo', 923, 'ssh-conn-1')
+
+    // Assert
+    await expect(lookup).rejects.toThrow('Could not resolve GitHub owner/repo for this repository')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('still reads a local non-GitHub remote through gh issue view when owner/repo is unresolved', async () => {
+    // Arrange
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ number: 923, title: 'T', state: 'OPEN', url: 'u', labels: [] })
+    })
+
+    // Act
+    const result = await getIssue('/repo-root', 923)
+
+    // Assert
+    expect(result).toMatchObject({ number: 923, title: 'T' })
+    expect(ghExecFileAsyncMock.mock.calls[0][0].slice(0, 2)).toEqual(['issue', 'view'])
   })
 
   it('does not put raw gh stderr into the rejection the renderer sees', async () => {

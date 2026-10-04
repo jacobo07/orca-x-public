@@ -50,8 +50,9 @@ export async function getIssue(
   )
   // Why: a connection-backed request has no local cwd, so the non-GitHub
   // fallback below would let gh target its default repository. Refuse instead.
+  // An unresolved repository is unknown, not "no issue": null here was cached as an answer.
   if (connectionId && !ownerRepo) {
-    return null
+    throw new Error('Could not resolve GitHub owner/repo for this repository')
   }
   await acquire()
   try {
