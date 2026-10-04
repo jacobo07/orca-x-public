@@ -43,7 +43,8 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$ERA" ] && [ -n "$SHA" ] && [ -n "$OUT" ] && [ -n "$WORK" ] || usage
 case "$FLOOR" in yes | no) ;; *) usage ;; esac
-case "$ERA" in *[!A-Za-z0-9._-]* | "") echo "refused: bad era name" >&2; exit 2 ;; esac
+# Why: "." and ".." pass the character class but make ERA_DIR the work dir or its parent, so writes land outside the per-era directory.
+case "$ERA" in *[!A-Za-z0-9._-]* | "" | . | ..) echo "refused: bad era name" >&2; exit 2 ;; esac
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel) || exit 2
