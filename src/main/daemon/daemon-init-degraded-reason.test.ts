@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FAKE_RUNTIME_DIR } from './daemon-init-test-harness'
 
 const {
   probeSocketExistsMock,
@@ -58,6 +59,48 @@ function degradedLines(warn: ReturnType<typeof vi.spyOn>): string[] {
   return warn.mock.calls
     .map((call) => String(call[0]))
     .filter((line) => line.includes('DEGRADED MODE'))
+}
+
+// A socket that accepts the connect and never says anything: what probeSocket reads as alive.
+function acceptConnects(): void {
+  probeSocketExistsMock.mockReturnValue(true)
+  netConnectMock.mockImplementation(() => {
+    const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    return {
+      on(event: string, cb: () => void) {
+        handlers[event]?.push(cb)
+        if (event === 'connect') {
+          queueMicrotask(() => cb())
+        }
+        return this
+      },
+      removeListener(event: string, cb: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return this
+      },
+      destroy() {}
+    }
+  })
+}
+
+function unreachableClient(): { ensureConnected: () => Promise<void> } & Record<string, unknown> {
+  return {
+    ensureConnected: vi.fn(async () => {
+      throw new Error('endpoint accepted the connect and gave no hello')
+    }),
+    getDaemonIdentity: vi.fn(() => null),
+    request: vi.fn(async () => ({ sessions: [] })),
+    disconnect: vi.fn()
+  }
+}
+
+function answeringClient(): Record<string, unknown> {
+  return {
+    ensureConnected: vi.fn(async () => {}),
+    getDaemonIdentity: vi.fn(() => null),
+    request: vi.fn(async () => ({ sessions: [] })),
+    disconnect: vi.fn()
+  }
 }
 
 describe('daemon-init: a degraded adoption states the guard that forced it (R-08)', () => {
@@ -141,24 +184,7 @@ describe('daemon-init: a degraded adoption states the guard that forced it (R-08
       throw new Error('replacement could not publish')
     })
     // The endpoint accepts a connect only after the failed launch.
-    probeSocketExistsMock.mockReturnValue(true)
-    netConnectMock.mockImplementation(() => {
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
-      return {
-        on(event: string, cb: () => void) {
-          handlers[event]?.push(cb)
-          if (event === 'connect') {
-            queueMicrotask(() => cb())
-          }
-          return this
-        },
-        removeListener(event: string, cb: () => void) {
-          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
-          return this
-        },
-        destroy() {}
-      }
-    })
+    acceptConnects()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'nonce')
@@ -171,5 +197,63 @@ describe('daemon-init: a degraded adoption states the guard that forced it (R-08
     } finally {
       warn.mockRestore()
     }
+  })
+  // R-09: the kill outcome for an endpoint that accepted a connect after a confirmed exit and gave
+  // no protocol answer. Both readers of liveOwnerSurvived must stay fail-closed on it.
+  const UNVERIFIED = {
+    killed: true,
+    liveOwnerSurvived: true,
+    preservedBy: 'endpoint_unverified'
+  }
+
+  it('startup: an unverified endpoint is adopted in DEGRADED MODE naming it, and nothing forks beside it', async () => {
+    const launcher = await startLauncher()
+    killStaleDaemonMock.mockResolvedValueOnce(UNVERIFIED)
+    const forksBefore = forkMock.mock.calls.length
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'nonce')
+
+      expect(degradedLines(warn)[0]).toContain('reason=endpoint_unverified')
+      expect(handle.mode).toBe('degraded-new-pty-fallback')
+      expect(handle.degradedReason).toBe('endpoint_unverified')
+      expect(forkMock.mock.calls.length).toBe(forksBefore)
+      handle.releaseAdoptionLease?.()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('startup: when the unverified endpoint cannot be adopted either, the launch aborts without forking', async () => {
+    const launcher = await startLauncher()
+    killStaleDaemonMock.mockResolvedValueOnce(UNVERIFIED)
+    // Launcher clients in order: the adoption probe, the session count, then the adoption lease.
+    daemonClientMock
+      .mockImplementationOnce(answeringClient)
+      .mockImplementationOnce(answeringClient)
+      .mockImplementationOnce(unreachableClient)
+    const forksBefore = forkMock.mock.calls.length
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await expect(
+        launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'nonce')
+      ).rejects.toThrow('Daemon replacement aborted')
+
+      expect(forkMock.mock.calls.length).toBe(forksBefore)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('cleanup: an unverified endpoint refuses the restart instead of reporting it cleaned', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    acceptConnects()
+    daemonClientMock.mockImplementationOnce(unreachableClient)
+    killStaleDaemonMock.mockResolvedValueOnce(UNVERIFIED)
+
+    await expect(mod.cleanupDaemonForProtocol(FAKE_RUNTIME_DIR, 1)).rejects.toThrow(
+      'Daemon cleanup aborted'
+    )
   })
 })

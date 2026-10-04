@@ -10,16 +10,31 @@ import { PROTOCOL_VERSION, type ListSessionsResult } from './types'
  *
  * null is load-bearing and is NOT zero: a daemon too wedged to answer may still own live
  * sessions. Callers decide what unknown licenses; this only reports what was observed.
+ *
+ * `budgetMs` bounds connect and request together and closes the client when it runs out; a caller
+ * that merely stopped waiting would leave its sockets open on a peer that never answers.
  */
 export async function getAliveDaemonSessionCount(
   socketPath: string,
   tokenPath: string,
-  protocolVersion = PROTOCOL_VERSION
+  protocolVersion = PROTOCOL_VERSION,
+  budgetMs?: number
 ): Promise<number | null> {
   const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
   try {
-    await client.ensureConnected()
-    const result = await client.request<ListSessionsResult>('listSessions', undefined)
+    let result: ListSessionsResult
+    if (budgetMs === undefined) {
+      await client.ensureConnected()
+      result = await client.request<ListSessionsResult>('listSessions', undefined)
+    } else {
+      const deadlineMs = Date.now() + budgetMs
+      await client.ensureConnectedWithin(budgetMs)
+      result = await client.request<ListSessionsResult>(
+        'listSessions',
+        undefined,
+        Math.max(1, deadlineMs - Date.now())
+      )
+    }
     return result.sessions.filter((session) => session.isAlive).length
   } catch {
     return null

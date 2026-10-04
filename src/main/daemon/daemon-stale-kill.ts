@@ -21,6 +21,26 @@ const KILL_POLL_MS = 100
 // Why: SIGKILL is delivered on return from an uninterruptible syscall, so confirm the exit
 // rather than assume it — but keep the wait short, it only guards the rare wedged case.
 const SIGKILL_CONFIRM_WAIT_MS = 1_000
+// Why this long: a daemon that accepted a connect but cannot answer within the client's own connect
+// budget (5 s) is not one we can call alive or dead; waiting longer only delays the fail-closed answer.
+export const TAIL_OWNER_PROBE_TIMEOUT_MS = 5_000
+
+async function probeOwnerWithin(
+  probe: () => Promise<number | null>,
+  timeoutMs: number
+): Promise<number | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      probe().catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
@@ -44,6 +64,12 @@ export type StaleDaemonKillOptions = {
    * through real syscalls. The probe itself is covered separately; this injects its verdict.
    */
   probeEndpoint?: (socketPath: string) => Promise<SocketProbeOutcome>
+  /**
+   * Direct-construction-only seam, same reason as `probeEndpoint`. Asks the endpoint a protocol
+   * question (live session count): a number means a daemon answered, null means it could not be
+   * asked. Defaults to a `listSessions` round trip.
+   */
+  probeEndpointOwner?: (socketPath: string) => Promise<number | null>
   /**
    * Set by callers whose destruction was authorized on the belief that no live work exists —
    * automatic replacement — so the belief is re-taken immediately before the signal.
@@ -74,6 +100,11 @@ export type StaleDaemonPreservedBy =
   | 'signal_refused'
   | 'unconfirmed_exit'
   | 'endpoint_still_serving'
+  /**
+   * The recorded daemon's exit was confirmed, then the endpoint accepted a connect but gave no
+   * protocol answer: unknown, kept fail-closed (never read as absent).
+   */
+  | 'endpoint_unverified'
 
 export type StaleDaemonKillOutcome = {
   /** A daemon was positively confirmed gone. Drives replacement telemetry. */
@@ -319,6 +350,25 @@ export async function killStaleDaemon(
   // will not overwrite anything it cannot prove dead, which makes this judgement a hint
   // rather than a correctness dependency.
   if ((await probeEndpoint(socketPath)) === 'connected') {
+    if (killedDaemon) {
+      // Why (R-09): a connect proves a listener, not the identity of the daemon we just watched
+      // exit, so only a protocol answer keeps the "live owner" reading. No answer is unknown: it
+      // stays fail-closed and is never reported as absent.
+      const ownerProbe =
+        options?.probeEndpointOwner ??
+        ((path: string) =>
+          getAliveDaemonSessionCount(path, tokenPath, protocolVersion, TAIL_OWNER_PROBE_TIMEOUT_MS))
+      const answer = await probeOwnerWithin(
+        () => ownerProbe(socketPath),
+        TAIL_OWNER_PROBE_TIMEOUT_MS
+      )
+      if (answer === null) {
+        console.warn(
+          '[daemon] Endpoint accepted a connection after the recorded daemon exited but gave no protocol answer: reason=endpoint_unverified'
+        )
+        return { killed: killedDaemon, liveOwnerSurvived: true, preservedBy: 'endpoint_unverified' }
+      }
+    }
     return { killed: killedDaemon, liveOwnerSurvived: true, preservedBy: 'endpoint_still_serving' }
   }
   return { killed: killedDaemon, liveOwnerSurvived }
