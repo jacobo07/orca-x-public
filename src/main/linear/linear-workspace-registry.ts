@@ -126,18 +126,20 @@ export function writeWorkspaceFile(file: LinearWorkspaceFile): void {
         ? file.selectedWorkspaceId
         : activeWorkspaceId
 
-  cachedWorkspaceFile = {
+  const next: LinearWorkspaceFile = {
     version: 1,
     activeWorkspaceId,
     selectedWorkspaceId,
     workspaces: persistedWorkspaces
   }
-  workspaceFileLoadedFromDisk = true
   // Why: an in-place write truncates the workspace list first; an empty list reads as "no workspaces".
   writeCredentialFileAtomic(
     getWorkspaceFilePath(),
-    Buffer.from(JSON.stringify(cachedWorkspaceFile, null, 2), 'utf-8')
+    Buffer.from(JSON.stringify(next, null, 2), 'utf-8')
   )
+  // Why: a failed write must leave memory equal to the disk, so the cache moves only after it.
+  cachedWorkspaceFile = next
+  workspaceFileLoadedFromDisk = true
 }
 
 export function getLegacyWorkspace(): LinearWorkspace | null {
