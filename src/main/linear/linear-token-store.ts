@@ -1,5 +1,4 @@
-import { safeStorage } from 'electron'
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -28,19 +27,15 @@ import {
 } from './linear-workspace-registry'
 import {
   CredentialDecryptionError,
-  readStoredCredentialToken
+  readStoredCredentialToken,
+  writeEncryptedCredential
 } from '../integration-credential-file'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 
+// Why: writeFileSync truncates the live token on open, so a full disk would erase the previous key
+// before failing; the contract writer publishes a synced temp file by rename instead.
 function writeEncryptedToken(path: string, apiKey: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(apiKey)
-    writeFileSync(path, encrypted, { mode: 0o600 })
-    return
-  }
-
-  console.warn('[linear] safeStorage encryption unavailable — storing token in plaintext')
-  writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
+  writeEncryptedCredential('Linear', path, apiKey)
 }
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
