@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
@@ -91,6 +92,13 @@ case " $* " in
       *"%b"*) echo 8192 ;;
       *"%S"*) echo 1024 ;;
     esac
+    ;;
+  *"%u"*)
+    case "\${@: -1}" in
+      *.real-enospc-volume.marker) over=$SHIM_DIR/resp/stat_uid_marker ;;
+      *) over=$SHIM_DIR/resp/stat_uid_dir ;;
+    esac
+    if [ -e "$over" ]; then cat "$over"; else exec /usr/bin/stat "$@"; fi
     ;;
   *) exec /usr/bin/stat "$@" ;;
 esac
@@ -402,6 +410,7 @@ linux('real-enospc-volume.sh --recover', () => {
 
   function killedRun(row, { mounted = false } = {}) {
     mkdirSync(join(row.runDir, 'mnt'), { recursive: true })
+    chmodSync(row.runDir, 0o700)
     writeFileSync(join(row.runDir, '.real-enospc-volume.marker'), MARKER)
     writeFileSync(join(row.runDir, 'loop-device.txt'), `${FAKE_DEV}\n`)
     writeFileSync(join(row.runDir, 'volume.img'), 'image')
@@ -459,6 +468,129 @@ linux('real-enospc-volume.sh --recover', () => {
       `sudo -n umount -- ${row.runDir}/mnt`,
       `sudo -n ${row.shim}/losetup -d ${FAKE_DEV}`
     ])
+  })
+
+  // Every row below plants a recoverable-looking run dir that the driver did not make; none may reach umount or -d.
+  function expectRefusedUntouched(row, run, reason) {
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain(`RECOVER_REFUSED ${reason}`)
+    expect(row.sudoCalls().filter((line) => /umount| -d /.test(line))).toEqual([])
+    expect(existsSync(join(row.root, 'foreign-target'))).toBe(true)
+  }
+
+  function foreignTarget(row) {
+    const target = join(row.root, 'foreign-target')
+    mkdirSync(target, { recursive: true })
+    return target
+  }
+
+  it('refuses a symlinked mnt that points at a foreign mount, and never unmounts or detaches', () => {
+    const row = makeRow()
+    const target = foreignTarget(row)
+    killedRun(row, { mounted: true })
+    rmSync(join(row.runDir, 'mnt'), { recursive: true })
+    symlinkSync(target, join(row.runDir, 'mnt'))
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expectRefusedUntouched(row, run, 'symlink')
+  })
+
+  it('refuses a symlinked volume.img that points at a foreign backing file', () => {
+    const row = makeRow()
+    const target = foreignTarget(row)
+    writeFileSync(join(target, 'disk.img'), 'foreign')
+    killedRun(row)
+    rmSync(join(row.runDir, 'volume.img'))
+    symlinkSync(join(target, 'disk.img'), join(row.runDir, 'volume.img'))
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expectRefusedUntouched(row, run, 'symlink')
+    expect(readFileSync(join(target, 'disk.img'), 'utf8')).toBe('foreign')
+  })
+
+  it('refuses a symlinked loop-device.txt and a symlinked marker', () => {
+    const linkedRecord = makeRow()
+    const target = foreignTarget(linkedRecord)
+    writeFileSync(join(target, 'record'), `${FAKE_DEV}\n`)
+    killedRun(linkedRecord)
+    rmSync(join(linkedRecord.runDir, 'loop-device.txt'))
+    symlinkSync(join(target, 'record'), join(linkedRecord.runDir, 'loop-device.txt'))
+    expectRefusedUntouched(
+      linkedRecord,
+      drive(linkedRecord, ['--recover', '--run-dir', linkedRecord.runDir], { tools: 'shim' }),
+      'symlink'
+    )
+
+    const linkedMarker = makeRow()
+    const markerTarget = foreignTarget(linkedMarker)
+    writeFileSync(join(markerTarget, 'marker'), MARKER)
+    killedRun(linkedMarker)
+    rmSync(join(linkedMarker.runDir, '.real-enospc-volume.marker'))
+    symlinkSync(
+      join(markerTarget, 'marker'),
+      join(linkedMarker.runDir, '.real-enospc-volume.marker')
+    )
+    const run = drive(linkedMarker, ['--recover', '--run-dir', linkedMarker.runDir], {
+      tools: 'shim'
+    })
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain('RECOVER_REFUSED no-marker')
+    expect(linkedMarker.sudoCalls()).toEqual([])
+  })
+
+  it('refuses a run dir that is itself a symlink to a real run dir', () => {
+    const row = makeRow()
+    foreignTarget(row)
+    killedRun(row)
+    const alias = join(row.root, 'p3-enospc-alias')
+    symlinkSync(row.runDir, alias)
+    const run = drive(row, ['--recover', '--run-dir', alias], { tools: 'shim' })
+    expectRefusedUntouched(row, run, 'no-marker')
+  })
+
+  it('refuses a run dir owned by someone else', () => {
+    const row = makeRow()
+    foreignTarget(row)
+    killedRun(row, { mounted: true })
+    row.resp('stat_uid_dir', '0\n')
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expectRefusedUntouched(row, run, 'not-owned')
+  })
+
+  it('refuses a marker owned by someone else inside a run dir the caller owns', () => {
+    const row = makeRow()
+    foreignTarget(row)
+    killedRun(row, { mounted: true })
+    row.resp('stat_uid_marker', '0\n')
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expectRefusedUntouched(row, run, 'not-owned')
+    expect(run.out).toContain('.real-enospc-volume.marker')
+  })
+
+  it('refuses a run dir the driver would not have created (not 0700)', () => {
+    const row = makeRow()
+    foreignTarget(row)
+    killedRun(row, { mounted: true })
+    chmodSync(row.runDir, 0o777)
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expectRefusedUntouched(row, run, 'not-owned')
+  })
+
+  it('refuses a marker that is not the driver nonce line', () => {
+    const row = makeRow()
+    foreignTarget(row)
+    killedRun(row, { mounted: true })
+    writeFileSync(join(row.runDir, '.real-enospc-volume.marker'), 'real-enospc-volume marker v1\n')
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expectRefusedUntouched(row, run, 'no-marker')
+  })
+
+  it('does not unmount when losetup -j names another device for the image, even if the recorded one is mounted', () => {
+    const row = makeRow()
+    killedRun(row, { mounted: true })
+    row.resp('losetup_j.out', '/dev/loop99: [1]:1 (/elsewhere.img)\n')
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expect(run.status, run.out).toBe(5)
+    expect(run.out).toContain('UMOUNT_SKIPPED image-does-not-name')
+    expect(row.sudoCalls().filter((line) => /umount| -d /.test(line))).toEqual([])
   })
 
   it('refuses a recovery path under /tmp or without the prefix', () => {

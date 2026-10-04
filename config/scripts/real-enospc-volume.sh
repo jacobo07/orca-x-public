@@ -14,7 +14,9 @@
 #   the path must NOT exist yet (this script creates it with a marker before anything else), never under /tmp.
 #   Only <run-dir>/volume.img and <run-dir>/mnt are ever created, mounted over, chowned or removed (no rm -rf).
 # --recover: for a driver killed without its trap. Releases only the device recorded in <run-dir>/loop-device.txt,
-#   only after `sudo -n losetup -j <run-dir>/volume.img` names it. Never runs `losetup -f`, never mounts.
+#   only after `sudo -n losetup -j <run-dir>/volume.img` names it, and only for a run dir this script could have made:
+#   a real (non-symlink) directory owned by the caller with mode 0700, holding the v1 nonce marker, with mnt,
+#   volume.img, loop-device.txt and the marker all non-symlinks. Never runs `losetup -f`, never mounts.
 # Tools: losetup and mkfs.ext4 are NOT on an ordinary user's PATH; they are resolved from REAL_ENOSPC_SBIN_DIRS
 # below (never from the environment) and called by absolute path. Every loop probe goes through `sudo -n` because
 # an unprivileged `losetup -j` can read a live loop device as absent.
@@ -151,6 +153,13 @@ unmount_own() {
   fi
 }
 
+# image_names_device: 0 only when `sudo -n losetup -j <image>` succeeds and lists $DEV; an unreadable probe is "no".
+image_names_device() {
+  local answer
+  answer=$(sudo -n "$LOSETUP" -j "$IMG" 2> /dev/null) || return 1
+  printf '%s\n' "$answer" | grep -q "^$DEV:"
+}
+
 # detach_own: detach the recorded device, only after `losetup -j <image>` names it and nothing is mounted from it.
 detach_own() {
   local answer rc
@@ -226,6 +235,27 @@ on_exit() {
   exit "$rc"
 }
 
+# check_recover_ownership: refuse a run dir this script could not have made, and pin RUN_DIR to its physical path so
+# mountpoint, findmnt, umount and losetup all see the same real names.
+check_recover_ownership() {
+  local me item
+  me=$(id -u)
+  if [ "$(stat -c %u -- "$RUN_DIR" 2> /dev/null)" != "$me" ] || [ "$(stat -c %a -- "$RUN_DIR" 2> /dev/null)" != 700 ]; then
+    refuse 2 "RECOVER_REFUSED not-owned $RUN_DIR (must be owned by the caller with mode 0700)"
+  fi
+  for item in "$MNT" "$IMG" "$RUN_DIR/loop-device.txt" "$MARKER"; do
+    if [ -L "$item" ]; then
+      refuse 2 "RECOVER_REFUSED symlink $item"
+    fi
+  done
+  if [ -e "$MARKER" ] && [ "$(stat -c %u -- "$MARKER" 2> /dev/null)" != "$me" ]; then
+    refuse 2 "RECOVER_REFUSED not-owned $MARKER"
+  fi
+  RUN_DIR=$(cd -P -- "$RUN_DIR" 2> /dev/null && pwd -P) || refuse 2 "RECOVER_REFUSED no-marker (unresolvable) $RUN_DIR"
+  check_run_dir_name
+  set_paths
+}
+
 run_recover() {
   local recorded mount_before loop_before answer
   check_run_dir_name
@@ -235,6 +265,9 @@ run_recover() {
   MARKER_LINE=$(cat -- "$MARKER")
   printf '%s\n' "$MARKER_LINE" | grep -Eq '^real-enospc-volume marker v1 pid=[0-9]+ nonce=[0-9a-f]+$' \
     || refuse 2 "RECOVER_REFUSED no-marker (not a v1 marker) $RUN_DIR"
+  # Why: the marker is read from the file it is later compared with, so it proves a format, not authorship. Authorship
+  # is the owner and 0700 of the directory the driver creates, plus no link anywhere a probe or umount would follow.
+  check_recover_ownership
   [ -f "$RUN_DIR/loop-device.txt" ] || refuse 2 "RECOVER_REFUSED no-device-record $RUN_DIR"
   recorded=$(cat -- "$RUN_DIR/loop-device.txt")
   printf '%s\n' "$recorded" | grep -Eq '^(/dev/loop[0-9]+|tmpfs)$' || refuse 2 "RECOVER_REFUSED bad-device-record $recorded"
@@ -250,7 +283,12 @@ run_recover() {
   log "TOOL losetup=${LOSETUP:-none} mkfs.ext4=${MKFS_EXT4:-none}"
   log "RECOVER dev=$recorded mount_before=$mount_before loop_before=$loop_before"
   if [ "$mount_before" = 1 ]; then
-    unmount_own "$([ "$recorded" = tmpfs ] && echo tmpfs || echo "$recorded")"
+    # Why: a mount of the recorded device is released only when losetup -j names it for this run's own image.
+    if [ "$recorded" = tmpfs ] || image_names_device; then
+      unmount_own "$([ "$recorded" = tmpfs ] && echo tmpfs || echo "$recorded")"
+    else
+      log "UMOUNT_SKIPPED image-does-not-name dev=$recorded"
+    fi
   fi
   detach_own
   final_probe
