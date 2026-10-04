@@ -5,7 +5,8 @@ import {
   carryForwardContainerMarkers,
   listNestedContainer,
   rethrowUnlessAbsent,
-  toListingError
+  toListingError,
+  type WorktreeListingError
 } from './worktree-base-directory-listing-errors'
 import type { WorktreeBaseRepoWatchConfig } from './worktree-base-directory-event-filter'
 
@@ -41,7 +42,7 @@ export type BaseSnapshot = {
   // index-aligned with gateDirs, each sampled *before* that dir's listing
   gateSignatures: string[]
   // nested containers that failed to list this scan; their children kept their previous markers
-  listingErrors: Error[]
+  listingErrors: WorktreeListingError[]
 }
 
 // Depth-1 worktree dirs (flat layout), plus depth-2 dirs under each nested
@@ -53,7 +54,7 @@ export async function snapshotBase(
   previous?: BaseSnapshot
 ): Promise<BaseSnapshot> {
   const markers = new Map<string, boolean>()
-  const listingErrors: Error[] = []
+  const listingErrors: WorktreeListingError[] = []
   const gateDirs = [rootPath]
   // Why: sampling the signature before the listing makes a write that races the
   // scan look stale next tick (one redundant rescan) instead of invisible until

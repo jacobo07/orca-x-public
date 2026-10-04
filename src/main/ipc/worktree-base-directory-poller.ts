@@ -1,5 +1,10 @@
 import { join } from 'node:path'
-import { toListingError, unlistableBaseSnapshot } from './worktree-base-directory-listing-errors'
+import {
+  createListingFailureReporter,
+  toListingError,
+  unlistableBaseSnapshot,
+  type WorktreeListingError
+} from './worktree-base-directory-listing-errors'
 import {
   diffBase,
   dirSignature,
@@ -70,7 +75,8 @@ export type WorktreeBasePollerOptions = {
   platform?: NodeJS.Platform
   visibility?: WorktreePollerWindowVisibility
   getGitStatusRefPaths?: () => readonly string[]
-  onWatchError?: (error: Error) => void
+  /** Returns false when the error was not delivered, so the poller offers it again next tick. */
+  onWatchError?: (error: Error) => boolean | void
   /** Test hook: called whenever a full snapshot scan runs (vs. a gated skip). */
   onFullScan?: () => void
   /** Test hook: called before a pending `.git` marker stat. */
@@ -113,29 +119,19 @@ async function startBasePoller(
   let disposed = false
   let ticking = false
   let tickCount = 0
-  // Why: report an unlistable directory once per failing streak, not on every 2 s tick.
-  let listingFailureReported = false
-  const noteListingOutcome = (errors: readonly Error[]): void => {
-    if (errors.length === 0) {
-      listingFailureReported = false
-      return
+  const noteListingOutcome = createListingFailureReporter((error) => {
+    if (!options.onWatchError) {
+      console.warn('[worktree-base-poller]', error)
+      return true
     }
-    if (listingFailureReported) {
-      return
-    }
-    listingFailureReported = true
-    if (options.onWatchError) {
-      options.onWatchError(errors[0])
-    } else {
-      console.warn('[worktree-base-poller]', errors[0])
-    }
-  }
-  const startupErrors: Error[] = []
+    return options.onWatchError(error) !== false
+  })
+  const startupErrors: WorktreeListingError[] = []
   let snapshot = await snapshotBase(target.path, getRepos()).catch((error: unknown) => {
     startupErrors.push(toListingError(target.path, error))
     return unlistableBaseSnapshot(target.path)
   })
-  noteListingOutcome([...startupErrors, ...snapshot.listingErrors])
+  noteListingOutcome([...startupErrors, ...snapshot.listingErrors], startupErrors.length === 0)
   let parkedWhileHidden = false
   const onEvents = (events: WorktreeBasePollEvent[]): void => {
     registration.noteActivity()
@@ -157,7 +153,7 @@ async function startBasePoller(
     if (disposed) {
       return
     }
-    noteListingOutcome(next.listingErrors)
+    noteListingOutcome(next.listingErrors, true)
     const events = diffBase(snapshot, next)
     for (const [dir, marker] of next.markers) {
       if (marker) {
@@ -236,7 +232,7 @@ async function startBasePoller(
       await poll(forceFullScan)
     } catch (error) {
       // Transient fs error: keep the previous snapshot and retry next tick.
-      noteListingOutcome([toListingError(target.path, error)])
+      noteListingOutcome([toListingError(target.path, error)], false)
     } finally {
       ticking = false
     }

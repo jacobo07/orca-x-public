@@ -91,6 +91,19 @@ export function handleLocalWatchEvents(
   }
 }
 
+/** False when no live window could receive the error, so the poller must not treat it as reported. */
+export function reportLocalWatchError(
+  watch: ActiveWatch,
+  error: Error,
+  listWatches: ListActiveWatches
+): boolean {
+  if (watch.disposed || !liveWindowForWatch(watch)) {
+    return false
+  }
+  handleLocalWatchEvents(watch, error, [], listWatches)
+  return true
+}
+
 export function handleRemoteWatchEvents(
   watch: ActiveWatch,
   events: Parameters<typeof collectRemoteWorktreeBaseChanges>[1],

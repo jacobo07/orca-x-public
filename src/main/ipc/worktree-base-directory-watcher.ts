@@ -22,6 +22,7 @@ import {
   createActiveWatch,
   handleLocalWatchEvents,
   handleRemoteWatchEvents,
+  reportLocalWatchError,
   liveWindowForWatch,
   supportsWorktreeHeadIdentityRefresh,
   type ActiveWatch
@@ -73,15 +74,13 @@ async function subscribeTarget(
   // Why: a failure that already exists when the poller starts is reported before `activeWatch` is assigned.
   // Dropping it would also arm the poller's once-per-streak latch, silencing the failure for good.
   const startupWatchErrors: Error[] = []
-  const reportWatchError = (error: Error): void => {
+  const reportWatchError = (error: Error): boolean => {
     const currentWatch = activeWatches.get(target.key) ?? activeWatch
     if (!currentWatch) {
       startupWatchErrors.push(error)
-      return
+      return true
     }
-    if (!currentWatch.disposed) {
-      handleLocalWatchEvents(currentWatch, error, [], listActiveWatches)
-    }
+    return reportLocalWatchError(currentWatch, error, listActiveWatches)
   }
 
   // Why: a recursive native watcher here forced fseventsd to deliver every

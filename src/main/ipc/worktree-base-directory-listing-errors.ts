@@ -15,7 +15,7 @@ export function unlistableBaseSnapshot(rootPath: string): {
   markers: Map<string, boolean>
   gateDirs: string[]
   gateSignatures: string[]
-  listingErrors: Error[]
+  listingErrors: WorktreeListingError[]
 } {
   return {
     markers: new Map(),
@@ -38,11 +38,43 @@ export function carryForwardContainerMarkers(
   }
 }
 
-export function toListingError(path: string, cause: unknown): Error {
+export type WorktreeListingError = Error & { listingPath: string }
+
+// Why: the path keys the poller's once-per-streak report, so one failing directory cannot hide another.
+export function toListingError(path: string, cause: unknown): WorktreeListingError {
   const code = (cause as NodeJS.ErrnoException | null)?.code
-  return new Error(`Could not scan worktree directory ${path}${code ? ` (${code})` : ''}`, {
-    cause
-  })
+  return Object.assign(
+    new Error(`Could not scan worktree directory ${path}${code ? ` (${code})` : ''}`, { cause }),
+    { listingPath: path }
+  )
+}
+
+/**
+ * Reports each failing directory once per its own failing streak, not on every 2 s tick.
+ *
+ * A directory re-arms only when a completed scan lists it again; a scan that threw part-way says
+ * nothing about the directories it never reached. A report the sink did not deliver (returns
+ * false) is not latched, so the next tick offers it again.
+ */
+export function createListingFailureReporter(
+  deliver: (error: WorktreeListingError) => boolean
+): (errors: readonly WorktreeListingError[], scanCompleted: boolean) => void {
+  const reported = new Set<string>()
+  return (errors, scanCompleted) => {
+    if (scanCompleted) {
+      const failing = new Set(errors.map((error) => error.listingPath))
+      for (const path of reported) {
+        if (!failing.has(path)) {
+          reported.delete(path)
+        }
+      }
+    }
+    for (const error of errors) {
+      if (!reported.has(error.listingPath) && deliver(error)) {
+        reported.add(error.listingPath)
+      }
+    }
+  }
 }
 
 // Why: a nested repo container that is gone has no children; one that failed to list is unknown and rethrows.
