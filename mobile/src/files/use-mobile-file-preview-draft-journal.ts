@@ -2,7 +2,7 @@
 // the process, and offers it back as a dirty draft when the same file is reopened
 // against the same host content. Nothing here saves to the host: a restored draft only
 // lands in the editor's existing dirty state, where Save stays the user's act.
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { sha256 } from '@noble/hashes/sha256'
 import {
   loadDraft,
@@ -71,6 +71,11 @@ function scopeKey(scope: FilePreviewDraftScope): string {
   return JSON.stringify([scope.hostId, scope.worktreeId, scope.subjectId])
 }
 
+export type FilePreviewDraftJournal = {
+  /** The user chose to lose this edit: cancel its pending write and remove its entry. */
+  discardDraft: (scope: FilePreviewDraftScope) => void
+}
+
 export function useMobileFilePreviewDraftJournal(args: {
   /** Null until the editable file's content has loaded. */
   scope: FilePreviewDraftScope | null
@@ -79,7 +84,7 @@ export function useMobileFilePreviewDraftJournal(args: {
   savedContent: string
   onRestore: (text: string) => void
   onIssue?: (issue: FilePreviewDraftIssue) => void
-}): void {
+}): FilePreviewDraftJournal {
   const { scope, surface = 'file-preview', draftContent, savedContent, onRestore, onIssue } = args
   const key = scope ? scopeKey(scope) : null
   const latestRef = useRef({ key, draftContent, savedContent, onRestore, onIssue })
@@ -94,7 +99,7 @@ export function useMobileFilePreviewDraftJournal(args: {
     baseVersion: string
   } | null>(null)
 
-  const write = (identity: DraftIdentity, text: string, baseVersion: string) => {
+  const write = (identity: DraftIdentity, text: string, baseVersion: string | null) => {
     void saveDraft(identity, text, { baseVersion }).then((outcome) => {
       if (outcome.kind === 'failed') {
         latestRef.current.onIssue?.({ kind: 'save-failed', error: outcome.error })
@@ -108,6 +113,19 @@ export function useMobileFilePreviewDraftJournal(args: {
       pendingRef.current = null
     }
   }
+
+  // Why stable: callers list it in effect and callback deps; it reads only refs, so a render never changes it.
+  const discardDraft = useCallback(
+    (target: FilePreviewDraftScope) => {
+      // Why: only the mounted subject has a pending write; another subject's was flushed when it left.
+      if (scopeKey(target) === key) {
+        cancelPending()
+        ownsEntryRef.current = false
+      }
+      write(identityFor(target, surface), '', null)
+    },
+    [key, surface]
+  )
 
   // Unmount (or leaving the file) is not process death: write what is pending, do not drop it.
   useEffect(() => {
@@ -179,4 +197,6 @@ export function useMobileFilePreviewDraftJournal(args: {
       }
     })
   }, [key])
+
+  return { discardDraft }
 }

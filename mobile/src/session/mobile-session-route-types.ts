@@ -129,6 +129,8 @@ export type DirtyMarkdownDraft = {
   tabId: string
   title: string
   content: string
+  /** The journal key; null when the tab is already gone, so there is no entry to retire by path. */
+  relativePath: string | null
 }
 
 export type TerminalCreateResult = {

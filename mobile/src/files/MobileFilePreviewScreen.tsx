@@ -197,18 +197,22 @@ export function MobileFilePreviewScreen({ route }: Props) {
   })
 
   // Journaled only once the editable file's content is loaded; the path survives a relaunch, the grant does not.
-  useMobileFilePreviewDraftJournal({
-    scope:
-      isEditableTerminalArtifact &&
-      previewParams &&
-      previewSource?.source === 'terminalArtifact' &&
-      draftSourceKeyRef.current === previewSourceKey
-        ? {
-            hostId: previewParams.hostId,
-            worktreeId: previewParams.worktreeId,
-            subjectId: previewSource.absolutePath
-          }
-        : null,
+  const draftJournalScope =
+    isEditableTerminalArtifact &&
+    previewParams &&
+    previewSource?.source === 'terminalArtifact' &&
+    draftSourceKeyRef.current === previewSourceKey
+      ? {
+          hostId: previewParams.hostId,
+          worktreeId: previewParams.worktreeId,
+          subjectId: previewSource.absolutePath
+        }
+      : null
+  // Why a ref: the scope is rebuilt every render, and the back handler must not resubscribe for it.
+  const draftJournalScopeRef = useRef(draftJournalScope)
+  draftJournalScopeRef.current = draftJournalScope
+  const { discardDraft } = useMobileFilePreviewDraftJournal({
+    scope: draftJournalScope,
     draftContent,
     savedContent,
     onRestore: setDraftContent
@@ -245,10 +249,20 @@ export function MobileFilePreviewScreen({ route }: Props) {
     }
     Alert.alert('Discard changes?', 'Unsaved edits will be lost.', [
       { text: 'Stay', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: () => router.back() }
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => {
+          // Why: leaving unmounts the screen, whose flush would otherwise keep the edit the user just threw away.
+          if (draftJournalScopeRef.current) {
+            discardDraft(draftJournalScopeRef.current)
+          }
+          router.back()
+        }
+      }
     ])
     return true
-  }, [hasUnsavedTerminalArtifactDraft, router])
+  }, [discardDraft, hasUnsavedTerminalArtifactDraft, router])
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', requestBack)

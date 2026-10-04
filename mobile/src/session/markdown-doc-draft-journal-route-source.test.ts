@@ -28,4 +28,38 @@ describe('session route markdown draft journal wiring', () => {
     expect(args).toMatch(/markdownDocs\.get\(activeMarkdownTab\.id\)/)
     expect(args).toMatch(/onRestore: updateMarkdownLocalContent\b/)
   })
+  // Why source pins: each of these routes drops the phone draft without an unmount, so the journal entry must
+  // be retired by an explicit call, and the call must come before the read that replaces the doc.
+  function bodyOf(declaration: RegExp): string {
+    const match = code.match(declaration)
+    expect(match, `the route must declare ${declaration}`).not.toBeNull()
+    return match![1]
+  }
+
+  it('retires the journal entry before Discard Changes re-reads the doc', () => {
+    const body = bodyOf(
+      /const confirmDiscardMarkdown = useCallback\(\(\) => \{([\s\S]*?)\n {2}\}, \[/
+    )
+    const discardAt = body.indexOf('discardMarkdownDraft(target)')
+    const readAt = body.indexOf('readMarkdownTab(target)')
+    expect(discardAt).toBeGreaterThanOrEqual(0)
+    expect(readAt).toBeGreaterThan(discardAt)
+  })
+
+  it('retires the journal entry when a dirty doc is refreshed, and wires Refresh through it', () => {
+    const body = bodyOf(/const refreshMarkdownTab = useCallback\(([\s\S]*?)\n {2}\)\n/)
+    expect(body).toMatch(/doc\?\.status === 'ready' && doc\.isDirty/)
+    expect(body.indexOf('discardMarkdownDraft(tab)')).toBeGreaterThanOrEqual(0)
+    expect(code).toMatch(/onRefresh=\{\(\) => refreshMarkdownTab\(activeMarkdownTab\)\}/)
+  })
+
+  it('retires every dirty draft before Discard & Leave leaves the session', () => {
+    const action = code.match(
+      /label: 'Discard & Leave',[\s\S]*?onPress: \(\) => \{([\s\S]*?)\n {12}\}/
+    )
+    expect(action, 'the Discard & Leave action must exist').not.toBeNull()
+    const discardAt = action![1].indexOf('discardLeaveDrafts(leaveDrafts ?? [])')
+    expect(discardAt).toBeGreaterThanOrEqual(0)
+    expect(action![1].indexOf('leaveSession()')).toBeGreaterThan(discardAt)
+  })
 })

@@ -38,6 +38,10 @@ type Screen = {
   doc: MarkdownDocState
   edit: (text: string) => void
   save: (text: string) => void
+  discard: (relativePath: string) => void
+  // Mirrors readMarkdownTab: a render with the doc loading, then the host's content.
+  startReload: () => void
+  finishReload: (hostContent: string) => void
 }
 
 const readyDoc = (content: string, editable = true): MarkdownDocState => ({
@@ -87,7 +91,7 @@ describe('markdown doc drafts survive the process', () => {
           ? { ...prev, localContent: text, isDirty: text !== prev.content }
           : prev
       )
-    useMobileMarkdownDocDraftJournal({
+    const journal = useMobileMarkdownDocDraftJournal({
       hostId: 'host-a',
       worktreeId: 'wt-1',
       tab: { id: tabId, relativePath: PATH },
@@ -98,6 +102,9 @@ describe('markdown doc drafts survive the process', () => {
     screen = {
       doc,
       edit: change,
+      discard: (relativePath) => journal.discardDraft({ relativePath }),
+      startReload: () => setDoc({ status: 'loading' }),
+      finishReload: (hostContent) => setDoc(readyDoc(hostContent)),
       save: (text) =>
         setDoc((prev) =>
           prev.status === 'ready'
@@ -231,5 +238,56 @@ describe('markdown doc drafts survive the process', () => {
     await launchProcess()
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
     expect(asyncStorage.removeItem).not.toHaveBeenCalled()
+  })
+  // The route's Discard Changes: retire the draft, then re-read the host file into the doc.
+  async function discardAndReload(hostContent: string): Promise<void> {
+    act(() => screen?.discard(PATH))
+    act(() => screen?.startReload())
+    await act(async () => undefined)
+    act(() => screen?.finishReload(hostContent))
+    await act(async () => undefined)
+  }
+
+  it('Discard Changes retires the entry, and a later launch restores nothing', async () => {
+    await launchProcess()
+    await edit(EDITED)
+    expect(values.has(KEY)).toBe(true)
+
+    await discardAndReload(LOADED)
+
+    expect(localContent()).toBe(LOADED)
+    expect(values.has(KEY)).toBe(false)
+    await launchProcess()
+    expect(localContent()).toBe(LOADED)
+    expect(issues).toEqual([])
+  })
+
+  it('a discard inside the debounce window leaves no entry behind, even after the doc unmounts', async () => {
+    await launchProcess()
+    act(() => screen?.edit(EDITED))
+
+    act(() => screen?.discard(PATH))
+    const renderer = renderers.pop()!
+    act(() => renderer.unmount())
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, FILE_PREVIEW_DRAFT_SAVE_DEBOUNCE_MS + 100))
+    })
+
+    expect(values.has(KEY)).toBe(false)
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('discarding a doc that is not the active tab removes its entry', async () => {
+    const other = identity('docs/other.md')
+    values.set(
+      getDraftStorageKeyForTests(other),
+      JSON.stringify({ v: 1, ...other, text: 'phone draft', updatedAt: 1, baseVersion: 'x' })
+    )
+    await launchProcess()
+
+    act(() => screen?.discard('docs/other.md'))
+    await act(async () => undefined)
+
+    expect(values.has(getDraftStorageKeyForTests(other))).toBe(false)
   })
 })

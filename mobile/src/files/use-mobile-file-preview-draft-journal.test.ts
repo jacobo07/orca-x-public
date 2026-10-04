@@ -214,13 +214,14 @@ describe('file preview drafts survive the process', () => {
   })
 })
 
-describe('file preview in-place scope switches', () => {
+describe('file preview draft discard and in-place scope switches', () => {
   let values: Map<string, string>
   let renderers: ReactTestRenderer[] = []
   let screen: {
     draft: string
     setDraft: (text: string) => void
     switchTo: (subject: string | null) => void
+    discard: (subject: string) => void
   } | null = null
 
   const scopeFor = (subjectId: string) => ({ hostId: 'host-a', worktreeId: 'wt-1', subjectId })
@@ -252,7 +253,7 @@ describe('file preview in-place scope switches', () => {
   function SwitchHarness({ first }: { first: string | null }): null {
     const [subject, setSubject] = useState<string | null>(first)
     const [draft, setDraft] = useState('')
-    useMobileFilePreviewDraftJournal({
+    const journal = useMobileFilePreviewDraftJournal({
       scope: subject ? scopeFor(subject) : null,
       draftContent: draft,
       savedContent: '',
@@ -261,7 +262,8 @@ describe('file preview in-place scope switches', () => {
     screen = {
       draft,
       setDraft,
-      switchTo: setSubject
+      switchTo: setSubject,
+      discard: (target) => journal.discardDraft(scopeFor(target))
     }
     return null
   }
@@ -335,6 +337,48 @@ describe('file preview in-place scope switches', () => {
     act(() => screen?.switchTo('/a.md'))
     await settle()
     expect(screen?.draft).toBe('draft of A')
+  })
+
+  it('an explicit discard removes the journaled entry and a remount restores nothing', async () => {
+    const renderer = await mount('/a.md')
+    act(() => screen?.setDraft('typed then discarded'))
+    await settle()
+    expect(values.has(keyFor('/a.md'))).toBe(true)
+
+    act(() => screen?.discard('/a.md'))
+    await act(async () => undefined)
+    act(() => renderer.unmount())
+    renderers = []
+    await act(async () => undefined)
+
+    expect(values.has(keyFor('/a.md'))).toBe(false)
+    await mount('/a.md')
+    expect(screen?.draft).toBe('')
+  })
+
+  it('the unmount flush does not re-save text discarded inside the debounce window', async () => {
+    const renderer = await mount('/a.md')
+    act(() => screen?.setDraft('typed a moment ago'))
+
+    act(() => screen?.discard('/a.md'))
+    act(() => renderer.unmount())
+    renderers = []
+    await settle()
+
+    expect(values.has(keyFor('/a.md'))).toBe(false)
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('discarding another subject leaves the active subject pending write alone', async () => {
+    storedDraft('/other.md', 'draft of the other file')
+    await mount('/a.md')
+    act(() => screen?.setDraft('still typing'))
+
+    act(() => screen?.discard('/other.md'))
+    await settle()
+
+    expect(values.has(keyFor('/other.md'))).toBe(false)
+    expect(JSON.parse(values.get(keyFor('/a.md'))!).text).toBe('still typing')
   })
 })
 

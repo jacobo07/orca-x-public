@@ -2143,7 +2143,12 @@ export default function SessionScreen() {
     for (const [tabId, doc] of markdownDocs) {
       if (doc.status === 'ready' && doc.isDirty) {
         const tab = sessionTabs.find((candidate) => candidate.id === tabId)
-        drafts.push({ tabId, title: tab?.title || 'Markdown', content: doc.localContent })
+        drafts.push({
+          tabId,
+          title: tab?.title || 'Markdown',
+          content: doc.localContent,
+          relativePath: tab?.type === 'markdown' ? tab.relativePath : null
+        })
       }
     }
     return drafts
@@ -2191,14 +2196,6 @@ export default function SessionScreen() {
     },
     [markdownDocs, readMarkdownTab]
   )
-
-  const confirmDiscardMarkdown = useCallback(() => {
-    const target = discardMarkdownTarget
-    setDiscardMarkdownTarget(null)
-    if (target) {
-      void readMarkdownTab(target)
-    }
-  }, [discardMarkdownTarget, readMarkdownTab])
 
   const saveMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
@@ -4102,13 +4099,42 @@ export default function SessionScreen() {
 
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
-  useMobileMarkdownDocDraftJournal({
+  const { discardDraft: discardMarkdownDraft } = useMobileMarkdownDocDraftJournal({
     hostId,
     worktreeId,
     tab: activeMarkdownTab,
     doc: activeMarkdownTab ? markdownDocs.get(activeMarkdownTab.id) : undefined,
     onRestore: updateMarkdownLocalContent
   })
+  // Why: each of these replaces or drops the phone draft without an unmount, so the journal entry goes with it.
+  const confirmDiscardMarkdown = useCallback(() => {
+    const target = discardMarkdownTarget
+    setDiscardMarkdownTarget(null)
+    if (target) {
+      discardMarkdownDraft(target)
+      void readMarkdownTab(target)
+    }
+  }, [discardMarkdownDraft, discardMarkdownTarget, readMarkdownTab])
+  const refreshMarkdownTab = useCallback(
+    (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
+      const doc = markdownDocs.get(tab.id)
+      if (doc?.status === 'ready' && doc.isDirty) {
+        discardMarkdownDraft(tab)
+      }
+      void readMarkdownTab(tab)
+    },
+    [discardMarkdownDraft, markdownDocs, readMarkdownTab]
+  )
+  const discardLeaveDrafts = useCallback(
+    (drafts: DirtyMarkdownDraft[]) => {
+      for (const draft of drafts) {
+        if (draft.relativePath) {
+          discardMarkdownDraft({ relativePath: draft.relativePath })
+        }
+      }
+    },
+    [discardMarkdownDraft]
+  )
   const activeFileTab = activeSessionTab?.type === 'file' ? activeSessionTab : null
   const activeBrowserTab = activeSessionTab?.type === 'browser' ? activeSessionTab : null
   const activePendingTerminalTab =
@@ -4599,7 +4625,7 @@ export default function SessionScreen() {
                 <MobileMarkdownReader
                   documentId={activeMarkdownTab.id}
                   doc={markdownDocs.get(activeMarkdownTab.id)}
-                  onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
+                  onRefresh={() => refreshMarkdownTab(activeMarkdownTab)}
                   onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
                   onSave={() => void saveMarkdownTab(activeMarkdownTab)}
                   onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
@@ -5265,6 +5291,7 @@ export default function SessionScreen() {
             label: 'Discard & Leave',
             destructive: true,
             onPress: () => {
+              discardLeaveDrafts(leaveDrafts ?? [])
               setLeaveDrafts(null)
               leaveSession()
             }

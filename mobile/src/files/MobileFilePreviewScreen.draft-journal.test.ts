@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const asyncStorage = vi.hoisted(() => ({ getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }))
 const host = vi.hoisted(() => ({
+  alert: vi.fn(),
+  back: vi.fn(),
+  backPress: { current: null as null | (() => boolean) },
   client: { id: 'client' },
   load: vi.fn(),
   save: vi.fn(),
@@ -12,15 +15,20 @@ const host = vi.hoisted(() => ({
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 vi.mock('react-native', () => ({
-  Alert: { alert: vi.fn() },
-  BackHandler: { addEventListener: () => ({ remove: () => undefined }) },
+  Alert: { alert: host.alert },
+  BackHandler: {
+    addEventListener: (_event: string, handler: () => boolean) => {
+      host.backPress.current = handler
+      return { remove: () => undefined }
+    }
+  },
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ width: 400, height: 800 })
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
-vi.mock('expo-router', () => ({ useRouter: () => ({ back: () => undefined }) }))
+vi.mock('expo-router', () => ({ useRouter: () => ({ back: host.back }) }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'ChevronLeft', Save: 'Save' }))
 vi.mock('../transport/client-context', () => ({
   useHostClient: () => ({ client: host.client, state: 'connected' }),
@@ -143,6 +151,67 @@ describe('MobileFilePreviewScreen draft journal wiring', () => {
     await launch('{"ok":"newer on the host"}')
 
     expect(draft()).toBe('{"ok":"newer on the host"}')
+    expect(values.has(KEY)).toBe(true)
+  })
+  // Back on a dirty editor asks first; this presses the dialog's Discard button.
+  function pressDiscard(): void {
+    act(() => {
+      host.backPress.current?.()
+    })
+    const buttons = host.alert.mock.calls.at(-1)?.[2] as
+      | { text: string; onPress?: () => void }[]
+      | undefined
+    const discard = buttons?.find((button) => button.text === 'Discard')
+    if (!discard?.onPress) {
+      throw new Error('the discard dialog was never shown')
+    }
+    act(() => discard.onPress?.())
+  }
+
+  it('Discard on the leave dialog retires the journaled edit, so the next launch is clean', async () => {
+    await launch(LOADED)
+    act(() => typeEdit(EDITED))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, FILE_PREVIEW_DRAFT_SAVE_DEBOUNCE_MS + 100))
+    })
+    expect(values.has(KEY)).toBe(true)
+
+    pressDiscard()
+    expect(host.back).toHaveBeenCalledTimes(1)
+    act(() => renderers.pop()?.unmount())
+    await act(async () => undefined)
+
+    expect(values.has(KEY)).toBe(false)
+    await launch(LOADED)
+    expect(draft()).toBe(LOADED)
+  })
+
+  it('Discard inside the debounce window is not re-saved by the unmount flush', async () => {
+    await launch(LOADED)
+    act(() => typeEdit(EDITED))
+
+    pressDiscard()
+    act(() => renderers.pop()?.unmount())
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, FILE_PREVIEW_DRAFT_SAVE_DEBOUNCE_MS + 100))
+    })
+
+    expect(values.has(KEY)).toBe(false)
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('Stay keeps the journaled edit', async () => {
+    await launch(LOADED)
+    act(() => typeEdit(EDITED))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, FILE_PREVIEW_DRAFT_SAVE_DEBOUNCE_MS + 100))
+    })
+
+    act(() => {
+      host.backPress.current?.()
+    })
+
+    expect(host.back).not.toHaveBeenCalled()
     expect(values.has(KEY)).toBe(true)
   })
 })
