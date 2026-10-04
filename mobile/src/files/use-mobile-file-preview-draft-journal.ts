@@ -13,6 +13,8 @@ import {
 
 export const FILE_PREVIEW_DRAFT_SAVE_DEBOUNCE_MS = 300
 
+export type EditorDraftSurface = 'file-preview' | 'markdown-editor'
+
 export type FilePreviewDraftScope = {
   readonly hostId: string
   readonly worktreeId: string
@@ -60,19 +62,21 @@ export function decideFilePreviewDraftRestore(
     : { kind: 'restore', text: outcome.draft.text }
 }
 
-function identityFor(scope: FilePreviewDraftScope): DraftIdentity {
-  return { surface: 'file-preview', ...scope }
+// Why a surface argument: the markdown doc editor journals through this same mechanism under its own surface.
+function identityFor(scope: FilePreviewDraftScope, surface: EditorDraftSurface): DraftIdentity {
+  return { surface, ...scope }
 }
 
 export function useMobileFilePreviewDraftJournal(args: {
   /** Null until the editable file's content has loaded. */
   scope: FilePreviewDraftScope | null
+  surface?: EditorDraftSurface
   draftContent: string
   savedContent: string
   onRestore: (text: string) => void
   onIssue?: (issue: FilePreviewDraftIssue) => void
 }): void {
-  const { scope, draftContent, savedContent, onRestore, onIssue } = args
+  const { scope, surface = 'file-preview', draftContent, savedContent, onRestore, onIssue } = args
   const key = scope ? JSON.stringify([scope.hostId, scope.worktreeId, scope.subjectId]) : null
   const latestRef = useRef({ draftContent, savedContent, onRestore, onIssue })
   latestRef.current = { draftContent, savedContent, onRestore, onIssue }
@@ -117,7 +121,7 @@ export function useMobileFilePreviewDraftJournal(args: {
     if (!scope) {
       return
     }
-    const identity = identityFor(scope)
+    const identity = identityFor(scope, surface)
     const text = journalTextFor(draftContent, savedContent)
     cancelPending()
     if (text === '') {
@@ -142,7 +146,7 @@ export function useMobileFilePreviewDraftJournal(args: {
     }
     restoredKeyRef.current = key
     const loadedContent = latestRef.current.savedContent
-    void loadDraft(identityFor(scope)).then((outcome) => {
+    void loadDraft(identityFor(scope, surface)).then((outcome) => {
       const current = latestRef.current
       const decision = decideFilePreviewDraftRestore(outcome, loadedContent)
       if (decision.kind === 'restore') {

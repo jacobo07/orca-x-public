@@ -160,6 +160,7 @@ import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileMarkdownReader } from '../../../../src/session/MobileMarkdownReader'
+import { useMobileMarkdownDocDraftJournal } from '../../../../src/session/use-mobile-markdown-doc-draft-journal'
 import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
 import {
   CustomKeyModal,
@@ -4101,6 +4102,13 @@ export default function SessionScreen() {
 
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
+  useMobileMarkdownDocDraftJournal({
+    hostId,
+    worktreeId,
+    tab: activeMarkdownTab,
+    doc: activeMarkdownTab ? markdownDocs.get(activeMarkdownTab.id) : undefined,
+    onRestore: updateMarkdownLocalContent
+  })
   const activeFileTab = activeSessionTab?.type === 'file' ? activeSessionTab : null
   const activeBrowserTab = activeSessionTab?.type === 'browser' ? activeSessionTab : null
   const activePendingTerminalTab =
@@ -4294,21 +4302,21 @@ export default function SessionScreen() {
           ? createTabAgentOptions
               .filter((option) => option.agent)
               .map((option) => ({
-              label: option.label,
-              hint: 'New agent session',
-              icon: Bot,
-              onPress: () => {
-                const delivery = pendingDiffNotesDelivery
-                setPendingDiffNotesDelivery(null)
-                if (!delivery) {
-                  return
+                label: option.label,
+                hint: 'New agent session',
+                icon: Bot,
+                onPress: () => {
+                  const delivery = pendingDiffNotesDelivery
+                  setPendingDiffNotesDelivery(null)
+                  if (!delivery) {
+                    return
+                  }
+                  void handleCreateTerminal(option.agent, {
+                    initialPrompt: delivery.prompt,
+                    onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
+                  })
                 }
-                void handleCreateTerminal(option.agent, {
-                  initialPrompt: delivery.prompt,
-                  onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
-                })
-              }
-            }))
+              }))
           : createTabAgentLoadState === 'loaded'
             ? [
                 {
