@@ -43,10 +43,16 @@ export function setWorktreeGitStatusRefWatch(
   return updateActiveGitStatusRefBinding(args, () => activeWatches.values(), resolveUpstreamRef)
 }
 
+type SubscribedTarget = {
+  watch: ActiveWatch
+  /** Reported by the poller before the watch existed; replayed only once the watch is registered. */
+  startupErrors: Error[]
+}
+
 async function subscribeTarget(
   target: WorktreeBaseWatchTarget,
   mainWindow: BrowserWindow
-): Promise<ActiveWatch> {
+): Promise<SubscribedTarget> {
   let activeWatch: ActiveWatch | null = null
   const gitStatusRefPaths = new Set<string>()
   applyActiveGitStatusRefBinding({ ...target, gitStatusRefPaths })
@@ -68,19 +74,20 @@ async function subscribeTarget(
       { unsubscribe: async () => unwatch() },
       gitStatusRefPaths
     )
-    return activeWatch
+    return { watch: activeWatch, startupErrors: [] }
   }
 
   // Why: a failure that already exists when the poller starts is reported before `activeWatch` is assigned.
   // Dropping it would also arm the poller's once-per-streak latch, silencing the failure for good.
   const startupWatchErrors: Error[] = []
+  // Why: reports go to THIS subscription's own watch. Resolving through the registry would hand a superseded
+  // poller's error to the live watch that already reported the same directory.
   const reportWatchError = (error: Error): boolean => {
-    const currentWatch = activeWatches.get(target.key) ?? activeWatch
-    if (!currentWatch) {
+    if (!activeWatch) {
       startupWatchErrors.push(error)
       return true
     }
-    return reportLocalWatchError(currentWatch, error, listActiveWatches)
+    return reportLocalWatchError(activeWatch, error, listActiveWatches)
   }
 
   // Why: a recursive native watcher here forced fseventsd to deliver every
@@ -107,17 +114,13 @@ async function subscribeTarget(
     }
   )
   activeWatch = createActiveWatch(target, mainWindow, subscription, gitStatusRefPaths)
-  // Why: the poller's startup scan runs before this watch exists; replay what it reported then.
-  for (const error of startupWatchErrors.splice(0)) {
-    reportWatchError(error)
-  }
   if (supportsWorktreeHeadIdentityRefresh(activeWatch)) {
     // Baseline eagerly so the first status-only signal — possibly hours after
     // subscribe — diffs against subscribe-time heads instead of silently
     // re-baselining past an external commit.
     void refreshWorktreeHeadIdentities(activeWatch, activeWatch.headIdentityRefresh, false)
   }
-  return activeWatch
+  return { watch: activeWatch, startupErrors: startupWatchErrors }
 }
 
 async function replaceWatch(
@@ -133,7 +136,7 @@ async function replaceWatch(
     return
   }
   try {
-    const activeWatch = await subscribeTarget(target, mainWindow)
+    const { watch: activeWatch, startupErrors } = await subscribeTarget(target, mainWindow)
     if (generation !== syncGeneration) {
       activeWatch.disposed = true
       await activeWatch.subscription.unsubscribe().catch((error) => {
@@ -143,6 +146,10 @@ async function replaceWatch(
     }
     applyActiveGitStatusRefBinding(activeWatch)
     activeWatches.set(target.key, activeWatch)
+    // Why: after the generation check, so a superseded subscription cannot report what the live one already did.
+    for (const error of startupErrors) {
+      reportLocalWatchError(activeWatch, error, listActiveWatches)
+    }
   } catch (error) {
     console.warn(`[worktree-base-watcher] failed to watch ${target.path}:`, error)
   }

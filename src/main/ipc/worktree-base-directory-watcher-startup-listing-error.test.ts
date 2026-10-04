@@ -7,7 +7,12 @@ import type * as ObservationClock from './worktree-observation-clock'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 
-const listing = vi.hoisted(() => ({ failPaths: new Set<string>(), failures: 0 }))
+const listing = vi.hoisted(() => ({
+  failPaths: new Set<string>(),
+  failures: 0,
+  // Holds the FIRST failing listing open so a second sync can overtake a slow startup scan.
+  hold: { armed: false, reached: false, release: null as (() => void) | null }
+}))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
@@ -16,7 +21,15 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     readdir: ((...args: Parameters<typeof FsPromises.readdir>) => {
       if (listing.failPaths.has(String(args[0]))) {
         listing.failures++
-        throw Object.assign(new Error('EACCES: listing failed'), { code: 'EACCES' })
+        const failure = Object.assign(new Error('EACCES: listing failed'), { code: 'EACCES' })
+        if (listing.hold.armed) {
+          listing.hold.armed = false
+          listing.hold.reached = true
+          return new Promise<never>((_resolve, reject) => {
+            listing.hold.release = () => reject(failure)
+          }) as never
+        }
+        throw failure
       }
       return (actual.readdir as (...a: unknown[]) => unknown)(...args)
     }) as typeof FsPromises.readdir
@@ -69,6 +82,9 @@ describe('worktree base directory watcher: a listing failure present when the wa
   beforeEach(() => {
     listing.failPaths.clear()
     listing.failures = 0
+    listing.hold.armed = false
+    listing.hold.reached = false
+    listing.hold.release = null
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
@@ -133,6 +149,27 @@ describe('worktree base directory watcher: a listing failure present when the wa
     const failures = watcherFailures()
     expect(failures).toHaveLength(1)
     expect(String((failures[0][1] as Error).message)).toContain(root)
+  })
+
+  it('reports a startup failure once when a second sync overtakes the first subscription', async () => {
+    // Arrange: sync 1's startup scan is held open; sync 2 starts, subscribes and reports on its own.
+    const { container, store, window } = await layout()
+    listing.failPaths.add(container)
+    listing.hold.armed = true
+    const first = syncWorktreeBaseDirectoryWatchers(store as never, window as never)
+    await waitFor(() => listing.hold.reached, 'the first startup scan is in flight')
+    await syncWorktreeBaseDirectoryWatchers(store as never, window as never)
+    await waitFor(() => watcherFailures().length >= 1, 'the second sync reported its own failure')
+
+    // Act: the superseded scan now finishes and hands its buffered error to the replay.
+    listing.hold.release?.()
+    await first
+    await waitFor(() => listing.failures >= 4, 'several failing ticks ran')
+
+    // Assert: one failure, one report; the superseded subscription says nothing.
+    const failures = watcherFailures()
+    expect(failures).toHaveLength(1)
+    expect(String((failures[0][1] as Error).message)).toContain(container)
   })
 
   it('control: a failure that starts after the watch is live is reported through the same path', async () => {
