@@ -188,6 +188,27 @@ describe('worktree base poller listing errors', () => {
     expect(onWatchError).toHaveBeenCalledTimes(2)
   })
 
+  it('retries an unlistable nested container on the next ticks instead of waiting for the backstop scan', async () => {
+    // Arrange
+    const { containerA, containerB, addWorktree } = await startTwoContainers()
+    arm(containerA, 'EIO')
+
+    // Act
+    await addWorktree(containerB, 'wt-b2')
+    // Why: the 15-tick backstop is 375 ms at this interval, so four failures inside 300 ms can only come from per-tick retries.
+    await vi.waitFor(
+      () => {
+        if (listing.failures < 4) {
+          throw new Error('not yet: the container was retried on consecutive ticks')
+        }
+      },
+      { timeout: 300, interval: 10 }
+    )
+
+    // Assert
+    expect(listing.failures).toBeGreaterThanOrEqual(4)
+  })
+
   it.each(['EIO', 'EACCES', 'EMFILE'])(
     'a root listing that fails with %s emits no deletes and the next good listing diffs against the old snapshot',
     async (code) => {
