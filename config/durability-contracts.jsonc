@@ -249,7 +249,7 @@
       "knownGaps": [
         "The barrier is hand-rolled rather than routed through durable-file-write, and it stays that way deliberately. Consolidation was attempted once the primitive learned to remove its own temp, and reverted: bitbucket/credential-store.test.ts injects failures at writeSync and unlinkSync to hold the STA-3941 guarantee, so replacing the explicit short-write loop deletes the boundary those regression tests assert against. This writer is specialized, not duplicated.",
         "The containing directory is not fsynced, so the rename itself is durable only where the filesystem orders it.",
-        "Observed against a real full ext4 volume on Linux through config/scripts/real-enospc-volume.sh and the opt-in src/main/integration-credential-real-enospc.test.ts (ENOSPC at write for the Linear token and the Bitbucket secret, previous bytes byte-identical, no temp file, publishes after space is freed); the Jira token and both index files are proven only by the fs-boundary model in integration-token-save-disk-full.test.ts, and Windows full-disk mapping is not exercised."
+        "Observed against a real full ext4 volume on Linux through config/scripts/real-enospc-volume.sh and the opt-in src/main/integration-credential-real-enospc.test.ts (ENOSPC at write for the Linear token, the Jira token, the Linear workspace list, the Jira site list and the Bitbucket secret, previous bytes byte-identical, no temp file, memory not advanced for the tokens and both lists, publishes after space is freed); the fs-boundary model in integration-token-save-disk-full.test.ts covers the same files and the fsync-before-rename order, and Windows full-disk mapping is not exercised."
       ]
     },
     {
