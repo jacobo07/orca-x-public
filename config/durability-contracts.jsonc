@@ -57,18 +57,26 @@
     },
     {
       "id": "mobile.user-drafts",
-      "state": "AsyncStorage keys orca:user-draft:v1:<sha256(surface, host, worktree, subject)> — unsent chat composer text per tab, and recognized dictation that reached no surface (dictation-salvage, per host and worktree)",
+      "state": "AsyncStorage keys orca:user-draft:v1:<sha256(surface, host, worktree, subject)> — unsent chat composer text per tab, unsaved edits of an editable file preview (file-preview, keyed by host file path) and of an editable markdown doc (markdown-editor, keyed by the doc's relative path), and recognized dictation that reached no surface (dictation-salvage, per host and worktree)",
       "writer": "mobile/src/storage/draft-journal.ts",
       "tier": "atomic-only",
-      "lostIf": "The user's own unsent words. Before this contract they lived only in React state, so the OS killing the app discarded them with no notice, and recognized dictation whose target had gone was dropped outright. A key is replaced whole, so a reader sees the old draft or the new one; the newest edit can be lost inside the 300 ms save debounce. Load keeps 'unreadable' (the corrupt entry is removed and the user told) apart from 'failed' (a storage error removes nothing), and a draft is cleared only after the host confirms the send.",
+      "lostIf": "The user's own unsent words. Before this contract they lived only in React state, so the OS killing the app discarded them with no notice, and recognized dictation whose target had gone was dropped outright. A key is replaced whole, so a reader sees the old draft or the new one; the newest edit can be lost inside the 300 ms save debounce. Load keeps 'unreadable' (the corrupt entry is removed and the user told) apart from 'failed' (a storage error removes nothing), and a chat draft is cleared only after the host confirms the send. An editor surface journals its text against the hash of the content it loaded, retires the entry when a save moves the saved content (or the text is edited back to it), and restores it only as a dirty draft, never saved, when the reopened content hashes the same; a draft whose base changed is neither applied nor deleted, and an unreadable or failed read is never treated as no draft. The editor surfaces are wired with no new UI, so their stale-base, unreadable and failed outcomes are not shown to the user.",
       "provenBy": [
         "mobile/src/storage/draft-journal.test.ts",
         "mobile/src/session/use-mobile-native-chat-drafts-persistence.test.ts",
+        "mobile/src/files/use-mobile-file-preview-draft-journal.test.ts",
+        "mobile/src/files/MobileFilePreviewScreen.draft-journal.test.ts",
+        "mobile/src/session/use-mobile-markdown-doc-draft-journal.test.ts",
+        "mobile/src/session/markdown-doc-draft-journal-route-source.test.ts",
         "mobile/src/dictation/mobile-dictation-transcript-dispatch.test.ts"
       ],
       "knownGaps": [
         "No real process-death run yet: persistence is proven by remounting the hook over the same storage, not by killing the app on an emulator.",
-        "The markdown editor and the file preview editor still hold unsaved edits only in memory (variant-parity drafts.user-invested-input-survives-process-death stays open).",
+        "A stale-base editor draft (the file changed on the host after the edit) is kept but nothing shows it: there is no retrieval UI, which is a product decision for the Owner.",
+        "A later edit of the same file supersedes a stale-base entry, since the journal holds one entry per file; the stale text is preserved at restore time but not protected against the next edit.",
+        "An editor emptied to blank text is not journaled: the journal refuses empty text, so emptying a file or doc is not durable.",
+        "An older app build drops a record whose surface it does not know (the schema check fails and the entry is removed), so a downgrade loses file-preview and markdown-editor drafts.",
+        "The markdown editor's restore is pinned on the hook and, for the session route, on a source check that the route calls it, because the route is too large to render in a unit test.",
         "Salvaged dictation is kept and the user told, but no screen yet lists or re-inserts it.",
         "Host removal purges drafts outside the per-key mutation queue, so a save in flight at that instant can recreate one entry."
       ]
