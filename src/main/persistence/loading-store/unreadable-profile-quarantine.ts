@@ -1,4 +1,4 @@
-import { closeSync, fsyncSync, openSync, readFileSync, writeSync } from 'node:fs'
+import { closeSync, fsyncSync, openSync, readFileSync, unlinkSync, writeSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
 
 // Why: bound the suffix search so a pathological directory cannot spin the startup path forever.
@@ -33,6 +33,14 @@ function utcStamp(now: Date): string {
     .toISOString()
     .replace(/\.\d{3}Z$/, 'Z')
     .replace(/[-:]/g, '')
+}
+
+function closeQuietly(fd: number): void {
+  try {
+    closeSync(fd)
+  } catch {
+    // The descriptor is being abandoned after a failure; the unlink that follows is what matters.
+  }
 }
 
 function syncDirectoryBestEffort(directory: string): void {
@@ -74,11 +82,27 @@ export function quarantineUnreadableProfile(dataFile: string): UnreadableProfile
         return { ok: false, code: errorCode(error) }
       }
       try {
-        writeSync(fd, bytes)
+        // Why: write(2) returns a short count on a filling disk instead of throwing; a single writeSync would report a truncated copy as ok.
+        let written = 0
+        while (written < bytes.length) {
+          const count = writeSync(fd, bytes, written, bytes.length - written)
+          if (count <= 0) {
+            throw Object.assign(new Error('quarantine write stalled'), { code: 'EIO' })
+          }
+          written += count
+        }
         fsyncSync(fd)
-      } finally {
-        closeSync(fd)
+      } catch (error) {
+        closeQuietly(fd)
+        // Why: only this call's exclusively-created file is removed; an earlier quarantine was never opened here.
+        try {
+          unlinkSync(path)
+        } catch {
+          // Nothing more to clean up; the failure code below is what the caller needs.
+        }
+        return { ok: false, code: errorCode(error) }
       }
+      closeSync(fd)
       syncDirectoryBestEffort(dirname(path))
       return { ok: true, path }
     }
