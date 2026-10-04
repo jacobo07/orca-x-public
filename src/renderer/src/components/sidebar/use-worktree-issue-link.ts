@@ -227,7 +227,11 @@ export function useWorktreeIssueLink(args: {
     setOpeningIssue(true)
     try {
       const url = await resolveIssueUrlWithinTimeout(
-        fetchIssue(issueRepo.path, issueNumber, { repoId: issueRepo.id })
+        // Why: a click is a fresh request, so it must not be refused by the backoff meant for hover and sweep traffic.
+        fetchIssue(issueRepo.path, issueNumber, {
+          repoId: issueRepo.id,
+          bypassFailureBackoff: true
+        })
       )
       if (!isCurrentRequest()) {
         return

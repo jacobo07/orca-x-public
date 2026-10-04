@@ -85,6 +85,50 @@ describe('createGitHubSlice.fetchIssue lookup failure state and backoff', () => 
     expect(failureEntries(store)).toEqual([])
   })
 
+  it.each([
+    ['a transient failure', new Error('HTTP 502')],
+    ['a permanent failure', new Error(ISSUE_LOOKUP_FAILURE_MESSAGES.issues_disabled)]
+  ])(
+    'asks again for an explicit user action inside the backoff after %s',
+    async (_label, failure) => {
+      // Arrange
+      const store = createTestStore()
+      mockApi.gh.issue.mockRejectedValueOnce(failure).mockResolvedValueOnce(issue)
+      await store.getState().fetchIssue(repoPath, 7, { repoId })
+
+      // Act
+      vi.advanceTimersByTime(1_000)
+      const blocked = await store.getState().fetchIssue(repoPath, 7, { repoId })
+      const callsWhileBlocked = mockApi.gh.issue.mock.calls.length
+      const explicit = await store
+        .getState()
+        .fetchIssue(repoPath, 7, { repoId, bypassFailureBackoff: true })
+
+      // Assert
+      expect(blocked).toBeNull()
+      expect(callsWhileBlocked).toBe(1)
+      expect(explicit).toMatchObject({ number: 7 })
+      expect(mockApi.gh.issue).toHaveBeenCalledTimes(2)
+      expect(failureEntries(store)).toEqual([])
+    }
+  )
+
+  it('records another failure after a bypassing lookup fails, so automatic traffic still backs off', async () => {
+    // Arrange
+    const store = createTestStore()
+    mockApi.gh.issue.mockRejectedValue(new Error('HTTP 502'))
+    await store.getState().fetchIssue(repoPath, 7, { repoId })
+    vi.advanceTimersByTime(1_000)
+    await store.getState().fetchIssue(repoPath, 7, { repoId, bypassFailureBackoff: true })
+
+    // Act
+    await store.getState().fetchIssue(repoPath, 7, { repoId })
+
+    // Assert
+    expect(mockApi.gh.issue).toHaveBeenCalledTimes(2)
+    expect(failureEntries(store)).toMatchObject([{ kind: 'transient', attempts: 2 }])
+  })
+
   it('lets a transient failure retry sooner and backs off longer on each repeat', async () => {
     // Arrange
     const store = createTestStore()

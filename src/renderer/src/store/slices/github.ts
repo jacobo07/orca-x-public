@@ -1886,7 +1886,10 @@ export type GitHubSlice = {
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & {
+      /** An explicit user action is a fresh request: it skips the automatic failure backoff. */
+      bypassFailureBackoff?: boolean
+    }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,
@@ -3429,6 +3432,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const knownFailure = get().issueLookupFailureCache[cacheKey]
     if (
       knownFailure &&
+      !options?.bypassFailureBackoff &&
       Date.now() - knownFailure.fetchedAt <
         issueLookupBackoffMs(knownFailure.kind, knownFailure.attempts)
     ) {
