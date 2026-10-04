@@ -5,6 +5,7 @@ import {
   refreshWorktreeHeadIdentities,
   type WorktreeHeadIdentityRefreshState
 } from './worktree-head-identity-refresh'
+import { liveWindowForWatch } from './worktree-base-directory-live-window'
 import { notifyWorktreeGitStatusMetadataChanged, notifyWorktreesChanged } from './worktree-remote'
 
 export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
@@ -33,7 +34,7 @@ export function scheduleWorktreeBaseNotification(
   watch: WorktreeBaseNotificationWatch,
   changes: Partial<Omit<WorktreeBaseCollectedChanges, 'overflow'>>
 ): void {
-  if (watch.disposed || watch.mainWindow.isDestroyed()) {
+  if (watch.disposed || !liveWindowForWatch(watch)) {
     clearPendingWorktreeBaseNotifications(watch)
     return
   }
@@ -49,7 +50,8 @@ export function scheduleWorktreeBaseNotification(
   clearTimeout(watch.notifyTimer ?? undefined)
   watch.notifyTimer = setTimeout(() => {
     watch.notifyTimer = null
-    if (watch.disposed || watch.mainWindow.isDestroyed()) {
+    // Why: the window that was live when the event arrived can close inside the debounce.
+    if (watch.disposed || !liveWindowForWatch(watch)) {
       clearPendingWorktreeBaseNotifications(watch)
       return
     }

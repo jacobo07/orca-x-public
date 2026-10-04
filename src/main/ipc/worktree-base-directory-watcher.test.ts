@@ -183,6 +183,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
 
     expect(notifyWorktreesChanged).toHaveBeenCalledTimes(1)
+    expect(notifyWorktreesChanged).toHaveBeenCalledWith(survivor, 'repo-1')
   })
 
   it('ignores deep checkout churn below candidate roots', async () => {
