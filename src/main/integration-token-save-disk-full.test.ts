@@ -287,6 +287,98 @@ describe('integration token re-save on a full disk', () => {
     })
   })
 
+  describe('index caches follow the disk (the same instance, not a fresh import)', () => {
+    const linearWorkspace = {
+      id: 'org-123',
+      organizationId: 'org-123',
+      organizationName: 'Acme',
+      displayName: 'Ada',
+      email: 'ada@example.com'
+    }
+    const jiraSite = {
+      id: 'site-1',
+      siteUrl: 'https://example.atlassian.net',
+      email: 'ada@example.com',
+      displayName: 'Ada',
+      accountId: 'acc-1'
+    }
+    const jiraFile = (displayName: string) => ({
+      version: 1 as const,
+      activeSiteId: jiraSite.id,
+      selectedSiteId: jiraSite.id,
+      sites: [{ ...jiraSite, displayName }]
+    })
+
+    it('keeps the Linear workspace list in memory equal to the disk after a failed rewrite', async () => {
+      // Arrange
+      const { linear, linearRegistry } = await loadFreshModules()
+      linear.saveWorkspaceToken('org-123', 'linear-key')
+      linearRegistry.upsertWorkspace(linearWorkspace, { select: true })
+
+      // Act
+      disk.armed = true
+      const error = captureError(() =>
+        linearRegistry.upsertWorkspace(
+          { ...linearWorkspace, displayName: 'Grace' },
+          { select: true }
+        )
+      )
+      disk.armed = false
+
+      // Assert
+      expect(disk.fired, 'the injected ENOSPC must actually have fired').toBeGreaterThan(0)
+      expect(error.code).toBe('ENOSPC')
+      expect(linearRegistry.getWorkspaceFile().workspaces).toMatchObject([
+        { id: 'org-123', displayName: 'Ada' }
+      ])
+    })
+
+    it('keeps the Jira site list in memory equal to the disk after a failed rewrite', async () => {
+      // Arrange
+      const { jira } = await loadFreshModules()
+      jira.saveToken(jiraSite.id, 'jira-token')
+      jira.writeSiteFile(jiraFile('Ada'))
+
+      // Act
+      disk.armed = true
+      const error = captureError(() => jira.writeSiteFile(jiraFile('Grace')))
+      disk.armed = false
+
+      // Assert
+      expect(disk.fired, 'the injected ENOSPC must actually have fired').toBeGreaterThan(0)
+      expect(error.code).toBe('ENOSPC')
+      expect(jira.getSiteFile().sites).toMatchObject([{ id: 'site-1', displayName: 'Ada' }])
+    })
+
+    it('lets the Linear workspace list follow a rewrite that succeeds', async () => {
+      // Arrange
+      const { linear, linearRegistry } = await loadFreshModules()
+      linear.saveWorkspaceToken('org-123', 'linear-key')
+      linearRegistry.upsertWorkspace(linearWorkspace, { select: true })
+
+      // Act
+      linearRegistry.upsertWorkspace({ ...linearWorkspace, displayName: 'Grace' }, { select: true })
+
+      // Assert
+      expect(linearRegistry.getWorkspaceFile().workspaces).toMatchObject([
+        { id: 'org-123', displayName: 'Grace' }
+      ])
+    })
+
+    it('lets the Jira site list follow a rewrite that succeeds', async () => {
+      // Arrange
+      const { jira } = await loadFreshModules()
+      jira.saveToken(jiraSite.id, 'jira-token')
+      jira.writeSiteFile(jiraFile('Ada'))
+
+      // Act
+      jira.writeSiteFile(jiraFile('Grace'))
+
+      // Assert
+      expect(jira.getSiteFile().sites).toMatchObject([{ id: 'site-1', displayName: 'Grace' }])
+    })
+  })
+
   describe('Bitbucket secret (control: already atomic)', () => {
     it('keeps the previous secret and reports ENOSPC when the re-save cannot be written', async () => {
       // Arrange
