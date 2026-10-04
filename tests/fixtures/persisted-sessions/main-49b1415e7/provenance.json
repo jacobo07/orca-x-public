@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "era": "main-49b1415e7",
+  "sourceSha": "49b1415e7f87b2d3456d36e467071f6e53203d04",
+  "sourceDate": "2026-09-29",
+  "sourceSubject": "merge(integration-2): origin/main @ 94f2eebe7",
+  "generatorCommand": "bash config/scripts/persisted-session-corpus-generate.sh --era main-49b1415e7 --sha 49b1415e7 --floor yes --out tests/fixtures/persisted-sessions --work <work>",
+  "writerSha256": "a881d2f92e018f6388052de1b0647139a7e12df357abe406ae8652605722a72c",
+  "eraConfigSha256": "30bf2fba576abf854bddba8d04dd61f8de586b0397df7fbc452fb08d3b845dac",
+  "nodeVersion": "v24.21.0",
+  "eraLockfileSha256Prefix": "0e3e7a3189836879",
+  "currentLockfileSha256Prefix": "0e3e7a3189836879",
+  "eraSelfRead": "ok",
+  "outputSha256": "fd858770b62cbb53b7579a1c20e6e0d8377dd04920143473fead351fb68db22d",
+  "outputBytes": 16289,
+  "expected": {
+    "repos": [
+      "repo-alpha|/synthetic/repo-alpha|alpha",
+      "repo-beta|/synthetic/repo-beta|beta"
+    ],
+    "terminalTabsByWorktree": {
+      "repo-alpha::/synthetic/repo-alpha": [
+        "tab-a1|Terminal 1",
+        "tab-a2|Build"
+      ],
+      "repo-beta::/synthetic/repo-beta": [
+        "tab-b1|Terminal 1"
+      ]
+    },
+    "splitLeavesByTab": {
+      "tab-a1": 2,
+      "tab-a2": 1,
+      "tab-b1": 1
+    },
+    "editorFilesByWorktree": {
+      "repo-alpha::/synthetic/repo-alpha": [
+        "/synthetic/repo-alpha/README.md"
+      ]
+    },
+    "active": {
+      "repoId": "repo-alpha",
+      "worktreeId": "repo-alpha::/synthetic/repo-alpha",
+      "tabId": "tab-a1"
+    }
+  },
+  "invariantsExercised": [
+    "repos",
+    "worktree-meta",
+    "terminal-tabs",
+    "split-layout",
+    "editor-tabs",
+    "active-selection"
+  ],
+  "countsTowardFloor": true,
+  "clock": {
+    "dateNow": 1767225600000,
+    "fakedApis": [
+      "Date"
+    ],
+    "randomUUID": "counter"
+  }
+}
