@@ -16,7 +16,10 @@
 #
 # 2026-10-04: persistence.profile-data-file answered. Callers that act on durability are told;
 # the unreported paths (debounced save, quit, beforeunload) are stated in its onFailure with their bound.
-integrations.credential-file
+#
+# 2026-10-04: integrations.credential-file answered. Its population was bypassing its writer (Linear and
+# Jira tokens and the index files were written in place); they now publish through it, and the
+# onFailure states what each save tells the user.
 codex-accounts.managed-credential
 codex.config-toml-trust
 # Its seal DOES capture per-pane error codes into report.failed[], which is the pattern the others

@@ -30,7 +30,6 @@ src/main/ipc/filesystem-mutations.ts
 src/main/ipc/terminal-render-desync-evidence.ts
 src/main/ipc/worktrees.ts
 src/main/issue-command-file.ts
-src/main/jira/site-credential-store.ts
 src/main/mimo/hook-service.ts
 src/main/opencode/hook-service.ts
 src/main/pi/legacy-omp-overlay-migration.ts

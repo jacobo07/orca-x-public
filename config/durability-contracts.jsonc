@@ -225,14 +225,19 @@
     },
     {
       "id": "integrations.credential-file",
-      "state": "Per-integration token files (Linear, Jira), safeStorage-encrypted where a keyring exists",
+      "state": "Every credential and index file of the Linear, Jira and Bitbucket integrations: Linear workspace tokens (linear-tokens/<id>.enc) and the legacy linear-token.enc, the Linear workspace list (linear-workspaces.json), Jira site tokens (jira-tokens/<id>.enc) and the Jira site list (jira-sites.json), and the Bitbucket secret and metadata (bitbucket-credential.enc/.json). Tokens are safeStorage-encrypted where a keyring exists, else 0600 plaintext",
       "writer": "src/main/integration-credential-file.ts",
       "tier": "crash-durable",
-      "lostIf": "The user is silently signed out of the integration and must re-authenticate. An empty file reads as 'missing' by design, so a torn publish degrades straight to logged-out with no error.",
-      "provenBy": ["src/main/integration-credential-durability.test.ts"],
+      "lostIf": "The user is silently signed out of the integration and must re-authenticate. An empty token file reads as 'missing' and an empty workspace or site list reads as 'no workspaces' / 'no sites' by design, so a torn or truncated publish degrades straight to logged-out with no error.",
+      "onFailure": "A failed save never touches the previous file. Every file of the population is published by the one writer: a 0600 temp sibling, short-write loop, fsync, close, rename; on any failure the temp is closed and removed, so the live token or list stays byte-identical and a fresh read returns the previous credential. Until 2026-10-04 the Linear and Jira token files and both index files were written in place with writeFileSync, which truncates on open, so a full disk emptied the working token before failing (measured RED). The save throws the OS error with its code intact (ENOSPC); the Linear token cache is updated only after the write, so a failed save does not advance memory past the disk. Linear connect and test-connection, and Jira connect, catch it and return {ok:false} carrying the raw OS message, which the key and site dialogs render verbatim; the Bitbucket connect and the disconnect or select paths (Linear selectWorkspace, Jira selectSite and disconnect) do not catch, so the IPC call rejects with the raw error. Weaknesses stated, not fixed here: that raw text is what the user sees; Linear testConnection re-saves the stored token, so it is now safe on a full disk but still reports the OS text; the Linear and Jira index writers assign their in-memory copy before the write, so memory can run ahead of disk after a failed rewrite; Jira saves the token before the site list, so a failed list write leaves the new token with the old list while the user is told the connect failed. Proven by src/main/integration-token-save-disk-full.test.ts (injected ENOSPC modelled at the fs boundary with firing proof, for the Linear workspace and legacy tokens, the Jira token, both index files and the Bitbucket secret control, and fsync-before-rename at the Linear and Jira token callers) and src/main/integration-credential-durability.test.ts at the primitive.",
+      "provenBy": [
+        "src/main/integration-credential-durability.test.ts",
+        "src/main/integration-token-save-disk-full.test.ts"
+      ],
       "knownGaps": [
         "The barrier is hand-rolled rather than routed through durable-file-write, and it stays that way deliberately. Consolidation was attempted once the primitive learned to remove its own temp, and reverted: bitbucket/credential-store.test.ts injects failures at writeSync and unlinkSync to hold the STA-3941 guarantee, so replacing the explicit short-write loop deletes the boundary those regression tests assert against. This writer is specialized, not duplicated.",
-        "The containing directory is not fsynced, so the rename itself is durable only where the filesystem orders it."
+        "The containing directory is not fsynced, so the rename itself is durable only where the filesystem orders it.",
+        "The failure-path proof is a model of the kernel order (open truncates, the write then fails), not a full disk; the real-kernel ENOSPC run is a separate plan."
       ]
     },
     {
