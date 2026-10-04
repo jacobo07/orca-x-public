@@ -15,8 +15,9 @@
 #   Only <run-dir>/volume.img and <run-dir>/mnt are ever created, mounted over, chowned or removed (no rm -rf).
 # --recover: for a driver killed without its trap. Releases only the device recorded in <run-dir>/loop-device.txt,
 #   only after `sudo -n losetup -j <run-dir>/volume.img` names it, and only for a run dir this script could have made:
-#   a real (non-symlink) directory owned by the caller with mode 0700, holding the v1 nonce marker, with mnt,
-#   volume.img, loop-device.txt and the marker all non-symlinks. Never runs `losetup -f`, never mounts.
+#   a real (non-symlink) directory owned by the caller with permission bits 0700 (a setgid bit is ignored), holding
+#   the v1 nonce marker, with mnt, volume.img, loop-device.txt and the marker all non-symlinks. Both modes validate
+#   the physical (canonical) run-dir path. Never runs `losetup -f`, never mounts.
 # Tools: losetup and mkfs.ext4 are NOT on an ordinary user's PATH; they are resolved from REAL_ENOSPC_SBIN_DIRS
 # below (never from the environment) and called by absolute path. Every loop probe goes through `sudo -n` because
 # an unprivileged `losetup -j` can read a live loop device as absent.
@@ -238,9 +239,11 @@ on_exit() {
 # check_recover_ownership: refuse a run dir this script could not have made, and pin RUN_DIR to its physical path so
 # mountpoint, findmnt, umount and losetup all see the same real names.
 check_recover_ownership() {
-  local me item
+  local me item mode
   me=$(id -u)
-  if [ "$(stat -c %u -- "$RUN_DIR" 2> /dev/null)" != "$me" ] || [ "$(stat -c %a -- "$RUN_DIR" 2> /dev/null)" != 700 ]; then
+  mode=$(stat -c %a -- "$RUN_DIR" 2> /dev/null)
+  # Why: the permission bits only. mkdir -m 0700 under a setgid parent yields 2700, a dir the driver did make.
+  if [ "$(stat -c %u -- "$RUN_DIR" 2> /dev/null)" != "$me" ] || [ $((8#${mode:-777} & 8#777)) -ne $((8#700)) ]; then
     refuse 2 "RECOVER_REFUSED not-owned $RUN_DIR (must be owned by the caller with mode 0700)"
   fi
   for item in "$MNT" "$IMG" "$RUN_DIR/loop-device.txt" "$MARKER"; do
@@ -353,6 +356,11 @@ PARENT=$(dirname -- "$RUN_DIR")
 if [ -L "$PARENT" ] || [ ! -d "$PARENT" ] || [ "$(stat -c %u -- "$PARENT" 2> /dev/null)" != "$(id -u)" ]; then
   refuse 2 "REFUSED run-dir-parent $PARENT (must be an existing real directory owned by the caller)"
 fi
+# Why: validate the physical path, the one --recover re-checks, so both modes accept the same set of directories.
+PARENT_REAL=$(cd -P -- "$PARENT" 2> /dev/null && pwd -P) || refuse 2 "REFUSED run-dir-parent $PARENT (unresolvable)"
+RUN_DIR=$PARENT_REAL/$(basename -- "$RUN_DIR")
+check_run_dir_name
+set_paths
 
 [ "$(uname -s)" = Linux ] || refuse 3 "PRECONDITION_MISSING linux"
 sudo -n true > /dev/null 2>&1 || refuse 3 "BLOCKED_EXTERNAL needs a bounded filesystem (root mount or CAP_SYS_ADMIN)"

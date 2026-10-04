@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -243,6 +244,28 @@ linux('real-enospc-volume.sh refusals (no sudo mount ever runs)', () => {
     expect(row.sudoCalls()).toEqual([])
   })
 
+  it('refuses a run dir that only reaches /tmp through an ancestor symlink, before any sudo call', () => {
+    const row = makeRow()
+    const real = mkdtempSync('/tmp/p3-enospc-ancestor-')
+    try {
+      mkdirSync(join(real, 'sub'))
+      symlinkSync(real, join(row.root, 'alias'))
+      const run = drive(
+        row,
+        ['--run-dir', join(row.root, 'alias', 'sub', 'p3-enospc-x'), '--', '/bin/true'],
+        {
+          tools: 'shim'
+        }
+      )
+      expect(run.status, run.out).toBe(2)
+      expect(run.out).toContain('REFUSED run-dir-tmp')
+      expect(row.sudoCalls()).toEqual([])
+      expect(existsSync(join(real, 'sub', 'p3-enospc-x'))).toBe(false)
+    } finally {
+      rmSync(real, { recursive: true, force: true })
+    }
+  })
+
   it('refuses a size over the cap before any sudo call', () => {
     const row = makeRow()
     const run = drive(row, runArgs(row, ['--size-mb', '65']))
@@ -456,6 +479,35 @@ linux('real-enospc-volume.sh --recover', () => {
     expect(run.out).toContain('LEFTOVER mount=0 loop=0')
     expect(existsSync(join(row.runDir, 'volume.img'))).toBe(false)
     expect(existsSync(join(row.runDir, 'mnt'))).toBe(false)
+  })
+
+  it('recovers a run dir the driver itself made under a setgid parent (mode 2700)', () => {
+    const row = makeRow()
+    chmodSync(row.root, 0o2755)
+    // Killed with SIGKILL mid-command: no trap runs, so the loop device and mount stay as a crash leaves them.
+    const run = drive(row, ['--run-dir', row.runDir, '--', '/bin/sh', '-c', 'kill -KILL $PPID'], {
+      tools: 'shim'
+    })
+    expect(run.status, run.out).not.toBe(0)
+    // Positive control: the driver's own mkdir really inherited the setgid bit, so the row exercises the case.
+    expect(statSync(row.runDir).mode & 0o7777).toBe(0o2700)
+    expect(row.sudoCalls().some((line) => line.includes('mount -t ext4'))).toBe(true)
+    const recovered = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expect(recovered.status, recovered.out).toBe(0)
+    expect(row.sudoCalls().filter((line) => / -d /.test(line))).toEqual([
+      `sudo -n ${row.shim}/losetup -d ${FAKE_DEV}`
+    ])
+    expect(recovered.out).toContain('LEFTOVER mount=0 loop=0')
+  })
+
+  it('recovers a physical run dir whose parent is reached through an ancestor symlink', () => {
+    const row = makeRow()
+    killedRun(row, { mounted: true })
+    symlinkSync(row.root, join(row.root, '..', `alias-${row.root.split('/').pop()}`))
+    const viaAlias = join(row.root, '..', `alias-${row.root.split('/').pop()}`, 'p3-enospc-vol-row')
+    const run = drive(row, ['--recover', '--run-dir', viaAlias], { tools: 'shim' })
+    expect(run.status, run.out).toBe(0)
+    expect(run.out).toContain(`UMOUNT ok mnt=${row.runDir}/mnt`)
   })
 
   it('unmounts the run dir mount of the recorded device before detaching it', () => {
