@@ -575,7 +575,12 @@ describe('killStaleDaemon ownership decisions', () => {
         startedAtMs: 2_000,
         launchNonce: 'daemon-b'
       })
-      const replacement = createServer((socket) => socket.end())
+      // Accepts, never answers. resume(): a paused socket never sees the client's FIN, so it
+      // would never close and server.close() would hang the test after the kill returned.
+      const replacement = createServer((socket) => {
+        socket.resume()
+        socket.end()
+      })
       const handover = setTimeout(() => {
         void listenOnSocketPath(replacement, socketPath).then(() => {
           writeFileSync(getDaemonPidPath(dir), replacementRecord, { mode: 0o600 })
@@ -583,9 +588,11 @@ describe('killStaleDaemon ownership decisions', () => {
       }, 300)
 
       try {
+        // R-09: a connect after the confirmed exit, with no protocol answer, is unverified.
         await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toEqual({
           killed: true,
-          liveOwnerSurvived: true
+          liveOwnerSurvived: true,
+          preservedBy: 'endpoint_unverified'
         })
         expect(readFileSync(getDaemonPidPath(dir), 'utf8')).toBe(replacementRecord)
         await expect(canConnect(socketPath)).resolves.toBe(true)
