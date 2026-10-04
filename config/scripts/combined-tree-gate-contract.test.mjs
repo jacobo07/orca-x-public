@@ -92,7 +92,7 @@ describe('evaluateSummary: GREEN control', () => {
     const lines = swap(
       greenLines(manifest),
       'UNIT pty ',
-      'UNIT pty exit=1  Test Files 67 passed (68);'
+      'UNIT pty exit=1  Test Files 70 passed (71);'
     )
     expect(judge(lines, manifest).verdict).toBe('GREEN')
   })

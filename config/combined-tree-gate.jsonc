@@ -59,7 +59,7 @@
     {
       "name": "pty",
       "paths": ["src/main/ipc/pty"],
-      "minPassedFiles": 67,
+      "minPassedFiles": 70,
       "regressionDiff": true,
       // The 741ca9985 baseline failure list measured NONE, so exit must be 0 and regressions 0.
       // Entries, when recorded, are "<file relative to the repo root>::<full test name>" (a suite error, ::FILE_FAILED, is never excusable).

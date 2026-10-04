@@ -60,7 +60,7 @@ describe('planLines', () => {
     expect(lines.filter((l) => l.startsWith('PLAN_GATE ')).length).toBe(MANIFEST.staticGates.length)
     expect(lines.at(-1)).toBe('PLAN_COUNTS specs=15 units=3 gates=9')
     expect(lines).toContain('PLAN_GATE oxfmt 1 node_modules/.bin/oxfmt --check')
-    expect(lines).toContain('PLAN_UNIT pty 67 1 src/main/ipc/pty')
+    expect(lines).toContain('PLAN_UNIT pty 70 1 src/main/ipc/pty')
   })
 })
 
