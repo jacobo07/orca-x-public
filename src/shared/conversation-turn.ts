@@ -22,7 +22,13 @@ export type ConversationTurnOutcome =
   | { outcome: 'completed'; turnId: string; providerSessionId: string | null }
   | { outcome: 'busy'; activeTurnId: string }
   | { outcome: 'conversation-absent' }
-  | { outcome: 'agent-unavailable'; agentId: string; reason: 'missing' | 'unverifiable' }
+  | {
+      outcome: 'agent-unavailable'
+      agentId: string
+      reason: 'missing' | 'unverifiable'
+      /** Optional addition, never a new `reason`: older clients ignore it and keep the answer they know. */
+      cause?: 'catalog-unreadable'
+    }
   /** `reason` carries the resolver's own answers rather than one flattened failure: each needs its
    *  own sentence and has its own fix. `remote-execution-unavailable` is a project located on a
    *  remote host with no way to run there — refused, never run locally instead. */

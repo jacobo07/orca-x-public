@@ -158,7 +158,8 @@ async function runTracedTurn(
     return {
       outcome: 'agent-unavailable',
       agentId: binding.agentId,
-      reason: binding.kind === 'agent-missing' ? 'missing' : 'unverifiable'
+      reason: binding.kind === 'agent-missing' ? 'missing' : 'unverifiable',
+      ...(binding.kind === 'agent-unverifiable' && binding.cause ? { cause: binding.cause } : {})
     }
   }
   // Resolved HERE, beside the agent and before admission, for the same reason the binding is: a
@@ -428,7 +429,8 @@ function latestResumableProvenance(
   for (let index = record.provenance.length - 1; index >= 0; index -= 1) {
     const entry = record.provenance[index]
     const onThisHost =
-      provenanceHostId(entry) === hostId || (Boolean(hostAddress) && entry.hostAddress === hostAddress)
+      provenanceHostId(entry) === hostId ||
+      (Boolean(hostAddress) && entry.hostAddress === hostAddress)
     if (entry.agent === provider && entry.providerSessionId !== null && onThisHost) {
       return entry
     }

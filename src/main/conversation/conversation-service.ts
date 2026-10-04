@@ -56,7 +56,8 @@ export type ConversationAgentBinding =
   | { kind: 'none' }
   | { kind: 'agent'; agent: Agent }
   | { kind: 'agent-missing'; agentId: AgentId }
-  | { kind: 'agent-unverifiable'; agentId: AgentId }
+  // `cause` is optional on purpose: it names why, and a reader that ignores it still gets the old answer.
+  | { kind: 'agent-unverifiable'; agentId: AgentId; cause?: 'catalog-unreadable' }
 
 /**
  * Admission to run a turn. `busy` is a deliberate product answer, not an error: one conversation
@@ -121,7 +122,7 @@ export class ConversationService {
     }
     const found = findAgent(this.agentRoster, input.agentId)
     if (found === 'unreadable') {
-      return { outcome: 'agent-unverifiable' }
+      return { outcome: 'agent-unverifiable', cause: 'catalog-unreadable' }
     }
     if (found === undefined) {
       return { outcome: 'agent-not-found', agentId: input.agentId }
@@ -145,7 +146,7 @@ export class ConversationService {
     }
     const agent = findAgent(this.agentRoster, agentId)
     if (agent === 'unreadable') {
-      return { kind: 'agent-unverifiable', agentId }
+      return { kind: 'agent-unverifiable', agentId, cause: 'catalog-unreadable' }
     }
     return agent ? { kind: 'agent', agent } : { kind: 'agent-missing', agentId }
   }

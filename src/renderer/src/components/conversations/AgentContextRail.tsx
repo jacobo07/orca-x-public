@@ -118,7 +118,11 @@ export function AgentContextRail({
     grounding?.status === 'failed'
       ? grounding.reason
       : grounding?.status === 'loaded' && grounding.grounding.outcome === 'roster-unreadable'
-        ? grounding.grounding.reason
+        ? // Main's message is a developer string; the unreadable catalog has product copy already.
+          translate(
+            'agents.unreadable',
+            'Your agent list could not be read, and nothing was changed.'
+          )
         : grounding?.status === 'loaded' && grounding.grounding.outcome === 'agent-missing'
           ? translate('workspace.context.agentMissing', 'This agent is no longer in your roster.')
           : null

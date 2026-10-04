@@ -24,6 +24,8 @@ export type ConversationNoticeKind =
   | 'absent'
   | 'agent-missing'
   | 'agent-unverifiable'
+  /** Unreadable catalog: restarting reads the same file, so this notice gives no restart advice. */
+  | 'agent-catalog-unreadable'
   | 'approval-declined'
   /** Ways an agent's project cannot be reached, kept apart because each is a different action: set
    *  it up, wait for its setup, open it where it lives, choose one host, or run where it lives. */
@@ -162,7 +164,12 @@ export function noticeForTurnOutcome(outcome: ConversationTurnOutcome): Conversa
     case 'agent-unavailable':
       // Refused before anything was committed or sent. No id in the notice: that is machinery.
       return {
-        kind: outcome.reason === 'missing' ? 'agent-missing' : 'agent-unverifiable',
+        kind:
+          outcome.reason === 'missing'
+            ? 'agent-missing'
+            : outcome.cause === 'catalog-unreadable'
+              ? 'agent-catalog-unreadable'
+              : 'agent-unverifiable',
         detail: null,
         userMessageKept: false
       }
@@ -206,7 +213,12 @@ export function noticeForAgentCreateRefusal(
   result: Exclude<ConversationForAgentResult, { outcome: 'created' }>
 ): ConversationNotice {
   return {
-    kind: result.outcome === 'agent-not-found' ? 'agent-missing' : 'agent-unverifiable',
+    kind:
+      result.outcome === 'agent-not-found'
+        ? 'agent-missing'
+        : result.cause === 'catalog-unreadable'
+          ? 'agent-catalog-unreadable'
+          : 'agent-unverifiable',
     detail: null,
     userMessageKept: false
   }

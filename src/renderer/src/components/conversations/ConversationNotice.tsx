@@ -89,6 +89,11 @@ function messageFor(notice: Notice): string {
         'conversations.noticeAgentUnverifiable',
         'Orca could not check which agent this conversation is with, so nothing was sent. Restart Orca and try again.'
       )
+    case 'agent-catalog-unreadable':
+      return translate(
+        'conversations.noticeAgentCatalogUnreadable',
+        'Your agent list could not be read, so nothing was sent and nothing was changed.'
+      )
     case 'approval-declined':
       return translate(
         'conversations.noticeApprovalDeclined',

@@ -7,6 +7,7 @@ import {
   applyConversationTurnOutcome,
   beginConversationTurn,
   EMPTY_CONVERSATION_LIVE_STATE,
+  noticeForAgentCreateRefusal,
   noticeForTurnOutcome
 } from './conversation-live-state'
 
@@ -183,7 +184,22 @@ describe('conversation live state — every refusal names what to do', () => {
       kind: 'failed-host-lost',
       kept: true
     },
-    { outcome: { outcome: 'conversation-absent' }, kind: 'absent', kept: false }
+    { outcome: { outcome: 'conversation-absent' }, kind: 'absent', kept: false },
+    {
+      outcome: { outcome: 'agent-unavailable', agentId: 'a1', reason: 'unverifiable' },
+      kind: 'agent-unverifiable',
+      kept: false
+    },
+    {
+      outcome: {
+        outcome: 'agent-unavailable',
+        agentId: 'a1',
+        reason: 'unverifiable',
+        cause: 'catalog-unreadable'
+      },
+      kind: 'agent-catalog-unreadable',
+      kept: false
+    }
   ]
 
   for (const testCase of cases) {
@@ -193,6 +209,16 @@ describe('conversation live state — every refusal names what to do', () => {
       expect(notice?.userMessageKept).toBe(testCase.kept)
     })
   }
+
+  it('classifies a refused agent create by its cause too', () => {
+    expect(noticeForAgentCreateRefusal({ outcome: 'agent-unverifiable' }).kind).toBe(
+      'agent-unverifiable'
+    )
+    expect(
+      noticeForAgentCreateRefusal({ outcome: 'agent-unverifiable', cause: 'catalog-unreadable' })
+        .kind
+    ).toBe('agent-catalog-unreadable')
+  })
 
   it('says nothing on success', () => {
     expect(

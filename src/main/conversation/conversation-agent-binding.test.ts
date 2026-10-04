@@ -163,7 +163,8 @@ describe('the binding a turn reads', () => {
 
       const created = await svc.createForAgent({ agentId: mintAgentId(), title: 'x' })
 
-      expect(created).toEqual({ outcome: 'agent-unverifiable' })
+      // `cause` is additive: the outcome paired clients already know is unchanged.
+      expect(created).toEqual({ outcome: 'agent-unverifiable', cause: 'catalog-unreadable' })
       expect(await svc.list()).toEqual([])
     })
 
@@ -177,7 +178,8 @@ describe('the binding a turn reads', () => {
 
       expect(unreadableService().agentFor(created.record)).toEqual({
         kind: 'agent-unverifiable',
-        agentId: ada.id
+        agentId: ada.id,
+        cause: 'catalog-unreadable'
       })
     })
 

@@ -142,7 +142,8 @@ export type ConversationLoadResult =
 export type ConversationForAgentResult =
   | { outcome: 'created'; record: ConversationRecord }
   | { outcome: 'agent-not-found'; agentId: AgentId }
-  | { outcome: 'agent-unverifiable' }
+  // `cause` is an optional addition: older clients ignore it and keep the outcome they know.
+  | { outcome: 'agent-unverifiable'; cause?: 'catalog-unreadable' }
 
 export function isConversationTurnSettled(state: ConversationTurnState): boolean {
   return !CONVERSATION_UNSETTLED_TURN_STATES.includes(state)

@@ -138,6 +138,33 @@ describe('an agent reaches the provider-neutral turn', () => {
   })
 })
 
+describe('a turn in an agent chat whose agent catalog cannot be read', () => {
+  it('stays agent-unavailable/unverifiable for old clients and names the cause beside it', async () => {
+    const ada = agent('Ada', 'r')
+    const id = await chatWith(ada)
+    const unreadable = new ConversationService(() => join(root, 'conversations'), {
+      readAgents: () => {
+        throw Object.assign(new Error('the stored agent catalog is unreadable'), {
+          code: 'agent-catalog-unreadable'
+        })
+      }
+    })
+
+    const outcome = await runConversationTurn(
+      { ...deps(), service: unreadable },
+      { conversationId: id, text: 'hello', cwd: root }
+    )
+
+    expect(outcome).toEqual({
+      outcome: 'agent-unavailable',
+      agentId: ada.id,
+      reason: 'unverifiable',
+      cause: 'catalog-unreadable'
+    })
+    expect(driverCalls).toHaveLength(0)
+  })
+})
+
 describe('an agent chat across turns', () => {
   it('continues the same thread, keeps the agent, and stores each user message once', async () => {
     const ada = agent('Ada', 'Reviews migrations for data loss.')

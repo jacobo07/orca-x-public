@@ -16731,6 +16731,7 @@
     "noticeFailed": "The turn failed. Your message was kept.",
     "noticeInterrupted": "The turn was interrupted before it finished. Your message was kept.",
     "noticeAbsent": "This conversation is no longer on disk. Nothing was sent.",
+    "noticeAgentCatalogUnreadable": "Your agent list could not be read, so nothing was sent and nothing was changed.",
     "noticeApprovalDeclined": "The agent asked to run a command and Orca declined it. Approving actions from a conversation is not built yet.",
     "composerLabel": "Message",
     "composerHint": "Enter sends. Shift+Enter starts a new line.",
