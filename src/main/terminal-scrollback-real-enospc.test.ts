@@ -11,34 +11,20 @@
 // was missing is how a gate quietly stops running.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   writeTerminalScrollbackSnapshot,
   readTerminalScrollbackSnapshotSync
 } from './terminal-scrollback-snapshots'
+import {
+  fillRealEnospcVolume,
+  realEnospcVolume,
+  realEnospcVolumeUnusableReason
+} from './real-enospc-volume-test-harness'
 
-const volume = process.env.ORCA_ENOSPC_VOLUME ?? ''
-
-function unusableReason(): string | null {
-  if (!volume) {
-    return 'ORCA_ENOSPC_VOLUME is not set'
-  }
-  let info: ReturnType<typeof statfsSync>
-  try {
-    info = statfsSync(volume)
-  } catch (error) {
-    return `ORCA_ENOSPC_VOLUME is not a mounted filesystem: ${(error as Error).message}`
-  }
-  const totalBytes = Number(info.blocks) * Number(info.bsize)
-  // A guard against being pointed at a real disk: filling / would take the machine down.
-  if (totalBytes > 64 * 1024 * 1024) {
-    return `refusing to fill a ${Math.round(totalBytes / 1024 / 1024)}MB volume; point this at a small loopback image`
-  }
-  return null
-}
-
-const skipReason = unusableReason()
+const volume = realEnospcVolume()
+const skipReason = realEnospcVolumeUnusableReason()
 
 describe.skipIf(skipReason !== null)(`scrollback snapshot on a real full filesystem`, () => {
   let root: string
@@ -54,23 +40,6 @@ describe.skipIf(skipReason !== null)(`scrollback snapshot on a real full filesys
     rmSync(root, { recursive: true, force: true })
   })
 
-  function fillVolume(): number {
-    // Why descending sizes: the last successful write leaves the volume as close to full as the
-    // filesystem allows, so the subject's own write is the one that runs out of room.
-    let wrote = 0
-    for (const size of [1024 * 1024, 256 * 1024, 64 * 1024, 8 * 1024, 1024, 128]) {
-      for (;;) {
-        try {
-          writeFileSync(ballast, Buffer.alloc(wrote + size), { flag: 'w' })
-          wrote += size
-        } catch {
-          break
-        }
-      }
-    }
-    return wrote
-  }
-
   it('control: with room on the volume the snapshot stores and reads back', async () => {
     const outcome = await writeTerminalScrollbackSnapshot({
       tabId: 'tab-real',
@@ -84,9 +53,9 @@ describe.skipIf(skipReason !== null)(`scrollback snapshot on a real full filesys
       return
     }
     // Stored must mean readable, or "stored" is its own false success.
-    expect(
-      readTerminalScrollbackSnapshotSync(outcome.ref, { snapshotRoot: root })
-    ).toContain('real scrollback body')
+    expect(readTerminalScrollbackSnapshotSync(outcome.ref, { snapshotRoot: root })).toContain(
+      'real scrollback body'
+    )
   })
 
   it('reports storage-full from a genuine kernel ENOSPC', async () => {
@@ -100,8 +69,11 @@ describe.skipIf(skipReason !== null)(`scrollback snapshot on a real full filesys
     })
     expect(prior.status, 'the prior write needs room; the volume was already full').toBe('stored')
 
-    const filled = fillVolume()
-    expect(filled, 'nothing was written as ballast; the volume was full before we began').toBeGreaterThan(0)
+    const filled = fillRealEnospcVolume(ballast)
+    expect(
+      filled,
+      'nothing was written as ballast; the volume was full before we began'
+    ).toBeGreaterThan(0)
 
     const outcome = await writeTerminalScrollbackSnapshot({
       tabId: 'tab-full',
