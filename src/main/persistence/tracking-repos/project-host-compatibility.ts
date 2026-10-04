@@ -3,7 +3,7 @@ import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import { remapAgentProjectIds } from '../../../shared/agent-project-id-remap'
+import { isReadableAgent, remapAgentProjectIds } from '../../../shared/agent-project-id-remap'
 import {
   carryProjectStateThroughIdentityChange,
   localRepoIdSet
@@ -22,7 +22,9 @@ export type ProjectHostSetupCompatibilityState = Pick<
 
 function dependentProjectIds(state: ProjectHostSetupCompatibilityState): string {
   return JSON.stringify([
-    (state.agents ?? []).map((agent) => agent.projectId),
+    (Array.isArray(state.agents) ? state.agents : [])
+      .filter((agent) => isReadableAgent(agent))
+      .map((agent) => agent.projectId),
     Object.entries(state.worktreeMeta ?? {})
       .filter(([, meta]) => isReadableWorktreeMeta(meta))
       .map(([id, meta]) => [id, meta.projectId])
@@ -98,7 +100,9 @@ export function mergeProjectHostSetupCompatibilityState(
     projectHostSetups: [...projection.setups, ...independentSetups],
     // Why: only the dependents the caller handed in are returned, so a load-path spread of this
     // result never overwrites a field with undefined.
-    ...(state.agents ? { agents: remapAgentProjectIds(state.agents, remappedProjectIds) } : {}),
+    ...(Array.isArray(state.agents)
+      ? { agents: remapAgentProjectIds(state.agents, remappedProjectIds) }
+      : {}),
     ...(state.worktreeMeta
       ? { worktreeMeta: remapWorktreeMetaProjectIds(state.worktreeMeta, remappedProjectIds) }
       : {})
