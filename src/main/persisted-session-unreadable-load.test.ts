@@ -278,4 +278,195 @@ describe('persisted-session unreadable-load red controls', () => {
       `UNKNOWN_FIELD_ON_SAVE top=${saved.includes('fromTheFutureTopLevel') ? 'kept' : 'dropped'} session=${saved.includes('fromTheFutureField') ? 'kept' : 'dropped'}\n`
     )
   })
+
+  describe('a valid-JSON profile whose session part fails validation', () => {
+    const CORRUPT_HOST = 'ssh:corrupt-host'
+    const VALID_HOST = 'ssh:valid-host'
+    // Why: a local mirror of the quarantine module's name-search bound, so the RED run fails on bytes and outcome, never on an import.
+    const QUARANTINE_NAME_ATTEMPTS = 1000
+
+    type Profile = Record<string, unknown> & {
+      workspaceSession: { tabsByWorktree: Record<string, { id: string }[]> }
+    }
+
+    function corruptProfile(
+      mutate: (profile: Profile) => void,
+      era: string = PRIMARY_ERA
+    ): { bytes: Buffer; profile: Profile } {
+      const profile = JSON.parse(fixtureBytes(era).toString('utf-8')) as Profile
+      mutate(profile)
+      const bytes = Buffer.from(JSON.stringify(profile))
+      writePrimary(bytes)
+      return { bytes, profile }
+    }
+
+    it('quarantines the original bytes and names it when the whole workspace session fails validation', async () => {
+      // Arrange
+      const { bytes } = corruptProfile((profile) => {
+        profile.workspaceSession = 'not-a-session' as never
+      })
+
+      // Act
+      const store = await createStore()
+
+      // Assert
+      expect(console.error).toHaveBeenCalledWith(
+        '[persistence] Corrupt workspace session, using defaults:',
+        expect.anything()
+      )
+      const quarantined = quarantineFiles()
+      expect(quarantined).toHaveLength(1)
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      expect(repoKeys(store)).toEqual(fixtureExpectedRepos(PRIMARY_ERA))
+      expect(Object.values(store.getWorkspaceSession().tabsByWorktree ?? {}).flat()).toHaveLength(0)
+      expect(store.getStartupLoadOutcome()).toEqual({
+        kind: 'session-unreadable-defaulted',
+        quarantinePath: join(testState.dir, quarantined[0]),
+        defaulted: ['workspaceSession']
+      })
+    })
+
+    it('keeps the session quarantine byte-identical and the rest of the profile after the first save', async () => {
+      // Arrange
+      const { bytes } = corruptProfile((profile) => {
+        profile.workspaceSession = 'not-a-session' as never
+      })
+      const store = await createStore()
+
+      // Act
+      store.flush()
+
+      // Assert
+      const bak0 = `${dataFile()}.bak.0`
+      let bak0State = 'absent'
+      try {
+        bak0State = readFileSync(bak0).equals(bytes) ? 'kept' : 'absent'
+      } catch {
+        // Observation only: no backup slot was written.
+      }
+      process.stdout.write(`SESSION_BYTES_IN_BAK0 ${bak0State}\n`)
+      expect(readFileSync(dataFile()).equals(bytes)).toBe(false)
+      const quarantined = quarantineFiles()
+      expect(quarantined).toHaveLength(1)
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      const reloaded = await createStore()
+      expect(repoKeys(reloaded)).toEqual(fixtureExpectedRepos(PRIMARY_ERA))
+      expect(reloaded.getStartupLoadOutcome()).toEqual({ kind: 'loaded' })
+      expect(quarantineFiles()).toEqual(quarantined)
+    })
+
+    it('reports session-unreadable-unquarantined with the code and still loads the rest when no quarantine name is free', async () => {
+      // Arrange: a frozen clock makes every candidate name predictable, and each one is taken
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-10-04T08:00:00Z'))
+      corruptProfile((profile) => {
+        profile.workspaceSession = 'not-a-session' as never
+      })
+      const base = `${dataFile()}.unreadable-20261004T080000Z`
+      const taken: string[] = []
+      for (let attempt = 0; attempt < QUARANTINE_NAME_ATTEMPTS; attempt++) {
+        const path = attempt === 0 ? base : `${base}-${attempt}`
+        writeFileSync(path, '')
+        taken.push(path)
+      }
+      const before = quarantineFiles()
+
+      // Act
+      const store = await createStore()
+
+      // Assert
+      expect(repoKeys(store)).toEqual(fixtureExpectedRepos(PRIMARY_ERA))
+      expect(store.getStartupLoadOutcome()).toEqual({
+        kind: 'session-unreadable-unquarantined',
+        code: 'EEXIST',
+        defaulted: ['workspaceSession']
+      })
+      expect(quarantineFiles()).toEqual(before)
+      expect(taken.every((path) => readFileSync(path).length === 0)).toBe(true)
+    })
+
+    it('quarantines a corrupt per-host session partition and keeps the valid sibling partition', async () => {
+      // Arrange
+      const { bytes, profile } = corruptProfile((p) => {
+        p.workspaceSessionsByHostId = {
+          [VALID_HOST]: JSON.parse(JSON.stringify(p.workspaceSession)),
+          [CORRUPT_HOST]: 'not-a-session'
+        }
+      })
+      const validTabIds = Object.values(profile.workspaceSession.tabsByWorktree)
+        .flat()
+        .map((tab) => tab.id)
+
+      // Act
+      const store = await createStore()
+
+      // Assert
+      expect(console.error).toHaveBeenCalledWith(
+        `[persistence] Corrupt workspace session for host ${CORRUPT_HOST}, using defaults:`,
+        expect.anything()
+      )
+      const keptTabIds = Object.values(store.getWorkspaceSession(VALID_HOST).tabsByWorktree ?? {})
+        .flat()
+        .map((tab) => tab.id)
+      expect(keptTabIds).toEqual(validTabIds)
+      expect(store.getWorkspaceSessionHostIds()).not.toContain(CORRUPT_HOST)
+      const quarantined = quarantineFiles()
+      expect(quarantined).toHaveLength(1)
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      expect(store.getStartupLoadOutcome()).toEqual({
+        kind: 'session-unreadable-defaulted',
+        quarantinePath: join(testState.dir, quarantined[0]),
+        defaulted: [`workspaceSessionsByHostId.${CORRUPT_HOST}`]
+      })
+      store.flush()
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      const saved = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
+        workspaceSessionsByHostId: Record<string, unknown>
+      }
+      expect(Object.keys(saved.workspaceSessionsByHostId)).toEqual([VALID_HOST])
+    })
+
+    it('writes one quarantine per load that covers a corrupt session and a corrupt partition together', async () => {
+      // Arrange
+      const { bytes } = corruptProfile((profile) => {
+        profile.workspaceSession = 'not-a-session' as never
+        profile.workspaceSessionsByHostId = { [CORRUPT_HOST]: 'not-a-session' }
+      })
+
+      // Act
+      const store = await createStore()
+
+      // Assert: the single copy of the whole file holds both corrupt parts
+      const quarantined = quarantineFiles()
+      expect(quarantined).toHaveLength(1)
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      expect(store.getStartupLoadOutcome()).toEqual({
+        kind: 'session-unreadable-defaulted',
+        quarantinePath: join(testState.dir, quarantined[0]),
+        defaulted: ['workspaceSession', `workspaceSessionsByHostId.${CORRUPT_HOST}`]
+      })
+    })
+
+    it('quarantines the per-host session map when it is not an object', async () => {
+      // Arrange
+      const { bytes } = corruptProfile((profile) => {
+        profile.workspaceSessionsByHostId = 'not-a-map'
+      })
+
+      // Act
+      const store = await createStore()
+
+      // Assert
+      const quarantined = quarantineFiles()
+      expect(quarantined).toHaveLength(1)
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      expect(repoKeys(store)).toEqual(fixtureExpectedRepos(PRIMARY_ERA))
+      expect(Object.values(store.getWorkspaceSession().tabsByWorktree ?? {}).flat()).toHaveLength(3)
+      expect(store.getStartupLoadOutcome()).toEqual({
+        kind: 'session-unreadable-defaulted',
+        quarantinePath: join(testState.dir, quarantined[0]),
+        defaulted: ['workspaceSessionsByHostId']
+      })
+    })
+  })
 })
