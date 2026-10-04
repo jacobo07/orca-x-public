@@ -16,8 +16,9 @@
 # --recover: for a driver killed without its trap. Releases only the device recorded in <run-dir>/loop-device.txt,
 #   only after `sudo -n losetup -j <run-dir>/volume.img` names it, and only for a run dir this script could have made:
 #   a real (non-symlink) directory owned by the caller with permission bits 0700 (a setgid bit is ignored), holding
-#   the v1 nonce marker, with mnt, volume.img, loop-device.txt, volume.log and the marker all non-symlinks. Both
-#   modes validate the physical (canonical) run-dir path. Never runs `losetup -f`, never mounts.
+#   the v1 nonce marker, with mnt, volume.img, loop-device.txt, volume.log and the marker all non-symlinks, under a
+#   parent owned by the caller or root that is not group/other-writable unless sticky (a run refuses the same
+#   parent up front). Both modes validate the physical (canonical) run-dir path. Never runs `losetup -f`, never mounts.
 # Tools: losetup and mkfs.ext4 are NOT on an ordinary user's PATH; they are resolved from REAL_ENOSPC_SBIN_DIRS
 # below (never from the environment) and called by absolute path. Every loop probe goes through `sudo -n` because
 # an unprivileged `losetup -j` can read a live loop device as absent.
@@ -241,10 +242,27 @@ on_exit() {
   exit "$rc"
 }
 
+# parent_problem <dir>: prints the reason and returns 0 when someone other than the caller (or root) could rename
+# entries in <dir>, which lets a foreign directory be swapped in after the checks (later reads go by name).
+parent_problem() {
+  local parent=$1 puid pmode
+  puid=$(stat -c %u -- "$parent" 2> /dev/null)
+  pmode=$(stat -c %a -- "$parent" 2> /dev/null)
+  if [ "$puid" != "$(id -u)" ] && [ "$puid" != 0 ]; then
+    echo "parent-not-owned $parent (must be owned by the caller or root)"
+    return 0
+  fi
+  if [ $((8#${pmode:-777} & 8#022)) -ne 0 ] && [ $((8#${pmode:-777} & 8#1000)) -eq 0 ]; then
+    echo "parent-writable $parent (group or other writable and not sticky)"
+    return 0
+  fi
+  return 1
+}
+
 # check_recover_ownership: refuse a run dir this script could not have made, and pin RUN_DIR to its physical path so
 # mountpoint, findmnt, umount and losetup all see the same real names.
 check_recover_ownership() {
-  local me item mode
+  local me item mode problem
   me=$(id -u)
   mode=$(stat -c %a -- "$RUN_DIR" 2> /dev/null)
   # Why: the permission bits only. mkdir -m 0700 under a setgid parent yields 2700, a dir the driver did make.
@@ -262,6 +280,7 @@ check_recover_ownership() {
   RUN_DIR=$(cd -P -- "$RUN_DIR" 2> /dev/null && pwd -P) || refuse 2 "RECOVER_REFUSED no-marker (unresolvable) $RUN_DIR"
   check_run_dir_name
   set_paths
+  problem=$(parent_problem "$(dirname -- "$RUN_DIR")") && refuse 2 "RECOVER_REFUSED $problem"
   enable_log
 }
 
@@ -367,6 +386,10 @@ PARENT_REAL=$(cd -P -- "$PARENT" 2> /dev/null && pwd -P) || refuse 2 "REFUSED ru
 RUN_DIR=$PARENT_REAL/$(basename -- "$RUN_DIR")
 check_run_dir_name
 set_paths
+# Why: the same parent rule --recover applies, so a run is never started that its own recovery would refuse.
+if problem=$(parent_problem "$PARENT_REAL"); then
+  refuse 2 "REFUSED run-dir-parent $problem"
+fi
 
 [ "$(uname -s)" = Linux ] || refuse 3 "PRECONDITION_MISSING linux"
 sudo -n true > /dev/null 2>&1 || refuse 3 "BLOCKED_EXTERNAL needs a bounded filesystem (root mount or CAP_SYS_ADMIN)"

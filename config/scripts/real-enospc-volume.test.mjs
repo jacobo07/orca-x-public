@@ -97,7 +97,8 @@ case " $* " in
   *"%u"*)
     case "\${@: -1}" in
       *.real-enospc-volume.marker) over=$SHIM_DIR/resp/stat_uid_marker ;;
-      *) over=$SHIM_DIR/resp/stat_uid_dir ;;
+      */p3-enospc-*) over=$SHIM_DIR/resp/stat_uid_dir ;;
+      *) over=$SHIM_DIR/resp/stat_uid_parent ;;
     esac
     if [ -e "$over" ]; then cat "$over"; else exec /usr/bin/stat "$@"; fi
     ;;
@@ -133,6 +134,8 @@ function makeRow() {
   const shim = join(root, 'shim')
   const emptyDir = join(root, 'empty-sbin')
   mkdirSync(join(shim, 'resp'), { recursive: true })
+  // Why: the driver refuses a group/other-writable parent, and a 0002 host umask would make every row's parent one.
+  chmodSync(root, 0o755)
   mkdirSync(join(shim, 'state'), { recursive: true })
   mkdirSync(emptyDir)
   for (const [name, body] of Object.entries(SHIMS)) {
@@ -264,6 +267,16 @@ linux('real-enospc-volume.sh refusals (no sudo mount ever runs)', () => {
     } finally {
       rmSync(real, { recursive: true, force: true })
     }
+  })
+
+  it('refuses a run dir whose parent is group-writable, before any sudo call and before creating anything', () => {
+    const row = makeRow()
+    chmodSync(row.root, 0o775)
+    const run = drive(row, runArgs(row), { tools: 'shim' })
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain('REFUSED run-dir-parent')
+    expect(row.sudoCalls()).toEqual([])
+    expect(existsSync(row.runDir)).toBe(false)
   })
 
   it('refuses a size over the cap before any sudo call', () => {
@@ -675,6 +688,54 @@ linux('real-enospc-volume.sh --recover', () => {
     const log = readFileSync(join(row.runDir, 'volume.log'), 'utf8')
     expect(log.startsWith('earlier line\n')).toBe(true)
     expect(log).toContain('RECOVER dev=/dev/loop77')
+  })
+
+  it('refuses a run dir whose parent anyone but the caller could rename entries in', () => {
+    const groupWritable = makeRow()
+    killedRun(groupWritable, { mounted: true })
+    chmodSync(groupWritable.root, 0o770)
+    const run = drive(groupWritable, ['--recover', '--run-dir', groupWritable.runDir], {
+      tools: 'shim'
+    })
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain('RECOVER_REFUSED parent-writable')
+    expect(groupWritable.sudoCalls()).toEqual([])
+
+    const worldWritable = makeRow()
+    killedRun(worldWritable, { mounted: true })
+    chmodSync(worldWritable.root, 0o757)
+    const open = drive(worldWritable, ['--recover', '--run-dir', worldWritable.runDir], {
+      tools: 'shim'
+    })
+    expect(open.status, open.out).toBe(2)
+    expect(open.out).toContain('RECOVER_REFUSED parent-writable')
+    expect(worldWritable.sudoCalls()).toEqual([])
+  })
+
+  it('refuses a run dir whose parent belongs to neither the caller nor root', () => {
+    const row = makeRow()
+    killedRun(row, { mounted: true })
+    row.resp('stat_uid_parent', '4242\n')
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain('RECOVER_REFUSED parent-not-owned')
+    expect(row.sudoCalls()).toEqual([])
+  })
+
+  it('accepts a sticky world-writable parent and a root-owned parent (controls for the parent checks)', () => {
+    const sticky = makeRow()
+    killedRun(sticky, { mounted: true })
+    chmodSync(sticky.root, 0o1777)
+    const stickyRun = drive(sticky, ['--recover', '--run-dir', sticky.runDir], { tools: 'shim' })
+    expect(stickyRun.status, stickyRun.out).toBe(0)
+
+    const rootOwned = makeRow()
+    killedRun(rootOwned, { mounted: true })
+    rootOwned.resp('stat_uid_parent', '0\n')
+    const rootRun = drive(rootOwned, ['--recover', '--run-dir', rootOwned.runDir], {
+      tools: 'shim'
+    })
+    expect(rootRun.status, rootRun.out).toBe(0)
   })
 
   it('refuses a marker that is not the driver nonce line', () => {
