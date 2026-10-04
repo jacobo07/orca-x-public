@@ -50,7 +50,7 @@ test('a terminal keeps painting while a foreign X window is in front @headful', 
   // Why read once: this is the display `xvfb-run -a` allocated for this run, and every X child is
   // given it explicitly so none can land on another run's display.
   const display = process.env.DISPLAY ?? ''
-  diag(`display=${display}`)
+  console.error(`L1_DIAG display=${display}`)
   if (display === '') {
     throw stationFailure('display', 'DISPLAY is empty; this spec needs an X server')
   }
