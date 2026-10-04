@@ -295,10 +295,45 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       ['an env file the build loads', '.env.local'],
       ['an ignored .js with no .ts sibling (shadows a dir module)', 'src/lone.js'],
       ['an ignored source under an ignored src dir', 'src/main/release/x.ts'],
-      ['an ignored source under tests', 'tests/e2e/tmp/x.ts']
+      ['an ignored source under tests', 'tests/e2e/tmp/x.ts'],
+      ['an ignored source under config (IN-42)', 'config/build-plugins/tmp/x.ts'],
+      ['an ignored file under resources (IN-43)', 'resources/skills/.notes.swp']
     ])('refuses (92) a tree holding %s', (_label, file) => {
       const fx = makeRepo()
       write(fx.repo, file, 'export {}\n')
+      const run = runGate(fx, { args: ['--dry-run'] })
+      expect(run.status, run.stdout).toBe(92)
+      expect(run.stdout).toContain('REFUSED_DIRTY_TREE dirty=1')
+    })
+
+    it('names the offending paths in a file when it refuses (IN-41)', () => {
+      // Arrange
+      const fx = makeRepo()
+      write(fx.repo, 'src/main/release/x.ts', 'export {}\n')
+      write(fx.repo, 'resources/skills/.notes.swp', 'x\n')
+      // Act
+      const run = runGate(fx, { args: ['--dry-run'] })
+      // Assert
+      expect(run.status, run.stdout).toBe(92)
+      const named = /^REFUSED_DIRTY_TREE dirty=2 paths=(\S+)$/m.exec(run.stdout)
+      expect(named, run.stdout).not.toBeNull()
+      expect(readFileSync(named[1], 'utf8').split('\n').filter(Boolean).sort()).toEqual([
+        'resources/skills/.notes.swp',
+        'src/main/release/x.ts'
+      ])
+    })
+
+    it('does not refuse on the cross-version checkouts resident, a known non-input (IN-41)', () => {
+      const fx = makeRepo()
+      write(fx.repo, 'tests/e2e/.cross-version-checkouts/v1.0.0/src/x.ts', 'export {}\n')
+      const run = runGate(fx, { args: ['--dry-run'] })
+      expect(run.status, run.stdout).toBe(0)
+    })
+
+    it('still refuses an ignored source beside the cross-version checkouts (control)', () => {
+      const fx = makeRepo()
+      write(fx.repo, 'tests/e2e/.cross-version-checkouts/v1.0.0/x.ts', 'export {}\n')
+      write(fx.repo, 'tests/e2e/tmp/x.ts', 'export {}\n')
       const run = runGate(fx, { args: ['--dry-run'] })
       expect(run.status, run.stdout).toBe(92)
       expect(run.stdout).toContain('REFUSED_DIRTY_TREE dirty=1')
@@ -309,6 +344,15 @@ linux('combined-tree-gate.sh against a stub tree', () => {
       write(fx.repo, 'config/tsconfig.node.tsbuildinfo', '{}\n')
       write(fx.repo, 'out/main/index.js', '//\n')
       expect(runGate(fx, { args: ['--dry-run'] }).status).toBe(0)
+    })
+
+    it('writes the dirty paths of a mid-run dirty TREE_AT beside its unchanged line (IN-41)', () => {
+      const fx = makeRepo()
+      const run = runGate(fx, { env: { STUB_MUTATE_AT: 'spec', STUB_MUTATE: 'untracked' } })
+      expect(run.status).toBe(99)
+      expect(run.summary).toContain(`TREE_AT spec-alpha head=${run.head} dirty=1\n`)
+      expect(readFileSync(join(run.dir, 'dirt-spec-alpha.txt'), 'utf8').trim()).toBe('src/stray.ts')
+      expect(existsSync(join(run.dir, 'dirt-build.txt'))).toBe(false)
     })
 
     it('reads a shadowing file that appears during a spec as RED', () => {

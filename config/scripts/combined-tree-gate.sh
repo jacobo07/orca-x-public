@@ -80,36 +80,45 @@ ctg_verdict() {
 # Untracked paths that are not build inputs: agent session state, and the evidence dir when it sits in the tree.
 DIRT_EXCLUDE=(':(exclude).claude')
 
-# tree_dirt: tracked changes, untracked files outside .gitignore (the build, tsc and the unit filters read
-# them) and gitignored files that shadow a committed source in the build (see shadowing_files); or `unknown`
-# when git fails (never 0 on failure).
-tree_dirt() {
+# tree_dirt_paths: one line per dirty path, same population tree_dirt counts: tracked changes, untracked files
+# outside .gitignore (the build, tsc and the unit filters read them) and gitignored files that shadow a
+# committed source in the build (see shadowing_files). Returns 1 when git fails (never an empty list).
+tree_dirt_paths() {
   local tracked untracked shadows
-  tracked=$(git status --porcelain --untracked-files=no) || {
+  tracked=$(git status --porcelain --untracked-files=no) || return 1
+  untracked=$(git ls-files --others --exclude-standard -- . "${DIRT_EXCLUDE[@]}") || return 1
+  shadows=$(shadowing_files) || return 1
+  printf '%s\n%s\n%s\n' "$tracked" "$untracked" "$shadows" | grep . || true
+}
+
+# tree_dirt: the count of tree_dirt_paths, or `unknown` when git fails (never 0 on failure).
+tree_dirt() {
+  local paths
+  paths=$(tree_dirt_paths) || {
     echo unknown
     return 0
   }
-  untracked=$(git ls-files --others --exclude-standard -- . "${DIRT_EXCLUDE[@]}") || {
-    echo unknown
-    return 0
-  }
-  shadows=$(shadowing_files) || {
-    echo unknown
-    return 0
-  }
-  printf '%s\n%s\n%s' "$tracked" "$untracked" "$shadows" | grep -c . || true
+  printf '%s\n' "$paths" | grep -c . || true
+}
+
+# write_dirt <file>: the dirty paths, one per line, for a reader to open; says so when git failed.
+write_dirt() {
+  tree_dirt_paths > "$1" 2> /dev/null || echo "unknown: git failed while listing the dirty paths" > "$1"
 }
 
 # shadowing_files: ignored files the build may read instead of, or beside, the committed tree: anything
-# ignored under src/ or tests/ (vite prefers .js over .ts and over a dir's index), config/ except tsc build
-# info, an extra vite config, an .env file.
+# ignored under src/, tests/ or resources/ (vite prefers .js over .ts and over a dir's index), config/ except
+# tsc build info, an extra vite config, an .env file. resources/ is a build and runtime input root.
 shadowing_files() {
   local listed file
-  listed=$(git ls-files --others --ignored --exclude-standard -- src tests config ':(glob).env*' \
+  listed=$(git ls-files --others --ignored --exclude-standard -- src tests config resources ':(glob).env*' \
     ':(glob)electron.vite.config.*' ':(glob)vite.config.*' "${DIRT_EXCLUDE[@]}") || return 1
   while IFS= read -r file; do
     case "$file" in
       config/*.tsbuildinfo) ;;
+      # Why: old release trees the cross-version wire harness extracts on demand; no build or unit filter reads
+      # them (check-e2e-terminal-liveness-probes.mjs skips the same directory).
+      tests/e2e/.cross-version-checkouts/*) ;;
       ?*) echo "$file" ;;
     esac
   done <<< "$listed"
@@ -238,7 +247,13 @@ preflight() {
   HEAD=$(git rev-parse HEAD) || refuse 90 "REFUSED_TREE cannot read HEAD"
   case "$HEAD" in "$EXPECT"*) ;; *) refuse 91 "REFUSED_HEAD_MISMATCH expected=$EXPECT head=$HEAD" ;; esac
   DIRTY=$(tree_dirt)
-  [ "$DIRTY" = 0 ] || refuse 92 "REFUSED_DIRTY_TREE dirty=$DIRTY"
+  if [ "$DIRTY" != 0 ]; then
+    # Why a file beside the CTG_RUNS_DIR entry: the run dir does not exist yet, and the refusal line must name
+    # which paths to look at without carrying them (nothing parses this line; TREE_AT stays path-free).
+    dirt_file=$CTG_RUNS_DIR/$LABEL-${HEAD:0:9}.dirt.txt
+    write_dirt "$dirt_file"
+    refuse 92 "REFUSED_DIRTY_TREE dirty=$DIRTY paths=$dirt_file"
+  fi
   git rev-parse --verify --quiet "$BASE^{commit}" > /dev/null || refuse 97 "REFUSED_MANIFEST base $BASE is not a commit here"
 
   local owner here there installed=node_modules/.pnpm/lock.yaml compared=0
@@ -314,6 +329,8 @@ assert_tree() {
   h=$(git rev-parse HEAD) || h=unknown
   d=$(tree_dirt)
   log_line "TREE_AT $1 head=$h dirty=$d"
+  # Why a side file: the contract parses TREE_AT with an end-anchored regex, so paths never go on the line.
+  [ "$d" = 0 ] || write_dirt "$RUN/dirt-$1.txt"
   [ "$h" = "$HEAD" ] && [ "$d" = 0 ]
 }
 

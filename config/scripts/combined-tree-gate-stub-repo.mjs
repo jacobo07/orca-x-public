@@ -163,7 +163,7 @@ export function makeRepo({
   write(
     repo,
     '.gitignore',
-    'node_modules/\nout/\ntmp/\nrelease/\n*.tsbuildinfo\nsrc/**/*.js\nsrc/**/*.d.ts\n/electron.vite.config.js\n.env*\n'
+    'node_modules/\nout/\ntmp/\nrelease/\n*.tsbuildinfo\nsrc/**/*.js\nsrc/**/*.d.ts\n/electron.vite.config.js\n.env*\nresources/**/*.swp\ntests/e2e/.cross-version-checkouts/\n'
   )
   write(repo, 'pnpm-lock.yaml', lockText)
   write(repo, 'src/tracked.ts', 'export {}\n')
