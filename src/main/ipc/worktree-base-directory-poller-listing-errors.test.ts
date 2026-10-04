@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
 import {
   startWorktreeBaseDirectoryPoller,
-  type WorktreeBasePollEvent
+  WORKTREE_BASE_BACKSTOP_TICKS,
+  type WorktreeBasePollEvent,
+  type WorktreeBasePollerOptions
 } from './worktree-base-directory-poller'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -99,7 +101,10 @@ describe('worktree base poller listing errors', () => {
     return { root, container, worktrees, received, touchRoot }
   }
 
-  async function startTwoContainers(onWatchError?: (error: Error) => void) {
+  async function startTwoContainers(
+    onWatchError?: (error: Error) => void,
+    extra: Partial<WorktreeBasePollerOptions> = {}
+  ) {
     const raw = await mkdtemp(join(tmpdir(), 'orca-base-poller-two-'))
     cleanups.push(() => rm(raw, { recursive: true, force: true }))
     const root = await realpath(raw)
@@ -121,7 +126,7 @@ describe('worktree base poller listing errors', () => {
       target as WorktreeBaseWatchTarget,
       () => repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, onWatchError }
+      { pollIntervalMs: POLL_MS, onWatchError, ...extra }
     )
     cleanups.push(() => poller.unsubscribe())
     const addWorktree = async (container: string, name: string) => {
@@ -188,25 +193,26 @@ describe('worktree base poller listing errors', () => {
     expect(onWatchError).toHaveBeenCalledTimes(2)
   })
 
-  it('retries an unlistable nested container on the next ticks instead of waiting for the backstop scan', async () => {
+  it('retries an unlistable nested container on consecutive ticks instead of waiting for the backstop scan', async () => {
     // Arrange
-    const { containerA, containerB, addWorktree } = await startTwoContainers()
+    const scanTicks: number[] = []
+    const { containerA, containerB, addWorktree } = await startTwoContainers(undefined, {
+      onSnapshotTaken: (tick) => {
+        if (listing.failPath !== null) {
+          scanTicks.push(tick)
+        }
+      }
+    })
     arm(containerA, 'EIO')
 
     // Act
     await addWorktree(containerB, 'wt-b2')
-    // Why: the 15-tick backstop is 375 ms at this interval, so four failures inside 300 ms can only come from per-tick retries.
-    await vi.waitFor(
-      () => {
-        if (listing.failures < 4) {
-          throw new Error('not yet: the container was retried on consecutive ticks')
-        }
-      },
-      { timeout: 300, interval: 10 }
-    )
+    await waitFor(() => scanTicks.length >= 4, 'four scans ran while the container was unlistable')
 
     // Assert
-    expect(listing.failures).toBeGreaterThanOrEqual(4)
+    const firstFour = scanTicks.slice(0, 4)
+    expect(firstFour[3] - firstFour[0]).toBe(3)
+    expect(firstFour[3] - firstFour[0]).toBeLessThan(WORKTREE_BASE_BACKSTOP_TICKS)
   })
 
   it.each(['EIO', 'EACCES', 'EMFILE'])(
@@ -297,5 +303,69 @@ describe('worktree base poller listing errors', () => {
       .filter((event) => event.type === 'delete')
       .map((event) => event.path)
     expect(deleted.sort()).toEqual([...worktrees].sort())
+  })
+
+  describe('when the root is unlistable at startup', () => {
+    async function layoutRoot() {
+      const raw = await mkdtemp(join(tmpdir(), 'orca-base-poller-startup-'))
+      cleanups.push(() => rm(raw, { recursive: true, force: true }))
+      const root = await realpath(raw)
+      const worktrees = [join(root, 'wt-a'), join(root, 'wt-b')]
+      for (const worktree of worktrees) {
+        await mkdir(worktree, { recursive: true })
+        await writeFile(join(worktree, '.git'), 'gitdir: elsewhere')
+      }
+      return { root, worktrees, target: makeTarget(root, { nestWorkspaces: false }) }
+    }
+
+    it('still resolves the poller instead of rejecting the subscription', async () => {
+      // Arrange
+      const { root, target } = await layoutRoot()
+      arm(root, 'EIO')
+
+      // Act
+      const started = startWorktreeBaseDirectoryPoller(
+        target as WorktreeBaseWatchTarget,
+        () => target.repos,
+        () => {},
+        { pollIntervalMs: POLL_MS }
+      )
+
+      // Assert
+      const poller = await started
+      cleanups.push(() => poller.unsubscribe())
+      expect(listing.failures).toBeGreaterThan(0)
+    })
+
+    it('rescans on the first tick once the root lists, and reports the existing worktrees as creates only', async () => {
+      // Arrange
+      const { root, worktrees, target } = await layoutRoot()
+      arm(root, 'EIO')
+      const received: WorktreeBasePollEvent[][] = []
+      const scanTicks: number[] = []
+      const poller = await startWorktreeBaseDirectoryPoller(
+        target as WorktreeBaseWatchTarget,
+        () => target.repos,
+        (events) => received.push(events),
+        { pollIntervalMs: POLL_MS, onSnapshotTaken: (tick) => scanTicks.push(tick) }
+      )
+      cleanups.push(() => poller.unsubscribe())
+
+      // Act
+      listing.failPath = null
+      await waitFor(() => scanTicks.length > 0, 'a scan ran after the root became listable')
+
+      // Assert
+      // Why: the backstop scan is tick 15; only the sentinel gate can force a scan on tick 1.
+      expect(scanTicks[0]).toBeLessThan(WORKTREE_BASE_BACKSTOP_TICKS)
+      const events = received.flat()
+      expect(events.filter((event) => event.type === 'delete')).toEqual([])
+      expect(
+        events
+          .filter((event) => event.type === 'create')
+          .map((event) => event.path)
+          .sort()
+      ).toEqual(worktrees.map((worktree) => join(worktree, '.git')).sort())
+    })
   })
 })
