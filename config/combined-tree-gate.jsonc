@@ -64,6 +64,37 @@
       // The 741ca9985 baseline failure list measured NONE, so exit must be 0 and regressions 0.
       // Entries, when recorded, are "<file relative to the repo root>::<full test name>" (a suite error, ::FILE_FAILED, is never excusable).
       "knownFailures": []
+    },
+    {
+      "name": "stability",
+      // Phase 3: durable publish order, write-failure semantics, quarantine and corpus, credential saves, draft round-trip.
+      // Opt-in *-real-enospc tests are not listed: they skip without a volume and a skipped file is not a passed file.
+      "paths": [
+        "src/main/persistence-durable-publish-order.test.ts",
+        "src/main/persistence-write-failure-semantics.test.ts",
+        "src/main/orca-profiles/profile-project-transfer-write-failure.test.ts",
+        "src/main/persisted-session-corpus.test.ts",
+        "src/main/persisted-session-unreadable-load.test.ts",
+        "src/main/integration-token-save-disk-full.test.ts",
+        "src/renderer/src/store/slices/editor-draft-hot-exit-round-trip.test.ts",
+        "src/main/durable-file-write.test.ts",
+        "src/main/durable-file-write-exclusive.test.ts",
+        "src/main/durable-file-write-stage-provenance.test.ts",
+        "src/main/durable-file-write-syscall-proof.test.ts",
+        "src/main/integration-credential-durability.test.ts",
+        "src/main/bitbucket/credential-store.test.ts",
+        "src/main/persistence-backup-ring-self-consumption.test.ts",
+        "src/main/persistence-worktree-lineage-and-backups.test.ts",
+        "src/main/persistence-initial-load.test.ts",
+        "src/main/persistence-async-write-syscalls.test.ts",
+        "src/main/orca-profiles/profile-project-state-durability.test.ts",
+        "src/renderer/src/lib/workspace-session-editor-drafts.test.ts",
+        "src/renderer/src/store/slices/store-session-editor-hydration.test.ts",
+        "src/renderer/src/store/slices/restored-editor-owner-reparent.test.ts",
+        "src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts",
+        "src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts"
+      ],
+      "minPassedFiles": 23
     }
   ],
   "staticGates": [
@@ -102,6 +133,15 @@
     {
       "name": "recurring-work",
       "argv": ["node", "config/scripts/check-recurring-work-inventory.mjs"]
+    },
+    // Phase 3: both measured exit 0 at 616fc1407 before they were added.
+    {
+      "name": "durability-contracts",
+      "argv": ["node", "config/scripts/check-durability-contracts.mjs"]
+    },
+    {
+      "name": "reliability-gates",
+      "argv": ["node", "config/scripts/check-reliability-gates.mjs"]
     }
   ]
 }
