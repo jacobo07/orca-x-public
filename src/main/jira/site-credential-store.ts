@@ -1,11 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { safeStorage } from 'electron'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
-  readStoredCredentialToken
+  readStoredCredentialToken,
+  writeCredentialFileAtomic,
+  writeEncryptedCredential
 } from '../integration-credential-file'
 import type { JiraSite, JiraSiteSelection } from '../../shared/jira-types'
 
@@ -150,19 +151,17 @@ export function writeSiteFile(file: JiraSiteFile): void {
     sites
   }
   siteFileLoaded = true
-  writeFileSync(getSiteFilePath(), JSON.stringify(cachedSiteFile, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
+  // Why: an in-place write truncates the site list first; an empty list reads as "no sites".
+  writeCredentialFileAtomic(
+    getSiteFilePath(),
+    Buffer.from(JSON.stringify(cachedSiteFile, null, 2), 'utf-8')
+  )
 }
 
+// Why: writeFileSync truncates the live token on open, so a full disk would erase the previous
+// token before failing; the contract writer publishes a synced temp file by rename instead.
 function writeEncryptedToken(path: string, apiToken: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(path, safeStorage.encryptString(apiToken), { mode: 0o600 })
-    return
-  }
-  console.warn('[jira] safeStorage encryption unavailable — storing token in plaintext')
-  writeFileSync(path, apiToken, { encoding: 'utf-8', mode: 0o600 })
+  writeEncryptedCredential('Jira', path, apiToken)
 }
 
 export function readToken(siteId: string): string | null {
