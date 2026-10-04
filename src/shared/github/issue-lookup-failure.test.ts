@@ -10,7 +10,8 @@ describe('classifyIssueLookupFailure', () => {
     ['permission_denied', 'permanent'],
     ['issues_disabled', 'permanent'],
     ['validation_error', 'permanent'],
-    ['unresolved_repository', 'permanent'],
+    // Why: main returns this while an SSH runtime is not yet connected, so it must recover on the next lookup.
+    ['unresolved_repository', 'transient'],
     ['rate_limited', 'rate_limited'],
     ['network_error', 'transient'],
     ['unknown', 'transient']

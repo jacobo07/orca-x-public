@@ -18,11 +18,12 @@ export const ISSUE_LOOKUP_FAILURE_MESSAGES = {
 
 export type IssueLookupFailureKind = 'permanent' | 'rate_limited' | 'transient'
 
+// Why: unresolved_repository is deliberately absent. Main also throws it while an SSH runtime has not connected yet, so
+// it must read as transient (5 s backoff) rather than hide a reachable issue for the permanent window.
 const KIND_BY_MESSAGE: readonly (readonly [string, IssueLookupFailureKind])[] = [
   [ISSUE_LOOKUP_FAILURE_MESSAGES.permission_denied, 'permanent'],
   [ISSUE_LOOKUP_FAILURE_MESSAGES.issues_disabled, 'permanent'],
   [ISSUE_LOOKUP_FAILURE_MESSAGES.validation_error, 'permanent'],
-  [ISSUE_LOOKUP_FAILURE_MESSAGES.unresolved_repository, 'permanent'],
   [ISSUE_LOOKUP_FAILURE_MESSAGES.rate_limited, 'rate_limited']
 ]
 

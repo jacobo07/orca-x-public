@@ -67,6 +67,24 @@ describe('createGitHubSlice.fetchIssue lookup failure state and backoff', () => 
     expect(mockApi.gh.issue).toHaveBeenCalledTimes(2)
   })
 
+  it('asks again within seconds when the owner/repo was unresolved, so an SSH connection that comes up is picked up', async () => {
+    // Arrange
+    const store = createTestStore()
+    mockApi.gh.issue
+      .mockRejectedValueOnce(new Error(ISSUE_LOOKUP_FAILURE_MESSAGES.unresolved_repository))
+      .mockResolvedValueOnce(issue)
+    await store.getState().fetchIssue(repoPath, 7, { repoId })
+
+    // Act
+    vi.advanceTimersByTime(6_000)
+    const afterConnect = await store.getState().fetchIssue(repoPath, 7, { repoId })
+
+    // Assert
+    expect(mockApi.gh.issue).toHaveBeenCalledTimes(2)
+    expect(afterConnect).toMatchObject({ number: 7 })
+    expect(failureEntries(store)).toEqual([])
+  })
+
   it('lets a transient failure retry sooner and backs off longer on each repeat', async () => {
     // Arrange
     const store = createTestStore()
