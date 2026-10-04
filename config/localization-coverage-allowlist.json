@@ -68,5 +68,12 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/dormant-row-footprint-curve-harness.ts",
+    "kind": "object-property:title",
+    "text": "pwsh",
+    "dynamic": false,
+    "count": 1
   }
 ]
