@@ -16,6 +16,7 @@
  */
 
 import type { ElectronApplication } from '@stablyai/playwright-test'
+import { readThroughDestroyedContext } from './helpers/destroyed-context-probe-read'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -81,9 +82,17 @@ async function readMainProcessCrashProbe(electronApp: ElectronApplication): Prom
   )
 }
 
+// Why: WL-P1-04 — the forced crash can destroy the main evaluate context mid-poll; that reads as "not yet", and the
+// poll's own positive predicate still decides.
+async function readCrashProbeThroughDestroyedContext(
+  electronApp: ElectronApplication
+): Promise<CrashProbe | undefined> {
+  return readThroughDestroyedContext(() => readMainProcessCrashProbe(electronApp))
+}
+
 async function waitForRendererRecovery(electronApp: ElectronApplication): Promise<void> {
   await expect
-    .poll(async () => (await readMainProcessCrashProbe(electronApp)).recoveredLoads, {
+    .poll(async () => (await readCrashProbeThroughDestroyedContext(electronApp))?.recoveredLoads, {
       timeout: RECOVERY_TIMEOUT_MS,
       message:
         'Main process never observed a recovery reload (did-finish-load) after the forced crash — scheduleRendererRecovery did not fire'
@@ -129,10 +138,14 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
       })
 
       await expect
-        .poll(async () => (await readMainProcessCrashProbe(electronApp)).processGone?.reason, {
-          timeout: 15_000,
-          message: 'forcefullyCrashRenderer never produced a render-process-gone event'
-        })
+        .poll(
+          async () =>
+            (await readCrashProbeThroughDestroyedContext(electronApp))?.processGone?.reason,
+          {
+            timeout: 15_000,
+            message: 'forcefullyCrashRenderer never produced a render-process-gone event'
+          }
+        )
         .toBeTruthy()
 
       await waitForRendererRecovery(electronApp)
@@ -177,7 +190,8 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
             `REVIVED_POST_${cycle}`
           ))
         const crashReason =
-          (await readMainProcessCrashProbe(electronApp)).processGone?.reason ?? 'unknown'
+          (await readCrashProbeThroughDestroyedContext(electronApp))?.processGone?.reason ??
+          'unknown'
         throw new Error(
           buildFrozenPaneReport(
             `crash cycle ${cycle}, baseline ptyId ${baselinePtyId}, crash reason ${crashReason}`,
