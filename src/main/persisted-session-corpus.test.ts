@@ -37,8 +37,8 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 
-// Why: minimum eras that can express terminal tabs across worktrees AND a split layout; raised with the corpus.
-const FLOOR_ERAS = 1
+// Why: minimum eras that can express terminal tabs across worktrees AND a split layout.
+const FLOOR_ERAS = 3
 
 type Expected = {
   repos: string[]
@@ -56,6 +56,7 @@ type Provenance = {
   expected: Expected
   invariantsExercised: string[]
   countsTowardFloor: boolean
+  expectedSessionState?: string
 }
 type CorpusEra = { name: string; dir: string; provenance: Provenance }
 
@@ -178,6 +179,11 @@ describe('persisted-session corpus', () => {
           ])
         )
         expect(files).toEqual(expected.editorFilesByWorktree)
+      }
+      if (provenance.expectedSessionState === 'empty-no-workspace-session') {
+        // The era's Store had no workspace session: today's loader must hand back an empty one, not invent tabs.
+        expect(session.tabsByWorktree).toEqual({})
+        expect(session.terminalLayoutsByTabId).toEqual({})
       }
       if (exercised.has('active-selection')) {
         expect({
