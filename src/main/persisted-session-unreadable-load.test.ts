@@ -75,12 +75,6 @@ function readQuarantine(name: string): Buffer {
   return readFileSync(join(testState.dir, name))
 }
 
-// Why: a build without the typed outcome must fail on the bytes assertions, not on a missing method.
-function startupLoadOutcome(store: object): unknown {
-  const getter: unknown = Reflect.get(store, 'getStartupLoadOutcome')
-  return typeof getter === 'function' ? getter.call(store) : 'getter-missing'
-}
-
 function repoKeys(store: Awaited<ReturnType<typeof createStore>>): string[] {
   return store
     .getRepos()
@@ -114,7 +108,7 @@ describe('persisted-session unreadable-load red controls', () => {
     expect(quarantined).toHaveLength(1)
     expect(readQuarantine(quarantined[0]).equals(original)).toBe(true)
     expect(store.getRepos()).toEqual([])
-    expect(startupLoadOutcome(store)).toEqual({
+    expect(store.getStartupLoadOutcome()).toEqual({
       kind: 'unreadable-defaulted',
       quarantinePath: join(testState.dir, quarantined[0])
     })
@@ -150,7 +144,7 @@ describe('persisted-session unreadable-load red controls', () => {
     expect(quarantined).toHaveLength(1)
     expect(readQuarantine(quarantined[0]).equals(original)).toBe(true)
     expect(repoKeys(store)).toEqual(fixtureExpectedRepos(BACKUP_ERA))
-    expect(startupLoadOutcome(store)).toEqual({
+    expect(store.getStartupLoadOutcome()).toEqual({
       kind: 'recovered-from-backup',
       slot: 0,
       quarantinePath: join(testState.dir, quarantined[0]),
@@ -163,7 +157,7 @@ describe('persisted-session unreadable-load red controls', () => {
     const store = await createStore()
 
     // Assert
-    expect(startupLoadOutcome(store)).toEqual({ kind: 'absent' })
+    expect(store.getStartupLoadOutcome()).toEqual({ kind: 'absent' })
     expect(quarantineFiles()).toEqual([])
   })
 
@@ -176,7 +170,7 @@ describe('persisted-session unreadable-load red controls', () => {
 
     // Assert
     expect(repoKeys(store)).toEqual(fixtureExpectedRepos(PRIMARY_ERA))
-    expect(startupLoadOutcome(store)).toEqual({ kind: 'loaded' })
+    expect(store.getStartupLoadOutcome()).toEqual({ kind: 'loaded' })
     expect(quarantineFiles()).toEqual([])
   })
 
@@ -200,7 +194,7 @@ describe('persisted-session unreadable-load red controls', () => {
     expect(readQuarantine(firstName).equals(first)).toBe(true)
     const secondName = quarantined.find((name) => name !== firstName) as string
     expect(readQuarantine(secondName).equals(second)).toBe(true)
-    expect(startupLoadOutcome(store)).toEqual({
+    expect(store.getStartupLoadOutcome()).toEqual({
       kind: 'unreadable-defaulted',
       quarantinePath: join(testState.dir, secondName)
     })
@@ -215,7 +209,10 @@ describe('persisted-session unreadable-load red controls', () => {
 
     // Assert: no new crash path, the load carries on exactly as before
     expect(store.getRepos()).toEqual([])
-    expect(startupLoadOutcome(store)).toEqual({ kind: 'unreadable-unquarantined', code: 'EISDIR' })
+    expect(store.getStartupLoadOutcome()).toEqual({
+      kind: 'unreadable-unquarantined',
+      code: 'EISDIR'
+    })
     expect(quarantineFiles()).toEqual([])
   })
 })

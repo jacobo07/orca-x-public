@@ -363,6 +363,14 @@ import {
 import { hydrateRepo as hydrateRepoOperation } from '../tracking-repos/repo-hydration'
 import { RepoUpdatePersistenceOperations } from '../tracking-repos/repo-update-operations'
 import { ProjectHostSetupPersistenceOperations } from '../tracking-repos/project-host-setup-update'
+import {
+  defaultedStartupLoadOutcome,
+  quarantineUnreadableProfile,
+  recoveredStartupLoadOutcome,
+  startupLoadOutcomeLogDetails,
+  type StartupLoadOutcome,
+  type UnreadableProfileQuarantine
+} from './unreadable-profile-quarantine'
 
 // Why (issue #1158): keep 5 rolling backups at >=1h spacing so a corrupt/empty write leaves an earlier copy recoverable.
 const BACKUP_COUNT = 5
@@ -543,6 +551,7 @@ export class Store {
   private readonly gitUsernameCache = new Map<string, string>()
   private readonly protectedSecrets = new ProtectedSecretPersistence()
   private loadNeedsSave = false
+  private startupLoadOutcome: StartupLoadOutcome = { kind: 'absent' }
   private settingsChangeListeners = new Set<
     (
       updates: Partial<GlobalSettings>,
@@ -808,7 +817,7 @@ export class Store {
     }
   }
 
-  private restoreFromBackup(dataFile: string): boolean {
+  private restoreFromBackup(dataFile: string): number | null {
     for (let i = 0; i < BACKUP_COUNT; i++) {
       const path = backupPath(dataFile, i)
       if (!existsSync(path)) {
@@ -820,15 +829,19 @@ export class Store {
         mkdirSync(dirname(dataFile), { recursive: true })
         writeFileSync(dataFile, raw, 'utf-8')
         console.warn(`[persistence] Recovered state from backup slot ${i}: ${path}`)
-        return true
+        return i
       } catch (err) {
         console.error(`[persistence] Backup slot ${i} unusable, trying next:`, err)
       }
     }
-    return false
+    return null
   }
 
-  private load(allowBackupRecovery = true): PersistedState {
+  // Why: `earlierQuarantine` carries the first pass's quarantine into the post-restore pass so its outcome still names it.
+  private load(
+    allowBackupRecovery = true,
+    earlierQuarantine: UnreadableProfileQuarantine | null = null
+  ): PersistedState {
     // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
     const dataFile = this.dataFile
     const fileExistedOnLoad = existsSync(dataFile)
@@ -837,6 +850,8 @@ export class Store {
     })
 
     let result: PersistedState | null = null
+    let quarantine: UnreadableProfileQuarantine | null = earlierQuarantine
+    let hasBackup = false
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -1551,11 +1566,14 @@ export class Store {
       }
     } catch (err) {
       console.error('[persistence] Failed to load primary state, trying backups:', err)
+      // Why: the bytes that failed to load must survive the restore or the first save that follows.
+      if (fileExistedOnLoad && quarantine === null) {
+        quarantine = quarantineUnreadableProfile(dataFile)
+      }
     }
 
     // Corrupt-file and no-file paths converge here; a corrupted install counts as existing, so it sees the opt-in banner.
     if (result === null && allowBackupRecovery) {
-      let hasBackup = false
       for (let i = 0; i < BACKUP_COUNT; i++) {
         if (existsSync(backupPath(dataFile, i))) {
           hasBackup = true
@@ -1563,8 +1581,18 @@ export class Store {
         }
       }
       if (fileExistedOnLoad || hasBackup) {
-        if (this.restoreFromBackup(dataFile)) {
-          return this.load(false)
+        const restoredSlot = this.restoreFromBackup(dataFile)
+        if (restoredSlot !== null) {
+          const restored = this.load(false, quarantine)
+          // Why: the restored backup may itself fail to normalise; only a load that kept it counts as recovered.
+          if (this.startupLoadOutcome.kind === 'loaded') {
+            this.startupLoadOutcome = recoveredStartupLoadOutcome(restoredSlot, quarantine)
+          }
+          logPersistenceStartupMilestone(
+            'persistence-load-outcome',
+            startupLoadOutcomeLogDetails(this.startupLoadOutcome)
+          )
+          return restored
         }
         console.error('[persistence] No usable state file or backup found, using defaults')
       }
@@ -1572,6 +1600,20 @@ export class Store {
 
     if (result === null) {
       result = getDefaultPersistedState(homedir())
+      this.startupLoadOutcome = defaultedStartupLoadOutcome({
+        primaryExisted: fileExistedOnLoad,
+        backupsPresent: hasBackup,
+        quarantine
+      })
+    } else {
+      this.startupLoadOutcome = { kind: 'loaded' }
+    }
+    // Why: the restore pass logs the final outcome itself, once, so a recovered load is not announced as plain 'loaded'.
+    if (allowBackupRecovery) {
+      logPersistenceStartupMilestone(
+        'persistence-load-outcome',
+        startupLoadOutcomeLogDetails(this.startupLoadOutcome)
+      )
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -2061,6 +2103,11 @@ export class Store {
       scheduleSave: () => this.scheduleSave()
     })
     return this.projectHostOperations
+  }
+
+  /** How startup obtained this state: loaded, absent, recovered from a backup, or defaulted with the unreadable bytes quarantined. */
+  getStartupLoadOutcome(): StartupLoadOutcome {
+    return this.startupLoadOutcome
   }
 
   getRepos(): Repo[] {
