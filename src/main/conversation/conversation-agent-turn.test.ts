@@ -93,13 +93,17 @@ async function send(id: ConversationId, text: string) {
 async function settled(id: ConversationId): Promise<ConversationRecord> {
   await service.applyEvent(id, (record) => record)
   const loaded = await service.read(id)
-  if (loaded.outcome !== 'loaded') throw new Error(`expected loaded, got ${loaded.outcome}`)
+  if (loaded.outcome !== 'loaded') {
+    throw new Error(`expected loaded, got ${loaded.outcome}`)
+  }
   return loaded.record
 }
 
 async function chatWith(target: Agent): Promise<ConversationId> {
   const created = await service.createForAgent({ agentId: target.id, title: target.name })
-  if (created.outcome !== 'created') throw new Error(`precondition: ${created.outcome}`)
+  if (created.outcome !== 'created') {
+    throw new Error(`precondition: ${created.outcome}`)
+  }
   return created.record.id
 }
 

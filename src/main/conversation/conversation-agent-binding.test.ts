@@ -48,7 +48,9 @@ describe('a conversation created with an agent', () => {
 
     const created = await service().createForAgent({ agentId: ada.id, title: 'first' })
     expect(created.outcome).toBe('created')
-    if (created.outcome !== 'created') return
+    if (created.outcome !== 'created') {
+      return
+    }
 
     const loaded = await service().read(created.record.id)
     expect(loaded.outcome === 'loaded' && loaded.record.agentId).toBe(ada.id)
@@ -91,7 +93,9 @@ describe('a conversation created with an agent', () => {
     roster.push(ada)
     const svc = service()
     const created = await svc.createForAgent({ agentId: ada.id, title: 'promoted' })
-    if (created.outcome !== 'created') throw new Error('precondition: create failed')
+    if (created.outcome !== 'created') {
+      throw new Error('precondition: create failed')
+    }
 
     roster[0] = { ...ada, projectId: 'github:org/alpha' }
 
@@ -127,7 +131,9 @@ describe('the binding a turn reads', () => {
     roster.push(ada)
     const svc = service()
     const created = await svc.createForAgent({ agentId: ada.id, title: 'orphan' })
-    if (created.outcome !== 'created') throw new Error('precondition: create failed')
+    if (created.outcome !== 'created') {
+      throw new Error('precondition: create failed')
+    }
 
     roster.length = 0
 
@@ -138,7 +144,9 @@ describe('the binding a turn reads', () => {
     const ada = agent()
     roster.push(ada)
     const created = await service().createForAgent({ agentId: ada.id, title: 'x' })
-    if (created.outcome !== 'created') throw new Error('precondition: create failed')
+    if (created.outcome !== 'created') {
+      throw new Error('precondition: create failed')
+    }
 
     expect(service(false).agentFor(created.record)).toEqual({
       kind: 'agent-unverifiable',
