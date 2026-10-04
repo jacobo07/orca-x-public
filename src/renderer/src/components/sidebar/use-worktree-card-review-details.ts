@@ -88,6 +88,9 @@ export function useWorktreeCardReviewDetails({
   )
   const prCacheEntry = useAppStore((s) => (prCacheKey ? s.prCache?.[prCacheKey] : undefined))
   const issueEntry = useAppStore((s) => (issueCacheKey ? s.issueCache[issueCacheKey] : undefined))
+  const issueFailure = useAppStore((s) =>
+    issueCacheKey ? s.issueLookupFailureCache?.[issueCacheKey] : undefined
+  )
   const linearIssueEntry = useAppStore((s) =>
     linearIssueCacheKey ? s.linearIssueCache[linearIssueCacheKey] : undefined
   )
@@ -185,6 +188,7 @@ export function useWorktreeCardReviewDetails({
     hostedReviewCacheKey,
     issueCacheKey,
     issueEntry,
+    issueFailure,
     linearIssueEntry,
     linearIssueFallbackEntry,
     linkedGitHubPR,

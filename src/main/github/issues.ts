@@ -1,5 +1,6 @@
 import type { ClassifiedError } from '../../shared/classified-error'
 import type { IssueInfo } from '../../shared/github/pull-request-types'
+import { ISSUE_LOOKUP_FAILURE_MESSAGES } from '../../shared/github/issue-lookup-failure'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapIssueInfo } from './mappers'
 import type { LocalGitExecOptions } from './gh-utils'
@@ -52,7 +53,7 @@ export async function getIssue(
   // fallback below would let gh target its default repository. Refuse instead.
   // An unresolved repository is unknown, not "no issue": null here was cached as an answer.
   if (connectionId && !ownerRepo) {
-    throw new Error('Could not resolve GitHub owner/repo for this repository')
+    throw new Error(ISSUE_LOOKUP_FAILURE_MESSAGES.unresolved_repository)
   }
   await acquire()
   try {
@@ -83,10 +84,9 @@ export async function getIssue(
     if (classified.type === 'not_found') {
       return null
     }
-    // Why: the unknown arm's message embeds raw gh stderr, which must not reach renderer-visible copy.
-    throw new Error(classified.type === 'unknown' ? 'Failed to load issue' : classified.message, {
-      cause: err
-    })
+    // Why: the classified message can embed raw gh stderr; a fixed per-class string is what the renderer
+    // classifies retryability from, and nothing else reaches renderer-visible copy.
+    throw new Error(ISSUE_LOOKUP_FAILURE_MESSAGES[classified.type], { cause: err })
   } finally {
     release()
   }

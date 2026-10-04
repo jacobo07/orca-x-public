@@ -26,6 +26,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     deleteState: foundation.deleteState,
     branch: review.branch,
     issueEntry: review.issueEntry,
+    issueFailure: review.issueFailure,
     linearIssueEntry: review.linearIssueEntry,
     linearIssueFallbackEntry: review.linearIssueFallbackEntry,
     prDisplay: review.prDisplay

@@ -5,6 +5,11 @@ import type { AppState } from '../types'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { githubProjectIdentityKey } from '../../../../shared/github/project-identity'
 import type { ClassifiedError } from '../../../../shared/classified-error'
+import {
+  classifyIssueLookupFailure,
+  issueLookupBackoffMs,
+  type IssueLookupFailureKind
+} from '../../../../shared/github/issue-lookup-failure'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type {
   GitHubCommentResult,
@@ -873,10 +878,10 @@ function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void 
 }
 
 function evictRepoCacheEntries<T>(
-  cache: Record<string, CacheEntry<T>>,
+  cache: Record<string, T>,
   prefixes: readonly string[]
-): { cache: Record<string, CacheEntry<T>>; evicted: boolean } {
-  let next: Record<string, CacheEntry<T>> | null = null
+): { cache: Record<string, T>; evicted: boolean } {
+  let next: Record<string, T> | null = null
   for (const key of Object.keys(cache)) {
     if (!matchesRepoCacheKey(key, prefixes)) {
       continue
@@ -1850,9 +1855,17 @@ function debouncedSaveCache(state: AppState): void {
   }, 1000) // Save at most once per second
 }
 
+// Why: a failed issue lookup is unknown, not an answer, so it lives beside the answer cache and never in it or the persisted copy.
+export type IssueLookupFailureEntry = {
+  fetchedAt: number
+  kind: IssueLookupFailureKind
+  attempts: number
+}
+
 export type GitHubSlice = {
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
+  issueLookupFailureCache: Record<string, IssueLookupFailureEntry>
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
   commentsCache: Record<string, CacheEntry<PRComment[]>>
   prRefreshSequences: Record<string, number>
@@ -2088,6 +2101,7 @@ export type GitHubSlice = {
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
   prCache: {},
   issueCache: {},
+  issueLookupFailureCache: {},
   checksCache: {},
   commentsCache: {},
   prRefreshSequences: {},
@@ -3411,6 +3425,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return cached.data
     }
 
+    // Why: the failure is not cached as an answer, so without this every hover, mount and sweep would re-ask gh.
+    const knownFailure = get().issueLookupFailureCache[cacheKey]
+    if (
+      knownFailure &&
+      Date.now() - knownFailure.fetchedAt <
+        issueLookupBackoffMs(knownFailure.kind, knownFailure.attempts)
+    ) {
+      return get().issueCache[cacheKey]?.data ?? null
+    }
+
     const inflightRequest = inflightIssueRequests.get(cacheKey)
     if (inflightRequest) {
       return inflightRequest
@@ -3439,17 +3463,30 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 number,
                 sourceContext: options?.sourceContext
               })
-        set((s) => ({
-          issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
-            data: issue,
-            fetchedAt: Date.now()
-          })
-        }))
+        set((s) => {
+          const failures = { ...s.issueLookupFailureCache }
+          delete failures[cacheKey]
+          return {
+            issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
+              data: issue,
+              fetchedAt: Date.now()
+            }),
+            issueLookupFailureCache:
+              cacheKey in s.issueLookupFailureCache ? failures : s.issueLookupFailureCache
+          }
+        })
         debouncedSaveCache(get())
         return issue
       } catch (err) {
         console.error('Failed to fetch issue:', err)
         // Why: a failed lookup is unknown, not "no issue"; caching it would hide a real issue for the TTL.
+        set((s) => ({
+          issueLookupFailureCache: withBoundedCacheEntry(s.issueLookupFailureCache, cacheKey, {
+            fetchedAt: Date.now(),
+            kind: classifyIssueLookupFailure(err),
+            attempts: (s.issueLookupFailureCache[cacheKey]?.attempts ?? 0) + 1
+          })
+        }))
         return get().issueCache[cacheKey]?.data ?? null
       } finally {
         inflightIssueRequests.delete(cacheKey)
@@ -4770,6 +4807,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       const workItems = evictRepoCacheEntries(s.workItemsCache, prefixes)
       const prs = evictRepoCacheEntries(s.prCache, prefixes)
       const issues = evictRepoCacheEntries(s.issueCache, prefixes)
+      const issueFailures = evictRepoCacheEntries(s.issueLookupFailureCache, prefixes)
       const checks = evictRepoCacheEntries(s.checksCache, prefixes)
       const comments = evictRepoCacheEntries(s.commentsCache, prefixes)
       const updates: Partial<AppState> = {}
@@ -4783,6 +4821,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }
       if (issues.evicted) {
         updates.issueCache = issues.cache
+      }
+      if (issueFailures.evicted) {
+        updates.issueLookupFailureCache = issueFailures.cache
       }
       if (checks.evicted) {
         updates.checksCache = checks.cache

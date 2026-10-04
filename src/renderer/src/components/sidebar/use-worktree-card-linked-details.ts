@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import { getLinkedIssuePlaceholderTitle } from './worktree-card-linked-issue-placeholder'
 import { getWorktreeCardJiraIssueDisplay } from './worktree-card-jira-issue-display'
 import type { WorktreeCardIssueDisplay } from './WorktreeCardMeta'
 import {
@@ -24,6 +25,7 @@ export function useWorktreeCardLinkedDetails({
   deleteState,
   branch,
   issueEntry,
+  issueFailure,
   linearIssueEntry,
   linearIssueFallbackEntry,
   prDisplay
@@ -31,7 +33,12 @@ export function useWorktreeCardLinkedDetails({
   Pick<Foundation, 'newCardStyle' | 'deleteState'> &
   Pick<
     ReviewDetails,
-    'branch' | 'issueEntry' | 'linearIssueEntry' | 'linearIssueFallbackEntry' | 'prDisplay'
+    | 'branch'
+    | 'issueEntry'
+    | 'issueFailure'
+    | 'linearIssueEntry'
+    | 'linearIssueFallbackEntry'
+    | 'prDisplay'
   >) {
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
@@ -44,7 +51,7 @@ export function useWorktreeCardLinkedDetails({
       ? {
           number: worktree.linkedIssue,
           // Why: linked metadata persists immediately but GitHub details arrive async; show the link number so it doesn't look unlinked.
-          title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
+          title: getLinkedIssuePlaceholderTitle(issue, issueFailure)
         }
       : null)
   const linearStatus = useAppStore((s) => s.linearStatus)

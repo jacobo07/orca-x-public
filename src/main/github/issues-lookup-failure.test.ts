@@ -32,6 +32,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
 })
 
 import { getIssue } from './issues'
+import { ISSUE_LOOKUP_FAILURE_MESSAGES } from '../../shared/github/issue-lookup-failure'
 
 describe('getIssue lookup failure', () => {
   beforeEach(() => {
@@ -122,5 +123,38 @@ describe('getIssue lookup failure', () => {
     // Assert
     await expect(lookup).rejects.toThrow(/Failed to load issue/)
     await expect(lookup).rejects.not.toThrow(/ghp_SECRET/)
+  })
+
+  it.each([
+    ['permission_denied', 'gh: Forbidden (HTTP 403) token=ghp_SECRET'],
+    ['issues_disabled', 'gh: the repository has disabled issues token=ghp_SECRET'],
+    ['validation_error', 'gh: Validation Failed (HTTP 422) token=ghp_SECRET'],
+    ['rate_limited', 'gh: API rate limit exceeded (HTTP 403) token=ghp_SECRET'],
+    ['network_error', 'dial tcp: lookup api.github.com: no such host token=ghp_SECRET'],
+    ['unknown', 'boom token=ghp_SECRET']
+  ] as const)(
+    'rejects a %s failure with its fixed message and no raw stderr',
+    async (type, stderr) => {
+      // Arrange
+      ghExecFileAsyncMock.mockRejectedValueOnce(new Error(stderr))
+
+      // Act
+      const lookup = getIssue('/repo-root', 923)
+
+      // Assert
+      await expect(lookup).rejects.toThrow(new RegExp(`^${ISSUE_LOOKUP_FAILURE_MESSAGES[type]}$`))
+      await expect(lookup).rejects.not.toThrow(/ghp_SECRET/)
+    }
+  )
+
+  it('rejects an unresolved connection-backed repository with the shared fixed message', async () => {
+    // Arrange
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+
+    // Act
+    const lookup = getIssue('/remote/repo', 923, 'ssh-conn-1')
+
+    // Assert
+    await expect(lookup).rejects.toThrow(ISSUE_LOOKUP_FAILURE_MESSAGES.unresolved_repository)
   })
 })

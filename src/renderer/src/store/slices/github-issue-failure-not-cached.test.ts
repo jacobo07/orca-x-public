@@ -31,7 +31,7 @@ describe('createGitHubSlice.fetchIssue failure handling', () => {
     vi.useRealTimers()
   })
 
-  it('leaves the cache untouched when the lookup rejects, and the next call fetches again', async () => {
+  it('leaves the cache untouched when the lookup rejects, and a call after the backoff fetches again', async () => {
     // Arrange
     const store = createTestStore()
     mockApi.gh.issue.mockRejectedValueOnce(new Error('HTTP 502')).mockResolvedValueOnce(issue)
@@ -39,6 +39,7 @@ describe('createGitHubSlice.fetchIssue failure handling', () => {
     // Act
     const failed = await store.getState().fetchIssue(repoPath, 7, { repoId })
     const keysAfterFailure = cacheKeys(store)
+    vi.advanceTimersByTime(10_000)
     const retried = await store.getState().fetchIssue(repoPath, 7, { repoId })
 
     // Assert
