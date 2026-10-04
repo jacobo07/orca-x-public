@@ -21,11 +21,8 @@ import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
 import type { ProviderTurnTool } from './provider-turn-tool'
-import {
-  describeUnavailableProject,
-  REMOTE_REFUSAL_DETAIL,
-  type RemoteDriverRefusal
-} from './conversation-turn-refusals'
+import { describeUnavailableProject, type RemoteDriverRefusal } from './conversation-turn-refusals'
+import { resolveRemoteTurnDriver } from './remote-turn-driver-resolution'
 import {
   completeTurnTrace,
   draftTurnTrace,
@@ -187,57 +184,16 @@ async function runTracedTurn(
   let checkAuth = deps.checkAuth
   let hostAddress: string | null = null
   if (location.outcome === 'resolved-remote') {
-    const target = {
-      projectId: location.projectId,
-      hostId: location.hostId,
-      setupId: location.setupId,
-      path: location.path
+    const remote = await resolveRemoteTurnDriver(
+      deps,
+      binding.kind === 'agent' ? binding.agent : null,
+      location,
+      trace
+    )
+    if ('refused' in remote) {
+      return remote.refused
     }
-    // Known before the host is asked, so a refusal still says where it tried.
-    Object.assign(trace, { hostId: target.hostId, setupId: target.setupId, path: target.path })
-    const refuse = (
-      reason: 'remote-execution-unavailable' | RemoteDriverRefusal,
-      detail: string
-    ): ConversationTurnOutcome => ({
-      outcome: 'project-unavailable',
-      projectId: location.projectId,
-      reason,
-      detail
-    })
-    if (!deps.remoteDriverFor) {
-      return refuse(
-        'remote-execution-unavailable',
-        'This agent’s project lives on a remote host, and Orca cannot run its chat there.'
-      )
-    }
-    let resolution: RemoteDriverResolution
-    try {
-      resolution = await deps.remoteDriverFor(target)
-    } catch {
-      // Nothing escapes before admission: a probe that threw is a host we could not reach.
-      resolution = { refusal: 'remote-host-unreachable' }
-    }
-    if ('refusal' in resolution) {
-      return refuse(resolution.refusal, REMOTE_REFUSAL_DETAIL[resolution.refusal])
-    }
-    // The probe awaited; a project that moved meanwhile must not run at the location read before.
-    const again = binding.kind === 'agent' ? deps.resolveProjectLocation(binding.agent) : null
-    if (
-      again?.outcome !== 'resolved-remote' ||
-      again.hostId !== target.hostId ||
-      again.setupId !== target.setupId ||
-      again.path !== target.path
-    ) {
-      return {
-        outcome: 'project-unavailable',
-        projectId: location.projectId,
-        reason: 'location-changed',
-        detail: 'This agent’s project moved while the message was being sent.'
-      }
-    }
-    driver = resolution.driver
-    checkAuth = resolution.checkAuth
-    hostAddress = resolution.hostAddress ?? null
+    ;({ driver, checkAuth, hostAddress } = remote)
   }
 
   const developerInstructions =
