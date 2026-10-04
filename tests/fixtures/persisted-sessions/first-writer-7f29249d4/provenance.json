@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "era": "first-writer-7f29249d4",
+  "sourceSha": "7f29249d4851761b400346c66872da4b17b375cf",
+  "sourceDate": "2026-03-17",
+  "sourceSubject": "Major features",
+  "generatorCommand": "bash config/scripts/persisted-session-corpus-generate.sh --era first-writer-7f29249d4 --sha 7f29249d4 --floor no --out tests/fixtures/persisted-sessions --work <work>",
+  "writerSha256": "9b079d79731e13627982cb39ed6c05ea78ed132ecf7dd5c94190162522493a94",
+  "eraConfigSha256": "30bf2fba576abf854bddba8d04dd61f8de586b0397df7fbc452fb08d3b845dac",
+  "nodeVersion": "v24.21.0",
+  "eraLockfileSha256Prefix": "62b66ac4d95a1769",
+  "currentLockfileSha256Prefix": "0e3e7a3189836879",
+  "eraSelfRead": "ok",
+  "outputSha256": "07647e0deb97400d8b03b6104fe24f7d358f3f6dfa11023bdfaaf3f0002c54c6",
+  "outputBytes": 1219,
+  "expected": {
+    "repos": [
+      "repo-alpha|/synthetic/repo-alpha|alpha",
+      "repo-beta|/synthetic/repo-beta|beta"
+    ],
+    "terminalTabsByWorktree": {},
+    "splitLeavesByTab": {},
+    "editorFilesByWorktree": {},
+    "active": {}
+  },
+  "invariantsExercised": [
+    "repos",
+    "worktree-meta"
+  ],
+  "countsTowardFloor": false,
+  "clock": {
+    "dateNow": 1767225600000,
+    "fakedApis": [
+      "Date"
+    ],
+    "randomUUID": "counter"
+  },
+  "expectedSessionState": "empty-no-workspace-session"
+}

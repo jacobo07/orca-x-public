@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "repos": [
+    {
+      "id": "repo-alpha",
+      "path": "/synthetic/repo-alpha",
+      "displayName": "alpha",
+      "badgeColor": "#737373",
+      "addedAt": 1767225600000
+    },
+    {
+      "id": "repo-beta",
+      "path": "/synthetic/repo-beta",
+      "displayName": "beta",
+      "badgeColor": "#737373",
+      "addedAt": 1767225600001
+    }
+  ],
+  "worktreeMeta": {
+    "repo-alpha::/synthetic/repo-alpha": {
+      "displayName": "alpha main",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "isArchived": false,
+      "isUnread": false,
+      "sortOrder": 0
+    },
+    "repo-beta::/synthetic/repo-beta": {
+      "displayName": "beta main",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "isArchived": false,
+      "isUnread": false,
+      "sortOrder": 0
+    }
+  },
+  "settings": {
+    "workspaceDir": "/synthetic/home/orca/workspaces",
+    "nestWorkspaces": true,
+    "branchPrefix": "git-username",
+    "branchPrefixCustom": "",
+    "theme": "system",
+    "terminalFontSize": 14,
+    "terminalFontFamily": "SF Mono"
+  },
+  "ui": {
+    "lastActiveRepoId": null,
+    "lastActiveWorktreeId": null,
+    "sidebarWidth": 280
+  }
+}
