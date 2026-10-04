@@ -1,4 +1,4 @@
-// The Linear token and the Bitbucket secret on a real full filesystem, nothing mocked at the fs boundary.
+// The Linear and Jira tokens, both index files and the Bitbucket secret on a real full filesystem, nothing mocked at the fs boundary.
 // integration-token-save-disk-full.test.ts models ENOSPC at the fs boundary; this file pins the premise to
 // the kernel: a genuinely full volume makes the re-save throw the code, the previous bytes survive, no temp
 // file stays, and the save publishes once space is freed.
@@ -23,6 +23,27 @@ const state = { home: '' }
 const PREVIOUS = 'synthetic-previous-value'
 const REPLACEMENT = 'synthetic-replacement-value'
 const WORKSPACE = 'org-123'
+const SITE_ID = 'site-1'
+const LINEAR_WORKSPACE = {
+  id: WORKSPACE,
+  organizationId: WORKSPACE,
+  organizationName: 'Acme',
+  displayName: 'Ada',
+  email: 'ada@example.com'
+}
+const JIRA_SITE = {
+  id: SITE_ID,
+  siteUrl: 'https://example.atlassian.net',
+  email: 'ada@example.com',
+  displayName: 'Ada',
+  accountId: 'acc-1'
+}
+const jiraSiteFile = (displayName: string) => ({
+  version: 1 as const,
+  activeSiteId: SITE_ID,
+  selectedSiteId: SITE_ID,
+  sites: [{ ...JIRA_SITE, displayName }]
+})
 
 function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
@@ -44,6 +65,8 @@ async function loadFreshModules() {
   return {
     linear: await import('./linear/linear-token-store'),
     linearPaths: await import('./linear/linear-credential-paths'),
+    linearRegistry: await import('./linear/linear-workspace-registry'),
+    jira: await import('./jira/site-credential-store'),
     bitbucket: await import('./bitbucket/credential-store')
   }
 }
@@ -136,6 +159,119 @@ describe.skipIf(skipReason !== null)('credential saves on a real full filesystem
     expect(tempFilesIn(join(linearPaths.getWorkspaceTokenPath(WORKSPACE), '..'))).toEqual([])
     const fresh = await loadFreshModules()
     expect(fresh.linear.loadToken({ force: true, workspaceId: WORKSPACE })).toBe(REPLACEMENT)
+  })
+
+  it('Jira token: a re-save on a full volume throws ENOSPC, keeps the previous token and publishes once space is freed', async () => {
+    // Arrange
+    const { jira } = await loadFreshModules()
+    jira.saveToken(SITE_ID, PREVIOUS)
+    const tokenPath = join(
+      state.home,
+      '.orca',
+      'jira-tokens',
+      `${Buffer.from(SITE_ID).toString('base64url')}.enc`
+    )
+    const before = sha256(tokenPath)
+
+    // Act
+    fillOrFail()
+    const error = captureError(() => jira.saveToken(SITE_ID, REPLACEMENT))
+
+    // Assert
+    expect(error, 'the re-save on a full volume must throw').not.toBeNull()
+    expect(error?.code).toBe('ENOSPC')
+    const after = sha256(tokenPath)
+    observed('jira-token-resave', error, after === before)
+    expect(after).toBe(before)
+    expect(tempFilesIn(join(tokenPath, '..'))).toEqual([])
+    expect(jira.readToken(SITE_ID)).toBe(PREVIOUS)
+    const fresh = await loadFreshModules()
+    expect(fresh.jira.readToken(SITE_ID)).toBe(PREVIOUS)
+
+    rmSync(ballast, { force: true })
+    jira.saveToken(SITE_ID, REPLACEMENT)
+
+    expect(sha256(tokenPath)).not.toBe(before)
+    expect(tempFilesIn(join(tokenPath, '..'))).toEqual([])
+    const afterRecovery = await loadFreshModules()
+    expect(afterRecovery.jira.readToken(SITE_ID)).toBe(REPLACEMENT)
+  })
+
+  it('Linear workspace list: a rewrite on a full volume throws ENOSPC, keeps the previous list in file and memory and publishes once space is freed', async () => {
+    // Arrange
+    const { linear, linearPaths, linearRegistry } = await loadFreshModules()
+    linear.saveWorkspaceToken(WORKSPACE, PREVIOUS)
+    linearRegistry.upsertWorkspace(LINEAR_WORKSPACE, { select: true })
+    const listPath = linearPaths.getWorkspaceFilePath()
+    const before = sha256(listPath)
+
+    // Act
+    fillOrFail()
+    const error = captureError(() =>
+      linearRegistry.upsertWorkspace(
+        { ...LINEAR_WORKSPACE, displayName: 'Grace' },
+        { select: true }
+      )
+    )
+
+    // Assert
+    expect(error, 'the rewrite on a full volume must throw').not.toBeNull()
+    expect(error?.code).toBe('ENOSPC')
+    const after = sha256(listPath)
+    observed('linear-workspace-list-rewrite', error, after === before)
+    expect(after).toBe(before)
+    expect(tempFilesIn(join(listPath, '..'))).toEqual([])
+    expect(linearRegistry.getWorkspaceFile().workspaces).toMatchObject([
+      { id: WORKSPACE, displayName: 'Ada' }
+    ])
+    const fresh = await loadFreshModules()
+    expect(fresh.linearRegistry.getWorkspaceFile().workspaces).toMatchObject([
+      { id: WORKSPACE, displayName: 'Ada' }
+    ])
+
+    rmSync(ballast, { force: true })
+    linearRegistry.upsertWorkspace({ ...LINEAR_WORKSPACE, displayName: 'Grace' }, { select: true })
+
+    expect(sha256(listPath)).not.toBe(before)
+    expect(tempFilesIn(join(listPath, '..'))).toEqual([])
+    const afterRecovery = await loadFreshModules()
+    expect(afterRecovery.linearRegistry.getWorkspaceFile().workspaces).toMatchObject([
+      { id: WORKSPACE, displayName: 'Grace' }
+    ])
+  })
+
+  it('Jira site list: a rewrite on a full volume throws ENOSPC, keeps the previous list in file and memory and publishes once space is freed', async () => {
+    // Arrange
+    const { jira } = await loadFreshModules()
+    jira.saveToken(SITE_ID, PREVIOUS)
+    jira.writeSiteFile(jiraSiteFile('Ada'))
+    const listPath = join(state.home, '.orca', 'jira-sites.json')
+    const before = sha256(listPath)
+
+    // Act
+    fillOrFail()
+    const error = captureError(() => jira.writeSiteFile(jiraSiteFile('Grace')))
+
+    // Assert
+    expect(error, 'the rewrite on a full volume must throw').not.toBeNull()
+    expect(error?.code).toBe('ENOSPC')
+    const after = sha256(listPath)
+    observed('jira-site-list-rewrite', error, after === before)
+    expect(after).toBe(before)
+    expect(tempFilesIn(join(listPath, '..'))).toEqual([])
+    expect(jira.getSiteFile().sites).toMatchObject([{ id: SITE_ID, displayName: 'Ada' }])
+    const fresh = await loadFreshModules()
+    expect(fresh.jira.getSiteFile().sites).toMatchObject([{ id: SITE_ID, displayName: 'Ada' }])
+
+    rmSync(ballast, { force: true })
+    jira.writeSiteFile(jiraSiteFile('Grace'))
+
+    expect(sha256(listPath)).not.toBe(before)
+    expect(tempFilesIn(join(listPath, '..'))).toEqual([])
+    const afterRecovery = await loadFreshModules()
+    expect(afterRecovery.jira.getSiteFile().sites).toMatchObject([
+      { id: SITE_ID, displayName: 'Grace' }
+    ])
   })
 
   it('Bitbucket secret: a re-save on a full volume throws ENOSPC, keeps the previous secret and metadata and publishes once space is freed', async () => {
