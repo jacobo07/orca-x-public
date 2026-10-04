@@ -162,6 +162,22 @@ describe('user draft journal', () => {
     })
   })
 
+  it('round-trips a file-preview draft keyed by a host file path', async () => {
+    const preview: DraftIdentity = {
+      ...CHAT_A,
+      surface: 'file-preview',
+      subjectId: '/home/user/notes/result.json'
+    }
+    await saveDraft(preview, '{"ok":false}', { baseVersion: 'base-hash' })
+    await expect(loadDraft(preview)).resolves.toMatchObject({
+      kind: 'draft',
+      draft: { surface: 'file-preview', baseVersion: 'base-hash', text: '{"ok":false}' }
+    })
+    await expect(loadDraft({ ...preview, surface: 'markdown-editor' })).resolves.toEqual({
+      kind: 'none'
+    })
+  })
+
   it('appends dictation salvage instead of replacing it', async () => {
     const scope = { hostId: 'host-a', worktreeId: 'wt-1' }
     await appendDictationSalvage(scope, 'first words', 10)

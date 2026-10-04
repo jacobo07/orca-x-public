@@ -26,6 +26,7 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileFilePreviewDraftJournal } from './use-mobile-file-preview-draft-journal'
 
 type Props = {
   route: MobileFilePreviewRouteState
@@ -193,6 +194,24 @@ export function MobileFilePreviewScreen({ route }: Props) {
     previewSourceKey,
     draftContent,
     savedContent
+  })
+
+  // Journaled only once the editable file's content is loaded; the path survives a relaunch, the grant does not.
+  useMobileFilePreviewDraftJournal({
+    scope:
+      isEditableTerminalArtifact &&
+      previewParams &&
+      previewSource?.source === 'terminalArtifact' &&
+      draftSourceKeyRef.current === previewSourceKey
+        ? {
+            hostId: previewParams.hostId,
+            worktreeId: previewParams.worktreeId,
+            subjectId: previewSource.absolutePath
+          }
+        : null,
+    draftContent,
+    savedContent,
+    onRestore: setDraftContent
   })
 
   const saveArtifact = useCallback(async () => {

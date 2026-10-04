@@ -15,6 +15,8 @@ const MAX_SALVAGE_ENTRIES = 50
 export type DraftSurface =
   | 'chat-composer'
   | 'markdown-editor'
+  // Why separate from 'markdown-editor': a file-preview edit is keyed by a host file path, not a markdown doc id.
+  | 'file-preview'
   | 'terminal-command'
   | 'dictation-salvage'
 
@@ -33,7 +35,13 @@ const SalvageEntrySchema = z
 const DraftRecordSchema = z
   .object({
     v: z.literal(1),
-    surface: z.enum(['chat-composer', 'markdown-editor', 'terminal-command', 'dictation-salvage']),
+    surface: z.enum([
+      'chat-composer',
+      'markdown-editor',
+      'file-preview',
+      'terminal-command',
+      'dictation-salvage'
+    ]),
     hostId: z.string().min(1),
     worktreeId: z.string().min(1),
     subjectId: z.string().min(1).nullable(),
