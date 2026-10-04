@@ -146,7 +146,8 @@
         "Only loading-store rotates the .bak ring; a profile transfer replaces the file with no backup refresh, so a transfer is the one publish with no recovery slot behind it.",
         "A failed debounced save is not retried by a timer (pinned by persistence-write-failure-semantics.test.ts): if the disk recovers while the app is idle, the pending state stays unwritten until the next mutation, flush or quit.",
         "The unreported paths named in onFailure (debounced save, flush(), quit, update-install, auth-restart, beforeunload) have no user surface; the contract bounds their loss and does not remove it.",
-        "Rejections from flushOrThrow, flushPendingOrThrowAsync and the transfer cross IPC as raw error text with no product-state classification; how each renderer caller words them is not measured here, so the copy pass owns it."
+        "Rejections from flushOrThrow, flushPendingOrThrowAsync and the transfer cross IPC as raw error text with no product-state classification; how each renderer caller words them is not measured here, so the copy pass owns it.",
+        "Observed against a real full ext4 volume on Linux through config/scripts/real-enospc-volume.sh and the opt-in src/main/persistence-real-enospc.test.ts (ENOSPC at write for the async flush, the sync flush and the transfer's target write, previous file byte-identical, no temp file, publishes after space is freed); Windows full-disk mapping is not exercised."
       ]
     },
     {
@@ -237,7 +238,7 @@
       "knownGaps": [
         "The barrier is hand-rolled rather than routed through durable-file-write, and it stays that way deliberately. Consolidation was attempted once the primitive learned to remove its own temp, and reverted: bitbucket/credential-store.test.ts injects failures at writeSync and unlinkSync to hold the STA-3941 guarantee, so replacing the explicit short-write loop deletes the boundary those regression tests assert against. This writer is specialized, not duplicated.",
         "The containing directory is not fsynced, so the rename itself is durable only where the filesystem orders it.",
-        "The failure-path proof is a model of the kernel order (open truncates, the write then fails), not a full disk; the real-kernel ENOSPC run is a separate plan."
+        "Observed against a real full ext4 volume on Linux through config/scripts/real-enospc-volume.sh and the opt-in src/main/integration-credential-real-enospc.test.ts (ENOSPC at write for the Linear token and the Bitbucket secret, previous bytes byte-identical, no temp file, publishes after space is freed); the Jira token and both index files are proven only by the fs-boundary model in integration-token-save-disk-full.test.ts, and Windows full-disk mapping is not exercised."
       ]
     },
     {
