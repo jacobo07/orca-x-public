@@ -1,11 +1,12 @@
-import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { toListingError, unlistableBaseSnapshot } from './worktree-base-directory-listing-errors'
 import {
-  listNestedContainer,
-  rethrowUnlessAbsent,
-  unlistableBaseSnapshot
-} from './worktree-base-directory-listing-errors'
+  diffBase,
+  dirSignature,
+  hasGitMarker,
+  snapshotBase,
+  type WorktreeBasePollEvent
+} from './worktree-base-directory-snapshot'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -17,7 +18,7 @@ import {
   type WorktreeObservationClock
 } from './worktree-observation-clock'
 
-export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
+export type { WorktreeBasePollEvent }
 
 export type WorktreeBaseSubscription = { unsubscribe: () => Promise<void> }
 
@@ -101,109 +102,6 @@ export const WORKTREE_BASE_BACKSTOP_TICKS = 15
 // backstop scan cover the pathological case.
 const PENDING_MARKER_MAX_TICKS = 300
 
-function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number }): string {
-  return `${s.mtimeMs}:${s.ctimeMs}:${s.ino}`
-}
-
-async function dirSignature(path: string): Promise<string> {
-  try {
-    return statSignature(await stat(path))
-  } catch {
-    return 'missing'
-  }
-}
-
-async function hasGitMarker(dir: string): Promise<boolean> {
-  try {
-    await stat(join(dir, '.git'))
-    return true
-  } catch {
-    return false
-  }
-}
-
-type BaseSnapshot = {
-  // worktree-candidate dir → whether its `.git` completion marker exists
-  markers: Map<string, boolean>
-  // dirs whose listing determines the candidate set: the root plus any
-  // nested repo containers. Their stat signatures gate the next full scan.
-  gateDirs: string[]
-  // index-aligned with gateDirs, each sampled *before* that dir's listing
-  gateSignatures: string[]
-}
-
-// Depth-1 worktree dirs (flat layout), plus depth-2 dirs under each nested
-// repo's container, mirroring what worktree-base-directory-event-filter
-// matches: `<wt>/.git` completion markers and `<wt>` deletions.
-async function snapshotBase(
-  rootPath: string,
-  repos: ReadonlyMap<string, WorktreeBaseRepoWatchConfig>
-): Promise<BaseSnapshot> {
-  const markers = new Map<string, boolean>()
-  const gateDirs = [rootPath]
-  // Why: sampling the signature before the listing makes a write that races the
-  // scan look stale next tick (one redundant rescan) instead of invisible until
-  // the backstop, which is up to 15 ticks of missed creates/deletes.
-  const gateSignatures = [await dirSignature(rootPath)]
-  const configs = [...repos.values()]
-  const includeFlat = configs.some((config) => !config.nestWorkspaces)
-  const nestedRepoNames = new Set(
-    configs
-      .filter((config) => config.nestWorkspaces)
-      .map((config) => normalizeRuntimePathForComparison(config.repoName))
-  )
-
-  let rootEntries
-  try {
-    rootEntries = await readdir(rootPath, { withFileTypes: true })
-  } catch (error) {
-    // Only an absent root diffs into deletes for every known worktree; any other failure rethrows so poll() keeps the previous snapshot.
-    rethrowUnlessAbsent(error)
-    return { markers, gateDirs, gateSignatures }
-  }
-
-  const candidates: string[] = []
-  for (const entry of rootEntries) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) {
-      continue
-    }
-    const entryPath = join(rootPath, entry.name)
-    if (includeFlat) {
-      candidates.push(entryPath)
-    }
-    if (nestedRepoNames.has(normalizeRuntimePathForComparison(entry.name))) {
-      gateDirs.push(entryPath)
-      gateSignatures.push(await dirSignature(entryPath))
-      const subEntries = await listNestedContainer(entryPath)
-      for (const sub of subEntries) {
-        if (sub.isDirectory() || sub.isSymbolicLink()) {
-          candidates.push(join(entryPath, sub.name))
-        }
-      }
-    }
-  }
-
-  for (const dir of candidates) {
-    markers.set(dir, await hasGitMarker(dir))
-  }
-  return { markers, gateDirs, gateSignatures }
-}
-
-function diffBase(prev: BaseSnapshot, next: BaseSnapshot): WorktreeBasePollEvent[] {
-  const events: WorktreeBasePollEvent[] = []
-  for (const [dir, marker] of next.markers) {
-    if (marker && prev.markers.get(dir) !== true) {
-      events.push({ type: 'create', path: join(dir, '.git') })
-    }
-  }
-  for (const dir of prev.markers.keys()) {
-    if (!next.markers.has(dir)) {
-      events.push({ type: 'delete', path: dir })
-    }
-  }
-  return events
-}
-
 async function startBasePoller(
   target: WorktreeBaseWatchTarget,
   getRepos: () => ReadonlyMap<string, WorktreeBaseRepoWatchConfig>,
@@ -215,9 +113,29 @@ async function startBasePoller(
   let disposed = false
   let ticking = false
   let tickCount = 0
-  let snapshot = await snapshotBase(target.path, getRepos()).catch(() =>
-    unlistableBaseSnapshot(target.path)
-  )
+  // Why: report an unlistable directory once per failing streak, not on every 2 s tick.
+  let listingFailureReported = false
+  const noteListingOutcome = (errors: readonly Error[]): void => {
+    if (errors.length === 0) {
+      listingFailureReported = false
+      return
+    }
+    if (listingFailureReported) {
+      return
+    }
+    listingFailureReported = true
+    if (options.onWatchError) {
+      options.onWatchError(errors[0])
+    } else {
+      console.warn('[worktree-base-poller]', errors[0])
+    }
+  }
+  const startupErrors: Error[] = []
+  let snapshot = await snapshotBase(target.path, getRepos()).catch((error: unknown) => {
+    startupErrors.push(toListingError(target.path, error))
+    return unlistableBaseSnapshot(target.path)
+  })
+  noteListingOutcome([...startupErrors, ...snapshot.listingErrors])
   let parkedWhileHidden = false
   const onEvents = (events: WorktreeBasePollEvent[]): void => {
     registration.noteActivity()
@@ -234,11 +152,12 @@ async function startBasePoller(
 
   const fullScan = async (): Promise<void> => {
     options.onFullScan?.()
-    const next = await snapshotBase(target.path, getRepos())
+    const next = await snapshotBase(target.path, getRepos(), snapshot)
     await options.onSnapshotTaken?.(tickCount)
     if (disposed) {
       return
     }
+    noteListingOutcome(next.listingErrors)
     const events = diffBase(snapshot, next)
     for (const [dir, marker] of next.markers) {
       if (marker) {
@@ -315,8 +234,9 @@ async function startBasePoller(
     ticking = true
     try {
       await poll(forceFullScan)
-    } catch {
+    } catch (error) {
       // Transient fs error: keep the previous snapshot and retry next tick.
+      noteListingOutcome([toListingError(target.path, error)])
     } finally {
       ticking = false
     }

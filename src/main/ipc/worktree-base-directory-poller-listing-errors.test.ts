@@ -99,6 +99,95 @@ describe('worktree base poller listing errors', () => {
     return { root, container, worktrees, received, touchRoot }
   }
 
+  async function startTwoContainers(onWatchError?: (error: Error) => void) {
+    const raw = await mkdtemp(join(tmpdir(), 'orca-base-poller-two-'))
+    cleanups.push(() => rm(raw, { recursive: true, force: true }))
+    const root = await realpath(raw)
+    const containerA = join(root, 'project-a')
+    const containerB = join(root, 'project-b')
+    const worktreeA = join(containerA, 'wt-a1')
+    const worktreeB = join(containerB, 'wt-b1')
+    for (const worktree of [worktreeA, worktreeB]) {
+      await mkdir(worktree, { recursive: true })
+      await writeFile(join(worktree, '.git'), 'gitdir: elsewhere')
+    }
+    const repos = new Map<string, WorktreeBaseRepoWatchConfig>([
+      ['repo-a', { repoId: 'repo-a', repoName: 'project-a', nestWorkspaces: true }],
+      ['repo-b', { repoId: 'repo-b', repoName: 'project-b', nestWorkspaces: true }]
+    ])
+    const target = { key: `base:local:${root}`, kind: 'base', path: root, repos }
+    const received: WorktreeBasePollEvent[][] = []
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target as WorktreeBaseWatchTarget,
+      () => repos,
+      (events) => received.push(events),
+      { pollIntervalMs: POLL_MS, onWatchError }
+    )
+    cleanups.push(() => poller.unsubscribe())
+    const addWorktree = async (container: string, name: string) => {
+      await mkdir(join(container, name), { recursive: true })
+      await writeFile(join(container, name, '.git'), 'gitdir: elsewhere')
+    }
+    return { containerA, containerB, worktreeA, worktreeB, received, addWorktree }
+  }
+
+  it('a failing nested container does not hide a sibling container, and its own children are kept', async () => {
+    // Arrange
+    const { containerA, containerB, worktreeA, received, addWorktree } = await startTwoContainers()
+    arm(containerA, 'EACCES')
+
+    // Act
+    await addWorktree(containerB, 'wt-b2')
+    await waitFor(
+      () =>
+        received
+          .flat()
+          .some(
+            (event) => event.type === 'create' && event.path === join(containerB, 'wt-b2', '.git')
+          ),
+      'the healthy sibling create is reported while project-a is unlistable'
+    )
+
+    // Assert
+    expect(listing.failures).toBeGreaterThan(0)
+    expect(received.flat().filter((event) => event.type === 'delete')).toEqual([])
+    listing.failPath = null
+    await rm(worktreeA, { recursive: true })
+    await waitFor(
+      () => received.flat().some((event) => event.type === 'delete' && event.path === worktreeA),
+      'the failing container is read again once it recovers'
+    )
+  })
+
+  it('reports an unlistable nested container once per failing streak, not on every tick', async () => {
+    // Arrange
+    const onWatchError = vi.fn()
+    const { containerA, addWorktree, containerB } = await startTwoContainers(onWatchError)
+    arm(containerA, 'EIO')
+
+    // Act
+    await addWorktree(containerB, 'wt-b2')
+    await waitFor(() => listing.failures >= 4, 'several failing ticks ran')
+    const reportedDuringStreak = onWatchError.mock.calls.length
+    listing.failPath = null
+    await addWorktree(containerB, 'wt-b3')
+    await waitFor(
+      () => listing.failPath === null && onWatchError.mock.calls.length >= 1,
+      'recovery'
+    )
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+    arm(containerA, 'EIO')
+    await addWorktree(containerB, 'wt-b4')
+    await waitFor(() => listing.failures >= 1, 'the second streak ran')
+    await waitFor(() => onWatchError.mock.calls.length >= 2, 'the second streak is reported')
+
+    // Assert
+    expect(reportedDuringStreak).toBe(1)
+    expect(onWatchError.mock.calls[0][0]).toBeInstanceOf(Error)
+    expect(String(onWatchError.mock.calls[0][0].message)).toContain(containerA)
+    expect(onWatchError).toHaveBeenCalledTimes(2)
+  })
+
   it.each(['EIO', 'EACCES', 'EMFILE'])(
     'a root listing that fails with %s emits no deletes and the next good listing diffs against the old snapshot',
     async (code) => {
