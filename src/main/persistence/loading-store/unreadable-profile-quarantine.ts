@@ -2,7 +2,7 @@ import { closeSync, fsyncSync, openSync, readFileSync, writeSync } from 'node:fs
 import { basename, dirname } from 'node:path'
 
 // Why: bound the suffix search so a pathological directory cannot spin the startup path forever.
-const MAX_QUARANTINE_ATTEMPTS = 1000
+export const MAX_QUARANTINE_ATTEMPTS = 1000
 
 export type UnreadableProfileQuarantine = { ok: true; path: string } | { ok: false; code: string }
 
@@ -17,6 +17,9 @@ export type StartupLoadOutcome =
     }
   | { kind: 'unreadable-defaulted'; quarantinePath: string }
   | { kind: 'unreadable-unquarantined'; code: string }
+  // Why: the profile parsed but a whole session part was defaulted; `loaded` would hide that bytes were set aside.
+  | { kind: 'session-unreadable-defaulted'; quarantinePath: string; defaulted: string[] }
+  | { kind: 'session-unreadable-unquarantined'; code: string; defaulted: string[] }
   // Why: no primary to preserve, but backups existed and none parsed, so "absent" would misname it.
   | { kind: 'backups-unusable-defaulted' }
 
@@ -103,6 +106,52 @@ export function defaultedStartupLoadOutcome(input: {
   }
 }
 
+/** Per-load record of the session parts that fell to defaults, plus the one quarantine that covers them all. */
+export type DefaultedSessionParts = {
+  parts: string[]
+  quarantine: UnreadableProfileQuarantine | null
+}
+
+export function recordDefaultedSessionPart(
+  record: DefaultedSessionParts,
+  part: string,
+  dataFile: string
+): void {
+  record.parts.push(part)
+  // Why: one copy of the whole original file covers every part defaulted in this load.
+  record.quarantine ??= quarantineUnreadableProfile(dataFile)
+}
+
+/** The quarantine for a load that threw; reuses a session-part copy of the same file already made in this load. */
+export function quarantineAfterLoadFailure(
+  record: DefaultedSessionParts,
+  dataFile: string
+): UnreadableProfileQuarantine {
+  // Why: a throw after a session part was quarantined must reuse that copy, not write a second one.
+  return record.quarantine?.ok ? record.quarantine : quarantineUnreadableProfile(dataFile)
+}
+
+/** The outcome of a load that kept the profile but defaulted a session part; null when nothing was defaulted. */
+export function sessionDefaultedStartupLoadOutcome(
+  record: DefaultedSessionParts
+): StartupLoadOutcome | null {
+  if (record.parts.length === 0) {
+    return null
+  }
+  if (record.quarantine?.ok) {
+    return {
+      kind: 'session-unreadable-defaulted',
+      quarantinePath: record.quarantine.path,
+      defaulted: record.parts
+    }
+  }
+  return {
+    kind: 'session-unreadable-unquarantined',
+    code: record.quarantine ? record.quarantine.code : 'NOT_ATTEMPTED',
+    defaulted: record.parts
+  }
+}
+
 export function recoveredStartupLoadOutcome(
   slot: number,
   quarantine: UnreadableProfileQuarantine | null
@@ -113,6 +162,11 @@ export function recoveredStartupLoadOutcome(
     quarantinePath: quarantine?.ok ? quarantine.path : null,
     quarantineFailureCode: quarantine && !quarantine.ok ? quarantine.code : null
   }
+}
+
+// Why: partition names carry host ids, which the startup log must not carry; keep the top-level field only.
+function topLevelFields(parts: string[]): string[] {
+  return [...new Set(parts.map((part) => part.split('.', 1)[0]))]
 }
 
 /** Startup-log details: file names only, never the user-data directory. */
@@ -129,6 +183,20 @@ export function startupLoadOutcomeLogDetails(outcome: StartupLoadOutcome): Recor
       return { outcome: outcome.kind, quarantineFile: basename(outcome.quarantinePath) }
     case 'unreadable-unquarantined':
       return { outcome: outcome.kind, code: outcome.code }
+    case 'session-unreadable-defaulted':
+      return {
+        outcome: outcome.kind,
+        quarantineFile: basename(outcome.quarantinePath),
+        defaultedFields: topLevelFields(outcome.defaulted),
+        defaultedCount: outcome.defaulted.length
+      }
+    case 'session-unreadable-unquarantined':
+      return {
+        outcome: outcome.kind,
+        code: outcome.code,
+        defaultedFields: topLevelFields(outcome.defaulted),
+        defaultedCount: outcome.defaulted.length
+      }
     default:
       return { outcome: outcome.kind }
   }

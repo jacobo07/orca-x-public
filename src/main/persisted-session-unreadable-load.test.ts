@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAX_QUARANTINE_ATTEMPTS } from './persistence/loading-store/unreadable-profile-quarantine'
 import { createStore, dataFile, testState } from './persistence-test-harness'
 
 // Why: red controls for the corpus gate. Every control is derived at test time from a COPY of a corpus fixture
@@ -282,8 +283,6 @@ describe('persisted-session unreadable-load red controls', () => {
   describe('a valid-JSON profile whose session part fails validation', () => {
     const CORRUPT_HOST = 'ssh:corrupt-host'
     const VALID_HOST = 'ssh:valid-host'
-    // Why: a local mirror of the quarantine module's name-search bound, so the RED run fails on bytes and outcome, never on an import.
-    const QUARANTINE_NAME_ATTEMPTS = 1000
 
     type Profile = Record<string, unknown> & {
       workspaceSession: { tabsByWorktree: Record<string, { id: string }[]> }
@@ -364,7 +363,7 @@ describe('persisted-session unreadable-load red controls', () => {
       })
       const base = `${dataFile()}.unreadable-20261004T080000Z`
       const taken: string[] = []
-      for (let attempt = 0; attempt < QUARANTINE_NAME_ATTEMPTS; attempt++) {
+      for (let attempt = 0; attempt < MAX_QUARANTINE_ATTEMPTS; attempt++) {
         const path = attempt === 0 ? base : `${base}-${attempt}`
         writeFileSync(path, '')
         taken.push(path)
@@ -466,6 +465,63 @@ describe('persisted-session unreadable-load red controls', () => {
         kind: 'session-unreadable-defaulted',
         quarantinePath: join(testState.dir, quarantined[0]),
         defaulted: ['workspaceSessionsByHostId']
+      })
+      store.flush()
+      const saved = JSON.parse(readFileSync(dataFile(), 'utf-8')) as Record<string, unknown>
+      expect(saved.workspaceSessionsByHostId).not.toBe('not-a-map')
+    })
+
+    it('quarantines the per-host session map when it is a falsy scalar, not only a truthy one', async () => {
+      // Arrange
+      const { bytes } = corruptProfile((profile) => {
+        profile.workspaceSessionsByHostId = ''
+      })
+
+      // Act
+      const store = await createStore()
+
+      // Assert
+      const quarantined = quarantineFiles()
+      expect(quarantined).toHaveLength(1)
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      expect(store.getStartupLoadOutcome()).toEqual({
+        kind: 'session-unreadable-defaulted',
+        quarantinePath: join(testState.dir, quarantined[0]),
+        defaulted: ['workspaceSessionsByHostId']
+      })
+    })
+
+    it('keeps null per-host session map as a plain load with no quarantine', async () => {
+      // Arrange
+      corruptProfile((profile) => {
+        profile.workspaceSessionsByHostId = null
+      })
+
+      // Act
+      const store = await createStore()
+
+      // Assert
+      expect(store.getStartupLoadOutcome()).toEqual({ kind: 'loaded' })
+      expect(quarantineFiles()).toEqual([])
+    })
+
+    it('reuses the session quarantine instead of writing a second copy when a later load step throws', async () => {
+      // Arrange: a corrupt session is recorded first, then a non-array sshTargets makes the result build throw
+      const { bytes } = corruptProfile((profile) => {
+        profile.workspaceSession = 'not-a-session' as never
+        profile.sshTargets = 'not-a-list'
+      })
+
+      // Act
+      const store = await createStore()
+
+      // Assert
+      const quarantined = quarantineFiles()
+      expect(quarantined).toHaveLength(1)
+      expect(readQuarantine(quarantined[0]).equals(bytes)).toBe(true)
+      expect(store.getStartupLoadOutcome()).toEqual({
+        kind: 'unreadable-defaulted',
+        quarantinePath: join(testState.dir, quarantined[0])
       })
     })
   })

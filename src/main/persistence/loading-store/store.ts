@@ -365,9 +365,12 @@ import { RepoUpdatePersistenceOperations } from '../tracking-repos/repo-update-o
 import { ProjectHostSetupPersistenceOperations } from '../tracking-repos/project-host-setup-update'
 import {
   defaultedStartupLoadOutcome,
-  quarantineUnreadableProfile,
+  quarantineAfterLoadFailure,
+  recordDefaultedSessionPart,
   recoveredStartupLoadOutcome,
+  sessionDefaultedStartupLoadOutcome,
   startupLoadOutcomeLogDetails,
+  type DefaultedSessionParts,
   type StartupLoadOutcome,
   type UnreadableProfileQuarantine
 } from './unreadable-profile-quarantine'
@@ -411,11 +414,20 @@ function workspaceSessionSalvageLogDetails(result: {
 function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState
-): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; repaired: boolean } {
+): {
+  partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
+  repaired: boolean
+  defaultedParts: string[]
+} {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { partitions: {}, repaired: raw !== undefined }
+    return {
+      partitions: {},
+      repaired: raw !== undefined,
+      defaultedParts: raw !== undefined && raw !== null ? ['workspaceSessionsByHostId'] : []
+    }
   }
   let repaired = false
+  const defaultedParts: string[] = []
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
@@ -426,6 +438,7 @@ function parseWorkspaceSessionsByHostId(
     const result = parseWorkspaceSessionSalvaging(value)
     if (!result.ok) {
       repaired = true
+      defaultedParts.push(`workspaceSessionsByHostId.${hostId}`)
       console.error(
         `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
         result.error
@@ -441,7 +454,7 @@ function parseWorkspaceSessionsByHostId(
     }
     partitions[hostId] = { ...defaults, ...result.value }
   }
-  return { partitions, repaired }
+  return { partitions, repaired, defaultedParts }
 }
 
 function backupPath(dataFile: string, index: number): string {
@@ -851,6 +864,7 @@ export class Store {
 
     let result: PersistedState | null = null
     let quarantine: UnreadableProfileQuarantine | null = earlierQuarantine
+    const sessionDefaults: DefaultedSessionParts = { parts: [], quarantine: null }
     let hasBackup = false
     try {
       if (fileExistedOnLoad) {
@@ -1502,6 +1516,7 @@ export class Store {
                 '[persistence] Corrupt workspace session, using defaults:',
                 result.error
               )
+              recordDefaultedSessionPart(sessionDefaults, 'workspaceSession', dataFile)
               return defaults.workspaceSession
             }
             if (result.droppedCount > 0) {
@@ -1516,10 +1531,13 @@ export class Store {
           })(),
           // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
           workspaceSessionsByHostId: (() => {
-            const { partitions, repaired } = parseWorkspaceSessionsByHostId(
+            const { partitions, repaired, defaultedParts } = parseWorkspaceSessionsByHostId(
               parsed.workspaceSessionsByHostId,
               defaults.workspaceSession
             )
+            for (const part of defaultedParts) {
+              recordDefaultedSessionPart(sessionDefaults, part, dataFile)
+            }
             if (repaired) {
               // Why: salvage repairs only the in-memory partitions; without a save the corrupt entries stay on disk and get re-dropped every launch.
               this.loadNeedsSave = true
@@ -1568,7 +1586,7 @@ export class Store {
       console.error('[persistence] Failed to load primary state, trying backups:', err)
       // Why: the bytes that failed to load must survive the restore or the first save that follows.
       if (fileExistedOnLoad && quarantine === null) {
-        quarantine = quarantineUnreadableProfile(dataFile)
+        quarantine = quarantineAfterLoadFailure(sessionDefaults, dataFile)
       }
     }
 
@@ -1606,7 +1624,9 @@ export class Store {
         quarantine
       })
     } else {
-      this.startupLoadOutcome = { kind: 'loaded' }
+      this.startupLoadOutcome = sessionDefaultedStartupLoadOutcome(sessionDefaults) ?? {
+        kind: 'loaded'
+      }
     }
     // Why: the restore pass logs the final outcome itself, once, so a recovered load is not announced as plain 'loaded'.
     if (allowBackupRecovery) {
