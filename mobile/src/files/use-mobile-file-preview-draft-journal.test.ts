@@ -214,6 +214,130 @@ describe('file preview drafts survive the process', () => {
   })
 })
 
+describe('file preview in-place scope switches', () => {
+  let values: Map<string, string>
+  let renderers: ReactTestRenderer[] = []
+  let screen: {
+    draft: string
+    setDraft: (text: string) => void
+    switchTo: (subject: string | null) => void
+  } | null = null
+
+  const scopeFor = (subjectId: string) => ({ hostId: 'host-a', worktreeId: 'wt-1', subjectId })
+  const keyFor = (subjectId: string) =>
+    getDraftStorageKeyForTests({ surface: 'file-preview', ...scopeFor(subjectId) })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetDraftJournalForTests()
+    values = new Map()
+    asyncStorage.getItem.mockImplementation(async (key: string) => values.get(key) ?? null)
+    asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      values.set(key, value)
+    })
+    asyncStorage.removeItem.mockImplementation(async (key: string) => {
+      values.delete(key)
+    })
+  })
+
+  afterEach(() => {
+    for (const renderer of renderers) {
+      act(() => renderer.unmount())
+    }
+    renderers = []
+    screen = null
+  })
+
+  // One editor state shared by every subject, like two empty docs behind one markdown editor.
+  function SwitchHarness({ first }: { first: string | null }): null {
+    const [subject, setSubject] = useState<string | null>(first)
+    const [draft, setDraft] = useState('')
+    useMobileFilePreviewDraftJournal({
+      scope: subject ? scopeFor(subject) : null,
+      draftContent: draft,
+      savedContent: '',
+      onRestore: setDraft
+    })
+    screen = {
+      draft,
+      setDraft,
+      switchTo: setSubject
+    }
+    return null
+  }
+
+  async function mount(first: string | null): Promise<ReactTestRenderer> {
+    resetDraftJournalForTests()
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(SwitchHarness, { first }))
+      renderers.push(renderer)
+    })
+    await act(async () => undefined)
+    return renderer
+  }
+
+  function storedDraft(subject: string, text: string): void {
+    values.set(
+      keyFor(subject),
+      JSON.stringify({
+        v: 1,
+        surface: 'file-preview',
+        ...scopeFor(subject),
+        text,
+        updatedAt: 1,
+        baseVersion: filePreviewDraftBaseVersion('')
+      })
+    )
+  }
+
+  function gateNextRead(): () => void {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    asyncStorage.getItem.mockImplementationOnce(async (key: string) => {
+      await gate
+      return values.get(key) ?? null
+    })
+    return release
+  }
+
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, FILE_PREVIEW_DRAFT_SAVE_DEBOUNCE_MS + 100))
+    })
+
+  it('a read that resolves after an in-place switch is not applied to the new subject', async () => {
+    storedDraft('/a.md', 'draft of A')
+    const release = gateNextRead()
+    await mount('/a.md')
+
+    act(() => screen?.switchTo('/b.md'))
+    release()
+    await settle()
+
+    expect(screen?.draft).toBe('')
+    expect(values.has(keyFor('/b.md'))).toBe(false)
+    expect(JSON.parse(values.get(keyFor('/a.md'))!).text).toBe('draft of A')
+  })
+
+  it('a read that resolves while the scope is null is retried when the subject returns', async () => {
+    storedDraft('/a.md', 'draft of A')
+    const release = gateNextRead()
+    await mount('/a.md')
+
+    act(() => screen?.switchTo(null))
+    release()
+    await settle()
+    expect(screen?.draft).toBe('')
+
+    act(() => screen?.switchTo('/a.md'))
+    await settle()
+    expect(screen?.draft).toBe('draft of A')
+  })
+})
+
 describe('decideFilePreviewDraftRestore', () => {
   const draft = (text: string, baseVersion: string | null) => ({
     kind: 'draft' as const,

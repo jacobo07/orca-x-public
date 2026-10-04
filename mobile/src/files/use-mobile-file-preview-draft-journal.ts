@@ -67,6 +67,10 @@ function identityFor(scope: FilePreviewDraftScope, surface: EditorDraftSurface):
   return { surface, ...scope }
 }
 
+function scopeKey(scope: FilePreviewDraftScope): string {
+  return JSON.stringify([scope.hostId, scope.worktreeId, scope.subjectId])
+}
+
 export function useMobileFilePreviewDraftJournal(args: {
   /** Null until the editable file's content has loaded. */
   scope: FilePreviewDraftScope | null
@@ -77,9 +81,9 @@ export function useMobileFilePreviewDraftJournal(args: {
   onIssue?: (issue: FilePreviewDraftIssue) => void
 }): void {
   const { scope, surface = 'file-preview', draftContent, savedContent, onRestore, onIssue } = args
-  const key = scope ? JSON.stringify([scope.hostId, scope.worktreeId, scope.subjectId]) : null
-  const latestRef = useRef({ draftContent, savedContent, onRestore, onIssue })
-  latestRef.current = { draftContent, savedContent, onRestore, onIssue }
+  const key = scope ? scopeKey(scope) : null
+  const latestRef = useRef({ key, draftContent, savedContent, onRestore, onIssue })
+  latestRef.current = { key, draftContent, savedContent, onRestore, onIssue }
   const restoredKeyRef = useRef<string | null>(null)
   // Removal is owed only for an entry this mount wrote or restored; a stale one is not ours.
   const ownsEntryRef = useRef(false)
@@ -145,9 +149,18 @@ export function useMobileFilePreviewDraftJournal(args: {
       return
     }
     restoredKeyRef.current = key
+    const requestedKey = key
     const loadedContent = latestRef.current.savedContent
     void loadDraft(identityFor(scope, surface)).then((outcome) => {
       const current = latestRef.current
+      // Why: the hook is mounted once per screen and the subject changes in place; a read for another subject
+      // must not land in whatever editor is showing now. A null scope retries when the subject returns.
+      if (current.key !== requestedKey) {
+        if (restoredKeyRef.current === requestedKey) {
+          restoredKeyRef.current = null
+        }
+        return
+      }
       const decision = decideFilePreviewDraftRestore(outcome, loadedContent)
       if (decision.kind === 'restore') {
         // Why: anything the user already typed, or a newer load, wins over the stored copy.
