@@ -144,18 +144,17 @@ export function writeSiteFile(file: JiraSiteFile): void {
         ? file.selectedSiteId
         : activeSiteId
 
-  cachedSiteFile = {
+  const next: JiraSiteFile = {
     version: 1,
     activeSiteId,
     selectedSiteId,
     sites
   }
-  siteFileLoaded = true
   // Why: an in-place write truncates the site list first; an empty list reads as "no sites".
-  writeCredentialFileAtomic(
-    getSiteFilePath(),
-    Buffer.from(JSON.stringify(cachedSiteFile, null, 2), 'utf-8')
-  )
+  writeCredentialFileAtomic(getSiteFilePath(), Buffer.from(JSON.stringify(next, null, 2), 'utf-8'))
+  // Why: a failed write must leave memory equal to the disk, so the cache moves only after it.
+  cachedSiteFile = next
+  siteFileLoaded = true
 }
 
 // Why: writeFileSync truncates the live token on open, so a full disk would erase the previous
