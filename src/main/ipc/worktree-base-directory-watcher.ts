@@ -70,6 +70,20 @@ async function subscribeTarget(
     return activeWatch
   }
 
+  // Why: a failure that already exists when the poller starts is reported before `activeWatch` is assigned.
+  // Dropping it would also arm the poller's once-per-streak latch, silencing the failure for good.
+  const startupWatchErrors: Error[] = []
+  const reportWatchError = (error: Error): void => {
+    const currentWatch = activeWatches.get(target.key) ?? activeWatch
+    if (!currentWatch) {
+      startupWatchErrors.push(error)
+      return
+    }
+    if (!currentWatch.disposed) {
+      handleLocalWatchEvents(currentWatch, error, [], listActiveWatches)
+    }
+  }
+
   // Why: a recursive native watcher here forced fseventsd to deliver every
   // event under the whole workspace root (all worktrees) / whole common .git
   // (objects included) just to observe a few shallow paths. The poller reads
@@ -90,15 +104,14 @@ async function subscribeTarget(
         return currentWatch ? liveWindowForWatch(currentWatch) : null
       }),
       getGitStatusRefPaths: () => [...gitStatusRefPaths],
-      onWatchError: (error) => {
-        const currentWatch = activeWatches.get(target.key) ?? activeWatch
-        if (currentWatch && !currentWatch.disposed) {
-          handleLocalWatchEvents(currentWatch, error, [], listActiveWatches)
-        }
-      }
+      onWatchError: reportWatchError
     }
   )
   activeWatch = createActiveWatch(target, mainWindow, subscription, gitStatusRefPaths)
+  // Why: the poller's startup scan runs before this watch exists; replay what it reported then.
+  for (const error of startupWatchErrors.splice(0)) {
+    reportWatchError(error)
+  }
   if (supportsWorktreeHeadIdentityRefresh(activeWatch)) {
     // Baseline eagerly so the first status-only signal — possibly hours after
     // subscribe — diffs against subscribe-time heads instead of silently
