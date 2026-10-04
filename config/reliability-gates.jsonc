@@ -5952,15 +5952,15 @@
       "id": "startup-upgrade.persisted-session-corpus",
       "title": "Current Orca preserves or recovers old production persisted sessions",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "startup-persistence",
       "layer": "upgrade-fixture",
       "surfaces": ["startup", "upgrade", "session restore", "daemon restore"],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap only; no executable coverage is wired yet.",
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Unit over the real loader (createStore on a temp userData dir), not an Electron boot. The corpus is four fixture eras under tests/fixtures/persisted-sessions written by each era's own Store through the era-writer harness (first-writer-7f29249d4, pre-split-1f483c3e4, pre-5234-36e439907, main-49b1415e7): each loads with its expected content and a plain loaded outcome, and a copy cut in half degrades to a named unreadable-defaulted outcome with the original bytes quarantined byte-identical. Red controls cover an unreadable primary with and without a backup, a second unreadable load that must not overwrite the first quarantine, an unwritable quarantine, one corrupt tab entry salvaged with the drop named, and unknown extra fields.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/5356",
         "https://github.com/stablyai/orca/pull/5234",
@@ -5968,21 +5968,57 @@
       ],
       "invariant": "Startup and restore fixes must preserve or explicitly recover sessions from the last affected production persisted-state schema, not only from state written by current code.",
       "oracle": "Boot current Orca against immutable copied user-data fixtures from affected versions and reject blank replacement panes, duplicate resume tabs, silent session loss, or works-only-after-current-write behavior.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/persisted-session-corpus.test.ts src/main/persisted-session-unreadable-load.test.ts"
+      ],
+      "testFiles": [
+        "src/main/persisted-session-corpus.test.ts",
+        "src/main/persisted-session-unreadable-load.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/persisted-session-corpus.test.ts",
+          "assertions": [
+            "holds enough eras that express terminal tabs across worktrees and a split layout",
+            "loads through the current loader with its expected content",
+            "reports a plain load, never a default state, for its readable bytes",
+            "degrades explicitly with its cut bytes quarantined when the file is truncated",
+            "has no duplicate tab ids and no terminal tab without a pane binding"
+          ]
+        },
+        {
+          "file": "src/main/persisted-session-unreadable-load.test.ts",
+          "assertions": [
+            "quarantines a truncated primary byte-identical and names it when no backup exists",
+            "quarantines the unreadable primary before restoring a parseable backup and names the slot",
+            "never overwrites an earlier quarantine when a second unreadable load lands on the same stamp",
+            "salvages a session with one corrupt tab entry, names the drop and keeps the sibling tabs",
+            "loads a profile with unknown extra top-level and session fields without losing known content"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/persisted-session-corpus.test.ts src/main/persisted-session-unreadable-load.test.ts",
+          "date": "2026-10-04",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "durationSeconds": 2,
+          "summary": "32 tests pass (corpus 22 across the four fixture eras, unreadable-load 10). Executed as `node node_modules/vitest/vitest.mjs run` with the same config and files, the binary `pnpm exec vitest` resolves to. Before the quarantine fix the unreadable-load controls failed 7 of 7 (original bytes lost, no typed outcome); log kept in the closure run dir p3-06-corpus-gate/unreadable-red.log."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 120,
         "scope": "focused Electron upgrade fixture"
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Fixture corpus not implemented."
+        "evidence": "One local linux run of the unit corpus; no repeated-run or CI soak yet."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs immutable pre-fix persisted-state fixture."
+        "status": "partial",
+        "evidence": "The unreadable-primary controls were red on the unfixed loader (7 of 7: original bytes lost, no typed outcome) and green after the quarantine fix; mutants that drop the quarantine, report a defaulted state as loaded, return an empty session on salvage, or make the quarantine non-exclusive turn the corpus gate red. The Electron upgrade-boot rung has no red/green evidence."
       },
       "performanceBudget": {
         "required": true,
@@ -5993,7 +6029,13 @@
         "Run second restart after current code writes upgraded state.",
         "Record startup timing and failure artifact."
       ],
-      "knownGaps": ["No fixture corpus or command yet."],
+      "knownGaps": [
+        "The Electron upgrade-boot rung is not wired: no focused Electron fixture boots current Orca on a copied old user-data directory, so the 120 second p95 budget is unmeasured, and there is no second restart after the current writer rewrites the state.",
+        "Fixtures are Linux-written local-provider sessions only: no daemon, ssh or wsl session partitions and no Windows or macOS writer.",
+        "Corpus eras: first-writer-7f29249d4 (empty session), pre-split-1f483c3e4, pre-5234-36e439907 and main-49b1415e7; later schemas are not represented until they are added.",
+        "OPEN data-loss residual: a profile that is valid JSON but whose whole workspaceSession fails validation is replaced by defaults and the file rewritten on the next save, with only a console.error and no quarantined copy; a single corrupt tab entry is salvaged and named, a whole corrupt session is not. OWNER: 03-08 classification.",
+        "A loader save keeps unknown top-level fields but drops unknown fields inside workspaceSession (observed UNKNOWN_FIELD_ON_SAVE top=kept session=dropped); a downgrade after a newer writer loses them."
+      ],
       "demotionRule": "Cannot promote without old production fixture provenance."
     },
     {

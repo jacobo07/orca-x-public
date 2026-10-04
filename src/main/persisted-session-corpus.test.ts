@@ -6,7 +6,8 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  rmSync
+  rmSync,
+  writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -97,12 +98,19 @@ function leafCount(node: TerminalPaneLayoutNode | null | undefined): number {
 
 const eras = listEras()
 
+function unreadableArtifacts(): string[] {
+  return readdirSync(testState.dir).filter((name) => name.startsWith('orca-data.json.unreadable-'))
+}
+
 describe('persisted-session corpus', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-corpus-'))
+    // Why: the truncation controls make the loader log its expected failure on purpose.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -192,6 +200,39 @@ describe('persisted-session corpus', () => {
           tabId: session.activeTabId
         }).toEqual(expected.active)
       }
+    })
+
+    it('reports a plain load, never a default state, for its readable bytes', async () => {
+      // Arrange
+      mkdirSync(testState.dir, { recursive: true })
+      copyFileSync(join(era.dir, 'orca-data.json'), join(testState.dir, 'orca-data.json'))
+
+      // Act
+      const store = await createStore()
+
+      // Assert: a default state would be empty, so content proves the outcome is not a mislabelled default
+      expect(store.getStartupLoadOutcome()).toEqual({ kind: 'loaded' })
+      expect(store.getRepos().length).toBeGreaterThan(0)
+      expect(unreadableArtifacts()).toEqual([])
+    })
+
+    it('degrades explicitly with its cut bytes quarantined when the file is truncated', async () => {
+      // Arrange: a copy cut mid-file, which can never parse
+      const bytes = readFileSync(join(era.dir, 'orca-data.json'))
+      const cut = bytes.subarray(0, Math.floor(bytes.length / 2))
+      mkdirSync(testState.dir, { recursive: true })
+      writeFileSync(join(testState.dir, 'orca-data.json'), cut)
+
+      // Act
+      const store = await createStore()
+
+      // Assert: the empty state is allowed only with a named reason and the original bytes kept
+      const outcome = store.getStartupLoadOutcome()
+      expect(outcome.kind).toBe('unreadable-defaulted')
+      const artifacts = unreadableArtifacts()
+      expect(artifacts).toHaveLength(1)
+      expect(readFileSync(join(testState.dir, artifacts[0])).equals(cut)).toBe(true)
+      expect(store.getRepos()).toEqual([])
     })
 
     it('has no duplicate tab ids and no terminal tab without a pane binding', async () => {

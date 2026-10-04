@@ -215,4 +215,67 @@ describe('persisted-session unreadable-load red controls', () => {
     })
     expect(quarantineFiles()).toEqual([])
   })
+
+  it('reports backups-unusable-defaulted and quarantines nothing when no primary exists and no backup parses', async () => {
+    // Arrange: only a garbage backup slot, so there is no primary whose bytes could be lost
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(`${dataFile()}.bak.0`, '{"truncated"')
+
+    // Act
+    const store = await createStore()
+
+    // Assert
+    expect(store.getRepos()).toEqual([])
+    expect(store.getStartupLoadOutcome()).toEqual({ kind: 'backups-unusable-defaulted' })
+    expect(quarantineFiles()).toEqual([])
+  })
+
+  it('salvages a session with one corrupt tab entry, names the drop and keeps the sibling tabs', async () => {
+    // Arrange: the same valid fixture with one extra tab entry that cannot validate
+    const profile = JSON.parse(fixtureBytes(PRIMARY_ERA).toString('utf-8')) as {
+      workspaceSession: { tabsByWorktree: Record<string, { id: string }[]> }
+    }
+    const worktreeId = Object.keys(profile.workspaceSession.tabsByWorktree)[0]
+    const siblingIds = profile.workspaceSession.tabsByWorktree[worktreeId].map((tab) => tab.id)
+    profile.workspaceSession.tabsByWorktree[worktreeId].push({ id: 'tab-corrupt-entry' })
+    writePrimary(Buffer.from(JSON.stringify(profile)))
+
+    // Act
+    const store = await createStore()
+
+    // Assert
+    const keptIds = (store.getWorkspaceSession().tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
+    expect(keptIds).toEqual(siblingIds)
+    expect(console.warn).toHaveBeenCalledWith(
+      '[persistence] Salvaged workspace session; dropped corrupt entries:',
+      { count: 1, fields: ['tabsByWorktree'], detailsTruncated: false }
+    )
+    expect(store.getStartupLoadOutcome()).toEqual({ kind: 'loaded' })
+    expect(quarantineFiles()).toEqual([])
+  })
+
+  it('loads a profile with unknown extra top-level and session fields without losing known content', async () => {
+    // Arrange: fields a newer writer might add
+    const profile = JSON.parse(fixtureBytes(PRIMARY_ERA).toString('utf-8')) as Record<
+      string,
+      unknown
+    > & { workspaceSession: Record<string, unknown> }
+    profile.fromTheFutureTopLevel = { a: 1 }
+    profile.workspaceSession.fromTheFutureField = [1, 2]
+    writePrimary(Buffer.from(JSON.stringify(profile)))
+
+    // Act
+    const store = await createStore()
+    store.flush()
+
+    // Assert: known content survives and the load is a plain load
+    expect(repoKeys(store)).toEqual(fixtureExpectedRepos(PRIMARY_ERA))
+    expect(Object.values(store.getWorkspaceSession().tabsByWorktree).flat()).toHaveLength(3)
+    expect(store.getStartupLoadOutcome()).toEqual({ kind: 'loaded' })
+    // Observation only (no assertion): whether the loader's own save keeps what it does not know
+    const saved = readFileSync(dataFile(), 'utf-8')
+    process.stdout.write(
+      `UNKNOWN_FIELD_ON_SAVE top=${saved.includes('fromTheFutureTopLevel') ? 'kept' : 'dropped'} session=${saved.includes('fromTheFutureField') ? 'kept' : 'dropped'}\n`
+    )
+  })
 })
