@@ -274,6 +274,17 @@ describe('NewAgentDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
+  it('says agents are not available in this client, with nothing to retry, when the client has no agent directory', async () => {
+    create.mockResolvedValue({ outcome: 'unavailable' })
+    render()
+    type('new-agent-name', 'Ada')
+
+    await submit()
+
+    expect(field('new-agent-error').textContent).toBe('Agents are not available in this client.')
+    expect(onCreated).not.toHaveBeenCalled()
+  })
+
   it('surfaces a rejected call instead of leaving the button spinning forever', async () => {
     create.mockRejectedValue(new Error('the renderer sent a malformed payload'))
     render()

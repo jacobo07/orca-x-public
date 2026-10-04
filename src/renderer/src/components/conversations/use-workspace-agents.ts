@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { Agent } from '../../../../shared/agent-types'
+import type { Agent, AgentRosterRead } from '../../../../shared/agent-types'
 
 import type { WorkspaceAgentsLoad } from './CognitiveWorkspaceRoster'
 
@@ -12,7 +12,10 @@ export type ScopedAgentLookup =
   | { status: 'missing'; agentId: string }
   // The catalog exists but cannot be read: not "missing", and not a failure a retry could clear.
   | { status: 'unreadable' }
-  | { status: 'failed'; reason: string }
+  // This client has no agent directory: not "missing" either.
+  | { status: 'unavailable' }
+  // No message field on purpose: an exception string is not product copy.
+  | { status: 'failed' }
 
 /**
  * The roster, read once through main's authority and re-read on demand (after a create), never
@@ -29,19 +32,15 @@ export function useWorkspaceAgents(agentScope: string | null): {
     | { status: 'loading' }
     | { status: 'ready'; agents: readonly Agent[] }
     | { status: 'unreadable' }
-    | { status: 'failed'; reason: string }
+    | { status: 'unavailable' }
+    | { status: 'failed' }
   >({ status: 'loading' })
 
   const refresh = useCallback(async () => {
     try {
-      const read = await window.api.agents.roster()
-      setState(
-        read.status === 'readable'
-          ? { status: 'ready', agents: read.agents }
-          : { status: 'unreadable' }
-      )
-    } catch (error) {
-      setState({ status: 'failed', reason: error instanceof Error ? error.message : String(error) })
+      setState(classifyRosterRead(await window.api.agents.roster()))
+    } catch {
+      setState({ status: 'failed' })
     }
   }, [])
 
@@ -57,21 +56,33 @@ export function useWorkspaceAgents(agentScope: string | null): {
     if (state.status === 'loading') {
       return { status: 'loading' }
     }
-    if (state.status === 'unreadable') {
-      return { status: 'unreadable' }
-    }
-    if (state.status === 'failed') {
-      return { status: 'failed', reason: state.reason }
+    if (state.status !== 'ready') {
+      return { status: state.status }
     }
     const agent = state.agents.find((entry) => entry.id === agentScope)
     return agent ? { status: 'found', agent } : { status: 'missing', agentId: agentScope }
   }, [agentScope, state])
 
-  const load: WorkspaceAgentsLoad =
-    state.status === 'failed'
-      ? { status: 'failed', reason: state.reason }
-      : { status: state.status }
+  const load: WorkspaceAgentsLoad = { status: state.status }
   return { load, agents, scoped, refresh }
+}
+
+/** The answer is data from another layer: anything that is not a known shape is a failed read, never an empty roster. */
+function classifyRosterRead(
+  read: unknown
+):
+  | { status: 'ready'; agents: readonly Agent[] }
+  | { status: 'unreadable' }
+  | { status: 'unavailable' }
+  | { status: 'failed' } {
+  const answer = read as Partial<AgentRosterRead> | null | undefined
+  if (answer?.status === 'readable' && Array.isArray(answer.agents)) {
+    return { status: 'ready', agents: answer.agents }
+  }
+  if (answer?.status === 'unreadable' || answer?.status === 'unavailable') {
+    return { status: answer.status }
+  }
+  return { status: 'failed' }
 }
 
 const EMPTY: readonly Agent[] = []

@@ -81,6 +81,11 @@ export function AgentChatHeader({
             )}
           </p>
         ) : null}
+        {lookup.status === 'unavailable' ? (
+          <p className="text-xs text-muted-foreground" role="status">
+            {translate('agents.unavailable', 'Agents are not available in this client.')}
+          </p>
+        ) : null}
         {lookup.status === 'failed' ? (
           <p className="text-xs text-destructive" role="alert">
             {translate('agents.readFailed', 'Could not read your agents.')}

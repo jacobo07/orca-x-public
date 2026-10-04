@@ -938,6 +938,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
+    agents: createAgentDirectoryApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
@@ -3340,6 +3341,17 @@ function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimax
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),
     clearCookie: () => Promise.resolve(notConfigured)
+  }
+}
+
+// Why explicit: the agent catalog lives in the desktop app's store. Inheriting the generic fallback
+// answered `undefined` for `roster` and a false empty list for `list`.
+function createAgentDirectoryApi(): NonNullable<Partial<PreloadApi>['agents']> {
+  return {
+    list: () =>
+      Promise.reject(new Error('The agent directory is only available in the desktop app.')),
+    roster: () => Promise.resolve({ status: 'unavailable' }),
+    create: () => Promise.resolve({ outcome: 'unavailable' })
   }
 }
 

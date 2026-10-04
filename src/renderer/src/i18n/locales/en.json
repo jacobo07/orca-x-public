@@ -17360,6 +17360,7 @@
   },
   "agents": {
     "unreadable": "Your agent list could not be read, and nothing was changed.",
+    "unavailable": "Agents are not available in this client.",
     "create": {
       "catalogUnreadable": "Your agent list could not be read, so no agent was created and nothing was changed."
     }

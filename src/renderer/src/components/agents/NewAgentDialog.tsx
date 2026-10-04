@@ -102,9 +102,11 @@ export function NewAgentDialog(props: {
                 'agents.create.catalogUnreadable',
                 'Your agent list could not be read, so no agent was created and nothing was changed.'
               )
-            : result.outcome === 'not-persisted'
-              ? `${translate('agents.create.notSaved', 'Your agent could not be saved.')} ${result.reason}`
-              : result.reason
+            : result.outcome === 'unavailable'
+              ? translate('agents.unavailable', 'Agents are not available in this client.')
+              : result.outcome === 'not-persisted'
+                ? `${translate('agents.create.notSaved', 'Your agent could not be saved.')} ${result.reason}`
+                : result.reason
     })
   }
 

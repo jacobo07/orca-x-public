@@ -20,7 +20,8 @@ export type WorkspaceAgentsLoad =
   | { status: 'loading' }
   | { status: 'ready' }
   | { status: 'unreadable' }
-  | { status: 'failed'; reason: string }
+  | { status: 'unavailable' }
+  | { status: 'failed' }
 
 /**
  * The Cognitive Workspace's left column: who you can talk to, what you have talked about, and the
@@ -175,6 +176,17 @@ function AgentsLoadNotice({ load, empty }: { load: WorkspaceAgentsLoad; empty: b
       </p>
     )
   }
+  if (load.status === 'unavailable') {
+    return (
+      <p
+        className="px-2 text-xs text-muted-foreground"
+        role="status"
+        data-testid="workspace-agents-unavailable"
+      >
+        {translate('agents.unavailable', 'Agents are not available in this client.')}
+      </p>
+    )
+  }
   if (load.status === 'failed') {
     // "Could not read" is not "you have none": the second invites a duplicate agent.
     return (
@@ -183,7 +195,7 @@ function AgentsLoadNotice({ load, empty }: { load: WorkspaceAgentsLoad; empty: b
         role="alert"
         data-testid="workspace-agents-error"
       >
-        {translate('agents.readFailed', 'Could not read your agents.')} {load.reason}
+        {translate('agents.readFailed', 'Could not read your agents.')}
       </p>
     )
   }

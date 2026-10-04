@@ -58,6 +58,15 @@ export type AgentCreationResult =
   | { outcome: 'not-persisted'; reason: string }
   // The stored catalog cannot be read, so nothing was written. Unlike `not-persisted`, trying again cannot help.
   | { outcome: 'catalog-unreadable' }
+  // This client has no agent directory (the web client): nothing was written and nothing can be retried.
+  | { outcome: 'unavailable' }
 
-/** EMPTY is only ever a `readable` roster: an unreadable catalog is a failed read, not no agents. */
-export type AgentRosterRead = { status: 'readable'; agents: Agent[] } | { status: 'unreadable' }
+/**
+ * EMPTY is only ever a `readable` roster: an unreadable catalog is a failed read, not no agents.
+ * `unavailable` is answered by a client with no agent directory (the web client) and never by main,
+ * so it does not cross the runtime RPC.
+ */
+export type AgentRosterRead =
+  | { status: 'readable'; agents: Agent[] }
+  | { status: 'unreadable' }
+  | { status: 'unavailable' }

@@ -139,7 +139,68 @@ describe('the Workspace roster when the agent catalog cannot be read', () => {
 
     await mount({ tab: 'agents' })
 
-    expect(byTestId('workspace-agents-error')?.textContent).toContain('ipc closed')
+    expect(byTestId('workspace-agents-error')?.textContent).toContain('Could not read your agents.')
     expect(byTestId('workspace-agents-unreadable')).toBeNull()
+  })
+})
+
+// IN-14 of 08-REVIEW: a client with no agent directory (the web client) and an answer of an
+// unexpected shape each get a classified state with fixed copy, never an exception message.
+describe('the Workspace roster when the client has no agent directory or answers oddly', () => {
+  it('says agents are not available in this client, not "no agents" and not "could not be read"', async () => {
+    roster.mockResolvedValue({ status: 'unavailable' })
+
+    await mount({ tab: 'agents' })
+
+    const notice = byTestId('workspace-agents-unavailable')
+    expect(notice?.textContent).toBe('Agents are not available in this client.')
+    expect(byTestId('workspace-agents-empty')).toBeNull()
+    expect(byTestId('workspace-agents-error')).toBeNull()
+    expect(byTestId('workspace-agents-unreadable')).toBeNull()
+  })
+
+  it('reports the scoped agent as unavailable, never missing', async () => {
+    roster.mockResolvedValue({ status: 'unavailable' })
+
+    await mount({ tab: 'agents', agentScope: ADA.id })
+
+    expect(byTestId('harness')?.getAttribute('data-scoped')).toBe('unavailable')
+  })
+
+  it('never prints the exception text of an answer with no shape', async () => {
+    roster.mockResolvedValue(undefined)
+
+    await mount({ tab: 'agents' })
+
+    const notice = byTestId('workspace-agents-error')
+    expect(notice?.textContent).toBe('Could not read your agents.')
+    expect(container.textContent).not.toContain('Cannot read properties')
+    expect(container.textContent).not.toContain('undefined')
+  })
+
+  it('treats a readable answer without a list as a failure, not an empty roster', async () => {
+    roster.mockResolvedValue({ status: 'readable' })
+
+    await mount({ tab: 'agents' })
+
+    expect(byTestId('workspace-agents-error')).not.toBeNull()
+    expect(byTestId('workspace-agents-empty')).toBeNull()
+  })
+
+  it('treats an unknown status as a failure with fixed copy', async () => {
+    roster.mockResolvedValue({ status: 'surprise', detail: 'secret-internal-detail' })
+
+    await mount({ tab: 'agents' })
+
+    expect(byTestId('workspace-agents-error')?.textContent).toBe('Could not read your agents.')
+    expect(container.textContent).not.toContain('secret-internal-detail')
+  })
+
+  it('does not echo a rejection message', async () => {
+    roster.mockRejectedValue(new Error('ipc closed'))
+
+    await mount({ tab: 'agents' })
+
+    expect(container.textContent).not.toContain('ipc closed')
   })
 })
