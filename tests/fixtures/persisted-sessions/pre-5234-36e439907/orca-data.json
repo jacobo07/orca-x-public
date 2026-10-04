@@ -1,0 +1,523 @@
+{
+  "schemaVersion": 1,
+  "repos": [
+    {
+      "id": "repo-alpha",
+      "path": "/synthetic/repo-alpha",
+      "displayName": "alpha",
+      "badgeColor": "#737373",
+      "addedAt": 1767225600000
+    },
+    {
+      "id": "repo-beta",
+      "path": "/synthetic/repo-beta",
+      "displayName": "beta",
+      "badgeColor": "#737373",
+      "addedAt": 1767225600001
+    }
+  ],
+  "projectGroups": [],
+  "folderWorkspaces": [],
+  "sparsePresetsByRepo": {},
+  "worktreeMeta": {
+    "repo-alpha::/synthetic/repo-alpha": {
+      "instanceId": "00000000-0000-4000-8000-000000000002",
+      "displayName": "alpha main",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "linkedLinearIssue": null,
+      "linkedGitLabMR": null,
+      "linkedGitLabIssue": null,
+      "isArchived": false,
+      "isUnread": false,
+      "isPinned": false,
+      "sortOrder": 1767225600000,
+      "lastActivityAt": 0,
+      "workspaceStatus": "in-progress"
+    },
+    "repo-beta::/synthetic/repo-beta": {
+      "instanceId": "00000000-0000-4000-8000-000000000003",
+      "displayName": "beta main",
+      "comment": "",
+      "linkedIssue": null,
+      "linkedPR": null,
+      "linkedLinearIssue": null,
+      "linkedGitLabMR": null,
+      "linkedGitLabIssue": null,
+      "isArchived": false,
+      "isUnread": false,
+      "isPinned": false,
+      "sortOrder": 1767225600000,
+      "lastActivityAt": 0,
+      "workspaceStatus": "in-progress"
+    }
+  },
+  "worktreeLineageById": {},
+  "settings": {
+    "workspaceDir": "/synthetic/home/orca/workspaces",
+    "nestWorkspaces": true,
+    "workspaceDirHistory": [],
+    "refreshLocalBaseRefOnWorktreeCreate": false,
+    "localBaseRefSuggestionDismissed": false,
+    "autoRenameBranchFromWork": true,
+    "autoRenameBranchFromWorkDefaultedOn": true,
+    "branchPrefix": "git-username",
+    "branchPrefixCustom": "",
+    "enableGitHubAttribution": false,
+    "theme": "system",
+    "uiLanguage": "system",
+    "appIcon": "classic",
+    "appFontFamily": "Geist",
+    "editorAutoSave": false,
+    "editorAutoSaveDelayMs": 1000,
+    "editorMinimapEnabled": false,
+    "markdownReviewToolsEnabled": true,
+    "primarySelectionMiddleClickPaste": true,
+    "primarySelectionMiddleClickPasteDefaultedForLinux": true,
+    "primarySelectionMiddleClickPasteDefaultedForTerminalDefaults": true,
+    "terminalFontSize": 14,
+    "terminalFontFamily": "DejaVu Sans Mono",
+    "terminalFontWeight": 500,
+    "terminalLineHeight": 1,
+    "terminalGpuAcceleration": "auto",
+    "terminalLigatures": "auto",
+    "terminalCursorStyle": "block",
+    "terminalCursorStyleDefaultedToBlock": true,
+    "terminalCursorBlink": true,
+    "terminalThemeDark": "Ghostty Default Style Dark",
+    "terminalDividerColorDark": "#3f3f46",
+    "terminalUseSeparateLightTheme": true,
+    "terminalThemeLight": "Builtin Tango Light",
+    "terminalCustomThemes": [],
+    "terminalDividerColorLight": "#d4d4d8",
+    "terminalInactivePaneOpacity": 0.8,
+    "terminalActivePaneOpacity": 1,
+    "terminalPaneOpacityTransitionMs": 140,
+    "terminalDividerThicknessPx": 3,
+    "terminalRightClickToPaste": true,
+    "terminalWindowsShell": "powershell.exe",
+    "terminalWindowsWslDistro": null,
+    "localAccountRuntime": "host",
+    "localAccountWslDistro": null,
+    "terminalWindowsPowerShellImplementation": "auto",
+    "terminalMouseHideWhileTyping": false,
+    "terminalQuickCommands": [],
+    "terminalFocusFollowsMouse": false,
+    "windowBackgroundBlur": false,
+    "terminalClipboardOnSelect": false,
+    "terminalAllowOsc52Clipboard": false,
+    "claudeAgentTeamsMode": "off",
+    "setupScriptLaunchMode": "new-tab",
+    "terminalScrollbackBytes": 10000000,
+    "httpProxyUrl": "",
+    "httpProxyBypassRules": "",
+    "electronHttp1CompatibilityMode": false,
+    "openLinksInApp": true,
+    "openInApplications": [
+      {
+        "id": "vscode",
+        "label": "VS Code",
+        "command": "code"
+      }
+    ],
+    "rightSidebarOpenByDefault": true,
+    "showGitIgnoredFiles": true,
+    "sourceControlViewMode": "list",
+    "showTitlebarAppName": true,
+    "showTasksButton": true,
+    "showAutomationsButton": true,
+    "showMobileButton": true,
+    "ctrlTabOrderMode": "mru",
+    "terminalShortcutPolicy": "orca-first",
+    "floatingTerminalEnabled": true,
+    "floatingTerminalDefaultedForAllUsers": true,
+    "floatingTerminalCwd": "~",
+    "floatingTerminalTrustedCwds": [],
+    "floatingTerminalCwdMigratedToAppWorkspace": true,
+    "floatingTerminalTriggerLocation": "floating-button",
+    "notifications": {
+      "enabled": true,
+      "agentTaskComplete": true,
+      "terminalBell": false,
+      "suppressWhenFocused": true,
+      "customSoundId": "system",
+      "customSoundPath": null,
+      "customSoundVolume": 100
+    },
+    "diffDefaultView": "inline",
+    "combinedDiffFileTreeVisibleByDefault": false,
+    "promptCacheTimerEnabled": false,
+    "promptCacheTtlMs": 300000,
+    "codexManagedAccounts": [],
+    "activeCodexManagedAccountId": null,
+    "activeCodexManagedAccountIdsByRuntime": {
+      "host": null,
+      "wsl": {}
+    },
+    "claudeManagedAccounts": [],
+    "activeClaudeManagedAccountId": null,
+    "terminalScopeHistoryByWorktree": true,
+    "defaultTuiAgent": null,
+    "disabledTuiAgents": [],
+    "claudeAgentTeamsDefaultDisabledMigrated": true,
+    "skipDeleteWorktreeConfirm": false,
+    "skipDeleteAutomationConfirm": false,
+    "defaultTaskViewPreset": "all",
+    "defaultTaskSource": "github",
+    "visibleTaskProviders": [
+      "github",
+      "gitlab",
+      "linear",
+      "jira"
+    ],
+    "visibleTaskProvidersDefaultedForJira": true,
+    "defaultRepoSelection": null,
+    "defaultLinearTeamSelection": null,
+    "opencodeSessionCookie": "",
+    "opencodeWorkspaceId": "",
+    "geminiCliOAuthEnabled": false,
+    "agentCmdOverrides": {},
+    "agentDefaultArgs": {
+      "claude": "--dangerously-skip-permissions",
+      "claude-agent-teams": "--dangerously-skip-permissions",
+      "openclaude": "--dangerously-skip-permissions",
+      "codex": "--dangerously-bypass-approvals-and-sandbox",
+      "gemini": "--yolo",
+      "antigravity": "--dangerously-skip-permissions",
+      "aider": "--yes-always",
+      "amp": "--dangerously-allow-all",
+      "kiro": "--trust-all-tools",
+      "crush": "--yolo",
+      "autohand": "--unrestricted",
+      "cline": "--auto-approve true",
+      "command-code": "--yolo",
+      "continue": "--allow \"*\"",
+      "cursor": "--yolo",
+      "kimi": "--yolo",
+      "mistral-vibe": "--agent auto-approve",
+      "qwen-code": "--approval-mode yolo",
+      "rovo": "--yolo",
+      "hermes": "--yolo",
+      "copilot": "--yolo",
+      "grok": "--permission-mode bypassPermissions"
+    },
+    "agentDefaultEnv": {
+      "goose": {
+        "GOOSE_MODE": "auto"
+      }
+    },
+    "agentYoloDefaultsMigrated": true,
+    "agentStatusHooksEnabled": true,
+    "tabAutoGenerateTitle": false,
+    "keepComputerAwakeWhileAgentsRun": false,
+    "terminalMacOptionAsAlt": "auto",
+    "terminalMacOptionAsAltMigrated": false,
+    "terminalJISYenToBackslash": false,
+    "experimentalMobile": false,
+    "mobileEmulatorEnabled": true,
+    "mobileEmulatorDefaultDeviceUdid": null,
+    "mobileAutoRestoreFitMs": null,
+    "experimentalPet": false,
+    "experimentalActivity": false,
+    "experimentalActivityDefaultedOffForAllUsers": true,
+    "experimentalTerminalAttention": false,
+    "compactWorktreeCards": false,
+    "experimentalWorktreeSymlinks": false,
+    "activeRuntimeEnvironmentId": null,
+    "githubProjects": {
+      "pinned": [],
+      "recent": [],
+      "lastViewByProject": {},
+      "activeProject": null
+    },
+    "commitMessageAi": {
+      "enabled": true,
+      "agentId": null,
+      "selectedModelByAgent": {},
+      "discoveredModelsByAgent": {},
+      "selectedModelByAgentByHost": {},
+      "discoveredModelsByAgentByHost": {},
+      "selectedThinkingByModel": {},
+      "customPrompt": "",
+      "customAgentCommand": ""
+    },
+    "sourceControlAi": {
+      "enabled": true,
+      "actions": {
+        "commitMessage": {
+          "commandInputTemplate": "{basePrompt}"
+        },
+        "pullRequest": {
+          "commandInputTemplate": "{basePrompt}"
+        },
+        "branchName": {
+          "commandInputTemplate": "{basePrompt}"
+        },
+        "fixCommitFailure": {
+          "commandInputTemplate": "{basePrompt}"
+        },
+        "fixChecks": {
+          "commandInputTemplate": "{basePrompt}"
+        },
+        "resolveConflicts": {
+          "commandInputTemplate": "{basePrompt}"
+        },
+        "resolveComments": {
+          "commandInputTemplate": "{basePrompt}"
+        }
+      },
+      "agentId": null,
+      "selectedModelByAgent": {},
+      "selectedModelByAgentByHost": {},
+      "discoveredModelsByAgent": {},
+      "discoveredModelsByAgentByHost": {},
+      "selectedThinkingByModel": {},
+      "customAgentCommand": "",
+      "instructionsByOperation": {
+        "commitMessage": "",
+        "pullRequest": "",
+        "branchName": ""
+      },
+      "prCreationDefaults": {
+        "draft": false,
+        "useTemplate": false,
+        "generateDetailsOnOpen": false,
+        "openAfterCreate": false
+      },
+      "launchActionDefaults": {}
+    },
+    "voice": {
+      "enabled": false,
+      "sttModel": "",
+      "modelsDir": "",
+      "language": "en",
+      "dictationMode": "toggle",
+      "terminalConfirmBeforeInsert": false,
+      "userModels": [],
+      "openAiApiKeyConfigured": false
+    },
+    "telemetry": {
+      "existedBeforeTelemetryRelease": false,
+      "optedIn": true,
+      "installId": "00000000-0000-4000-8000-000000000001"
+    }
+  },
+  "ui": {
+    "lastActiveRepoId": null,
+    "lastActiveWorktreeId": null,
+    "sidebarWidth": 280,
+    "rightSidebarOpen": true,
+    "rightSidebarTab": "explorer",
+    "rightSidebarExplorerView": "files",
+    "rightSidebarWidth": 350,
+    "groupBy": "repo",
+    "sortBy": "recent",
+    "projectOrderBy": "manual",
+    "showActiveOnly": false,
+    "hideSleepingWorkspaces": false,
+    "showSleepingWorkspaces": true,
+    "hideDefaultBranchWorkspace": false,
+    "showDotfilesByWorktree": {},
+    "filterRepoIds": [],
+    "collapsedGroups": [],
+    "uiZoomLevel": 0,
+    "editorFontZoomLevel": 0,
+    "worktreeCardProperties": [
+      "status",
+      "unread",
+      "issue",
+      "linear-issue",
+      "pr",
+      "comment",
+      "ports",
+      "inline-agents"
+    ],
+    "agentActivityDisplayMode": "compact",
+    "workspaceStatuses": [
+      {
+        "id": "completed",
+        "label": "Done",
+        "color": "conductor-done",
+        "icon": "conductor-done"
+      },
+      {
+        "id": "in-review",
+        "label": "In review",
+        "color": "conductor-review",
+        "icon": "conductor-review"
+      },
+      {
+        "id": "in-progress",
+        "label": "In progress",
+        "color": "conductor-progress",
+        "icon": "conductor-progress"
+      },
+      {
+        "id": "todo",
+        "label": "Todo",
+        "color": "neutral",
+        "icon": "circle"
+      }
+    ],
+    "workspaceBoardOpacity": 1,
+    "workspaceBoardColumnWidth": 308,
+    "_workspaceStatusesDefaultOrderMigrated": true,
+    "_workspaceStatusesDefaultWorkflowMigrated": true,
+    "_workspaceStatusesDefaultVisualsMigrated": true,
+    "statusBarItems": [
+      "claude",
+      "codex",
+      "gemini",
+      "opencode-go",
+      "kimi",
+      "ssh",
+      "resource-usage",
+      "ports"
+    ],
+    "statusBarVisible": true,
+    "dismissedUpdateVersion": null,
+    "lastUpdateCheckAt": null,
+    "trustedOrcaHooks": {},
+    "setupScriptPromptDismissedRepoIds": [],
+    "acknowledgedAgentsByPaneKey": {},
+    "setupGuideSidebarDismissed": false,
+    "setupGuideBrowserMilestoneMigrated": true,
+    "setupGuideBrowserMilestoneLegacyComplete": false,
+    "browserImportHintHidden": false,
+    "workspaceCleanup": {
+      "dismissals": {}
+    },
+    "featureTipsSeenIds": [],
+    "featureInteractions": {},
+    "contextualToursSeenIds": [],
+    "browserDefaultZoomLevel": 0,
+    "browserKagiSessionLink": null
+  },
+  "githubCache": {
+    "pr": {},
+    "issue": {}
+  },
+  "workspaceSession": {
+    "activeRepoId": "repo-alpha",
+    "activeWorktreeId": "repo-alpha::/synthetic/repo-alpha",
+    "activeTabId": "tab-a1",
+    "tabsByWorktree": {
+      "repo-alpha::/synthetic/repo-alpha": [
+        {
+          "id": "tab-a1",
+          "ptyId": "pty-tab-a1",
+          "worktreeId": "repo-alpha::/synthetic/repo-alpha",
+          "title": "Terminal 1",
+          "customTitle": null,
+          "color": null,
+          "sortOrder": 0,
+          "createdAt": 1767225600000
+        },
+        {
+          "id": "tab-a2",
+          "ptyId": "pty-tab-a2",
+          "worktreeId": "repo-alpha::/synthetic/repo-alpha",
+          "title": "Build",
+          "customTitle": null,
+          "color": null,
+          "sortOrder": 1,
+          "createdAt": 1767225600000
+        }
+      ],
+      "repo-beta::/synthetic/repo-beta": [
+        {
+          "id": "tab-b1",
+          "ptyId": "pty-tab-b1",
+          "worktreeId": "repo-beta::/synthetic/repo-beta",
+          "title": "Terminal 1",
+          "customTitle": null,
+          "color": null,
+          "sortOrder": 0,
+          "createdAt": 1767225600000
+        }
+      ]
+    },
+    "terminalLayoutsByTabId": {
+      "tab-a1": {
+        "root": {
+          "type": "split",
+          "direction": "vertical",
+          "first": {
+            "type": "leaf",
+            "leafId": "11111111-1111-4111-8111-111111111111"
+          },
+          "second": {
+            "type": "leaf",
+            "leafId": "22222222-2222-4222-8222-222222222222"
+          }
+        },
+        "activeLeafId": "11111111-1111-4111-8111-111111111111",
+        "expandedLeafId": null,
+        "ptyIdsByLeafId": {
+          "11111111-1111-4111-8111-111111111111": "pty-leaf-a",
+          "22222222-2222-4222-8222-222222222222": "pty-leaf-b"
+        }
+      },
+      "tab-a2": {
+        "root": {
+          "type": "leaf",
+          "leafId": "33333333-3333-4333-8333-333333333333"
+        },
+        "activeLeafId": "33333333-3333-4333-8333-333333333333",
+        "expandedLeafId": null,
+        "ptyIdsByLeafId": {
+          "33333333-3333-4333-8333-333333333333": "pty-leaf-33333333"
+        }
+      },
+      "tab-b1": {
+        "root": {
+          "type": "leaf",
+          "leafId": "44444444-4444-4444-8444-444444444444"
+        },
+        "activeLeafId": "44444444-4444-4444-8444-444444444444",
+        "expandedLeafId": null,
+        "ptyIdsByLeafId": {
+          "44444444-4444-4444-8444-444444444444": "pty-leaf-44444444"
+        }
+      }
+    },
+    "openFilesByWorktree": {
+      "repo-alpha::/synthetic/repo-alpha": [
+        {
+          "filePath": "/synthetic/repo-alpha/README.md",
+          "relativePath": "README.md",
+          "worktreeId": "repo-alpha::/synthetic/repo-alpha",
+          "language": "markdown"
+        }
+      ]
+    }
+  },
+  "sshTargets": [],
+  "sshRemotePtyLeases": [],
+  "migrationUnsupportedPtyEntries": [],
+  "legacyPaneKeyAliasEntries": [],
+  "automations": [],
+  "automationRuns": [],
+  "onboarding": {
+    "flowVersion": 3,
+    "closedAt": null,
+    "outcome": null,
+    "lastCompletedStep": -1,
+    "checklist": {
+      "addedRepo": false,
+      "choseAgent": false,
+      "ranFirstAgent": false,
+      "ranSecondAgentOnSameTask": false,
+      "triedCmdJ": false,
+      "shapedSidebar": false,
+      "reviewedDiff": false,
+      "openedPr": false,
+      "addedFolder": false,
+      "openedFile": false,
+      "ranAgentOnFile": false,
+      "dismissed": false
+    }
+  },
+  "featureInteractionTelemetryBuckets": {}
+}

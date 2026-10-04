@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "era": "pre-5234-36e439907",
+  "sourceSha": "36e439907ac131a0d4fa720ffc3f0a869d27153b",
+  "sourceDate": "2026-06-11",
+  "sourceSubject": "Implement GitHub issue close reasons and tabbed comment composer (#5235)",
+  "generatorCommand": "bash config/scripts/persisted-session-corpus-generate.sh --era pre-5234-36e439907 --sha 36e439907 --floor yes --out tests/fixtures/persisted-sessions --work <work>",
+  "writerSha256": "9b079d79731e13627982cb39ed6c05ea78ed132ecf7dd5c94190162522493a94",
+  "eraConfigSha256": "30bf2fba576abf854bddba8d04dd61f8de586b0397df7fbc452fb08d3b845dac",
+  "nodeVersion": "v24.21.0",
+  "eraLockfileSha256Prefix": "fe64515dfa847e52",
+  "currentLockfileSha256Prefix": "0e3e7a3189836879",
+  "eraSelfRead": "ok",
+  "outputSha256": "aea5427864c46327a0ba980b12b0e97768374e6e2a03354094981903467ca77e",
+  "outputBytes": 15592,
+  "expected": {
+    "repos": [
+      "repo-alpha|/synthetic/repo-alpha|alpha",
+      "repo-beta|/synthetic/repo-beta|beta"
+    ],
+    "terminalTabsByWorktree": {
+      "repo-alpha::/synthetic/repo-alpha": [
+        "tab-a1|Terminal 1",
+        "tab-a2|Build"
+      ],
+      "repo-beta::/synthetic/repo-beta": [
+        "tab-b1|Terminal 1"
+      ]
+    },
+    "splitLeavesByTab": {
+      "tab-a1": 2,
+      "tab-a2": 1,
+      "tab-b1": 1
+    },
+    "editorFilesByWorktree": {
+      "repo-alpha::/synthetic/repo-alpha": [
+        "/synthetic/repo-alpha/README.md"
+      ]
+    },
+    "active": {
+      "repoId": "repo-alpha",
+      "worktreeId": "repo-alpha::/synthetic/repo-alpha",
+      "tabId": "tab-a1"
+    }
+  },
+  "invariantsExercised": [
+    "repos",
+    "worktree-meta",
+    "terminal-tabs",
+    "split-layout",
+    "editor-tabs",
+    "active-selection"
+  ],
+  "countsTowardFloor": true,
+  "clock": {
+    "dateNow": 1767225600000,
+    "fakedApis": [
+      "Date"
+    ],
+    "randomUUID": "counter"
+  }
+}
