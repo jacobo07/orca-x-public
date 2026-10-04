@@ -148,6 +148,7 @@
         "src/main/persistence-durable-publish-order.test.ts",
         "src/main/persistence-write-failure-semantics.test.ts",
         "src/main/persisted-session-unreadable-load.test.ts",
+        "src/main/persistence/loading-store/unreadable-profile-quarantine.test.ts",
         "src/main/orca-profiles/profile-project-state-durability.test.ts",
         "src/main/orca-profiles/profile-project-transfer-write-failure.test.ts"
       ],

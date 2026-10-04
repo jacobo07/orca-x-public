@@ -147,3 +147,31 @@ describe('loadManifest: knownFailures never baseline a suite error (WR-23)', () 
     expect(() => loadManifest(withKnown('a.test.ts::a known flake'))).not.toThrow()
   })
 })
+
+describe('the stability group proves the profile-file contract it is named for (IN-04)', () => {
+  const CONTRACTS = parse(
+    readFileSync(new URL('../durability-contracts.jsonc', import.meta.url), 'utf8')
+  )
+  const contract = CONTRACTS.contracts.find((c) => c.id === 'persistence.profile-data-file')
+  const group = MANIFEST.unitGroups.find((g) => g.name === 'stability')
+  const QUARANTINE_TEST = 'src/main/persistence/loading-store/unreadable-profile-quarantine.test.ts'
+
+  it('finds the contract and the group (control: the checks below are not vacuous)', () => {
+    expect(contract, 'persistence.profile-data-file must exist').toBeDefined()
+    expect(group, 'the stability group must exist').toBeDefined()
+    expect(contract.provenBy.length).toBeGreaterThan(0)
+  })
+
+  it('names the quarantine test in provenBy and runs it in the stability group', () => {
+    expect(contract.provenBy).toContain(QUARANTINE_TEST)
+    expect(group.paths).toContain(QUARANTINE_TEST)
+  })
+
+  it('floors the group at every listed file, so a file that stops passing is red', () => {
+    expect(group.minPassedFiles).toBe(group.paths.length)
+  })
+
+  it('runs every proof the contract names, so a deleted or broken one turns the gate red', () => {
+    expect(group.paths).toEqual(expect.arrayContaining(contract.provenBy))
+  })
+})

@@ -75,6 +75,7 @@
         "src/main/orca-profiles/profile-project-transfer-write-failure.test.ts",
         "src/main/persisted-session-corpus.test.ts",
         "src/main/persisted-session-unreadable-load.test.ts",
+        "src/main/persistence/loading-store/unreadable-profile-quarantine.test.ts",
         "src/main/integration-token-save-disk-full.test.ts",
         "src/renderer/src/store/slices/editor-draft-hot-exit-round-trip.test.ts",
         "src/main/durable-file-write.test.ts",
@@ -94,7 +95,7 @@
         "src/renderer/src/components/terminal-pane/visible-pane-presentation-liveness.test.ts",
         "src/renderer/src/components/terminal-pane/visible-pane-output-liveness.test.ts"
       ],
-      "minPassedFiles": 23
+      "minPassedFiles": 24
     }
   ],
   "staticGates": [
