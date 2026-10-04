@@ -1,4 +1,5 @@
 import { mintAgentId } from '../../../shared/agent-identity'
+import { isReadableAgent } from '../../../shared/agent-project-id-remap'
 import type { Agent, AgentCreationInput, AgentCreationResult } from '../../../shared/agent-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
@@ -23,6 +24,16 @@ export type AgentMutationOperations = {
   now?: () => number
 }
 
+// Why: the catalog has no load-time normalizer, so a corrupt entry stays in the file for its owner. Readers skip it, because
+// the sort and the conversation lookups dereference id and name; they never rewrite it (IN-09 of 08-REVIEW).
+function isRosterAgent(entry: unknown): entry is Agent {
+  return (
+    isReadableAgent(entry) &&
+    typeof (entry as Partial<Agent>).id === 'string' &&
+    typeof (entry as Partial<Agent>).name === 'string'
+  )
+}
+
 export class AgentPersistenceOperations {
   constructor(private readonly operations: AgentMutationOperations) {}
 
@@ -43,7 +54,8 @@ export class AgentPersistenceOperations {
    * reads looks like the roster changed when it did not.
    */
   getAgents(): Agent[] {
-    return [...(this.state.agents ?? [])].sort(
+    const catalog: unknown = this.state.agents
+    return (Array.isArray(catalog) ? catalog.filter(isRosterAgent) : []).sort(
       (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
     )
   }
@@ -96,12 +108,19 @@ export class AgentPersistenceOperations {
       updatedAt: createdAt
     }
 
-    this.state.agents = [...(this.state.agents ?? []), agent]
+    const catalog: unknown = this.state.agents
+    if (catalog !== undefined && catalog !== null && !Array.isArray(catalog)) {
+      // Why: appending would mean replacing the unreadable value, which belongs to whoever wrote it.
+      return { outcome: 'not-persisted', reason: 'the stored agent catalog is unreadable' }
+    }
+    this.state.agents = [...((catalog as Agent[] | undefined | null) ?? []), agent]
     this.operations.scheduleSave()
     try {
       await this.operations.flushDurableStateOrThrowAsync()
     } catch (error) {
-      this.state.agents = (this.state.agents ?? []).filter((entry) => entry.id !== agent.id)
+      this.state.agents = (this.state.agents ?? []).filter(
+        (entry) => !(isReadableAgent(entry) && entry.id === agent.id)
+      )
       return {
         outcome: 'not-persisted',
         reason: error instanceof Error ? error.message : String(error)
