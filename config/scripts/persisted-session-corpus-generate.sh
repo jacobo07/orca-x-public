@@ -78,6 +78,10 @@ PATHS=()
 for p in src config package.json tsconfig.json; do
   git -C "$REPO" cat-file -e "$FULL_SHA:$p" 2> /dev/null && PATHS+=("$p")
 done
+# Why: an old tsconfig.json may only reference sibling tsconfig*.json files that Vite then fails to parse.
+for p in $(git -C "$REPO" ls-tree --name-only "$FULL_SHA" | grep -E '^tsconfig[A-Za-z0-9._-]*\.json$'); do
+  case " ${PATHS[*]} " in *" $p "*) ;; *) PATHS+=("$p") ;; esac
+done
 [ ${#PATHS[@]} -gt 0 ] || drop "no source paths at $FULL_SHA"
 git -C "$REPO" archive "$FULL_SHA" -- "${PATHS[@]}" | tar -x -C "$TREE" >> "$LOG" 2>&1 || drop "git archive failed"
 ln -s "$REPO/node_modules" "$TREE/node_modules"
@@ -151,6 +155,7 @@ const provenance = {
   invariantsExercised: result.invariantsExercised,
   countsTowardFloor: e.FLOOR === "yes" && holds,
   clock: result.clock,
+  ...(result.expectedSessionState ? { expectedSessionState: result.expectedSessionState } : {}),
 };
 fs.writeFileSync(e.OUTDIR + "/provenance.json", JSON.stringify(provenance, null, 2) + "\n");
 console.log(

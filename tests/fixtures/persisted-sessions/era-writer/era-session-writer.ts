@@ -41,11 +41,11 @@ type EraStore = {
   addRepo: (repo: Json) => void
   getRepos: () => Json[]
   setWorktreeMeta: (worktreeId: string, meta: Json) => unknown
-  setWorkspaceSession: (session: Json) => void
-  getWorkspaceSession: () => Json
+  setWorkspaceSession?: (session: Json) => void
+  getWorkspaceSession?: () => Json
   flush: () => void
 }
-type EraPersistence = { Store: new () => EraStore; initDataPath: () => void }
+type EraPersistence = { Store: new () => EraStore; initDataPath?: () => void }
 
 const eraName = requiredEnv('ERA_NAME')
 const eraTree = requiredEnv('ERA_TREE')
@@ -55,10 +55,33 @@ const PINNED_NOW = Date.UTC(2026, 0, 1, 0, 0, 0)
 
 // Why: era names whose types express a field the scenario uses; others leave it out and say so in
 // `invariantsExercised`. Measured from `git show <sha>:<types file>` per era, never from HEAD.
-const ERA_NOTES: Record<string, { leafStyle: 'uuid' | 'pane'; openFilesKey: string }> = {
+type EraNote = { leafStyle: 'uuid' | 'pane'; openFilesKey: string; hasSession: boolean }
+const ERA_NOTES: Record<string, EraNote> = {
   // Why: production writer; stable pane ids are UUIDs and editor files are keyed by worktree.
-  'main-49b1415e7': { leafStyle: 'uuid', openFilesKey: 'openFilesByWorktree' }
+  'main-49b1415e7': { leafStyle: 'uuid', openFilesKey: 'openFilesByWorktree', hasSession: true },
+  // Why: last monolithic writer; src/shared/workspace-session-state-types.ts has the same three session fields.
+  'pre-split-1f483c3e4': {
+    leafStyle: 'uuid',
+    openFilesKey: 'openFilesByWorktree',
+    hasSession: true
+  },
+  // Why: src/shared/types.ts at this sha already keys editor files by worktree (openFilesByWorktree), not `openFiles`.
+  'pre-5234-36e439907': {
+    leafStyle: 'uuid',
+    openFilesKey: 'openFilesByWorktree',
+    hasSession: true
+  },
+  // Why: the first persistence.ts has no workspace session at all (no tabs, layouts or editor files, no
+  // setWorkspaceSession), so only repos and worktree meta can be written.
+  'first-writer-7f29249d4': {
+    leafStyle: 'uuid',
+    openFilesKey: 'openFilesByWorktree',
+    hasSession: false
+  }
 }
+
+const SESSION_INVARIANTS = ['terminal-tabs', 'split-layout', 'editor-tabs', 'active-selection']
+const BASE_INVARIANTS = ['repos', 'worktree-meta']
 
 function requiredEnv(name: string): string {
   const value = process.env[name]
@@ -198,7 +221,8 @@ async function loadEraPersistence(): Promise<EraPersistence> {
   const mod = (await import(
     /* @vite-ignore */ join(eraTree, 'src/main/persistence')
   )) as EraPersistence
-  mod.initDataPath()
+  // Why: the first writer has no initDataPath; it resolves its data file when the module loads.
+  mod.initDataPath?.()
   return mod
 }
 
@@ -218,13 +242,23 @@ it(`writes a session with the ${eraName} Store`, async () => {
   for (const [worktreeId, meta] of Object.entries(scenario.worktreeMeta)) {
     store.setWorktreeMeta(worktreeId, meta)
   }
-  store.setWorkspaceSession(scenario.session)
+  if (notes.hasSession) {
+    if (!store.setWorkspaceSession) {
+      throw new Error(`era ${eraName} Store has no setWorkspaceSession`)
+    }
+    store.setWorkspaceSession(scenario.session)
+  }
   store.flush()
 
-  const expected = project(scenario.repos, scenario.session, notes.openFilesKey)
+  const writtenSession = notes.hasSession ? scenario.session : {}
+  const expected = project(scenario.repos, writtenSession, notes.openFilesKey)
   const readerModule = await loadEraPersistence()
   const reader = new readerModule.Store()
-  const loaded = project(reader.getRepos(), reader.getWorkspaceSession(), notes.openFilesKey)
+  if (notes.hasSession && !reader.getWorkspaceSession) {
+    throw new Error(`era ${eraName} Store has no getWorkspaceSession`)
+  }
+  const loadedSession = reader.getWorkspaceSession ? reader.getWorkspaceSession() : {}
+  const loaded = project(reader.getRepos(), loadedSession, notes.openFilesKey)
   const eraSelfRead = JSON.stringify(loaded) === JSON.stringify(expected) ? 'ok' : 'failed'
 
   writeFileSync(
@@ -235,14 +269,10 @@ it(`writes a session with the ${eraName} Store`, async () => {
         eraSelfRead,
         eraSelfReadObserved: eraSelfRead === 'ok' ? undefined : loaded,
         expected,
-        invariantsExercised: [
-          'repos',
-          'worktree-meta',
-          'terminal-tabs',
-          'split-layout',
-          'editor-tabs',
-          'active-selection'
-        ],
+        invariantsExercised: notes.hasSession
+          ? [...BASE_INVARIANTS, ...SESSION_INVARIANTS]
+          : BASE_INVARIANTS,
+        expectedSessionState: notes.hasSession ? undefined : 'empty-no-workspace-session',
         clock: { dateNow: PINNED_NOW, fakedApis: ['Date'], randomUUID: 'counter' }
       },
       null,
