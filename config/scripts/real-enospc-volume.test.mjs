@@ -626,6 +626,57 @@ linux('real-enospc-volume.sh --recover', () => {
     expectRefusedUntouched(row, run, 'not-owned')
   })
 
+  function plantLogLink(row) {
+    const victim = join(row.root, 'victim.txt')
+    writeFileSync(victim, 'victim bytes\n')
+    symlinkSync(victim, join(row.runDir, 'volume.log'))
+    return { victim, before: sha(victim) }
+  }
+
+  it("a refusal of a run dir that is not the caller's never writes through its volume.log symlink", () => {
+    const row = makeRow()
+    killedRun(row, { mounted: true })
+    chmodSync(row.runDir, 0o755)
+    const { victim, before } = plantLogLink(row)
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain('RECOVER_REFUSED not-owned')
+    expect(sha(victim)).toBe(before)
+    expect(row.sudoCalls()).toEqual([])
+  })
+
+  it('refuses, and does not append to, a volume.log symlink inside a run dir the caller owns', () => {
+    const row = makeRow()
+    killedRun(row, { mounted: true })
+    const { victim, before } = plantLogLink(row)
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain(`RECOVER_REFUSED symlink ${row.runDir}/volume.log`)
+    expect(sha(victim)).toBe(before)
+    expect(row.sudoCalls()).toEqual([])
+  })
+
+  it('refuses an existing run dir without writing through its volume.log symlink', () => {
+    const row = makeRow()
+    mkdirSync(row.runDir)
+    const { victim, before } = plantLogLink(row)
+    const run = drive(row, runArgs(row), { tools: 'shim' })
+    expect(run.status, run.out).toBe(2)
+    expect(run.out).toContain('REFUSED run-dir-exists')
+    expect(sha(victim)).toBe(before)
+  })
+
+  it('still appends to a regular volume.log of an own run dir (control: the log is not simply off)', () => {
+    const row = makeRow()
+    killedRun(row)
+    writeFileSync(join(row.runDir, 'volume.log'), 'earlier line\n')
+    const run = drive(row, ['--recover', '--run-dir', row.runDir], { tools: 'shim' })
+    expect(run.status, run.out).toBe(0)
+    const log = readFileSync(join(row.runDir, 'volume.log'), 'utf8')
+    expect(log.startsWith('earlier line\n')).toBe(true)
+    expect(log).toContain('RECOVER dev=/dev/loop77')
+  })
+
   it('refuses a marker that is not the driver nonce line', () => {
     const row = makeRow()
     foreignTarget(row)

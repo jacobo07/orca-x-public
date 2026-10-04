@@ -16,8 +16,8 @@
 # --recover: for a driver killed without its trap. Releases only the device recorded in <run-dir>/loop-device.txt,
 #   only after `sudo -n losetup -j <run-dir>/volume.img` names it, and only for a run dir this script could have made:
 #   a real (non-symlink) directory owned by the caller with permission bits 0700 (a setgid bit is ignored), holding
-#   the v1 nonce marker, with mnt, volume.img, loop-device.txt and the marker all non-symlinks. Both modes validate
-#   the physical (canonical) run-dir path. Never runs `losetup -f`, never mounts.
+#   the v1 nonce marker, with mnt, volume.img, loop-device.txt, volume.log and the marker all non-symlinks. Both
+#   modes validate the physical (canonical) run-dir path. Never runs `losetup -f`, never mounts.
 # Tools: losetup and mkfs.ext4 are NOT on an ordinary user's PATH; they are resolved from REAL_ENOSPC_SBIN_DIRS
 # below (never from the environment) and called by absolute path. Every loop probe goes through `sudo -n` because
 # an unprivileged `losetup -j` can read a live loop device as absent.
@@ -52,7 +52,7 @@ CMD_RC=0
 
 log() {
   printf '%s\n' "$*"
-  if [ -n "$LOGFILE" ] && [ -d "$RUN_DIR" ]; then
+  if [ -n "$LOGFILE" ] && [ -d "$RUN_DIR" ] && [ ! -L "$LOGFILE" ]; then
     printf '%s\n' "$*" >> "$LOGFILE"
   fi
 }
@@ -90,6 +90,11 @@ set_paths() {
   IMG=$RUN_DIR/volume.img
   MNT=$RUN_DIR/mnt
   MARKER=$RUN_DIR/.real-enospc-volume.marker
+}
+
+# enable_log: volume.log is written only once RUN_DIR is proven this script's own, so no refusal about a foreign
+# directory can append through a link that directory's owner planted. Until then log() prints to stdout only.
+enable_log() {
   LOGFILE=$RUN_DIR/volume.log
 }
 
@@ -246,7 +251,7 @@ check_recover_ownership() {
   if [ "$(stat -c %u -- "$RUN_DIR" 2> /dev/null)" != "$me" ] || [ $((8#${mode:-777} & 8#777)) -ne $((8#700)) ]; then
     refuse 2 "RECOVER_REFUSED not-owned $RUN_DIR (must be owned by the caller with mode 0700)"
   fi
-  for item in "$MNT" "$IMG" "$RUN_DIR/loop-device.txt" "$MARKER"; do
+  for item in "$MNT" "$IMG" "$RUN_DIR/loop-device.txt" "$MARKER" "$RUN_DIR/volume.log"; do
     if [ -L "$item" ]; then
       refuse 2 "RECOVER_REFUSED symlink $item"
     fi
@@ -257,6 +262,7 @@ check_recover_ownership() {
   RUN_DIR=$(cd -P -- "$RUN_DIR" 2> /dev/null && pwd -P) || refuse 2 "RECOVER_REFUSED no-marker (unresolvable) $RUN_DIR"
   check_run_dir_name
   set_paths
+  enable_log
 }
 
 run_recover() {
@@ -375,6 +381,7 @@ NONCE=$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
 MARKER_LINE="real-enospc-volume marker v1 pid=$$ nonce=$NONCE"
 mkdir -m 0700 -- "$RUN_DIR" || refuse 2 "REFUSED run-dir-exists $RUN_DIR (lost the creation race)"
 printf '%s\n' "$MARKER_LINE" > "$MARKER"
+enable_log
 log "TOOL losetup=${LOSETUP:-none} mkfs.ext4=${MKFS_EXT4:-none}"
 log "RUN_DIR $RUN_DIR fs=$FS size_mb=$SIZE_MB"
 
