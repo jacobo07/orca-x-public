@@ -1562,7 +1562,7 @@
       "row": "HF Replica state model",
       "owner": "new workspace-replica-state module",
       "done": "evidence-based states; unknown never healthy; timestamps never decide",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
       "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
       "measuredAt": "2026-09-27",
@@ -1571,8 +1571,14 @@
         17
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: no cross-host comparison in src/{main,relay,shared}"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/workspace-replica-state.test.ts",
+          "note": "pure evidence-only replica state model: missing or failed evidence gives unknown, never healthy; replicas whose timestamps disagree with their evidence are decided by evidence; mutants that treat unknown as healthy go red. Not yet wired to a comparison transport (row 63)."
+        }
+      ],
+      "reason": "Measured 2026-09-27: no cross-host comparison in src/{main,relay,shared}. Model module and tests now exist; transport and presenter are not built, so the row is PARTIAL."
     },
     {
       "id": 63,
