@@ -1600,17 +1600,34 @@
       "row": "HF Cross-host comparison transport",
       "owner": "relay git + bundle",
       "done": "ancestry decided on transferred objects (bundle verified); relay capability-probed",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X06 (vitest in unit tree row-63)",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
         17
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: git-exec-validator.ts:19 allowlist lacks rev-list/bundle"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/replica-bundle-receive.test.ts",
+          "note": "real-git temp repos: bundle verify -> list-heads set equality -> fetch into refs/orca/replicas/<hostKey>/*; corrupted, mismatched-heads and missing-prerequisite bundles are refused, deleted and write no ref; ancestry (same/ahead/behind/diverged/unrelated) is decided on the transferred objects."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-relay-capabilities.test.ts",
+          "note": "relay.status capability probe: once per generation, re-probe on bump, failure not cached, absent capability reads unsupported."
+        }
+        ,
+        {
+          "kind": "file",
+          "path": "src/relay/git-replica-handler.test.ts",
+          "note": "relay git.replicaTips/BundleExport/BundleRead/BundleRelease on a real git repo: chunked read matches sha256 and passes bundle verify, release deletes the temp dir, relative path/bad offset/third concurrent export refused; advertised as relay capability git.replicaBundle."
+        }
+      ],
+      "reason": "Measured 2026-10-10: client verified receive, ancestry on transferred objects, capability probe and relay-side export/read/release handlers exist with tests. NOT built or run: comparison service wiring the probe to the receive over a real SSH connection, and any live two-host transfer (needs a second host). So the row is PARTIAL."
     },
     {
       "id": 64,
