@@ -1433,8 +1433,8 @@
       "done": "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "phase-16",
-      "measuredAt": "2026-10-01",
+      "measuredIn": "dws-exec X05 (unit tests) + phase-16 (two-host)",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
         16
@@ -1472,6 +1472,11 @@
           "note": "Run 6 leg table with planes; Run 5 L2 characterization kept as history"
         },
         {
+          "kind": "file",
+          "path": "src/shared/project-identity-collisions.test.ts",
+          "note": "2026-10-10 re-run green with project-root-identity-key, git-root-identity, client-projection, root-merge and root-identity-link tests (6 files, 99 tests): same-host forks surfaced as collisions, not merged"
+        },
+        {
           "kind": "commit",
           "sha": "28eaff96a",
           "note": "two-host harness: p1[56] guard, deterministic seed on both hosts, refusal drill"
@@ -1492,7 +1497,7 @@
           "note": "Run 6 evidence: L1-L5 observed"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17)."
+      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17). Re-checked 2026-10-10 in unit tests only (no two-host run), so the state stays PARTIAL."
     },
     {
       "id": 61,
