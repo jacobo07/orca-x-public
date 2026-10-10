@@ -1285,7 +1285,8 @@
         { "kind": "commit", "sha": "afb96e5ff", "note": "host identity shown in host management" },
         { "kind": "commit", "sha": "b10b72e37", "note": "real-sshd evidence" },
         { "kind": "commit", "sha": "059af5e87", "note": "a removed or re-pointed pin refuses automatic connects until re-trusted" },
-        { "kind": "commit", "sha": "0fff3967b", "note": "a pin recorded for another endpoint refuses automatic connects" }
+        { "kind": "commit", "sha": "0fff3967b", "note": "a pin recorded for another endpoint refuses automatic connects" },
+        { "kind": "commit", "sha": "46e1778bb", "note": "an automatic connect to a never-pinned target is refused host_key_unpinned (OD-2 grace closed); unit-level only, real-sshd legs not re-run" }
       ],
       "reason": "measured 2026-09-30/10-01 (phase 14): PARTIAL. Proven: the ssh2 transport pins the host key; on a real sshd on GEX44 (disposable root, generated keys, at 43b869962) first contact recorded exactly OpenSSH's own ssh-keygen fingerprint, a real key change was refused host_key_changed on interactive and automatic connects with the pin file unchanged, and the app's trust dialog passed 3/3 headless (REAL-APP, Leg D, after building the relay the e2e build omits). After review (LOCAL-HOST only, real-sshd legs not re-run): a target whose pin was removed or re-pointed, or whose pin names another endpoint, is refused on automatic connects and prompts on interactive ones. Open: system-OpenSSH transport parity is delegated (OD-3: its negotiated key is not portably observable below OpenSSH 8.5, research section 7), and a never-pinned target on an automatic connect still connects with a loud diagnostic (OD-2 legacy grace) instead of being refused."
     },

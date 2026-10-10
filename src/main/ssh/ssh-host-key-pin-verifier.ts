@@ -63,16 +63,13 @@ export function verifyHostKeyAgainstPin(pin: unknown, offered: OfferedHostKey): 
     : { kind: 'changed', pinnedFingerprint: parsed.fingerprint }
 }
 
-// Why: only a match, or first contact of a never-pinned legacy target on an automatic attempt (OD-2), may proceed; a target that has or had a pin needs a person.
+// Why: only a pin match may proceed; a never-pinned target is refused on an automatic attempt (named host_key_unpinned) and needs a person to pin it interactively.
 export function hostKeyVerdictAllowsConnect(
   verdict: HostKeyVerdict,
-  interactive: boolean,
-  pinWasReset = false
+  _interactive: boolean,
+  _pinWasReset = false
 ): boolean {
-  if (verdict.kind === 'pinned-match') {
-    return true
-  }
-  return verdict.kind === 'unpinned' && !interactive && !pinWasReset
+  return verdict.kind === 'pinned-match'
 }
 
 const unpinnedAutomaticConnects = new Map<string, number>()
