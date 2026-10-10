@@ -1682,6 +1682,11 @@
       "evidence": [
         {
           "kind": "file",
+          "path": "docs/dws/phase-20-verification.md",
+          "note": "phase 20 verification 2026-10-10: truths judged, 13 scoped test files re-run green"
+        },
+        {
+          "kind": "file",
           "path": "tests/e2e/hwf-two-host-prepare-device.spec.ts",
           "note": "opt-in REAL-TWO-HOST spec; L1 measures a seeded GEX44 contract over SSH, Test B reads an old relay; a skip reads as NOT RUN"
         },
@@ -1746,7 +1751,7 @@
           "note": "phase 20 two-host evidence"
         }
       ],
-      "reason": "measured 2026-10-02 (phase 20, REAL-TWO-HOST for SSH, REAL-RUNTIME for the runtime host, LOCAL-HOST for this laptop). Local: 20-01 T2 real laptop probe found git 2.52.0 outside the workspace, an absent command absent and a .cmd shim reported without executing it (LOCAL-HOST). SSH: a fresh-profile Windows Orca measured a seeded GEX44 contract over real ssh2 with a pinned host key: every declared kind reached its state, os linux, git 2.43.0 equal to an independent ssh read, contract sha equal to the seed (REAL-TWO-HOST, Runs 3-6). Runtime: a disposable orca serve on GEX44, fenced to 01acd5e7c, answered orca project requirements run on GEX44 with status measured, os linux, git 2.43.0 equal to an independent read, hostKey local@c0d6078e9c767e3a (REAL-RUNTIME). An old relay (5de29754c) reads every row unknown host-predates-probes with zero missing (REAL-TWO-HOST, O1). Not observed: WSL (no distro on this host, NOT_RUN). The L6 defect seen in runs 5-6 (a dead SSH transport read as contract-unreadable) was fixed in b6411fa6f and observed fixed in run 7 (reason unreachable, zero missing; see row 69)."
+      "reason": "measured 2026-10-02 (phase 20, REAL-TWO-HOST for SSH, REAL-RUNTIME for the runtime host, LOCAL-HOST for this laptop). Local: 20-01 T2 real laptop probe found git 2.52.0 outside the workspace, an absent command absent and a .cmd shim reported without executing it (LOCAL-HOST). SSH: a fresh-profile Windows Orca measured a seeded GEX44 contract over real ssh2 with a pinned host key: every declared kind reached its state, os linux, git 2.43.0 equal to an independent ssh read, contract sha equal to the seed (REAL-TWO-HOST, Runs 3-6). Runtime: a disposable orca serve on GEX44, fenced to 01acd5e7c, answered orca project requirements run on GEX44 with status measured, os linux, git 2.43.0 equal to an independent read, hostKey local@c0d6078e9c767e3a (REAL-RUNTIME). An old relay (5de29754c) reads every row unknown host-predates-probes with zero missing (REAL-TWO-HOST, O1). Not observed: WSL (no distro on this host, NOT_RUN). The L6 defect seen in runs 5-6 (a dead SSH transport read as contract-unreadable) was fixed in b6411fa6f and observed fixed in run 7 (reason unreachable, zero missing; see row 69). Re-verified 2026-10-10 (X07): 13 scoped phase-20 vitest files, 211 tests passed; live legs not re-run, verdicts from the 2026-10-02 evidence (docs/dws/phase-20-verification.md)."
     },
     {
       "id": 69,
@@ -1763,6 +1768,11 @@
       ],
       "dependsOn": [],
       "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-20-verification.md",
+          "note": "phase 20 verification 2026-10-10: truths judged, 13 scoped test files re-run green"
+        },
         {
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-prepare-device.spec.ts",
@@ -1834,7 +1844,7 @@
           "note": "phase 20 Run 7 evidence: all six legs pass"
         }
       ],
-      "reason": "measured 2026-10-02 (phase 20, Run 7, REAL-TWO-HOST): a fresh-profile Windows Orca built from b6411fa6f drove a seeded GEX44 contract over real ssh2 with a pinned host key on fresh root /tmp/orca-hwf-p20-20261002T000826Z, 1 passed. L1 every state as seeded (satisfied, incompatible, missing, unsupported, needs-authorization, unknown, env satisfied), git 2.43.0 equal to an independent ssh read, contract sha equal to the seed. L3 a stale approval refused contract-changed, shim absent. L4 an approval for another host refused approval-for-another-host, shim absent. L2 an approved step ran on GEX44 (shim created) and a user re-measure read it satisfied; the terminal evidence is tab-present, a store read. L5 no sentinel on the laptop (absence scan PASS, control found, 0 hits, scanned after app exit). L6 carrier killed: every row unknown with reason unreachable, zero missing (Runs 5-6 read contract-unreadable before b6411fa6f). Not observed REAL: runtime-host prepare, local prepare and folder workspaces prepare are LOCAL-HOST units only (R1 measured a runtime host but ran no prepare step); WSL NOT_RUN (no distro). D-09 narrowing: contract differs on <host> is LOCAL-HOST only (component test), and the no-replica source preference is deferred to phases 17-19."
+      "reason": "measured 2026-10-02 (phase 20, Run 7, REAL-TWO-HOST): a fresh-profile Windows Orca built from b6411fa6f drove a seeded GEX44 contract over real ssh2 with a pinned host key on fresh root /tmp/orca-hwf-p20-20261002T000826Z, 1 passed. L1 every state as seeded (satisfied, incompatible, missing, unsupported, needs-authorization, unknown, env satisfied), git 2.43.0 equal to an independent ssh read, contract sha equal to the seed. L3 a stale approval refused contract-changed, shim absent. L4 an approval for another host refused approval-for-another-host, shim absent. L2 an approved step ran on GEX44 (shim created) and a user re-measure read it satisfied; the terminal evidence is tab-present, a store read. L5 no sentinel on the laptop (absence scan PASS, control found, 0 hits, scanned after app exit). L6 carrier killed: every row unknown with reason unreachable, zero missing (Runs 5-6 read contract-unreadable before b6411fa6f). Not observed REAL: runtime-host prepare, local prepare and folder workspaces prepare are LOCAL-HOST units only (R1 measured a runtime host but ran no prepare step); WSL NOT_RUN (no distro). D-09 narrowing: contract differs on <host> is LOCAL-HOST only (component test), and the no-replica source preference is deferred to phases 17-19. Re-verified 2026-10-10 (X07): 13 scoped phase-20 vitest files, 211 tests passed; live legs not re-run, verdicts from the 2026-10-02 evidence (docs/dws/phase-20-verification.md)."
     },
     {
       "id": 70,
