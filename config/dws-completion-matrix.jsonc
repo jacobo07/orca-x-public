@@ -658,7 +658,12 @@
         {
           "kind": "file",
           "path": "src/main/conversation/routed-conversation-turn.test.ts",
-          "note": "provider routing exists (codex/claude, ranked by continuity/preference/tools/quota/auth) but no cited test runs the same agent on provider X then Y"
+          "note": "provider routing exists (codex/claude, ranked by continuity/preference/tools/quota/auth)"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-agent-provider-switch.test.ts",
+          "note": "one agent runs a turn routed to codex then a turn routed to claude (fake providers, no network): same AgentId, continuous history, routing reason per turn; a mutant that mints a new id on provider change goes red"
         }
       ],
       "reason": "Measured 2026-09-28: MISSION.md's own definition of Cognitive Routing is 'prove Agent identity persists across model change' — the same underlying claim as row 32 (Model switching), which this matrix already carries as PARTIAL. AgentId is architecturally provider-independent (agent-identity.ts) and provider routing exists, but no test in this worktree exercises one agent across provider X then Y to prove coherence; 'P3 gates' (federation Phase 3's own gate suite) is not a resolvable artifact in this worktree. Demoted from the Stage-Zero PASS seed for consistency with row 32's own PARTIAL."
