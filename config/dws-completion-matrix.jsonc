@@ -1634,17 +1634,28 @@
       "row": "HF Dirty-state capsule",
       "owner": "git tree objects (UWCP A6 semantics)",
       "done": "uncommitted state captured as a content-addressed commit under refs/orca/capsules",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X10 (tranche 2), tree exec/row-64",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
         17
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: no stash/bundle/tree capture in src"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/replica-capsule.test.ts",
+          "note": "16 hermetic tests on real git repos: createCapsule builds a stash-shaped commit W (parents HEAD, I, U) from temp-index trees, publishes it by one create-only ref update under refs/orca/capsules/<W>, leaves index/HEAD/branches/worktree untouched, is idempotent, clean tree returns clean, secret-shaped and oversized files are omitted and recorded."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-dirty-capsule.spec.ts",
+          "note": "Opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1), NOT RUN: laptop capsule pushed over ssh to a GEX44 p17 disposable root and read back by verify-p17. Harness verbs seed-p17/verify-p17 and the /tmp/orca-hwf-p17-* root guard are in config/scripts/."
+        }
+      ],
+      "reason": "Measured 2026-10-10: capsule creation and listing built with hermetic tests (content-addressed commit under refs/orca/capsules, real git). Built but NOT RUN: the Windows <-> GEX44 leg over real SSH (spec waits for ORCA_HWF_TWO_HOST=1; reads NOT RUN). NOT built: restore/apply of a capsule, UI or service wiring that calls createCapsule. So the row is PARTIAL."
     },
     {
       "id": 65,
