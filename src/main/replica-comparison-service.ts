@@ -5,7 +5,13 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, open, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ReplicaPairEvidence } from '../shared/workspace-replica-state'
+import {
+  deriveReplicaRelation,
+  type ReplicaFacts,
+  type ReplicaPairEvidence,
+  type ReplicaRelation,
+  type ReplicaUnknownReason
+} from '../shared/workspace-replica-state'
 import { gitExecFileAsync } from './git/runner'
 import { decideReplicaAncestry, receiveReplicaBundle, type DeclaredHead } from './replica-bundle-receive'
 import { relaySupportsReplicaBundle, type RelayCapabilityRequest } from './ssh/ssh-relay-capabilities'
@@ -180,4 +186,37 @@ export async function compareWithRelayReplica(args: {
     }
     await rm(dir, { recursive: true, force: true })
   }
+}
+
+const FAILURE_REASON: Record<ReplicaComparisonFailure, ReplicaUnknownReason> = {
+  'relay-unsupported': 'relay-too-old',
+  'relay-bad-response': 'transfer-interrupted',
+  'transfer-interrupted': 'transfer-interrupted',
+  'bundle-verify-failed': 'bundle-verify-failed',
+  'bundle-heads-mismatch': 'bundle-heads-mismatch',
+  'no-comparable-tip': 'tip-unknown'
+}
+
+/**
+ * Row 62: fold a comparison result into the evidence-only state model. A failed comparison is unknown with a
+ * closed reason (never healthy, never a guess); the model's fence rejects evidence for tips that have moved.
+ */
+export function relationFromComparison(
+  a: ReplicaFacts,
+  b: ReplicaFacts,
+  result: ReplicaComparisonResult
+): ReplicaRelation {
+  if (result.ok) {
+    return deriveReplicaRelation(a, b, result.evidence)
+  }
+  if (result.evidence) {
+    return deriveReplicaRelation(a, b, result.evidence)
+  }
+  const tip = (f: ReplicaFacts): string =>
+    f.kind !== 'folder' && (f.tip.kind === 'commit' || f.tip.kind === 'detached') ? f.tip.sha : ''
+  return deriveReplicaRelation(a, b, {
+    observedTips: [tip(a), tip(b)],
+    site: 'local',
+    outcome: { ok: false, reason: FAILURE_REASON[result.reason] }
+  })
 }

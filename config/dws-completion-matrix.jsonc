@@ -1579,8 +1579,8 @@
       "done": "evidence-based states; unknown never healthy; timestamps never decide",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X09 (vitest in unit tree row-62)",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
         17
@@ -1590,10 +1590,20 @@
         {
           "kind": "file",
           "path": "src/shared/workspace-replica-state.test.ts",
-          "note": "pure evidence-only replica state model: missing or failed evidence gives unknown, never healthy; replicas whose timestamps disagree with their evidence are decided by evidence; mutants that treat unknown as healthy go red. Not yet wired to a comparison transport (row 63)."
+          "note": "pure evidence-only replica state model: missing or failed evidence gives unknown, never healthy; replicas whose timestamps disagree with their evidence are decided by evidence; mutants that treat unknown as healthy go red."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-comparison-service.test.ts",
+          "note": "relationFromComparison: real-git bundle comparison folded through the model; every comparison failure maps to a closed unknown reason (relay-unsupported reads relay-too-old), never healthy; evidence for moved tips reads evidence-stale."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-state.spec.ts",
+          "note": "opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1): NOT RUN from GEX44."
         }
       ],
-      "reason": "Measured 2026-09-27: no cross-host comparison in src/{main,relay,shared}. Model module and tests now exist; transport and presenter are not built, so the row is PARTIAL."
+      "reason": "dws-exec X09 2026-10-10: model plus hermetic comparison-to-state bridge (relationFromComparison) are tested; the opt-in Windows<->GEX44 spec is built but NOT RUN (needs the laptop). Still open: the comparison service is not wired to the app SSH relay session and no presenter exists, so the row stays PARTIAL."
     },
     {
       "id": 63,
