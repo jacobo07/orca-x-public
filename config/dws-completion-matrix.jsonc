@@ -860,7 +860,7 @@
       "state": "PARTIAL",
       "stateSource": "measured",
       "measuredIn": "phase-7",
-      "measuredAt": "2026-09-30",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
         7
@@ -880,7 +880,7 @@
         { "kind": "commit", "sha": "3f3bcf7ae", "note": "P5: a gate carries the exact commit it approves (v33)" },
         { "kind": "commit", "sha": "205048aa5", "note": "P5: approval enforced where the task acts" }
       ],
-      "reason": "measured 2026-09-30: the policy-routed reviewer exists as code (reviews.policy none/any/independent, producer-provider exclusion, reviewer provider taken from the routed result) and its gates re-ran on GEX44 at 997b4a55a with both fences at 677 passed / 0 failed (verdict MEASURED); a policy-routed reviewer across two live providers is unevidenced (no live spend in this phase); the UWCP judge half of this row belongs to another program."
+      "reason": "re-measured 2026-10-10 on GEX44 in the exec/row-37 tree: review-flow, subject-bound-gates, approval-authority-aperture and agent-federation tests 4 files / 23 tests passed; the policy-routed reviewer exists as code (reviews.policy none/any/independent, producer-provider exclusion, reviewer provider taken from the routed result); a policy-routed reviewer across two live providers is unevidenced (needs a second provider login and live spend, not run), so the row stays PARTIAL; the UWCP judge half of this row belongs to another program."
     },
     {
       "id": 38,
