@@ -1605,8 +1605,14 @@
           "path": "src/main/ssh/ssh-relay-capabilities.test.ts",
           "note": "relay.status capability probe: once per generation, re-probe on bump, failure not cached, absent capability reads unsupported."
         }
+        ,
+        {
+          "kind": "file",
+          "path": "src/relay/git-replica-handler.test.ts",
+          "note": "relay git.replicaTips/BundleExport/BundleRead/BundleRelease on a real git repo: chunked read matches sha256 and passes bundle verify, release deletes the temp dir, relative path/bad offset/third concurrent export refused; advertised as relay capability git.replicaBundle."
+        }
       ],
-      "reason": "Measured 2026-10-10: client-side verified receive, ancestry on transferred objects and the capability probe exist with tests. NOT built or run: relay-side bundle export/read handlers, chunked download, comparison service wiring the probe to the receive, and any live two-host transfer. So the row is PARTIAL."
+      "reason": "Measured 2026-10-10: client verified receive, ancestry on transferred objects, capability probe and relay-side export/read/release handlers exist with tests. NOT built or run: comparison service wiring the probe to the receive over a real SSH connection, and any live two-host transfer (needs a second host). So the row is PARTIAL."
     },
     {
       "id": 64,

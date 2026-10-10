@@ -36,6 +36,7 @@ import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { installRelayLogRotation } from './rotating-log-writer'
 import { GitHandler } from './git-handler'
+import { GitReplicaHandler, REPLICA_BUNDLE_RELAY_CAPABILITIES } from './git-replica-handler'
 import { PreflightHandler } from './preflight-handler'
 import {
   ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES,
@@ -718,6 +719,7 @@ async function main(): Promise<void> {
   ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
   watchRegistry.setWorktreePtyTeardown((rootPath) => ptyHandler.shutdownForWorktreePath(rootPath))
   const gitHandler = new GitHandler(dispatcher, context, watchRegistry)
+  const gitReplicaHandler = new GitReplicaHandler(dispatcher)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   void new EnvironmentRequirementsHandler(dispatcher)
@@ -938,7 +940,11 @@ async function main(): Promise<void> {
   let graceBranch: RelayGraceBranch | null = null
 
   dispatcher.onRequest('relay.status', async () => ({
-    capabilities: [...SKILL_RELAY_CAPABILITIES, ...ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES],
+    capabilities: [
+      ...SKILL_RELAY_CAPABILITIES,
+      ...ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES,
+      ...REPLICA_BUNDLE_RELAY_CAPABILITIES
+    ],
     pid: process.pid,
     uptimeMs: Date.now() - startedAt,
     detached,
@@ -1320,6 +1326,7 @@ async function main(): Promise<void> {
         dispatcher.dispose()
         fsHandler.dispose()
         gitHandler.dispose()
+        void gitReplicaHandler.dispose()
         hookServer.stop()
         // Why: server.close() unlinks the listen path; skip if a newer relay rebound it, else we strand that newer daemon.
         if (socketServer && ownsCurrentSocketPath()) {
