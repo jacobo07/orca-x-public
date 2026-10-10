@@ -266,20 +266,17 @@ describe('SshConnection host key pinning', () => {
     expect(refusal.reason).toBe('host_key_unpinned')
   })
 
-  it('V-SSH-NO-SILENT-TOFU: an automatic first contact connects loudly, counted, and never pins', async () => {
+  it('V-SSH-NO-SILENT-TOFU: an automatic first contact is refused as host_key_unpinned, never pinned, never prompted', async () => {
     const onHostKeyTrustRequest = vi.fn(async () => pinFor(GOOD_KEY))
     const conn = new SshConnection(createTarget(), createCallbacks({ onHostKeyTrustRequest }))
 
-    await conn.connect()
+    const refusal = await captureRefusal(conn.connect())
 
-    expect(conn.getState()).toMatchObject({ status: 'connected', hostIdentity: 'unpinned-legacy' })
+    expect(refusal.reason).toBe('host_key_unpinned')
+    expect(conn.getState()).toMatchObject({ status: 'error', hostIdentity: 'refused-unpinned' })
     expect(onHostKeyTrustRequest).not.toHaveBeenCalled()
     expect(conn.getTarget().hostKeyPin).toBeUndefined()
-    expect(getUnpinnedAutomaticConnectCount('target-1')).toBe(1)
-    const warnings = warn.mock.calls.filter(([line]) =>
-      String(line).includes('[ssh-host-key] unpinned')
-    )
-    expect(warnings).toHaveLength(1)
+    expect(getUnpinnedAutomaticConnectCount('target-1')).toBe(0)
   })
 
   it('V-SSH-PIN-RESET-AUTOMATIC-REFUSED: a target whose pin was removed refuses an automatic connect', async () => {

@@ -15,7 +15,6 @@ import {
   computeHostKeyFingerprint,
   hostIdentityForRefusal,
   hostKeyVerdictAllowsConnect,
-  noteUnpinnedAutomaticConnect,
   readHostKeyAlgorithm,
   refusalFromVerdict,
   verifyHostKeyAgainstPin
@@ -1288,10 +1287,7 @@ export class SshConnection {
           return false
         }
         if (current) {
-          if (verdict.kind === 'unpinned') {
-            noteUnpinnedAutomaticConnect(this.target.id, offered)
-          }
-          this.hostIdentity = verdict.kind === 'unpinned' ? 'unpinned-legacy' : 'pinned'
+          this.hostIdentity = 'pinned'
         }
         return true
       }

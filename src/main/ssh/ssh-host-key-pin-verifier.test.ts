@@ -92,7 +92,7 @@ describe('verifyHostKeyAgainstPin', () => {
   it('only a match, or an unpinned automatic attempt, may connect', () => {
     expect(hostKeyVerdictAllowsConnect({ kind: 'pinned-match' }, true)).toBe(true)
     expect(hostKeyVerdictAllowsConnect({ kind: 'pinned-match' }, false)).toBe(true)
-    expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, false)).toBe(true)
+    expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, false)).toBe(false)
     expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, true)).toBe(false)
     for (const interactive of [true, false]) {
       expect(
@@ -233,7 +233,7 @@ describe('persisted pin', () => {
   it('V-SSH-PIN-RESET-VERDICT: a reset target refuses unpinned automatically, prompts interactively, and never reads verified', () => {
     expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, false, true)).toBe(false)
     expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, true, true)).toBe(false)
-    expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, false, false)).toBe(true)
+    expect(hostKeyVerdictAllowsConnect({ kind: 'unpinned' }, false, false)).toBe(false)
     expect(hostKeyVerdictAllowsConnect({ kind: 'pinned-match' }, false, true)).toBe(true)
     const resetTarget = target({ hostKeyPinReset: true })
     expect(resolveSshHostIdentityStatus(resetTarget, undefined)).not.toBe('pinned')
