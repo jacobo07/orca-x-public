@@ -719,8 +719,8 @@
       "done": "cite P3 live evidence",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "phase-1",
-      "measuredAt": "2026-09-28",
+      "measuredIn": "dws-exec-x02",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [],
       "dependsOn": [],
@@ -734,9 +734,19 @@
           "kind": "file",
           "path": "src/shared/agent-identity.test.ts",
           "note": "pins the zero-argument mint signature as the contract worth pinning, 'not the string' — a mint accepting a provider would let identity inherit its lifetime"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/agent-identity-cross-host.test.ts",
+          "note": "hermetic two-store handover: Agent JSON over the wire + conversation dir copied to a second store; codex turn on host A, claude turn on host B keep one AgentId and continuous history; re-mint mutant goes red. Not a live two-machine run"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-agent-provider-switch.test.ts",
+          "note": "same AgentId and history across a codex-to-claude provider change (row 28)"
         }
       ],
-      "reason": "Measured 2026-09-28: the capability exists and is architecturally sound (AgentId minted independent of provider/host/session, pinned by test) but the done condition asks to cite 'P3 live evidence' — an actual live cross-host/cross-provider demonstration — which is not a committed, resolvable artifact in this worktree; if it exists it is only in federation's git-excluded .planning records (orca-federation-wt), which cannot be cited per CONTEXT.md. 'cogws roster' (CognitiveWorkspaceRoster.tsx) is a rendering surface, not a portability proof, so it is not cited as evidence."
+      "reason": "Measured 2026-10-10 (dws-exec X02): cross-provider and cross-host-by-transfer portability are now proven by committed tests (AgentId survives a provider change and a simulated host handover with history intact; a re-mint mutant fails). The done condition asks for P3 LIVE evidence — a real two-machine run — which did not run here and remains uncommitted/uncitable (federation .planning records are git-excluded), so the row stays PARTIAL. Missing precondition: a second reachable host to run the handover live."
     },
     {
       "id": 32,
