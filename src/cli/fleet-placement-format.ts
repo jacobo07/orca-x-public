@@ -62,9 +62,20 @@ export function formatFleetPlacementView(result: FleetPlacementViewResult): stri
       `  x ${rejected.addresses.join(', ')}: ${rejected.reasons.map(describeRejection).join('; ') || 'not judged'}`
     )
   }
+  const sshHosts = observation.coverage.sshHosts
+  const sshText = sshHosts
+    ? `${sshHosts.length} SSH target(s), ${sshHosts.filter((h) => h.outcome === 'measured').length} measured`
+    : 'SSH targets are not enumerated'
   lines.push(
-    `coverage: this machine + ${observation.coverage.runtimeEnvironments} paired runtime(s); SSH targets are not enumerated`
+    `coverage: this machine + ${observation.coverage.runtimeEnvironments} paired runtime(s); ${sshText}`
   )
+  for (const host of sshHosts ?? []) {
+    lines.push(
+      host.outcome === 'measured'
+        ? `  ssh ${host.label}: measured, relay up ${host.relayUptimeMs} ms`
+        : `  ssh ${host.label}: unknown (${host.reason}: ${host.detail})`
+    )
+  }
   lines.push('A proposal only — nothing was moved.')
   return lines.join('\n')
 }
