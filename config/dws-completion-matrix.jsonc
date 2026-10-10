@@ -827,8 +827,8 @@
       "done": "P4b flow live",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "phase-7",
-      "measuredAt": "2026-09-30",
+      "measuredIn": "exec-x03",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
         7
@@ -850,7 +850,7 @@
         { "kind": "commit", "sha": "da3ec43c0", "note": "P4b: a review of a real agent's commit, run on a real provider (Claude only)" },
         { "kind": "commit", "sha": "47558af87", "note": "the sealing note" }
       ],
-      "reason": "measured 2026-09-30: federation's sealed review flow (P4a/P4b, reviews v31/v32) is contained in this branch (71dd7bc97 is the merge base, 0 commits behind at 997b4a55a) and its gates re-ran on GEX44 at 997b4a55a with both fences at 677 passed / 0 failed (tsc 0 errors, verdict MEASURED); a live independent review across TWO providers is UNPROVEN (federation's own live record da3ec43c0 is Claude only: independent -> failed/no-provider, any -> degraded-same-provider); no live provider spend in this phase; the four inherited mobile-aperture entries (orchestration.reviewRequest, orchestration.reviewShow, conversations.subscribe, conversations.unsubscribe) are federation debt; federation's RESUMPTION note cites live-review commit 2e8c5516a, which is not in the object store, so da3ec43c0 is cited instead."
+      "reason": "re-measured 2026-10-10 (exec X03): review-flow.test.ts and orchestration-reviews.test.ts re-ran green in this branch (2 files, 14 tests passed); the live independent review across TWO providers did NOT run (needs a second provider login and live spend, not available to this unit), so the row stays PARTIAL; federation's own live record da3ec43c0 is Claude only (independent -> failed/no-provider, any -> degraded-same-provider). Earlier measurement 2026-09-30: sealed review flow (P4a/P4b, reviews v31/v32) contained in this branch, both fences 677 passed / 0 failed on GEX44 at 997b4a55a. The four inherited mobile-aperture entries (orchestration.reviewRequest, orchestration.reviewShow, conversations.subscribe, conversations.unsubscribe) are federation debt; federation's RESUMPTION note cites live-review commit 2e8c5516a, which is not in the object store, so da3ec43c0 is cited instead."
     },
     {
       "id": 37,
