@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # GEX44 provisioner for the phase-15/16/20 two-host rungs; verbs: create status witness procs teardown install-stub
-# seed-p16 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
+# seed-p17 verify-p17 seed-p16 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
@@ -12,6 +12,9 @@ case "$ROOT" in
   /tmp/orca-hwf-p1[56]-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p1[56]-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p1[56]-*) ;;
+  /tmp/orca-hwf-p17-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p17-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p17-*) ;;
   /tmp/orca-hwf-p20-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*) ;;
@@ -231,6 +234,47 @@ STUB
     echo "UNBORN_PATH=$UNBORN"
     echo "LATE_PATH=$LATE"
     echo "LATE_HEAD=$(git -C "$LATE" rev-parse HEAD)"
+    ;;
+  seed-p17)
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *) echo "REFUSED nonce=$EXTRA"; exit 2 ;;
+    esac
+    TARGET="$ROOT/repos/p17-target"
+    if [ -e "$TARGET" ]; then echo "REFUSED exists=$TARGET"; exit 3; fi
+    mkdir -p "$TARGET"
+    seed_git -C "$TARGET" init -q
+    printf 'HWF17_%s\n' "$EXTRA" > "$TARGET/seed.txt"
+    seed_git -C "$TARGET" add seed.txt
+    seed_git -C "$TARGET" commit -q -m 'hwf p17 seed'
+    echo "TARGET_PATH=$TARGET"
+    echo "TARGET_HEAD=$(git -C "$TARGET" rev-parse HEAD)"
+    ;;
+  verify-p17)
+    # Reads the capsule the laptop pushed: ref shape, W/I/U layout, the dirty content, and that the target worktree is untouched.
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *) echo "REFUSED nonce=$EXTRA"; exit 2 ;;
+    esac
+    TARGET="$ROOT/repos/p17-target"
+    if [ ! -d "$TARGET/.git" ]; then echo "REFUSED no-target=$TARGET"; exit 3; fi
+    REFS=$(git -C "$TARGET" for-each-ref --format='%(refname)' refs/orca/capsules/)
+    echo "CAPSULE_REFS=$(printf '%s' "$REFS" | grep -c . || true)"
+    REF=$(printf '%s\n' "$REFS" | head -n 1)
+    W=$(git -C "$TARGET" rev-parse "$REF^{commit}")
+    echo "CAPSULE_REF=$REF"
+    echo "CAPSULE_REF_MATCHES_W=$([ "$REF" = "refs/orca/capsules/$W" ] && echo yes || echo no)"
+    echo "CAPSULE_FSCK=$(git -C "$TARGET" fsck --no-dangling >/dev/null 2>&1 && echo ok || echo bad)"
+    PARENTS=$(git -C "$TARGET" rev-list --parents -n 1 "$W" | wc -w)
+    echo "CAPSULE_PARENTS=$((PARENTS - 1))"
+    echo "CAPSULE_BASE_IS_HEAD=$([ "$(git -C "$TARGET" rev-parse "$W^1")" = "$(git -C "$TARGET" rev-parse HEAD)" ] && echo yes || echo no)"
+    echo "CAPSULE_W_TRACKED=$(git -C "$TARGET" show "$W:seed.txt")"
+    echo "CAPSULE_I_STAGED=$(git -C "$TARGET" show "$W^2:staged.txt")"
+    echo "CAPSULE_U_UNTRACKED=$(git -C "$TARGET" show "$W^3:untracked.txt")"
+    echo "TARGET_STATUS_LINES=$(git -C "$TARGET" status --porcelain | wc -l)"
+    echo "TARGET_HEAD_UNCHANGED=$(git -C "$TARGET" rev-parse HEAD)"
     ;;
   git-compat-p16)
     if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
