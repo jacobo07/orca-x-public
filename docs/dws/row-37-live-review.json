@@ -1,0 +1,13 @@
+{
+  "row": 37,
+  "measuredAt": "2026-10-13",
+  "host": "GEX44",
+  "command": "ORCA_LIVE_REVIEW=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/runtime/orchestration/review-live-providers.test.ts",
+  "models": { "claude": "haiku", "codex": "gpt-6-luna" },
+  "liveTurns": 4,
+  "results": [
+    { "producer": "claude", "reviewer": "codex", "status": "completed", "independence": "independent", "verdict": "approve" },
+    { "producer": "codex", "reviewer": "claude", "status": "completed", "independence": "independent", "verdict": "approve" }
+  ],
+  "scope": "real requestReview/dispatch/settlement with a runner that shells out to the real claude and codex CLIs; the Orca desktop/serve runtime was not started"
+}
