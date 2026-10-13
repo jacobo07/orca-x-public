@@ -1953,15 +1953,15 @@
       "done": "an old relay rejects new sync/fabric methods; client never widens",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X18 (hermetic vitest + tsc on exec/row-74)",
+      "measuredAt": "2026-10-13",
       "required": true,
       "phases": [
         23
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: relay-handshake.ts:206 exact-version exit 42; no fabric methods yet"
+      "evidence": ["src/main/ssh/ssh-relay-capabilities.ts","src/main/ssh/ssh-relay-capabilities.test.ts","tests/e2e/hwf-two-host-mixed-relay.spec.ts"],
+      "reason": "Measured 2026-10-13: client gate requestGatedRelayMethod fails closed (sync./fabric. need relay.status sync.v1/fabric.v1; no relay.status or MethodNotFound => RelayCapabilityUnsupportedError, never widened) with 11 hermetic tests green; no sync/fabric relay methods exist yet. Two-host leg built but NOT RUN: tests/e2e/hwf-two-host-mixed-relay.spec.ts + old-relay-p23 verb wait for the live Windows<->GEX44 run, so PARTIAL."
     },
     {
       "id": 75,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# GEX44 provisioner for the phase-15/16/20 two-host rungs; verbs: create status witness procs teardown install-stub
-# seed-p16 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
+# GEX44 provisioner for the phase-15/16/20/23 two-host rungs; verbs: create status witness procs teardown install-stub
+# seed-p16 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20 old-relay-p23. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
@@ -15,6 +15,9 @@ case "$ROOT" in
   /tmp/orca-hwf-p20-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*) ;;
+  /tmp/orca-hwf-p23-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p23-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p23-*) ;;
   *) echo "REFUSED root=$ROOT"; exit 2 ;;
 esac
 
@@ -420,6 +423,13 @@ for p in m.get("probes") or []:
 print("HWF20_R1 status=%s hostKey=%s os=%s gitVersion=%s" % (m.get("status"), m.get("hostKey"), os_name, version))
 PY
     echo "INDEPENDENT_GIT=$(git --version | awk '{print $3}')"
+    ;;
+  old-relay-p23)
+    # Phase 23: marks an "old relay" install (no sync/fabric capabilities) inside the root; writes only under $ROOT.
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    mkdir -p "$ROOT/relay-old"
+    printf '0.0.0\n' > "$ROOT/relay-old/.version"
+    echo "P23_OLD_RELAY version=$(tr -d '\n' < "$ROOT/relay-old/.version") dir=$ROOT/relay-old"
     ;;
   *)
     echo "REFUSED verb=$VERB"; exit 2
