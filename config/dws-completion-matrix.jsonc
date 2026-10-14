@@ -1519,14 +1519,9 @@
           "kind": "file",
           "path": "src/shared/replica-topology.test.ts",
           "note": "dws-exec X20: grouped relation from ancestry evidence, diverged stays grouped"
-        },
-        {
-          "kind": "file",
-          "path": "inputs/d4/20261014/X20/d4-ev-x20-20261014-164702.playwright.log",
-          "note": "dws-exec X20f D4 live leg PASS (ctl repo, mission dws-exec): HWF60_PIN + HWF60_REMOTE_AHEAD=2"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17). Re-checked 2026-10-10 in unit tests only (no two-host run), so the state stays PARTIAL. dws-exec X20 (2026-10-13, unit tests only, no two-host run): deriveReplicaTopology now takes SHA-fenced per-setup relations (row 63 ancestry) and a grouped member reports same/ahead/behind/diverged/unrelated instead of always unverified; a diverged pair stays grouped and visible, never merged, and an unknown or failed comparison stays unverified (4 new tests in replica-topology.test.ts). NOT WIRED: compareWithRelayReplica is not fed from the app SSH relay session, so no live relation is produced. dws-exec X20f (2026-10-14, D4): the opt-in tests/e2e/hwf-two-host-grouped-relation.spec.ts live two-host leg RAN and PASSED against a GEX44 disposable root (HWF60_PIN=SHA256:..., HWF60_REMOTE_AHEAD=2). It proves transport and ahead 2 only; it does not assert the relay compare result. compareWithRelayReplica is still not wired into the app SSH relay session, so no live grouped relation is produced by the app. State stays PARTIAL."
+      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17). Re-checked 2026-10-10 in unit tests only (no two-host run), so the state stays PARTIAL. dws-exec X20 (2026-10-13, unit tests only, no two-host run): deriveReplicaTopology now takes SHA-fenced per-setup relations (row 63 ancestry) and a grouped member reports same/ahead/behind/diverged/unrelated instead of always unverified; a diverged pair stays grouped and visible, never merged, and an unknown or failed comparison stays unverified (4 new tests in replica-topology.test.ts). NOT WIRED: compareWithRelayReplica is not fed from the app SSH relay session, so no live relation is produced. dws-exec X20f (2026-10-14, D4): the opt-in tests/e2e/hwf-two-host-grouped-relation.spec.ts live two-host leg RAN and PASSED against a GEX44 disposable root (HWF60_PIN=SHA256:..., HWF60_REMOTE_AHEAD=2). It proves transport and ahead 2 only; it does not assert the relay compare result. compareWithRelayReplica is still not wired into the app SSH relay session, so no live grouped relation is produced by the app. State stays PARTIAL. dws-exec X20f D4 live leg PASS (HWF60_PIN + HWF60_REMOTE_AHEAD=2); its log is outside this repo: dws-exec ctl inputs/d4/20261014/X20/d4-ev-x20-20261014-164702.playwright.log."
     },
     {
       "id": 61,
@@ -1731,7 +1726,11 @@
         19
       ],
       "dependsOn": [],
-      "evidence": ["src/main/replica-divergence.ts", "src/main/replica-divergence.test.ts", "tests/e2e/hwf-two-host-replica-divergence.spec.ts", "ctl/inputs/d4/20261014/X12/"],
+      "evidence": [
+        { "kind": "file", "path": "src/main/replica-divergence.ts" },
+        { "kind": "file", "path": "src/main/replica-divergence.test.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-replica-divergence.spec.ts" }
+      ],
       "reason": "Built (dws-exec X12): replica-divergence.ts preserves both tips as create-only refs/orca/divergence refs, surfaces conflicts via merge-tree, touches no branch/index/worktree; 4 hermetic tests pass, tsc clean; seed-p19 harness verb + refusal drill. Live two-host leg RAN and PASSED 2026-10-14 (Windows<->GEX44 disposable root; HWF19_ANCESTRY=diverged, HWF19_CONFLICT=conflicted seed.txt, HWF19_REFS=true, HWF19_NEITHER_OVERWRITTEN=true; evidence ctl/inputs/d4/20261014/X12/, laptop fix fa9e33b855 merged). Stays PARTIAL: not wired to the app UI/IPC, so conflict is not surfaced to users, and the spec is not covered by a tsc config"
     },
     {
@@ -1951,18 +1950,8 @@
       ],
       "dependsOn": [],
       "evidence": [
-        {
-          "path": "src/shared/project-working-set-host-translation.test.ts",
-          "note": "16 hermetic tests: translation through projectId, typed refusals, per-pane reattach/resume/restart/unavailable"
-        },
-        {
-          "path": "tests/e2e/hwf-two-host-continue-here.spec.ts",
-          "note": "opt-in two-host leg, RAN and PASSED 2026-10-14 (D4)"
-        },
-        {
-          "path": "ctl/inputs/d4/20261014/X14/",
-          "note": "laptop D4 live leg evidence d4-ev-x14-20261014-164538, summary.json verdict PASS"
-        }
+        { "kind": "file", "path": "src/shared/project-working-set-host-translation.test.ts", "note": "16 hermetic tests: translation through projectId, typed refusals, per-pane reattach/resume/restart/unavailable" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-continue-here.spec.ts", "note": "opt-in two-host leg, RAN and PASSED 2026-10-14 (D4)" }
       ],
       "reason": "measured 2026-10-14 (dws-exec X14f, D4): translateWorkingSetToHost re-points scope, location and startup cwd through the source and target setups of one projectId (typed refusals, no guessing) and planContinueOnHost labels each pane reattach/resume/restart/unavailable; 16 hermetic tests pass, tsc clean. The live two-host leg RAN and PASSED against a GEX44 disposable root (HWF21_TRANSLATE=translated, HWF21_TARGET_PATH=present, HWF21_NO_SETUP=target-setup-missing; evidence ctl/inputs/d4/20261014/X14/). The spec never launches Orca: the translation is a local pure function and only path existence is read over SSH. Not covered: no Orca launch or real pane reattach/resume on the target; not wired into the renderer restore path (project-working-set-restore.ts planNow still passes a same-scope target), so the user-visible Continue here flow is unbuilt. Stays PARTIAL."
     },
@@ -1980,7 +1969,12 @@
         22
       ],
       "dependsOn": [],
-      "evidence": ["src/main/fleet/fleet-observation-service.ts","src/main/fleet/fleet-observation-service.test.ts","src/shared/fleet-placement-view.ts","tests/e2e/hwf-two-host-ssh-fleet.spec.ts","ctl/inputs/d4/20261014/X15/"],
+      "evidence": [
+        { "kind": "file", "path": "src/main/fleet/fleet-observation-service.ts" },
+        { "kind": "file", "path": "src/main/fleet/fleet-observation-service.test.ts" },
+        { "kind": "file", "path": "src/shared/fleet-placement-view.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-ssh-fleet.spec.ts" }
+      ],
       "reason": "Built: SSH hosts measured via relay.status with freshness (answeredAt, relayUptimeMs), unmeasured stays unknown; hermetic tests and tsc green. The live two-host leg RAN and PASSED on 2026-10-14 (Windows laptop <-> GEX44 disposable root, 1 passed: HWF22_MEASURED uptimeMs/answeredAt, HWF22_UNKNOWN reason=not-connected; evidence dws-exec ctl inputs/d4/20261014/X15). Not covered: the spec is not type-checked by any tsc config, and only one SSH target was exercised."
     },
     {
@@ -2015,11 +2009,10 @@
       ],
       "dependsOn": [],
       "evidence": [
-        "src/main/ssh/ssh-relay-session-host-loss.test.ts",
-        "tests/e2e/hwf-two-host-host-loss.spec.ts",
-        "ctl/inputs/d4/20261014/X17"
+        { "kind": "file", "path": "src/main/ssh/ssh-relay-session-host-loss.test.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-host-loss.spec.ts" }
       ],
-      "reason": "Measured 2026-10-14 (D4): hermetic host-loss test plus the live two-host leg RAN and PASSED Windows<->GEX44 (x17b shell leg: same relay pid, same shell pid, no duplicate, HWF_LOCAL_CONTINUES 0->119; x17c agent leg: same agent pid, emitter alive, no row removals, no relaunch). Does NOT cover: a job/background-task duplicate check, the p23 refusal drill (not run), and host B backfill after outage (seen=0 of 13). Stays PARTIAL because done also names jobs."
+      "reason": "Measured 2026-10-14 (D4): hermetic host-loss test plus the live two-host leg RAN and PASSED Windows<->GEX44 (x17b shell leg: same relay pid, same shell pid, no duplicate, HWF_LOCAL_CONTINUES 0->119; x17c agent leg: same agent pid, emitter alive, no row removals, no relaunch). Does NOT cover: a job/background-task duplicate check, the p23 refusal drill (not run), and host B backfill after outage (seen=0 of 13). Stays PARTIAL because done also names jobs. Live-leg evidence is outside this repo: dws-exec ctl inputs/d4/20261014/X17."
     },
     {
       "id": 74,
