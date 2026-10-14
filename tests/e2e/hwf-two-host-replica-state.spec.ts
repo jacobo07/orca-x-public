@@ -50,7 +50,8 @@ test('state model decides ahead from evidence read over SSH; unreadable host is 
       const r = execOnOwningHost(run, `git -C ${repo} rev-parse ${spec}`)
       return r.status === 0 ? r.out.trim() : ''
     }
-    const seedTip = rev(run.seedRoot, 'HEAD')
+    // seedRoot is a commit, not a repo: resolve it inside the replica on the owning host.
+    const seedTip = rev(p17, `${run.seedRoot}^{commit}`)
     const replicaTip = rev(p17, 'HEAD')
     expect(seedTip).toMatch(/^[0-9a-f]{40}$/)
     expect(replicaTip).toMatch(/^[0-9a-f]{40}$/)
