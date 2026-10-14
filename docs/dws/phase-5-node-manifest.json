@@ -1,52 +1,114 @@
 {
-  "verdict": "BLOCKED",
-  "rung": "none",
-  "rungReached": "preflight",
-  "blockedReason": "deploy-failed: ...lready ours POSTURE ufw-state POSTURE Status: inactive POSTURE sandbox-mode POSTURE no-sandbox (accepted contingency, T-02-05) fatal: detected dubious ownership in repository at '/home/orca-svc/dws-p2/e625d3f' To add an exception for this directory, call: System.Management.Automation.RemoteException git config --global --add safe.directory /home/orca-svc/dws-p2/e625d3f INSTALL_FAILED step=checkout",
-  "headSha": "e625d3f42cd44fa89de32b5f5ee5bea5f9211511",
-  "runtimeIdMatchesServe": null,
-  "deployed": null,
-  "utc": {
-    "start": "2026-09-30T04:46:53.7703839Z",
-    "end": "2026-09-30T04:47:22.6377636Z"
+  "verdict": "MEASURED",
+  "rung": "fan-out-gex44",
+  "headSha": "79f54d64af040e9a4327ca3bd9b645b6cfcda478",
+  "runtimeIdMatchesServe": true,
+  "deployed": {
+    "sha": "3266e1a41790ab356def108aca96895e1e921279",
+    "svcCheckout": "/home/orca-svc/dws-p2/3266e1a",
+    "boundEndpoint": "ws://127.0.0.1:6791",
+    "artifactSha256Laptop": "8ef4ce12f2579e85e3861cea5cde8dd977a74089b1a34feb19f6b30445ac4594",
+    "artifactSha256Gex44": "8ef4ce12f2579e85e3861cea5cde8dd977a74089b1a34feb19f6b30445ac4594",
+    "deployedUtc": "2026-09-30T04:59:04.7933937Z"
   },
-  "product": null,
-  "control": null,
+  "utc": {
+    "start": "2026-10-14T20:49:42Z",
+    "end": "2026-10-14T20:50:15Z"
+  },
+  "product": {
+    "memoryAvailableBytes": 59193368576,
+    "vramFreeBytes": 3245342720,
+    "diskAvailableBytes": 903119962112,
+    "modelIds": [
+      "qwen3-coder-30b"
+    ],
+    "diskFilesystemPath": "/",
+    "statuses": {
+      "memory": "measured",
+      "disk": "measured",
+      "vram": "measured",
+      "resident_model": "measured"
+    },
+    "memberAddress": "runtime:0aca491d-9729-406d-87aa-e5d32bc73e1b",
+    "observedAt": 1792011015070
+  },
+  "control": {
+    "valid": true,
+    "memoryAvailableBytes": 60349718528,
+    "vramFreeBytes": 3245342720,
+    "diskAvailableBytes": 903255478272,
+    "modelIds": [
+      "qwen3-coder-30b"
+    ]
+  },
   "comparison": {
     "memory": {
-      "verdict": "UNJUDGED",
-      "reason": "blocked"
+      "verdict": "MATCH",
+      "delta": 1156349952,
+      "tolerance": 6034971852.8
     },
     "vram": {
-      "verdict": "UNJUDGED",
-      "reason": "blocked"
+      "verdict": "MATCH",
+      "delta": 0,
+      "tolerance": 268435456
     },
     "disk": {
-      "verdict": "UNJUDGED",
-      "reason": "blocked"
+      "verdict": "MATCH",
+      "delta": 135516160,
+      "tolerance": 1073741824
     },
     "resident_model": {
-      "verdict": "UNJUDGED",
-      "reason": "blocked"
+      "verdict": "MATCH",
+      "tolerance": "exact-set-equality"
     }
   },
-  "planeTags": {},
-  "notes": [],
-  "probePort": null,
-  "fanOut": null,
+  "planeTags": {
+    "memory": "GEX44-PROVEN",
+    "vram": "GEX44-PROVEN",
+    "disk": "GEX44-PROVEN",
+    "resident_model": "GEX44-PROVEN"
+  },
+  "notes": [
+    "judged against control-before; product reading: fan-out-gex44"
+  ],
+  "controlStability": {
+    "memory": {
+      "verdict": "MATCH",
+      "delta": 386842624,
+      "tolerance": 5996287590.400001
+    },
+    "vram": {
+      "verdict": "MATCH",
+      "delta": 0,
+      "tolerance": 268435456
+    },
+    "disk": {
+      "verdict": "MATCH",
+      "delta": 91979776,
+      "tolerance": 1073741824
+    },
+    "resident_model": {
+      "verdict": "MATCH",
+      "tolerance": "exact-set-equality"
+    }
+  },
+  "probePort": 8081,
+  "fanOut": "a second, isolated e2e Orca on GEX44 (HEAD 79f54d64af, src equal to deployed 3266e1a) paired to the serve over loopback; manifest members: local + runtime:<serve env>",
   "teardown": {
-    "tunnelSshProcesses": 0,
-    "tunnelPortListeners": 0,
-    "laptopLocalRuntimePid": null,
-    "serveActive": "failed",
+    "e2eElectron": 0,
+    "leftoverE2eUserData": 0,
+    "serveActive": "active",
     "notes": [
-      "TUNNEL_NOT_RUNNING"
+      "GEX44-hosted: laptop free memory fell to 1.37 GB"
     ]
   },
   "serveMainPid": {
-    "before": "0",
-    "after": "0"
+    "before": "978766",
+    "after": "978766"
   },
-  "laptopFreeMbAtStart": 5633.9,
-  "diskFact": null
+  "laptopFreeMbAtStart": null,
+  "diskFact": {
+    "availableBytes": 903255478272,
+    "percentUsed": 49
+  }
 }
