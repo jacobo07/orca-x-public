@@ -3,11 +3,14 @@ import type { FleetObservation } from '../../../../shared/fleet-placement-view'
 import type { FleetPlacementMember } from '../../../../shared/fleet-placement'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
+import { RpcDispatcher } from '../dispatcher'
+import { ORCHESTRATION_METHODS } from './orchestration'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 
 const observation = vi.hoisted(() => ({ current: null as Promise<unknown> | null }))
@@ -119,6 +122,42 @@ describe('cross-host mission dispatch', () => {
       await codeOf(h.call('orchestration.missionPlace', { from: 'term_other', tasks: [a.id] }, ctx))
     ).toBe('consumer_fenced')
     expect(db.getTaskPlacement(a.id)).toBeUndefined()
+  })
+
+  // Why: the dispatcher stamps a local caller fingerprint on every mutation; the live leg was refused by it.
+  it('admits the local socket through the real dispatcher and refuses a paired socket', async () => {
+    setup()
+    const a = db.createTask({ spec: 'job a' })
+    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    const request = (id: string) => ({
+      id,
+      authToken: 'test-auth-token',
+      method: 'orchestration.missionPlace',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: `place-${id}`,
+      params: { from: 'term_coord', tasks: [a.id] }
+    })
+    const replies: string[] = []
+    await dispatcher.dispatchStreaming(request('paired'), (r) => replies.push(r), {
+      authenticatedCallerFingerprint: 'fp-phone',
+      clientId: 'device-token',
+      pairedDeviceId: 'phone',
+      clientKind: 'runtime'
+    })
+    expect(JSON.parse(replies[0]).error).toMatchObject({ code: 'remote_caller_refused' })
+    // A fingerprint that is not this runtime's own still marks a remote caller.
+    expect(
+      await codeOf(
+        h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [a.id] },
+          { ...ctx, authenticatedCallerFingerprint: 'fp-foreign' }
+        )
+      )
+    ).toBe('remote_caller_refused')
+    const local = await dispatcher.dispatch(request('local'))
+    expect(local.ok ? undefined : local.error).toBeUndefined()
+    expect(db.getTaskPlacement(a.id)).toBeDefined()
   })
 
   it('workerStart refuses a placed task started on the wrong host before any dispatch row', async () => {
