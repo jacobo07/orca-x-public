@@ -1900,17 +1900,17 @@
       "row": "HF SSH targets in fleet observation",
       "owner": "fleet observation",
       "done": "SSH hosts measured with freshness through the relay; unmeasured stays unknown",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X15 (row-71 hermetic tests + tsc, tranche 2)",
+      "measuredIn": "dws-exec X15f (D4)",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         22
       ],
       "dependsOn": [],
-      "evidence": ["src/main/fleet/fleet-observation-service.ts","src/main/fleet/fleet-observation-service.test.ts","src/shared/fleet-placement-view.ts","tests/e2e/hwf-two-host-ssh-fleet.spec.ts"],
-      "reason": "Built: SSH hosts measured via relay.status with freshness (answeredAt, relayUptimeMs), unmeasured stays unknown; hermetic tests and tsc green. NOT RUN: real Windows<->GEX44 leg (tests/e2e/hwf-two-host-ssh-fleet.spec.ts, needs ORCA_HWF_TWO_HOST=1); row stays PARTIAL until it runs."
+      "evidence": ["src/main/fleet/fleet-observation-service.ts","src/main/fleet/fleet-observation-service.test.ts","src/shared/fleet-placement-view.ts","tests/e2e/hwf-two-host-ssh-fleet.spec.ts","ctl/inputs/d4/20261014/X15/"],
+      "reason": "Built: SSH hosts measured via relay.status with freshness (answeredAt, relayUptimeMs), unmeasured stays unknown; hermetic tests and tsc green. The live two-host leg RAN and PASSED on 2026-10-14 (Windows laptop <-> GEX44 disposable root, 1 passed: HWF22_MEASURED uptimeMs/answeredAt, HWF22_UNKNOWN reason=not-connected; evidence dws-exec ctl inputs/d4/20261014/X15). Not covered: the spec is not type-checked by any tsc config, and only one SSH target was exercised."
     },
     {
       "id": 72,
