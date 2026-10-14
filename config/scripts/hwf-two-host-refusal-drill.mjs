@@ -85,6 +85,11 @@ report(
   'seed-p17-bad-root',
   runDriver(['seed-p17', '/tmp/orca-hwf-p18-X', '0123456789abcdef'])
 )
+report(
+  'driver',
+  'seed-p19-bad-root',
+  runDriver(['seed-p19', '/tmp/orca-hwf-p19-X', '0123456789abcdef'])
+)
 report('driver', 'new-nonce', runDriver(['new-nonce']))
 report('driver', 'new-root-p17', runDriver(['new-root', '--phase', '17']))
 report('driver', 'new-root-p20', runDriver(['new-root', '--phase', '20']))
