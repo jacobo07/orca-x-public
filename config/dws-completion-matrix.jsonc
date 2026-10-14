@@ -1671,17 +1671,17 @@
       "row": "HF One-way safe sync",
       "owner": "sync pipeline",
       "done": "fast-forward of a proven descendant, capsule first, generation-fenced; disk-full/disconnect/stale stay failures",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X11 (hermetic vitest + tsc)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         18
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: no sync pipeline"
+      "evidence": ["src/main/replica-sync.ts","src/main/replica-sync.test.ts","tests/e2e/hwf-two-host-replica-sync.spec.ts"],
+      "reason": "dws-exec X11: fast-forward pipeline (generation+tip fences, descendant proof, verified capsule first, typed failures) built with 10 hermetic tests; two-host spec written but NOT RUN (needs laptop, ORCA_HWF_TWO_HOST=1); not wired to UI/IPC"
     },
     {
       "id": 66,
