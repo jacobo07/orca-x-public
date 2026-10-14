@@ -12,7 +12,7 @@ import { execOnOwningHost, readHwfRunFile } from './helpers/hwf-two-host-ssh-tar
 /**
  * REAL-TWO-HOST rung for phase 17 (row 64): the laptop captures a dirty worktree as a capsule commit and pushes the
  * ref over real SSH to a GEX44 disposable root, where an independent git reads the dirty content back.
- * Opt-in: a skip means NOT RUN. Run file: hwf-two-host-remote.mjs run-file (create + seed-p17 already run).
+ * Opt-in: a skip means NOT RUN. Run file: hwf-two-host-remote.mjs run-file (create + seed-p17-capsule already run).
  */
 test.skip(
   process.env.ORCA_HWF_TWO_HOST !== '1' || !process.env.ORCA_HWF_RUN_FILE,

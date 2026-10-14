@@ -1579,8 +1579,8 @@
       "done": "evidence-based states; unknown never healthy; timestamps never decide",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X09 (vitest in unit tree row-62)",
+      "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
         17
@@ -1590,10 +1590,20 @@
         {
           "kind": "file",
           "path": "src/shared/workspace-replica-state.test.ts",
-          "note": "pure evidence-only replica state model: missing or failed evidence gives unknown, never healthy; replicas whose timestamps disagree with their evidence are decided by evidence; mutants that treat unknown as healthy go red. Not yet wired to a comparison transport (row 63)."
+          "note": "pure evidence-only replica state model: missing or failed evidence gives unknown, never healthy; replicas whose timestamps disagree with their evidence are decided by evidence; mutants that treat unknown as healthy go red."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-comparison-service.test.ts",
+          "note": "relationFromComparison: real-git bundle comparison folded through the model; every comparison failure maps to a closed unknown reason (relay-unsupported reads relay-too-old), never healthy; evidence for moved tips reads evidence-stale."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-state.spec.ts",
+          "note": "opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1): NOT RUN from GEX44."
         }
       ],
-      "reason": "Measured 2026-09-27: no cross-host comparison in src/{main,relay,shared}. Model module and tests now exist; transport and presenter are not built, so the row is PARTIAL."
+      "reason": "dws-exec X09 2026-10-10: model plus hermetic comparison-to-state bridge (relationFromComparison) are tested; the opt-in Windows<->GEX44 spec is built but NOT RUN (needs the laptop). Still open: the comparison service is not wired to the app SSH relay session and no presenter exists, so the row stays PARTIAL."
     },
     {
       "id": 63,
@@ -1602,7 +1612,7 @@
       "done": "ancestry decided on transferred objects (bundle verified); relay capability-probed",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X06 (vitest in unit tree row-63)",
+      "measuredIn": "dws-exec X08 (vitest in unit tree row-63-t2)",
       "measuredAt": "2026-10-10",
       "required": true,
       "phases": [
@@ -1625,9 +1635,19 @@
           "kind": "file",
           "path": "src/relay/git-replica-handler.test.ts",
           "note": "relay git.replicaTips/BundleExport/BundleRead/BundleRelease on a real git repo: chunked read matches sha256 and passes bundle verify, release deletes the temp dir, relative path/bad offset/third concurrent export refused; advertised as relay capability git.replicaBundle."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-comparison-service.test.ts",
+          "note": "compareWithRelayReplica with an injected relay request: probe, export, sha256-checked chunked pull, verify-then-fetch, ancestry on received objects; hermetic, 7 tests."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-compare.spec.ts",
+          "note": "opt-in two-host transport precondition (ORCA_HWF_TWO_HOST=1); NOT RUN on GEX44."
         }
       ],
-      "reason": "Measured 2026-10-10: client verified receive, ancestry on transferred objects, capability probe and relay-side export/read/release handlers exist with tests. NOT built or run: comparison service wiring the probe to the receive over a real SSH connection, and any live two-host transfer (needs a second host). So the row is PARTIAL."
+      "reason": "Measured 2026-10-10: comparison service (probe -> export -> checked chunk pull -> verified receive -> ancestry on transferred objects) built and tested hermetically with an injected relay request, plus seed-p17 harness verb with refusal drill and an opt-in two-host spec. NOT done: the service is not yet wired to the app's real SSH relay session, and the Windows<->GEX44 leg has NOT RUN (needs the laptop). So the row stays PARTIAL."
     },
     {
       "id": 64,
@@ -1652,7 +1672,7 @@
         {
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-dirty-capsule.spec.ts",
-          "note": "Opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1), NOT RUN: laptop capsule pushed over ssh to a GEX44 p17 disposable root and read back by verify-p17. Harness verbs seed-p17/verify-p17 and the /tmp/orca-hwf-p17-* root guard are in config/scripts/."
+          "note": "Opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1), NOT RUN: laptop capsule pushed over ssh to a GEX44 p17 disposable root and read back by verify-p17. Harness verbs seed-p17-capsule/verify-p17 and the /tmp/orca-hwf-p17-* root guard are in config/scripts/."
         }
       ],
       "reason": "Measured 2026-10-10: capsule creation and listing built with hermetic tests (content-addressed commit under refs/orca/capsules, real git). Built but NOT RUN: the Windows <-> GEX44 leg over real SSH (spec waits for ORCA_HWF_TWO_HOST=1; reads NOT RUN). NOT built: restore/apply of a capsule, UI or service wiring that calls createCapsule. So the row is PARTIAL."
@@ -1662,17 +1682,17 @@
       "row": "HF One-way safe sync",
       "owner": "sync pipeline",
       "done": "fast-forward of a proven descendant, capsule first, generation-fenced; disk-full/disconnect/stale stay failures",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X11 (hermetic vitest + tsc)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         18
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: no sync pipeline"
+      "evidence": ["src/main/replica-sync.ts","src/main/replica-sync.test.ts","tests/e2e/hwf-two-host-replica-sync.spec.ts"],
+      "reason": "dws-exec X11: fast-forward pipeline (generation+tip fences, descendant proof, verified capsule first, typed failures) built with 10 hermetic tests; two-host spec written but NOT RUN (needs laptop, ORCA_HWF_TWO_HOST=1); not wired to UI/IPC"
     },
     {
       "id": 66,
