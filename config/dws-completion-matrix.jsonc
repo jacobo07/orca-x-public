@@ -1631,8 +1631,8 @@
       "done": "ancestry decided on transferred objects (bundle verified); relay capability-probed",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X08 (vitest in unit tree row-63-t2)",
-      "measuredAt": "2026-10-10",
+      "measuredIn": "dws-exec X08f (D4)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         17
@@ -1658,15 +1658,15 @@
         {
           "kind": "file",
           "path": "src/main/replica-comparison-service.test.ts",
-          "note": "compareWithRelayReplica with an injected relay request: probe, export, sha256-checked chunked pull, verify-then-fetch, ancestry on received objects; hermetic, 7 tests."
+          "note": "compareWithRelayReplica with an injected relay request: probe, export, sha256-checked chunked pull, verify-then-fetch, ancestry on received objects; hermetic; compareWithSshRelayReplica binds it to the active SSH multiplexer and connection generation (injected deps in tests), 9 tests."
         },
         {
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-replica-compare.spec.ts",
-          "note": "opt-in two-host transport precondition (ORCA_HWF_TWO_HOST=1); NOT RUN on GEX44."
+          "note": "opt-in two-host transport precondition (ORCA_HWF_TWO_HOST=1); live leg RAN and PASSED on 2026-10-14 (laptop -> GEX44 disposable root, evidence d4-ev-20261014-164045; W/inputs/d4/20261014/X08/). Proves pin + ahead 2 only."
         }
       ],
-      "reason": "Measured 2026-10-10: comparison service (probe -> export -> checked chunk pull -> verified receive -> ancestry on transferred objects) built and tested hermetically with an injected relay request, plus seed-p17 harness verb with refusal drill and an opt-in two-host spec. NOT done: the service is not yet wired to the app's real SSH relay session, and the Windows<->GEX44 leg has NOT RUN (needs the laptop). So the row stays PARTIAL."
+      "reason": "Measured 2026-10-10: comparison service (probe -> export -> checked chunk pull -> verified receive -> ancestry on transferred objects) built and tested hermetically with an injected relay request, plus seed-p17 harness verb with refusal drill and an opt-in two-host spec. Wired: compareWithSshRelayReplica resolves the app's active SSH multiplexer and generation (hermetic tests with injected session deps; no caller UI/IPC yet). Live two-host leg RAN and PASSED 2026-10-14 (laptop -> GEX44 disposable root; evidence W/inputs/d4/20261014/X08/, summary.json unit X08; fix 3962a9f02d merged). It proves the transport precondition only (HWF17_PIN + remote ahead 2); the spec does not assert the relay compare result, and there is no IPC/UI caller yet. So the row stays PARTIAL."
     },
     {
       "id": 64,

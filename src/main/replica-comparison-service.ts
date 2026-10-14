@@ -14,6 +14,7 @@ import {
 } from '../shared/workspace-replica-state'
 import { gitExecFileAsync } from './git/runner'
 import { decideReplicaAncestry, receiveReplicaBundle, type DeclaredHead } from './replica-bundle-receive'
+import { getSshConnectionGeneration } from './ssh/ssh-connection-generation'
 import { relaySupportsReplicaBundle, type RelayCapabilityRequest } from './ssh/ssh-relay-capabilities'
 
 export type ReplicaComparisonRequest = RelayCapabilityRequest
@@ -218,5 +219,44 @@ export function relationFromComparison(
     observedTips: [tip(a), tip(b)],
     site: 'local',
     outcome: { ok: false, reason: FAILURE_REASON[result.reason] }
+  })
+}
+
+type MuxLike = {
+  isDisposed(): boolean
+  request(
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { timeoutMs?: number }
+  ): Promise<unknown>
+}
+
+export type SshRelaySessionDeps = {
+  getMultiplexer: (connectionId: string) => Promise<MuxLike | undefined> | MuxLike | undefined
+  getGeneration: (connectionId: string) => number
+}
+
+/** Production entry: binds the comparison to the app's live SSH relay session (multiplexer + generation). */
+export async function compareWithSshRelayReplica(
+  args: Omit<Parameters<typeof compareWithRelayReplica>[0], 'request' | 'generation'> & {
+    deps?: Partial<SshRelaySessionDeps>
+  }
+): Promise<ReplicaComparisonResult> {
+  const { deps, ...rest } = args
+  // Loaded on demand so this module stays importable without the Electron-bound SSH layer.
+  const getMultiplexer =
+    deps?.getMultiplexer ??
+    (async (id: string) => (await import('./ipc/ssh')).getActiveMultiplexer(id))
+  const getGeneration =
+    deps?.getGeneration ??
+    getSshConnectionGeneration
+  const mux = await getMultiplexer(args.connectionId)
+  if (!mux || mux.isDisposed()) {
+    return { ok: false, reason: 'relay-unsupported', evidence: null }
+  }
+  return compareWithRelayReplica({
+    ...rest,
+    generation: getGeneration(args.connectionId),
+    request: (method, params, options) => mux.request(method, params, options)
   })
 }
