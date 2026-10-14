@@ -77,7 +77,11 @@ describe('SSH placement members', () => {
   it('a failed or silent relay reads unreachable', async () => {
     const thrown = await observeSshPlacementMembers(
       [measured()],
-      deps({ call: async () => Promise.reject(new Error('mux closed')) })
+      deps({
+        call: async () => {
+          throw new Error('mux closed')
+        }
+      })
     )
     expect(thrown[0].sample).toMatchObject({ outcome: 'unreachable', detail: 'mux closed' })
     const silent = await observeSshPlacementMembers(

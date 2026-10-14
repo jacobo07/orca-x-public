@@ -48,9 +48,9 @@ describe('fleet.resources relay method', () => {
   })
 
   it('a collection failure rejects the request instead of answering zeros', async () => {
-    const handler = register(async () => Promise.reject(new Error('procfs gone'))).get(
-      FLEET_RESOURCES_RELAY_METHOD
-    )!
+    const handler = register(async () => {
+      throw new Error('procfs gone')
+    }).get(FLEET_RESOURCES_RELAY_METHOD)!
     await expect(handler({})).rejects.toThrow('procfs gone')
   })
 
