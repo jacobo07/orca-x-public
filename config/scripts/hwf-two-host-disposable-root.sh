@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # GEX44 provisioner for the phase-15/16/20 two-host rungs; verbs: create status witness procs teardown install-stub
-# seed-p16 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
+# seed-p16 seed-p17 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
@@ -12,6 +12,9 @@ case "$ROOT" in
   /tmp/orca-hwf-p1[56]-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p1[56]-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p1[56]-*) ;;
+  /tmp/orca-hwf-p17-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p17-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p17-*) ;;
   /tmp/orca-hwf-p20-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*) ;;
@@ -231,6 +234,31 @@ STUB
     echo "UNBORN_PATH=$UNBORN"
     echo "LATE_PATH=$LATE"
     echo "LATE_HEAD=$(git -C "$LATE" rev-parse HEAD)"
+    ;;
+  seed-p17)
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *) echo "REFUSED nonce=$EXTRA"; exit 2 ;;
+    esac
+    NONCE="$EXTRA"
+    P17="$ROOT/repos/p17-replica"
+    if [ -e "$P17" ]; then echo "REFUSED exists=$P17"; exit 3; fi
+    mkdir -p "$P17"
+    seed_git -C "$P17" init -q
+    printf 'HWF16_%s\n' "$NONCE" > "$P17/seed.txt"
+    seed_git -C "$P17" add seed.txt
+    seed_git -C "$P17" commit -q -m 'hwf p16 seed'
+    SEED_ROOT=$(git -C "$P17" rev-parse HEAD)
+    for N in 1 2; do
+      printf 'remote %s %s\n' "$N" "$NONCE" > "$P17/remote$N.txt"
+      $G -C "$P17" add "remote$N.txt"
+      $G -C "$P17" commit -q -m "hwf p17 remote commit $N"
+    done
+    echo "SEED_ROOT=$SEED_ROOT"
+    echo "P17_REPLICA_PATH=$P17"
+    echo "P17_REPLICA_HEAD=$(git -C "$P17" rev-parse HEAD)"
+    echo "P17_REMOTE_AHEAD=2"
     ;;
   git-compat-p16)
     if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi

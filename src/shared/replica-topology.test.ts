@@ -222,4 +222,56 @@ describe('deriveReplicaTopology', () => {
       path: '/data/a'
     })
   })
+
+  describe('ancestry evidence on a grouped pair (row 60 open leg)', () => {
+    const tips = ['b'.repeat(40), 'c'.repeat(40)] as const
+    const setups = [
+      setup('a', ROOT_PROJECT_ID),
+      setup('b', ROOT_PROJECT_ID, { hostId: 'ssh:gex44' })
+    ]
+    const relationsOf = (relations: Parameters<typeof deriveReplicaTopology>[0]['relations']) =>
+      deriveReplicaTopology({ setups, repos: [], relations }).map((e) => [e.membership, e.relation])
+
+    it('names a diverged cross-host pair but keeps it grouped, never merged', () => {
+      const diverged = {
+        kind: 'diverged' as const,
+        mergeBase: ROOT,
+        aheadCount: 1,
+        behindCount: 2,
+        observedTips: tips
+      }
+      expect(relationsOf(new Map([['b', diverged]]))).toEqual([
+        ['grouped', 'unverified'],
+        ['grouped', 'diverged']
+      ])
+    })
+
+    it('keeps unverified when the comparison failed or no evidence exists', () => {
+      expect(
+        relationsOf(new Map([['b', { kind: 'unknown' as const, reason: 'transfer-interrupted' as const }]]))
+      ).toEqual([
+        ['grouped', 'unverified'],
+        ['grouped', 'unverified']
+      ])
+      expect(relationsOf(undefined)[1]).toEqual(['grouped', 'unverified'])
+    })
+
+    it('reports ahead from verified evidence', () => {
+      expect(
+        relationsOf(new Map([['b', { kind: 'ahead' as const, count: 2, observedTips: tips }]]))[1]
+      ).toEqual(['grouped', 'ahead'])
+    })
+
+    it('does not attach a relation to a colliding member', () => {
+      const [entry] = deriveReplicaTopology({
+        setups,
+        repos: [],
+        identityCollisions: [
+          { kind: 'same-host-duplicate', rootCommit: ROOT, hostId: 'local', setupIds: ['a'] }
+        ],
+        relations: new Map([['a', { kind: 'ahead' as const, count: 1, observedTips: tips }]])
+      })
+      expect(entry).not.toHaveProperty('relation')
+    })
+  })
 })

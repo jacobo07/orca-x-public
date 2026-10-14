@@ -4,6 +4,7 @@ import type { ProjectIdentityCollision } from './project-identity-collisions'
 import { isHostLocalProjectId } from './project-host-setup-projection'
 import type { Project, ProjectHostSetup, ProjectHostSetupMethod } from './project-types'
 import type { Repo } from './repo-types'
+import type { ReplicaRelation } from './workspace-replica-state'
 
 export type ReplicaProvenance = 'imported' | 'cloned' | 'provisioned' | 'legacy' | 'unknown'
 
@@ -24,8 +25,8 @@ export type ReplicaTopologyEntry = {
   provenance: ReplicaProvenance
   membership: ReplicaMembership
   membershipReason?: ReplicaMembershipReason
-  /** Only grouped members carry it; phase 17's state model replaces this producer. */
-  relation?: 'unverified'
+  /** Only grouped members carry it: 'unverified' until ancestry evidence on transferred objects says otherwise. */
+  relation?: 'unverified' | Exclude<ReplicaRelation['kind'], 'unknown'>
 }
 
 /** A setup as published to a client that supports `projects.root-identity.v1`. */
@@ -39,6 +40,8 @@ export type ReplicaTopologyInput = {
   repos: readonly Pick<Repo, 'id' | 'kind' | 'gitRootIdentity' | 'gitRootIdentityNoneReason'>[]
   identityCollisions?: readonly ProjectIdentityCollision[]
   /** False for a host whose Orca version predates root identity: its absence is not "no root". */
+  /** setupId -> relation derived from SHA-fenced ancestry evidence (row 63); absent or unknown stays 'unverified'. */
+  relations?: ReadonlyMap<string, ReplicaRelation>
   hostReportsRootIdentity?: (hostId: ExecutionHostId) => boolean
 }
 
@@ -101,7 +104,13 @@ export function deriveReplicaTopology(input: ReplicaTopologyInput): ReplicaTopol
       return { ...base, membership: 'colliding', membershipReason: collision }
     }
     if ((countByProject.get(setup.projectId) ?? 0) > 1) {
-      return { ...base, membership: 'grouped', relation: 'unverified' }
+      // A diverged or unrelated pair stays grouped and visible; it is never merged or hidden.
+      const known = input.relations?.get(setup.id)
+      return {
+        ...base,
+        membership: 'grouped',
+        relation: known && known.kind !== 'unknown' ? known.kind : 'unverified'
+      }
     }
     if (!isHostLocalProjectId(setup.projectId)) {
       return { ...base, membership: 'sole' }
