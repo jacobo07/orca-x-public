@@ -1691,8 +1691,12 @@
         18
       ],
       "dependsOn": [],
-      "evidence": ["src/main/replica-sync.ts","src/main/replica-sync.test.ts","tests/e2e/hwf-two-host-replica-sync.spec.ts","ctl/inputs/d4/20261014/X11/","ctl/inputs/d4/20261014/summary.json"],
-      "reason": "dws-exec X11f (D4): fast-forward pipeline with 10 hermetic tests; the live two-host leg RAN and PASSED on 2026-10-14 (laptop to GEX44 disposable root, stale-generation, ff ok, capsule present). Does not cover disk-full/disconnect live, and not wired to UI/IPC, so row stays PARTIAL"
+      "evidence": [
+        { "kind": "file", "path": "src/main/replica-sync.ts" },
+        { "kind": "file", "path": "src/main/replica-sync.test.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-replica-sync.spec.ts" }
+      ],
+      "reason": "dws-exec X11f (D4): fast-forward pipeline with 10 hermetic tests; the live two-host leg RAN and PASSED on 2026-10-14 (laptop to GEX44 disposable root, stale-generation, ff ok, capsule present; evidence ctl/inputs/d4/20261014/X11/ and summary.json). Does not cover disk-full/disconnect live, and not wired to UI/IPC, so row stays PARTIAL"
     },
     {
       "id": 66,
