@@ -30,6 +30,7 @@ import {
 } from '../../shared/runtime-environments'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { fingerprintHostPublicKey } from '../runtime/host-key-fingerprint'
+import { observeSshPlacementMembers } from './fleet-ssh-placement-member'
 
 export const FLEET_STEP_DEADLINE_MS = 5_000
 export const FLEET_OBSERVATION_CONCURRENCY = 4
@@ -63,10 +64,12 @@ export type FleetObservationDeps = {
   /** Asks one connected target's relay `relay.status`. Must not connect or deploy anything. */
   callSshRelay?: (args: {
     targetId: string
-    method: 'relay.status'
+    method: 'relay.status' | 'fleet.resources'
     timeoutMs: number
     signal: AbortSignal
   }) => Promise<unknown>
+  /** With `callSshRelay`, lets a connected, pinned SSH target become a placement member. */
+  readPinnedSshHostKeyFingerprint?: (targetId: string) => string | null
   stepDeadlineMs?: number
 }
 
@@ -394,10 +397,22 @@ export async function observeFleet(
     observeSshHosts(deps, deadlineMs)
   ])
   const sshHostIdentity = countSshHostIdentities(deps)
+  const sshMembers =
+    deps.callSshRelay && deps.readPinnedSshHostKeyFingerprint
+      ? await observeSshPlacementMembers(sshHosts, {
+          now: deps.now,
+          call: deps.callSshRelay,
+          readPinnedFingerprint: deps.readPinnedSshHostKeyFingerprint,
+          deadlineMs
+        })
+      : []
+  const others = [...remote, ...sshMembers].sort((a, b) =>
+    compareFleetAddresses(a.address, b.address)
+  )
   return {
     observedAt,
     completedAt: deps.now(),
-    members: [local, ...remote.sort((a, b) => compareFleetAddresses(a.address, b.address))],
+    members: [local, ...others],
     coverage: {
       runtimeEnvironments: environments.length,
       sshTargets: sshHosts ? 'enumerated' : 'not-enumerated',

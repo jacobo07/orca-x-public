@@ -42,6 +42,10 @@ import {
   ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES,
   EnvironmentRequirementsHandler
 } from './environment-requirements-handler'
+import {
+  FLEET_RESOURCES_RELAY_CAPABILITIES,
+  registerFleetResourcesHandler
+} from './fleet-resources-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
@@ -723,6 +727,7 @@ async function main(): Promise<void> {
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   void new EnvironmentRequirementsHandler(dispatcher)
+  registerFleetResourcesHandler(dispatcher)
   const _skillInstallHandler = new SkillInstallHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
   void _preflightHandler
@@ -943,7 +948,8 @@ async function main(): Promise<void> {
     capabilities: [
       ...SKILL_RELAY_CAPABILITIES,
       ...ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES,
-      ...REPLICA_BUNDLE_RELAY_CAPABILITIES
+      ...REPLICA_BUNDLE_RELAY_CAPABILITIES,
+      ...FLEET_RESOURCES_RELAY_CAPABILITIES
     ],
     pid: process.pid,
     uptimeMs: Date.now() - startedAt,
