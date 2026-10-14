@@ -1598,8 +1598,8 @@
       "done": "evidence-based states; unknown never healthy; timestamps never decide",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X09f (D4)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         17
@@ -1609,10 +1609,20 @@
         {
           "kind": "file",
           "path": "src/shared/workspace-replica-state.test.ts",
-          "note": "pure evidence-only replica state model: missing or failed evidence gives unknown, never healthy; replicas whose timestamps disagree with their evidence are decided by evidence; mutants that treat unknown as healthy go red. Not yet wired to a comparison transport (row 63)."
+          "note": "pure evidence-only replica state model: missing or failed evidence gives unknown, never healthy; replicas whose timestamps disagree with their evidence are decided by evidence; mutants that treat unknown as healthy go red."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-comparison-service.test.ts",
+          "note": "relationFromComparison: real-git bundle comparison folded through the model; every comparison failure maps to a closed unknown reason (relay-unsupported reads relay-too-old), never healthy; evidence for moved tips reads evidence-stale."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-state.spec.ts",
+          "note": "opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1): RAN and PASSED from the laptop against a GEX44 disposable root 2026-10-14 (D4 X09). Evidence: ctl/inputs/d4/20261014/X09/ and summary.json."
         }
       ],
-      "reason": "Measured 2026-09-27: no cross-host comparison in src/{main,relay,shared}. Model module and tests now exist; transport and presenter are not built, so the row is PARTIAL."
+      "reason": "dws-exec X09f 2026-10-14: model plus hermetic comparison-to-state bridge are tested, and the live Windows<->GEX44 two-host leg RAN and PASSED (HWF17_STATE=ahead:2, HWF17_UNREADABLE=unknown; evidence W/inputs/d4/20261014/X09). That leg feeds ssh-read facts to the model, not the relay compare. Not covered: the comparison service is not wired to the app SSH relay session and no presenter exists, so the row stays PARTIAL."
     },
     {
       "id": 63,

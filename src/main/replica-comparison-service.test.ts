@@ -3,9 +3,10 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isReplicaRelationHealthy, type ReplicaFacts } from '../shared/workspace-replica-state'
 import { GitReplicaHandler } from '../relay/git-replica-handler'
 import { createMockDispatcher, type RelayDispatcher } from '../relay/git-handler-test-setup'
-import { compareWithRelayReplica, type ReplicaComparisonRequest } from './replica-comparison-service'
+import { relationFromComparison, compareWithRelayReplica, type ReplicaComparisonRequest } from './replica-comparison-service'
 import { resetSshRelayCapabilityCacheForTests } from './ssh/ssh-relay-capabilities'
 
 const ENV = {
@@ -136,5 +137,54 @@ describe('compareWithRelayReplica', () => {
   it('a malformed export response is relay-bad-response', async () => {
     const r = await run(relay(['git.replicaBundle'], (m, x) => (m === 'git.replicaBundleExport' ? { nope: 1 } : x)))
     expect(r).toMatchObject({ ok: false, reason: 'relay-bad-response' })
+  })
+})
+
+describe('relationFromComparison (row 62)', () => {
+  const facts = (cwd: string, host: string): ReplicaFacts => ({
+    setupId: 's',
+    hostId: host,
+    tip: { kind: 'commit', sha: git(cwd, 'rev-parse', 'HEAD'), ref: 'main' },
+    worktree: { kind: 'clean' }
+  })
+
+  it('transferred objects decide ahead/behind; only same+clean is healthy', async () => {
+    commit(remote, 'r1')
+    const r = await run(relay(['git.replicaBundle']))
+    const rel = relationFromComparison(facts(local, 'l'), facts(remote, 'r'), r)
+    expect(rel).toMatchObject({ kind: 'behind', count: 1 })
+    expect(isReplicaRelationHealthy(rel, facts(local, 'l'), facts(remote, 'r'))).toBe(false)
+  })
+
+  it('every failure is unknown with a closed reason, never healthy', async () => {
+    commit(remote, 'r1')
+    const a = facts(local, 'l')
+    const b = facts(remote, 'r')
+    const old = await run(relay(['git.exec']))
+    const oldRel = relationFromComparison(a, b, old)
+    expect(oldRel).toEqual({ kind: 'unknown', reason: 'relay-too-old' })
+    resetSshRelayCapabilityCacheForTests()
+    const bad = await run(relay(['git.replicaBundle'], (m, x) => (m === 'git.replicaBundleExport' ? { nope: 1 } : x)))
+    expect(relationFromComparison(a, b, bad)).toEqual({ kind: 'unknown', reason: 'transfer-interrupted' })
+    const lie = await run(
+      relay(['git.replicaBundle'], (m, x) =>
+        m === 'git.replicaBundleExport' ? { ...(x as object), heads: [{ ref: 'HEAD', sha: 'a'.repeat(40) }] } : x
+      )
+    )
+    const lieRel = relationFromComparison(a, b, lie)
+    expect(lieRel).toEqual({ kind: 'unknown', reason: 'bundle-heads-mismatch' })
+    for (const rel of [oldRel, lieRel]) {
+      expect(isReplicaRelationHealthy(rel, a, b)).toBe(false)
+    }
+  })
+
+  it('evidence for tips that moved is stale, not reused', async () => {
+    commit(remote, 'r1')
+    const r = await run(relay(['git.replicaBundle']))
+    commit(local, 'l-moved')
+    expect(relationFromComparison(facts(local, 'l'), facts(remote, 'r'), r)).toEqual({
+      kind: 'unknown',
+      reason: 'evidence-stale'
+    })
   })
 })
