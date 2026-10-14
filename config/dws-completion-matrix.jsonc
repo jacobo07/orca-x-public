@@ -1922,9 +1922,9 @@
       "row": "HF Jobs placed across hosts",
       "owner": "orchestration dispatch + dws phase 6 apply",
       "done": "two jobs of one mission run concurrently on two hosts with observable placement and integrated results",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X16",
+      "measuredIn": "dws-exec X16 + row 72 B live leg (p22 serve, tests/e2e/hwf-two-host-mission-dispatch.spec.ts)",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
@@ -1938,9 +1938,15 @@
         { "kind": "file", "path": "src/main/fleet/fleet-ssh-placement-member.ts" },
         { "kind": "file", "path": "src/relay/fleet-resources-handler.ts" },
         { "kind": "file", "path": "tests/e2e/hwf-two-host-mission-placement.spec.ts" },
-        { "kind": "commit", "sha": "0a89359680", "note": "X16 placement leg PASS live: GEX44 + Local Windows, one job per host" }
+        { "kind": "file", "path": "src/main/runtime/rpc/methods/orchestration-mission.ts" },
+        { "kind": "file", "path": "src/main/runtime/rpc/methods/orchestration-mission.test.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-mission-dispatch.spec.ts" },
+        { "kind": "commit", "sha": "0a89359680", "note": "X16 placement leg PASS live: GEX44 + Local Windows, one job per host" },
+        { "kind": "commit", "sha": "373e4f7f09", "note": "missionPlace / missionResults + workerStart placement check" },
+        { "kind": "commit", "sha": "6433969137", "note": "local coordinator admitted through the real dispatcher (live leg refused it before)" },
+        { "kind": "commit", "sha": "d62bf760c5", "note": "dispatch leg PASS live: both jobs completed on their placed hosts, overlapping" }
       ],
-      "reason": "Placement PASSES live 2026-10-14 (laptop -> GEX44 p22 root, commit 0a89359680): a connected, pinned SSH target is a placement member via relay fleet.resources.v1, the proposal holds GEX44 + Local Windows, and a two-job mission is planned one job per host. NOT done: dispatch is not wired to planMissionPlacement/recordTaskPlacement, so no job runs on the remote host and integrateMissionResults has no real outcomes."
+      "reason": "PASSES live 2026-10-14 (laptop Windows + GEX44 paired orca serve at 6433969, spec at d62bf760c5): missionPlace planned one job on Local Windows and one on runtime:gex44-p22; both started through workerStart together, both completed (2/2, 0 failed), ranOnPlacement true for both, crossHost true; the stub agents reported their own hosts (kobicraft-gex44, DESKTOP-PMT5BS8) and their run windows overlap (gex44 18:28:54-18:29:14Z, laptop 18:29:02-18:29:22Z); the remote result came home via workerShow and merged in missionResults. Caveat: the workers are a stub agent that reports worker_done through the real CLI, not a model; no real-provider turn was run."
     },
     {
       "id": 73,
