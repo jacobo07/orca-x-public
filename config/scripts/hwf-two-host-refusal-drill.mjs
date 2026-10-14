@@ -30,7 +30,11 @@ const badRoots = [
   ['dotdot22', '/tmp/orca-hwf-p22-../x'],
   ['semicolon22', '/tmp/orca-hwf-p22-a;id'],
   ['slash22', '/tmp/orca-hwf-p22-a/'],
-  ['p23', '/tmp/orca-hwf-p23-X']
+  ['p24', '/tmp/orca-hwf-p24-X'],
+  ['bare23', '/tmp/orca-hwf-p23-'],
+  ['dotdot23', '/tmp/orca-hwf-p23-../x'],
+  ['semicolon23', '/tmp/orca-hwf-p23-a;id'],
+  ['slash23', '/tmp/orca-hwf-p23-a/']
 ]
 
 function report(side, label, status) {
@@ -75,6 +79,7 @@ for (const [label, root] of badRoots) {
 report('remote', 'no-root', runRemoteScript('/tmp/orca-hwf-p16-NOPE0'))
 report('remote', 'no-root17', runRemoteScript('/tmp/orca-hwf-p17-NOPE0'))
 report('remote', 'no-root20', runRemoteScript('/tmp/orca-hwf-p20-NOPE0'))
+report('remote', 'no-root23', runRemoteScript('/tmp/orca-hwf-p23-NOPE0'))
 report(
   'driver',
   'seed-p16-bad-root',

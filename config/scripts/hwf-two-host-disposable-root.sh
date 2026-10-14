@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GEX44 provisioner for the phase-15/16/20 two-host rungs; verbs: create status witness procs teardown install-stub
+# GEX44 provisioner for the phase-15/16/17/20/22/23 two-host rungs; verbs: create status witness procs teardown install-stub
 # seed-p16 seed-p17 seed-p17-capsule verify-p17 seed-p19 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
 set -eu
 
@@ -21,6 +21,9 @@ case "$ROOT" in
   /tmp/orca-hwf-p22-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p22-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p22-*) ;;
+  /tmp/orca-hwf-p23-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p23-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p23-*) ;;
   *) echo "REFUSED root=$ROOT"; exit 2 ;;
 esac
 
