@@ -11,6 +11,10 @@ import {
   readHwfRunFile
 } from './helpers/hwf-two-host-ssh-target'
 import { waitForSessionReady } from './helpers/store'
+import type {
+  FleetPlacementCandidate,
+  FleetPlacementMember
+} from '../../src/shared/fleet-placement'
 import { planMissionPlacement } from '../../src/shared/mission-job-placement'
 
 /**
@@ -29,7 +33,10 @@ test.use({
   orcaAppExtraEnv: { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
 })
 
-type Candidate = { key: string; fingerprint: string; label: string; evidenceAddress: string }
+type Candidate = Pick<
+  FleetPlacementCandidate,
+  'key' | 'fingerprint' | 'label' | 'evidenceAddress' | 'availableMemory' | 'availableMemorySource'
+>
 
 let lastProposal = ''
 
@@ -39,13 +46,21 @@ function eligibleOf(userData: string): Candidate[] {
     lastProposal = `unreachable: ${r.unreachable}`
     return []
   }
-  const body = (r.value.result ?? r.value) as { proposal?: { eligible?: Candidate[]; rejected?: unknown } }
+  const body = (r.value.result ?? r.value) as {
+    proposal?: { eligible?: Candidate[]; rejected?: unknown }
+  }
   // Why: a count of 1 alone cannot say which host was rejected or why.
-  lastProposal = JSON.stringify({ eligible: body.proposal?.eligible, rejected: body.proposal?.rejected })
+  lastProposal = JSON.stringify({
+    eligible: body.proposal?.eligible,
+    rejected: body.proposal?.rejected
+  })
   return body.proposal?.eligible ?? []
 }
 
-test('two jobs of one mission are placed on two distinct hosts', async ({ orcaPage, electronApp }) => {
+test('two jobs of one mission are placed on two distinct hosts', async ({
+  orcaPage,
+  electronApp
+}) => {
   test.setTimeout(900_000)
   const run = readHwfRunFile()
   const localPort = readHwfLocalPort()
@@ -65,17 +80,26 @@ test('two jobs of one mission are placed on two distinct hosts', async ({ orcaPa
     console.log(`HWF22_PROPOSAL=${lastProposal}`)
     expect(new Set(eligible.map((c) => c.key)).size).toBeGreaterThanOrEqual(2)
     // Plan from the live proposal: the members below only restate the eligible hosts.
-    const members = eligible.map((c) => ({
+    const now = Date.now()
+    const members: FleetPlacementMember[] = eligible.map((c) => ({
       address: c.evidenceAddress,
       label: c.label,
-      fingerprint: c.fingerprint,
-      sample: { availableMemory: 1, platform: 'any', capabilities: [] }
+      identity: { state: 'keyed', fingerprint: c.fingerprint },
+      facts: { runtimeId: null, platform: null, capabilities: [], protocol: 'not-applicable' },
+      sample: {
+        outcome: 'measured',
+        runtimeId: null,
+        startedAt: now,
+        totalMemory: c.availableMemory,
+        availableMemory: c.availableMemory,
+        availableMemorySource: 'unknown',
+        processSweep: 'unknown'
+      }
     }))
-    const plan = planMissionPlacement(
-      [{ jobId: 'job-a' }, { jobId: 'job-b' }],
-      members as never,
-      {} as never
-    )
+    const plan = planMissionPlacement([{ jobId: 'job-a' }, { jobId: 'job-b' }], members, {
+      now,
+      maxSampleAgeMs: 60_000
+    })
     expect(plan.hostCount).toBe(2)
     for (const p of plan.placements) {
       console.log(`HWF22_PLACED job=${p.jobId} host=${p.hostKey} label=${p.label}`)
