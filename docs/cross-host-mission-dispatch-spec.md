@@ -88,6 +88,13 @@ coordinator, or a test, starts each placed job with the address the plan returne
 
 ### D4. Results
 
+An outcome is credited to a placement only when the task's dispatch ran there
+(`dispatchRanOnPlacement`): a local placement needs a non-federated dispatch, and a runtime
+placement needs a federated dispatch to that environment with the placed peer key. `missionPlace`
+refuses (`task_not_placeable`) a task that is neither `pending` nor `ready` and has no placement yet.
+Without both rules, a task finished elsewhere, or by a manual `task-update`, would make `crossHost`
+true with no remote run (review finding, 2026-10-14).
+
 There is no new store. `integrateMissionResults(listRunTaskPlacements(run) → placements,
 taskList → {jobId, status, result})`. Exposed read-only as `orchestration.missionResults { run }`
 so the e2e and the UI read the same merge.

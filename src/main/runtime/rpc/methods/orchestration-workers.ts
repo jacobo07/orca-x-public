@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { assertWorkerStartMatchesPlacement } from '../../orchestration/mission-dispatch-placement'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -40,6 +41,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         throw new OrchestrationError(
           'task_not_found',
           `Task ${params.task} was not found in Run ${run.id}.`
+        )
+      }
+      const placement = db.getTaskPlacement(task.id)
+      if (placement) {
+        assertWorkerStartMatchesPlacement(
+          placement,
+          params.on ? runtime.resolveOrchestrationWorkerServer(params.on) : null
         )
       }
 

@@ -4637,6 +4637,62 @@ export class OrchestrationDb {
       .get(params.taskId) as TaskPlacementRow
   }
 
+  getTaskPlacement(taskId: string): TaskPlacementRow | undefined {
+    return this.db.prepare('SELECT * FROM task_placements WHERE task_id = ?').get(taskId) as
+      | TaskPlacementRow
+      | undefined
+  }
+
+  /** All-or-nothing: a retry of the same plan keeps each row; a different host is refused, never overwritten. */
+  placeMissionTasks(
+    runId: string,
+    placements: readonly {
+      taskId: string
+      hostKey: string
+      fingerprint: string
+      address: string
+      label: string
+    }[]
+  ): TaskPlacementRow[] {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const rows = placements.map((p) => {
+        const task = this.db.prepare('SELECT run_id FROM tasks WHERE id = ?').get(p.taskId) as
+          | { run_id: string }
+          | undefined
+        if (!task || task.run_id !== runId) {
+          throw new OrchestrationError(
+            'task_not_found',
+            `Task ${p.taskId} was not found in Run ${runId}.`
+          )
+        }
+        const existing = this.getTaskPlacement(p.taskId)
+        if (existing) {
+          if (existing.host_key !== p.hostKey || existing.address !== p.address) {
+            throw new OrchestrationError(
+              'placement_conflict',
+              `Task ${p.taskId} is already placed on ${existing.label} (${existing.address}).`,
+              { taskId: p.taskId, placedAddress: existing.address, proposedAddress: p.address }
+            )
+          }
+          return existing
+        }
+        this.db
+          .prepare(
+            `INSERT INTO task_placements (task_id, run_id, host_key, fingerprint, address, label)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .run(p.taskId, runId, p.hostKey, p.fingerprint, p.address, p.label)
+        return this.getTaskPlacement(p.taskId) as TaskPlacementRow
+      })
+      this.db.exec('COMMIT')
+      return rows
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   listRunTaskPlacements(runId: string): TaskPlacementRow[] {
     return this.db
       .prepare('SELECT * FROM task_placements WHERE run_id = ? ORDER BY task_id')

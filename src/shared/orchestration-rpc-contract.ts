@@ -25,6 +25,7 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.reviewRequest',
   'orchestration.dispatch',
   'orchestration.workerStart',
+  'orchestration.missionPlace',
   'orchestration.workerStop',
   'orchestration.workerAbandon',
   'orchestration.workerRelease',

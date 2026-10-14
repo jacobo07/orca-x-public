@@ -2,6 +2,25 @@ import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 
 export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['orchestration', 'mission-place'],
+    summary: 'Place each task of one mission on a distinct dispatchable host',
+    usage:
+      'orca orchestration mission-place --tasks <task_id,task_id> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'tasks', 'run', 'from', 'retry-request'],
+    notes: [
+      'Records where each task must start; it starts nothing. Start each task with worker-start, adding --on <environment> for a runtime placement.',
+      'Only this host and connected Orca servers with orchestration federation can be placed on; SSH targets are listed as not-dispatchable.',
+      'A placed task keeps its host: worker-start elsewhere, or a different re-plan, is refused.'
+    ]
+  },
+  {
+    path: ['orchestration', 'mission-results'],
+    summary: 'Show the per-host outcomes of a placed mission',
+    usage: 'orca orchestration mission-results --run <run_id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run'],
+    notes: ['crossHost is true only when jobs completed on two or more distinct hosts.']
+  },
+  {
     path: ['orchestration', 'worker-start'],
     summary: 'Start one supervised worker on the Run home or a connected Orca server',
     usage:
