@@ -28,7 +28,8 @@ const remoteVerbs = new Set([
   'serve-query-p20',
   'serve-p22',
   'pairing-p22',
-  'serve-stop-p22'
+  'serve-stop-p22',
+  'old-relay-p23'
 ])
 // These take no root; every other verb's root argument is checked.
 const ROOTLESS_VERBS = new Set(['new-root', 'new-nonce', 'seed-local-p16'])
@@ -292,6 +293,6 @@ if (verb === 'new-root') {
   process.exit(runRemoteVerb(verb, root, extras, argValue(rest, '--out')))
 } else {
   fail(
-    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16|17|20|22|23]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|seed-p17|seed-p17-capsule|verify-p17|seed-p19|git-compat-p16|seed-p20|edit-prepare-p20|stat-shim-p20|serve-p20|serve-query-p20|fetch-key|run-file> ...'
+    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16|17|20|22|23]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|seed-p17|seed-p17-capsule|verify-p17|seed-p19|git-compat-p16|seed-p20|edit-prepare-p20|stat-shim-p20|serve-p20|serve-query-p20|old-relay-p23|fetch-key|run-file> ...'
   )
 }

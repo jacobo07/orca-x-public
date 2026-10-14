@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # GEX44 provisioner for the phase-15/16/17/20/22/23 two-host rungs; verbs: create status witness procs teardown install-stub
 # seed-p16 seed-p17 seed-p17-capsule verify-p17 seed-p19 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20 serve-p22 pairing-p22
-# serve-stop-p22. Never deletes anything.
+# serve-stop-p22 old-relay-p23. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
@@ -596,6 +596,13 @@ PY
     if [ "$(ps -o pid= -s "$SID" | wc -l)" != 0 ]; then kill -KILL -- "-$SID" 2>/dev/null || true; sleep 1; fi
     echo "SERVE_SESSION_AFTER=$(ps -o pid= -s "$SID" | wc -l)"
     echo "STUB_LEDGER_LINES=$(wc -l < "$ROOT/stub-ledger.jsonl" 2>/dev/null || echo 0)"
+    ;;
+  old-relay-p23)
+    # Phase 23: marks an "old relay" install (no sync/fabric capabilities) inside the root; writes only under $ROOT.
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    mkdir -p "$ROOT/relay-old"
+    printf '0.0.0\n' > "$ROOT/relay-old/.version"
+    echo "P23_OLD_RELAY version=$(tr -d '\n' < "$ROOT/relay-old/.version") dir=$ROOT/relay-old"
     ;;
   *)
     echo "REFUSED verb=$VERB"; exit 2
