@@ -17,6 +17,8 @@ const remoteVerbs = new Set([
   'install-stub',
   'seed-p16',
   'seed-p17',
+  'seed-p17-capsule',
+  'verify-p17',
   'git-compat-p16',
   'seed-p20',
   'edit-prepare-p20',
@@ -286,6 +288,6 @@ if (verb === 'new-root') {
   process.exit(runRemoteVerb(verb, root, extras, argValue(rest, '--out')))
 } else {
   fail(
-    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16|17|20]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|seed-p17|git-compat-p16|seed-p20|edit-prepare-p20|stat-shim-p20|serve-p20|serve-query-p20|fetch-key|run-file> ...'
+    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16|17|20]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|seed-p17|seed-p17-capsule|verify-p17|git-compat-p16|seed-p20|edit-prepare-p20|stat-shim-p20|serve-p20|serve-query-p20|fetch-key|run-file> ...'
   )
 }
