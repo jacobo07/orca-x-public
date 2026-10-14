@@ -25,7 +25,7 @@ const remoteVerbs = new Set([
 ])
 // These take no root; every other verb's root argument is checked.
 const ROOTLESS_VERBS = new Set(['new-root', 'new-nonce', 'seed-local-p16'])
-const ROOT_SHAPE = /^\/tmp\/orca-hwf-p(?:1[56]|20)-[0-9A-Za-z]+$/
+const ROOT_SHAPE = /^\/tmp\/orca-hwf-p(?:1[56]|2[02])-[0-9A-Za-z]+$/
 const NONCE_SHAPE = /^[0-9a-f]{16}$/
 const EXTRA_SHAPE = /^\/[A-Za-z0-9_./-]+$/
 // The serve launch line: words and env assignments only, no quotes or shell metacharacters.
@@ -173,7 +173,7 @@ if (!ROOTLESS_VERBS.has(verb) && root !== undefined && !ROOT_SHAPE.test(root)) {
 
 if (verb === 'new-root') {
   const phase = argValue(process.argv.slice(3), '--phase') ?? '15'
-  if (phase !== '15' && phase !== '16' && phase !== '20') {
+  if (phase !== '15' && phase !== '16' && phase !== '20' && phase !== '22') {
     fail(`REFUSED phase=${phase}`)
   }
   console.log(`/tmp/orca-hwf-p${phase}-${utcStamp()}`)
@@ -285,6 +285,6 @@ if (verb === 'new-root') {
   process.exit(runRemoteVerb(verb, root, extras, argValue(rest, '--out')))
 } else {
   fail(
-    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16|20]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|git-compat-p16|seed-p20|edit-prepare-p20|stat-shim-p20|serve-p20|serve-query-p20|fetch-key|run-file> ...'
+    'usage: hwf-two-host-remote.mjs <new-root [--phase 15|16|20|22]|new-nonce|seed-local-p16 --nonce <n> --dir <d>|create|status|witness|procs|teardown|install-stub|seed-p16|git-compat-p16|seed-p20|edit-prepare-p20|stat-shim-p20|serve-p20|serve-query-p20|fetch-key|run-file> ...'
   )
 }

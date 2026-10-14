@@ -1917,17 +1917,17 @@
       "row": "HF Jobs placed across hosts",
       "owner": "orchestration dispatch + dws phase 6 apply",
       "done": "two jobs of one mission run concurrently on two hosts with observable placement and integrated results",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X16",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         22
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: orchestration db.ts:619-645 tasks have no host; fleet-placement.ts:63 proposal authorizes nothing"
+      "evidence": ["src/shared/mission-job-placement.ts","src/shared/mission-job-placement.test.ts","src/main/runtime/orchestration/task-placement-db.test.ts","tests/e2e/hwf-two-host-mission-placement.spec.ts"],
+      "reason": "Built and hermetically tested 2026-10-14: orchestration task_placements (schema v34) records the host per job; planMissionPlacement spreads one mission over distinct hosts; integrateMissionResults merges per-host outcomes. Dispatch is not yet wired to call it. Live two-host leg (tests/e2e/hwf-two-host-mission-placement.spec.ts, ORCA_HWF_TWO_HOST=1) NOT RUN."
     },
     {
       "id": 73,
