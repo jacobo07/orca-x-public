@@ -3,7 +3,8 @@
 # through the product and through an independent ssh control, and write the evidence bundle.
 # PowerShell 5.1. Rungs: fan-out (laptop-local runtime) > gex44-local-caller (built CLI run on GEX44) > none (BLOCKED).
 # The pairing URL stays in memory (Get-DwsServeReady); nothing here writes it anywhere.
-param([switch]$Resume, [switch]$NoSandbox)
+# -FanOut: no deploy; an isolated laptop Orca pairs through the tunnel and answers fleet manifest (step 5).
+param([switch]$Resume, [switch]$NoSandbox, [switch]$FanOut)
 
 # Why Continue: the lane wraps ssh with 2>&1, and Stop turns git's stderr progress lines into terminating errors.
 $ErrorActionPreference = 'Continue'
@@ -64,7 +65,16 @@ try {
 
     # 2 DEPLOY
     $deployedPath = Join-Path $p2State 'deployed.json'
-    if ($Resume -and (Test-Path $deployedPath) -and ((Get-Content $deployedPath -Raw | ConvertFrom-Json).sha -eq $head)) {
+    if ($FanOut) {
+      if (-not (Test-Path $deployedPath)) { Write-Step 2 DEPLOY FAIL 'fan-out needs deployed.json'; Set-Block 'fanout-no-deployed'; break }
+      $deployed = Get-Content $deployedPath -Raw | ConvertFrom-Json
+      # Why: the laptop runtime must run the same product as the serve; only harness files may differ.
+      $srcDiff = @(& $git diff --name-only $deployed.sha HEAD -- src | Where-Object { $_ })
+      # Why: a sha missing from this checkout makes git fail with empty stdout, which reads as "equal".
+      if ($LASTEXITCODE -ne 0) { Write-Step 2 DEPLOY FAIL "fan-out: git diff against $($deployed.sha) exit=$LASTEXITCODE"; Set-Block 'fanout-src-diff-failed'; break }
+      if ($srcDiff.Count -gt 0) { Write-Step 2 DEPLOY FAIL "fan-out: laptop src differs from deployed: $($srcDiff -join ' ')"; Set-Block 'fanout-src-differs'; break }
+      Write-Step 2 DEPLOY SKIP "fan-out: laptop src equals deployed $($deployed.sha)"
+    } elseif ($Resume -and (Test-Path $deployedPath) -and ((Get-Content $deployedPath -Raw | ConvertFrom-Json).sha -eq $head)) {
       $deployed = Get-Content $deployedPath -Raw | ConvertFrom-Json
       Write-Step 2 DEPLOY SKIP "resume: deployed.json already at $head"
     } else {
@@ -116,7 +126,10 @@ try {
     Write-Step 3 ARTIFACT OK "laptop=$laptopSha gex44=$remoteSha"
 
     # 4 CONTROL BEFORE
-    $localControl = Join-Path $PSScriptRoot 'dws-node-manifest-ssh-control.sh'
+    # Why LF-normalized: an autocrlf checkout ships CRLF, every remote line gets a \r and the control goes blind.
+    $localControl = Join-Path $state 'dws-node-manifest-ssh-control.lf.sh'
+    $controlText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'dws-node-manifest-ssh-control.sh')) -replace "`r`n", "`n"
+    [IO.File]::WriteAllText($localControl, $controlText, (New-Object System.Text.UTF8Encoding $false))
     if ((Invoke-DwsScpTo -LocalPath $localControl -RemotePath $controlRemote) -ne 0) {
       Write-Step 4 CONTROL_BEFORE FAIL 'scp of the control script failed'; Set-Block 'control-scp-failed'; break
     }
@@ -149,12 +162,6 @@ try {
     $rec.rungReached = 'control-before'
     Write-Step 4 CONTROL_BEFORE OK "probePort=$probePort candidates=$($candidates -join ',')"
 
-    # 5 PRODUCT READING, fan-out
-    $orcaProcs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(?i)orca' }).Count
-    $rec.fanOut = "not attempted: SPIKE-CLI-TARGET names the desktop default profile as the laptop-local runtime; orcaProcesses=$orcaProcs, and starting a second Electron runtime on a laptop with $($rec.laptopFreeMb) MB free (out/ is the Linux build) was not authorized"
-    Write-Step 5 FANOUT SKIP $rec.fanOut
-
-    # 6 PRODUCT READING, gex44-local-caller
     $ready = Get-DwsServeReady
     $tunnelPort = $ready.port
     $readyLine = (Invoke-DwsSsh -RemoteBody "sudo bash /home/kobii/dws-0104-clone/config/scripts/dws-gex44-serve-provision.sh ready-json").Output
@@ -166,32 +173,74 @@ try {
     }
     $rec.serveRuntimeId = $serveRuntimeId
     Start-DwsTunnel -Port $tunnelPort | Out-Null
-    $nonce = [guid]::NewGuid().ToString('N').Substring(0, 12)
-    $svc = $deployed.svcCheckout
-    $add = Invoke-DwsCli -Args @('repo', 'add', '--path', $svc)
-    $portFlag = if ($probePort) { "--model-probe-ports $probePort " } else { '' }
-    $cmd = "node $svc/out/cli/index.js fleet manifest $($portFlag)--json > $remoteOut/p5-$nonce.json 2> $remoteOut/p5-$nonce.err; echo done > $remoteOut/p5-$nonce.done"
-    $create = Invoke-DwsCli -Args @('terminal', 'create', '--worktree', "path:$svc", '--title', 'dws-p5-manifest', '--command', $cmd)
-    if ($create.ExitCode -ne 0) {
-      Write-Step 6 GEX44_LOCAL_CALLER FAIL "terminal create exit=$($create.ExitCode) repoAddExit=$($add.ExitCode)"; Set-Block 'terminal-create-failed'; break
+
+    # 5 PRODUCT READING, fan-out
+    if ($FanOut) {
+      if (-not $serveRuntimeId) { Write-Step 5 FANOUT FAIL 'serve runtime id unreadable'; Set-Block 'fanout-no-runtime-id'; break }
+      & node (Join-Path $repo 'config/scripts/ensure-native-runtime.mjs') --runtime=electron
+      if ($LASTEXITCODE -ne 0) { Write-Step 5 FANOUT FAIL "ensure-native-runtime exit=$LASTEXITCODE"; Set-Block 'fanout-native-runtime'; break }
+      $fanOutPath = Join-Path $state 'product-manifest-fanout.json'
+      Remove-Item $fanOutPath -ErrorAction SilentlyContinue
+      $fanOutEnv = 'ORCA_DWS_P5_FANOUT', 'ORCA_DWS_P5_PAIRING_URL', 'ORCA_DWS_P5_OUT', 'ORCA_DWS_P5_SERVE_RUNTIME_ID', 'ORCA_DWS_P5_PROBE_PORT'
+      $env:ORCA_DWS_P5_FANOUT = '1'
+      # Why module scope: the credential lives only in the module's memory (see Get-DwsServeReady).
+      $env:ORCA_DWS_P5_PAIRING_URL = & (Get-Module dws-laptop-remote) { $script:DwsLastPairingUrl }
+      $env:ORCA_DWS_P5_OUT = $fanOutPath
+      $env:ORCA_DWS_P5_SERVE_RUNTIME_ID = $serveRuntimeId
+      if ($probePort) { $env:ORCA_DWS_P5_PROBE_PORT = [string]$probePort }
+      $pwExit = 1
+      Push-Location $repo
+      try {
+        $pwOut = & node (Join-Path $repo 'node_modules/@playwright/test/cli.js') test --config tests/playwright.config.ts --project electron-headless --workers=1 tests/e2e/dws-node-manifest-fanout.spec.ts 2>&1
+        $pwExit = $LASTEXITCODE
+      } finally {
+        Pop-Location
+        foreach ($name in $fanOutEnv) { Remove-Item "Env:\$name" -ErrorAction SilentlyContinue }
+      }
+      $pwText = (($pwOut | ForEach-Object { "$_" }) -join "`n") -replace 'orca:[/]{2}pair\S*', '<redacted>' -replace '[?]code[=]\S*', '<redacted>'
+      Set-Content -Path (Join-Path $state 'fanout-playwright.log') -Value $pwText -Encoding utf8
+      # Why the file and not only the exit: a skipped test also exits 0.
+      if ($pwExit -ne 0 -or -not (Test-Path $fanOutPath)) {
+        Write-Step 5 FANOUT FAIL "playwright exit=$pwExit manifestWritten=$(Test-Path $fanOutPath)"; Set-Block "fanout-spec-failed: exit=$pwExit"; break
+      }
+      $rec.productManifest = $fanOutPath
+      $rec.rung = 'fan-out'
+      $rec.rungReached = 'product-read'
+      $rec.fanOut = 'an isolated laptop Orca paired over the ssh -L tunnel answered fleet.nodeManifests through callEnvironment'
+      Write-Step 5 FANOUT OK "bytes=$((Get-Item $fanOutPath).Length)"
+    } else {
+      $orcaProcs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(?i)orca' }).Count
+      $rec.fanOut = "not attempted (no -FanOut): orcaProcesses=$orcaProcs, laptopFreeMb=$($rec.laptopFreeMb)"
+      Write-Step 5 FANOUT SKIP $rec.fanOut
+
+      # 6 PRODUCT READING, gex44-local-caller
+      $nonce = [guid]::NewGuid().ToString('N').Substring(0, 12)
+      $svc = $deployed.svcCheckout
+      $add = Invoke-DwsCli -Args @('repo', 'add', '--path', $svc)
+      $portFlag = if ($probePort) { "--model-probe-ports $probePort " } else { '' }
+      $cmd = "node $svc/out/cli/index.js fleet manifest $($portFlag)--json > $remoteOut/p5-$nonce.json 2> $remoteOut/p5-$nonce.err; echo done > $remoteOut/p5-$nonce.done"
+      $create = Invoke-DwsCli -Args @('terminal', 'create', '--worktree', "path:$svc", '--title', 'dws-p5-manifest', '--command', $cmd)
+      if ($create.ExitCode -ne 0) {
+        Write-Step 6 GEX44_LOCAL_CALLER FAIL "terminal create exit=$($create.ExitCode) repoAddExit=$($add.ExitCode)"; Set-Block 'terminal-create-failed'; break
+      }
+      $done = $false
+      $deadline = (Get-Date).AddSeconds(120)
+      while ((Get-Date) -lt $deadline) {
+        $t = Invoke-DwsSsh -RemoteBody "sudo test -s $remoteOut/p5-$nonce.done && echo P5_DONE"
+        if ($t.Output -match 'P5_DONE') { $done = $true; break }
+        Start-Sleep -Seconds 3
+      }
+      if (-not $done) {
+        Write-Step 6 GEX44_LOCAL_CALLER FAIL 'manifest command did not finish within 120s'; Set-Block 'manifest-command-timeout'; break
+      }
+      $cat = Invoke-DwsSsh -RemoteBody "sudo cat $remoteOut/p5-$nonce.json" -TimeoutSec 40
+      $manifestPath = Join-Path $state 'product-manifest.json'
+      Set-Content -Path $manifestPath -Value $cat.Output -Encoding ascii
+      $rec.productManifest = $manifestPath
+      $rec.rung = 'gex44-local-caller'
+      $rec.rungReached = 'product-read'
+      Write-Step 6 GEX44_LOCAL_CALLER OK "nonce=$nonce serveRuntimeIdKnown=$([bool]$serveRuntimeId) bytes=$($cat.Output.Length)"
     }
-    $done = $false
-    $deadline = (Get-Date).AddSeconds(120)
-    while ((Get-Date) -lt $deadline) {
-      $t = Invoke-DwsSsh -RemoteBody "sudo test -s $remoteOut/p5-$nonce.done && echo P5_DONE"
-      if ($t.Output -match 'P5_DONE') { $done = $true; break }
-      Start-Sleep -Seconds 3
-    }
-    if (-not $done) {
-      Write-Step 6 GEX44_LOCAL_CALLER FAIL 'manifest command did not finish within 120s'; Set-Block 'manifest-command-timeout'; break
-    }
-    $cat = Invoke-DwsSsh -RemoteBody "sudo cat $remoteOut/p5-$nonce.json" -TimeoutSec 40
-    $manifestPath = Join-Path $state 'product-manifest.json'
-    Set-Content -Path $manifestPath -Value $cat.Output -Encoding ascii
-    $rec.productManifest = $manifestPath
-    $rec.rung = 'gex44-local-caller'
-    $rec.rungReached = 'product-read'
-    Write-Step 6 GEX44_LOCAL_CALLER OK "nonce=$nonce serveRuntimeIdKnown=$([bool]$serveRuntimeId) bytes=$($cat.Output.Length)"
 
     # 7 CONTROL AFTER
     $after = Invoke-DwsSsh -RemoteBody $withPort -TimeoutSec 40
@@ -217,9 +266,14 @@ try {
   $listener = if ($tunnelPort) { @(Get-NetTCPConnection -LocalPort $tunnelPort -State Listen -ErrorAction SilentlyContinue).Count } else { 0 }
   $svcActive = (Invoke-DwsSsh -RemoteBody 'systemctl is-active orca-dws-serve.service').Output.Trim()
   $rec.mainPidAfter = (Invoke-DwsSsh -RemoteBody 'systemctl show orca-dws-serve.service -p MainPID --value').Output.Trim()
-  $rec.teardown = [ordered]@{ tunnelSshProcesses = $sshTunnels; tunnelPortListeners = $listener; laptopLocalRuntimePid = $null; serveActive = $svcActive; notes = $tearNotes }
-  $ok = ($sshTunnels -eq 0 -and $listener -eq 0 -and $svcActive -eq 'active')
-  Write-Step 8 TEARDOWN $(if ($ok) { 'OK' } else { 'FAIL' }) "tunnelProcs=$sshTunnels listeners=$listener serveActive=$svcActive mainPidBefore=$($rec.mainPidBefore) mainPidAfter=$($rec.mainPidAfter)"
+  # Why by worktree path: the fan-out app is the only electron.exe launched from this checkout.
+  $e2eElectron = @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($repo) }).Count
+  # Why: a userData the fixture failed to delete still holds the paired environment's credential.
+  $runStart = [datetime]::Parse($rec.utcStart).ToLocalTime()
+  $leftUserData = @(Get-ChildItem -Path ([IO.Path]::GetTempPath()) -Directory -Filter 'orca-e2e-userdata-*' -ErrorAction SilentlyContinue | Where-Object { $_.CreationTime -ge $runStart } | ForEach-Object { $_.FullName })
+  $rec.teardown = [ordered]@{ tunnelSshProcesses = $sshTunnels; tunnelPortListeners = $listener; laptopLocalRuntimeProcesses = $e2eElectron; leftoverE2eUserData = $leftUserData; serveActive = $svcActive; notes = $tearNotes }
+  $ok = ($sshTunnels -eq 0 -and $listener -eq 0 -and $e2eElectron -eq 0 -and $leftUserData.Count -eq 0 -and $svcActive -eq 'active')
+  Write-Step 8 TEARDOWN $(if ($ok) { 'OK' } else { 'FAIL' }) "tunnelProcs=$sshTunnels listeners=$listener e2eElectron=$e2eElectron serveActive=$svcActive mainPidBefore=$($rec.mainPidBefore) mainPidAfter=$($rec.mainPidAfter)"
 }
 
 $rec.utcEnd = (Get-Date).ToUniversalTime().ToString('o')

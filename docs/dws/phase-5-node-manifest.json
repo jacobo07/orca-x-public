@@ -1,24 +1,24 @@
 {
   "verdict": "MEASURED",
-  "rung": "gex44-local-caller",
-  "headSha": "6e036d7ccec3e6b4ea5e31c5109ca6349e7723d3",
+  "rung": "fan-out-gex44",
+  "headSha": "79f54d64af040e9a4327ca3bd9b645b6cfcda478",
   "runtimeIdMatchesServe": true,
   "deployed": {
-    "sha": "6e036d7ccec3e6b4ea5e31c5109ca6349e7723d3",
-    "svcCheckout": "/home/orca-svc/dws-p2/6e036d7",
+    "sha": "3266e1a41790ab356def108aca96895e1e921279",
+    "svcCheckout": "/home/orca-svc/dws-p2/3266e1a",
     "boundEndpoint": "ws://127.0.0.1:6791",
-    "artifactSha256Laptop": "3c68024e33b83f6fd8e47ff37b4a995d0d974b356088ea78ec4f78c521d9cf04",
-    "artifactSha256Gex44": "3c68024e33b83f6fd8e47ff37b4a995d0d974b356088ea78ec4f78c521d9cf04",
-    "deployedUtc": "2026-09-30T04:55:39.0315223Z"
+    "artifactSha256Laptop": "8ef4ce12f2579e85e3861cea5cde8dd977a74089b1a34feb19f6b30445ac4594",
+    "artifactSha256Gex44": "8ef4ce12f2579e85e3861cea5cde8dd977a74089b1a34feb19f6b30445ac4594",
+    "deployedUtc": "2026-09-30T04:59:04.7933937Z"
   },
   "utc": {
-    "start": "2026-09-30T04:55:07.9319001Z",
-    "end": "2026-09-30T04:56:18.1080801Z"
+    "start": "2026-10-14T20:49:42Z",
+    "end": "2026-10-14T20:50:15Z"
   },
   "product": {
-    "memoryAvailableBytes": 52938711040,
-    "vramFreeBytes": 3202351104,
-    "diskAvailableBytes": 32911593472,
+    "memoryAvailableBytes": 59193368576,
+    "vramFreeBytes": 3245342720,
+    "diskAvailableBytes": 903119962112,
     "modelIds": [
       "qwen3-coder-30b"
     ],
@@ -29,21 +29,23 @@
       "vram": "measured",
       "resident_model": "measured"
     },
-    "memberAddress": "local",
-    "observedAt": 1790744171515
+    "memberAddress": "runtime:0aca491d-9729-406d-87aa-e5d32bc73e1b",
+    "observedAt": 1792011015070
   },
   "control": {
     "valid": true,
-    "memoryAvailableBytes": 52867870720,
-    "vramFreeBytes": 3202351104,
-    "diskAvailableBytes": 32911626240,
-    "modelIds": null
+    "memoryAvailableBytes": 60349718528,
+    "vramFreeBytes": 3245342720,
+    "diskAvailableBytes": 903255478272,
+    "modelIds": [
+      "qwen3-coder-30b"
+    ]
   },
   "comparison": {
     "memory": {
       "verdict": "MATCH",
-      "delta": 70840320,
-      "tolerance": 5286787072
+      "delta": 1156349952,
+      "tolerance": 6034971852.8
     },
     "vram": {
       "verdict": "MATCH",
@@ -52,27 +54,28 @@
     },
     "disk": {
       "verdict": "MATCH",
-      "delta": 32768,
+      "delta": 135516160,
       "tolerance": 1073741824
     },
     "resident_model": {
-      "verdict": "UNJUDGED",
-      "reason": "control-missing"
+      "verdict": "MATCH",
+      "tolerance": "exact-set-equality"
     }
   },
   "planeTags": {
     "memory": "GEX44-PROVEN",
     "vram": "GEX44-PROVEN",
-    "disk": "GEX44-PROVEN"
+    "disk": "GEX44-PROVEN",
+    "resident_model": "GEX44-PROVEN"
   },
   "notes": [
-    "judged against control-before; product reading: gex44-local-caller"
+    "judged against control-before; product reading: fan-out-gex44"
   ],
   "controlStability": {
     "memory": {
       "verdict": "MATCH",
-      "delta": 108175360,
-      "tolerance": 5297604608
+      "delta": 386842624,
+      "tolerance": 5996287590.400001
     },
     "vram": {
       "verdict": "MATCH",
@@ -81,32 +84,31 @@
     },
     "disk": {
       "verdict": "MATCH",
-      "delta": 45056,
+      "delta": 91979776,
       "tolerance": 1073741824
     },
     "resident_model": {
-      "verdict": "UNJUDGED",
-      "reason": "both-unknown"
+      "verdict": "MATCH",
+      "tolerance": "exact-set-equality"
     }
   },
   "probePort": 8081,
-  "fanOut": "not attempted: SPIKE-CLI-TARGET names the desktop default profile as the laptop-local runtime; orcaProcesses=1, and starting a second Electron runtime on a laptop with 5176.7 MB free (out/ is the Linux build) was not authorized",
+  "fanOut": "a second, isolated e2e Orca on GEX44 (HEAD 79f54d64af, src equal to deployed 3266e1a) paired to the serve over loopback; manifest members: local + runtime:<serve env>",
   "teardown": {
-    "tunnelSshProcesses": 0,
-    "tunnelPortListeners": 0,
-    "laptopLocalRuntimePid": null,
+    "e2eElectron": 0,
+    "leftoverE2eUserData": 0,
     "serveActive": "active",
     "notes": [
-      "TUNNEL_STOPPED pid=47164"
+      "GEX44-hosted: laptop free memory fell to 1.37 GB"
     ]
   },
   "serveMainPid": {
-    "before": "1470711",
-    "after": "1473744"
+    "before": "978766",
+    "after": "978766"
   },
-  "laptopFreeMbAtStart": 5176.7,
+  "laptopFreeMbAtStart": null,
   "diskFact": {
-    "availableBytes": 32911626240,
-    "percentUsed": 98
+    "availableBytes": 903255478272,
+    "percentUsed": 49
   }
 }

@@ -414,7 +414,7 @@
       "state": "PARTIAL",
       "stateSource": "measured",
       "measuredIn": "phase-5",
-      "measuredAt": "2026-10-10",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         5
@@ -429,11 +429,13 @@
         { "kind": "file", "path": "src/shared/node-measurement-age-sole-authority.test.ts", "note": "sweep: the age check has one authority and all six scanned modules are required" },
         { "kind": "file", "path": "src/main/fleet/node-resources-measure.test.ts", "note": "host memory/disk/VRAM/model measurers" },
         { "kind": "file", "path": "src/main/fleet/fleet-observation-service.test.ts", "note": "observer step on the observer clock, old host reads unsupported" },
-        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.json", "note": "SC3 evidence: MEASURED at rung gex44-local-caller; memory/disk/vram MATCH the ssh control, resident_model control UNJUDGED" },
-        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.md", "note": "what happened on GEX44, tolerances, ND-1/ND-2" },
+        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.json", "note": "SC3 evidence: MEASURED at rung fan-out-gex44, 4/4 MATCH vs ssh control, GEX44-PROVEN" },
+        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.md", "note": "rung, tolerances, what the rung does not prove, ND-1/ND-2" },
+        { "kind": "file", "path": "docs/dws/phase-5-fanout-spec.md", "note": "fan-out rung spec and acceptance" },
+        { "kind": "file", "path": "tests/e2e/dws-node-manifest-fanout.spec.ts", "note": "opt-in spec: isolated Orca pairs to the serve and answers fleet manifest" },
         { "kind": "file", "path": "docs/dws/node-manifest-handoff.md", "note": "schema path and consumer rules for UWCP; consume half BLOCKED" }
       ],
-      "reason": "measured 2026-09-30: schema, real-producer contract, freshness and eligibility (drills M1-M5) and the CLI are tested locally; GEX44 was read through the product at rung gex44-local-caller (6e036d7, artifact sha256 equal at both ends, runtimeId equals the deployed serve): memory, disk and VRAM MATCH an independent ssh control, the resident model qwen3-coder-30b was read but its control was UNJUDGED (parse defect fixed in 3266e1a41); re-checked 2026-10-10: the fixed ssh control script run on GEX44 now parses modelIds [qwen3-coder-30b] (equal to the 2026-09-30 product reading) and the five cited test files pass (87 tests), but the product was NOT re-read at the fixed commit (needs a built CLI and serve redeploy; out/ absent in this tree), so the resident_model verdict stays UNJUDGED in the stored evidence; the laptop fan-out rung was not attempted; the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
+      "reason": "measured 2026-10-14 against orca-dws-serve at 3266e1a (artifact sha256 8ef4ce12 both ends): rung gex44-local-caller 4/4 MATCH, then rung fan-out-gex44 4/4 MATCH (a second isolated Orca on GEX44, src equal to the deployed sha, paired to the serve; the serve member came through callEnvironment; control stable, serve MainPID unchanged). This re-reads the product at the fixed commit, which the 2026-10-10 re-check could not, so resident_model qwen3-coder-30b is now judged MATCH. Not proven: the laptop-to-GEX44 tunnel leg (laptop had 1.37 GB free). Still PARTIAL: the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
     },
     {
       "id": 18,
