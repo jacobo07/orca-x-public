@@ -1690,15 +1690,15 @@
       "done": "diverged replicas preserved as refs; conflict surfaced; neither side overwritten",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X12",
+      "measuredIn": "dws-exec X12f (D4)",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         19
       ],
       "dependsOn": [],
-      "evidence": ["src/main/replica-divergence.ts", "src/main/replica-divergence.test.ts", "tests/e2e/hwf-two-host-replica-divergence.spec.ts"],
-      "reason": "Built (dws-exec X12): replica-divergence.ts preserves both tips as create-only refs/orca/divergence refs, surfaces conflicts via merge-tree, touches no branch/index/worktree; 4 hermetic tests pass, tsc clean; seed-p19 harness verb + refusal drill. Waiting for the live run: opt-in spec hwf-two-host-replica-divergence.spec.ts (Windows<->GEX44 over SSH) has NOT RUN."
+      "evidence": ["src/main/replica-divergence.ts", "src/main/replica-divergence.test.ts", "tests/e2e/hwf-two-host-replica-divergence.spec.ts", "ctl/inputs/d4/20261014/X12/"],
+      "reason": "Built (dws-exec X12): replica-divergence.ts preserves both tips as create-only refs/orca/divergence refs, surfaces conflicts via merge-tree, touches no branch/index/worktree; 4 hermetic tests pass, tsc clean; seed-p19 harness verb + refusal drill. Live two-host leg RAN and PASSED 2026-10-14 (Windows<->GEX44 disposable root; HWF19_ANCESTRY=diverged, HWF19_CONFLICT=conflicted seed.txt, HWF19_REFS=true, HWF19_NEITHER_OVERWRITTEN=true; evidence ctl/inputs/d4/20261014/X12/, laptop fix fa9e33b855 merged). Stays PARTIAL: not wired to the app UI/IPC, so conflict is not surfaced to users, and the spec is not covered by a tsc config"
     },
     {
       "id": 67,
