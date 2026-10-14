@@ -21,7 +21,10 @@ const remoteVerbs = new Set([
   'edit-prepare-p20',
   'stat-shim-p20',
   'serve-p20',
-  'serve-query-p20'
+  'serve-query-p20',
+  'serve-p22',
+  'pairing-p22',
+  'serve-stop-p22'
 ])
 // These take no root; every other verb's root argument is checked.
 const ROOTLESS_VERBS = new Set(['new-root', 'new-nonce', 'seed-local-p16'])
@@ -277,7 +280,7 @@ if (verb === 'new-root') {
     const ok =
       NONCE_SHAPE.test(extra) ||
       EXTRA_SHAPE.test(extra) ||
-      (i === 1 && verb === 'serve-p20' && LAUNCH_SHAPE.test(extra))
+      (i === 1 && (verb === 'serve-p20' || verb === 'serve-p22') && LAUNCH_SHAPE.test(extra))
     if (!ok) {
       fail(`REFUSED extra=${extra}`)
     }
