@@ -1,13 +1,15 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
-  toRuntimeExecutionHostId
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
 } from '../../shared/execution-host'
 import { compareFleetAddresses, identityFromKeyFingerprint } from '../../shared/fleet-host-identity'
 import type { FleetPlacementMember } from '../../shared/fleet-placement'
 import type {
   FleetObservation,
-  FleetSshHostIdentityCounts
+  FleetSshHostIdentityCounts,
+  FleetSshHostObservation
 } from '../../shared/fleet-placement-view'
 import type { SshHostIdentityStatus } from '../../shared/ssh-types'
 import {
@@ -56,6 +58,15 @@ export type FleetObservationDeps = {
   callEnvironment: FleetEnvironmentCall
   /** Absent omits `coverage.sshHostIdentity`, so the reply is the old one byte for byte. */
   listSshHostIdentities?: () => readonly { targetId: string; status: SshHostIdentityStatus }[]
+  /** With `callSshRelay`, makes the SSH targets measured; absent keeps `not-enumerated`. */
+  listSshTargets?: () => readonly { id: string; label: string; status: string | null }[]
+  /** Asks one connected target's relay `relay.status`. Must not connect or deploy anything. */
+  callSshRelay?: (args: {
+    targetId: string
+    method: 'relay.status'
+    timeoutMs: number
+    signal: AbortSignal
+  }) => Promise<unknown>
   stepDeadlineMs?: number
 }
 
@@ -211,6 +222,109 @@ async function observeLocal(
   }
 }
 
+async function observeSshHost(
+  target: { id: string; label: string; status: string | null },
+  call: NonNullable<FleetObservationDeps['callSshRelay']>,
+  deps: FleetObservationDeps,
+  deadlineMs: number
+): Promise<FleetSshHostObservation> {
+  const base = {
+    targetId: target.id,
+    address: toSshExecutionHostId(target.id),
+    label: target.label
+  }
+  const observedAt = deps.now()
+  const unknown = (
+    reason: 'not-connected' | 'unreachable' | 'timeout' | 'malformed',
+    detail: string
+  ): FleetSshHostObservation => ({
+    ...base,
+    outcome: 'unknown',
+    observedAt,
+    reason,
+    connection: target.status,
+    detail
+  })
+  // Why: a probe must not dial; only a live relay link can answer.
+  if (target.status !== 'connected') {
+    return unknown('not-connected', `connection is ${target.status ?? 'unknown'}`)
+  }
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      resolve('timeout')
+    }, deadlineMs)
+  })
+  try {
+    const reply = await Promise.race([
+      call({
+        targetId: target.id,
+        method: 'relay.status',
+        timeoutMs: deadlineMs,
+        signal: controller.signal
+      }),
+      deadline
+    ])
+    if (reply === 'timeout') {
+      return unknown('timeout', `no answer within ${deadlineMs} ms`)
+    }
+    const record =
+      typeof reply === 'object' && reply !== null ? (reply as Record<string, unknown>) : null
+    const uptime = record?.uptimeMs
+    if (
+      !record ||
+      typeof uptime !== 'number' ||
+      !Number.isFinite(uptime) ||
+      uptime < 0 ||
+      !Array.isArray(record.capabilities)
+    ) {
+      return unknown('malformed', 'relay.status reply lacks uptimeMs or capabilities')
+    }
+    return {
+      ...base,
+      outcome: 'measured',
+      observedAt,
+      answeredAt: deps.now(),
+      relayUptimeMs: uptime,
+      relayCapabilities: record.capabilities.filter((v): v is string => typeof v === 'string')
+    }
+  } catch (error) {
+    return unknown('unreachable', error instanceof Error ? error.message : String(error))
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function observeSshHosts(
+  deps: FleetObservationDeps,
+  deadlineMs: number
+): Promise<FleetSshHostObservation[] | undefined> {
+  if (!deps.listSshTargets || !deps.callSshRelay) {
+    return undefined
+  }
+  let targets: ReturnType<NonNullable<FleetObservationDeps['listSshTargets']>>
+  try {
+    targets = deps.listSshTargets()
+  } catch {
+    // Why: an unreadable list is unknown; an empty list would read as "no SSH hosts".
+    return undefined
+  }
+  const call = deps.callSshRelay
+  const out: FleetSshHostObservation[] = []
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < targets.length) {
+      out.push(await observeSshHost(targets[next++], call, deps, deadlineMs))
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(FLEET_OBSERVATION_CONCURRENCY, targets.length) }, worker)
+  )
+  return out.sort((a, b) => compareFleetAddresses(a.address, b.address))
+}
+
 function countSshHostIdentities(
   deps: FleetObservationDeps
 ): FleetSshHostIdentityCounts | undefined {
@@ -274,7 +388,11 @@ export async function observeFleet(
     { length: Math.min(FLEET_OBSERVATION_CONCURRENCY, environments.length) },
     worker
   )
-  const [local] = await Promise.all([observeLocal(deps, options, deadlineMs), Promise.all(workers)])
+  const [local, , sshHosts] = await Promise.all([
+    observeLocal(deps, options, deadlineMs),
+    Promise.all(workers),
+    observeSshHosts(deps, deadlineMs)
+  ])
   const sshHostIdentity = countSshHostIdentities(deps)
   return {
     observedAt,
@@ -282,7 +400,8 @@ export async function observeFleet(
     members: [local, ...remote.sort((a, b) => compareFleetAddresses(a.address, b.address))],
     coverage: {
       runtimeEnvironments: environments.length,
-      sshTargets: 'not-enumerated',
+      sshTargets: sshHosts ? 'enumerated' : 'not-enumerated',
+      ...(sshHosts ? { sshHosts } : {}),
       ...(sshHostIdentity ? { sshHostIdentity } : {})
     }
   }

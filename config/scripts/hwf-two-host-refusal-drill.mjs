@@ -25,7 +25,12 @@ const badRoots = [
   ['bare20', '/tmp/orca-hwf-p20-'],
   ['dotdot20', '/tmp/orca-hwf-p20-../x'],
   ['semicolon20', '/tmp/orca-hwf-p20-a;id'],
-  ['slash20', '/tmp/orca-hwf-p20-a/']
+  ['slash20', '/tmp/orca-hwf-p20-a/'],
+  ['bare22', '/tmp/orca-hwf-p22-'],
+  ['dotdot22', '/tmp/orca-hwf-p22-../x'],
+  ['semicolon22', '/tmp/orca-hwf-p22-a;id'],
+  ['slash22', '/tmp/orca-hwf-p22-a/'],
+  ['p23', '/tmp/orca-hwf-p23-X']
 ]
 
 function report(side, label, status) {

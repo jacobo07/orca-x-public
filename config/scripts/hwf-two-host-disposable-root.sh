@@ -18,6 +18,9 @@ case "$ROOT" in
   /tmp/orca-hwf-p20-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p20-*) ;;
+  /tmp/orca-hwf-p22-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p22-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p22-*) ;;
   *) echo "REFUSED root=$ROOT"; exit 2 ;;
 esac
 

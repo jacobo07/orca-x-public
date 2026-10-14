@@ -444,3 +444,97 @@ describe('fleet observation SSH host identity coverage', () => {
     expect('sshHostIdentity' in view.coverage).toBe(false)
   })
 })
+
+describe('fleet observation SSH hosts (row 71)', () => {
+  const noRemote: FleetEnvironmentCall = async () => {
+    throw new Error('no remote in this test')
+  }
+  const targets = [
+    { id: 'b', label: 'B', status: 'connected' },
+    { id: 'a', label: 'A', status: 'connected' }
+  ]
+
+  it('stays not-enumerated without both deps', async () => {
+    const view = await observeFleet(deps({ callEnvironment: noRemote, listSshTargets: () => targets }))
+    expect(view.coverage.sshTargets).toBe('not-enumerated')
+    expect('sshHosts' in view.coverage).toBe(false)
+  })
+
+  it('measures a connected target through relay.status, sorted by address', async () => {
+    const callSshRelay = vi.fn(async () => ({ uptimeMs: 5000, capabilities: ['x', 3] }))
+    const view = await observeFleet(
+      deps({ callEnvironment: noRemote, listSshTargets: () => targets, callSshRelay })
+    )
+    expect(view.coverage.sshTargets).toBe('enumerated')
+    const hosts = view.coverage.sshHosts!
+    expect(hosts.map((h) => h.targetId)).toEqual(['a', 'b'])
+    expect(hosts[0]).toMatchObject({
+      outcome: 'measured',
+      relayUptimeMs: 5000,
+      relayCapabilities: ['x']
+    })
+    expect(callSshRelay).toHaveBeenCalledTimes(2)
+  })
+
+  it('a disconnected target is unknown and is never probed', async () => {
+    const callSshRelay = vi.fn(async () => ({ uptimeMs: 1, capabilities: [] }))
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshTargets: () => [{ id: 'a', label: 'A', status: null }],
+        callSshRelay
+      })
+    )
+    expect(view.coverage.sshHosts![0]).toMatchObject({
+      outcome: 'unknown',
+      reason: 'not-connected',
+      connection: null
+    })
+    expect(view.coverage.sshHosts![0]).not.toHaveProperty('relayUptimeMs')
+    expect(callSshRelay).not.toHaveBeenCalled()
+  })
+
+  it('failure and malformed replies are unknown, not zero', async () => {
+    const replies: Record<string, () => Promise<unknown>> = {
+      a: async () => {
+        throw new Error('boom')
+      },
+      b: async () => ({ uptimeMs: 'x' })
+    }
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshTargets: () => targets,
+        callSshRelay: ({ targetId }) => replies[targetId]()
+      })
+    )
+    const [a, b] = view.coverage.sshHosts!
+    expect(a).toMatchObject({ outcome: 'unknown', reason: 'unreachable', detail: 'boom' })
+    expect(b).toMatchObject({ outcome: 'unknown', reason: 'malformed' })
+  })
+
+  it('a hung relay times out as unknown', async () => {
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshTargets: () => [targets[0]],
+        callSshRelay: () => new Promise(() => undefined),
+        stepDeadlineMs: 20
+      })
+    )
+    expect(view.coverage.sshHosts![0]).toMatchObject({ outcome: 'unknown', reason: 'timeout' })
+  })
+
+  it('an unreadable target list omits the field', async () => {
+    const view = await observeFleet(
+      deps({
+        callEnvironment: noRemote,
+        listSshTargets: () => {
+          throw new Error('x')
+        },
+        callSshRelay: async () => ({})
+      })
+    )
+    expect(view.coverage.sshTargets).toBe('not-enumerated')
+  })
+})
