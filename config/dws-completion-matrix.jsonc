@@ -413,7 +413,7 @@
       "done": "real measurement, freshness-bound",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "phase-5",
+      "measuredIn": "dws-exec X01r3",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
