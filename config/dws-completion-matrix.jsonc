@@ -1730,13 +1730,11 @@
       ],
       "dependsOn": [],
       "evidence": [
-        "src/main/replica-reconcile.ts",
-        "src/main/replica-reconcile.test.ts",
-        "tests/e2e/hwf-two-host-dirty-both.spec.ts",
-        "dws-exec/ctl/inputs/d4/20261014-x13r/summary.json",
-        "dws-exec/ctl/inputs/d4/20261014-x13r/X13r/"
+        { "kind": "file", "path": "src/main/replica-reconcile.ts", "note": "dirty-both reconcile: merge-tree clean -> reconciled, else conflict" },
+        { "kind": "file", "path": "src/main/replica-reconcile.test.ts", "note": "hermetic proof, real git, 5 tests" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-dirty-both.spec.ts", "note": "live Windows<->GEX44 leg, ORCA_HWF_TWO_HOST=1" }
       ],
-      "reason": "Hermetic (real git, 5 tests) plus the live Windows<->GEX44 leg RAN and PASSED on 2026-10-14 at head 52154f048c (ORCA_HWF_TWO_HOST=1, 1 passed; HWF19_DISJOINT=reconciled, HWF19_CONFLICT=conflict, HWF19_NO_REF=ok; harness verbs and teardown exit 0, witness unchanged). Not covered: laptop used an isolated node_modules with a copied prebuilt windows-native-registry native.node; one disposable-root run only; no UI/workflow wiring."
+      "reason": "Hermetic (real git, 5 tests) plus the live Windows<->GEX44 leg RAN and PASSED on 2026-10-14 at head 52154f048c (ORCA_HWF_TWO_HOST=1, 1 passed; HWF19_DISJOINT=reconciled, HWF19_CONFLICT=conflict, HWF19_NO_REF=ok; harness verbs and teardown exit 0, witness unchanged). Not covered: laptop used an isolated node_modules with a copied prebuilt windows-native-registry native.node; one disposable-root run only; no UI/workflow wiring. Live-leg evidence is outside this repo: ctl inputs/d4/20261014-x13r (summary.json + X13r/ logs), proof ctl tools/x13rf_proof.py."
     },
     {
       "id": 68,
