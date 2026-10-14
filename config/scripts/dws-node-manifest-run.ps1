@@ -70,6 +70,8 @@ try {
       $deployed = Get-Content $deployedPath -Raw | ConvertFrom-Json
       # Why: the laptop runtime must run the same product as the serve; only harness files may differ.
       $srcDiff = @(& $git diff --name-only $deployed.sha HEAD -- src | Where-Object { $_ })
+      # Why: a sha missing from this checkout makes git fail with empty stdout, which reads as "equal".
+      if ($LASTEXITCODE -ne 0) { Write-Step 2 DEPLOY FAIL "fan-out: git diff against $($deployed.sha) exit=$LASTEXITCODE"; Set-Block 'fanout-src-diff-failed'; break }
       if ($srcDiff.Count -gt 0) { Write-Step 2 DEPLOY FAIL "fan-out: laptop src differs from deployed: $($srcDiff -join ' ')"; Set-Block 'fanout-src-differs'; break }
       Write-Step 2 DEPLOY SKIP "fan-out: laptop src equals deployed $($deployed.sha)"
     } elseif ($Resume -and (Test-Path $deployedPath) -and ((Get-Content $deployedPath -Raw | ConvertFrom-Json).sha -eq $head)) {
@@ -266,8 +268,11 @@ try {
   $rec.mainPidAfter = (Invoke-DwsSsh -RemoteBody 'systemctl show orca-dws-serve.service -p MainPID --value').Output.Trim()
   # Why by worktree path: the fan-out app is the only electron.exe launched from this checkout.
   $e2eElectron = @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($repo) }).Count
-  $rec.teardown = [ordered]@{ tunnelSshProcesses = $sshTunnels; tunnelPortListeners = $listener; laptopLocalRuntimeProcesses = $e2eElectron; serveActive = $svcActive; notes = $tearNotes }
-  $ok = ($sshTunnels -eq 0 -and $listener -eq 0 -and $e2eElectron -eq 0 -and $svcActive -eq 'active')
+  # Why: a userData the fixture failed to delete still holds the paired environment's credential.
+  $runStart = [datetime]::Parse($rec.utcStart).ToLocalTime()
+  $leftUserData = @(Get-ChildItem -Path ([IO.Path]::GetTempPath()) -Directory -Filter 'orca-e2e-userdata-*' -ErrorAction SilentlyContinue | Where-Object { $_.CreationTime -ge $runStart } | ForEach-Object { $_.FullName })
+  $rec.teardown = [ordered]@{ tunnelSshProcesses = $sshTunnels; tunnelPortListeners = $listener; laptopLocalRuntimeProcesses = $e2eElectron; leftoverE2eUserData = $leftUserData; serveActive = $svcActive; notes = $tearNotes }
+  $ok = ($sshTunnels -eq 0 -and $listener -eq 0 -and $e2eElectron -eq 0 -and $leftUserData.Count -eq 0 -and $svcActive -eq 'active')
   Write-Step 8 TEARDOWN $(if ($ok) { 'OK' } else { 'FAIL' }) "tunnelProcs=$sshTunnels listeners=$listener e2eElectron=$e2eElectron serveActive=$svcActive mainPidBefore=$($rec.mainPidBefore) mainPidAfter=$($rec.mainPidAfter)"
 }
 

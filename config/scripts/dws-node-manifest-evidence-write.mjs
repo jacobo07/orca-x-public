@@ -143,6 +143,10 @@ const RUNG_TEXT = {
     reader: 'an isolated laptop Orca paired to the GEX44 serve over the ssh -L tunnel, answering `orca fleet manifest` itself',
     limits: `Rung \`fan-out\` is the laptop-local runtime observing gex44-svc through callEnvironment (fleet.nodeResources on the paired serve). It does NOT prove the user's own desktop profile, a non-loopback pairing, or the UWCP goal/node.py consumer (S4-22). ${rec.fanOut}.`
   },
+  'fan-out-gex44': {
+    reader: 'a second, isolated Orca runtime on GEX44 paired to the serve over loopback, answering `orca fleet manifest` itself',
+    limits: `Rung \`fan-out-gex44\` is a separate runtime observing gex44-svc through callEnvironment (fleet.nodeResources on the paired serve), hosted on GEX44 because the laptop had too little free memory. It does NOT prove the laptop-to-GEX44 transport (ssh -L tunnel), the user's own desktop profile, or the UWCP goal/node.py consumer (S4-22). ${rec.fanOut}.`
+  },
   'gex44-local-caller': {
     reader: '`orca fleet manifest` run in a terminal on GEX44',
     limits: `Rung \`gex44-local-caller\` is the built CLI running ON GEX44 (real product path through observeLocal), exactly the phase-2 row-18 recipe. It does NOT prove the laptop fan-out through callEnvironment (a laptop-local runtime observing gex44-svc). Fan-out: ${rec.fanOut}.`

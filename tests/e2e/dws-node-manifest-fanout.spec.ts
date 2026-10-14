@@ -6,7 +6,9 @@
  *
  * Never logs or writes the pairing URL; the runner judges the written manifest against its control.
  */
+import { spawnSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { attachDwsRemoteRuntime } from './helpers/dws-remote-runtime-attach'
 
@@ -37,6 +39,12 @@ test.describe('DWS-P5 node manifest fan-out', () => {
     const serveRuntimeId = process.env.ORCA_DWS_P5_SERVE_RUNTIME_ID
     const probePort = process.env.ORCA_DWS_P5_PROBE_PORT
     const envName = process.env.ORCA_DWS_P5_ENV_NAME ?? 'gex44-svc'
+    // Why before the attach: the fixture records video from this env var alone, and the attach puts the code on screen.
+    if (process.env.ORCA_E2E_RECORD_VIDEO === '1') {
+      throw new Error(
+        'ORCA_E2E_RECORD_VIDEO=1 would record the pairing code; unset it for this spec'
+      )
+    }
     if (!pairingUrl || !outPath || !serveRuntimeId) {
       throw new Error(
         'ORCA_DWS_P5_PAIRING_URL, ORCA_DWS_P5_OUT and ORCA_DWS_P5_SERVE_RUNTIME_ID are all required'
@@ -51,25 +59,33 @@ test.describe('DWS-P5 node manifest fan-out', () => {
 
     // Why the credential is stripped: the local CLI call must reach this app, not pair anywhere.
     const { ORCA_DWS_P5_PAIRING_URL: _url, ORCA_PAIRING_CODE: _code, ...childEnv } = process.env
-    const rpcModule = await import('../../config/scripts/live-remote-freeze-rpc.mjs')
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-    const localRpc = rpcModule.createOrcaRpc({
-      envName: 'dws-p5-fanout-local',
-      env: {
-        ...childEnv,
-        ORCA_DEV_REPO_ROOT: process.cwd(),
-        ORCA_CLI_COMMAND: 'orca-dev',
-        ORCA_USER_DATA_PATH: userDataDir
+    // Why node + the built entry, not a named CLI: no orca-dev command exists on a Linux evidence host.
+    const cliArgs = [
+      path.join(process.cwd(), 'out', 'cli', 'index.js'),
+      'fleet',
+      'manifest',
+      ...(probePort ? ['--model-probe-ports', probePort] : []),
+      '--json'
+    ]
+    const readManifest = (): unknown => {
+      const run = spawnSync(process.execPath, cliArgs, {
+        encoding: 'utf8',
+        env: { ...childEnv, ORCA_USER_DATA_PATH: userDataDir },
+        timeout: 60_000
+      })
+      if (run.status !== 0) {
+        throw new Error(`fleet manifest exit=${run.status}: ${run.stderr || run.stdout}`)
       }
-    })
-    const args = ['fleet', 'manifest', ...(probePort ? ['--model-probe-ports', probePort] : [])]
+      return JSON.parse(run.stdout)
+    }
 
     // Why polled: the first observation can land before the paired runtime's first answer.
     let parsed: unknown = null
     await expect
       .poll(
         () => {
-          parsed = localRpc.orcaJsonSync(args, { local: true, timeoutMs: 60_000 }).parsed
+          parsed = readManifest()
           return gex44Member(parsed, serveRuntimeId)?.measurements?.memory?.status ?? 'absent'
         },
         { timeout: 120_000, intervals: [2_000, 5_000], message: 'no measured GEX44 member' }
