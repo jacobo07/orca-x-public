@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   REPLICA_UNKNOWN_REASONS,
@@ -219,7 +220,7 @@ describe('classifier reads no clock', () => {
   })
 
   it('module source is pure', () => {
-    const src = stripComments(readFileSync(new URL('./workspace-replica-state.ts', import.meta.url), 'utf8'))
+    const src = stripComments(readFileSync(join(__dirname, 'workspace-replica-state.ts'), 'utf8'))
     expect(CLOCK.test(src)).toBe(false)
     expect(src).not.toMatch(/from 'node:/)
   })
