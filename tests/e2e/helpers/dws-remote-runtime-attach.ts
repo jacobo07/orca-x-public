@@ -22,8 +22,7 @@ type PairingFileShape = {
 
 export type AttachDwsRemoteRuntimeOptions = {
   name: string
-  pairingFile: string
-}
+} & ({ pairingFile: string } | { pairingUrl: string })
 
 export type AttachDwsRemoteRuntimeResult = {
   environmentId: string
@@ -39,6 +38,10 @@ function readPairingFile(pairingFile: string): { pairingUrl: string; pairingSha1
       `attachDwsRemoteRuntime: pairing file "${pairingFile}" carries no pairing.pairingUrl`
     )
   }
+  return withSha12(pairingUrl)
+}
+
+function withSha12(pairingUrl: string): { pairingUrl: string; pairingSha12: string } {
   const pairingSha12 = createHash('sha256').update(pairingUrl, 'utf8').digest('hex').slice(0, 12)
   return { pairingUrl, pairingSha12 }
 }
@@ -53,7 +56,9 @@ export async function attachDwsRemoteRuntime(
   orcaPage: Page,
   opts: AttachDwsRemoteRuntimeOptions
 ): Promise<AttachDwsRemoteRuntimeResult> {
-  const { pairingUrl, pairingSha12 } = readPairingFile(opts.pairingFile)
+  // Why an in-memory URL is accepted: the P5 runner keeps the bearer credential off disk.
+  const { pairingUrl, pairingSha12 } =
+    'pairingUrl' in opts ? withSha12(opts.pairingUrl) : readPairingFile(opts.pairingFile)
 
   await waitForSessionReady(orcaPage)
   // Why: this host's OS locale is not guaranteed to be English (AGENTS.md), and this spec's later
@@ -73,7 +78,9 @@ export async function attachDwsRemoteRuntime(
   await expect(addProjectDialogLast).toBeVisible({ timeout: 10_000 })
   const addProjectDialogId = await addProjectDialogLast.getAttribute('id')
   if (!addProjectDialogId) {
-    throw new Error('attachDwsRemoteRuntime: the Add Project dialog rendered with no id to pin against')
+    throw new Error(
+      'attachDwsRemoteRuntime: the Add Project dialog rendered with no id to pin against'
+    )
   }
   const addProjectDialog = orcaPage.locator(`#${addProjectDialogId}`)
 
@@ -101,7 +108,9 @@ export async function attachDwsRemoteRuntime(
   await expect(serverDialogLast).toBeVisible({ timeout: 10_000 })
   const serverDialogId = await serverDialogLast.getAttribute('id')
   if (!serverDialogId) {
-    throw new Error('attachDwsRemoteRuntime: the remote-server dialog rendered with no id to pin against')
+    throw new Error(
+      'attachDwsRemoteRuntime: the remote-server dialog rendered with no id to pin against'
+    )
   }
   const serverDialog = orcaPage.locator(`#${serverDialogId}`)
 
@@ -122,7 +131,9 @@ export async function attachDwsRemoteRuntime(
   // succeeding -- this IS the criterion-3 attach proof.
   await expect(serverDialog).toBeHidden({ timeout: 20_000 })
   await orcaPage.keyboard.press('Escape')
-  await expect(addProjectDialog).toBeHidden({ timeout: 10_000 }).catch(() => undefined)
+  await expect(addProjectDialog)
+    .toBeHidden({ timeout: 10_000 })
+    .catch(() => undefined)
 
   const found = await orcaPage.evaluate((name) => {
     const state = window.__store?.getState()

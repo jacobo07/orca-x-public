@@ -138,6 +138,17 @@ function mdRows() {
 
 const tol = Object.entries(ev.TOLERANCES).map(([k, v]) => `- ${k} = ${typeof v.value === 'number' ? v.value : v.value}: ${v.reason}`).join('\n')
 const disk = evidence.diskFact
+const RUNG_TEXT = {
+  'fan-out': {
+    reader: 'an isolated laptop Orca paired to the GEX44 serve over the ssh -L tunnel, answering `orca fleet manifest` itself',
+    limits: `Rung \`fan-out\` is the laptop-local runtime observing gex44-svc through callEnvironment (fleet.nodeResources on the paired serve). It does NOT prove the user's own desktop profile, a non-loopback pairing, or the UWCP goal/node.py consumer (S4-22). ${rec.fanOut}.`
+  },
+  'gex44-local-caller': {
+    reader: '`orca fleet manifest` run in a terminal on GEX44',
+    limits: `Rung \`gex44-local-caller\` is the built CLI running ON GEX44 (real product path through observeLocal), exactly the phase-2 row-18 recipe. It does NOT prove the laptop fan-out through callEnvironment (a laptop-local runtime observing gex44-svc). Fan-out: ${rec.fanOut}.`
+  }
+}
+const rungText = RUNG_TEXT[rung] ?? RUNG_TEXT['gex44-local-caller']
 const md = evidence.verdict === 'MEASURED'
   ? `# Phase 5 - GEX44 node manifest measurement
 
@@ -148,14 +159,14 @@ Artifact sha256 (laptop == GEX44): ${rec.deployed.artifactSha256Laptop}. runtime
 |---|---|---|---|---|
 ${mdRows()}
 
-Each value was read by the product (\`orca fleet manifest\` run in a terminal on GEX44) and independently by an ssh control (free, nvidia-smi, df, curl /v1/models), judged with tolerances:
+Each value was read by the product (${rungText.reader}) and independently by an ssh control (free, nvidia-smi, df, curl /v1/models), judged with tolerances:
 ${tol}
 
 Probe port ${rec.probePort ?? 'none'} came from the control run's loopback listener list, not from a code default.
 Disk fact for planners: ${disk ? `${gib(disk.availableBytes)} available, ${disk.percentUsed}% used` : 'n/a'} on \`/\` at the control reading.
 
 ## Rung and what it does not prove
-Rung \`gex44-local-caller\` is the built CLI running ON GEX44 (real product path through observeLocal), exactly the phase-2 row-18 recipe. It does NOT prove the laptop fan-out through callEnvironment (a laptop-local runtime observing gex44-svc). Fan-out: ${rec.fanOut}.
+${rungText.limits}
 
 ## Named debt
 - ND-1: the legal lane is the Orca bundle+ssh evidence lane until UWCP S5's dispatcher lands.
