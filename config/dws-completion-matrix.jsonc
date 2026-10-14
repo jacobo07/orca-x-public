@@ -1684,15 +1684,15 @@
       "done": "fast-forward of a proven descendant, capsule first, generation-fenced; disk-full/disconnect/stale stay failures",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X11 (hermetic vitest + tsc)",
+      "measuredIn": "dws-exec X11f (D4)",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         18
       ],
       "dependsOn": [],
-      "evidence": ["src/main/replica-sync.ts","src/main/replica-sync.test.ts","tests/e2e/hwf-two-host-replica-sync.spec.ts"],
-      "reason": "dws-exec X11: fast-forward pipeline (generation+tip fences, descendant proof, verified capsule first, typed failures) built with 10 hermetic tests; two-host spec written but NOT RUN (needs laptop, ORCA_HWF_TWO_HOST=1); not wired to UI/IPC"
+      "evidence": ["src/main/replica-sync.ts","src/main/replica-sync.test.ts","tests/e2e/hwf-two-host-replica-sync.spec.ts","ctl/inputs/d4/20261014/X11/","ctl/inputs/d4/20261014/summary.json"],
+      "reason": "dws-exec X11f (D4): fast-forward pipeline with 10 hermetic tests; the live two-host leg RAN and PASSED on 2026-10-14 (laptop to GEX44 disposable root, stale-generation, ff ok, capsule present). Does not cover disk-full/disconnect live, and not wired to UI/IPC, so row stays PARTIAL"
     },
     {
       "id": 66,
