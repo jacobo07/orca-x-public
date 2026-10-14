@@ -414,7 +414,7 @@
       "state": "PARTIAL",
       "stateSource": "measured",
       "measuredIn": "phase-5",
-      "measuredAt": "2026-09-30",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         5
@@ -429,11 +429,13 @@
         { "kind": "file", "path": "src/shared/node-measurement-age-sole-authority.test.ts", "note": "sweep: the age check has one authority and all six scanned modules are required" },
         { "kind": "file", "path": "src/main/fleet/node-resources-measure.test.ts", "note": "host memory/disk/VRAM/model measurers" },
         { "kind": "file", "path": "src/main/fleet/fleet-observation-service.test.ts", "note": "observer step on the observer clock, old host reads unsupported" },
-        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.json", "note": "SC3 evidence: BLOCKED at deploy, no plane tag" },
-        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.md", "note": "what happened on GEX44, tolerances, ND-1/ND-2" },
+        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.json", "note": "SC3 evidence: MEASURED at rung fan-out-gex44, 4/4 MATCH vs ssh control, GEX44-PROVEN" },
+        { "kind": "file", "path": "docs/dws/phase-5-node-manifest.md", "note": "rung, tolerances, what the rung does not prove, ND-1/ND-2" },
+        { "kind": "file", "path": "docs/dws/phase-5-fanout-spec.md", "note": "fan-out rung spec and acceptance" },
+        { "kind": "file", "path": "tests/e2e/dws-node-manifest-fanout.spec.ts", "note": "opt-in spec: isolated Orca pairs to the serve and answers fleet manifest" },
         { "kind": "file", "path": "docs/dws/node-manifest-handoff.md", "note": "schema path and consumer rules for UWCP; consume half BLOCKED" }
       ],
-      "reason": "measured 2026-09-30: schema, real-producer contract, freshness and eligibility (drills M1-M5) and the CLI are tested locally; the GEX44 reading is BLOCKED at rung preflight (redeploy of orca-dws-serve failed at install: 133 sandboxed, then git dubious ownership twice with -NoSandbox), so no GEX44-PROVEN value exists; the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
+      "reason": "measured 2026-10-14 against orca-dws-serve at 3266e1a (artifact sha256 8ef4ce12 both ends): rung gex44-local-caller 4/4 MATCH, then rung fan-out-gex44 4/4 MATCH (a second isolated Orca on GEX44, src equal to the deployed sha, paired to the serve; the serve member came through callEnvironment; control stable, serve MainPID unchanged). Not proven: the laptop-to-GEX44 tunnel leg (laptop had 1.37 GB free). Still PARTIAL: the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
     },
     {
       "id": 18,
