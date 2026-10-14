@@ -1936,7 +1936,7 @@
       "done": "host drops, others continue, return creates no duplicate PTY/agent/job",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X17",
+      "measuredIn": "dws-exec X17f (D4)",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
@@ -1945,9 +1945,10 @@
       "dependsOn": [],
       "evidence": [
         "src/main/ssh/ssh-relay-session-host-loss.test.ts",
-        "tests/e2e/hwf-two-host-host-loss.spec.ts"
+        "tests/e2e/hwf-two-host-host-loss.spec.ts",
+        "ctl/inputs/d4/20261014/X17"
       ],
-      "reason": "Measured 2026-10-14: hermetic test proves host A drop leaves host B untouched and A's return reattaches without spawning (ssh-relay-session-host-loss.test.ts). Built, NOT RUN: opt-in two-host spec hwf-two-host-host-loss.spec.ts (ORCA_HWF_TWO_HOST=1) and the p23 root guard; the Windows<->GEX44 live leg waits for the laptop run"
+      "reason": "Measured 2026-10-14 (D4): hermetic host-loss test plus the live two-host leg RAN and PASSED Windows<->GEX44 (x17b shell leg: same relay pid, same shell pid, no duplicate, HWF_LOCAL_CONTINUES 0->119; x17c agent leg: same agent pid, emitter alive, no row removals, no relaunch). Does NOT cover: a job/background-task duplicate check, the p23 refusal drill (not run), and host B backfill after outage (seen=0 of 13). Stays PARTIAL because done also names jobs."
     },
     {
       "id": 74,
