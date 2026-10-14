@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import Database from '../../sqlite/sync-database'
 import { OrchestrationDb, SCHEMA_VERSION } from './db'
 
 describe('task host placements', () => {
