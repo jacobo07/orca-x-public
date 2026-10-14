@@ -1579,8 +1579,8 @@
       "done": "evidence-based states; unknown never healthy; timestamps never decide",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X09 (vitest in unit tree row-62)",
-      "measuredAt": "2026-10-10",
+      "measuredIn": "dws-exec X09f (D4)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         17
@@ -1600,10 +1600,10 @@
         {
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-replica-state.spec.ts",
-          "note": "opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1): NOT RUN from GEX44."
+          "note": "opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1): RAN and PASSED from the laptop against a GEX44 disposable root 2026-10-14 (D4 X09). Evidence: ctl/inputs/d4/20261014/X09/ and summary.json."
         }
       ],
-      "reason": "dws-exec X09 2026-10-10: model plus hermetic comparison-to-state bridge (relationFromComparison) are tested; the opt-in Windows<->GEX44 spec is built but NOT RUN (needs the laptop). Still open: the comparison service is not wired to the app SSH relay session and no presenter exists, so the row stays PARTIAL."
+      "reason": "dws-exec X09f 2026-10-14: model plus hermetic comparison-to-state bridge are tested, and the live Windows<->GEX44 two-host leg RAN and PASSED (HWF17_STATE=ahead:2, HWF17_UNREADABLE=unknown; evidence W/inputs/d4/20261014/X09). That leg feeds ssh-read facts to the model, not the relay compare. Not covered: the comparison service is not wired to the app SSH relay session and no presenter exists, so the row stays PARTIAL."
     },
     {
       "id": 63,
