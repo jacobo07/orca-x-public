@@ -1936,15 +1936,18 @@
       "done": "host drops, others continue, return creates no duplicate PTY/agent/job",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X17",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         23
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: ssh-relay-session.ts reconnecting state exists; no fabric-level proof"
+      "evidence": [
+        "src/main/ssh/ssh-relay-session-host-loss.test.ts",
+        "tests/e2e/hwf-two-host-host-loss.spec.ts"
+      ],
+      "reason": "Measured 2026-10-14: hermetic test proves host A drop leaves host B untouched and A's return reattaches without spawning (ssh-relay-session-host-loss.test.ts). Built, NOT RUN: opt-in two-host spec hwf-two-host-host-loss.spec.ts (ORCA_HWF_TWO_HOST=1) and the p23 root guard; the Windows<->GEX44 live leg waits for the laptop run"
     },
     {
       "id": 74,
