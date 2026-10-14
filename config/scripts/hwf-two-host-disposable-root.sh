@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # GEX44 provisioner for the phase-15/16/20 two-host rungs; verbs: create status witness procs teardown install-stub
-# seed-p16 seed-p17 seed-p17-capsule verify-p17 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
+# seed-p16 seed-p17 seed-p17-capsule verify-p17 seed-p19 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
@@ -301,6 +301,31 @@ STUB
     echo "CAPSULE_U_UNTRACKED=$(git -C "$TARGET" show "$W^3:untracked.txt")"
     echo "TARGET_STATUS_LINES=$(git -C "$TARGET" status --porcelain | wc -l)"
     echo "TARGET_HEAD_UNCHANGED=$(git -C "$TARGET" rev-parse HEAD)"
+    ;;
+  seed-p19)
+    # Phase 19 reuses a p17-shaped root (the guard is not widened). A diverged replica: same seed commit as the
+    # seed root, then one commit that rewrites seed.txt, so a local rewrite of the same file conflicts.
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    case "$ROOT" in /tmp/orca-hwf-p17-*) ;; *) echo "REFUSED root=$ROOT"; exit 2 ;; esac
+    case "$EXTRA" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *) echo "REFUSED nonce=$EXTRA"; exit 2 ;;
+    esac
+    NONCE="$EXTRA"
+    P19="$ROOT/repos/p19-replica"
+    if [ -e "$P19" ]; then echo "REFUSED exists=$P19"; exit 3; fi
+    mkdir -p "$P19"
+    seed_git -C "$P19" init -q
+    printf 'HWF16_%s\n' "$NONCE" > "$P19/seed.txt"
+    seed_git -C "$P19" add seed.txt
+    seed_git -C "$P19" commit -q -m 'hwf p16 seed'
+    SEED_ROOT=$(git -C "$P19" rev-parse HEAD)
+    printf 'remote side %s\n' "$NONCE" > "$P19/seed.txt"
+    $G -C "$P19" add seed.txt
+    $G -C "$P19" commit -q -m 'hwf p19 remote rewrite'
+    echo "SEED_ROOT=$SEED_ROOT"
+    echo "P19_REPLICA_PATH=$P19"
+    echo "P19_REPLICA_HEAD=$(git -C "$P19" rev-parse HEAD)"
     ;;
   git-compat-p16)
     if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
