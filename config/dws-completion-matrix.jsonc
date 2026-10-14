@@ -1443,8 +1443,8 @@
       "done": "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X05 (unit tests) + phase-16 (two-host)",
-      "measuredAt": "2026-10-10",
+      "measuredIn": "dws-exec X20f (D4)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         16
@@ -1515,9 +1515,14 @@
           "kind": "file",
           "path": "src/shared/replica-topology.test.ts",
           "note": "dws-exec X20: grouped relation from ancestry evidence, diverged stays grouped"
+        },
+        {
+          "kind": "file",
+          "path": "inputs/d4/20261014/X20/d4-ev-x20-20261014-164702.playwright.log",
+          "note": "dws-exec X20f D4 live leg PASS (ctl repo, mission dws-exec): HWF60_PIN + HWF60_REMOTE_AHEAD=2"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17). Re-checked 2026-10-10 in unit tests only (no two-host run), so the state stays PARTIAL. dws-exec X20 (2026-10-13, unit tests only, no two-host run): deriveReplicaTopology now takes SHA-fenced per-setup relations (row 63 ancestry) and a grouped member reports same/ahead/behind/diverged/unrelated instead of always unverified; a diverged pair stays grouped and visible, never merged, and an unknown or failed comparison stays unverified (4 new tests in replica-topology.test.ts). NOT WIRED: compareWithRelayReplica is not fed from the app SSH relay session, so no live relation is produced. NOT RUN: opt-in tests/e2e/hwf-two-host-grouped-relation.spec.ts (ORCA_HWF_TWO_HOST=1, needs the laptop). State stays PARTIAL."
+      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17). Re-checked 2026-10-10 in unit tests only (no two-host run), so the state stays PARTIAL. dws-exec X20 (2026-10-13, unit tests only, no two-host run): deriveReplicaTopology now takes SHA-fenced per-setup relations (row 63 ancestry) and a grouped member reports same/ahead/behind/diverged/unrelated instead of always unverified; a diverged pair stays grouped and visible, never merged, and an unknown or failed comparison stays unverified (4 new tests in replica-topology.test.ts). NOT WIRED: compareWithRelayReplica is not fed from the app SSH relay session, so no live relation is produced. dws-exec X20f (2026-10-14, D4): the opt-in tests/e2e/hwf-two-host-grouped-relation.spec.ts live two-host leg RAN and PASSED against a GEX44 disposable root (HWF60_PIN=SHA256:..., HWF60_REMOTE_AHEAD=2). It proves transport and ahead 2 only; it does not assert the relay compare result. compareWithRelayReplica is still not wired into the app SSH relay session, so no live grouped relation is produced by the app. State stays PARTIAL."
     },
     {
       "id": 61,
