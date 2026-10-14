@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GitReplicaHandler } from '../relay/git-replica-handler'
 import { createMockDispatcher, type RelayDispatcher } from '../relay/git-handler-test-setup'
-import { compareWithRelayReplica, type ReplicaComparisonRequest } from './replica-comparison-service'
+import { compareWithRelayReplica, compareWithSshRelayReplica, type ReplicaComparisonRequest } from './replica-comparison-service'
 import { resetSshRelayCapabilityCacheForTests } from './ssh/ssh-relay-capabilities'
 
 const ENV = {
@@ -136,5 +136,43 @@ describe('compareWithRelayReplica', () => {
   it('a malformed export response is relay-bad-response', async () => {
     const r = await run(relay(['git.replicaBundle'], (m, x) => (m === 'git.replicaBundleExport' ? { nope: 1 } : x)))
     expect(r).toMatchObject({ ok: false, reason: 'relay-bad-response' })
+  })
+})
+
+describe('compareWithSshRelayReplica', () => {
+  const base = () => ({
+    connectionId: 'c',
+    localRepoPath: local,
+    remoteRepoPath: remote,
+    hostKey: 'gex44',
+    now: () => 7
+  })
+
+  it('drives the comparison through the session multiplexer with its generation', async () => {
+    commit(remote, 'r1')
+    const req = relay(['git.replicaBundle'])
+    const gens: string[] = []
+    const r = await compareWithSshRelayReplica({
+      ...base(),
+      deps: {
+        getMultiplexer: () => ({ isDisposed: () => false, request: (m, p, o) => req(m, p ?? {}, { timeoutMs: o?.timeoutMs ?? 0 }) }),
+        getGeneration: (id) => (gens.push(id), 5)
+      }
+    })
+    expect(r.ok).toBe(true)
+    expect(gens).toEqual(['c'])
+    expect(calls[0]).toBe('relay.status')
+    expect(calls.at(-1)).toBe('git.replicaBundleRelease')
+  })
+
+  it('no live connection or a disposed multiplexer is relay-unsupported with no relay calls', async () => {
+    for (const mux of [undefined, { isDisposed: () => true, request: async () => ({}) }]) {
+      const r = await compareWithSshRelayReplica({
+        ...base(),
+        deps: { getMultiplexer: () => mux, getGeneration: () => 1 }
+      })
+      expect(r).toMatchObject({ ok: false, reason: 'relay-unsupported' })
+    }
+    expect(calls).toEqual([])
   })
 })
