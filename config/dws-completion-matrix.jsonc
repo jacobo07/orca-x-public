@@ -1903,17 +1903,26 @@
       "row": "HF Continue here across hosts",
       "owner": "working-set restore planner",
       "done": "a working set translates through projectId to another host; each pane reattach/resume/restart/unavailable",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X14",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         21
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: project-working-set-restore-plan.ts:136-141 scope-mismatch blocker"
+      "evidence": [
+        {
+          "path": "src/shared/project-working-set-host-translation.test.ts",
+          "note": "16 hermetic tests: translation through projectId, typed refusals, per-pane reattach/resume/restart/unavailable"
+        },
+        {
+          "path": "tests/e2e/hwf-two-host-continue-here.spec.ts",
+          "note": "opt-in two-host leg, NOT RUN"
+        }
+      ],
+      "reason": "measured 2026-10-14 (dws-exec X14): translateWorkingSetToHost re-points scope, location and startup cwd through the source and target setups of one projectId (typed refusals, no guessing) and planContinueOnHost labels each pane reattach/resume/restart/unavailable with the ordinary restore planner; 16 hermetic tests pass, tsc clean. Built but NOT wired into the renderer restore path (project-working-set-restore.ts planNow still passes a same-scope target). The REAL-TWO-HOST leg (tests/e2e/hwf-two-host-continue-here.spec.ts) is written and NOT RUN: it skips without ORCA_HWF_TWO_HOST=1."
     },
     {
       "id": 71,
