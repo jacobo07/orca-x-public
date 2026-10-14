@@ -862,7 +862,7 @@
       "state": "PARTIAL",
       "stateSource": "measured",
       "measuredIn": "phase-7",
-      "measuredAt": "2026-10-10",
+      "measuredAt": "2026-10-13",
       "required": true,
       "phases": [
         7
@@ -878,11 +878,13 @@
         { "kind": "file", "path": "src/main/ipc/agent-federation.test.ts", "note": "the P7 guard test" },
         { "kind": "file", "path": "config/scripts/check-federation-ownership.mjs", "note": "ownership sweep: no federation-owned file edited on this branch" },
         { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.json", "note": "phase-7 evidence: MEASURED at rung gates, both GEX44 fences 677 passed / 0 failed" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-live-providers.test.ts", "note": "opt-in live leg: independent review routed across claude and codex" },
+        { "kind": "file", "path": "docs/dws/row-37-live-review.json", "note": "2026-10-13 live run: 4 turns, both directions completed/independent" },
         { "kind": "commit", "sha": "5c14ecc24", "note": "a review records its policy and producer task (v32)" },
         { "kind": "commit", "sha": "3f3bcf7ae", "note": "P5: a gate carries the exact commit it approves (v33)" },
         { "kind": "commit", "sha": "205048aa5", "note": "P5: approval enforced where the task acts" }
       ],
-      "reason": "re-measured 2026-10-10 on GEX44 in the exec/row-37 tree: review-flow, subject-bound-gates, approval-authority-aperture and agent-federation tests 4 files / 23 tests passed; the policy-routed reviewer exists as code (reviews.policy none/any/independent, producer-provider exclusion, reviewer provider taken from the routed result); a policy-routed reviewer across two live providers is unevidenced (needs a second provider login and live spend, not run), so the row stays PARTIAL; the UWCP judge half of this row belongs to another program."
+      "reason": "re-measured 2026-10-13 on GEX44 in the exec/row-37 tree: review-flow, subject-bound-gates, approval-authority-aperture and agent-federation tests green; live leg ran with 4 real turns (claude haiku, codex gpt-6-luna): an independent review of a claude-built change was routed to and settled on codex, and of a codex-built change on claude, both status completed / independence independent (docs/dws/row-37-live-review.json, review-live-providers.test.ts, opt-in ORCA_LIVE_REVIEW=1). The runner was a CLI shim around the real review flow, not the Orca desktop/serve conversation runtime, and no gate-blocking use of the verdict was exercised, so the row stays PARTIAL; the UWCP judge half of this row belongs to another program."
     },
     {
       "id": 38,
