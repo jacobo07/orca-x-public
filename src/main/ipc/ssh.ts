@@ -54,7 +54,7 @@ import {
 } from './ssh-host-key-trust-prompt'
 import { describeHostKeyRefusalForOwner } from './ssh-host-key-refusal-copy'
 import { hostIdentityForRefusal, isSshHostKeyRefusedError } from '../ssh/ssh-host-key-pin-verifier'
-import { resolveSshHostIdentityStatus } from '../../shared/ssh-host-key-pin-shape'
+import { parseHostKeyPin, resolveSshHostIdentityStatus } from '../../shared/ssh-host-key-pin-shape'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -166,9 +166,10 @@ export function listSshTargetsForFleet(): { id: string; label: string; status: s
     }))
 }
 
-/** Asks an already-live relay `relay.status`; never connects or deploys. */
+/** Asks an already-live relay a read-only fleet question; never connects or deploys. */
 export async function requestSshRelayStatus(args: {
   targetId: string
+  method?: 'relay.status' | 'fleet.resources'
   timeoutMs: number
   signal: AbortSignal
 }): Promise<unknown> {
@@ -176,7 +177,24 @@ export async function requestSshRelayStatus(args: {
   if (!mux || mux.isDisposed()) {
     throw new Error('SSH relay is not ready')
   }
-  return mux.request('relay.status', {}, { timeoutMs: args.timeoutMs, signal: args.signal })
+  return mux.request(
+    args.method ?? 'relay.status',
+    {},
+    { timeoutMs: args.timeoutMs, signal: args.signal }
+  )
+}
+
+/** The pinned host key's fingerprint only while the target's identity reads `pinned` now. */
+export function readPinnedSshHostKeyFingerprint(targetId: string): string | null {
+  const target = sshStore?.getTarget(targetId)
+  if (!target) {
+    return null
+  }
+  const status = resolveSshHostIdentityStatus(
+    target,
+    connectionManager?.getState(targetId)?.hostIdentity ?? hostKeyRefusalByTarget.get(targetId)
+  )
+  return status === 'pinned' ? (parseHostKeyPin(target.hostKeyPin)?.fingerprint ?? null) : null
 }
 
 /** Removed-target id → last known label, for ghost-host display on paired clients. */

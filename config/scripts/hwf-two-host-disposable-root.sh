@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # GEX44 provisioner for the phase-15/16/17/20/22/23 two-host rungs; verbs: create status witness procs teardown install-stub
-# seed-p16 seed-p17 seed-p17-capsule verify-p17 seed-p19 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20. Never deletes anything.
+# seed-p16 seed-p17 seed-p17-capsule verify-p17 seed-p19 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20 serve-p22 pairing-p22
+# serve-stop-p22. Never deletes anything.
 set -eu
 
 VERB="${1:-}"
@@ -521,6 +522,80 @@ for p in m.get("probes") or []:
 print("HWF20_R1 status=%s hostKey=%s os=%s gitVersion=%s" % (m.get("status"), m.get("hostKey"), os_name, version))
 PY
     echo "INDEPENDENT_GIT=$(git --version | awk '{print $3}')"
+    ;;
+  serve-p22)
+    # Paired disposable serve for row 72: a remote worker runs the mission stub agent and reports worker_done.
+    if [ ! -f "$ROOT/sshd_config" ]; then echo "REFUSED no-root=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      /home/kobii/orca-x|/home/kobii/orca-x/*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/kobii/*[!A-Za-z0-9_./-]*) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+      /home/kobii/?*) ;;
+      *) echo "REFUSED worktree=$EXTRA"; exit 2 ;;
+    esac
+    case "$EXTRA2" in
+      ''|*[!A-Za-z0-9_./=\ -]*) echo "REFUSED launch"; exit 2 ;;
+    esac
+    if [ ! -d "$EXTRA" ]; then echo "REFUSED worktree-missing=$EXTRA"; exit 3; fi
+    if [ -f "$ROOT/serve.pid" ]; then echo "REFUSED serve-exists=$(cat "$ROOT/serve.pid")"; exit 3; fi
+    STUB="$EXTRA/tests/e2e/fixtures/mission-stub-agent"
+    if [ ! -x "$STUB/codex" ]; then echo "REFUSED no-stub=$STUB"; exit 3; fi
+    REPO="$ROOT/repos/p22-project"
+    mkdir -p "$REPO" "$ROOT/serve-data" "$ROOT/home"
+    if [ ! -d "$REPO/.git" ]; then
+      seed_git init -q "$REPO"
+      echo "p22 mission dispatch" > "$REPO/README.md"
+      seed_git -C "$REPO" add README.md
+      seed_git -C "$REPO" commit -q -m "p22 seed"
+    fi
+    PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
+    cd "$EXTRA"
+    export PATH="$STUB:/home/kobii/.orca-toolchain/node24/bin:$PATH"
+    # shellcheck disable=SC2086
+    setsid nohup env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_USER_DATA_PATH="$ROOT/serve-data" \
+      ORCA_DEV_CLI_INVOCATION=1 ORCA_E2E_CLI_ENTRY="$EXTRA/out/cli/index.js" MISSION_STUB_HOST=gex44 \
+      MISSION_STUB_LEDGER="$ROOT/stub-ledger.jsonl" \
+      $EXTRA2 serve --port "$PORT" --bind-host 127.0.0.1 --pairing-address 127.0.0.1 > "$ROOT/serve.log" 2>&1 < /dev/null &
+    echo "$!" > "$ROOT/serve.pid"
+    echo "SERVE_PORT=$PORT"
+    echo "SERVE_PID=$!"
+    I=0
+    while [ "$I" -lt 120 ] && ! grep -q '^Pairing URL: ' "$ROOT/serve.log"; do sleep 1; I=$((I + 1)); done
+    if ! grep -q '^Pairing URL: ' "$ROOT/serve.log"; then echo "PAIRING_READY=no"; tail -20 "$ROOT/serve.log"; exit 4; fi
+    # Why: the pairing code is a credential; it stays in a 0600 file, never in this verb's output.
+    umask 077
+    grep -m1 '^Pairing URL: ' "$ROOT/serve.log" | sed 's/^Pairing URL: //' > "$ROOT/pairing-url"
+    echo "PAIRING_READY=yes"
+    env HOME="$ROOT/home" ORCA_USER_DATA_PATH="$ROOT/serve-data" ORCA_DEV_CLI_INVOCATION=1 \
+      node out/cli/index.js repo add --path "$REPO" --json > "$ROOT/serve-repo-add.json" 2>&1 && AEC=0 || AEC=$?
+    echo "SERVE_REPO_ADD_EXIT=$AEC"
+    echo "REMOTE_REPO_PATH=$REPO"
+    ORCA_HWF_JSON="$ROOT/serve-repo-add.json" python3 - <<'PY'
+import json, os
+try:
+    doc = json.load(open(os.environ["ORCA_HWF_JSON"]))
+except Exception as e:
+    print("REMOTE_REPO_ID=none parse-" + type(e).__name__)
+    raise SystemExit(0)
+res = doc.get("result", doc)
+repo = res.get("repo", res) if isinstance(res, dict) else {}
+print("REMOTE_REPO_ID=%s" % (repo.get("id") or "none"))
+PY
+    ;;
+  pairing-p22)
+    if [ ! -f "$ROOT/pairing-url" ]; then echo "REFUSED no-pairing=$ROOT"; exit 3; fi
+    cat "$ROOT/pairing-url"
+    ;;
+  serve-stop-p22)
+    if [ ! -f "$ROOT/serve.pid" ]; then echo "REFUSED no-serve=$ROOT"; exit 3; fi
+    SID=$(cat "$ROOT/serve.pid")
+    case "$SID" in ''|*[!0-9]*) echo "REFUSED pid"; exit 2 ;; esac
+    echo "SERVE_SESSION_BEFORE=$(ps -o pid= -s "$SID" | wc -l)"
+    kill -TERM -- "-$SID" 2>/dev/null || true
+    I=0
+    while [ "$I" -lt 20 ] && [ "$(ps -o pid= -s "$SID" | wc -l)" != 0 ]; do sleep 0.5; I=$((I + 1)); done
+    if [ "$(ps -o pid= -s "$SID" | wc -l)" != 0 ]; then kill -KILL -- "-$SID" 2>/dev/null || true; sleep 1; fi
+    echo "SERVE_SESSION_AFTER=$(ps -o pid= -s "$SID" | wc -l)"
+    echo "STUB_LEDGER_LINES=$(wc -l < "$ROOT/stub-ledger.jsonl" 2>/dev/null || echo 0)"
     ;;
   *)
     echo "REFUSED verb=$VERB"; exit 2

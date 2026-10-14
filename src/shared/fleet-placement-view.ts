@@ -13,11 +13,7 @@ export type FleetSshHostIdentityCounts = {
   refusedChanged: number
 }
 
-export type FleetSshHostUnknownReason =
-  | 'not-connected'
-  | 'unreachable'
-  | 'timeout'
-  | 'malformed'
+export type FleetSshHostUnknownReason = 'not-connected' | 'unreachable' | 'timeout' | 'malformed'
 
 /** One saved SSH target as the relay answered it. Unmeasured carries no numbers, never zeros. */
 export type FleetSshHostObservation =
@@ -50,7 +46,7 @@ export type FleetObservation = {
   /** Same clock as every sample's `startedAt`; plans judge age against this, not their own. */
   completedAt: number
   members: FleetPlacementMember[]
-  /** What this view covers; SSH targets carry no Orca key, so they are listed in `sshHosts`, not as placement members. */
+  /** What this view covers. Every saved SSH target is listed in `sshHosts`; a connected one is also a placement member, keyed by its pinned host key (`ssh-hostkey:`), which never merges with an Orca key. */
   coverage: {
     runtimeEnvironments: number
     /** `enumerated` only when the host listed its saved targets; an older host says `not-enumerated`. */

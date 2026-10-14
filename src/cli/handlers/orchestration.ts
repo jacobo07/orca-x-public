@@ -10,6 +10,7 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { requireWorkerDoneSettlement } from './orchestration-worker-settlement'
+import { missionHandlers } from './orchestration-mission'
 import { getTerminalHandle } from '../selectors'
 import {
   clampOrchestrationAskTimeoutMs,
@@ -473,6 +474,7 @@ function safeJson(value: unknown): string {
 }
 
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
+  ...missionHandlers({ callMutation, resolveCoordinatorTerminalHandle }),
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await callMutation<{

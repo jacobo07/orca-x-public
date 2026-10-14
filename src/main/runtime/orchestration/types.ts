@@ -266,6 +266,16 @@ export type TaskRow = {
   subject: string | null
 }
 
+export type TaskPlacementRow = {
+  task_id: string
+  run_id: string
+  host_key: string
+  fingerprint: string
+  address: string
+  label: string
+  placed_at: string
+}
+
 /** What a delegated task is ABOUT. Orca captures it from git; an agent's own text never sets it. */
 export type DelegationSubject = {
   projectId: string

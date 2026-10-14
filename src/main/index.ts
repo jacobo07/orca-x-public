@@ -341,6 +341,7 @@ import {
   beginSshShutdown,
   listSshHostIdentities,
   listSshTargetsForFleet,
+  readPinnedSshHostKeyFingerprint,
   requestSshRelayStatus
 } from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
@@ -2845,8 +2846,9 @@ void app.whenReady().then(async () => {
     listEnvironments: () => listEnvironments(app.getPath('userData')),
     listSshHostIdentities,
     listSshTargets: listSshTargetsForFleet,
-    callSshRelay: ({ targetId, timeoutMs, signal }) =>
-      requestSshRelayStatus({ targetId, timeoutMs, signal }),
+    callSshRelay: ({ targetId, method, timeoutMs, signal }) =>
+      requestSshRelayStatus({ targetId, method, timeoutMs, signal }),
+    readPinnedSshHostKeyFingerprint,
     callEnvironment: ({ environmentId, method, params, pairingRevision, timeoutMs, signal }) =>
       callRuntimeEnvironment(
         app.getPath('userData'),

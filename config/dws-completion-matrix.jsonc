@@ -1982,17 +1982,31 @@
       "row": "HF Jobs placed across hosts",
       "owner": "orchestration dispatch + dws phase 6 apply",
       "done": "two jobs of one mission run concurrently on two hosts with observable placement and integrated results",
-      "state": "ABSENT",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X16 + row 72 B live leg (p22 serve, tests/e2e/hwf-two-host-mission-dispatch.spec.ts)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         22
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: orchestration db.ts:619-645 tasks have no host; fleet-placement.ts:63 proposal authorizes nothing"
+      "evidence": [
+        { "kind": "file", "path": "src/shared/mission-job-placement.ts" },
+        { "kind": "file", "path": "src/shared/mission-job-placement.test.ts" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/task-placement-db.test.ts" },
+        { "kind": "file", "path": "src/main/fleet/fleet-ssh-placement-member.ts" },
+        { "kind": "file", "path": "src/relay/fleet-resources-handler.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-mission-placement.spec.ts" },
+        { "kind": "file", "path": "src/main/runtime/rpc/methods/orchestration-mission.ts" },
+        { "kind": "file", "path": "src/main/runtime/rpc/methods/orchestration-mission.test.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-mission-dispatch.spec.ts" },
+        { "kind": "commit", "sha": "0a89359680", "note": "X16 placement leg PASS live: GEX44 + Local Windows, one job per host" },
+        { "kind": "commit", "sha": "373e4f7f09", "note": "missionPlace / missionResults + workerStart placement check" },
+        { "kind": "commit", "sha": "6433969137", "note": "local coordinator admitted through the real dispatcher (live leg refused it before)" },
+        { "kind": "commit", "sha": "d62bf760c5", "note": "dispatch leg PASS live: both jobs completed on their placed hosts, overlapping" }
+      ],
+      "reason": "PASSES live 2026-10-14 (laptop Windows + GEX44 paired orca serve at 6433969, spec at d62bf760c5): missionPlace planned one job on Local Windows and one on runtime:gex44-p22; both started through workerStart together, both completed (2/2, 0 failed), ranOnPlacement true for both, crossHost true; the stub agents reported their own hosts (kobicraft-gex44, DESKTOP-PMT5BS8) and their run windows overlap (gex44 18:28:54-18:29:14Z, laptop 18:29:02-18:29:22Z); the remote result came home via workerShow and merged in missionResults. Caveat: the workers are a stub agent that reports worker_done through the real CLI, not a model; no real-provider turn was run."
     },
     {
       "id": 73,
