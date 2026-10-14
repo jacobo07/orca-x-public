@@ -147,6 +147,7 @@ test('two jobs of one mission run concurrently on two hosts with integrated resu
         run: runId,
         on: envId,
         worktree: 'new-top-level',
+        name: `p22-remote-${nonce}`,
         repo: `id:${remoteRepoId}`,
         agent: 'codex',
         timeoutMs: 120_000
