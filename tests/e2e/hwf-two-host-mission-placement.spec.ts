@@ -31,12 +31,17 @@ test.use({
 
 type Candidate = { key: string; fingerprint: string; label: string; evidenceAddress: string }
 
+let lastProposal = ''
+
 function eligibleOf(userData: string): Candidate[] {
   const r = runCliJson(['fleet', 'placement'], userData)
   if (!r.ok) {
+    lastProposal = `unreachable: ${r.unreachable}`
     return []
   }
-  const body = (r.value.result ?? r.value) as { proposal?: { eligible?: Candidate[] } }
+  const body = (r.value.result ?? r.value) as { proposal?: { eligible?: Candidate[]; rejected?: unknown } }
+  // Why: a count of 1 alone cannot say which host was rejected or why.
+  lastProposal = JSON.stringify({ eligible: body.proposal?.eligible, rejected: body.proposal?.rejected })
   return body.proposal?.eligible ?? []
 }
 
@@ -57,6 +62,7 @@ test('two jobs of one mission are placed on two distinct hosts', async ({ orcaPa
       (e) => new Set(e.map((c) => c.key)).size >= 2,
       60_000
     )
+    console.log(`HWF22_PROPOSAL=${lastProposal}`)
     expect(new Set(eligible.map((c) => c.key)).size).toBeGreaterThanOrEqual(2)
     // Plan from the live proposal: the members below only restate the eligible hosts.
     const members = eligible.map((c) => ({
