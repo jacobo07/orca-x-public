@@ -1636,8 +1636,8 @@
       "done": "uncommitted state captured as a content-addressed commit under refs/orca/capsules",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X10 (tranche 2), tree exec/row-64",
-      "measuredAt": "2026-10-10",
+      "measuredIn": "dws-exec X10f (D4)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         17
@@ -1652,10 +1652,10 @@
         {
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-dirty-capsule.spec.ts",
-          "note": "Opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1), NOT RUN: laptop capsule pushed over ssh to a GEX44 p17 disposable root and read back by verify-p17. Harness verbs seed-p17/verify-p17 and the /tmp/orca-hwf-p17-* root guard are in config/scripts/."
+          "note": "Opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1), RAN and PASSED 2026-10-14 (evidence ctl/inputs/d4/20261014/X10/, summary.json unit X10): laptop capsule pushed over ssh to a GEX44 p17 disposable root and read back by verify-p17. Harness verbs seed-p17/verify-p17 and the /tmp/orca-hwf-p17-* root guard are in config/scripts/."
         }
       ],
-      "reason": "Measured 2026-10-10: capsule creation and listing built with hermetic tests (content-addressed commit under refs/orca/capsules, real git). Built but NOT RUN: the Windows <-> GEX44 leg over real SSH (spec waits for ORCA_HWF_TWO_HOST=1; reads NOT RUN). NOT built: restore/apply of a capsule, UI or service wiring that calls createCapsule. So the row is PARTIAL."
+      "reason": "Measured 2026-10-14: capsule creation and listing built with hermetic tests (content-addressed commit under refs/orca/capsules, real git). The live two-host leg (Windows laptop -> GEX44 disposable root over real SSH) RAN and PASSED: ref matches W, fsck ok, 3 parents, base is HEAD, target status clean, readback ok (evidence ctl/inputs/d4/20261014/X10/). It does not cover restore/apply or any service use. NOT built: restore/apply of a capsule, UI or service wiring that calls createCapsule. So the row is PARTIAL."
     },
     {
       "id": 65,
