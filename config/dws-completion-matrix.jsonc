@@ -1905,7 +1905,7 @@
       "done": "a working set translates through projectId to another host; each pane reattach/resume/restart/unavailable",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X14",
+      "measuredIn": "dws-exec X14f (D4)",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
@@ -1919,10 +1919,14 @@
         },
         {
           "path": "tests/e2e/hwf-two-host-continue-here.spec.ts",
-          "note": "opt-in two-host leg, NOT RUN"
+          "note": "opt-in two-host leg, RAN and PASSED 2026-10-14 (D4)"
+        },
+        {
+          "path": "ctl/inputs/d4/20261014/X14/",
+          "note": "laptop D4 live leg evidence d4-ev-x14-20261014-164538, summary.json verdict PASS"
         }
       ],
-      "reason": "measured 2026-10-14 (dws-exec X14): translateWorkingSetToHost re-points scope, location and startup cwd through the source and target setups of one projectId (typed refusals, no guessing) and planContinueOnHost labels each pane reattach/resume/restart/unavailable with the ordinary restore planner; 16 hermetic tests pass, tsc clean. Built but NOT wired into the renderer restore path (project-working-set-restore.ts planNow still passes a same-scope target). The REAL-TWO-HOST leg (tests/e2e/hwf-two-host-continue-here.spec.ts) is written and NOT RUN: it skips without ORCA_HWF_TWO_HOST=1."
+      "reason": "measured 2026-10-14 (dws-exec X14f, D4): translateWorkingSetToHost re-points scope, location and startup cwd through the source and target setups of one projectId (typed refusals, no guessing) and planContinueOnHost labels each pane reattach/resume/restart/unavailable; 16 hermetic tests pass, tsc clean. The live two-host leg RAN and PASSED against a GEX44 disposable root (HWF21_TRANSLATE=translated, HWF21_TARGET_PATH=present, HWF21_NO_SETUP=target-setup-missing; evidence ctl/inputs/d4/20261014/X14/). The spec never launches Orca: the translation is a local pure function and only path existence is read over SSH. Not covered: no Orca launch or real pane reattach/resume on the target; not wired into the renderer restore path (project-working-set-restore.ts planNow still passes a same-scope target), so the user-visible Continue here flow is unbuilt. Stays PARTIAL."
     },
     {
       "id": 71,
