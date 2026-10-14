@@ -1953,15 +1953,19 @@
       "done": "an old relay rejects new sync/fabric methods; client never widens",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X18 (hermetic vitest + tsc on exec/row-74)",
-      "measuredAt": "2026-10-13",
+      "measuredIn": "dws-exec X18 (hermetic vitest + tsc on exec/row-74); D4 live leg 2026-10-14",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         23
       ],
       "dependsOn": [],
-      "evidence": ["src/main/ssh/ssh-relay-capabilities.ts","src/main/ssh/ssh-relay-capabilities.test.ts","tests/e2e/hwf-two-host-mixed-relay.spec.ts"],
-      "reason": "Measured 2026-10-13: client gate requestGatedRelayMethod fails closed (sync./fabric. need relay.status sync.v1/fabric.v1; no relay.status or MethodNotFound => RelayCapabilityUnsupportedError, never widened) with 11 hermetic tests green; no sync/fabric relay methods exist yet. Two-host leg built but NOT RUN: tests/e2e/hwf-two-host-mixed-relay.spec.ts + old-relay-p23 verb wait for the live Windows<->GEX44 run, so PARTIAL."
+      "evidence": [
+        { "kind": "file", "path": "src/main/ssh/ssh-relay-capabilities.ts" },
+        { "kind": "file", "path": "src/main/ssh/ssh-relay-capabilities.test.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-mixed-relay.spec.ts" }
+      ],
+      "reason": "Client gate requestGatedRelayMethod fails closed (sync./fabric. need relay.status sync.v1/fabric.v1; no relay.status or MethodNotFound => RelayCapabilityUnsupportedError, never widened), 11 hermetic tests green. NOT measurable live yet: the gate has no production caller and no sync./fabric. method exists, so the client can never send one and a live zero is guaranteed by absence, not by the gate (D4 2026-10-14: count=0 with the owning relay logging 0 method lines; old-relay-p23 only writes a version marker, it installs no old relay). Live leg becomes meaningful when the first sync/fabric caller lands: it must route through requestGatedRelayMethod, and the leg needs a real old relay build plus an A/B control where a new relay DOES receive the method. Stays PARTIAL."
     },
     {
       "id": 75,
