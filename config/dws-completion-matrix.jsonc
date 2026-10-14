@@ -1720,9 +1720,9 @@
       "row": "HF Dirty-both reconciliation",
       "owner": "sync pipeline",
       "done": "same-base disjoint edits reconciled only when merge-tree is clean; otherwise conflict",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "X13r (phase 19 row 67)",
+      "measuredIn": "dws-exec X13rf (live)",
       "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
@@ -1732,9 +1732,11 @@
       "evidence": [
         "src/main/replica-reconcile.ts",
         "src/main/replica-reconcile.test.ts",
-        "tests/e2e/hwf-two-host-dirty-both.spec.ts"
+        "tests/e2e/hwf-two-host-dirty-both.spec.ts",
+        "dws-exec/ctl/inputs/d4/20261014-x13r/summary.json",
+        "dws-exec/ctl/inputs/d4/20261014-x13r/X13r/"
       ],
-      "reason": "Built and hermetically tested (real git, 5 tests): reconcileDirtyBoth reconciles same-base capsules only when git merge-tree --write-tree is clean, else typed conflict naming paths, no ref, HEAD never moved. Two-host leg built (opt-in spec, skips = NOT RUN) but NOT run live Windows<->GEX44; not PASS until it runs. No UI/workflow wiring yet."
+      "reason": "Hermetic (real git, 5 tests) plus the live Windows<->GEX44 leg RAN and PASSED on 2026-10-14 at head 52154f048c (ORCA_HWF_TWO_HOST=1, 1 passed; HWF19_DISJOINT=reconciled, HWF19_CONFLICT=conflict, HWF19_NO_REF=ok; harness verbs and teardown exit 0, witness unchanged). Not covered: laptop used an isolated node_modules with a copied prebuilt windows-native-registry native.node; one disposable-root run only; no UI/workflow wiring."
     },
     {
       "id": 68,
