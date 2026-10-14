@@ -815,10 +815,10 @@
       "row": "Independent review",
       "owner": "federation reviews",
       "done": "P4b flow live",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "exec-x03",
-      "measuredAt": "2026-10-10",
+      "measuredIn": "exec-x03r",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         7
@@ -830,7 +830,7 @@
         { "kind": "file", "path": "src/main/runtime/orchestration/review-subject-capture.ts", "note": "captures the exact subject revision a review judges" },
         { "kind": "file", "path": "src/main/runtime/orchestration/review-findings.ts", "note": "findings attached to a review" },
         { "kind": "file", "path": "src/main/runtime/orchestration/review-flow.test.ts", "note": "the review flow end to end (re-ran green on GEX44 at the gated sha)" },
-        { "kind": "file", "path": "src/main/runtime/orchestration/review-reality.test.ts", "note": "the opt-in live record (ORCA_CLAUDE_REALITY=1), Claude only; skipped in the phase-7 GEX44 run" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/review-reality.test.ts", "note": "the opt-in live record (ORCA_CLAUDE_REALITY=1); re-run 2026-10-14 on GEX44 with codex and claude both signed in: built by codex, independent review completed on claude" },
         { "kind": "file", "path": "src/main/runtime/rpc/methods/orchestration-reviews.test.ts", "note": "the review RPC methods" },
         { "kind": "file", "path": "config/scripts/check-federation-ownership.mjs", "note": "ownership sweep: this branch edits no federation-owned file" },
         { "kind": "file", "path": "docs/dws/phase-7-federation-remeasure.json", "note": "phase-7 evidence: MEASURED at rung gates, both GEX44 fences 677 passed / 0 failed" },
@@ -840,7 +840,7 @@
         { "kind": "commit", "sha": "da3ec43c0", "note": "P4b: a review of a real agent's commit, run on a real provider (Claude only)" },
         { "kind": "commit", "sha": "47558af87", "note": "the sealing note" }
       ],
-      "reason": "re-measured 2026-10-10 (exec X03): review-flow.test.ts and orchestration-reviews.test.ts re-ran green in this branch (2 files, 14 tests passed); the live independent review across TWO providers did NOT run (needs a second provider login and live spend, not available to this unit), so the row stays PARTIAL; federation's own live record da3ec43c0 is Claude only (independent -> failed/no-provider, any -> degraded-same-provider). Earlier measurement 2026-09-30: sealed review flow (P4a/P4b, reviews v31/v32) contained in this branch, both fences 677 passed / 0 failed on GEX44 at 997b4a55a. The four inherited mobile-aperture entries (orchestration.reviewRequest, orchestration.reviewShow, conversations.subscribe, conversations.unsubscribe) are federation debt; federation's RESUMPTION note cites live-review commit 2e8c5516a, which is not in the object store, so da3ec43c0 is cited instead."
+      "reason": "measured 2026-10-14 (exec X03r): live two-provider run of review-reality.test.ts (ORCA_CLAUDE_REALITY=1) on GEX44 passed: builder codex, independent review status completed / independence independent on claude, any-policy review degraded-same-provider on codex; flow+RPC tests, src/main/codex tests green, tsc 0 errors. Needed a fix: codex app-server initialize must opt in to experimentalApi for dynamicTools. Caveats: reviewer findings parsed as unstructured (no-json-block); one run only; the four mobile-aperture entries (orchestration.reviewRequest, reviewShow, conversations.subscribe, unsubscribe) remain federation debt."
     },
     {
       "id": 37,

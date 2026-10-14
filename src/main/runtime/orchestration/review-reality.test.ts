@@ -94,6 +94,7 @@ describe.skipIf(!ENABLED)('a review of a real agent’s commit against a real pr
     })
     await coordinate('build')
     const built = parseAgentTaskResult(db.getTask(build.id)!.result)
+    if (built?.outcome !== 'completed') console.info('BUILD_FAILED ' + JSON.stringify(built))
     expect(built).toMatchObject({ outcome: 'completed' })
     const builderProvider = built?.outcome === 'completed' ? built.provider : null
     expect(builderProvider).toBe(codexReady ? 'codex' : 'claude')
@@ -135,12 +136,19 @@ describe.skipIf(!ENABLED)('a review of a real agent’s commit against a real pr
       expect(independentRow).toMatchObject({ status: 'failed' })
       expect(parseReviewFindings(independentRow!.findings)).toMatchObject({ kind: 'failed', reason: 'no-provider' })
     }
-    expect(anyRow).toMatchObject({ status: 'completed', reviewer_provider: 'claude' })
-    expect(anyRow!.independence).toBe(builderProvider === 'claude' ? 'degraded-same-provider' : 'independent')
+    if (otherProviderReady) {
+      // Two providers signed in: the independent review must complete on the provider that did NOT build.
+      expect(independentRow).toMatchObject({ status: 'completed', independence: 'independent' })
+      expect(independentRow!.reviewer_provider).not.toBe(builderProvider)
+    }
+    expect(anyRow).toMatchObject({ status: 'completed' })
+    expect(anyRow!.independence).toBe(
+      anyRow!.reviewer_provider === builderProvider ? 'degraded-same-provider' : 'independent'
+    )
     const findings = parseReviewFindings(anyRow!.findings)
     expect(findings?.kind === 'structured' || findings?.kind === 'unstructured').toBe(true)
     // Recorded for the evidence file, whatever the model concluded.
-    console.info(`REVIEW_REALITY ${JSON.stringify({ revision, builderProvider, codexReady, independent: independentRow?.status, anyIndependence: anyRow!.independence, findings })}`)
+    console.info(`REVIEW_REALITY ${JSON.stringify({ revision, builderProvider, codexReady, independent: independentRow?.status, independentProvider: independentRow?.reviewer_provider, anyProvider: anyRow!.reviewer_provider, anyIndependence: anyRow!.independence, findings })}`)
 
     // 4. The worktree moves: the review stays evidence for the revision it saw, and is no longer current.
     expect((await describeReview(anyRow!)).currency).toEqual({ current: true })
