@@ -337,7 +337,12 @@ import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { beginSshShutdown, listSshHostIdentities } from './ipc/ssh'
+import {
+  beginSshShutdown,
+  listSshHostIdentities,
+  listSshTargetsForFleet,
+  requestSshRelayStatus
+} from './ipc/ssh'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -2839,6 +2844,9 @@ void app.whenReady().then(async () => {
       }),
     listEnvironments: () => listEnvironments(app.getPath('userData')),
     listSshHostIdentities,
+    listSshTargets: listSshTargetsForFleet,
+    callSshRelay: ({ targetId, timeoutMs, signal }) =>
+      requestSshRelayStatus({ targetId, timeoutMs, signal }),
     callEnvironment: ({ environmentId, method, params, pairingRevision, timeoutMs, signal }) =>
       callRuntimeEnvironment(
         app.getPath('userData'),

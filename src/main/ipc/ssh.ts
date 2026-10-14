@@ -151,6 +151,34 @@ export function listSshHostIdentities(): { targetId: string; status: SshHostIden
   }))
 }
 
+/** Saved, user-visible SSH targets with the live connection status (null = no manager state). */
+export function listSshTargetsForFleet(): { id: string; label: string; status: string | null }[] {
+  if (!sshStore) {
+    throw new Error('ssh_handlers_not_registered')
+  }
+  return sshStore
+    .listTargets()
+    .filter((target) => !isRuntimeOwnedSshTargetId(target.id))
+    .map((target) => ({
+      id: target.id,
+      label: target.label,
+      status: connectionManager?.getState(target.id)?.status ?? null
+    }))
+}
+
+/** Asks an already-live relay `relay.status`; never connects or deploys. */
+export async function requestSshRelayStatus(args: {
+  targetId: string
+  timeoutMs: number
+  signal: AbortSignal
+}): Promise<unknown> {
+  const mux = activeSessions.get(args.targetId)?.getMux()
+  if (!mux || mux.isDisposed()) {
+    throw new Error('SSH relay is not ready')
+  }
+  return mux.request('relay.status', {}, { timeoutMs: args.timeoutMs, signal: args.signal })
+}
+
 /** Removed-target id → last known label, for ghost-host display on paired clients. */
 export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
   return sshStore?.listRemovedTargetLabels() ?? {}

@@ -1900,17 +1900,17 @@
       "row": "HF SSH targets in fleet observation",
       "owner": "fleet observation",
       "done": "SSH hosts measured with freshness through the relay; unmeasured stays unknown",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dws-exec X15 (row-71 hermetic tests + tsc, tranche 2)",
+      "measuredAt": "2026-10-14",
       "required": true,
       "phases": [
         22
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: fleet-observation-service.ts:140-162"
+      "evidence": ["src/main/fleet/fleet-observation-service.ts","src/main/fleet/fleet-observation-service.test.ts","src/shared/fleet-placement-view.ts","tests/e2e/hwf-two-host-ssh-fleet.spec.ts"],
+      "reason": "Built: SSH hosts measured via relay.status with freshness (answeredAt, relayUptimeMs), unmeasured stays unknown; hermetic tests and tsc green. NOT RUN: real Windows<->GEX44 leg (tests/e2e/hwf-two-host-ssh-fleet.spec.ts, needs ORCA_HWF_TWO_HOST=1); row stays PARTIAL until it runs."
     },
     {
       "id": 72,
