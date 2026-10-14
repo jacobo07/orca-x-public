@@ -1909,7 +1909,12 @@
         22
       ],
       "dependsOn": [],
-      "evidence": ["src/main/fleet/fleet-observation-service.ts","src/main/fleet/fleet-observation-service.test.ts","src/shared/fleet-placement-view.ts","tests/e2e/hwf-two-host-ssh-fleet.spec.ts"],
+      "evidence": [
+        { "kind": "file", "path": "src/main/fleet/fleet-observation-service.ts" },
+        { "kind": "file", "path": "src/main/fleet/fleet-observation-service.test.ts" },
+        { "kind": "file", "path": "src/shared/fleet-placement-view.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-ssh-fleet.spec.ts" }
+      ],
       "reason": "Built: SSH hosts measured via relay.status with freshness (answeredAt, relayUptimeMs), unmeasured stays unknown; hermetic tests and tsc green. NOT RUN: real Windows<->GEX44 leg (tests/e2e/hwf-two-host-ssh-fleet.spec.ts, needs ORCA_HWF_TWO_HOST=1); row stays PARTIAL until it runs."
     },
     {
@@ -1926,8 +1931,16 @@
         22
       ],
       "dependsOn": [],
-      "evidence": ["src/shared/mission-job-placement.ts","src/shared/mission-job-placement.test.ts","src/main/runtime/orchestration/task-placement-db.test.ts","tests/e2e/hwf-two-host-mission-placement.spec.ts"],
-      "reason": "Built and hermetically tested 2026-10-14: orchestration task_placements (schema v34) records the host per job; planMissionPlacement spreads one mission over distinct hosts; integrateMissionResults merges per-host outcomes. Dispatch is not yet wired to call it. Live two-host leg (tests/e2e/hwf-two-host-mission-placement.spec.ts, ORCA_HWF_TWO_HOST=1) NOT RUN."
+      "evidence": [
+        { "kind": "file", "path": "src/shared/mission-job-placement.ts" },
+        { "kind": "file", "path": "src/shared/mission-job-placement.test.ts" },
+        { "kind": "file", "path": "src/main/runtime/orchestration/task-placement-db.test.ts" },
+        { "kind": "file", "path": "src/main/fleet/fleet-ssh-placement-member.ts" },
+        { "kind": "file", "path": "src/relay/fleet-resources-handler.ts" },
+        { "kind": "file", "path": "tests/e2e/hwf-two-host-mission-placement.spec.ts" },
+        { "kind": "commit", "sha": "0a89359680", "note": "X16 placement leg PASS live: GEX44 + Local Windows, one job per host" }
+      ],
+      "reason": "Placement PASSES live 2026-10-14 (laptop -> GEX44 p22 root, commit 0a89359680): a connected, pinned SSH target is a placement member via relay fleet.resources.v1, the proposal holds GEX44 + Local Windows, and a two-job mission is planned one job per host. NOT done: dispatch is not wired to planMissionPlacement/recordTaskPlacement, so no job runs on the remote host and integrateMissionResults has no real outcomes."
     },
     {
       "id": 73,
