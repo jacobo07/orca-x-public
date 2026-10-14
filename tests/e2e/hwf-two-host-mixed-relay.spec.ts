@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 import { expect, test } from './helpers/orca-app'
+import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
   connectHwfTargetWithTrust,
   disconnectHwfTarget,
@@ -45,7 +46,12 @@ test('old relay: sync/fabric methods are never sent', async ({ orcaPage }) => {
   expect(verb.stdout).toContain('P23_OLD_RELAY version=0.0.0')
   console.log(verb.stdout.trim())
 
-  const target = await connectHwfTargetWithTrust(orcaPage, run, readHwfLocalPort())
+  // Why: the target is 127.0.0.1:<local port>; without the carrier forward nothing listens there.
+  const carrier = await startHwfCarrier(run, readHwfLocalPort())
+  const target = await connectHwfTargetWithTrust(orcaPage, run, readHwfLocalPort()).catch(async (err) => {
+    await carrier.kill()
+    throw err
+  })
   try {
     // The owning host's own relay log is the independent instrument: zero gated requests arrived.
     const count = execOnOwningHost(
@@ -53,9 +59,18 @@ test('old relay: sync/fabric methods are never sent', async ({ orcaPage }) => {
       "cat $(find . -name 'relay*.log' -type f 2>/dev/null) /dev/null | grep -Ec '\"method\":\"(sync|fabric)\\.' || true"
     )
     const n = Number(count.out.trim().split('\n').pop())
+    // Positive control: a zero from no log, or a log that records no methods, proves nothing.
+    const control = execOnOwningHost(
+      run,
+      "F=$(find . -name 'relay*.log' -type f 2>/dev/null); echo \"P23_RELAY_LOGS=$(echo $F | wc -w)\"; echo \"P23_RELAY_METHODS=$(cat $F /dev/null | grep -Ec '\"method\":' || true)\""
+    )
+    console.log(control.out.trim())
     console.log(`P23_NO_SYNC_FABRIC_SENT count=${n}`)
+    expect(Number(/P23_RELAY_LOGS=(\d+)/.exec(control.out)?.[1] ?? 0)).toBeGreaterThan(0)
+    expect(Number(/P23_RELAY_METHODS=(\d+)/.exec(control.out)?.[1] ?? 0)).toBeGreaterThan(0)
     expect(n).toBe(0)
   } finally {
     await disconnectHwfTarget(orcaPage, target.targetId)
+    await carrier.kill()
   }
 })
