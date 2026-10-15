@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Laptop driver for the phase-15/16/20 two-host rungs: ships the committed provisioner to the carrier host as one base64 ssh argument.
+// Laptop driver for the phase-15/16/20 two-host rungs: ships the committed provisioner to the carrier host over ssh stdin.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { runProvisioner } from './hwf-two-host-provisioner-ssh.mjs'
 import { randomBytes } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -87,25 +88,10 @@ function runRemoteVerb(verb, root, extras, outFile) {
     /\r\n/g,
     '\n'
   )
-  const b64 = Buffer.from(script, 'utf8').toString('base64')
-  // Extras are shape-validated (no quotes), so single quotes keep a launch line as one argument.
-  const tail = extras.map((extra) => ` '${extra}'`).join('')
-  const result = spawnSync(
-    'ssh',
-    [
-      '-o',
-      'ConnectTimeout=10',
-      '-o',
-      'BatchMode=yes',
-      carrierHost,
-      `echo ${b64} | base64 -d | bash -s -- ${verb} ${root}${tail}`
-    ],
-    { encoding: 'utf8' }
-  )
-  const text = `${result.stdout ?? ''}${result.stderr ?? ''}`
-  process.stdout.write(text)
+  const result = runProvisioner(carrierHost, script, verb, root, extras)
+  process.stdout.write(result.text)
   if (outFile) {
-    writeFileSync(outFile, text)
+    writeFileSync(outFile, result.text)
   }
   return result.status ?? 1
 }

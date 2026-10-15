@@ -2,6 +2,7 @@
 // Refusal drill for the two-host root guard: every DRILL line is derived from a captured exit code, never typed.
 import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { runProvisioner } from './hwf-two-host-provisioner-ssh.mjs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -55,21 +56,8 @@ const script = readFileSync(path.join(here, 'hwf-two-host-disposable-root.sh'), 
   /\r\n/g,
   '\n'
 )
-const b64 = Buffer.from(script, 'utf8').toString('base64')
-
 function runRemoteScript(root) {
-  return spawnSync(
-    'ssh',
-    [
-      '-o',
-      'ConnectTimeout=10',
-      '-o',
-      'BatchMode=yes',
-      carrierHost,
-      `echo ${b64} | base64 -d | bash -s -- status '${root}'`
-    ],
-    { encoding: 'utf8', timeout: 60_000 }
-  ).status
+  return runProvisioner(carrierHost, script, 'status', `'${root}'`, [], { timeout: 60_000 }).status
 }
 
 for (const [label, root] of badRoots) {
