@@ -5,12 +5,17 @@ import { isAbsolute } from 'node:path'
 import { unlink } from 'node:fs/promises'
 import { gitExecFileAsync } from './git/runner'
 import type { ReplicaAncestry } from '../shared/workspace-replica-state'
+import { isDiskFullError, type ReplicaFailureCause } from './replica-failure-cause'
 
 export type DeclaredHead = { ref: string; sha: string }
 
 export type ReplicaReceiveResult =
   | { ok: true; refs: Record<string, string> }
-  | { ok: false; reason: 'bundle-verify-failed' | 'bundle-heads-mismatch' | 'transfer-interrupted' }
+  | {
+      ok: false
+      reason: 'bundle-verify-failed' | 'bundle-heads-mismatch' | 'transfer-interrupted'
+      cause?: ReplicaFailureCause
+    }
 
 const HOST_KEY = /^[A-Za-z0-9._-]+$/
 const SHA = /^[0-9a-f]{40,64}$/
@@ -67,8 +72,11 @@ export async function receiveReplicaBundle(args: {
     const refspecs = declaredHeads.map((h) => `+${h.ref}:${replicaRef(hostKey, h.ref)}`)
     try {
       await git(['fetch', '--no-tags', '--quiet', bundlePath, ...refspecs])
-    } catch {
-      return { ok: false, reason: 'transfer-interrupted' }
+    } catch (error) {
+      // The fetch writes objects into this host's disk; only here can the local disk be the cause.
+      return isDiskFullError(error)
+        ? { ok: false, reason: 'transfer-interrupted', cause: 'disk-full' }
+        : { ok: false, reason: 'transfer-interrupted' }
     }
     return {
       ok: true,
