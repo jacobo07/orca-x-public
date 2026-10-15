@@ -559,10 +559,10 @@
       "row": "Placement Engine integration",
       "owner": "fleet proposal + UWCP placement.py",
       "done": "one rule set, apply path",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "phase-1",
-      "measuredAt": "2026-09-28",
+      "measuredIn": "dwsrb phase 4",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         6
@@ -575,10 +575,56 @@
         {
           "kind": "file",
           "path": "config/scripts/fleet-placement-apply-path.characterization.test.mjs",
-          "note": "RED characterization: a placement proposal has no apply path; Phase 6 inverts it in place"
+          "note": "inverted in place: the apply path now consumes the placement chain, pinned over four real sources with strings and comments blanked.",
+          "provedBy": [
+            "one rule set, apply path"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/fleet-placement-resource-requirement.test.ts",
+          "note": "one judge: the placement judge calls the node eligibility rule, no inline comparator remains.",
+          "provedBy": [
+            "one rule set, apply path"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/orchestration/mission-dispatch-placement.test.ts",
+          "note": "agreement between the proposal and apply paths, and placement_mismatch / peer-fingerprint-changed on a changed key."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission.test.ts",
+          "note": "real handler and in-memory OrchestrationDb: placements persisted through db.placeMissionTasks."
+        },
+        {
+          "kind": "commit",
+          "sha": "e145f42ebcc6",
+          "note": "placement judges through the single node eligibility rule"
+        },
+        {
+          "kind": "commit",
+          "sha": "f950d901bc6f",
+          "note": "characterization test inverted in place with the apply role registered"
+        },
+        {
+          "kind": "commit",
+          "sha": "f08dc56c1ea7",
+          "note": "apply chain pinned on a synthetic source map (mutant M7 proof)"
+        },
+        {
+          "kind": "commit",
+          "sha": "e55352858bcf",
+          "note": "missionPlace carries a resource requirement into the placement judge"
+        },
+        {
+          "kind": "commit",
+          "sha": "f39827a2269d",
+          "note": "per-task requirements and the proposal and apply path agreement tests"
         }
       ],
-      "reason": "Measured 2026-09-28: a proposal engine exists (src/shared/fleet-placement.ts, planFleetPlacement) with exactly 4 read-only importers (view method, observation service, cli formatter, cli printer) and 0 importers that act on proposal.selected; no apply path exists today"
+      "reason": "dwsrb phase 4 (2026-10-15): the proposal and the apply path now run one rule set. planFleetPlacement judges every candidate through the single judgeNodeEligibility rule (e145f42eb); orchestration.missionPlace consumes proposal.eligible (not proposal.selected) through mission-job-placement.ts and db.placeMissionTasks, carrying the requirement into the same judge (e55352858, f39827a22); the apply-path characterization test was inverted in place and pins the chain over the real sources (f950d901b, f08dc56c1; mutants M6 and M7 turned it red); an agreement test shows the proposal path and the apply path place a requirement identically, and a placement whose peer fingerprint changed is refused as placement_mismatch (peer-fingerprint-changed). Replaces the 2026-09-28 sentence (no apply path, 0 importers acting on the proposal). NOT RUN: a live placement over two real paired hosts. The matrix dependsOn names the UWCP lease store; it is left unedited (an Owner decision, not a measurement)."
     },
     {
       "id": 20,
@@ -637,8 +683,8 @@
       "row": "RAM-aware scheduling",
       "owner": "placement",
       "done": "low-RAM host not selected for heavy work",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         6
@@ -647,16 +693,86 @@
         "Phase 5",
         "UWCP lease store S4-S5"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — low-RAM host not selected for heavy work not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/fleet-placement-resource-requirement.test.ts",
+          "note": "memory requirement golden (8 GiB need keeps the 6 GiB and 2 GiB hosts out) with the unknown-never-enough controls.",
+          "provedBy": [
+            "low-RAM host not selected for heavy work"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission.test.ts",
+          "note": "real handler and in-memory OrchestrationDb: heavy tasks stay off the 6 GiB host, per-task requirement replaces the global family.",
+          "provedBy": [
+            "low-RAM host not selected for heavy work"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission-distribution.golden.test.ts",
+          "note": "automatic-distribution golden read from persisted task_placements rows: t1 (8 GiB memory) to the 24 GiB runtime, relay never placed.",
+          "provedBy": [
+            "low-RAM host not selected for heavy work"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/handlers/orchestration-mission-place-cli.test.ts",
+          "note": "mission-place --min-available-mb reaches the wire as the strict requirement; unplaced tasks are explained per host.",
+          "provedBy": [
+            "low-RAM host not selected for heavy work"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/node-requirement-flags.test.ts",
+          "note": "megabyte flags become exact byte figures; a valueless flag is refused, never dropped."
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/fleet-placement-resource-format.test.ts",
+          "note": "insufficient-memory reason words render the available and required figures."
+        },
+        {
+          "kind": "commit",
+          "sha": "e145f42ebcc6",
+          "note": "placement judges memory, disk, VRAM and resident model through the single node eligibility rule"
+        },
+        {
+          "kind": "commit",
+          "sha": "e55352858bcf",
+          "note": "missionPlace carries a resource requirement into the placement judge"
+        },
+        {
+          "kind": "commit",
+          "sha": "f39827a2269d",
+          "note": "per-task requirements, per-job rejections and the apply-path agreement tests"
+        },
+        {
+          "kind": "commit",
+          "sha": "0a5a2660b1f6",
+          "note": "mission-place takes --min-available-mb, --min-vram-mb and --min-disk-mb as one strict requirement"
+        },
+        {
+          "kind": "commit",
+          "sha": "ec2e1420c178",
+          "note": "golden: four tasks over three hosts and a relay placed with no host choice, read from persisted rows"
+        }
+      ],
+      "reason": "dwsrb phase 4 (2026-10-15): placement now refuses a host whose measured available memory is below the need. planFleetPlacement judges memory through the one judgeNodeEligibility rule (e145f42eb), orchestration.missionPlace carries a global and a per-task requirement into it (e55352858, f39827a22), and the operator states it with --min-available-mb on orca orchestration mission-place (0a5a2660b). Plane: the real orchestration.missionPlace handler over the real in-memory OrchestrationDb with a fake fleet observation; in the 04-05 golden an 8 GiB memory task lands on the 24 GiB runtime and never on the 6 GiB runtime (rejected insufficient-memory, 6 GiB available, 8 GiB required), the 64 GiB ssh relay is listed notDispatchable and receives no task, and mutants M1, M8, M9 and M12 turned the tests red; NOT RUN: a live placement over two real paired hosts. The matrix dependsOn names the UWCP lease store, which the done text does not require: placement judges fleet facts, and contention and lease arbitration stay rows 20 and 21.",
+      "measuredIn": "dwsrb phase 4",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 23,
       "row": "GPU-aware scheduling",
       "owner": "placement",
       "done": "VRAM requirement honoured",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         6
@@ -665,16 +781,65 @@
         "Phase 5",
         "UWCP lease store S4-S5"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — VRAM requirement honoured not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/fleet-placement-resource-requirement.test.ts",
+          "note": "VRAM cases: below-need rejection with both figures, absent nodeResources, no GPU probe and a stale GPU reading read as unknown, D-13 most-free-memory host with unknown VRAM excluded.",
+          "provedBy": [
+            "VRAM requirement honoured"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission.test.ts",
+          "note": "real handler: a VRAM task only on the host with measured sufficient VRAM; unplaced with per-job reasons when only unknown-VRAM hosts exist.",
+          "provedBy": [
+            "VRAM requirement honoured"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/mission-job-placement.test.ts",
+          "note": "planMissionPlacement: a VRAM job only on measured sufficient VRAM, a light job still placed."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission-distribution.golden.test.ts",
+          "note": "automatic-distribution golden: the VRAM task to the 12 GiB-free runtime, resource-unknown elsewhere, unplaced when no host proves it."
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/node-requirement-flags.test.ts",
+          "note": "--min-vram-mb becomes an exact byte figure on the wire; the parser keeps the vram family (mutant M14)."
+        },
+        {
+          "kind": "commit",
+          "sha": "e145f42ebcc6",
+          "note": "placement judges VRAM through the single node eligibility rule"
+        },
+        {
+          "kind": "commit",
+          "sha": "e55352858bcf",
+          "note": "missionPlace carries a resource requirement into the placement judge"
+        },
+        {
+          "kind": "commit",
+          "sha": "0a5a2660b1f6",
+          "note": "mission-place takes --min-vram-mb as part of one strict requirement"
+        }
+      ],
+      "reason": "dwsrb phase 4 (2026-10-15): a VRAM requirement is honoured. A host is eligible only with measured free VRAM at or above the need; a host with no GPU probe, an absent nodeResources or a stale GPU reading is rejected as resource-unknown (cause unmeasured or stale), never read as zero and never as enough, and measured VRAM below the need is rejected as insufficient-vram with both figures (e145f42eb, e55352858, f39827a22). The operator states it with --min-vram-mb on orca orchestration mission-place (0a5a2660b). Plane: the real orchestration.missionPlace handler over the in-memory OrchestrationDb with a fake fleet observation; in the 04-05 golden the VRAM task lands on the runtime with 12 GiB measured free, and the local host and the second runtime each get exactly one resource-unknown for it, the 64 GiB ssh relay is never placed; mutant M14 (parser drops the vram family) turned the CLI tests red. NOT RUN: a live placement over a real GPU host. The matrix dependsOn names the UWCP lease store, left unedited.",
+      "measuredIn": "dwsrb phase 4",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 24,
       "row": "Workspace locality",
       "owner": "placement input",
       "done": "hydrated node preferred, measured",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PARTIAL",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         9
@@ -683,8 +848,51 @@
         "Phase 6",
         "Phase 8"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — hydrated node preferred, measured not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/shared/mission-job-locality.test.ts",
+          "note": "registry claim reader: only ready counts, updatedAt is not an input (same answer at any updatedAt)."
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/placement-host-ranking.test.ts",
+          "note": "ranking order pinned by a table golden: hydrated, load, free memory, fingerprint; isCurrent breaks no tie."
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/mission-job-placement.test.ts",
+          "note": "planMissionPlacement records hydrated per placement over the candidate full address list."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission.test.ts",
+          "note": "real handler: a hydrated host chosen when eligible, never when short of memory, stale, or an ssh relay; updatedAt not read."
+        },
+        {
+          "kind": "commit",
+          "sha": "a2a53e35e6ca",
+          "note": "hydration fact reader and the ranking module"
+        },
+        {
+          "kind": "commit",
+          "sha": "61918c23b6b3",
+          "note": "eligibility beats hydration, unreadable subjects are placed, updatedAt is not read"
+        },
+        {
+          "kind": "commit",
+          "sha": "2553ea8d0b3f",
+          "note": "missionPlace locality field classified in the project-id publisher inventory"
+        },
+        {
+          "kind": "commit",
+          "sha": "da855210db6f",
+          "note": "ranking order pinned by a table golden, the proposal breaks ties by fingerprint"
+        }
+      ],
+      "reason": "READY_FOR_LIVE: hydrated-node-two-host - a host holding a ready setup of the task project is preferred, proven on the real orchestration.missionPlace handler with a fake registry and a fake fleet observation (a2a53e35e, 61918c23b, 2553ea8d0, da855210d). Hydration is a registry claim: runtime.listProjectHostSetups is read once inside the call and a host counts only at setupState ready; updatedAt is not read (a setup at updatedAt 0, 1 or now gives the same placement), so no freshness window is claimed and the row stays PARTIAL even on the pure result. Ranking is hydrated first, then lower load, then more free memory, then lower fingerprint; hydration never makes an ineligible host eligible (a hydrated host short of memory, with a stale sample, or an ssh relay is not placed). The result carries locality per task. NOT RUN: a real two-host leg with a project actually hydrated on one paired host. Leg: seed a ready project host setup on one of two paired hosts, run orca orchestration mission-place for a task of that project, read locality[].hydrated and the persisted placement; no committed two-host spec seeds a setup yet.",
+      "measuredIn": "dwsrb phase 4",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 25,
@@ -903,8 +1111,8 @@
       "row": "Automatic distribution",
       "owner": "orchestration + routing + placement",
       "done": "golden",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PARTIAL",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         9
@@ -913,16 +1121,54 @@
         "Phase 6",
         "Phase 8"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — golden not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission-distribution.golden.test.ts",
+          "note": "automatic-distribution golden read from persisted task_placements rows, stable across rotations of members and tasks."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission-spread.golden.test.ts",
+          "note": "spread golden: independent tasks on different hosts, dependent tasks may share one."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-mission-placement.spec.ts",
+          "note": "the live two-host leg for this row; skipped (NOT RUN) without ORCA_HWF_TWO_HOST=1 and ORCA_HWF_RUN_FILE."
+        },
+        {
+          "kind": "commit",
+          "sha": "ec2e1420c178",
+          "note": "golden: four tasks over three hosts and a relay placed with no host choice"
+        },
+        {
+          "kind": "commit",
+          "sha": "a070a7a1522f",
+          "note": "golden hardened over rotations and the unplaced VRAM case"
+        },
+        {
+          "kind": "commit",
+          "sha": "bf6742acc7bf",
+          "note": "a task that depends on another may share its host while the independent task spreads"
+        },
+        {
+          "kind": "commit",
+          "sha": "1b097e3e52d9",
+          "note": "dependency relation is transitive and cycle safe"
+        }
+      ],
+      "reason": "READY_FOR_LIVE: automatic-distribution-two-host - the golden passes: four tasks over three hosts and an ssh relay are placed with no host choice by the caller and the mapping is read from the persisted task_placements rows (t1 memory 8 GiB and t2 VRAM 8 GiB on the 24 GiB runtime, t3 on local, t4 on the second runtime, the relay never placed), and it holds under every rotation of the fleet members and of the task list; the spread golden adds that independent tasks use different hosts (ec2e1420c, a070a7a15, bf6742acc, 1b097e3e5). Plane: the real handler over the in-memory OrchestrationDb with a fake fleet observation. NOT RUN: the same distribution over two real paired hosts. Leg: ORCA_HWF_TWO_HOST=1 ORCA_HWF_RUN_FILE=<run file written by node config/scripts/hwf-two-host-remote.mjs run-file --seed --local-seed> npx playwright test tests/e2e/hwf-two-host-mission-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless; without both variables the spec skips, which means NOT RUN.",
+      "measuredIn": "dwsrb phase 4",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 35,
       "row": "Mission decomposition",
       "owner": "orchestration DAG",
       "done": "independent tasks placed differently",
-      "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         9
@@ -931,8 +1177,42 @@
         "Phase 6",
         "Phase 8"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — independent tasks placed differently not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/orchestration-mission-spread.golden.test.ts",
+          "note": "spread golden from persisted task_placements rows: independent tasks differ, dependent tasks may share, all 24 orders identical.",
+          "provedBy": [
+            "independent tasks placed differently"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/mission-job-locality.test.ts",
+          "note": "dependency relation: transitive, cycle safe, malformed deps independent.",
+          "provedBy": [
+            "independent tasks placed differently"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/mission-job-placement.test.ts",
+          "note": "planMissionPlacement spreads independent jobs and keeps related jobs together."
+        },
+        {
+          "kind": "commit",
+          "sha": "bf6742acc7bf",
+          "note": "a task that depends on another may share its host while the independent task spreads"
+        },
+        {
+          "kind": "commit",
+          "sha": "1b097e3e52d9",
+          "note": "dependency relation is transitive and cycle safe, independent tasks spread across hosts"
+        }
+      ],
+      "reason": "dwsrb phase 4 (2026-10-15): independent tasks of one mission are placed on different hosts. Pinned on the real orchestration.missionPlace handler from persisted task_placements rows: two independent tasks over two eligible hosts land on different hosts, three over two differ in a pair with no host holding more than two, a transitive chain shares one host and the independent task is elsewhere, tasks sharing only a dependency count as independent, a dependency cycle neither hangs nor throws, malformed deps text and a dependency outside the call count as independent, and the mapping is identical across all 24 orders of a 4-task list (bf6742acc, 1b097e3e5; mutants M22 to M24 turned it red). Dependent tasks may share a host, so docs/cross-host-mission-dispatch-spec.md line 29 (Plan one mission over distinct hosts) is now only true for independent tasks and is not edited by this plan (Owner action). Known tension: when one eligible host is hydrated for the project, every independent task of that project prefers it and they colocate (hydration outranks load); the spread goldens hold when no eligible host is hydrated. No decomposition engine exists; the tasks come from the caller. NOT RUN: the spread over two real paired hosts (row 34 leg).",
+      "measuredIn": "dwsrb phase 4",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 36,
