@@ -1903,7 +1903,7 @@
       "done": "a second client opens a host-only project; fs/git/pty/agents act on the owning host; reconnect keeps work",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 3",
+      "measuredIn": "dwsrb live queue (desktop PC -> GEX44)",
       "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
@@ -2020,9 +2020,14 @@
           "kind": "commit",
           "sha": "f85c4ccd59d7",
           "note": "Client B backfill reading states what B can observe"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-15-row-59-remote-first-evidence.md",
+          "note": "plane, command, run-log lines and not-covered list for the 2026-10-15 live remote-first run (6/6)."
         }
       ],
-      "reason": "READY_FOR_LIVE: remote-first-reconnect-rerun — dwsrb phase 3 (2026-10-15): the five open legs of the phase-15 run were taken one by one. (4) The hidden status row after SSH re-establishment is fixed: clearTransientAgentStatuses, driven by the main-process transient agentStatus:clear on connection_lost, removed live rows; they are now retained and marked stale (59cb2650e, seam agent-status-reconnect-retention.ts); a retained stale row for a dead agent after reconnect is known debt. (3) Client B backfill: the relay replays its whole buffer to any attach (13 ticks, about 0.6 KB against REPLAY_BUFFER_MAX 100 KB) and refuses only a different paneKey or tabId, so the earlier \"B reads its own PTY\" premise is contradicted (D-18 outcome O1, 70f417e5d, f85c4ccd5); the helper's empty-B text is now HWF_BACKFILL_B=not-measurable reason=b-buffer-holds-no-tick-of-pane-1-...; whether the runtime terminal.subscribe path, which the web client uses instead of relay pty.attach, delivers the SSH reconnect replay to an already-subscribed web client is UNMEASURED. (1) The hook posted during an outage: a store-level replay test (4048a0487) did not reproduce the loss, so the 2-in-5 loss stays UNVERIFIED, not fixed. (5) Codex is an environment fact (P1): the relay finds codex wherever PATH or its fallbacks expose it and the client does not filter it (087fd84a1); no product change. (2) No model turn: OWNER:model-turn-credential (OD-1). NOT RUN: the two-host rerun. Command: `npx playwright test tests/e2e/hwf-two-host-remote-first.spec.ts --config tests/playwright.config.ts --project=electron-headless` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_PROBE_FILE and ORCA_HWF_LOCAL_PORT. Expected: HWF_RELAY_PID before equals after, HWF_BACKFILL_A and HWF_BACKFILL_B lines present (B is a measurement, not an assumption), HWF_B_OUTAGE_ROW stated, and the agent status row present through the drop."
+      "reason": "OWNER: model-turn-credential (OD-1) — dwsrb live queue (2026-10-15, desktop PC -> GEX44, REAL-TWO-HOST): tests/e2e/hwf-two-host-remote-first.spec.ts passed 6 of 6 against /tmp/orca-hwf-p15-20261015T161556Z. A fresh-profile app connected with the pinned fingerprint and ran a terminal on the owning host (relay fence match); Client A and the paired web Client B both ran a terminal, fs create/write/rename/copy/delete and a git commit on the owning host (client sha equals remote sha for both), with the absence scan PASS (no seed content on this PC); a real claude process launched from the new-tab menu ran in the host repo and hook status reached both clients. Reconnect: relay pid and shell pid unchanged, one shell before and after, both clients backfilled the 13 outage ticks (so the web terminal.subscribe path does replay the reconnect window to an already-subscribed client), the hook posted during the outage was delivered (204) to both stores, and the agent kept its pid with its status row and no relaunch. Remaining: no model turn — a real prompt on the owning host needs a provider credential that no executor copied, which is the Owner's decision (OD-1). Known debt: a retained stale row for a dead agent after reconnect (not exercised); one delivered outage hook does not settle the earlier 2-in-5 loss. The app ran with --lang=en-US because of the tab-bar \"+\" layout defect (docs/dws/live-2026-10-15-row-59-remote-first-evidence.md)."
     },
     {
       "id": 60,
