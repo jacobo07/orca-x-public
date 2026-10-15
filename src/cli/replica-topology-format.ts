@@ -1,4 +1,7 @@
-import type { ProjectHostSetupWithReplicaTopology } from '../shared/replica-topology'
+import type {
+  ProjectHostSetupWithReplicaTopology,
+  ReplicaTopologyEntry
+} from '../shared/replica-topology'
 
 export const NOT_REPORTED_BY_HOST = "not reported by this host's Orca version"
 
@@ -10,6 +13,28 @@ export function replicaListFooter(runtimeLabel: string = DEFAULT_RUNTIME_LABEL):
   return `Replicas known to ${runtimeLabel}; replicas owned by other paired Orca servers are not listed here.`
 }
 
+/** The word the pair service published, with its count or closed reason when it carries one. */
+function relationText(topology: ReplicaTopologyEntry): string {
+  switch (topology.relation) {
+    case undefined:
+      return '-'
+    case 'unverified':
+      return topology.relationUnknownReason
+        ? `unverified (${topology.relationUnknownReason})`
+        : 'unverified'
+    case 'ahead':
+      return topology.relationAhead === undefined ? 'ahead' : `ahead ${topology.relationAhead}`
+    case 'behind':
+      return topology.relationBehind === undefined ? 'behind' : `behind ${topology.relationBehind}`
+    case 'diverged':
+      return topology.relationAhead === undefined || topology.relationBehind === undefined
+        ? 'diverged'
+        : `diverged +${topology.relationAhead}/-${topology.relationBehind}`
+    default:
+      return topology.relation
+  }
+}
+
 /** One text row; a host that does not report topology prints the explicit unknown, never a blank. */
 export function formatReplicaListRow(setup: ProjectHostSetupWithReplicaTopology): string {
   const topology = setup.replicaTopology
@@ -19,7 +44,7 @@ export function formatReplicaListRow(setup: ProjectHostSetupWithReplicaTopology)
       ? `${topology.membership} (${topology.membershipReason})`
       : topology.membership
     : NOT_REPORTED_BY_HOST
-  const relation = topology ? (topology.relation ?? '-') : NOT_REPORTED_BY_HOST
+  const relation = topology ? relationText(topology) : NOT_REPORTED_BY_HOST
   return [
     setup.id,
     `project:${setup.projectId}`,

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Project } from '../shared/project-types'
 import type { ProjectHostSetupWithReplicaTopology } from '../shared/replica-topology'
+import { PROJECT_HANDLERS } from './handlers/project'
 import { formatProjectHostSetupList, formatProjectList } from './project-format'
 import {
   identityBasisOfProjectId,
@@ -98,6 +99,90 @@ describe('formatProjectHostSetupList', () => {
     expect(empty).toContain('No project host setups found.')
     expect(empty).toContain('replicas owned by other paired Orca servers are not listed here.')
     expect(empty).toContain('the connected Orca runtime')
+  })
+})
+
+describe('relation column text (row 62)', () => {
+  type Extra = Partial<NonNullable<ProjectHostSetupWithReplicaTopology['replicaTopology']>>
+  const relationOf = (extra: Extra): string => {
+    const row = formatProjectHostSetupList({
+      setups: [
+        setup('b', {
+          hostId: 'ssh:gpu-vm',
+          replicaTopology: {
+            setupId: 'b',
+            projectId: ROOT_PROJECT_ID,
+            hostId: 'ssh:gpu-vm',
+            path: '/srv/b',
+            provenance: 'cloned',
+            membership: 'grouped',
+            ...extra
+          }
+        })
+      ]
+    }).split('\n')[1]
+    return (row ?? '').split('  ')[6] ?? ''
+  }
+
+  it.each<[Extra, string]>([
+    [{ relation: 'same' }, 'same'],
+    [{ relation: 'ahead', relationAhead: 2 }, 'ahead 2'],
+    [{ relation: 'behind', relationBehind: 1 }, 'behind 1'],
+    [{ relation: 'diverged', relationAhead: 3, relationBehind: 4 }, 'diverged +3/-4'],
+    [{ relation: 'unrelated' }, 'unrelated'],
+    [{ relation: 'ahead' }, 'ahead'],
+    [{ relation: 'diverged' }, 'diverged']
+  ])('prints %j as %s', (extra, text) => {
+    expect(relationOf(extra)).toBe(text)
+  })
+
+  it('prints the closed reason of an unverified entry in parentheses', () => {
+    expect(
+      relationOf({ relation: 'unverified', relationUnknownReason: 'worktree-not-verified-clean' })
+    ).toBe('unverified (worktree-not-verified-clean)')
+  })
+
+  it('prints a bare unverified when no reason was published, and a dash when there is no relation (control)', () => {
+    expect(relationOf({ relation: 'unverified' })).toBe('unverified')
+    expect(relationOf({})).toBe('-')
+  })
+
+  it('never appends a reason to a known relation (control)', () => {
+    expect(relationOf({ relation: 'same', relationUnknownReason: 'relay-too-old' })).toBe('same')
+  })
+})
+
+describe('orca project setups --json (row 62)', () => {
+  it('passes the new entry fields through untouched', async () => {
+    const entry = {
+      setupId: 'b',
+      projectId: ROOT_PROJECT_ID,
+      hostId: 'ssh:gpu-vm' as const,
+      path: '/srv/b',
+      provenance: 'cloned' as const,
+      membership: 'grouped' as const,
+      relation: 'unverified' as const,
+      relationUnknownReason: 'worktree-not-verified-clean' as const,
+      relationAhead: 2,
+      relationBehind: 1
+    }
+    const result = { setups: [setup('b', { hostId: 'ssh:gpu-vm', replicaTopology: entry })] }
+    const client = {
+      call: async () => ({ id: 'r', ok: true, result, _meta: { runtimeId: 'rt-1' } })
+    }
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      await PROJECT_HANDLERS['project setups']({
+        client: client as never,
+        flags: new Map([['json', true]]),
+        cwd: '.',
+        json: true
+      })
+      const printed = JSON.parse(String(log.mock.calls[0]?.[0]))
+      expect(printed.result.setups[0].replicaTopology).toEqual(entry)
+    } finally {
+      log.mockRestore()
+    }
   })
 })
 
