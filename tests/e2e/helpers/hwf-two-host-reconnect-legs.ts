@@ -153,10 +153,11 @@ export async function runShellLeg(page: Page, session: HwfSession): Promise<void
     console.log(
       `HWF_B_TICKS count=${seenB.length} first=${seenB[0] ?? 'none'} last=${seenB.at(-1) ?? 'none'}`
     )
+    // Why: B reads pane 1 through the host runtime, never the relay, which replays its whole buffer to any attach (pty-handler-second-consumer-outage-replay.test.ts); seen<13 is a runtime-layer reading.
     console.log(
       seenB.length > 0
         ? `HWF_BACKFILL_B outage_ticks=${inWindow.length} seen=${seenCountB}`
-        : 'HWF_BACKFILL_B=split reason=web-client-terminal-is-its-own-pty-and-shows-no-tick-of-pane-1'
+        : 'HWF_BACKFILL_B=not-measurable reason=b-buffer-holds-no-tick-of-pane-1-so-neither-mirroring-nor-backfill-is-observable'
     )
     const ok =
       drop.rung === 'ok' &&

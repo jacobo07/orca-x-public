@@ -161,7 +161,9 @@ describe('PtyHandler replay across an outage and a second consumer (rows 59 73, 
         { isStale: () => false, clientId: 2 } as never
       )
 
-      expect(tickNumbers((second as { replay?: string }).replay)).toEqual(range(1, 2 + OUTAGE_TICKS))
+      expect(tickNumbers((second as { replay?: string }).replay)).toEqual(
+        range(1, 2 + OUTAGE_TICKS)
+      )
       expect((second as { incarnationId: string }).incarnationId).toBe(spawn.incarnationId)
     })
 
@@ -205,7 +207,11 @@ describe('PtyHandler replay across an outage and a second consumer (rows 59 73, 
         emit(tickLine(n))
       }
       await expect(
-        attachPty({ id: spawn.id, suppressReplayNotification: true, expectedPaneKey: 'tab-b:leaf-b' })
+        attachPty({
+          id: spawn.id,
+          suppressReplayNotification: true,
+          expectedPaneKey: 'tab-b:leaf-b'
+        })
       ).rejects.toThrow('identity mismatch')
 
       const result = await attachPty({
