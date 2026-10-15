@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ReplicaTopologyEntry } from '../../../../shared/replica-topology'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import type { ProjectReplicaNotice } from '../../store/replica-topology-selector'
 import { ContextRow } from '../conversations/AgentContextRail'
 import type { ReplicaHostHealth, ReplicaHostHealthTone } from './replica-host-health-presentation'
@@ -9,12 +10,21 @@ import {
   describeReplicaMembership,
   describeReplicaMembershipReason,
   describeReplicaProvenance,
-  describeReplicaRelation
+  describeReplicaRelation,
+  type ReplicaRelationDescription,
+  type ReplicaRelationTone
 } from './replica-topology-presentation'
 import { SettingsBadge } from './SettingsFormControls'
 
 const REPLICA_HOST_HEALTH_TONE_CLASS: Record<ReplicaHostHealthTone, string> = {
   healthy: 'text-status-success',
+  critical: 'text-status-error',
+  unknown: 'text-status-unknown'
+}
+
+const REPLICA_RELATION_TONE_CLASS: Record<ReplicaRelationTone, string> = {
+  healthy: 'text-status-success',
+  pressured: 'text-status-warning',
   critical: 'text-status-error',
   unknown: 'text-status-unknown'
 }
@@ -50,6 +60,52 @@ export function ReplicaHostHealthLine({
   )
 }
 
+function relationLabel(described: ReplicaRelationDescription): string {
+  // Why: the gate requires the consumer to render its own unknown state, never a borrowed one.
+  return described.state === 'unverified'
+    ? translate('auto.components.settings.RepositoryPane.relationUnverified', 'Relation unverified')
+    : described.text
+}
+
+/** The pair service's published relation; the label carries it, the mark and colour only reinforce it. */
+function ReplicaRelationLine({ entry }: { entry: ReplicaTopologyEntry }): React.JSX.Element {
+  const described = describeReplicaRelation(entry)
+  return (
+    <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-[11px]">
+      <ContextRow
+        term={translate('auto.components.settings.RepositoryPane.relationTerm', 'Relation')}
+        testId="replica-relation"
+        state={described.state}
+      >
+        <span
+          data-replica-relation={described.state}
+          data-replica-relation-tone={described.tone}
+          className={cn(
+            'inline-flex items-center gap-1.5',
+            REPLICA_RELATION_TONE_CLASS[described.tone]
+          )}
+        >
+          <span
+            aria-hidden
+            data-replica-relation-mark
+            className={cn(
+              'size-1.5 shrink-0 rounded-full',
+              // Why: unknown is the hollow dot where every other tone is filled (STYLEGUIDE).
+              described.tone === 'unknown' ? 'border border-current bg-transparent' : 'bg-current'
+            )}
+          />
+          {relationLabel(described)}
+        </span>
+        {described.detail ? (
+          <p className="text-muted-foreground" data-replica-relation-detail>
+            {described.detail}
+          </p>
+        ) : null}
+      </ContextRow>
+    </dl>
+  )
+}
+
 /** How a replica came to exist and how it belongs to its project; plain text, nothing hover-only. */
 export function ReplicaRowTopology({
   entry
@@ -78,12 +134,8 @@ export function ReplicaRowTopology({
       <div className="flex flex-wrap items-center gap-1.5">
         <SettingsBadge tone={provenance.tone}>{provenance.text}</SettingsBadge>
         <SettingsBadge tone={membership.tone}>{membership.text}</SettingsBadge>
-        {entry.relation ? (
-          <span className="text-[11px] text-muted-foreground">
-            {describeReplicaRelation(entry).text}
-          </span>
-        ) : null}
       </div>
+      {entry.relation ? <ReplicaRelationLine entry={entry} /> : null}
       {reason ? <p className="text-[11px] text-muted-foreground">{reason}</p> : null}
     </div>
   )

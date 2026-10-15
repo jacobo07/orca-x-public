@@ -2,6 +2,7 @@
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
@@ -251,5 +252,106 @@ describe('getReplicaTopologyFromState', () => {
       runtimeStatusByEnvironmentId: statusWith
     })
     expect(capable.get('rt')?.membershipReason).toBeUndefined()
+  })
+})
+
+describe('ReplicaRowTopology relation row', () => {
+  const entry = (overrides: Partial<ReplicaTopologyEntry>): ReplicaTopologyEntry => ({
+    setupId: 'b',
+    projectId: 'repo:b',
+    hostId: 'ssh:gpu-vm',
+    path: '/srv/b',
+    provenance: 'legacy',
+    membership: 'grouped',
+    ...overrides
+  })
+  const relationOf = (value: ReplicaTopologyEntry): HTMLElement | null => {
+    act(() => {
+      root.render(React.createElement(ReplicaRowTopology, { entry: value }))
+    })
+    return container.querySelector<HTMLElement>('[data-testid="replica-relation"]')
+  }
+  const valueOf = (): HTMLElement => {
+    const value = container.querySelector<HTMLElement>('[data-replica-relation]')
+    if (!value) {
+      throw new Error('no relation value rendered')
+    }
+    return value
+  }
+
+  it('shows an equal-but-unverified pair as unverified, unknown tone, hollow mark and the reason line', () => {
+    const row = relationOf(
+      entry({ relation: 'unverified', relationUnknownReason: 'worktree-not-verified-clean' })
+    )
+
+    expect(row).not.toBeNull()
+    expect(row?.getAttribute('data-state')).toBe('unverified')
+    const value = valueOf()
+    expect(value.getAttribute('data-replica-relation')).toBe('unverified')
+    expect(value.getAttribute('data-replica-relation-tone')).toBe('unknown')
+    expect(value.className).toContain('text-status-unknown')
+    expect(value.className).not.toContain('text-status-success')
+    expect(value.textContent).toContain('Relation unverified')
+    const mark = value.querySelector('[data-replica-relation-mark]')
+    expect(mark?.className).toContain('bg-transparent')
+    expect(container.querySelector('[data-replica-relation-detail]')?.textContent).toBe(
+      'Same commit, but the working tree is not verified clean'
+    )
+  })
+
+  it('shows the published same as healthy with a filled mark and no reason line (control)', () => {
+    relationOf(entry({ relation: 'same' }))
+
+    const value = valueOf()
+    expect(value.getAttribute('data-replica-relation')).toBe('same')
+    expect(value.getAttribute('data-replica-relation-tone')).toBe('healthy')
+    expect(value.className).toContain('text-status-success')
+    expect(value.querySelector('[data-replica-relation-mark]')?.className).not.toContain(
+      'bg-transparent'
+    )
+    expect(container.querySelector('[data-replica-relation-detail]')).toBeNull()
+  })
+
+  it.each([
+    [{ relation: 'ahead', relationAhead: 2 }, 'pressured', 'text-status-warning', 'by 2'],
+    [{ relation: 'behind', relationBehind: 4 }, 'pressured', 'text-status-warning', 'by 4'],
+    [
+      { relation: 'diverged', relationAhead: 1, relationBehind: 3 },
+      'critical',
+      'text-status-error',
+      '+1/-3'
+    ],
+    [{ relation: 'unrelated' }, 'critical', 'text-status-error', 'Unrelated']
+  ] as const)('reads %j as %s', (overrides, tone, toneClass, word) => {
+    relationOf(entry({ ...overrides }))
+
+    const value = valueOf()
+    expect(value.getAttribute('data-replica-relation-tone')).toBe(tone)
+    expect(value.className).toContain(toneClass)
+    expect(value.textContent).toContain(word)
+  })
+
+  it('draws no relation row for a copy that has no relation (sole, host-local, folder)', () => {
+    expect(relationOf(entry({ membership: 'sole' }))).toBeNull()
+    expect(relationOf(entry({ membership: 'host-local', membershipReason: 'folder' }))).toBeNull()
+  })
+
+  it('reaches every text-status class only through a Record tone map (the claims gate does not see text-status-*)', () => {
+    const source = readFileSync(
+      'src/renderer/src/components/settings/ReplicaTopologyDetails.tsx',
+      'utf8'
+    )
+    const mapRanges = Array.from(
+      source.matchAll(/const \w+: Record<\w+, string> = \{[^}]*\}/g)
+    ).map((match) => [match.index, match.index + match[0].length] as const)
+    const literals = Array.from(source.matchAll(/text-status-[a-z]+/g))
+
+    expect(literals.length).toBeGreaterThanOrEqual(7)
+    for (const literal of literals) {
+      expect(
+        mapRanges.some(([start, end]) => literal.index >= start && literal.index < end),
+        `${literal[0]} at ${literal.index} is outside a tone map`
+      ).toBe(true)
+    }
   })
 })

@@ -38,6 +38,10 @@
       "toneType": "ReplicaHostHealthTone"
     },
     {
+      "module": "src/renderer/src/components/settings/replica-topology-presentation.ts",
+      "toneType": "ReplicaRelationTone"
+    },
+    {
       "module": "src/renderer/src/components/settings/environment-requirement-presentation.ts",
       "toneType": "EnvironmentRequirementTone"
     }
@@ -47,6 +51,11 @@
       "producer": "src/renderer/src/components/settings/replica-host-health-presentation.ts#describeReplicaHostHealth",
       "absent": "auto.components.settings.RepositoryPane.hostStateUnknown",
       "why": "Host health is the renderer's own SSH or runtime connection state for that host; a host it has no state for reads Unknown, never Ready."
+    },
+    "replica-relation": {
+      "producer": "src/renderer/src/components/settings/replica-topology-presentation.ts#describeReplicaRelation",
+      "absent": "auto.components.settings.RepositoryPane.relationUnverified",
+      "why": "The relation is the pair service's published relation, and a pair without one reads unverified, never same."
     },
     "agent-context-project-name": {
       "producer": "src/shared/cognitive-workspace-projection.ts#projectWorkspaceAgents",
