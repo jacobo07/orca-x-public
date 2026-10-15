@@ -107,7 +107,13 @@ function pairView(healthy: boolean): ReplicaPairView {
 
 function fakeService(views: ReplicaPairView[]) {
   const relations = vi.fn(async () => ({ status: 'ok' as const, pairs: views }))
-  const service: ReplicaPairService = { compare: vi.fn(), relations }
+  const service: ReplicaPairService = {
+    compare: vi.fn(),
+    relations,
+    capsuleCreate: vi.fn(),
+    capsuleList: vi.fn(),
+    capsuleRestore: vi.fn()
+  }
   return { service, relations }
 }
 

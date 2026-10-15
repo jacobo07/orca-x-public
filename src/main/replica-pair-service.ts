@@ -10,23 +10,36 @@ import type {
 } from '../shared/replica-pair-view'
 import {
   deriveReplicaRelation,
-  isReplicaRelationHealthy,
   type ReplicaFacts,
-  type ReplicaRelation,
-  type ReplicaUnknownReason
+  type ReplicaRelation
 } from '../shared/workspace-replica-state'
 import {
   compareWithSshRelayReplica,
-  relationFromComparison,
   type ReplicaComparisonResult,
   type SshRelaySessionDeps
 } from './replica-comparison-service'
 import { readLocalReplicaFacts, type LocalReplicaRead } from './replica-local-facts'
 import {
+  createReplicaCapsuleOperations,
+  type ReplicaCapsuleOperationDeps,
+  type ReplicaCapsuleOperations
+} from './replica-pair-service-capsule'
+import {
+  anchorFactsOf,
+  foldPair,
+  localTipOf,
+  pickAnchor,
+  remoteFactsOf,
+  structuralReason,
+  unknownView,
+  viewOf
+} from './replica-pair-views'
+import {
   comparisonFoundEqualTips,
   readRemoteWorktreeFact,
   UNREAD_REMOTE_WORKTREE
 } from './replica-remote-facts'
+import { createReplicaWorktreeMutationGuard } from './replica-worktree-mutation-guard'
 import { getSshConnectionGeneration } from './ssh/ssh-connection-generation'
 
 export type ReplicaPairServiceDeps = {
@@ -36,7 +49,7 @@ export type ReplicaPairServiceDeps = {
   now?: () => number
   readLocalFacts?: typeof readLocalReplicaFacts
   readRemoteWorktreeFact?: typeof readRemoteWorktreeFact
-}
+} & Partial<Pick<ReplicaCapsuleOperationDeps, 'capsuleGit' | 'mutationGuard'>>
 
 export type ReplicaPairService = {
   compare(args: {
@@ -45,7 +58,7 @@ export type ReplicaPairService = {
   }): Promise<Extract<ReplicaPairCompareResult, { status: 'ok' | 'not-found' }>>
   /** Every non-anchor setup of every project: stored answers re-fenced against the current local tip, never a clock. */
   relations(): Promise<Extract<ReplicaPairRelationsResult, { status: 'ok' }>>
-}
+} & ReplicaCapsuleOperations
 
 type StoredPair = {
   anchorId: string
@@ -55,9 +68,6 @@ type StoredPair = {
 }
 
 type PairOutcome = { view: ReplicaPairView; stored: StoredPair | null }
-
-// Why: the model needs a tip to reach the evidence branch; this value is never published (unknown carries no tips).
-const UNREAD_REMOTE_TIP = '0'.repeat(40)
 
 /** Ref-safe, deterministic key per host: two hosts that sanitize alike still get distinct namespaces. */
 export function replicaHostKey(hostId: string): string {
@@ -69,104 +79,9 @@ export function replicaHostKey(hostId: string): string {
   return `${safe}-${createHash('sha256').update(hostId).digest('hex').slice(0, 10)}`
 }
 
-function pickAnchor(setups: readonly ProjectHostSetup[]): ProjectHostSetup | undefined {
-  return setups
-    .filter((s) => s.hostId === 'local')
-    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))[0]
-}
-
-function remoteFactsOf(setup: ProjectHostSetup, result: ReplicaComparisonResult | null, worktree = UNREAD_REMOTE_WORKTREE): ReplicaFacts {
-  const sha = result?.evidence?.observedTips[1] ?? UNREAD_REMOTE_TIP
-  return {
-    setupId: setup.id,
-    hostId: setup.hostId,
-    tip: { kind: 'commit', sha, ref: 'HEAD' },
-    worktree
-  }
-}
-
-// Why: the model names a non-repository path as a folder, which is the one fact that yields not-a-git-repo.
-function anchorFactsOf(read: LocalReplicaRead): ReplicaFacts {
-  const f = read.facts
-  return f.kind !== 'folder' && f.tip.kind === 'unknown' && f.tip.reason === 'not-a-git-repo'
-    ? { kind: 'folder' }
-    : f
-}
-
-function foldPair(
-  local: ReplicaFacts,
-  shallow: boolean,
-  remote: ReplicaFacts,
-  result: ReplicaComparisonResult
-): ReplicaRelation {
-  const decided = result.evidence?.outcome
-  if (shallow && decided?.ok && decided.ancestry.kind !== 'same' && result.evidence) {
-    // A shallow history cannot decide ancestry: transferred objects against it are not the whole graph.
-    return deriveReplicaRelation(local, remote, {
-      observedTips: result.evidence.observedTips,
-      site: 'local',
-      outcome: { ok: false, reason: 'shallow' }
-    })
-  }
-  return relationFromComparison(local, remote, result)
-}
-
-function viewOf(
-  setup: ProjectHostSetup,
-  anchor: ProjectHostSetup | undefined,
-  local: ReplicaFacts,
-  remote: ReplicaFacts,
-  relation: ReplicaRelation,
-  observed: boolean
-): ReplicaPairView {
-  return {
-    setupId: setup.id,
-    anchorSetupId: anchor?.id ?? null,
-    hostId: setup.hostId,
-    relation,
-    healthy: isReplicaRelationHealthy(relation, local, remote),
-    ...(observed && remote.kind !== 'folder' && remote.tip.kind === 'commit'
-      ? { remoteTip: remote.tip.sha }
-      : {})
-  }
-}
-
 // Why: loaded on demand so this module stays importable without the Electron-bound SSH layer.
 const defaultGetMultiplexer: SshRelaySessionDeps['getMultiplexer'] = async (id) =>
   (await import('./ipc/ssh')).getActiveMultiplexer(id)
-
-function unknownView(
-  setup: ProjectHostSetup,
-  anchor: ProjectHostSetup | undefined,
-  reason: ReplicaUnknownReason
-): ReplicaPairView {
-  const folder: ReplicaFacts = { kind: 'folder' }
-  const relation: ReplicaRelation = { kind: 'unknown', reason }
-  return viewOf(setup, anchor, folder, folder, relation, false)
-}
-
-// Pure function of the setup list, so it is recomputed on every read and can never be stale.
-function structuralReason(
-  setup: ProjectHostSetup,
-  anchor: ProjectHostSetup | undefined
-): ReplicaUnknownReason | null {
-  if (!anchor) {
-    return 'no-comparison-site'
-  }
-  // Folder workspaces have no history to compare, whichever side they are on.
-  if (setup.kind === 'folder' || anchor.kind === 'folder') {
-    return 'not-a-git-repo'
-  }
-  const parsed = parseExecutionHostId(setup.hostId)
-  if (parsed?.kind === 'local') {
-    return 'no-comparison-site'
-  }
-  return parsed?.kind === 'ssh' ? null : 'transport-unsupported-host'
-}
-
-function localTipOf(f: ReplicaFacts): string | null {
-  return f.kind !== 'folder' && (f.tip.kind === 'commit' || f.tip.kind === 'detached') ? f.tip.sha : null
-}
 
 export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaPairService {
   const readLocalFacts = deps.readLocalFacts ?? readLocalReplicaFacts
@@ -285,7 +200,12 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     return viewOf(setup, anchor, local, entry.remote, relation, entry.result.evidence !== null)
   }
 
+  // Why: one guard for every worktree-mutating method of this service, so two effects never interleave on a worktree.
+  const mutationGuard = deps.mutationGuard ?? createReplicaWorktreeMutationGuard()
+  const capsules = createReplicaCapsuleOperations({ ...deps, mutationGuard })
+
   return {
+    ...capsules,
     async compare({ projectId, setupId }) {
       const setups = deps.listProjectHostSetups().filter((s) => s.projectId === projectId)
       if (setups.length === 0) {
@@ -295,9 +215,13 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
         return { status: 'not-found', reason: 'unknown-setup' }
       }
       const anchor = pickAnchor(setups)
-      const targets = setups.filter((s) => s.id !== anchor?.id && (setupId === undefined || s.id === setupId))
+      const targets = setups.filter(
+        (s) => s.id !== anchor?.id && (setupId === undefined || s.id === setupId)
+      )
       // Read lazily and once per call: arms that never reach the anchor's history spend no git.
-      const readAnchor = anchor ? lazyAnchorRead(anchor) : () => Promise.reject(new Error('no anchor setup'))
+      const readAnchor = anchor
+        ? lazyAnchorRead(anchor)
+        : () => Promise.reject(new Error('no anchor setup'))
       const pairs = await Promise.all(targets.map((s) => pairFor(s, anchor, readAnchor)))
       return { status: 'ok', pairs }
     },

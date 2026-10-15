@@ -23,6 +23,9 @@ const ENV = {
 const git = (cwd: string, ...a: string[]): string =>
   execFileSync('git', a, { cwd, env: ENV, encoding: 'utf8' }).trim()
 
+// The slot type carries the capsule operations too; the compare and relations tests never reach them.
+const capsuleStubs = () => ({ capsuleCreate: vi.fn(), capsuleList: vi.fn(), capsuleRestore: vi.fn() })
+
 const compare = PROJECT_REPLICA_METHODS.find((m) => m.name === 'projectReplica.compare')!
 const call = (params: unknown, ctx: Partial<RpcContext> = {}) =>
   compare.handler(params, { runtime: {} as RpcContext['runtime'], ...ctx }) as Promise<ReplicaPairCompareResult>
@@ -107,7 +110,8 @@ describe('projectReplica.compare', () => {
   it('refuses every remote caller before the service is called; control: a local caller is served', async () => {
     const service = {
       compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
-      relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] }))
+      relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+      ...capsuleStubs()
     }
     installReplicaPairService(service)
     const remoteCallers: Partial<RpcContext>[] = [
@@ -148,7 +152,8 @@ describe('projectReplica.relations', () => {
     relations.handler(undefined, { runtime: {} as RpcContext['runtime'], ...ctx }) as Promise<ReplicaPairRelationsResult>
   const fake = () => ({
     compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
-    relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] }))
+    relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+    ...capsuleStubs()
   })
 
   it('a local caller gets the views', async () => {
@@ -176,7 +181,8 @@ describe('every projectReplica method is local-caller only', () => {
   it('refuses each remote caller shape before any service call; control: a local caller is not refused', async () => {
     const service = {
       compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
-      relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] }))
+      relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+      ...capsuleStubs()
     }
     installReplicaPairService(service)
     const remoteCallers: Partial<RpcContext>[] = [
