@@ -58,7 +58,8 @@ export async function describeWebClientFailure(page: Page): Promise<string> {
 }
 
 async function probeSshAgentMenu(page: Page): Promise<HwfClientProbe['sshAgentMenu']> {
-  await page.getByTestId('tab-bar-new-tab').click({ force: true })
+  // Why no force: a forced click lands on whatever covers the "+" and reads as "menu never opened".
+  await page.getByTestId('tab-bar-new-tab').click()
   // Station control: the menu itself must be visible before any item's absence means anything.
   await expect(page.getByRole('menu')).toBeVisible({ timeout: 15_000 })
   const codex = await page
@@ -100,7 +101,7 @@ async function waitForRootProc(
 }
 
 async function launchFromNewTab(page: Page, provider: 'codex' | 'claude'): Promise<void> {
-  await page.getByTestId('tab-bar-new-tab').click({ force: true })
+  await page.getByTestId('tab-bar-new-tab').click()
   const item = page
     .getByRole('menuitem', { name: new RegExp(`^${provider}(?:\\s|$)`, 'i') })
     .first()
@@ -138,7 +139,10 @@ export async function launchProviderOnOwningHost(
   await launchFromNewTab(page, launchAs)
   // The click must have produced a tab; otherwise any process found below was not launched by it.
   await expect
-    .poll(() => countActiveWorktreeTabs(page), { timeout: 15_000, message: 'no new tab after launch' })
+    .poll(() => countActiveWorktreeTabs(page), {
+      timeout: 15_000,
+      message: 'no new tab after launch'
+    })
     .toBeGreaterThan(tabsBefore)
   const proc = await waitForRootProc(run, providerRe, 60_000, knownPids)
   if (!proc) {

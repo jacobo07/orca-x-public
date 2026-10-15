@@ -1158,8 +1158,8 @@
           "note": "dependency relation is transitive and cycle safe"
         }
       ],
-      "reason": "READY_FOR_LIVE: automatic-distribution-two-host - the golden passes: four tasks over three hosts and an ssh relay are placed with no host choice by the caller and the mapping is read from the persisted task_placements rows (t1 memory 8 GiB and t2 VRAM 8 GiB on the 24 GiB runtime, t3 on local, t4 on the second runtime, the relay never placed), and it holds under every rotation of the fleet members and of the task list; the spread golden adds that independent tasks use different hosts (ec2e1420c, a070a7a15, bf6742acc, 1b097e3e5). Plane: the real handler over the in-memory OrchestrationDb with a fake fleet observation. NOT RUN: the same distribution over two real paired hosts. Leg: ORCA_HWF_TWO_HOST=1 ORCA_HWF_RUN_FILE=<run file written by node config/scripts/hwf-two-host-remote.mjs run-file --seed --local-seed> npx playwright test tests/e2e/hwf-two-host-mission-placement.spec.ts --config tests/playwright.config.ts --project=electron-headless; without both variables the spec skips, which means NOT RUN.",
-      "measuredIn": "dwsrb phase 4",
+      "reason": "READY_FOR_LIVE: app-mission-place-two-host - the golden passes: four tasks over three hosts and an ssh relay are placed with no host choice by the caller and the mapping is read from the persisted task_placements rows (t1 memory 8 GiB and t2 VRAM 8 GiB on the 24 GiB runtime, t3 on local, t4 on the second runtime, the relay never placed), and it holds under every rotation of the fleet members and of the task list; the spread golden adds that independent tasks use different hosts (ec2e1420c, a070a7a15, bf6742acc, 1b097e3e5). Plane: the real handler over the in-memory OrchestrationDb with a fake fleet observation. Live 2026-10-15 (desktop PC -> GEX44, /tmp/orca-hwf-p17-20261015T184859Z): tests/e2e/hwf-two-host-mission-placement.spec.ts passed; the app's fleet placement proposal over a real SSH connection listed two distinct eligible hosts with measured memory (GEX44 57.3 GB proc-meminfo, the PC 3.4 GB) and two jobs were spread one per host (HWF22_CROSSHOST hosts=2). Instrument limit: that spec runs planMissionPlacement in the Playwright process on members rebuilt from the CLI proposal, so it proves the live proposal, not the app's mission handler or persisted task_placements. NOT RUN: orca orchestration mission-place over two real paired hosts (it needs a Task Run with a bound coordinator terminal and orchestration tasks); expected: task_placements rows on two distinct hosts read back from the app.",
+      "measuredIn": "dwsrb live queue (desktop PC -> GEX44)",
       "measuredAt": "2026-10-15"
     },
     {
@@ -2248,9 +2248,9 @@
       "row": "HF Replica state model",
       "owner": "new workspace-replica-state module",
       "done": "evidence-based states; unknown never healthy; timestamps never decide",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 2",
+      "measuredIn": "dwsrb live queue (desktop PC -> GEX44)",
       "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
@@ -2332,9 +2332,22 @@
           "kind": "commit",
           "sha": "05ca19f2d1b1",
           "note": "Settings replica Compare action and honest unavailable states"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-settings-relation.spec.ts",
+          "note": "REAL-TWO-HOST LOCAL_RENDER leg: rendered relation row after a real Compare, live and with the host down; RAN and PASSED 2026-10-15.",
+          "provedBy": [
+            "evidence-based states; unknown never healthy; timestamps never decide"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-15-row-62-settings-relation-evidence.md",
+          "note": "run lines, screenshots and the footer finding for the 2026-10-15 run."
         }
       ],
-      "reason": "READY_FOR_LIVE: rendered-settings-row — dwsrb phase 2 (2026-10-15): the state model, the pair service over the relay handler, the local RPC and CLI (project replica-compare, project setups), the replicaPair IPC, the renderer slice with the published-relations selector and the Settings relation row with a total closed-reason map are built and covered by hermetic tests plus the workspace-surface-claims and status-semantics gates. The earlier two-host leg (evidence W/inputs/d4/20261014/X09) feeds ssh-read facts to the model. NOT RUN: the rendered Settings row (LOCAL_RENDER); GEX44 has no display and no built app in out/, and a grouped SSH replica needs a second live host. No repo command encodes it; drive it with the $electron skill and Playwright CDP (AGENTS.md Electron UI Validation). The ja, ko and zh strings are executor-authored, not native-reviewed. The row stays PARTIAL because nothing here observed what a user sees."
+      "reason": "dwsrb live queue (2026-10-15, desktop PC -> GEX44, REAL-TWO-HOST + LOCAL_RENDER, Spanish UI): tests/e2e/hwf-two-host-replica-settings-relation.spec.ts passed three times. The rendered SSH row read unverified with a reason before any comparison (never healthy); a real click on Compare rendered diverged (+1/-2) in the critical tone from both measured sides; with the carrier killed a second Compare rendered unverified with the closed reason host-unreachable in the unknown tone. The screenshots showed the section footer still claiming the relation was not verified yet; describeGroupingEvidence now states only the grouping commit (ReplicaTopologyDetails.test.tsx red before the fix) and the last run shows the corrected footer. Behind the surface: the state model, pair service, local RPC and CLI, replicaPair IPC and the published-relations selector are covered hermetically plus the workspace-surface-claims and status-semantics gates; timestamps never decide (workspace-replica-state.test.ts). Caveats: the anchor row reads unverified (no relation to itself is published; unknown, not healthy); ja, ko and zh strings are executor-authored, not native-reviewed; only the diverged shape ran live (docs/dws/live-2026-10-15-row-62-settings-relation-evidence.md)."
     },
     {
       "id": 63,
@@ -3104,7 +3117,7 @@
           ]
         }
       ],
-      "reason": "dwsrb live queue (2026-10-15, desktop PC -> GEX44, REAL-TWO-HOST): tests/e2e/hwf-two-host-host-loss.spec.ts passed both tests against /tmp/orca-hwf-p23-20261015T155939Z. Test 1: carrier dropped and restored (reconnect ladder, 5.7 s after restore); relay pid 2497523 and shell pid 2498333 unchanged, one shell before and after, same ptyId; the renderer counter kept running (HWF_LOCAL_CONTINUES 0 -> 109); both clients backfilled the 13 outage ticks (A 13/13, B 13/13). Test 2: a real claude process launched from the new-tab menu on the owning host kept pid 2522706 across the drop, the status row stayed, nothing relaunched, the hook posted during the outage was delivered (204) to both stores, and the outage emitter was alive after (first live confirmation of the 900 s tail from 17b6052e3). A first run of test 2 passed vacuously (NOT_RUN provider-binary-absent: the probe file lacked the provisioner PROVIDER_* lines) and was rerun with them. Teardown REMAINING=0, PROC_COUNT=0. Caveats: jobs and background tasks were not exercised live; they hold because no host-loss hook re-dispatches on return (evidence of absence). The agent had no model turn (OD-1). The app ran with --lang=en-US because in the Spanish UI at 1366 px the terminal strip covers the tab bar \"+\", a separate layout defect (docs/dws/live-2026-10-15-row-73-host-loss-evidence.md)."
+      "reason": "dwsrb live queue (2026-10-15, desktop PC -> GEX44, REAL-TWO-HOST): tests/e2e/hwf-two-host-host-loss.spec.ts passed both tests against /tmp/orca-hwf-p23-20261015T155939Z. Test 1: carrier dropped and restored (reconnect ladder, 5.7 s after restore); relay pid 2497523 and shell pid 2498333 unchanged, one shell before and after, same ptyId; the renderer counter kept running (HWF_LOCAL_CONTINUES 0 -> 109); both clients backfilled the 13 outage ticks (A 13/13, B 13/13). Test 2: a real claude process launched from the new-tab menu on the owning host kept pid 2522706 across the drop, the status row stayed, nothing relaunched, the hook posted during the outage was delivered (204) to both stores, and the outage emitter was alive after (first live confirmation of the 900 s tail from 17b6052e3). A first run of test 2 passed vacuously (NOT_RUN provider-binary-absent: the probe file lacked the provisioner PROVIDER_* lines) and was rerun with them. Teardown REMAINING=0, PROC_COUNT=0. Reproduced the same day in the Spanish UI with no --lang, after the tab-row fix (ce24e2eda) and with real (unforced) clicks on the new-tab \"+\": both tests passed again (relay and shell pids kept, backfill A and B 13/13, claude pid kept, emitter alive). Caveats: jobs and background tasks were not exercised live; they hold because no host-loss hook re-dispatches on return (evidence of absence). The agent had no model turn (OD-1). The app ran with --lang=en-US because in the Spanish UI at 1366 px the terminal strip covers the tab bar \"+\", a separate layout defect (docs/dws/live-2026-10-15-row-73-host-loss-evidence.md)."
     },
     {
       "id": 74,
