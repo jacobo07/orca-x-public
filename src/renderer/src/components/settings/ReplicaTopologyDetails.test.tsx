@@ -97,10 +97,11 @@ describe('Settings hosts section: replica topology', () => {
       expect(entry.getAttribute('data-replica-provenance')).toBe('legacy')
       expect(entry.textContent).toContain('unverified')
     }
-    expect(container.textContent).toContain(
-      'Grouped by shared first commit abcdef1. Relation not verified yet'
-    )
-    expect(container.querySelectorAll('[data-replica-grouping-evidence]')).toHaveLength(1)
+    const evidence = container.querySelectorAll('[data-replica-grouping-evidence]')
+    expect(evidence).toHaveLength(1)
+    // The footer states only what grouped the copies; each row owns its relation, so a footer claim
+    // about the relation goes stale the moment a comparison is published.
+    expect(evidence[0].textContent).toBe('Grouped by shared first commit abcdef1')
   })
 
   it('carries a host-health handle beside each replica and never colours inline', () => {

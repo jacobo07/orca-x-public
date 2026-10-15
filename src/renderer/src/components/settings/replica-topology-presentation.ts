@@ -216,11 +216,14 @@ export function describeReplicaMembershipReason(
   }
 }
 
-/** Params for the grouping evidence line; the first commit is shown as its short form only. */
+/**
+ * What grouped the copies, nothing more: the first commit as its short form. Each row owns its
+ * relation, so a relation clause here went stale as soon as a comparison was published.
+ */
 export function describeGroupingEvidence(rootCommit: string): string {
   return translate(
     'auto.components.settings.RepositoryPane.groupingEvidence',
-    'Grouped by shared first commit {{value0}}. Relation not verified yet',
+    'Grouped by shared first commit {{value0}}',
     { value0: rootCommit.slice(0, 7) }
   )
 }

@@ -6911,7 +6911,7 @@
           "reasonHostNotReporting": "No informado por la versión de Orca de este host",
           "reasonSameHostDuplicate": "Otro repositorio de este host comparte su primer commit",
           "reasonSharesRootWithRemote": "Comparte su primer commit con un proyecto que tiene remoto",
-          "groupingEvidence": "Agrupado por el primer commit compartido {{value0}}. Relación aún sin verificar",
+          "groupingEvidence": "Agrupado por el primer commit compartido {{value0}}",
           "collisionsTitle": "Otras copias con el mismo primer commit",
           "collisionsHelp": "Estos repositorios comparten el primer commit pero no se agruparon con este proyecto, porque podrían ser repositorios distintos.",
           "hostStateConnecting": "Conectando",
