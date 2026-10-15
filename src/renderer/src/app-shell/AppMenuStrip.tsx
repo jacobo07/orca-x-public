@@ -55,6 +55,23 @@ function measureNeighbours(wrapper: HTMLElement): number {
   // within a few pixels of them, which is where the overlap starts.
   return neighbours + 24
 }
+
+/**
+ * Width the top band loses outside the header: the columns left of it and the tab row's trailing
+ * toolbar. Neither moves when the strip changes shape, so both are safe inputs. Leaving them out let
+ * long localized labels (Spanish at 1366px) pass the check while the tab strip was left with no
+ * width at all and clipped its own "New tab" button.
+ */
+/** The tab row's trailing toolbar, and each group's header, whose width follows a docked panel. */
+const BAND_TENANT_SELECTOR = '[data-tab-row-trailing-chrome], [data-tab-group-strip-id]'
+
+function measureBandTenants(wrapper: HTMLElement): number {
+  const headerLeft = Math.max(0, (wrapper.parentElement ?? wrapper).getBoundingClientRect().left)
+  const trailing = [...document.querySelectorAll<HTMLElement>('[data-tab-row-trailing-chrome]')]
+    .map((el) => el.offsetWidth)
+    .reduce((widest, width) => Math.max(widest, width), 0)
+  return headerLeft + trailing
+}
 function useStripFits(itemCount: number): {
   wrapperRef: React.RefObject<HTMLDivElement | null>
   stripRef: React.RefObject<HTMLDivElement | null>
@@ -71,7 +88,7 @@ function useStripFits(itemCount: number): {
     if (!wrapper || itemCount === 0) {
       return
     }
-    const measure = (): void => {
+    const measureFit = (): void => {
       const strip = stripRef.current
       if (strip) {
         naturalWidthRef.current = Math.max(naturalWidthRef.current, strip.scrollWidth)
@@ -80,21 +97,56 @@ function useStripFits(itemCount: number): {
       // Inherited from the app root, so this is the same reserve every other surface uses to stay
       // clear of the Windows/Linux window-controls overlay rather than a second copy of 138px.
       const windowControls =
-        Number.parseFloat(
-          getComputedStyle(wrapper).getPropertyValue('--window-controls-width')
-        ) || 0
-      const available = window.innerWidth - windowControls - TOP_BAND_CONTENT_RESERVE_PX
+        Number.parseFloat(getComputedStyle(wrapper).getPropertyValue('--window-controls-width')) ||
+        0
+      const available =
+        window.innerWidth -
+        windowControls -
+        TOP_BAND_CONTENT_RESERVE_PX -
+        measureBandTenants(wrapper)
       setFits(
-        naturalWidthRef.current === 0 ||
-          available >= naturalWidthRef.current + reserveRef.current
+        naturalWidthRef.current === 0 || available >= naturalWidthRef.current + reserveRef.current
       )
     }
-    measure()
     // The window, not the header: the header is what the strip resizes, so observing it is the
-    // circularity this measurement exists to avoid.
-    const observer = new ResizeObserver(measure)
+    // circularity this measurement exists to avoid. The band tenants are observed too, because they
+    // change width without a window resize (terminal toolbar on tab switch, a docked panel opening);
+    // they are only triggers, and their widths do not depend on whether the strip is folded.
+    const observed = new WeakSet<Element>()
+    const observer = new ResizeObserver(() => measure())
+    const observeTenants = (): boolean => {
+      const tenants = document.querySelectorAll(BAND_TENANT_SELECTOR)
+      for (const tenant of tenants) {
+        // Why the set: observe() on an already-observed target re-registers it and fires again.
+        if (!observed.has(tenant)) {
+          observed.add(tenant)
+          observer.observe(tenant)
+        }
+      }
+      return tenants.length > 0
+    }
+    const measure = (): void => {
+      measureFit()
+      observeTenants()
+    }
+    measure()
     observer.observe(document.documentElement)
-    return () => observer.disconnect()
+    // The tab row can mount after the menu loads; watch for it only until it exists.
+    let mountWatch: MutationObserver | null = null
+    if (!observeTenants()) {
+      mountWatch = new MutationObserver(() => {
+        if (observeTenants()) {
+          mountWatch?.disconnect()
+          mountWatch = null
+          measureFit()
+        }
+      })
+      mountWatch.observe(document.body, { childList: true, subtree: true })
+    }
+    return () => {
+      observer.disconnect()
+      mountWatch?.disconnect()
+    }
   }, [itemCount])
 
   return { wrapperRef, stripRef, fits }
@@ -110,7 +162,9 @@ function useStripFits(itemCount: number): {
  * With no items — on the web runtime, or before the menu is registered — the caller's fallback
  * renders instead, so the application menu is never left unreachable.
  */
-export function AppMenuStrip({ fallback = null }: { fallback?: React.ReactNode } = {}): React.ReactNode {
+export function AppMenuStrip({
+  fallback = null
+}: { fallback?: React.ReactNode } = {}): React.ReactNode {
   const [items, setItems] = useState<readonly MenuTopLevelItem[]>([])
   const { wrapperRef, stripRef, fits } = useStripFits(items.length)
 

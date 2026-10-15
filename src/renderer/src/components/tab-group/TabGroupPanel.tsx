@@ -252,6 +252,8 @@ export default function TabGroupPanel({
           <div
             className="ml-1.5 flex shrink-0 items-center gap-0.5"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            // Read by AppMenuStrip's fit check: this cluster shares the top band with the menu.
+            data-tab-row-trailing-chrome=""
           >
             {/* Why here and not in the rail: this is the terminal panel's toolbar, so it belongs in
                 the panel's header beside the tab row — and it has to outlive collapsing the rail,
@@ -366,38 +368,38 @@ export default function TabGroupPanel({
             from the terminal instead of covering it. Panes are positioned to the anchor, so a rail
             painted over the body would leave the PTY sized for a surface it no longer owns. */}
         <div className="relative min-w-0 flex-1" style={bodyAnchorStyle}>
-        {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
-        {isFocused ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
-            data-contextual-tour-target="workspace-agent-terminal-tip"
-          />
-        ) : null}
-        {activeTab &&
-          activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
-            <div className="absolute inset-0 flex min-h-0 min-w-0">
-              {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
-              <Suspense
-                fallback={
-                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.814fb04c43',
-                      'Loading editor...'
-                    )}
-                  </div>
-                }
-              >
-                <EditorPanel
-                  activeFileId={activeTab.entityId}
-                  activeViewStateId={activeTab.id}
-                  isVisible={isVisible}
-                  isCmdSaveOwner={isFocused}
-                />
-              </Suspense>
-            </div>
-          )}
+          {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
+          {isFocused ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
+              data-contextual-tour-target="workspace-agent-terminal-tip"
+            />
+          ) : null}
+          {activeTab &&
+            activeTab.contentType !== 'terminal' &&
+            activeTab.contentType !== 'browser' &&
+            activeTab.contentType !== 'simulator' && (
+              <div className="absolute inset-0 flex min-h-0 min-w-0">
+                {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
+                <Suspense
+                  fallback={
+                    <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                      {translate(
+                        'auto.components.tab.group.TabGroupPanel.814fb04c43',
+                        'Loading editor...'
+                      )}
+                    </div>
+                  }
+                >
+                  <EditorPanel
+                    activeFileId={activeTab.entityId}
+                    activeViewStateId={activeTab.id}
+                    isVisible={isVisible}
+                    isCmdSaveOwner={isFocused}
+                  />
+                </Suspense>
+              </div>
+            )}
 
           {/* Why: terminal/browser/simulator panes render at the worktree level (overlay layers); per-group rendering remounted xterm/webview/simulator on split moves. */}
         </div>

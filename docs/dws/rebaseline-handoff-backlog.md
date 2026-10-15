@@ -35,8 +35,8 @@ Probe file (`ORCA_HWF_PROBE_FILE`): the probe test's `HWF_PROBE_*` lines PLUS th
 lines. Without `PROVIDER_CLAUDE` / `PROVIDER_CODEX` the agent leg prints `NOT_RUN provider-binary-absent`
 and still passes, so a green agent test is only a result when `HWF_AGENT_A_LAUNCH=observed` is printed.
 
-On a non-English UI, run the app in English for any leg that opens the tab bar "+" menu (probe, agent
-legs): see the layout defect under Other open items.
+Builds older than the tab-row fix (see Other open items) clip the tab bar "+" at a 1366 px window; with
+such a build, run the app with `--lang=en-US` and a wider window, or rebuild first.
 
 | Row | Spec / grep | Result 2026-10-15 | Next |
 |---|---|---|---|
@@ -55,12 +55,13 @@ word from both measured sides, emitter lifetime 900 s (verified live on the desk
 
 ## Other open items
 
-- Layout defect, not fixed: in the Spanish UI at a 1366 px window the terminal strip's "Nuevo terminal"
-  button covers the tab bar "+" (`tab-bar-new-tab` at x=880; `elementFromPoint` at its centre is
-  `BUTTON[Nuevo terminal]`). In English the "+" sits at x=836 and is reachable. Users on a wider locale
-  cannot open the new-tab menu from that "+"; the hwf helpers click it with `force: true`, which hides the
-  interception and reads as "menu never opened". Needs a geometry test in the style of
-  `tests/e2e/workspace-left-column-geometry.spec.ts` and a fix in the tab-group header.
+- Layout defect, fixed on this branch: at a 1366 px window the tab strip got 0 px (Spanish) / 22 px
+  (English) and clipped its own "New tab" "+", because AppMenuStrip's fit check ignored the columns left
+  of the header and the terminal toolbar sharing the top band. The check now subtracts both and is
+  re-run when they change; the menu folds to its compact button at 1366 px and keeps its labels at
+  1920 px. Covered by `tests/e2e/tab-row-new-tab-reachable.spec.ts` (es and en-US, red on the old build).
+  The hwf helpers still click the "+" with `force: true`, which would hide a regression as "menu never
+  opened"; worth removing.
 - Owner decisions: units X05 X06 X16 X18 X19 (proposals in `.planning/workstreams/dwsrb/STATE.md` on GEX44);
   where vault/UKDL records for rows 52-54 and 76 live; the `dws-exec` cap.
 - Debt: row-17 laptop tunnel leg; orca-dws-serve claude version pin; provisioner symlink check; orca-svc login (row 45).
