@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId, type ExecutionHostId } from './execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import type { FleetPlacementMember } from './fleet-placement'
 import { integrateMissionResults, planMissionPlacement } from './mission-job-placement'
+import type { FleetNodeResourcesObservation } from './node-resources'
 
 const GB = 1024 ** 3
 const NOW = 1_000_000
 const request = { now: NOW, maxSampleAgeMs: 60_000 }
 
-function member(address: ExecutionHostId, fp: string | null, avail: number | null): FleetPlacementMember {
+function member(
+  address: ExecutionHostId,
+  fp: string | null,
+  avail: number | null
+): FleetPlacementMember {
   return {
     address,
     label: address,
@@ -24,10 +33,38 @@ function member(address: ExecutionHostId, fp: string | null, avail: number | nul
             availableMemorySource: 'free-memory',
             processSweep: 'measured'
           },
-    facts: { runtimeId: `rt-${address}`, platform: 'linux', capabilities: ['code'], protocol: 'compatible' }
+    facts: {
+      runtimeId: `rt-${address}`,
+      platform: 'linux',
+      capabilities: ['code'],
+      protocol: 'compatible'
+    }
   }
 }
 const gex = toRuntimeExecutionHostId('gex44')
+
+function withGpu(
+  base: FleetPlacementMember,
+  gpu: FleetNodeResourcesObservation['gpu'] | null
+): FleetPlacementMember {
+  if (gpu === null) {
+    return base
+  }
+  return {
+    ...base,
+    nodeResources: {
+      startedAt: NOW - 1000,
+      runtimeId: base.facts.runtimeId,
+      disk: { outcome: 'unknown', reason: 'not-attempted' },
+      gpu,
+      models: { outcome: 'unknown', reason: 'no-probe-configured' }
+    }
+  }
+}
+const gpuFree = (freeBytes: number): FleetNodeResourcesObservation['gpu'] => ({
+  outcome: 'measured',
+  gpus: [{ name: 'gpu0', totalBytes: 24 * GB, freeBytes }]
+})
 
 describe('mission job placement', () => {
   const fleet = [member(LOCAL_EXECUTION_HOST_ID, 'fp-win', 4 * GB), member(gex, 'fp-gex', 20 * GB)]
@@ -50,7 +87,11 @@ describe('mission job placement', () => {
   })
 
   it('doubles up only after every eligible host holds a job', () => {
-    const plan = planMissionPlacement([{ jobId: 'a' }, { jobId: 'b' }, { jobId: 'c' }], fleet, request)
+    const plan = planMissionPlacement(
+      [{ jobId: 'a' }, { jobId: 'b' }, { jobId: 'c' }],
+      fleet,
+      request
+    )
     expect(plan.placements.map((p) => p.fingerprint)).toEqual(['fp-gex', 'fp-win', 'fp-gex'])
   })
 
@@ -65,14 +106,20 @@ describe('mission job placement', () => {
   })
 
   it('leaves a job unplaced when no host has its capability', () => {
-    const plan = planMissionPlacement([{ jobId: 'a', requiredCapabilities: ['gpu'] }], fleet, request)
+    const plan = planMissionPlacement(
+      [{ jobId: 'a', requiredCapabilities: ['gpu'] }],
+      fleet,
+      request
+    )
     expect(plan.placements).toEqual([])
     expect(plan.unplaced).toEqual([{ jobId: 'a', reason: 'no-eligible-host' }])
   })
 
   it('integrates results per host and reports cross-host only when two hosts completed', () => {
     const plan = planMissionPlacement([{ jobId: 'a' }, { jobId: 'b' }], fleet, request)
-    const partial = integrateMissionResults(plan.placements, [{ jobId: 'a', status: 'completed', result: 'ok' }])
+    const partial = integrateMissionResults(plan.placements, [
+      { jobId: 'a', status: 'completed', result: 'ok' }
+    ])
     expect(partial.pending).toEqual(['b'])
     expect(partial.crossHost).toBe(false)
     const full = integrateMissionResults(plan.placements, [
@@ -88,5 +135,131 @@ describe('mission job placement', () => {
     ])
     expect(failed.crossHost).toBe(false)
     expect(failed.failed).toBe(1)
+  })
+})
+
+describe('mission job placement by resource requirement', () => {
+  const low = toRuntimeExecutionHostId('low')
+  const mid = toRuntimeExecutionHostId('mid')
+  const high = toRuntimeExecutionHostId('high')
+  const fleet = [
+    member(low, 'fp-low', 6 * GB),
+    member(mid, 'fp-mid', 16 * GB),
+    member(high, 'fp-high', 24 * GB)
+  ]
+  const eightGb = { memory: { minAvailableBytes: 8 * GB } }
+
+  it('keeps a job with a memory need off the low-memory host even when it must double up', () => {
+    const plan = planMissionPlacement(
+      [
+        { jobId: 'a', requirement: eightGb },
+        { jobId: 'b', requirement: eightGb },
+        { jobId: 'c', requirement: eightGb }
+      ],
+      fleet,
+      request
+    )
+    expect(plan.placements.map((p) => p.fingerprint)).toEqual(['fp-high', 'fp-mid', 'fp-high'])
+  })
+
+  it('control: jobs with no requirement still reach the low-memory host', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 'a' }, { jobId: 'b' }, { jobId: 'c' }],
+      fleet,
+      request
+    )
+    expect(plan.placements.map((p) => p.fingerprint)).toEqual(['fp-high', 'fp-mid', 'fp-low'])
+  })
+
+  it('a job family replaces the request family and leaves the other families inherited', () => {
+    const base = { ...request, requirement: { memory: { minAvailableBytes: 20 * GB } } }
+    const replaced = planMissionPlacement(
+      [{ jobId: 'a', requirement: { memory: { minAvailableBytes: 1 * GB } } }],
+      fleet,
+      base
+    )
+    expect(replaced.placements.map((p) => p.fingerprint)).toEqual(['fp-high'])
+    expect(replaced.rejectedByJob[0].rejected).toEqual([])
+
+    const inherited = planMissionPlacement(
+      [{ jobId: 'a', requirement: { vram: { minFreeBytes: 1 } } }],
+      [
+        withGpu(member(low, 'fp-low', 6 * GB), gpuFree(20 * GB)),
+        withGpu(member(high, 'fp-high', 24 * GB), gpuFree(20 * GB))
+      ],
+      base
+    )
+    expect(inherited.placements.map((p) => p.fingerprint)).toEqual(['fp-high'])
+    expect(inherited.rejectedByJob[0].rejected.map((r) => r.fingerprint)).toEqual(['fp-low'])
+  })
+
+  it('does not let an explicitly undefined job family erase the inherited one', () => {
+    const plan = planMissionPlacement([{ jobId: 'a', requirement: { memory: undefined } }], fleet, {
+      ...request,
+      requirement: eightGb
+    })
+    expect(plan.rejectedByJob[0].rejected.map((r) => r.fingerprint)).toEqual(['fp-low'])
+  })
+
+  it('places a VRAM job only on the host with measured sufficient VRAM', () => {
+    const hosts = [
+      withGpu(member(low, 'fp-low', 6 * GB), gpuFree(4 * GB)),
+      member(mid, 'fp-mid', 16 * GB),
+      withGpu(member(high, 'fp-high', 24 * GB), gpuFree(16 * GB))
+    ]
+    const need = { vram: { minFreeBytes: 8 * GB } }
+    const plan = planMissionPlacement(
+      [
+        { jobId: 'a', requirement: need },
+        { jobId: 'b', requirement: need }
+      ],
+      hosts,
+      request
+    )
+    expect(plan.placements.map((p) => p.fingerprint)).toEqual(['fp-high', 'fp-high'])
+    const reasons = Object.fromEntries(plan.rejected.map((r) => [r.fingerprint, r.reasons]))
+    expect(reasons['fp-low']).toEqual([
+      { reason: 'insufficient-vram', freeBytes: 4 * GB, required: 8 * GB }
+    ])
+    expect(reasons['fp-mid']).toEqual([
+      { reason: 'resource-unknown', family: 'vram', cause: 'unmeasured', detail: 'not-attempted' }
+    ])
+  })
+
+  it('leaves a VRAM job unplaced when only unknown-VRAM hosts exist, but still places a light job', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 'heavy', requirement: { vram: { minFreeBytes: 1 } } }, { jobId: 'light' }],
+      fleet,
+      request
+    )
+    expect(plan.unplaced).toEqual([{ jobId: 'heavy', reason: 'no-eligible-host' }])
+    expect(plan.placements.map((p) => p.jobId)).toEqual(['light'])
+    const heavy = plan.rejectedByJob.find((entry) => entry.jobId === 'heavy')
+    expect(heavy?.rejected).toHaveLength(3)
+    for (const host of heavy?.rejected ?? []) {
+      expect(host.reasons).toEqual([
+        { reason: 'resource-unknown', family: 'vram', cause: 'unmeasured', detail: 'not-attempted' }
+      ])
+    }
+  })
+
+  it('keeps rejection detail per job, for placed and unplaced jobs, and `rejected` is the last job', () => {
+    const plan = planMissionPlacement(
+      [
+        { jobId: 'b' },
+        { jobId: 'a', requirement: eightGb },
+        { jobId: 'c', requirement: { memory: { minAvailableBytes: 100 * GB } } }
+      ],
+      fleet,
+      request
+    )
+    expect(plan.rejectedByJob.map((entry) => entry.jobId)).toEqual(['a', 'b', 'c'])
+    expect(Object.keys(plan.rejectedByJob[0]).sort()).toEqual(['jobId', 'rejected'])
+    const byJob = Object.fromEntries(plan.rejectedByJob.map((e) => [e.jobId, e.rejected]))
+    expect(byJob.a.map((r) => r.fingerprint)).toEqual(['fp-low'])
+    expect(byJob.b).toEqual([])
+    expect(byJob.c).toHaveLength(3)
+    expect(plan.unplaced).toEqual([{ jobId: 'c', reason: 'no-eligible-host' }])
+    expect(plan.rejected).toEqual(byJob.c)
   })
 })

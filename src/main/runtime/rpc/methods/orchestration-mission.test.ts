@@ -182,6 +182,136 @@ describe('cross-host mission dispatch', () => {
       ])
     })
 
+    function withGpu(base: FleetPlacementMember, freeBytes: number): FleetPlacementMember {
+      return {
+        ...base,
+        nodeResources: {
+          startedAt: 1_000,
+          runtimeId: null,
+          disk: { outcome: 'unknown', reason: 'not-attempted' },
+          gpu: { outcome: 'measured', gpus: [{ name: 'gpu0', totalBytes: 24 * GB, freeBytes }] },
+          models: { outcome: 'unknown', reason: 'no-probe-configured' }
+        }
+      }
+    }
+
+    it('a per-task requirement replaces the global one family by family', async () => {
+      setup()
+      useResourceFleet()
+      const ids = ['a', 'b', 'c'].map((spec) => db.createTask({ spec }).id)
+      const light = ids[2]
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: ids,
+          requirement: { memory: { minAvailableBytes: 8 * GB } },
+          taskRequirements: { [light]: { memory: { minAvailableBytes: 1 * GB } } }
+        },
+        ctx
+      )) as { rejectedByJob: { jobId: string; rejected: { fingerprint: string }[] }[] }
+      // Why: the rejection lists are order independent, unlike where load spreading puts each task.
+      const refusedBy = (id: string) =>
+        plan.rejectedByJob.find((entry) => entry.jobId === id)?.rejected.map((r) => r.fingerprint)
+      expect(refusedBy(light)).toEqual([])
+      expect(refusedBy(ids[0])).toEqual(['fp-small'])
+      expect(refusedBy(ids[1])).toEqual(['fp-small'])
+      for (const id of ids.slice(0, 2)) {
+        expect(db.getTaskPlacement(id)?.fingerprint).not.toBe('fp-small')
+      }
+    })
+
+    it('places a VRAM task only on the host with measured sufficient VRAM and a light task elsewhere', async () => {
+      setup()
+      observation.current = Promise.resolve({
+        ...fleet(),
+        members: [
+          withGpu(member('local', 'fp-win', null, 16 * GB), 16 * GB),
+          member('runtime:env-big', 'fp-big', FED, 24 * GB),
+          withGpu(member('runtime:env-small', 'fp-small', FED, 6 * GB), 4 * GB)
+        ]
+      })
+      const heavy = db.createTask({ spec: 'heavy' })
+      const light = db.createTask({ spec: 'light' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [heavy.id, light.id],
+          taskRequirements: { [heavy.id]: { vram: { minFreeBytes: 8 * GB } } }
+        },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced).toEqual([])
+      expect(db.getTaskPlacement(heavy.id)?.fingerprint).toBe('fp-win')
+      expect(db.getTaskPlacement(light.id)?.fingerprint).toBe('fp-big')
+    })
+
+    it('leaves a VRAM task unplaced on unknown-VRAM hosts and shows why per job', async () => {
+      setup()
+      useResourceFleet()
+      const heavy = db.createTask({ spec: 'heavy' })
+      const light = db.createTask({ spec: 'light' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [heavy.id, light.id],
+          taskRequirements: { [heavy.id]: { vram: { minFreeBytes: 1 } } }
+        },
+        ctx
+      )) as PlaceResult & {
+        rejectedByJob: { jobId: string; rejected: { reasons: unknown[] }[] }[]
+      }
+      expect(plan.unplaced).toEqual([{ jobId: heavy.id, reason: 'no-eligible-host' }])
+      expect(db.getTaskPlacement(heavy.id)).toBeUndefined()
+      expect(db.getTaskPlacement(light.id)).toBeDefined()
+      const detail = plan.rejectedByJob.find((entry) => entry.jobId === heavy.id)
+      expect(detail?.rejected).toHaveLength(3)
+      for (const host of detail?.rejected ?? []) {
+        expect(host.reasons).toEqual([
+          {
+            reason: 'resource-unknown',
+            family: 'vram',
+            cause: 'unmeasured',
+            detail: 'not-attempted'
+          }
+        ])
+      }
+      expect(plan.rejectedByJob.find((entry) => entry.jobId === light.id)?.rejected).toEqual([])
+    })
+
+    it('rejects a taskRequirements key that is not one of the tasks and places nothing', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'job a' })
+      const other = db.createTask({ spec: 'job other' })
+      await expect(
+        h.call(
+          'orchestration.missionPlace',
+          {
+            from: 'term_coord',
+            tasks: [a.id],
+            taskRequirements: { [other.id]: { memory: { minAvailableBytes: 1 } } }
+          },
+          ctx
+        )
+      ).rejects.toThrow(/not one of the tasks/)
+      expect(db.getTaskPlacement(a.id)).toBeUndefined()
+      expect(db.getTaskPlacement(other.id)).toBeUndefined()
+      // control: the same entry for a listed task is accepted
+      await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [a.id],
+          taskRequirements: { [a.id]: { memory: { minAvailableBytes: 1 } } }
+        },
+        ctx
+      )
+      expect(db.getTaskPlacement(a.id)).toBeDefined()
+    })
+
     it('stays strict: an unknown requirement key or family key fails, nothing is placed', async () => {
       setup()
       useResourceFleet()

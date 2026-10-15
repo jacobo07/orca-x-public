@@ -20,9 +20,19 @@ const MissionPlaceParams = z
     run: z.string().min(1).optional(),
     from: requiredString('Missing --from'),
     tasks: z.array(z.string().min(1)).min(1).max(64),
-    requirement: NodeRequirementParams.optional()
+    requirement: NodeRequirementParams.optional(),
+    taskRequirements: z.record(z.string().min(1), NodeRequirementParams).optional()
   })
   .strict()
+  // Why: a key outside tasks would otherwise smuggle a requirement for a task this call does not place.
+  .refine(
+    (params) =>
+      Object.keys(params.taskRequirements ?? {}).every((taskId) => params.tasks.includes(taskId)),
+    {
+      message: 'taskRequirements names a key that is not one of the tasks',
+      path: ['taskRequirements']
+    }
+  )
 
 const MissionResultsParams = z.object({ run: requiredString('Missing --run') }).strict()
 
@@ -73,8 +83,12 @@ export const ORCHESTRATION_MISSION_METHODS: RpcMethod[] = [
         throw new OrchestrationError('fleet_unavailable', 'No fleet observer is installed.')
       }
       const observation = await pending
+      // Why: a task's own family replaces the global one; families it leaves unset are inherited.
       const requirements = Object.fromEntries(
-        tasks.flatMap((taskId) => (params.requirement ? [[taskId, params.requirement]] : []))
+        tasks.flatMap((taskId) => {
+          const own = params.taskRequirements?.[taskId]
+          return params.requirement || own ? [[taskId, { ...params.requirement, ...own }]] : []
+        })
       )
       const plan = planDispatchableMission(
         tasks,
@@ -97,6 +111,7 @@ export const ORCHESTRATION_MISSION_METHODS: RpcMethod[] = [
         placements,
         unplaced: plan.unplaced,
         rejected: plan.rejected,
+        rejectedByJob: plan.rejectedByJob,
         notDispatchable: plan.notDispatchable,
         hostCount: plan.hostCount
       }

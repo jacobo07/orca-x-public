@@ -27,7 +27,10 @@ export type MissionJobPlacement = {
 export type MissionPlacementPlan = {
   placements: MissionJobPlacement[]
   unplaced: { jobId: string; reason: 'no-eligible-host' }[]
+  /** The last judged job's rejections; kept as it was before per-job detail existed. */
   rejected: FleetPlacementRejected[]
+  /** Every judged job's own rejections, placed or not, in job order. */
+  rejectedByJob: { jobId: string; rejected: FleetPlacementRejected[] }[]
   /** Distinct hosts the plan runs jobs on. */
   hostCount: number
 }
@@ -59,6 +62,7 @@ export function planMissionPlacement(
   const placements: MissionJobPlacement[] = []
   const unplaced: MissionPlacementPlan['unplaced'] = []
   let rejected: FleetPlacementRejected[] = []
+  const rejectedByJob: MissionPlacementPlan['rejectedByJob'] = []
   const ordered = [...jobs].sort((a, b) => (a.jobId < b.jobId ? -1 : a.jobId > b.jobId ? 1 : 0))
   for (const job of ordered) {
     const requirement = mergeJobRequirement(request.requirement, job.requirement)
@@ -71,6 +75,7 @@ export function planMissionPlacement(
       ]
     })
     rejected = proposal.rejected
+    rejectedByJob.push({ jobId: job.jobId, rejected: proposal.rejected })
     if (proposal.eligible.length === 0) {
       unplaced.push({ jobId: job.jobId, reason: 'no-eligible-host' })
       continue
@@ -88,7 +93,7 @@ export function planMissionPlacement(
       label: pick.label
     })
   }
-  return { placements, unplaced, rejected, hostCount: load.size }
+  return { placements, unplaced, rejected, rejectedByJob, hostCount: load.size }
 }
 
 export type MissionJobOutcome = { jobId: string; status: 'completed' | 'failed'; result?: string }
