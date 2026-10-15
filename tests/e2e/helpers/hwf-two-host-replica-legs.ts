@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 
 import type { HwfRun } from './hwf-two-host-ssh-target'
+import type { SubscribableAppStore } from './hwf-two-host-store-handle'
 
 // Written by `hwf-two-host-remote.mjs run-file --seed --local-seed`; both SEED_ROOT values were equal.
 export type HwfReplicaRun = HwfRun & {
@@ -79,7 +80,7 @@ export async function addRemoteRepo(
 ): Promise<string> {
   return page.evaluate(
     async ({ connected, remotePath, displayName, skipListRefresh }) => {
-      const store = window.__store!
+      const store = window.__store! as SubscribableAppStore
       const targetId = connected.targetId
       const labels = new Map(store.getState().sshTargetLabels)
       labels.set(targetId, connected.label)

@@ -24,6 +24,7 @@ import {
   writeHwfLeg
 } from './hwf-two-host-reconnect'
 import type { HwfSession } from './hwf-two-host-session'
+import type { SubscribableAppStore } from './hwf-two-host-store-handle'
 import { execOnOwningHost, type HwfRun } from './hwf-two-host-ssh-target'
 import { waitForActivePanePtyId } from './terminal'
 function agentRows(page: Page, prompt: string): Promise<boolean> {
@@ -51,7 +52,7 @@ type RowRemoval = { t: number; fn: string; key: string; stack: string }
 // Why: a row that vanishes across a reconnect must be attributed, not guessed; this wraps the page's two removal actions and records who called them and when.
 async function instrumentRowRemovals(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const store = window.__store
+    const store = window.__store as SubscribableAppStore | undefined
     if (!store) {
       return
     }
@@ -194,8 +195,9 @@ export async function runAgentLeg(
     console.log(`HWF_PANE_KEY=${paneKey}`)
     deliveredB = await agentRows(webPage, prompt)
     const hookLog = readOutageHookLog(run)
-    const window = outageWindowOnRemoteClock(drop.tKillMs, drop.tRestoreMs, skew.skewS)
-    const klass = hookLog ? classifyInWindow(hookLog.epoch, window) : 'edge'
+    // Why: not named `window`, which would shadow the page global inside the evaluate callbacks above.
+    const outageWindow = outageWindowOnRemoteClock(drop.tKillMs, drop.tRestoreMs, skew.skewS)
+    const klass = hookLog ? classifyInWindow(hookLog.epoch, outageWindow) : 'edge'
     const outcome = classifyOutageHook({ hookLog, windowClass: klass, storeSawIt: delivered })
     console.log(
       `HWF_OUTAGE_HOOK=${outcome} remote_epoch=${Math.floor(hookLog?.epoch ?? 0)} curl_exit=${hookLog?.exit ?? 'none'} http=${hookLog?.http ?? 'none'} class=${klass} store_a=${delivered} store_b=${deliveredB}`

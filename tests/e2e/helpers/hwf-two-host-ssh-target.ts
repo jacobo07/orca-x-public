@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 
 import { expect, type Page } from '@stablyai/playwright-test'
 
+import type { SubscribableAppStore } from './hwf-two-host-store-handle'
+
 // Written by `config/scripts/hwf-two-host-remote.mjs run-file`; every field comes from the provisioner's create output.
 export type HwfRun = {
   root: string
@@ -159,7 +161,7 @@ export async function hydrateHwfRemoteRepo(
 ): Promise<{ repoId: string; worktreeId: string }> {
   return page.evaluate(
     async ({ connected, remotePath }) => {
-      const store = window.__store
+      const store = window.__store as SubscribableAppStore | undefined
       if (!store) {
         throw new Error('Store unavailable')
       }

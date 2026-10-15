@@ -56,7 +56,8 @@ test('state model decides ahead from evidence read over SSH; unreadable host is 
     expect(seedTip).toMatch(/^[0-9a-f]{40}$/)
     expect(replicaTip).toMatch(/^[0-9a-f]{40}$/)
     const count = Number(execOnOwningHost(run, `git -C ${p17} rev-list --count ${run.seedRoot}..HEAD`).out.trim())
-    const facts = (hostId: string, sha: string): ReplicaFacts => ({
+    // Why: the git variant, so spreading it and overriding tip stays typed (the folder variant has no tip).
+    const facts = (hostId: string, sha: string): Exclude<ReplicaFacts, { kind: 'folder' }> => ({
       setupId: 'p17',
       hostId,
       tip: { kind: 'commit', sha, ref: 'HEAD' },
