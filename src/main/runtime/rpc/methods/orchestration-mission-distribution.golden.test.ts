@@ -182,4 +182,56 @@ describe('automatic mission distribution golden', () => {
     ).rejects.toThrow(/Unrecognized key/)
     expect(other.mapping).toEqual(GOLDEN_MAPPING)
   })
+
+  describe('determinism and unproven VRAM', () => {
+    const rotations = <T>(items: T[]): T[][] =>
+      items.map((_, shift) => [...items.slice(shift), ...items.slice(0, shift)])
+
+    it('keeps the full mapping under every rotation and the reverse of the fleet members', async () => {
+      const base = distributionFleet(true)
+      const orders = [...rotations(base), base.toReversed()]
+      expect(orders).toHaveLength(5)
+      for (const members of orders) {
+        const { mapping, plan } = await place({ members })
+        expect(mapping).toEqual(GOLDEN_MAPPING)
+        expect(plan.hostCount).toBe(3)
+      }
+    })
+
+    it('keeps the full mapping under the reverse and every rotation of the task list', async () => {
+      const orders: ((ids: string[]) => string[])[] = [
+        (ids) => ids.toReversed(),
+        ...[1, 2, 3].map((shift) => (ids: string[]) => [
+          ...ids.slice(shift),
+          ...ids.slice(0, shift)
+        ])
+      ]
+      for (const orderTasks of orders) {
+        const { mapping } = await place({ members: distributionFleet(true), orderTasks })
+        expect(mapping).toEqual(GOLDEN_MAPPING)
+      }
+    })
+
+    it('leaves the VRAM task unplaced when no host proves it and still places the other three', async () => {
+      const { plan, idOf, mapping, db } = await place({ members: distributionFleet(false) })
+
+      expect(plan.unplaced).toEqual([{ jobId: idOf.t2, reason: 'no-eligible-host' }])
+      expect(mapping).toEqual({
+        t1: 'runtime:env-a',
+        t2: undefined,
+        t3: 'local',
+        t4: 'runtime:env-b'
+      })
+      expect(db.getTaskPlacement(idOf.t2)).toBeUndefined()
+      const t2 = rejectionFor(plan, idOf.t2)
+      expect(t2.map((r) => r.fingerprint).sort()).toEqual(['fp-a', 'fp-b', 'fp-local'])
+      for (const host of t2) {
+        expect(host.reasons).toEqual([NO_VRAM_PROBE])
+      }
+      expect(plan.notDispatchable.map((m) => m.address)).toEqual(['ssh:relay'])
+      expect(db.listRunTaskPlacements(plan.runId).map((row) => row.address)).not.toContain(
+        'ssh:relay'
+      )
+    })
+  })
 })
