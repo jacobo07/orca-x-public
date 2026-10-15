@@ -12,6 +12,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { DEFAULT_FLEET_SAMPLE_MAX_AGE_MS } from './fleet'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 
 const observation = vi.hoisted(() => ({ current: null as Promise<unknown> | null }))
@@ -617,6 +618,219 @@ describe('cross-host mission dispatch', () => {
       const a = db.createTask({ spec: 'job' })
       await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
       expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+    })
+
+    describe('eligibility wins over hydration', () => {
+      function useFleet(members: FleetPlacementMember[], setups: ProjectHostSetup[]): void {
+        observation.current = Promise.resolve({ ...fleet(), members })
+        vi.spyOn(runtime, 'listProjectHostSetups').mockReturnValue(setups)
+      }
+
+      it('control: the hydrated host is chosen when it is eligible for the requirement', async () => {
+        setup()
+        useFleet(
+          [
+            member('runtime:env-a', 'fp-a', FED, 24 * GB),
+            member('runtime:env-b', 'fp-b', FED, 8 * GB)
+          ],
+          [setupRecord('P', 'runtime:env-b')]
+        )
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call(
+          'orchestration.missionPlace',
+          {
+            from: 'term_coord',
+            tasks: [a.id],
+            requirement: { memory: { minAvailableBytes: 4 * GB } }
+          },
+          ctx
+        )
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-b')
+      })
+
+      it('does not place on a hydrated host that lacks the memory the task needs', async () => {
+        setup()
+        useFleet(
+          [
+            member('runtime:env-a', 'fp-a', FED, 24 * GB),
+            member('runtime:env-b', 'fp-b', FED, 8 * GB)
+          ],
+          [setupRecord('P', 'runtime:env-b')]
+        )
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        const plan = (await h.call(
+          'orchestration.missionPlace',
+          {
+            from: 'term_coord',
+            tasks: [a.id],
+            requirement: { memory: { minAvailableBytes: 16 * GB } }
+          },
+          ctx
+        )) as PlaceResult
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+        expect(plan.locality?.[0].hydrated).toBe(false)
+      })
+
+      it('does not place on a hydrated host whose sample is stale', async () => {
+        setup()
+        const now = 1_000 + DEFAULT_FLEET_SAMPLE_MAX_AGE_MS * 4
+        const staleHost = member('runtime:env-b', 'fp-b', FED, 8 * GB)
+        const freshHost = member('runtime:env-a', 'fp-a', FED, 24 * GB)
+        if (staleHost.sample.outcome !== 'measured' || freshHost.sample.outcome !== 'measured') {
+          throw new Error('fixture must be measured')
+        }
+        freshHost.sample.startedAt = now
+        observation.current = Promise.resolve({
+          ...fleet(),
+          completedAt: now,
+          members: [freshHost, staleHost]
+        })
+        vi.spyOn(runtime, 'listProjectHostSetups').mockReturnValue([
+          setupRecord('P', 'runtime:env-b')
+        ])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        const plan = (await h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [a.id] },
+          ctx
+        )) as PlaceResult & { rejected: { fingerprint: string; reasons: { reason: string }[] }[] }
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+        const refused = plan.rejected.find((r) => r.fingerprint === 'fp-b')
+        expect(refused?.reasons.map((r) => r.reason)).toEqual(['sample-stale'])
+      })
+
+      it('never places on a hydrated SSH relay', async () => {
+        setup()
+        useFleet(
+          [
+            member('runtime:env-a', 'fp-a', FED, 8 * GB),
+            member('ssh:relay', 'ssh-hostkey:r', FED, 64 * GB)
+          ],
+          [setupRecord('P', 'ssh:relay')]
+        )
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        const plan = (await h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [a.id] },
+          ctx
+        )) as PlaceResult & { notDispatchable: { address: string }[] }
+        expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+        expect(plan.notDispatchable.map((m) => m.address)).toEqual(['ssh:relay'])
+      })
+    })
+
+    describe('subject handling', () => {
+      function writeRawSubject(taskId: string, raw: string | null): void {
+        const raw_db = (
+          db as unknown as { db: { prepare: (sql: string) => { run: (...a: unknown[]) => void } } }
+        ).db
+        raw_db.prepare('UPDATE tasks SET subject = ? WHERE id = ?').run(raw, taskId)
+      }
+
+      it('places a task whose subject text is unreadable, without the preference', async () => {
+        for (const raw of ['not json at all', '{"worktreePath":"/x"}', '{"projectId":""}', '[]']) {
+          setup()
+          useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+          const a = db.createTask({ spec: 'job' })
+          writeRawSubject(a.id, raw)
+          const plan = (await h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id] },
+            ctx
+          )) as PlaceResult
+          expect(db.getTaskPlacement(a.id)?.fingerprint, raw).toBe('fp-a')
+          expect(plan.unplaced).toEqual([])
+          h.cleanup()
+          vi.restoreAllMocks()
+        }
+      })
+
+      it('resolves a git subject and a folder-workspace subject alike by project id', async () => {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+        const git = db.createTask({
+          spec: 'git',
+          subject: { projectId: 'P', worktreePath: '/work/tree', revision: 'a'.repeat(40) }
+        })
+        const folder = db.createTask({
+          spec: 'folder',
+          subject: { projectId: 'P', worktreePath: null, revision: null }
+        })
+        await h.call(
+          'orchestration.missionPlace',
+          { from: 'term_coord', tasks: [git.id, folder.id] },
+          ctx
+        )
+        expect(db.getTaskPlacement(git.id)?.fingerprint).toBe('fp-b')
+        expect(db.getTaskPlacement(folder.id)?.fingerprint).toBe('fp-b')
+      })
+    })
+
+    it('does not read updatedAt: 0, 1 and the current time are hydrated alike', async () => {
+      for (const updatedAt of [0, 1, Date.now()]) {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b', 'ready', updatedAt)])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+        expect(db.getTaskPlacement(a.id)?.fingerprint, `updatedAt ${updatedAt}`).toBe('fp-b')
+        h.cleanup()
+        vi.restoreAllMocks()
+      }
+    })
+
+    it('gives the same placement for two setups that differ only in updatedAt', async () => {
+      const placed: (string | undefined)[] = []
+      for (const updatedAt of [0, 9_999_999_999_999]) {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b', 'ready', updatedAt)])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+        placed.push(db.getTaskPlacement(a.id)?.fingerprint)
+        h.cleanup()
+        vi.restoreAllMocks()
+      }
+      expect(placed).toEqual(['fp-b', 'fp-b'])
+    })
+
+    it('gives each placed task exactly one locality entry with exactly three keys', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const hydrated = db.createTask({ spec: 'h', subject: subjectOf('P') })
+      const plain = db.createTask({ spec: 'plain' })
+      const huge = db.createTask({ spec: 'huge' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [hydrated.id, plain.id, huge.id],
+          taskRequirements: { [huge.id]: { memory: { minAvailableBytes: 1000 * GB } } }
+        },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced.map((u) => u.jobId)).toEqual([huge.id])
+      const entries = plan.locality ?? []
+      expect(entries.map((e) => e.taskId).sort()).toEqual([hydrated.id, plain.id].sort())
+      for (const entry of entries) {
+        expect(Object.keys(entry).sort()).toEqual(['hostKey', 'hydrated', 'taskId'])
+      }
+      const byTask = Object.fromEntries(entries.map((e) => [e.taskId, e]))
+      expect(byTask[hydrated.id]).toEqual({
+        taskId: hydrated.id,
+        hostKey: 'fingerprint:fp-b',
+        hydrated: true
+      })
+      expect(byTask[plain.id].hydrated).toBe(false)
+      expect(entries.some((e) => e.taskId === huge.id)).toBe(false)
+    })
+
+    it('prefers a different host per project when each project lives on a different host', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b'), setupRecord('Q', 'runtime:env-a')])
+      const p = db.createTask({ spec: 'p', subject: subjectOf('P') })
+      const q = db.createTask({ spec: 'q', subject: subjectOf('Q') })
+      await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [p.id, q.id] }, ctx)
+      expect(db.getTaskPlacement(p.id)?.fingerprint).toBe('fp-b')
+      expect(db.getTaskPlacement(q.id)?.fingerprint).toBe('fp-a')
     })
 
     it('control: a setup whose host is not a member goes unused', async () => {
