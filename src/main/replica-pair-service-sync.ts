@@ -61,6 +61,7 @@ const FAILURE_WORD: Record<ReplicaSyncFailure, ReplicaSyncFailureReason> = {
   'invalid-input': 'invalid-input',
   'stale-generation': 'stale-generation',
   'stale-tip': 'stale-tip',
+  'operation-in-progress': 'operation-in-progress',
   'not-descendant': 'not-descendant',
   'capsule-failed': 'capsule-failed',
   'ff-failed': 'ff-failed',

@@ -92,6 +92,15 @@ describe('formatReplicaSync', () => {
     expect(withCapsule.text).toContain(`previous state saved as ${CAPSULE}`)
   })
 
+  it('operation-in-progress has its own text, says HEAD was not moved, and exits 1', () => {
+    const out = sync({ status: 'failed', reason: 'operation-in-progress' })
+    expect(out.exitCode).toBe(1)
+    expect(out.text).toContain('sync refused')
+    expect(out.text).toContain('rebase, merge, cherry-pick, revert or bisect')
+    expect(out.text).toContain('HEAD was not moved')
+    expect(out.text).not.toBe('sync failed: operation-in-progress; HEAD was not moved')
+  })
+
   it('verify-failed and ff-failed never claim HEAD was untouched', () => {
     const verify = sync({ status: 'failed', reason: 'verify-failed', capsuleRef: CAPSULE })
     expect(verify.text).not.toContain('HEAD was not moved')

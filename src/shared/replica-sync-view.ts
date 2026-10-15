@@ -27,6 +27,7 @@ export type ReplicaSyncFailureReason =
   | 'invalid-input'
   | 'stale-generation'
   | 'stale-tip'
+  | 'operation-in-progress'
   | 'not-descendant'
   | 'capsule-failed'
   | 'ff-failed'

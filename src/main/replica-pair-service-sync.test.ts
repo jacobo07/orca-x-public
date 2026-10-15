@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import type * as fsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -102,6 +102,15 @@ describe('sync', () => {
     expect(porcelain(rig.local)).toBe('')
     expect(refNames(rig.local, 'refs/orca/capsules')).toEqual([])
     expect(rig.relayLog[0]).toBe('relay.status')
+  })
+
+  it('an operation in progress at the anchor is a distinct closed failure and HEAD does not move (WR-01)', async () => {
+    commitFile(rig.remote, 'b.txt', 'b\n')
+    mkdirSync(join(rig.local, '.git', 'rebase-merge'))
+    const result = await service().sync({ setupId: 'box' })
+    expect(result).toEqual({ status: 'failed', reason: 'operation-in-progress' })
+    expect(head()).toBe(base)
+    expect(refNames(rig.local, 'refs/orca/capsules')).toEqual([])
   })
 
   it('a dirty anchor is captured first: the working tree is unchanged and the capsule commit exists', async () => {

@@ -5,6 +5,7 @@ import { rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { capsuleRef } from '../shared/replica-capsule-plan'
 import { createCapsule, type CapsuleGitRun } from './replica-capsule'
+import { OPERATION_MARKERS } from './replica-operation-markers'
 import {
   Refusal,
   diffTrees,
@@ -44,14 +45,6 @@ export type CapsuleRestoreResult =
 
 // Same prefix as replica-capsule.ts so its stale-temp sweep reclaims anything a crash leaves behind.
 const TEMP_PREFIX = 'orca-capsule-index-'
-const IN_PROGRESS = [
-  'MERGE_HEAD',
-  'CHERRY_PICK_HEAD',
-  'REVERT_HEAD',
-  'REBASE_HEAD',
-  'rebase-merge',
-  'rebase-apply'
-]
 const CAPSULE_ARGUMENT = /^(?:refs\/orca\/capsules\/)?([0-9a-f]{40,64})$/
 const RM_CHUNK = 100
 
@@ -112,7 +105,7 @@ export async function restoreCapsule(args: {
     if (head !== loaded.base) {
       return refused('base-mismatch', `worktree HEAD is ${head}, capsule base is ${loaded.base}`)
     }
-    if ((await Promise.all(IN_PROGRESS.map((n) => exists(join(gitDir, n))))).some(Boolean)) {
+    if ((await Promise.all(OPERATION_MARKERS.map((n) => exists(join(gitDir, n))))).some(Boolean)) {
       return refused(
         'operation-in-progress',
         'a merge, rebase, cherry-pick or revert is in progress'

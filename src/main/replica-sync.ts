@@ -1,10 +1,11 @@
 // One-way safe sync (row 65): fast-forward the local checked-out branch to a proven descendant tip.
-// Order: generation fence -> tip fence -> descendant proof -> capsule (verified) -> git merge --ff-only -> verify.
+// Order: generation fence -> tip fence -> operation-in-progress refusal -> descendant proof -> capsule (verified) -> git merge --ff-only -> verify.
 // Anything else (diverged, stale, disk-full, disconnect) stays a typed failure and never moves HEAD.
 import type { ReplicaPairEvidence } from '../shared/workspace-replica-state'
 import { gitExecFileAsync } from './git/runner'
 import { createCapsule, type CapsuleGitRun } from './replica-capsule'
 import { localCapsuleGit } from './replica-capsule-git'
+import { operationInProgress } from './replica-operation-markers'
 import { isDiskFullError, type ReplicaFailureCause } from './replica-failure-cause'
 import {
   compareWithRelayReplica,
@@ -18,6 +19,7 @@ export type ReplicaSyncFailure =
   | 'invalid-input'
   | 'stale-generation'
   | 'stale-tip'
+  | 'operation-in-progress'
   | 'not-descendant'
   | 'capsule-failed'
   | 'ff-failed'
@@ -84,6 +86,10 @@ export async function fastForwardToDescendant(args: {
   }
   if ((await head()) !== expectedLocalTip) {
     return { ok: false, reason: 'stale-tip' }
+  }
+  // Why: a rebase stopped at `edit` has a clean tree, so the capsule would short-circuit; moving HEAD breaks the resume.
+  if (await operationInProgress(async (argv, opts) => (await git(argv, opts)).stdout, repoPath)) {
+    return { ok: false, reason: 'operation-in-progress' }
   }
   if (
     expectedLocalTip === targetTip ||

@@ -425,11 +425,24 @@ describe('fastForwardToDescendant', () => {
       expect(capsules(local)).toHaveLength(0)
     })
 
-    it('a refused capsule (merge in progress) is capsule-failed', async () => {
+    it('a refused capsule (unmerged index entries, no operation marker) is capsule-failed', async () => {
       const tip = prepare()
-      writeFileSync(join(local, '.git', 'MERGE_HEAD'), `${base}\n`)
+      const blob = git(local, 'rev-parse', `${base}:a.txt`)
+      execFileSync('git', ['update-index', '--index-info'], {
+        cwd: local,
+        env: ENV,
+        input: ['1', '2', '3'].map((stage) => `100644 ${blob} ${stage}\ta.txt\n`).join('')
+      })
       expect(await run(tip)).toEqual({ ok: false, reason: 'capsule-failed' })
       expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+    })
+
+    it('a merge in progress is refused as operation-in-progress before any capsule is cut', async () => {
+      const tip = prepare()
+      writeFileSync(join(local, '.git', 'MERGE_HEAD'), `${base}\n`)
+      expect(await run(tip)).toEqual({ ok: false, reason: 'operation-in-progress' })
+      expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+      expect(capsules(local)).toHaveLength(0)
     })
 
     it('control: the working runner cuts the capsule and moves HEAD', async () => {

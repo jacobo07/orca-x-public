@@ -15,6 +15,7 @@ import {
   CAPSULE_REF_PREFIX,
   type CapsuleOmission
 } from '../shared/replica-capsule-plan'
+import { OPERATION_MARKERS } from './replica-operation-markers'
 
 export type CapsuleGitRun = (
   argv: string[],
@@ -40,14 +41,6 @@ export type CapsuleFact =
 
 const FSYNC = ['-c', 'core.fsyncObjectFiles=true', '-c', 'core.fsync=objects,reference']
 const TEMP_PREFIX = 'orca-capsule-index-'
-const IN_PROGRESS = [
-  'MERGE_HEAD',
-  'CHERRY_PICK_HEAD',
-  'REVERT_HEAD',
-  'REBASE_HEAD',
-  'rebase-merge',
-  'rebase-apply'
-]
 const activeGitDirs = new Set<string>()
 
 type Built = {
@@ -179,7 +172,7 @@ export async function createCapsule(git: CapsuleGitRun, worktreePath: string): P
   if (probe.length === 0) {
     return { kind: 'clean' }
   }
-  const inProgress = (await Promise.all(IN_PROGRESS.map((n) => exists(join(gitDir, n))))).some(Boolean)
+  const inProgress = (await Promise.all(OPERATION_MARKERS.map((n) => exists(join(gitDir, n))))).some(Boolean)
   if (inProgress || probe.split('\0').some((e) => e.startsWith('u '))) {
     return { kind: 'refused', reason: 'capsule-unmerged' }
   }

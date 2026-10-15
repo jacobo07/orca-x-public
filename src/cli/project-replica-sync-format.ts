@@ -82,6 +82,11 @@ function syncFailureLines(result: Extract<ReplicaSyncResult, { status: 'failed' 
   switch (result.reason) {
     case 'stale-generation':
       return ['sync failed: the connection changed during the sync; run it again', ...note]
+    case 'operation-in-progress':
+      return [
+        'sync refused: a rebase, merge, cherry-pick, revert or bisect is in progress in the local worktree; HEAD was not moved',
+        'finish or abort it, then run the sync again'
+      ]
     case 'compare-transfer-interrupted':
       return [
         `sync failed: ${LOST}; HEAD was not moved`,
