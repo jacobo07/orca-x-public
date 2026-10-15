@@ -267,13 +267,22 @@ test.describe('relay-compare-result', () => {
       const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
       const compareArgs = ['project', 'replica-compare', '--project', grouping.projectId]
 
-      // Orientation: the anchor is the local replica, so a remote two commits ahead reads "behind 2".
+      // Orientation: the anchor is the local replica. seed-local-p16 adds a host commit to it, so the
+      // expected word comes from both measured sides, never from an assumed local tip.
+      const localAhead = execFileSync(
+        'git',
+        ['-C', run.localReplicaPath, 'rev-list', '--count', `${run.seedRoot}..HEAD`],
+        { encoding: 'utf8' }
+      ).trim()
+      console.log(`HWF63_LOCAL_AHEAD=${localAhead}`)
+      const expectedWord =
+        localAhead === '0' ? `behind ${ahead}` : `diverged +${localAhead}/-${ahead}`
       const first = runCliRaw(compareArgs, userData)
       console.log(`HWF63_COMPARE_LIVE exit=${first.status} out=${first.stdout.trim()}`)
       const live = compareVerdict({
         output: first.stdout,
         status: first.status,
-        expectedWord: 'behind 2',
+        expectedWord,
         setupId
       })
       logLeg('HWF63_COMPARE_LIVE', live)
