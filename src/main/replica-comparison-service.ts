@@ -255,6 +255,35 @@ export type SshRelaySessionDeps = {
   getGeneration: (connectionId: string) => number
 }
 
+export type SshRelaySession = {
+  request: ReplicaComparisonRequest
+  /** Generation of the connection when the session was opened. */
+  generation: number
+  /** Live generation, for a fence that must notice a reconnect during an operation. */
+  currentGeneration: () => number
+}
+
+/** The one way to reach a host's relay: null when there is no live multiplexer for the connection. */
+export async function openSshRelaySession(
+  connectionId: string,
+  deps?: Partial<SshRelaySessionDeps>
+): Promise<SshRelaySession | null> {
+  // Loaded on demand so this module stays importable without the Electron-bound SSH layer.
+  const getMultiplexer =
+    deps?.getMultiplexer ??
+    (async (id: string) => (await import('./ipc/ssh')).getActiveMultiplexer(id))
+  const getGeneration = deps?.getGeneration ?? getSshConnectionGeneration
+  const mux = await getMultiplexer(connectionId)
+  if (!mux || mux.isDisposed()) {
+    return null
+  }
+  return {
+    request: (method, params, options) => mux.request(method, params, options),
+    generation: getGeneration(connectionId),
+    currentGeneration: () => getGeneration(connectionId)
+  }
+}
+
 /** Production entry: binds the comparison to the app's live SSH relay session (multiplexer + generation). */
 export async function compareWithSshRelayReplica(
   args: Omit<Parameters<typeof compareWithRelayReplica>[0], 'request' | 'generation'> & {
@@ -262,20 +291,13 @@ export async function compareWithSshRelayReplica(
   }
 ): Promise<ReplicaComparisonResult> {
   const { deps, ...rest } = args
-  // Loaded on demand so this module stays importable without the Electron-bound SSH layer.
-  const getMultiplexer =
-    deps?.getMultiplexer ??
-    (async (id: string) => (await import('./ipc/ssh')).getActiveMultiplexer(id))
-  const getGeneration =
-    deps?.getGeneration ??
-    getSshConnectionGeneration
-  const mux = await getMultiplexer(args.connectionId)
-  if (!mux || mux.isDisposed()) {
+  const session = await openSshRelaySession(args.connectionId, deps)
+  if (!session) {
     return { ok: false, reason: 'relay-unsupported', evidence: null }
   }
   return compareWithRelayReplica({
     ...rest,
-    generation: getGeneration(args.connectionId),
-    request: (method, params, options) => mux.request(method, params, options)
+    generation: session.generation,
+    request: session.request
   })
 }

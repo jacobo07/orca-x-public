@@ -28,8 +28,13 @@ const ENV = {
 const git = (cwd: string, ...a: string[]): string =>
   execFileSync('git', a, { cwd, env: ENV, encoding: 'utf8' }).trim()
 
-// The slot type carries the capsule operations too; the compare and relations tests never reach them.
-const capsuleStubs = () => ({ capsuleCreate: vi.fn(), capsuleList: vi.fn(), capsuleRestore: vi.fn() })
+// The slot type carries the capsule and sync operations too; the compare and relations tests never reach them.
+const capsuleStubs = () => ({
+  capsuleCreate: vi.fn(),
+  capsuleList: vi.fn(),
+  capsuleRestore: vi.fn(),
+  sync: vi.fn()
+})
 
 const compare = PROJECT_REPLICA_METHODS.find((m) => m.name === 'projectReplica.compare')!
 const call = (params: unknown, ctx: Partial<RpcContext> = {}) =>
@@ -200,7 +205,8 @@ function fakeService() {
     relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
     capsuleCreate: vi.fn(async () => ({ status: 'ok' as const, outcome: { kind: 'clean' as const } })),
     capsuleList: vi.fn(async () => ({ status: 'ok' as const, capsules: [] })),
-    capsuleRestore: vi.fn(async () => ({ status: 'refused' as const, reason: 'worktree-not-clean' as const }))
+    capsuleRestore: vi.fn(async () => ({ status: 'refused' as const, reason: 'worktree-not-clean' as const })),
+    sync: vi.fn()
   }
 }
 

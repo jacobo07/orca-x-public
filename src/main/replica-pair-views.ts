@@ -1,4 +1,5 @@
 // Pure pieces of the pair service: the anchor choice, the facts of each side and the published view of a pair.
+import { createHash } from 'node:crypto'
 import { parseExecutionHostId } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
 import type { ReplicaPairView } from '../shared/replica-pair-view'
@@ -12,6 +13,16 @@ import {
 import { relationFromComparison, type ReplicaComparisonResult } from './replica-comparison-service'
 import type { LocalReplicaRead } from './replica-local-facts'
 import { UNREAD_REMOTE_WORKTREE } from './replica-remote-facts'
+
+/** Ref-safe, deterministic key per host: two hosts that sanitize alike still get distinct namespaces. */
+export function replicaHostKey(hostId: string): string {
+  const safe = hostId
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .replace(/\.{2,}/g, '_')
+    .replace(/^[.-]/, '_')
+    .slice(0, 48)
+  return `${safe}-${createHash('sha256').update(hostId).digest('hex').slice(0, 10)}`
+}
 
 // Why: the model needs a tip to reach the evidence branch; this value is never published (unknown carries no tips).
 const UNREAD_REMOTE_TIP = '0'.repeat(40)

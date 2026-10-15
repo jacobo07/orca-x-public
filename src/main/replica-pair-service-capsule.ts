@@ -1,7 +1,6 @@
 // Capsule create, list and restore for one local git setup (row 64): the service half of the RPC and CLI verbs.
 // Create and restore run under the worktree mutation guard; remote and folder setups are refused before any git call.
 import { stat } from 'node:fs/promises'
-import { parseExecutionHostId } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
 import type {
   ReplicaCapsuleCreateResult,
@@ -16,6 +15,7 @@ import {
   type CapsuleResult
 } from './replica-capsule'
 import { restoreCapsule, type CapsuleRestoreResult } from './replica-capsule-restore'
+import { guarded, isRemoteSetup, MISSING } from './replica-pair-service-target'
 import type { ReplicaWorktreeMutationGuard } from './replica-worktree-mutation-guard'
 
 export type ReplicaCapsuleOperationDeps = {
@@ -46,18 +46,6 @@ type Early =
     }
 
 type Located = { path: string } | Early
-
-const BUSY = { status: 'refused', reason: 'worktree-busy' } as const
-const MISSING = { status: 'refused', reason: 'worktree-missing' } as const
-
-function isRemoteSetup(setup: ProjectHostSetup): boolean {
-  // Fail closed: a host id or an owner we cannot read as this machine is not a worktree this process may touch.
-  const hosts = [setup.hostId, ...(setup.executionHostId ? [setup.executionHostId] : [])]
-  return (
-    hosts.some((h) => parseExecutionHostId(h)?.kind !== 'local') ||
-    Boolean(setup.runtimeOwnerEnvironmentId)
-  )
-}
 
 // Why: the host and the kind are classified from the stored setup alone, so a refused setup costs no git call.
 async function locate(setups: readonly ProjectHostSetup[], setupId: string): Promise<Located> {
@@ -119,42 +107,15 @@ export function createReplicaCapsuleOperations(
   deps: ReplicaCapsuleOperationDeps
 ): ReplicaCapsuleOperations {
   const git = deps.capsuleGit ?? localCapsuleGit
-  // Why: a failure of the operation itself must surface as itself; only the guard's own realpath failure means "missing".
-  async function guarded<T>(
-    path: string,
-    operation: () => Promise<T>
-  ): Promise<{ done: T } | typeof BUSY | typeof MISSING> {
-    const failure: { error?: unknown; thrown: boolean } = { thrown: false }
-    const outcome = await deps.mutationGuard
-      .run(path, async () => {
-        try {
-          return await operation()
-        } catch (error) {
-          failure.error = error
-          failure.thrown = true
-          return undefined
-        }
-      })
-      .catch(() => null)
-    if (outcome === null) {
-      return MISSING
-    }
-    if (outcome.kind === 'busy') {
-      return BUSY
-    }
-    if (failure.thrown) {
-      throw failure.error
-    }
-    return { done: outcome.value as T }
-  }
-
   return {
     async capsuleCreate({ setupId }) {
       const located = await locate(deps.listProjectHostSetups(), setupId)
       if (!('path' in located)) {
         return located
       }
-      const ran = await guarded(located.path, () => createCapsule(git, located.path))
+      const ran = await guarded(deps.mutationGuard, located.path, () =>
+        createCapsule(git, located.path)
+      )
       return 'done' in ran ? createView(ran.done) : ran
     },
 
@@ -173,7 +134,7 @@ export function createReplicaCapsuleOperations(
       }
       // Why: plan unless the caller said apply in exactly that word; anything else must never write.
       const effective = mode === 'apply' ? 'apply' : 'plan'
-      const ran = await guarded(located.path, () =>
+      const ran = await guarded(deps.mutationGuard, located.path, () =>
         restoreCapsule({ git, worktreePath: located.path, capsule, mode: effective })
       )
       return 'done' in ran ? restoreView(ran.done) : ran

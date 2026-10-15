@@ -11,6 +11,7 @@ import {
   relationFromComparison,
   compareWithRelayReplica,
   compareWithSshRelayReplica,
+  openSshRelaySession,
   type ReplicaComparisonRequest
 } from './replica-comparison-service'
 import type { gitExecFileAsync } from './git/runner'
@@ -326,5 +327,40 @@ describe('compareWithSshRelayReplica', () => {
       expect(r).toMatchObject({ ok: false, reason: 'relay-unsupported' })
     }
     expect(calls).toEqual([])
+  })
+})
+
+describe('openSshRelaySession', () => {
+  it('no live connection or a disposed multiplexer is no session, and no relay call is made', async () => {
+    for (const mux of [undefined, { isDisposed: () => true, request: async () => ({}) }]) {
+      expect(
+        await openSshRelaySession('c', { getMultiplexer: () => mux, getGeneration: () => 1 })
+      ).toBeNull()
+    }
+    expect(calls).toEqual([])
+  })
+
+  it('binds the request to the multiplexer and reads the generation live', async () => {
+    const req = relay(['git.replicaBundle'])
+    let generation = 4
+    const seen: string[] = []
+    const session = await openSshRelaySession('c', {
+      getMultiplexer: (id) => (
+        seen.push(id),
+        {
+          isDisposed: () => false,
+          request: (m, p, o) => req(m, p ?? {}, { timeoutMs: o?.timeoutMs ?? 0 })
+        }
+      ),
+      getGeneration: () => generation
+    })
+    expect(session).not.toBeNull()
+    expect(session?.generation).toBe(4)
+    generation = 5
+    expect(session?.currentGeneration()).toBe(5)
+    expect(session?.generation).toBe(4)
+    await session?.request('relay.status', {}, { timeoutMs: 1 })
+    expect(calls).toEqual(['relay.status'])
+    expect(seen).toEqual(['c'])
   })
 })

@@ -1,6 +1,5 @@
 // One authority for comparing a project's setups: each non-anchor setup against the project's local anchor
 // setup over the app's SSH relay session, folded into the evidence-only state model (rows 62, 63).
-import { createHash } from 'node:crypto'
 import { parseExecutionHostId } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
 import type {
@@ -25,11 +24,16 @@ import {
   type ReplicaCapsuleOperations
 } from './replica-pair-service-capsule'
 import {
+  createReplicaSyncOperations,
+  type ReplicaSyncOperations
+} from './replica-pair-service-sync'
+import {
   anchorFactsOf,
   foldPair,
   localTipOf,
   pickAnchor,
   remoteFactsOf,
+  replicaHostKey,
   structuralReason,
   unknownView,
   viewOf
@@ -39,6 +43,7 @@ import {
   readRemoteWorktreeFact,
   UNREAD_REMOTE_WORKTREE
 } from './replica-remote-facts'
+import type { GitRun } from './replica-sync'
 import { createReplicaWorktreeMutationGuard } from './replica-worktree-mutation-guard'
 import { getSshConnectionGeneration } from './ssh/ssh-connection-generation'
 
@@ -49,6 +54,8 @@ export type ReplicaPairServiceDeps = {
   now?: () => number
   readLocalFacts?: typeof readLocalReplicaFacts
   readRemoteWorktreeFact?: typeof readRemoteWorktreeFact
+  /** Runner for the sync fast-forward; production leaves it out and gets the local one. */
+  git?: GitRun
 } & Partial<Pick<ReplicaCapsuleOperationDeps, 'capsuleGit' | 'mutationGuard'>>
 
 export type ReplicaPairService = {
@@ -58,9 +65,12 @@ export type ReplicaPairService = {
   }): Promise<Extract<ReplicaPairCompareResult, { status: 'ok' | 'not-found' }>>
   /** Every non-anchor setup of every project: stored answers re-fenced against the current local tip, never a clock. */
   relations(): Promise<Extract<ReplicaPairRelationsResult, { status: 'ok' }>>
-} & ReplicaCapsuleOperations
+} & ReplicaCapsuleOperations &
+  ReplicaSyncOperations
 
 type StoredPair = {
+  /** Set when the local tip moved under the answer (a sync): the answer is kept only as the fact that it is stale. */
+  stale?: true
   anchorId: string
   local: ReplicaFacts
   remote: ReplicaFacts
@@ -69,15 +79,7 @@ type StoredPair = {
 
 type PairOutcome = { view: ReplicaPairView; stored: StoredPair | null }
 
-/** Ref-safe, deterministic key per host: two hosts that sanitize alike still get distinct namespaces. */
-export function replicaHostKey(hostId: string): string {
-  const safe = hostId
-    .replace(/[^A-Za-z0-9._-]/g, '_')
-    .replace(/\.{2,}/g, '_')
-    .replace(/^[.-]/, '_')
-    .slice(0, 48)
-  return `${safe}-${createHash('sha256').update(hostId).digest('hex').slice(0, 10)}`
-}
+export { replicaHostKey }
 
 // Why: loaded on demand so this module stays importable without the Electron-bound SSH layer.
 const defaultGetMultiplexer: SshRelaySessionDeps['getMultiplexer'] = async (id) =>
@@ -89,7 +91,7 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
   const getGeneration = deps.sshSession?.getGeneration ?? getSshConnectionGeneration
   const readRemoteWorktree = deps.readRemoteWorktreeFact ?? readRemoteWorktreeFact
   // Why: a second compare of a setup that is mid-flight joins it, so one setup never holds two relay exports.
-  const inFlight = new Map<string, Promise<ReplicaPairView>>()
+  const inFlight = new Map<string, Promise<PairOutcome>>()
   // Memory only: the last answer per setup, re-fenced on every read. Losing it costs one re-compare.
   const stored = new Map<string, StoredPair>()
 
@@ -109,7 +111,9 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
   async function comparePair(
     setup: ProjectHostSetup,
     anchor: ProjectHostSetup | undefined,
-    readAnchor: () => Promise<LocalReplicaRead>
+    readAnchor: () => Promise<LocalReplicaRead>,
+    /** A comparison someone else already made (a sync that found the anchor not behind); no transfer is repeated. */
+    known?: ReplicaComparisonResult
   ): Promise<PairOutcome> {
     const structural = structuralReason(setup, anchor)
     const parsed = parseExecutionHostId(setup.hostId)
@@ -129,14 +133,16 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
       const relation = deriveReplicaRelation(local, remote)
       return { view: viewOf(setup, anchor, local, remote, relation, false), stored: null }
     }
-    const result = await compareWithSshRelayReplica({
-      connectionId,
-      localRepoPath: anchor.path,
-      remoteRepoPath: setup.path,
-      hostKey: replicaHostKey(setup.hostId),
-      ...(deps.now ? { now: deps.now } : {}),
-      deps: { ...deps.sshSession, getMultiplexer: () => mux }
-    })
+    const result =
+      known ??
+      (await compareWithSshRelayReplica({
+        connectionId,
+        localRepoPath: anchor.path,
+        remoteRepoPath: setup.path,
+        hostKey: replicaHostKey(setup.hostId),
+        ...(deps.now ? { now: deps.now } : {}),
+        deps: { ...deps.sshSession, getMultiplexer: () => mux }
+      }))
     // Why: the same multiplexer-bound request and generation as the comparison, so the sync.v1 probe is shared.
     const worktree = comparisonFoundEqualTips(result)
       ? await readRemoteWorktree({
@@ -154,16 +160,13 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     }
   }
 
-  function pairFor(
+  function startComparison(
     setup: ProjectHostSetup,
     anchor: ProjectHostSetup | undefined,
-    readAnchor: () => Promise<LocalReplicaRead>
-  ): Promise<ReplicaPairView> {
-    const joined = inFlight.get(setup.id)
-    if (joined) {
-      return joined
-    }
-    const started = comparePair(setup, anchor, readAnchor)
+    readAnchor: () => Promise<LocalReplicaRead>,
+    known?: ReplicaComparisonResult
+  ): Promise<PairOutcome> {
+    const started = comparePair(setup, anchor, readAnchor, known)
       .then((outcome) => {
         // A compare that reached no comparison also retires the older answer it replaces.
         if (outcome.stored) {
@@ -171,16 +174,25 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
         } else {
           stored.delete(setup.id)
         }
-        return outcome.view
+        return outcome
       })
       // One setup's failure is that setup's unknown; it never rejects the project call.
-      .catch((): ReplicaPairView => {
+      .catch((): PairOutcome => {
         stored.delete(setup.id)
-        return unknownView(setup, anchor, 'transfer-interrupted')
+        return { view: unknownView(setup, anchor, 'transfer-interrupted'), stored: null }
       })
       .finally(() => inFlight.delete(setup.id))
     inFlight.set(setup.id, started)
     return started
+  }
+
+  function pairFor(
+    setup: ProjectHostSetup,
+    anchor: ProjectHostSetup | undefined,
+    readAnchor: () => Promise<LocalReplicaRead>
+  ): Promise<ReplicaPairView> {
+    const joined = inFlight.get(setup.id)
+    return (joined ?? startComparison(setup, anchor, readAnchor)).then((outcome) => outcome.view)
   }
 
   // Why: re-derived against the current anchor so a moved local tip reads evidence-stale, never the old relation.
@@ -194,18 +206,47 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     const moved = localTipOf(local) !== localTipOf(entry.local)
     // A failure that carried no evidence has no tips for the model to fence, so the fence is checked here.
     const relation: ReplicaRelation =
-      moved && !entry.result.evidence
+      entry.stale || (moved && !entry.result.evidence)
         ? { kind: 'unknown', reason: 'evidence-stale' }
         : foldPair(local, read.shallow, entry.remote, entry.result)
-    return viewOf(setup, anchor, local, entry.remote, relation, entry.result.evidence !== null)
+    return viewOf(
+      setup,
+      anchor,
+      local,
+      entry.remote,
+      relation,
+      !entry.stale && entry.result.evidence !== null
+    )
   }
 
   // Why: one guard for every worktree-mutating method of this service, so two effects never interleave on a worktree.
   const mutationGuard = deps.mutationGuard ?? createReplicaWorktreeMutationGuard()
   const capsules = createReplicaCapsuleOperations({ ...deps, mutationGuard })
+  const syncOperations = createReplicaSyncOperations({
+    ...deps,
+    mutationGuard,
+    ledger: {
+      async adoptEvidence(setup, anchor, evidence) {
+        // Why: never overlap a comparison of the same setup; the evidence is folded through the one comparison path.
+        await inFlight.get(setup.id)
+        await startComparison(setup, anchor, lazyAnchorRead(anchor), {
+          ok: true,
+          evidence,
+          refs: {}
+        })
+      },
+      markStale(setupId) {
+        const entry = stored.get(setupId)
+        if (entry) {
+          stored.set(setupId, { ...entry, stale: true })
+        }
+      }
+    }
+  })
 
   return {
     ...capsules,
+    ...syncOperations,
     async compare({ projectId, setupId }) {
       const setups = deps.listProjectHostSetups().filter((s) => s.projectId === projectId)
       if (setups.length === 0) {

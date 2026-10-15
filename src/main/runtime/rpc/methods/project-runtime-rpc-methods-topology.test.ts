@@ -112,7 +112,8 @@ function fakeService(views: ReplicaPairView[]) {
     relations,
     capsuleCreate: vi.fn(),
     capsuleList: vi.fn(),
-    capsuleRestore: vi.fn()
+    capsuleRestore: vi.fn(),
+    sync: vi.fn()
   }
   return { service, relations }
 }
