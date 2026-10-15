@@ -7,17 +7,14 @@ import type {
   ReplicaPairRelationsResult,
   ReplicaPairView
 } from '../shared/replica-pair-view'
-import {
-  deriveReplicaRelation,
-  type ReplicaFacts,
-  type ReplicaRelation
-} from '../shared/workspace-replica-state'
+import { deriveReplicaRelation } from '../shared/workspace-replica-state'
 import {
   compareWithSshRelayReplica,
   type ReplicaComparisonResult,
   type SshRelaySessionDeps
 } from './replica-comparison-service'
 import { readLocalReplicaFacts, type LocalReplicaRead } from './replica-local-facts'
+import { refenceStoredPair, type StoredPair } from './replica-pair-service-refence'
 import {
   createReplicaCapsuleOperations,
   type ReplicaCapsuleOperationDeps,
@@ -79,15 +76,6 @@ export type ReplicaPairService = {
   ReplicaDivergenceOperations &
   ReplicaReconcileOperations
 
-type StoredPair = {
-  /** Set when the local tip moved under the answer (a sync): the answer is kept only as the fact that it is stale. */
-  stale?: true
-  anchorId: string
-  local: ReplicaFacts
-  remote: ReplicaFacts
-  result: ReplicaComparisonResult
-}
-
 type PairOutcome = { view: ReplicaPairView; stored: StoredPair | null }
 
 export { replicaHostKey }
@@ -137,6 +125,8 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     if (!mux || mux.isDisposed()) {
       return { view: unknownView(setup, anchor, 'host-unreachable'), stored: null }
     }
+    // Read before the comparison so a reconnect during it also reads as a changed session.
+    const generation = getGeneration(connectionId)
     const anchorRead = await readAnchor()
     const local = anchorFactsOf(anchorRead)
     if (localTipOf(local) === null) {
@@ -158,7 +148,7 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     const worktree = comparisonFoundEqualTips(result)
       ? await readRemoteWorktree({
           connectionId,
-          generation: getGeneration(connectionId),
+          generation,
           request: (method, params, options) => mux.request(method, params, options),
           repoPath: setup.path
         })
@@ -167,7 +157,15 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     const relation = foldPair(local, anchorRead.shallow, remote, result)
     return {
       view: viewOf(setup, anchor, local, remote, relation, result.evidence !== null),
-      stored: { anchorId: anchor.id, local, remote, result }
+      stored: {
+        anchorId: anchor.id,
+        local,
+        remote,
+        result,
+        connectionId,
+        generation,
+        observedAt: (deps.now ?? Date.now)()
+      }
     }
   }
 
@@ -204,30 +202,6 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
   ): Promise<ReplicaPairView> {
     const joined = inFlight.get(setup.id)
     return (joined ?? startComparison(setup, anchor, readAnchor)).then((outcome) => outcome.view)
-  }
-
-  // Why: re-derived against the current anchor so a moved local tip reads evidence-stale, never the old relation.
-  function refenced(
-    entry: StoredPair,
-    setup: ProjectHostSetup,
-    anchor: ProjectHostSetup,
-    read: LocalReplicaRead
-  ): ReplicaPairView {
-    const local = anchorFactsOf(read)
-    const moved = localTipOf(local) !== localTipOf(entry.local)
-    // A failure that carried no evidence has no tips for the model to fence, so the fence is checked here.
-    const relation: ReplicaRelation =
-      entry.stale || (moved && !entry.result.evidence)
-        ? { kind: 'unknown', reason: 'evidence-stale' }
-        : foldPair(local, read.shallow, entry.remote, entry.result)
-    return viewOf(
-      setup,
-      anchor,
-      local,
-      entry.remote,
-      relation,
-      !entry.stale && entry.result.evidence !== null
-    )
   }
 
   // Why: one guard for every worktree-mutating method of this service, so two effects never interleave on a worktree.
@@ -311,7 +285,12 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
           }
           // The anchor is read only once a stored answer needs fencing against it.
           readAnchor ??= lazyAnchorRead(anchor)
-          pairs.push(refenced(kept, setup, anchor, await readAnchor()))
+          pairs.push(
+            await refenceStoredPair(kept, setup, anchor, await readAnchor(), {
+              getGeneration,
+              getMultiplexer
+            })
+          )
         }
       }
       return { status: 'ok', pairs }
