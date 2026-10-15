@@ -68,9 +68,9 @@ describe('task-graph spread golden', () => {
   }
 
   // Why: task ids are random and the planner orders jobs by id, so tN names the Nth sorted id.
-  async function place(scenario: Scenario) {
+  function prepare(scenario: Scenario) {
     h.cleanup()
-    const { db, ctx } = h.setup(true)
+    const { db, ctx, activeRunId } = h.setup(true)
     observation.current = Promise.resolve({
       observedAt: 1_000,
       completedAt: 1_000,
@@ -98,6 +98,11 @@ describe('task-graph spread golden', () => {
     }
     const listed = scenario.listOrder ? scenario.listOrder(scenario.names) : [...scenario.names]
     const params = { from: 'term_coord', tasks: listed.map((name) => idOf[name]) }
+    return { db, ctx, idOf, params, runId: activeRunId }
+  }
+
+  async function place(scenario: Scenario) {
+    const { db, ctx, idOf, params } = prepare(scenario)
     const plan = (await h.call('orchestration.missionPlace', params, ctx)) as {
       runId: string
       unplaced: { jobId: string }[]
@@ -144,5 +149,130 @@ describe('task-graph spread golden', () => {
 
     expect(plan.unplaced).toEqual([])
     expect(mapping).toEqual({ t1: HOST_A, t2: HOST_B })
+  })
+
+  describe('independent tasks', () => {
+    it('two independent tasks over two eligible hosts land on different hosts', async () => {
+      const { mapping, plan } = await place({ names: ['t1', 't2'] })
+
+      expect(mapping).toEqual({ t1: HOST_A, t2: HOST_B })
+      expect(plan.hostCount).toBe(2)
+    })
+
+    it('three independent tasks over two hosts differ in a pair and no host holds more than two', async () => {
+      const { mapping } = await place({ names: ['t1', 't2', 't3'] })
+
+      const hosts = Object.values(mapping)
+      expect(new Set(hosts).size).toBe(2)
+      for (const host of [HOST_A, HOST_B]) {
+        expect(hosts.filter((h) => h === host).length).toBeLessThanOrEqual(Math.ceil(3 / 2))
+      }
+    })
+
+    it('over one eligible host all tasks share it and none is unplaced', async () => {
+      const { mapping, plan } = await place({
+        names: ['t1', 't2', 't3'],
+        members: [member(HOST_A, 'fp-a', 24 * GB)]
+      })
+
+      expect(plan.unplaced).toEqual([])
+      expect(mapping).toEqual({ t1: HOST_A, t2: HOST_A, t3: HOST_A })
+      expect(plan.hostCount).toBe(1)
+    })
+  })
+
+  describe('dependency relations', () => {
+    it('a transitive chain shares one host and the independent task is not on it', async () => {
+      const { mapping } = await place({
+        names: ['t1', 't2', 't3', 't4'],
+        deps: { t2: ['t1'], t3: ['t2'] }
+      })
+
+      expect(mapping).toEqual({ t1: HOST_A, t2: HOST_A, t3: HOST_A, t4: HOST_B })
+    })
+
+    it('two tasks that only share a dependency are independent of each other', async () => {
+      const { mapping } = await place({
+        names: ['t1', 't2', 't3'],
+        deps: { t2: ['t1'], t3: ['t1'] }
+      })
+
+      expect(mapping).toEqual({ t1: HOST_A, t2: HOST_A, t3: HOST_B })
+    })
+
+    it('a dependency on a task outside the call is ignored', async () => {
+      const { mapping, plan } = await place({
+        names: ['t1', 't2'],
+        outsideTask: 'outside',
+        deps: { t2: ['outside'] }
+      })
+
+      expect(plan.unplaced).toEqual([])
+      expect(mapping).toEqual({ t1: HOST_A, t2: HOST_B })
+    })
+
+    it('malformed deps text of every shape counts as independent', async () => {
+      for (const raw of ['not json', '{"a":1}', '7', '["x",1]', 'null', '']) {
+        const { mapping, plan } = await place({ names: ['t1', 't2'], deps: { t2: { raw } } })
+
+        expect(plan.unplaced).toEqual([])
+        expect(mapping).toEqual({ t1: HOST_A, t2: HOST_B })
+      }
+    })
+
+    it('a dependency cycle neither hangs nor throws and its members share a host', async () => {
+      const { mapping, plan } = await place({
+        names: ['t1', 't2', 't3'],
+        deps: { t1: ['t2'], t2: ['t1'] }
+      })
+
+      expect(plan.unplaced).toEqual([])
+      expect(mapping).toEqual({ t1: HOST_A, t2: HOST_A, t3: HOST_B })
+    })
+  })
+
+  describe('determinism and placeable states', () => {
+    const permutations = <T>(items: readonly T[]): T[][] =>
+      items.length <= 1
+        ? [[...items]]
+        : items.flatMap((item, i) =>
+            permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [
+              item,
+              ...rest
+            ])
+          )
+
+    it('keeps the full mapping across all 24 orders of a 4-task list and the member order', async () => {
+      const names = ['t1', 't2', 't3', 't4']
+      const deps: DepsSpec = { t2: ['t1'], t4: ['t3'] }
+      const golden = { t1: HOST_A, t2: HOST_A, t3: HOST_B, t4: HOST_B }
+      const orders = permutations(names)
+      expect(orders).toHaveLength(24)
+      for (const order of orders) {
+        const { mapping } = await place({ names, deps, listOrder: () => order })
+        expect(mapping).toEqual(golden)
+      }
+      const reversed = await place({ names, deps, members: TWO_HOSTS.toReversed() })
+      expect(reversed.mapping).toEqual(golden)
+    })
+
+    it('places pending and ready tasks and refuses a dispatched unplaced one before placing anything', async () => {
+      const ok = await place({
+        names: ['t1', 't2'],
+        deps: { t2: ['t1'] },
+        statuses: { t1: 'ready' }
+      })
+      expect(ok.mapping).toEqual({ t1: HOST_A, t2: HOST_A })
+
+      const { db, ctx, params, runId } = prepare({
+        names: ['t1', 't2', 't3'],
+        deps: { t2: ['t1'] },
+        statuses: { t3: 'dispatched' }
+      })
+      await expect(h.call('orchestration.missionPlace', params, ctx)).rejects.toThrow(
+        /only pending or ready tasks can be placed/
+      )
+      expect(db.listRunTaskPlacements(runId!)).toEqual([])
+    })
   })
 })

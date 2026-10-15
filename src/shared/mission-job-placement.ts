@@ -60,7 +60,21 @@ function relatedJobPairs(jobs: readonly MissionJob[]): (a: string, b: string) =>
   const direct = new Map(
     jobs.map((job) => [job.jobId, (job.dependsOn ?? []).filter((id) => inCall.has(id))])
   )
-  const reachable = new Map(jobs.map((job) => [job.jobId, new Set(direct.get(job.jobId))]))
+  const reachable = new Map<string, Set<string>>()
+  // Why: the seen set is what makes a dependency cycle terminate.
+  const collect = (id: string, seen: Set<string>): void => {
+    for (const next of direct.get(id) ?? []) {
+      if (!seen.has(next)) {
+        seen.add(next)
+        collect(next, seen)
+      }
+    }
+  }
+  for (const job of jobs) {
+    const seen = new Set<string>()
+    collect(job.jobId, seen)
+    reachable.set(job.jobId, seen)
+  }
   return (a, b) => reachable.get(a)?.has(b) === true || reachable.get(b)?.has(a) === true
 }
 

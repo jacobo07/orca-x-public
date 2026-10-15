@@ -383,4 +383,107 @@ describe('mission job placement: dependent jobs may share a host, independent jo
     )
     expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-small', t3: 'fp-win' })
   })
+
+  it('keeps independent jobs apart: two differ, and three over two hosts never put all on one', () => {
+    const two = planMissionPlacement([{ jobId: 't1' }, { jobId: 't2' }], fleet, request)
+    expect(new Set(Object.values(mapping(two))).size).toBe(2)
+    const three = planMissionPlacement(
+      [{ jobId: 't1' }, { jobId: 't2' }, { jobId: 't3' }],
+      fleet,
+      request
+    )
+    const perHost = Object.values(mapping(three)).reduce<Record<string, number>>(
+      (counts, fp) => ({ ...counts, [fp]: (counts[fp] ?? 0) + 1 }),
+      {}
+    )
+    expect(Math.max(...Object.values(perHost))).toBeLessThanOrEqual(2)
+    expect(Object.keys(perHost)).toHaveLength(2)
+  })
+
+  it('shares the only eligible host among independent jobs and leaves none unplaced', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 't1' }, { jobId: 't2' }, { jobId: 't3' }],
+      [fleet[0]],
+      request
+    )
+    expect(plan.unplaced).toEqual([])
+    expect(new Set(Object.values(mapping(plan)))).toEqual(new Set(['fp-win']))
+  })
+
+  it('relates a job to every ancestor, not only its direct dependency', () => {
+    const plan = planMissionPlacement(
+      [
+        { jobId: 't1' },
+        { jobId: 't2', dependsOn: ['t1'] },
+        { jobId: 't3', dependsOn: ['t2'] },
+        { jobId: 't4' }
+      ],
+      fleet,
+      request
+    )
+    expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-win', t3: 'fp-win', t4: 'fp-small' })
+  })
+
+  it('treats two jobs that only share a dependency as independent', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 't1' }, { jobId: 't2', dependsOn: ['t1'] }, { jobId: 't3', dependsOn: ['t1'] }],
+      fleet,
+      request
+    )
+    expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-win', t3: 'fp-small' })
+  })
+
+  it('ignores a dependency on a task outside the call', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 't1' }, { jobId: 't2', dependsOn: ['not-in-this-call'] }],
+      fleet,
+      request
+    )
+    expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-small' })
+  })
+
+  it('terminates on a dependency cycle and counts its members as related', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 't1', dependsOn: ['t2'] }, { jobId: 't2', dependsOn: ['t1'] }, { jobId: 't3' }],
+      fleet,
+      request
+    )
+    expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-win', t3: 'fp-small' })
+  })
+
+  it('terminates on a job that depends on itself', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 't1', dependsOn: ['t1'] }, { jobId: 't2' }],
+      fleet,
+      request
+    )
+    expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-small' })
+  })
+
+  it('gives the identical mapping for every order of the job list and of the member list', () => {
+    const jobs: MissionJob[] = [
+      { jobId: 't1' },
+      { jobId: 't2', dependsOn: ['t1'] },
+      { jobId: 't3' },
+      { jobId: 't4', dependsOn: ['t3'] }
+    ]
+    const permutations = <T>(items: readonly T[]): T[][] =>
+      items.length <= 1
+        ? [[...items]]
+        : items.flatMap((item, i) =>
+            permutations([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [
+              item,
+              ...rest
+            ])
+          )
+    const orders = permutations(jobs)
+    expect(orders).toHaveLength(24)
+    const golden = mapping(planMissionPlacement(jobs, fleet, request))
+    expect(golden).toEqual({ t1: 'fp-win', t2: 'fp-win', t3: 'fp-small', t4: 'fp-small' })
+    for (const order of orders) {
+      for (const members of [fleet, fleet.toReversed()]) {
+        expect(mapping(planMissionPlacement(order, members, request))).toEqual(golden)
+      }
+    }
+  })
 })
