@@ -4,13 +4,16 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { importsOf, resolveSpecifier, stringLiterals } from './check-workspace-surface-claims.mjs'
 
-// Pins TODAY's behaviour: no production module turns a fleet placement proposal into an effect.
-// Phase 6 inverts this in place by adding the apply module below with role 'apply' behind a lease.
+// Pins the fleet placement proposal's consumers: the view stays inert, the apply path is exactly the declared one.
+// The apply path is orchestration.missionPlace; a lease or governor is UWCP S4-S5 (absent), Orca builds none.
 // The per-consumer inertness half lives in src/main/runtime/rpc/methods/fleet.test.ts.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-export const SUBJECT_MODULES = ['src/shared/fleet-placement.ts', 'src/shared/fleet-placement-view.ts']
+export const SUBJECT_MODULES = [
+  'src/shared/fleet-placement.ts',
+  'src/shared/fleet-placement-view.ts'
+]
 export const VIEW_METHOD = 'fleet.placementView'
 export const PRODUCTION_ROOTS = [
   'src/main',
@@ -25,7 +28,16 @@ export const PRODUCTION_ROOTS = [
 // 8464; 90% of 8464 = 7617.6, rounded down to a multiple of 50.
 export const MIN_SCANNED_FILES = 7600
 
-export const READ_ONLY_PROPOSAL_CONSUMERS = Object.freeze({
+export const ROLES = Object.freeze([
+  'observation-producer',
+  'read-only-view',
+  'read-only-projection',
+  'formatter',
+  'printer',
+  'apply'
+])
+
+export const PROPOSAL_CONSUMERS = Object.freeze({
   'src/main/fleet/fleet-observation-service.ts': {
     role: 'observation-producer',
     reason:
@@ -43,14 +55,42 @@ export const READ_ONLY_PROPOSAL_CONSUMERS = Object.freeze({
   },
   'src/cli/fleet-placement-format.ts': {
     role: 'formatter',
-    reason: 'formats a FleetPlacementViewResult into text and an exit code; reads reasons, never acts'
+    reason:
+      'formats a FleetPlacementViewResult into text and an exit code; reads reasons, never acts'
   },
   'src/cli/handlers/fleet.ts': {
     role: 'printer',
     reason:
       'calls fleet.placementView over RPC and prints the formatted result; never reads proposal.selected itself'
+  },
+  'src/shared/mission-job-placement.ts': {
+    role: 'apply',
+    reason:
+      'calls planFleetPlacement once per job and turns proposal.eligible into per-job placements by least load; the plan authorizes nothing, dispatch re-resolves identity (D-10)'
+  },
+  'src/main/runtime/orchestration/mission-dispatch-placement.ts': {
+    role: 'apply',
+    reason:
+      'filters dispatchable members and calls planMissionPlacement; assertWorkerStartMatchesPlacement re-resolves identity and fingerprint at the effect, so the proposal authorizes nothing (D-10)'
+  },
+  'src/main/fleet/fleet-ssh-host-observation.ts': {
+    role: 'observation-producer',
+    reason:
+      'imports FleetSshHostObservation types from the view module only, to assemble an SSH observation; never calls planFleetPlacement'
+  },
+  'src/main/fleet/fleet-ssh-placement-member.ts': {
+    role: 'observation-producer',
+    reason:
+      'imports FleetPlacementMember and FleetSshHostObservation types only, to build a placement member from an SSH observation; never calls planFleetPlacement'
   }
 })
+
+export const APPLY_MODULES = Object.freeze(
+  Object.entries(PROPOSAL_CONSUMERS)
+    .filter(([, entry]) => entry.role === 'apply')
+    .map(([file]) => file)
+    .sort()
+)
 
 export const VIEW_METHOD_CALLERS = Object.freeze({
   'src/main/runtime/rpc/methods/fleet.ts': {
@@ -160,20 +200,35 @@ const sweep = sweepFleetProposalConsumers({
   exists: repoFileExists
 })
 
-describe('dws characterization (b): the fleet placement proposal has no apply path — Phase 6 inverts', () => {
-  it('no production module consumes a proposal to cause an effect: every importer is a declared read-only consumer', () => {
+describe('dws characterization (b): the fleet placement proposal has an apply path and it is exactly the declared one', () => {
+  it('every importer of a fleet placement subject module is a declared consumer with a role and a reason', () => {
     const found = [...sweep.importers.keys()].sort()
-    const declared = Object.keys(READ_ONLY_PROPOSAL_CONSUMERS).sort()
+    const declared = Object.keys(PROPOSAL_CONSUMERS).sort()
     const newOnes = found.filter((f) => !declared.includes(f))
     const staleOnes = declared.filter((f) => !found.includes(f))
     expect(
       newOnes,
-      `new importer(s) of a fleet placement subject module — classify each in READ_ONLY_PROPOSAL_CONSUMERS, or if it acts on proposal.selected this IS Phase 6's apply path and the characterization's premise is false: ${JSON.stringify(newOnes)}`
+      `new importer(s) of a fleet placement subject module — classify each in PROPOSAL_CONSUMERS with a role and a reason; one that acts on a proposal needs role 'apply' and a chain pin: ${JSON.stringify(newOnes)}`
     ).toEqual([])
     expect(
       staleOnes,
       `declared consumer(s) no longer import a subject module — stale entry: ${JSON.stringify(staleOnes)}`
     ).toEqual([])
+  })
+
+  it('roles come from the closed set, every entry has a reason, and the apply set is exactly the two row-72 modules', () => {
+    for (const [file, entry] of Object.entries(PROPOSAL_CONSUMERS)) {
+      expect(ROLES, `${file} has role ${entry.role} outside ROLES`).toContain(entry.role)
+      expect(entry.reason.trim().length, `${file} has no reason`).toBeGreaterThan(0)
+    }
+    expect(APPLY_MODULES.length).toBeGreaterThan(0)
+    expect(
+      APPLY_MODULES,
+      'a third module acting on a proposal must be added here with a reason and a chain pin'
+    ).toEqual([
+      'src/main/runtime/orchestration/mission-dispatch-placement.ts',
+      'src/shared/mission-job-placement.ts'
+    ])
   })
 
   it('every caller of fleet.placementView is a declared read-only consumer', () => {
@@ -230,7 +285,9 @@ describe('dws characterization (b): the fleet placement proposal has no apply pa
       read: synthRead,
       exists: synthExists
     })
-    expect(result.importers.get('src/main/fleet/fleet-placement-apply.ts')).toEqual(['planFleetPlacement'])
+    expect(result.importers.get('src/main/fleet/fleet-placement-apply.ts')).toEqual([
+      'planFleetPlacement'
+    ])
     expect(result.viewMethodCallers).toContain('src/main/fleet/fleet-placement-caller.ts')
     expect(result.importers.has('src/main/fleet/fleet-placement-colors-user.ts')).toBe(false)
   })
