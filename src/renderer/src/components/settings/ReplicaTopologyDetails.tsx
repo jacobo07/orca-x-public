@@ -79,7 +79,9 @@ export function ReplicaRowTopology({
         <SettingsBadge tone={provenance.tone}>{provenance.text}</SettingsBadge>
         <SettingsBadge tone={membership.tone}>{membership.text}</SettingsBadge>
         {entry.relation ? (
-          <span className="text-[11px] text-muted-foreground">{describeReplicaRelation()}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {describeReplicaRelation(entry).text}
+          </span>
         ) : null}
       </div>
       {reason ? <p className="text-[11px] text-muted-foreground">{reason}</p> : null}
