@@ -106,6 +106,8 @@ import {
 import { callRuntimeEnvironment } from './ipc/runtime-environment-transport-routing'
 import { listEnvironments, resolveEnvironment } from '../shared/runtime-environment-store'
 import { installFleetObservation } from './fleet/fleet-observation-slot'
+import { createReplicaPairService } from './replica-pair-service'
+import { installReplicaPairService } from './replica-pair-service-slot'
 import { measureNodeResources } from './fleet/node-resources-measure'
 import { installNodeResourcesMeasurer, readNodeResources } from './fleet/node-resources-slot'
 import { readE2EEPublicKey } from './runtime/e2ee-keypair'
@@ -2861,6 +2863,10 @@ void app.whenReady().then(async () => {
         { signal }
       )
   })
+  // Why: the SSH relay session lives only in this process, so `orca serve` leaves the replica slot empty.
+  installReplicaPairService(
+    createReplicaPairService({ listProjectHostSetups: () => runtimeService.listProjectHostSetups() })
+  )
   // Why: the node's userData is where its work lands, so it is the disk the manifest describes.
   installNodeResourcesMeasurer((params) =>
     measureNodeResources({ ...params, dataPath: app.getPath('userData') })
