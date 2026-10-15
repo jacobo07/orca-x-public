@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { hydratedAddressesForProject } from '../../../../shared/mission-job-locality'
+import {
+  hydratedAddressesForProject,
+  taskDependencies
+} from '../../../../shared/mission-job-locality'
 import { integrateMissionResults } from '../../../../shared/mission-job-placement'
 import { readFleetObservation } from '../../../fleet/fleet-observation-slot'
 import {
@@ -102,11 +105,15 @@ export const ORCHESTRATION_MISSION_METHODS: RpcMethod[] = [
             : []
         })
       )
+      // Why: dependencies come from the task rows already read here; unreadable text counts as independent.
+      const dependencies = Object.fromEntries(
+        tasks.map((taskId) => [taskId, taskDependencies(db.getTask(taskId)?.deps)])
+      )
       const plan = planDispatchableMission(
         tasks,
         observation.members,
         { now: observation.completedAt, maxSampleAgeMs: DEFAULT_FLEET_SAMPLE_MAX_AGE_MS },
-        { requirements, hydratedAddresses }
+        { requirements, hydratedAddresses, dependencies }
       )
       const placements = db.placeMissionTasks(
         run.id,

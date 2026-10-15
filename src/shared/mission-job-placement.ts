@@ -15,6 +15,8 @@ export type MissionJob = {
   requirement?: NodeRequirement
   /** Hosts that hold the job's project; a ranking term over already eligible hosts, never eligibility. */
   hydratedAddresses?: readonly ExecutionHostId[]
+  /** Ids of the tasks this job waits on; only ids that are jobs of the same call matter. */
+  dependsOn?: readonly string[]
 }
 
 export type MissionJobPlacement = {
@@ -52,10 +54,21 @@ function mergeJobRequirement(
   return { ...base, ...Object.fromEntries(set) }
 }
 
+// Why: two jobs on a dependency path cannot run at once, so they never count against each other's host.
+function relatedJobPairs(jobs: readonly MissionJob[]): (a: string, b: string) => boolean {
+  const inCall = new Set(jobs.map((job) => job.jobId))
+  const direct = new Map(
+    jobs.map((job) => [job.jobId, (job.dependsOn ?? []).filter((id) => inCall.has(id))])
+  )
+  const reachable = new Map(jobs.map((job) => [job.jobId, new Set(direct.get(job.jobId))]))
+  return (a, b) => reachable.get(a)?.has(b) === true || reachable.get(b)?.has(a) === true
+}
+
 /**
  * Spreads the jobs of ONE mission over distinct eligible hosts, so they can run concurrently on
  * separate machines. Every job is judged by planFleetPlacement per its own capability need; a host
- * already holding a job of this mission is used again only when no unused eligible host remains.
+ * already holding an unrelated job of this mission is used again only when no unused eligible host
+ * remains, while a job may share a host with a job it depends on, or that depends on it.
  * Deterministic for any input order. A plan authorizes nothing: dispatch re-resolves identity.
  */
 export function planMissionPlacement(
@@ -63,7 +76,9 @@ export function planMissionPlacement(
   members: readonly FleetPlacementMember[],
   request: FleetPlacementRequest
 ): MissionPlacementPlan {
-  const load = new Map<string, number>()
+  const hostsUsed = new Set<string>()
+  const placedOn = new Map<string, string[]>()
+  const related = relatedJobPairs(jobs)
   const placements: MissionJobPlacement[] = []
   const unplaced: MissionPlacementPlan['unplaced'] = []
   let rejected: FleetPlacementRejected[] = []
@@ -90,9 +105,11 @@ export function planMissionPlacement(
       c.addresses.some((address) => hydratedHosts.has(address))
     const pick = rankMissionCandidates(proposal.eligible, {
       isHydrated,
-      loadOf: (c) => load.get(c.key) ?? 0
+      loadOf: (c) =>
+        (placedOn.get(c.key) ?? []).filter((other) => !related(job.jobId, other)).length
     })[0]
-    load.set(pick.key, (load.get(pick.key) ?? 0) + 1)
+    hostsUsed.add(pick.key)
+    placedOn.set(pick.key, [...(placedOn.get(pick.key) ?? []), job.jobId])
     placements.push({
       jobId: job.jobId,
       fingerprint: pick.fingerprint,
@@ -102,7 +119,7 @@ export function planMissionPlacement(
       hydrated: isHydrated(pick)
     })
   }
-  return { placements, unplaced, rejected, rejectedByJob, hostCount: load.size }
+  return { placements, unplaced, rejected, rejectedByJob, hostCount: hostsUsed.size }
 }
 
 export type MissionJobOutcome = { jobId: string; status: 'completed' | 'failed'; result?: string }

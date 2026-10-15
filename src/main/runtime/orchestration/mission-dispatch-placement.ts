@@ -36,6 +36,8 @@ export type DispatchableMissionOptions = {
   requirements?: Readonly<Record<string, NodeRequirement>>
   /** Hosts holding each task's project, keyed by task id; a task with no entry has no preference. */
   hydratedAddresses?: Readonly<Record<string, readonly ExecutionHostId[]>>
+  /** Task ids each task depends on, keyed by task id; a task with no entry is independent. */
+  dependencies?: Readonly<Record<string, readonly string[]>>
 }
 
 export function planDispatchableMission(
@@ -52,7 +54,8 @@ export function planDispatchableMission(
     taskIds.map((jobId) => ({
       jobId,
       requirement: options.requirements?.[jobId],
-      hydratedAddresses: options.hydratedAddresses?.[jobId]
+      hydratedAddresses: options.hydratedAddresses?.[jobId],
+      dependsOn: options.dependencies?.[jobId]
     })),
     dispatchable,
     request

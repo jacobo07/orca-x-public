@@ -355,3 +355,32 @@ describe('mission job placement: a host that already holds the project', () => {
     expect(two).toEqual(one)
   })
 })
+
+describe('mission job placement: dependent jobs may share a host, independent jobs spread', () => {
+  const small = toRuntimeExecutionHostId('small')
+  const fleet = [
+    member(LOCAL_EXECUTION_HOST_ID, 'fp-win', 24 * GB),
+    member(small, 'fp-small', 16 * GB)
+  ]
+  const mapping = (plan: ReturnType<typeof planMissionPlacement>) =>
+    Object.fromEntries(plan.placements.map((p) => [p.jobId, p.fingerprint]))
+
+  it('puts a job on its dependency host and sends the independent job to the other host', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 't1' }, { jobId: 't2', dependsOn: ['t1'] }, { jobId: 't3' }],
+      fleet,
+      request
+    )
+    expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-win', t3: 'fp-small' })
+    expect(plan.hostCount).toBe(2)
+  })
+
+  it('control: with no dependency information the earlier mapping holds', () => {
+    const plan = planMissionPlacement(
+      [{ jobId: 't1' }, { jobId: 't2' }, { jobId: 't3' }],
+      fleet,
+      request
+    )
+    expect(mapping(plan)).toEqual({ t1: 'fp-win', t2: 'fp-small', t3: 'fp-win' })
+  })
+})

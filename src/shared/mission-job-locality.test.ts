@@ -1,5 +1,9 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { hydratedAddressesForProject, type ProjectSetupClaim } from './mission-job-locality'
+import {
+  hydratedAddressesForProject,
+  taskDependencies,
+  type ProjectSetupClaim
+} from './mission-job-locality'
 
 function claim(
   projectId: string,
@@ -49,5 +53,39 @@ describe('hydratedAddressesForProject', () => {
 
   it('has no field for a setup time in its input type', () => {
     expectTypeOf<keyof ProjectSetupClaim>().toEqualTypeOf<'projectId' | 'hostId' | 'setupState'>()
+  })
+})
+
+describe('taskDependencies', () => {
+  it('returns the ids of a valid array of strings, in order', () => {
+    expect(taskDependencies('["a","b"]')).toEqual(['a', 'b'])
+  })
+
+  it('returns an empty list for an empty array', () => {
+    expect(taskDependencies('[]')).toEqual([])
+  })
+
+  it('returns an empty list, without throwing, for text that is not JSON', () => {
+    for (const text of ['', 'not json', '[', '{"a":1']) {
+      expect(() => taskDependencies(text)).not.toThrow()
+      expect(taskDependencies(text)).toEqual([])
+    }
+  })
+
+  it('returns an empty list for JSON that is not an array', () => {
+    for (const text of ['{}', '"a"', '7', 'null', 'true', '{"0":"a"}']) {
+      expect(taskDependencies(text)).toEqual([])
+    }
+  })
+
+  it('returns an empty list when any element is not a string', () => {
+    for (const text of ['["a",1]', '[null]', '[["a"]]', '[{"id":"a"}]', '["a",true]']) {
+      expect(taskDependencies(text)).toEqual([])
+    }
+  })
+
+  it('returns an empty list for null or undefined text', () => {
+    expect(taskDependencies(null)).toEqual([])
+    expect(taskDependencies(undefined)).toEqual([])
   })
 })

@@ -13,3 +13,23 @@ export function hydratedAddressesForProject(
     .map((setup) => setup.hostId)
   return [...new Set(hosts)]
 }
+
+/** Task ids named by a task's deps text; unreadable text yields none, so the task counts as independent. */
+export function taskDependencies(depsJson: string | null | undefined): string[] {
+  if (!depsJson) {
+    return []
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(depsJson)
+  } catch {
+    return []
+  }
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every((entry): entry is string => typeof entry === 'string')
+  ) {
+    return []
+  }
+  return [...parsed]
+}
