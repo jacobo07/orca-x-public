@@ -196,7 +196,9 @@ const OUTAGE_HOOK_SCRIPT = [
   `HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$ORCA_AGENT_HOOK_PORT/hook/codex" -H "Content-Type: application/x-www-form-urlencoded" -H "X-Orca-Agent-Hook-Token: $ORCA_AGENT_HOOK_TOKEN" --data-urlencode "paneKey=$ORCA_PANE_KEY" --data-urlencode "tabId=$ORCA_TAB_ID" --data-urlencode "worktreeId=$ORCA_WORKTREE_ID" --data-urlencode "env=$ORCA_AGENT_HOOK_ENV" --data-urlencode "version=$ORCA_AGENT_HOOK_VERSION" --data-urlencode "payload=$PAYLOAD")`,
   'RC=$?',
   'echo "$(date +%s.%N) $RC ${HTTP:-000}" >> "$ROOT/outage-hook.log"',
-  'sleep 120'
+  // Why: the leg asserts the emitter survived the outage; a 120 s tail ended before that check
+  // (live 2026-10-15). Teardown reaps it (REMAINING=0).
+  'sleep 900'
 ].join('\n')
 
 // Schedules one hook to fire `delayS` after this call, from the pane's own shell; returns the prompt that identifies it.
