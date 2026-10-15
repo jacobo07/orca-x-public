@@ -1,12 +1,32 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import { defineMethod, type RpcMethod } from '../core'
+import { publishedRelationsOf } from '../../../../shared/replica-pair-view'
+import type { ReplicaRelation } from '../../../../shared/workspace-replica-state'
+import { readReplicaPairService } from '../../../replica-pair-service-slot'
+import { defineMethod, type RpcContext, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
 import {
   projectResultForClient,
-  projectRootIdentityForClient
+  projectRootIdentityForClient,
+  supportsProjectRootIdentity
 } from '../project-root-identity-client-projection'
+
+/** Only a capable client sees relations; an empty slot (headless serve) or a failed read publishes none. */
+async function publishedSetupRelations(
+  context: Pick<RpcContext, 'clientCapabilities'>
+): Promise<ReadonlyMap<string, ReplicaRelation> | undefined> {
+  const service = supportsProjectRootIdentity(context) ? readReplicaPairService() : null
+  if (!service) {
+    return undefined
+  }
+  try {
+    return publishedRelationsOf((await service.relations()).pairs)
+  } catch {
+    // Why: no feed reads as plain unverified, which is never healthy; a git failure must not fail the list.
+    return undefined
+  }
+}
 
 const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
@@ -121,12 +141,14 @@ export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'projectHostSetup.list',
     params: null,
-    handler: (_params, context) => {
+    handler: async (_params, context) => {
       context.runtime.enrichMissingRepoGitRemoteIdentities?.()
+      const relations = await publishedSetupRelations(context)
       return projectRootIdentityForClient(
         'setups',
         context.runtime.listProjectHostSetups(),
-        context
+        context,
+        relations
       )
     }
   }),

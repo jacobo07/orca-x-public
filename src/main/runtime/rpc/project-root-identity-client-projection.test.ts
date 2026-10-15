@@ -6,6 +6,8 @@ import {
 } from '../../../shared/protocol-version'
 import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime-client-capabilities'
 import type { Repo } from '../../../shared/repo-types'
+import { publishedRelationsOf, type ReplicaPairView } from '../../../shared/replica-pair-view'
+import type { ProjectHostSetupWithReplicaTopology } from '../../../shared/replica-topology'
 import { AUTOMATION_METHODS } from './methods/automations'
 import { PROJECT_RUNTIME_METHODS } from './methods/project-runtime-rpc-methods'
 import {
@@ -330,5 +332,80 @@ describe('gated publishers through their real handlers', () => {
     for (const name of ['project.list', 'projectHostSetup.list']) {
       expect(await invoke(name, NEW_CLIENT)).toHaveProperty('identityCollisions', [])
     }
+  })
+})
+
+// Parity table: plan 02-08 repeats these two literals for the renderer selector (site 2 of deriveReplicaTopology).
+const TIPS = ['b'.repeat(40), 'b'.repeat(40)] as const
+
+function sameView(healthy: boolean): ReplicaPairView {
+  return {
+    setupId: 'b',
+    anchorSetupId: 'a',
+    hostId: 'ssh:gpu-vm',
+    relation: { kind: 'same', observedTips: TIPS },
+    healthy
+  }
+}
+
+function groupedSetupB(
+  relations: ReturnType<typeof publishedRelationsOf> | undefined,
+  capabilities: string[] | undefined = NEW_CLIENT
+): ProjectHostSetupWithReplicaTopology | undefined {
+  const result = projectRootIdentityForClient(
+    'setups',
+    [SETUP_A, SETUP_B],
+    context(capabilities),
+    relations
+  ) as { setups: ProjectHostSetupWithReplicaTopology[] }
+  return result.setups.find((entry) => entry.id === 'b')
+}
+
+describe('setups projection fed with published relations (row 62)', () => {
+  it('publishes equal tips with a worktree not verified clean as unverified with its closed reason', () => {
+    expect(groupedSetupB(publishedRelationsOf([sameView(false)]))?.replicaTopology).toEqual({
+      setupId: 'b',
+      projectId: ROOT_PROJECT_ID,
+      hostId: 'ssh:gpu-vm',
+      path: '/srv/b',
+      provenance: 'legacy',
+      membership: 'grouped',
+      relation: 'unverified',
+      relationUnknownReason: 'worktree-not-verified-clean'
+    })
+  })
+
+  it('publishes equal tips with both worktrees clean as same with no reason (control)', () => {
+    expect(groupedSetupB(publishedRelationsOf([sameView(true)]))?.replicaTopology).toEqual({
+      setupId: 'b',
+      projectId: ROOT_PROJECT_ID,
+      hostId: 'ssh:gpu-vm',
+      path: '/srv/b',
+      provenance: 'legacy',
+      membership: 'grouped',
+      relation: 'same'
+    })
+  })
+
+  it("keeps today's unreasoned unverified when no relations were fed (control)", () => {
+    const topology = groupedSetupB(undefined)?.replicaTopology
+    expect(topology).toMatchObject({ membership: 'grouped', relation: 'unverified' })
+    expect(topology).not.toHaveProperty('relationUnknownReason')
+  })
+
+  it('leaves a legacy client byte-identical to the pre-change output whatever was fed', () => {
+    const fed = publishedRelationsOf([sameView(false)])
+    const before = projectRootIdentityForClient('setups', [SETUP_A, SETUP_B], context(OLD_CLIENT))
+    const after = projectRootIdentityForClient(
+      'setups',
+      [SETUP_A, SETUP_B],
+      context(OLD_CLIENT),
+      fed
+    )
+
+    expect(after).toEqual(before)
+    expect(JSON.stringify(after)).not.toContain('replicaTopology')
+    expect(JSON.stringify(after)).not.toContain('relationUnknownReason')
+    expect(JSON.stringify(groupedSetupB(fed))).toContain('relationUnknownReason')
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectIdentityCollision } from './project-identity-collisions'
 import type { ProjectHostSetup, ProjectHostSetupMethod } from './project-types'
 import { deriveReplicaTopology } from './replica-topology'
+import type { ReplicaRelation, ReplicaUnknownReason } from './workspace-replica-state'
 
 const ROOT = 'a'.repeat(40)
 const ROOT_PROJECT_ID = `git-root:${ROOT}`
@@ -248,7 +249,9 @@ describe('deriveReplicaTopology', () => {
 
     it('keeps unverified when the comparison failed or no evidence exists', () => {
       expect(
-        relationsOf(new Map([['b', { kind: 'unknown' as const, reason: 'transfer-interrupted' as const }]]))
+        relationsOf(
+          new Map([['b', { kind: 'unknown' as const, reason: 'transfer-interrupted' as const }]])
+        )
       ).toEqual([
         ['grouped', 'unverified'],
         ['grouped', 'unverified']
@@ -260,6 +263,70 @@ describe('deriveReplicaTopology', () => {
       expect(
         relationsOf(new Map([['b', { kind: 'ahead' as const, count: 2, observedTips: tips }]]))[1]
       ).toEqual(['grouped', 'ahead'])
+    })
+
+    describe('closed reason and counts on the entry (row 62)', () => {
+      const entryB = (relation?: ReplicaRelation) =>
+        deriveReplicaTopology({
+          setups,
+          repos: [],
+          ...(relation ? { relations: new Map([['b', relation]]) } : {})
+        })[1]
+
+      it.each<[ReplicaUnknownReason]>([['worktree-not-verified-clean'], ['relay-too-old']])(
+        'keeps unverified and carries the closed reason %s',
+        (reason) => {
+          expect(entryB({ kind: 'unknown', reason })).toMatchObject({
+            relation: 'unverified',
+            relationUnknownReason: reason
+          })
+        }
+      )
+
+      it('adds no key when the pair service published nothing for the setup (control)', () => {
+        const entry = entryB()
+        expect(entry).not.toHaveProperty('relationUnknownReason')
+        expect(entry).not.toHaveProperty('relationAhead')
+        expect(entry).not.toHaveProperty('relationBehind')
+        expect(entry?.relation).toBe('unverified')
+      })
+
+      it('carries no reason and no count for same, unrelated and an unlisted setup (control)', () => {
+        for (const relation of [
+          { kind: 'same' as const, observedTips: tips },
+          { kind: 'unrelated' as const, observedTips: tips }
+        ]) {
+          const entry = entryB(relation)
+          expect(entry?.relation).toBe(relation.kind)
+          expect(Object.keys(entry ?? {})).not.toEqual(
+            expect.arrayContaining(['relationUnknownReason'])
+          )
+          expect(entry).not.toHaveProperty('relationAhead')
+          expect(entry).not.toHaveProperty('relationBehind')
+        }
+      })
+
+      it('carries the count for ahead and the opposite count for behind (orientation)', () => {
+        const ahead = entryB({ kind: 'ahead', count: 2, observedTips: tips })
+        expect(ahead).toMatchObject({ relation: 'ahead', relationAhead: 2 })
+        expect(ahead).not.toHaveProperty('relationBehind')
+        const behind = entryB({ kind: 'behind', count: 1, observedTips: tips })
+        expect(behind).toMatchObject({ relation: 'behind', relationBehind: 1 })
+        expect(behind).not.toHaveProperty('relationAhead')
+        expect(behind).not.toHaveProperty('relationUnknownReason')
+      })
+
+      it('carries both counts for diverged', () => {
+        expect(
+          entryB({
+            kind: 'diverged',
+            mergeBase: ROOT,
+            aheadCount: 3,
+            behindCount: 4,
+            observedTips: tips
+          })
+        ).toMatchObject({ relation: 'diverged', relationAhead: 3, relationBehind: 4 })
+      })
     })
 
     it('does not attach a relation to a colliding member', () => {

@@ -4,7 +4,7 @@ import type { ProjectIdentityCollision } from './project-identity-collisions'
 import { isHostLocalProjectId } from './project-host-setup-projection'
 import type { Project, ProjectHostSetup, ProjectHostSetupMethod } from './project-types'
 import type { Repo } from './repo-types'
-import type { ReplicaRelation } from './workspace-replica-state'
+import type { ReplicaRelation, ReplicaUnknownReason } from './workspace-replica-state'
 
 export type ReplicaProvenance = 'imported' | 'cloned' | 'provisioned' | 'legacy' | 'unknown'
 
@@ -27,6 +27,12 @@ export type ReplicaTopologyEntry = {
   membershipReason?: ReplicaMembershipReason
   /** Only grouped members carry it: 'unverified' until ancestry evidence on transferred objects says otherwise. */
   relation?: 'unverified' | Exclude<ReplicaRelation['kind'], 'unknown'>
+  /** Why a grouped member is `unverified`; absent when no relation was published for it. */
+  relationUnknownReason?: ReplicaUnknownReason
+  /** Commits the anchor holds that this setup lacks (ahead, diverged). */
+  relationAhead?: number
+  /** Commits this setup holds that the anchor lacks (behind, diverged). */
+  relationBehind?: number
 }
 
 /** A setup as published to a client that supports `projects.root-identity.v1`. */
@@ -73,6 +79,33 @@ function hostLocalReason(
   return undefined
 }
 
+function groupedRelationFields(
+  known: ReplicaRelation | undefined
+): Pick<
+  ReplicaTopologyEntry,
+  'relation' | 'relationUnknownReason' | 'relationAhead' | 'relationBehind'
+> {
+  if (!known) {
+    return { relation: 'unverified' }
+  }
+  switch (known.kind) {
+    case 'unknown':
+      return { relation: 'unverified', relationUnknownReason: known.reason }
+    case 'ahead':
+      return { relation: 'ahead', relationAhead: known.count }
+    case 'behind':
+      return { relation: 'behind', relationBehind: known.count }
+    case 'diverged':
+      return {
+        relation: 'diverged',
+        relationAhead: known.aheadCount,
+        relationBehind: known.behindCount
+      }
+    default:
+      return { relation: known.kind }
+  }
+}
+
 /**
  * Pure and recomputed on every read: provenance and membership are facts about the setup set,
  * never stored. Precedence: colliding > grouped > host-local > identity-pending > sole.
@@ -105,11 +138,10 @@ export function deriveReplicaTopology(input: ReplicaTopologyInput): ReplicaTopol
     }
     if ((countByProject.get(setup.projectId) ?? 0) > 1) {
       // A diverged or unrelated pair stays grouped and visible; it is never merged or hidden.
-      const known = input.relations?.get(setup.id)
       return {
         ...base,
         membership: 'grouped',
-        relation: known && known.kind !== 'unknown' ? known.kind : 'unverified'
+        ...groupedRelationFields(input.relations?.get(setup.id))
       }
     }
     if (!isHostLocalProjectId(setup.projectId)) {

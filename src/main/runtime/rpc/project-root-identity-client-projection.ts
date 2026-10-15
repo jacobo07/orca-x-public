@@ -14,6 +14,7 @@ import {
   deriveReplicaTopology,
   type ProjectHostSetupWithReplicaTopology
 } from '../../../shared/replica-topology'
+import type { ReplicaRelation } from '../../../shared/workspace-replica-state'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { RpcContext } from './core'
 
@@ -64,12 +65,14 @@ function identityCollisionsFor(context: ProjectionContext): ProjectIdentityColli
 function withReplicaTopology(
   setups: readonly ProjectHostSetup[],
   identityCollisions: readonly ProjectIdentityCollision[],
-  context: ProjectionContext
+  context: ProjectionContext,
+  relations: ReadonlyMap<string, ReplicaRelation> | undefined
 ): ProjectHostSetupWithReplicaTopology[] {
   const entries = deriveReplicaTopology({
     setups,
     repos: context.runtime.listRepos(),
-    identityCollisions
+    identityCollisions,
+    ...(relations ? { relations } : {})
   })
   return setups.map((setup, index) => ({ ...setup, replicaTopology: entries[index] }))
 }
@@ -82,12 +85,15 @@ export function projectRootIdentityForClient(
 export function projectRootIdentityForClient(
   kind: 'setups',
   stored: readonly ProjectHostSetup[],
-  context: ProjectionContext
+  context: ProjectionContext,
+  /** Already published through `publishedRelationsOf`; ignored for a client without root identity. */
+  relations?: ReadonlyMap<string, ReplicaRelation>
 ): { setups: readonly ProjectHostSetup[]; identityCollisions?: ProjectIdentityCollision[] }
 export function projectRootIdentityForClient(
   kind: 'projects' | 'setups',
   stored: readonly Project[] | readonly ProjectHostSetup[],
-  context: ProjectionContext
+  context: ProjectionContext,
+  relations?: ReadonlyMap<string, ReplicaRelation>
 ): object {
   if (supportsProjectRootIdentity(context)) {
     const identityCollisions = identityCollisionsFor(context)
@@ -96,7 +102,8 @@ export function projectRootIdentityForClient(
         setups: withReplicaTopology(
           stored as readonly ProjectHostSetup[],
           identityCollisions,
-          context
+          context,
+          relations
         ),
         identityCollisions
       }
