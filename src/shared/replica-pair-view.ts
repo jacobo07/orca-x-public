@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
-import type { ReplicaRelation } from './workspace-replica-state'
+import { publishedReplicaRelation, type ReplicaRelation } from './workspace-replica-state'
 
 /** One non-anchor setup compared against the project's local anchor setup. */
 export type ReplicaPairView = {
@@ -20,3 +20,13 @@ export type ReplicaPairCompareResult =
   | { status: 'refused'; reason: 'remote-caller' }
   | { status: 'unavailable'; reason: 'no-replica-service' }
   | { status: 'not-found'; reason: 'unknown-project' | 'unknown-setup' }
+
+export type ReplicaPairRelationsResult =
+  | { status: 'ok'; pairs: ReplicaPairView[] }
+  | { status: 'refused'; reason: 'remote-caller' }
+  | { status: 'unavailable'; reason: 'no-replica-service' }
+
+/** setupId -> the relation a client may show: an equal-but-unverified pair is unknown, never `same`. */
+export function publishedRelationsOf(views: readonly ReplicaPairView[]): ReadonlyMap<string, ReplicaRelation> {
+  return new Map(views.map((v) => [v.setupId, publishedReplicaRelation(v.relation, v.healthy)]))
+}

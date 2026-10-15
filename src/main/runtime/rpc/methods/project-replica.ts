@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ReplicaPairCompareResult } from '../../../../shared/replica-pair-view'
+import type { ReplicaPairCompareResult, ReplicaPairRelationsResult } from '../../../../shared/replica-pair-view'
 import { readReplicaPairService } from '../../../replica-pair-service-slot'
 import { defineMethod, type RpcMethod } from '../core'
 import { isLocalRpcCaller } from '../local-rpc-caller'
@@ -20,6 +20,18 @@ export const PROJECT_REPLICA_METHODS: RpcMethod[] = [
         return { status: 'unavailable', reason: 'no-replica-service' }
       }
       return service.compare(params)
+    }
+  }),
+  defineMethod({
+    name: 'projectReplica.relations',
+    params: null,
+    handler: async (_params, ctx): Promise<ReplicaPairRelationsResult> => {
+      // Why: same reason as compare; the stored answers came from this host's SSH session.
+      if (!isLocalRpcCaller(ctx)) {
+        return { status: 'refused', reason: 'remote-caller' }
+      }
+      const service = readReplicaPairService()
+      return service ? service.relations() : { status: 'unavailable', reason: 'no-replica-service' }
     }
   })
 ]

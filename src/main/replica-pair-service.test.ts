@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createMockDispatcher, type RelayDispatcher } from '../relay/git-handler-test-setup'
 import { GitReplicaHandler } from '../relay/git-replica-handler'
 import type { ProjectHostSetup } from '../shared/project-types'
+import { publishedRelationsOf } from '../shared/replica-pair-view'
+import { readLocalReplicaFacts } from './replica-local-facts'
 import { createReplicaPairService, replicaHostKey } from './replica-pair-service'
 import { resetSshRelayCapabilityCacheForTests } from './ssh/ssh-relay-capabilities'
 
@@ -69,8 +71,14 @@ function sshSession(capabilities: string[], hooks: SessionHooks = {}) {
   }
 }
 
-function service(capabilities: string[], setups: ProjectHostSetup[], hooks?: SessionHooks) {
+function service(
+  capabilities: string[],
+  setups: ProjectHostSetup[],
+  hooks?: SessionHooks,
+  readLocalFacts?: typeof readLocalReplicaFacts
+) {
   return createReplicaPairService({
+    ...(readLocalFacts ? { readLocalFacts } : {}),
     listProjectHostSetups: () => setups,
     sshSession: sshSession(capabilities, hooks),
     now: () => 7
@@ -354,5 +362,85 @@ describe('failure arms and single-flight', () => {
     expect(replicaHostKey('ssh:a/b')).not.toBe(replicaHostKey('ssh:a_b'))
     expect(replicaHostKey('ssh:a.b')).not.toBe(replicaHostKey('ssh:a-b'))
     expect(replicaHostKey('ssh:a/b')).toBe(replicaHostKey('ssh:a/b'))
+  })
+})
+
+describe('relations: re-fenced on every read', () => {
+  const countingReader = () => {
+    const reader = { reads: 0 }
+    const read: typeof readLocalReplicaFacts = (args) => {
+      reader.reads += 1
+      return readLocalReplicaFacts(args)
+    }
+    return { reader, read }
+  }
+  const only = async (svc: ReturnType<typeof service>, setupId: string) => {
+    const res = await svc.relations()
+    expect(res.status).toBe('ok')
+    return res.pairs.find((p) => p.setupId === setupId)
+  }
+
+  it('a setup never compared reads not-compared with zero git reads; control: a compared setup reads its relation', async () => {
+    commit(remote, 'r1')
+    const { reader, read } = countingReader()
+    const svc = service(['git.replicaBundle'], [localSetup(), sshSetup()], undefined, read)
+    expect((await only(svc, 'box'))?.relation).toEqual({ kind: 'unknown', reason: 'not-compared' })
+    expect(reader.reads).toBe(0)
+    expect(log).toEqual([])
+
+    await svc.compare({ projectId: 'p1' })
+    const afterCompare = reader.reads
+    expect((await only(svc, 'box'))?.relation).toMatchObject({ kind: 'behind', count: 1 })
+    expect(reader.reads - afterCompare).toBe(1)
+  })
+
+  it('a local commit after the comparison reads evidence-stale, never the old relation', async () => {
+    commit(remote, 'r1')
+    const svc = service(['git.replicaBundle'], [localSetup(), sshSetup()])
+    await svc.compare({ projectId: 'p1' })
+    expect((await only(svc, 'box'))?.relation.kind).toBe('behind')
+    commit(local, 'l-moved')
+    const stale = await only(svc, 'box')
+    expect(stale?.relation).toEqual({ kind: 'unknown', reason: 'evidence-stale' })
+    expect(stale?.healthy).toBe(false)
+  })
+
+  it('a stored failure is re-fenced too: relay-too-old holds until the local tip moves', async () => {
+    const svc = service(['git.exec'], [localSetup(), sshSetup()])
+    await svc.compare({ projectId: 'p1' })
+    expect((await only(svc, 'box'))?.relation).toEqual({ kind: 'unknown', reason: 'relay-too-old' })
+    commit(local, 'l-moved')
+    expect((await only(svc, 'box'))?.relation).toEqual({ kind: 'unknown', reason: 'evidence-stale' })
+  })
+
+  it('a setup removed from the store is pruned and does not come back with its old answer', async () => {
+    commit(remote, 'r1')
+    const setups = [localSetup(), sshSetup()]
+    const svc = service(['git.replicaBundle'], setups)
+    await svc.compare({ projectId: 'p1' })
+    setups.splice(1, 1)
+    expect((await svc.relations()).pairs).toEqual([])
+    setups.push(sshSetup())
+    expect((await only(svc, 'box'))?.relation).toEqual({ kind: 'unknown', reason: 'not-compared' })
+  })
+
+  it('structural arms are derived from the setup list on every read, with no git', async () => {
+    const { reader, read } = countingReader()
+    const rt = setup({ id: 'rt', hostId: 'runtime:env1', path: remote, createdAt: 2 })
+    const lone = setup({ id: 'lone', projectId: 'p2', hostId: 'ssh:z', connectionId: 'z', path: remote })
+    const lone2 = setup({ id: 'lone2', projectId: 'p2', hostId: 'ssh:y', connectionId: 'y', path: remote, createdAt: 2 })
+    const svc = service(['git.replicaBundle'], [localSetup(), rt, lone, lone2], undefined, read)
+    expect((await only(svc, 'rt'))?.relation).toEqual({ kind: 'unknown', reason: 'transport-unsupported-host' })
+    expect((await only(svc, 'lone2'))?.relation).toEqual({ kind: 'unknown', reason: 'no-comparison-site' })
+    expect(reader.reads).toBe(0)
+  })
+
+  it('equal tips under a dirty local anchor publish as unknown worktree-not-verified-clean', async () => {
+    writeFileSync(join(local, 'dirty.txt'), 'x')
+    const svc = service(['git.replicaBundle'], [localSetup(), sshSetup()])
+    const res = await svc.compare({ projectId: 'p1' })
+    expect(res.status === 'ok' && res.pairs[0].relation.kind).toBe('same')
+    const published = publishedRelationsOf(res.status === 'ok' ? res.pairs : [])
+    expect(published.get('box')).toEqual({ kind: 'unknown', reason: 'worktree-not-verified-clean' })
   })
 })

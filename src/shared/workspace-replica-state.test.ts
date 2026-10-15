@@ -5,12 +5,14 @@ import {
   REPLICA_UNKNOWN_REASONS,
   deriveReplicaRelation,
   isReplicaRelationHealthy,
+  publishedReplicaRelation,
   type ReplicaFacts,
   type ReplicaPairEvidence,
   type ReplicaRelation,
   type TipFact,
   type WorktreeFact
 } from './workspace-replica-state'
+import { publishedRelationsOf, type ReplicaPairView } from './replica-pair-view'
 
 const SHA_A = 'a'.repeat(40)
 const SHA_B = 'b'.repeat(40)
@@ -34,12 +36,14 @@ const ev = (
 ): ReplicaPairEvidence => ({ observedTips: tips, site: 'local', outcome, observedAt })
 
 describe('deriveReplicaRelation', () => {
-  it('reason list is the closed list of 14', () => {
+  it('reason list is the closed list of 15', () => {
     expect([...REPLICA_UNKNOWN_REASONS]).toEqual([
       'host-unreachable', 'tip-unknown', 'unborn', 'relay-too-old', 'transport-unsupported-host',
       'no-comparison-site', 'bundle-too-large', 'bundle-verify-failed', 'bundle-heads-mismatch',
-      'transfer-interrupted', 'shallow', 'evidence-stale', 'not-compared', 'not-a-git-repo'
+      'transfer-interrupted', 'shallow', 'evidence-stale', 'not-compared', 'not-a-git-repo',
+      'worktree-not-verified-clean'
     ])
+    expect(REPLICA_UNKNOWN_REASONS).toHaveLength(15)
   })
 
   it('equal tips are same without evidence', () => {
@@ -223,5 +227,51 @@ describe('classifier reads no clock', () => {
     const src = stripComments(readFileSync(join(__dirname, 'workspace-replica-state.ts'), 'utf8'))
     expect(CLOCK.test(src)).toBe(false)
     expect(src).not.toMatch(/from 'node:/)
+  })
+})
+
+describe('publishedReplicaRelation (equal-but-unverified is unknown)', () => {
+  const same: ReplicaRelation = { kind: 'same', observedTips: [SHA_A, SHA_A] }
+  const others: ReplicaRelation[] = [
+    { kind: 'ahead', count: 1, observedTips: [SHA_B, SHA_A] },
+    { kind: 'behind', count: 1, observedTips: [SHA_A, SHA_B] },
+    { kind: 'diverged', mergeBase: SHA_C, aheadCount: 1, behindCount: 1, observedTips: [SHA_A, SHA_B] },
+    { kind: 'unrelated', observedTips: [SHA_A, SHA_B] },
+    { kind: 'unknown', reason: 'relay-too-old' }
+  ]
+
+  it('an unhealthy same publishes as unknown worktree-not-verified-clean; a healthy same is unchanged', () => {
+    expect(publishedReplicaRelation(same, false)).toEqual({ kind: 'unknown', reason: 'worktree-not-verified-clean' })
+    expect(publishedReplicaRelation(same, true)).toBe(same)
+  })
+
+  it('every other relation is unchanged for both values of healthy', () => {
+    for (const relation of others) {
+      expect(publishedReplicaRelation(relation, false)).toBe(relation)
+      expect(publishedReplicaRelation(relation, true)).toBe(relation)
+    }
+  })
+
+  const view = (a: ReplicaFacts, b: ReplicaFacts, setupId: string): ReplicaPairView => {
+    const relation = deriveReplicaRelation(a, b)
+    return { setupId, anchorSetupId: 'anchor', hostId: 'ssh:h', relation, healthy: isReplicaRelationHealthy(relation, a, b) }
+  }
+
+  it('publishedRelationsOf: equal tips with a dirty or unread worktree publish unknown; clean/clean publishes same', () => {
+    const tip = commit(SHA_A)
+    const views = [
+      view(facts(tip, dirty), facts(tip), 'dirty-local'),
+      view(facts(tip), facts(tip, wtUnknown), 'unread-remote'),
+      view(facts(tip), facts(tip, dirty), 'dirty-remote'),
+      view(facts(tip), facts(tip), 'clean-clean')
+    ]
+    const published = publishedRelationsOf(views)
+    for (const id of ['dirty-local', 'unread-remote', 'dirty-remote']) {
+      expect(published.get(id)).toEqual({ kind: 'unknown', reason: 'worktree-not-verified-clean' })
+    }
+    expect(published.get('clean-clean')).toMatchObject({ kind: 'same' })
+    // The raw views all derived `same`; only the shared rule makes three of them unknown.
+    expect(views.every((v) => v.relation.kind === 'same')).toBe(true)
+    expect(published.size).toBe(4)
   })
 })

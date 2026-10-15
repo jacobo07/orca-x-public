@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockDispatcher, type RelayDispatcher } from '../../../../relay/git-handler-test-setup'
 import { GitReplicaHandler } from '../../../../relay/git-replica-handler'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { ReplicaPairCompareResult } from '../../../../shared/replica-pair-view'
+import type { ReplicaPairCompareResult, ReplicaPairRelationsResult } from '../../../../shared/replica-pair-view'
 import { createReplicaPairService } from '../../../replica-pair-service'
 import { installReplicaPairService } from '../../../replica-pair-service-slot'
 import { resetSshRelayCapabilityCacheForTests } from '../../../ssh/ssh-relay-capabilities'
@@ -105,7 +105,10 @@ describe('projectReplica.compare', () => {
   })
 
   it('refuses every remote caller before the service is called; control: a local caller is served', async () => {
-    const service = { compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })) }
+    const service = {
+      compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+      relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] }))
+    }
     installReplicaPairService(service)
     const remoteCallers: Partial<RpcContext>[] = [
       { clientKind: 'mobile' },
@@ -136,5 +139,63 @@ describe('projectReplica.compare', () => {
     expect(schema.safeParse({ projectId: 'p1', setupId: 's1' }).success).toBe(true)
     expect(schema.safeParse({}).success).toBe(false)
     expect(schema.safeParse({ projectId: 'p1', extra: 1 }).success).toBe(false)
+  })
+})
+
+describe('projectReplica.relations', () => {
+  const relations = PROJECT_REPLICA_METHODS.find((m) => m.name === 'projectReplica.relations')!
+  const callRelations = (ctx: Partial<RpcContext> = {}) =>
+    relations.handler(undefined, { runtime: {} as RpcContext['runtime'], ...ctx }) as Promise<ReplicaPairRelationsResult>
+  const fake = () => ({
+    compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+    relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] }))
+  })
+
+  it('a local caller gets the views', async () => {
+    const service = fake()
+    installReplicaPairService(service)
+    await expect(callRelations()).resolves.toEqual({ status: 'ok', pairs: [] })
+    expect(service.relations).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a remote caller with the service never called; unavailable when the slot is empty', async () => {
+    const service = fake()
+    installReplicaPairService(service)
+    await expect(callRelations({ pairedDeviceId: 'dev-1' })).resolves.toEqual({ status: 'refused', reason: 'remote-caller' })
+    expect(service.relations).not.toHaveBeenCalled()
+    installReplicaPairService(null)
+    await expect(callRelations()).resolves.toEqual({ status: 'unavailable', reason: 'no-replica-service' })
+  })
+
+  it('takes no params', () => {
+    expect(relations.params).toBeNull()
+  })
+})
+
+describe('every projectReplica method is local-caller only', () => {
+  it('refuses each remote caller shape before any service call; control: a local caller is not refused', async () => {
+    const service = {
+      compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+      relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] }))
+    }
+    installReplicaPairService(service)
+    const remoteCallers: Partial<RpcContext>[] = [
+      { clientKind: 'mobile' },
+      { pairedDeviceId: 'dev-1' },
+      { clientId: 'token' },
+      { connectionId: 'socket-1' },
+      { authenticatedCallerFingerprint: 'fp' }
+    ]
+    expect(PROJECT_REPLICA_METHODS.length).toBeGreaterThanOrEqual(2)
+    for (const method of PROJECT_REPLICA_METHODS) {
+      for (const ctx of remoteCallers) {
+        const res = await method.handler({ projectId: 'p1' }, { runtime: {} as RpcContext['runtime'], ...ctx })
+        expect(res, `${method.name} ${JSON.stringify(ctx)}`).toEqual({ status: 'refused', reason: 'remote-caller' })
+      }
+      const local = (await method.handler({ projectId: 'p1' }, { runtime: {} as RpcContext['runtime'] })) as { status: string }
+      expect(local.status, method.name).not.toBe('refused')
+    }
+    expect(service.compare).toHaveBeenCalledTimes(1)
+    expect(service.relations).toHaveBeenCalledTimes(1)
   })
 })

@@ -14,7 +14,8 @@ export const REPLICA_UNKNOWN_REASONS = [
   'shallow',
   'evidence-stale',
   'not-compared',
-  'not-a-git-repo'
+  'not-a-git-repo',
+  'worktree-not-verified-clean'
 ] as const
 
 export type ReplicaUnknownReason = (typeof REPLICA_UNKNOWN_REASONS)[number]
@@ -157,4 +158,12 @@ export function isReplicaRelationHealthy(
     return false
   }
   return isClean(a) && isClean(b)
+}
+
+/**
+ * The one publication rule: equal tips with a worktree that is not verified clean are not a healthy `same`,
+ * so they publish as unknown. Every consumer of a pair view calls this rather than reading `relation` raw.
+ */
+export function publishedReplicaRelation(relation: ReplicaRelation, healthy: boolean): ReplicaRelation {
+  return relation.kind === 'same' && !healthy ? unknown('worktree-not-verified-clean') : relation
 }

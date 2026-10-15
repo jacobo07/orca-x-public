@@ -283,6 +283,8 @@ projectHostSetup.setupExistingFolder
 projectHostSetup.update
 # Added 2026-10-15, host-only by design: it uses this host's SSH session, so the handler refuses every remote caller.
 projectReplica.compare
+# Added 2026-10-15, host-only by design: its answers come from this host's SSH session, so the handler refuses every remote caller.
+projectReplica.relations
 repo.add
 repo.clone
 repo.create

@@ -3,7 +3,11 @@
 import { createHash } from 'node:crypto'
 import { parseExecutionHostId } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
-import type { ReplicaPairCompareResult, ReplicaPairView } from '../shared/replica-pair-view'
+import type {
+  ReplicaPairCompareResult,
+  ReplicaPairRelationsResult,
+  ReplicaPairView
+} from '../shared/replica-pair-view'
 import {
   deriveReplicaRelation,
   isReplicaRelationHealthy,
@@ -32,7 +36,18 @@ export type ReplicaPairService = {
     projectId: string
     setupId?: string
   }): Promise<Extract<ReplicaPairCompareResult, { status: 'ok' | 'not-found' }>>
+  /** Every non-anchor setup of every project: stored answers re-fenced against the current local tip, never a clock. */
+  relations(): Promise<Extract<ReplicaPairRelationsResult, { status: 'ok' }>>
 }
+
+type StoredPair = {
+  anchorId: string
+  local: ReplicaFacts
+  remote: ReplicaFacts
+  result: ReplicaComparisonResult
+}
+
+type PairOutcome = { view: ReplicaPairView; stored: StoredPair | null }
 
 // Why: the model needs a tip to reach the evidence branch; this value is never published (unknown carries no tips).
 const UNREAD_REMOTE_TIP = '0'.repeat(40)
@@ -124,9 +139,37 @@ function unknownView(
   return viewOf(setup, anchor, folder, folder, relation, false)
 }
 
+// Pure function of the setup list, so it is recomputed on every read and can never be stale.
+function structuralReason(
+  setup: ProjectHostSetup,
+  anchor: ProjectHostSetup | undefined
+): ReplicaUnknownReason | null {
+  if (!anchor) {
+    return 'no-comparison-site'
+  }
+  // Folder workspaces have no history to compare, whichever side they are on.
+  if (setup.kind === 'folder' || anchor.kind === 'folder') {
+    return 'not-a-git-repo'
+  }
+  const parsed = parseExecutionHostId(setup.hostId)
+  if (parsed?.kind === 'local') {
+    return 'no-comparison-site'
+  }
+  return parsed?.kind === 'ssh' ? null : 'transport-unsupported-host'
+}
+
+function localTipOf(f: ReplicaFacts): string | null {
+  return f.kind !== 'folder' && (f.tip.kind === 'commit' || f.tip.kind === 'detached') ? f.tip.sha : null
+}
+
 export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaPairService {
   const readLocalFacts = deps.readLocalFacts ?? readLocalReplicaFacts
   const getMultiplexer = deps.sshSession?.getMultiplexer ?? defaultGetMultiplexer
+  // Why: a second compare of a setup that is mid-flight joins it, so one setup never holds two relay exports.
+  const inFlight = new Map<string, Promise<ReplicaPairView>>()
+  // Memory only: the last answer per setup, re-fenced on every read. Losing it costs one re-compare.
+  const stored = new Map<string, StoredPair>()
+
   const lazyAnchorRead = (anchor: ProjectHostSetup): (() => Promise<LocalReplicaRead>) => {
     let pending: Promise<LocalReplicaRead> | null = null
     return () => {
@@ -139,41 +182,29 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
       return pending
     }
   }
-  // Why: a second compare of a setup that is mid-flight joins it, so one setup never holds two relay exports.
-  const inFlight = new Map<string, Promise<ReplicaPairView>>()
 
   async function comparePair(
     setup: ProjectHostSetup,
     anchor: ProjectHostSetup | undefined,
     readAnchor: () => Promise<LocalReplicaRead>
-  ): Promise<ReplicaPairView> {
-    if (!anchor) {
-      return unknownView(setup, anchor, 'no-comparison-site')
-    }
-    // Folder workspaces have no history to compare, whichever side they are on.
-    if (setup.kind === 'folder' || anchor.kind === 'folder') {
-      return unknownView(setup, anchor, 'not-a-git-repo')
-    }
+  ): Promise<PairOutcome> {
+    const structural = structuralReason(setup, anchor)
     const parsed = parseExecutionHostId(setup.hostId)
-    if (parsed?.kind === 'local') {
-      return unknownView(setup, anchor, 'no-comparison-site')
-    }
-    if (parsed?.kind !== 'ssh') {
-      return unknownView(setup, anchor, 'transport-unsupported-host')
+    if (structural || !anchor || parsed?.kind !== 'ssh') {
+      return { view: unknownView(setup, anchor, structural ?? 'no-comparison-site'), stored: null }
     }
     const connectionId = setup.connectionId ?? parsed.targetId
     // Why: compareWithSshRelayReplica reads a missing multiplexer as an old relay, which would mislabel an unconnected host.
     const mux = await getMultiplexer(connectionId)
     if (!mux || mux.isDisposed()) {
-      return unknownView(setup, anchor, 'host-unreachable')
+      return { view: unknownView(setup, anchor, 'host-unreachable'), stored: null }
     }
     const anchorRead = await readAnchor()
     const local = anchorFactsOf(anchorRead)
-    const usable =
-      local.kind !== 'folder' && (local.tip.kind === 'commit' || local.tip.kind === 'detached')
-    if (!usable) {
+    if (localTipOf(local) === null) {
       const remote = remoteFactsOf(setup, null)
-      return viewOf(setup, anchor, local, remote, deriveReplicaRelation(local, remote), false)
+      const relation = deriveReplicaRelation(local, remote)
+      return { view: viewOf(setup, anchor, local, remote, relation, false), stored: null }
     }
     const result = await compareWithSshRelayReplica({
       connectionId,
@@ -185,7 +216,10 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     })
     const remote = remoteFactsOf(setup, result)
     const relation = foldPair(local, anchorRead.shallow, remote, result)
-    return viewOf(setup, anchor, local, remote, relation, result.evidence !== null)
+    return {
+      view: viewOf(setup, anchor, local, remote, relation, result.evidence !== null),
+      stored: { anchorId: anchor.id, local, remote, result }
+    }
   }
 
   function pairFor(
@@ -198,11 +232,40 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
       return joined
     }
     const started = comparePair(setup, anchor, readAnchor)
+      .then((outcome) => {
+        // A compare that reached no comparison also retires the older answer it replaces.
+        if (outcome.stored) {
+          stored.set(setup.id, outcome.stored)
+        } else {
+          stored.delete(setup.id)
+        }
+        return outcome.view
+      })
       // One setup's failure is that setup's unknown; it never rejects the project call.
-      .catch((): ReplicaPairView => unknownView(setup, anchor, 'transfer-interrupted'))
+      .catch((): ReplicaPairView => {
+        stored.delete(setup.id)
+        return unknownView(setup, anchor, 'transfer-interrupted')
+      })
       .finally(() => inFlight.delete(setup.id))
     inFlight.set(setup.id, started)
     return started
+  }
+
+  // Why: re-derived against the current anchor so a moved local tip reads evidence-stale, never the old relation.
+  function refenced(
+    entry: StoredPair,
+    setup: ProjectHostSetup,
+    anchor: ProjectHostSetup,
+    read: LocalReplicaRead
+  ): ReplicaPairView {
+    const local = anchorFactsOf(read)
+    const moved = localTipOf(local) !== localTipOf(entry.local)
+    // A failure that carried no evidence has no tips for the model to fence, so the fence is checked here.
+    const relation: ReplicaRelation =
+      moved && !entry.result.evidence
+        ? { kind: 'unknown', reason: 'evidence-stale' }
+        : foldPair(local, read.shallow, entry.remote, entry.result)
+    return viewOf(setup, anchor, local, entry.remote, relation, entry.result.evidence !== null)
   }
 
   return {
@@ -219,6 +282,41 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
       // Read lazily and once per call: arms that never reach the anchor's history spend no git.
       const readAnchor = anchor ? lazyAnchorRead(anchor) : () => Promise.reject(new Error('no anchor setup'))
       const pairs = await Promise.all(targets.map((s) => pairFor(s, anchor, readAnchor)))
+      return { status: 'ok', pairs }
+    },
+
+    async relations() {
+      const all = deps.listProjectHostSetups()
+      const live = new Set(all.map((s) => s.id))
+      for (const id of [...stored.keys()]) {
+        if (!live.has(id)) {
+          stored.delete(id)
+        }
+      }
+      const byProject = new Map<string, ProjectHostSetup[]>()
+      for (const setup of all) {
+        byProject.set(setup.projectId, [...(byProject.get(setup.projectId) ?? []), setup])
+      }
+      const pairs: ReplicaPairView[] = []
+      for (const setups of byProject.values()) {
+        const anchor = pickAnchor(setups)
+        let readAnchor: (() => Promise<LocalReplicaRead>) | null = null
+        for (const setup of setups.filter((s) => s.id !== anchor?.id)) {
+          const entry = stored.get(setup.id)
+          const structural = structuralReason(setup, anchor)
+          if (entry && (structural || entry.anchorId !== anchor?.id)) {
+            stored.delete(setup.id)
+          }
+          const kept = structural ? undefined : stored.get(setup.id)
+          if (structural || !kept || !anchor) {
+            pairs.push(unknownView(setup, anchor, structural ?? 'not-compared'))
+            continue
+          }
+          // The anchor is read only once a stored answer needs fencing against it.
+          readAnchor ??= lazyAnchorRead(anchor)
+          pairs.push(refenced(kept, setup, anchor, await readAnchor()))
+        }
+      }
       return { status: 'ok', pairs }
     }
   }
