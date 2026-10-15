@@ -5,12 +5,22 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'mission-place'],
     summary: 'Place each task of one mission on a distinct dispatchable host',
     usage:
-      'orca orchestration mission-place --tasks <task_id,task_id> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'tasks', 'run', 'from', 'retry-request'],
+      'orca orchestration mission-place --tasks <task_id,task_id> [--min-available-mb <n>] [--min-vram-mb <n>] [--min-disk-mb <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'tasks',
+      'min-available-mb',
+      'min-vram-mb',
+      'min-disk-mb',
+      'run',
+      'from',
+      'retry-request'
+    ],
     notes: [
       'Records where each task must start; it starts nothing. Start each task with worker-start, adding --on <environment> for a runtime placement.',
       'Only this host and connected Orca servers with orchestration federation can be placed on; SSH targets are listed as not-dispatchable.',
-      'A placed task keeps its host: worker-start elsewhere, or a different re-plan, is refused.'
+      'A placed task keeps its host: worker-start elsewhere, or a different re-plan, is refused.',
+      'A task is placed only on a host whose measured figures meet the need; an unmeasured or stale figure is never enough.'
     ]
   },
   {

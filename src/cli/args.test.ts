@@ -11,6 +11,16 @@ import {
 } from './args'
 
 describe('parseArgs', () => {
+  it('reads --tasks as a value for mission-place and as a switch for reset', () => {
+    const place = parseArgs(['orchestration', 'mission-place', '--tasks', 't1,t2', '--json'])
+    expect(place.commandPath).toEqual(['orchestration', 'mission-place'])
+    expect(place.flags.get('tasks')).toBe('t1,t2')
+
+    const reset = parseArgs(['orchestration', 'reset', '--tasks', '--json'])
+    expect(reset.commandPath).toEqual(['orchestration', 'reset'])
+    expect(reset.flags.get('tasks')).toBe(true)
+  })
+
   it('keeps an empty string as a flag value', () => {
     const parsed = parseArgs(['computer', 'set-value', '--value', '', '--json'])
 

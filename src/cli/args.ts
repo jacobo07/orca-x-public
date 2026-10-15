@@ -60,6 +60,20 @@ export const BOOLEAN_FLAGS = new Set([
   'wait'
 ])
 
+// Why: `tasks` is a switch for `orchestration reset` but takes a list for `mission-place`; the switch reading made `--tasks a,b` parse `a,b` as a command word.
+const VALUE_FLAGS_BY_COMMAND: readonly { path: readonly string[]; flags: ReadonlySet<string> }[] = [
+  { path: ['orchestration', 'mission-place'], flags: new Set(['tasks']) }
+]
+
+function isValueFlagForCommand(commandPath: readonly string[], flag: string): boolean {
+  return VALUE_FLAGS_BY_COMMAND.some(
+    (entry) =>
+      entry.flags.has(flag) &&
+      entry.path.length <= commandPath.length &&
+      entry.path.every((part, index) => commandPath[index] === part)
+  )
+}
+
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
 
@@ -110,7 +124,7 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     }
 
     const flag = assignment
-    if (BOOLEAN_FLAGS.has(flag)) {
+    if (BOOLEAN_FLAGS.has(flag) && !isValueFlagForCommand(commandPath, flag)) {
       flags.set(flag, true)
       continue
     }

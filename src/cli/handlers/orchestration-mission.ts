@@ -1,6 +1,7 @@
 import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
+import { nodeRequirementFromFlags } from '../node-requirement-flags'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime-client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
@@ -52,6 +53,8 @@ function taskList(flags: Flags): string[] {
 export function missionHandlers(deps: MissionHandlerDeps): Record<string, CommandHandler> {
   return {
     'orchestration mission-place': async ({ flags, client, cwd, json }) => {
+      // Why: parse the need before resolving a terminal so a bad value reaches no RPC at all.
+      const requirement = nodeRequirementFromFlags(flags, { includeMemory: true })
       const result = await deps.callMutation<MissionPlaceResult>(
         client,
         flags,
@@ -59,7 +62,8 @@ export function missionHandlers(deps: MissionHandlerDeps): Record<string, Comman
         {
           tasks: taskList(flags),
           run: getOptionalStringFlag(flags, 'run'),
-          from: await deps.resolveCoordinatorTerminalHandle(flags, cwd, client)
+          from: await deps.resolveCoordinatorTerminalHandle(flags, cwd, client),
+          ...(requirement ? { requirement } : {})
         }
       )
       if (result.result.unplaced.length > 0) {
