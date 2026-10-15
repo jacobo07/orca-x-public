@@ -8,7 +8,7 @@ import { publishedReplicaRelation, type ReplicaRelation } from '../shared/worksp
 
 export type ReplicaCommandOutput = { text: string; exitCode: number }
 
-function unreachable(value: never): never {
+export function unreachable(value: never): never {
   throw new Error(`Unhandled replica result: ${JSON.stringify(value)}`)
 }
 

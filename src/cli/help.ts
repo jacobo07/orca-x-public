@@ -64,6 +64,9 @@ Projects:
   project replica-capsule   Capture a local setup's uncommitted work as a capsule ref
   project replica-capsule-list   List a local setup's capsules (reads only)
   project replica-capsule-restore   Plan, or with --apply perform, a capsule restore
+  project replica-sync   Fast-forward a local setup to its SSH replica's tip (one-way)
+  project replica-preserve-divergence   Keep both tips of a diverged pair as refs and report the conflict
+  project replica-reconcile   Merge local and remote capsules into a commit under refs/orca/reconciled
 
 Repos:
   repo list                 List repos registered in Orca
@@ -271,6 +274,9 @@ Common Commands:
   orca project replica-capsule --setup <setup-id> [--json]
   orca project replica-capsule-list --setup <setup-id> [--json]
   orca project replica-capsule-restore --setup <setup-id> --capsule <ref> [--apply] [--json]
+  orca project replica-sync --setup <setup-id> [--json]
+  orca project replica-preserve-divergence --setup <setup-id> [--json]
+  orca project replica-reconcile --setup <setup-id> --remote-capsule <sha> [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]
