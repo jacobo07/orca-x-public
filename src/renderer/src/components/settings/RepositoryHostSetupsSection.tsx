@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -19,6 +19,10 @@ import { SettingsBadge } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
+import {
+  describeReplicaCompareAction,
+  describeReplicaPairState
+} from './replica-pair-status-presentation'
 import { buildSetupHostOptions } from './repository-host-setup-options'
 import { deriveRepositoryHostSetupRowState } from './repository-host-setup-row-state'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
@@ -104,6 +108,9 @@ export function RepositoryHostSetupsSection({
     getProjectHostSetupProjectionFromState(state)
   )
   const replicaTopology = useAppStore((state) => getReplicaTopologyFromState(state))
+  const replicaPair = useAppStore((state) => state.replicaPair)
+  const compareReplicaPairsForProject = useAppStore((state) => state.compareReplicaPairsForProject)
+  const [comparing, setComparing] = useState(false)
   const repoProjectHostSetup = projectHostSetupProjection.setups.find(
     (setup) => setup.repoId === repo.id
   )
@@ -134,6 +141,30 @@ export function RepositoryHostSetupsSection({
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
   const projectId = selectedProjectHostSetup?.projectId
+  const hasReplicaPair = projectHostSetups.length >= 2
+  // Why: no timer; sections mounted in one commit share a read because the first one flips the slice to loading.
+  useEffect(() => {
+    if (!hasReplicaPair) {
+      return
+    }
+    const { replicaPair: current, refreshReplicaPairRelations } = useAppStore.getState()
+    if (current.status !== 'loading') {
+      void refreshReplicaPairRelations()
+    }
+  }, [hasReplicaPair])
+  const pairNote = describeReplicaPairState(replicaPair)
+  const compareBusy = comparing || replicaPair.status === 'loading'
+  const runCompare = async (): Promise<void> => {
+    if (!projectId || compareBusy) {
+      return
+    }
+    setComparing(true)
+    try {
+      await compareReplicaPairsForProject(projectId)
+    } finally {
+      setComparing(false)
+    }
+  }
   const replicaNotice = useMemo(
     () =>
       projectId ? getProjectReplicaNotice(projectHostSetupProjection, repos, projectId) : null,
@@ -320,6 +351,36 @@ export function RepositoryHostSetupsSection({
             )
           })}
         </div>
+        {hasReplicaPair || pairNote ? (
+          <div
+            className="flex flex-wrap items-center gap-2"
+            data-replica-pair-state={replicaPair.status}
+          >
+            {hasReplicaPair && (pairNote?.compare ?? true) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={compareBusy}
+                data-replica-compare-action
+                data-replica-comparing={compareBusy ? 'true' : undefined}
+                onClick={() => {
+                  void runCompare()
+                }}
+              >
+                {describeReplicaCompareAction(compareBusy ? 'comparing' : 'idle')}
+              </Button>
+            ) : null}
+            {pairNote ? (
+              <p
+                className="text-[11px] text-muted-foreground"
+                data-replica-pair-note={pairNote.state}
+              >
+                {pairNote.text}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {replicaNotice ? (
           <ReplicaTopologyNotice
             notice={replicaNotice}

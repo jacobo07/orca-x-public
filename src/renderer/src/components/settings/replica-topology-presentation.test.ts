@@ -10,10 +10,11 @@ import ja from '../../i18n/locales/ja.json'
 import ko from '../../i18n/locales/ko.json'
 import zh from '../../i18n/locales/zh.json'
 import {
-  describeReplicaRelation,
-  describeReplicaUnknownReason,
-  type ReplicaRelationTone
-} from './replica-topology-presentation'
+  describeReplicaCompareAction,
+  describeReplicaPairState
+} from './replica-pair-status-presentation'
+import { describeReplicaRelation, type ReplicaRelationTone } from './replica-topology-presentation'
+import { describeReplicaUnknownReason } from './replica-unknown-reason-presentation'
 
 const entry = (overrides: Partial<ReplicaTopologyEntry>): ReplicaTopologyEntry => ({
   setupId: 'b',
@@ -177,6 +178,11 @@ describe('relation locale leaves', () => {
     'relationAheadUncounted',
     'relationBehindUncounted',
     'relationDivergedUncounted',
+    'compareAction',
+    'comparing',
+    'pairUnavailableRemote',
+    'pairUnavailableNoService',
+    'pairFailed',
     ...REPLICA_UNKNOWN_REASONS.map(reasonKey)
   ]
   const english = repositoryPaneOf(en)
@@ -209,5 +215,61 @@ describe('relation locale leaves', () => {
     const values = REPLICA_UNKNOWN_REASONS.map((reason) => english[reasonKey(reason)])
     expect(values.every((value) => typeof value === 'string')).toBe(true)
     expect(new Set(values).size).toBe(15)
+  })
+})
+
+describe('describeReplicaPairState', () => {
+  it('has no note while idle, loading or ready', () => {
+    expect(describeReplicaPairState({ status: 'idle' })).toBeNull()
+    expect(describeReplicaPairState({ status: 'loading' })).toBeNull()
+    expect(
+      describeReplicaPairState({ status: 'ready', views: [], relations: new Map() })
+    ).toBeNull()
+  })
+
+  it('says why a comparison is not available here, per reason, in different words', () => {
+    const remote = describeReplicaPairState({ status: 'unavailable', reason: 'remote-caller' })
+    const noService = describeReplicaPairState({
+      status: 'unavailable',
+      reason: 'no-replica-service'
+    })
+
+    expect(remote).toMatchObject({ state: 'remote-caller', compare: false })
+    expect(noService).toMatchObject({ state: 'no-replica-service', compare: false })
+    expect(remote?.text).toContain('not available from this client')
+    expect(noService?.text).not.toBe(remote?.text)
+  })
+
+  it('states a failure in words that never carry the raw message, and keeps Compare available', () => {
+    const failed = describeReplicaPairState({
+      status: 'failed',
+      reason: 'transport',
+      message: 'ECONNRESET at 10.0.0.7:22'
+    })
+
+    expect(failed).toMatchObject({ state: 'failed', compare: true })
+    expect(failed?.text).not.toContain('ECONNRESET')
+    expect(failed?.text.trim().length).toBeGreaterThan(0)
+  })
+
+  it.each(['unknown-project', 'unknown-setup', 'transport'] as const)(
+    'gives a %s failure the same words and no raw reason',
+    (reason) => {
+      const failed = describeReplicaPairState({ status: 'failed', reason })
+
+      expect(failed?.text).not.toContain(reason)
+      expect(failed?.state).toBe('failed')
+    }
+  )
+
+  it('has Compare, comparing and the three notes as distinct sentences', () => {
+    const texts = [
+      describeReplicaCompareAction('idle'),
+      describeReplicaCompareAction('comparing'),
+      describeReplicaPairState({ status: 'unavailable', reason: 'remote-caller' })?.text,
+      describeReplicaPairState({ status: 'unavailable', reason: 'no-replica-service' })?.text,
+      describeReplicaPairState({ status: 'failed', reason: 'transport' })?.text
+    ]
+    expect(new Set(texts).size).toBe(5)
   })
 })
