@@ -4,18 +4,26 @@ import type { ProjectIdentityCollision } from '../../../shared/project-identity-
 import type { ProjectHostSetupProjection } from '../../../shared/project-host-setup-projection'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import { deriveReplicaTopology, type ReplicaTopologyEntry } from '../../../shared/replica-topology'
+import type { ReplicaRelation } from '../../../shared/workspace-replica-state'
 import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 import type { AppState } from './types'
 
 type ReplicaTopologyState = Pick<AppState, 'repos'> &
-  Partial<Pick<AppState, 'projects' | 'projectHostSetups' | 'runtimeStatusByEnvironmentId'>>
+  Partial<
+    Pick<
+      AppState,
+      'projects' | 'projectHostSetups' | 'runtimeStatusByEnvironmentId' | 'replicaPair'
+    >
+  >
 
 export type ReplicaTopologyBySetupId = ReadonlyMap<string, ReplicaTopologyEntry>
 
 const EMPTY_RUNTIME_STATUS: NonNullable<AppState['runtimeStatusByEnvironmentId']> = new Map()
+// Why: every non-ready pair state shares this one map, so it stays reference-stable and feeds nothing.
+const NO_RELATIONS: ReadonlyMap<string, ReplicaRelation> = new Map()
 const topologyCache = new WeakMap<
   AppState['repos'],
-  WeakMap<object, WeakMap<object, ReplicaTopologyBySetupId>>
+  WeakMap<object, WeakMap<object, WeakMap<object, ReplicaTopologyBySetupId>>>
 >()
 
 function runtimeReportsRootIdentity(
@@ -33,14 +41,18 @@ function runtimeReportsRootIdentity(
 
 /**
  * Provenance and membership of every setup, from the one pure producer, over the same projection
- * the Settings section reads. Reference-stable per (repos, projection, runtime status).
+ * the Settings section reads. Reference-stable per (repos, projection, runtime status, relations).
  */
 export function getReplicaTopologyFromState(state: ReplicaTopologyState): ReplicaTopologyBySetupId {
   const projection = getProjectHostSetupProjectionFromState(state)
   const runtimeStatus = state.runtimeStatusByEnvironmentId ?? EMPTY_RUNTIME_STATUS
+  // Why: only a ready answer carries relations; idle, loading, unavailable and failed never read as healthy.
+  const relations =
+    state.replicaPair?.status === 'ready' ? state.replicaPair.relations : NO_RELATIONS
   const byProjection = topologyCache.get(state.repos)
   const byRuntimeStatus = byProjection?.get(projection)
-  const cached = byRuntimeStatus?.get(runtimeStatus)
+  const byRelations = byRuntimeStatus?.get(runtimeStatus)
+  const cached = byRelations?.get(relations)
   if (cached) {
     return cached
   }
@@ -49,11 +61,15 @@ export function getReplicaTopologyFromState(state: ReplicaTopologyState): Replic
     setups: projection.setups,
     repos: state.repos,
     identityCollisions: projection.identityCollisions,
+    relations,
     hostReportsRootIdentity: (hostId) => runtimeReportsRootIdentity(hostId, runtimeStatus)
   })
   const result: ReplicaTopologyBySetupId = new Map(entries.map((entry) => [entry.setupId, entry]))
-  const nextByRuntimeStatus = byRuntimeStatus ?? new WeakMap<object, ReplicaTopologyBySetupId>()
-  nextByRuntimeStatus.set(runtimeStatus, result)
+  const nextByRelations = byRelations ?? new WeakMap<object, ReplicaTopologyBySetupId>()
+  nextByRelations.set(relations, result)
+  const nextByRuntimeStatus =
+    byRuntimeStatus ?? new WeakMap<object, WeakMap<object, ReplicaTopologyBySetupId>>()
+  nextByRuntimeStatus.set(runtimeStatus, nextByRelations)
   if (!byProjection) {
     topologyCache.set(state.repos, new WeakMap([[projection, nextByRuntimeStatus]]))
   } else if (!byRuntimeStatus) {
