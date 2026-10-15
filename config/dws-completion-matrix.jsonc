@@ -1750,8 +1750,8 @@
       "done": "evidence-based states; unknown never healthy; timestamps never decide",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X09f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 2",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         17
@@ -1772,9 +1772,69 @@
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-replica-state.spec.ts",
           "note": "opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1): RAN and PASSED from the laptop against a GEX44 disposable root 2026-10-14 (D4 X09). Evidence: ctl/inputs/d4/20261014/X09/ and summary.json."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-pair-service.test.ts",
+          "note": "pair service over the relay handler: every comparison failure publishes a closed unknown reason, equal-but-unverified publishes unknown."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-pair-service-mixed-relay.test.ts",
+          "note": "a relay without sync.v1 yields unknown relay-too-old, never healthy."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/project-replica.test.ts",
+          "note": "projectReplica.* answer local callers only and publish the closed reason."
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/handlers/project-replica.test.ts",
+          "note": "orca project replica-compare prints the published relation and its closed reason."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/store/replica-topology-selector.test.ts",
+          "note": "selector reads published relations (publishedRelationsOf) with parity to the main-side derivation."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/components/settings/replica-topology-presentation.test.ts",
+          "note": "presenter maps every closed unknown reason to a localized sentence, total over the closed set."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/components/settings/RepositoryHostSetupsSection.replica-relations.test.tsx",
+          "note": "Settings relation row and Compare action render relation, unavailable and failed states in words."
+        },
+        {
+          "kind": "gate",
+          "script": "check:workspace-surface-claims",
+          "note": "claims gate over the Settings surface: green at 2026-10-15 (02-gate-sweep.sh)."
+        },
+        {
+          "kind": "gate",
+          "script": "check:status-semantics",
+          "note": "status-semantics gate: green at 2026-10-15 (02-gate-sweep.sh)."
+        },
+        {
+          "kind": "commit",
+          "sha": "e04c478725d7",
+          "note": "pair service compares a setup pair over the SSH relay session"
+        },
+        {
+          "kind": "commit",
+          "sha": "5003943cd08c",
+          "note": "renderer topology selector reads published relations"
+        },
+        {
+          "kind": "commit",
+          "sha": "05ca19f2d1b1",
+          "note": "Settings replica Compare action and honest unavailable states"
         }
       ],
-      "reason": "dws-exec X09f 2026-10-14: model plus hermetic comparison-to-state bridge are tested, and the live Windows<->GEX44 two-host leg RAN and PASSED (HWF17_STATE=ahead:2, HWF17_UNREADABLE=unknown; evidence W/inputs/d4/20261014/X09). That leg feeds ssh-read facts to the model, not the relay compare. Not covered: the comparison service is not wired to the app SSH relay session and no presenter exists, so the row stays PARTIAL."
+      "reason": "READY_FOR_LIVE: rendered-settings-row — dwsrb phase 2 (2026-10-15): the state model, the pair service over the relay handler, the local RPC and CLI (project replica-compare, project setups), the replicaPair IPC, the renderer slice with the published-relations selector and the Settings relation row with a total closed-reason map are built and covered by hermetic tests plus the workspace-surface-claims and status-semantics gates. The earlier two-host leg (evidence W/inputs/d4/20261014/X09) feeds ssh-read facts to the model. NOT RUN: the rendered Settings row (LOCAL_RENDER); GEX44 has no display and no built app in out/, and a grouped SSH replica needs a second live host. No repo command encodes it; drive it with the $electron skill and Playwright CDP (AGENTS.md Electron UI Validation). The ja, ko and zh strings are executor-authored, not native-reviewed. The row stays PARTIAL because nothing here observed what a user sees."
     },
     {
       "id": 63,
@@ -1783,8 +1843,8 @@
       "done": "ancestry decided on transferred objects (bundle verified); relay capability-probed",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X08f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 2",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         17
@@ -1800,8 +1860,7 @@
           "kind": "file",
           "path": "src/main/ssh/ssh-relay-capabilities.test.ts",
           "note": "relay.status capability probe: once per generation, re-probe on bump, failure not cached, absent capability reads unsupported."
-        }
-        ,
+        },
         {
           "kind": "file",
           "path": "src/relay/git-replica-handler.test.ts",
@@ -1816,19 +1875,69 @@
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-replica-compare.spec.ts",
           "note": "opt-in two-host transport precondition (ORCA_HWF_TWO_HOST=1); live leg RAN and PASSED on 2026-10-14 (laptop -> GEX44 disposable root, evidence d4-ev-20261014-164045; W/inputs/d4/20261014/X08/). Proves pin + ahead 2 only."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-pair-service.test.ts",
+          "note": "pair service compares through the relay session with a real relay handler and injected deps."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-comparison-path.test.ts",
+          "note": "pins one relay comparison path; the e38da01d3 alternative is superseded."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-remote-facts.test.ts",
+          "note": "remote worktree facts cross the relay through requestGatedRelayMethod (sync.v1)."
+        },
+        {
+          "kind": "file",
+          "path": "src/relay/replica-facts-handler.test.ts",
+          "note": "relay sync.replicaFacts reads facts read-only on a real repo."
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/replica-facts-wire.test.ts",
+          "note": "wire parser ignores unknown extra keys so a newer relay may add an optional field, and rejects malformed facts."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-pair.spec.ts",
+          "note": "live relay-compare-result leg; skipped without ORCA_HWF_* (NOT RUN: needs two hosts and a display)."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-replica-verdict.unit.test.ts",
+          "note": "verdict function keeps PASS, FAIL and NOT_RUN apart (mutant-checked)."
+        },
+        {
+          "kind": "commit",
+          "sha": "8bb8d7330ae5",
+          "note": "remote worktree facts cross the relay through the sync.v1 gate"
+        },
+        {
+          "kind": "commit",
+          "sha": "40ae09a238e2",
+          "note": "one relay comparison path, e38da01d3 superseded"
+        },
+        {
+          "kind": "commit",
+          "sha": "fa2e1f015872",
+          "note": "two-host live legs for replica compare and sync failures, NOT RUN"
         }
       ],
-      "reason": "Measured 2026-10-10: comparison service (probe -> export -> checked chunk pull -> verified receive -> ancestry on transferred objects) built and tested hermetically with an injected relay request, plus seed-p17 harness verb with refusal drill and an opt-in two-host spec. Wired: compareWithSshRelayReplica resolves the app's active SSH multiplexer and generation (hermetic tests with injected session deps; no caller UI/IPC yet). Live two-host leg RAN and PASSED 2026-10-14 (laptop -> GEX44 disposable root; evidence W/inputs/d4/20261014/X08/, summary.json unit X08; fix 3962a9f02d merged). It proves the transport precondition only (HWF17_PIN + remote ahead 2); the spec does not assert the relay compare result, and there is no IPC/UI caller yet. So the row stays PARTIAL."
+      "reason": "READY_FOR_LIVE: relay-compare-result — dwsrb phase 2 (2026-10-15): compareWithSshRelayReplica now has callers through the pair service (orca project replica-compare, the replicaPair IPC, the Settings Compare action) and reads remote worktree facts through sync.replicaFacts behind the sync.v1 gate; hermetic suites are green. The transport precondition ran live 2026-10-14 (X08: pin plus remote ahead 2); the relay compare RESULT leg has NOT RUN. Command: `npx playwright test tests/e2e/hwf-two-host-replica-pair.spec.ts --config tests/playwright.config.ts --project=electron-headless -g relay-compare-result` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_P17_PATH, ORCA_HWF_LOCAL_PORT. Expected: HWF63_REMOTE_AHEAD=2, then HWF63_COMPARE_LIVE PASS with the setup/host line \"behind 2\" and exit 0, then with the carrier down \"unverified (host-unreachable)\" and exit 1. One comparison path remains: compareReplicaViaRelay at exec/row-63@e38da01d3 is superseded by the single path (compareWithSshRelayReplica through the pair service) pending the Owner's decision on packet X06."
     },
     {
       "id": 64,
       "row": "HF Dirty-state capsule",
       "owner": "git tree objects (UWCP A6 semantics)",
       "done": "uncommitted state captured as a content-addressed commit under refs/orca/capsules",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X10f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 2",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         17
@@ -1838,15 +1947,69 @@
         {
           "kind": "file",
           "path": "src/main/replica-capsule.test.ts",
-          "note": "16 hermetic tests on real git repos: createCapsule builds a stash-shaped commit W (parents HEAD, I, U) from temp-index trees, publishes it by one create-only ref update under refs/orca/capsules/<W>, leaves index/HEAD/branches/worktree untouched, is idempotent, clean tree returns clean, secret-shaped and oversized files are omitted and recorded."
+          "note": "16 hermetic tests on real git: stash-shaped commit W under refs/orca/capsules/<W>, create-only ref, worktree and index untouched.",
+          "provedBy": [
+            "uncommitted state captured as a content-addressed commit under refs/orca/capsules"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-capsule-singleton.test.ts",
+          "note": "pins the single createCapsule capture path used by sync and reconcile.",
+          "provedBy": [
+            "uncommitted state captured as a content-addressed commit under refs/orca/capsules"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-capsule-restore.test.ts",
+          "note": "restore plan by default and apply on real repos."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-pair-service-capsule.test.ts",
+          "note": "pair service capsule create, list and restore under the worktree guard."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/project-replica.test.ts",
+          "note": "projectReplica.capsuleCreate, capsuleList, capsuleRestore for local callers only."
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/handlers/project-replica.test.ts",
+          "note": "orca project replica-capsule, replica-capsule-list, replica-capsule-restore."
         },
         {
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-dirty-capsule.spec.ts",
-          "note": "Opt-in REAL-TWO-HOST leg (ORCA_HWF_TWO_HOST=1), RAN and PASSED 2026-10-14 (evidence ctl/inputs/d4/20261014/X10/, summary.json unit X10): laptop capsule pushed over ssh to a GEX44 p17 disposable root and read back by verify-p17. Harness verbs seed-p17-capsule/verify-p17 and the /tmp/orca-hwf-p17-* root guard are in config/scripts/."
+          "note": "live two-host creation leg RAN and PASSED 2026-10-14 (ctl path in the reason).",
+          "provedBy": [
+            "uncommitted state captured as a content-addressed commit under refs/orca/capsules"
+          ]
+        },
+        {
+          "kind": "commit",
+          "sha": "03aa562df1f1",
+          "note": "one createCapsule, sync and reconcile use it"
+        },
+        {
+          "kind": "commit",
+          "sha": "d8b126bef76d",
+          "note": "capsule restore and apply, plan by default"
+        },
+        {
+          "kind": "commit",
+          "sha": "1e1060e4fc9d",
+          "note": "pair service capsule create, list and restore"
+        },
+        {
+          "kind": "commit",
+          "sha": "3188e042c93c",
+          "note": "orca project replica-capsule CLI verbs"
         }
       ],
-      "reason": "Measured 2026-10-14: capsule creation and listing built with hermetic tests (content-addressed commit under refs/orca/capsules, real git). The live two-host leg (Windows laptop -> GEX44 disposable root over real SSH) RAN and PASSED: ref matches W, fsck ok, 3 parents, base is HEAD, target status clean, readback ok (evidence ctl/inputs/d4/20261014/X10/). It does not cover restore/apply or any service use. NOT built: restore/apply of a capsule, UI or service wiring that calls createCapsule. So the row is PARTIAL."
+      "reason": "dwsrb phase 2 (2026-10-15): createCapsule is the single capture path (sync and reconcile call it) and restoreCapsule plans by default and applies on request; create, list and restore are reachable through the pair service under a worktree guard, projectReplica.capsuleCreate, capsuleList and capsuleRestore for local callers, and orca project replica-capsule, replica-capsule-list and replica-capsule-restore. All covered by hermetic tests on real git repos. Creation also ran live 2026-10-14 (evidence ctl/inputs/d4/20261014/X10/, summary.json unit X10). Caveat: restore/apply and the RPC and CLI path have no live two-host run; the live leg proved creation on the earlier code."
     },
     {
       "id": 65,
@@ -1855,40 +2018,143 @@
       "done": "fast-forward of a proven descendant, capsule first, generation-fenced; disk-full/disconnect/stale stay failures",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X11f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 2",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         18
       ],
       "dependsOn": [],
       "evidence": [
-        { "kind": "file", "path": "src/main/replica-sync.ts" },
-        { "kind": "file", "path": "src/main/replica-sync.test.ts" },
-        { "kind": "file", "path": "tests/e2e/hwf-two-host-replica-sync.spec.ts" }
+        {
+          "kind": "file",
+          "path": "src/main/replica-sync.ts"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-sync.test.ts"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-sync.spec.ts"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-pair-service-sync.test.ts",
+          "note": "pair service one-way sync with distinct failure arms; HEAD is not moved on failure."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-failure-cause.test.ts",
+          "note": "disk-full cause classifier."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/project-replica.test.ts",
+          "note": "projectReplica.sync for local callers only."
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/project-replica-sync-format.test.ts",
+          "note": "CLI sentences for sync success and each failure arm."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-pair.spec.ts",
+          "note": "live disk-full-and-disconnect leg; skipped without ORCA_HWF_* (NOT RUN: needs two hosts and a small filesystem)."
+        },
+        {
+          "kind": "commit",
+          "sha": "170f7b81bad3",
+          "note": "pair service one-way sync with distinct failure arms"
+        },
+        {
+          "kind": "commit",
+          "sha": "9ba6d9cf1aed",
+          "note": "sync and comparison failures carry the disk-full cause"
+        },
+        {
+          "kind": "commit",
+          "sha": "81e0a2c4981d",
+          "note": "projectReplica.sync, preserveDivergence, reconcile for local callers"
+        }
       ],
-      "reason": "dws-exec X11f (D4): fast-forward pipeline with 10 hermetic tests; the live two-host leg RAN and PASSED on 2026-10-14 (laptop to GEX44 disposable root, stale-generation, ff ok, capsule present; evidence ctl/inputs/d4/20261014/X11/ and summary.json). Does not cover disk-full/disconnect live, and not wired to UI/IPC, so row stays PARTIAL"
+      "reason": "READY_FOR_LIVE: disk-full-and-disconnect — dwsrb phase 2 (2026-10-15): one-way sync is a pair-service operation with distinct failure arms (disk-full cause classifier, stale generation, disconnect), reachable through projectReplica.sync and orca project replica-sync; hermetic suites are green. The live fast-forward leg RAN and PASSED 2026-10-14 (X11) on the earlier primitive; the disk-full and disconnect legs have NOT RUN. Command: `npx playwright test tests/e2e/hwf-two-host-replica-pair.spec.ts --config tests/playwright.config.ts --project=electron-headless -g disk-full-and-disconnect` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_P17_PATH, ORCA_HWF_LOCAL_PORT and ORCA_HWF_SMALL_FS_ROOT (a dedicated filesystem of at most 1 GiB, not the root device). Expected: a normal clone prints \"synced a..b\" and HEAD equals the remote tip; on a full filesystem \"sync failed: the local disk is full; HEAD was not moved\" exit 1, HEAD unchanged; after the carrier drops \"sync failed: the connection to the host was lost ...; HEAD was not moved\" exit 1, HEAD unchanged."
     },
     {
       "id": 66,
       "row": "HF Divergence and conflict workflow",
       "owner": "sync pipeline + merge-tree preview",
       "done": "diverged replicas preserved as refs; conflict surfaced; neither side overwritten",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X12f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 2",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         19
       ],
       "dependsOn": [],
       "evidence": [
-        { "kind": "file", "path": "src/main/replica-divergence.ts" },
-        { "kind": "file", "path": "src/main/replica-divergence.test.ts" },
-        { "kind": "file", "path": "tests/e2e/hwf-two-host-replica-divergence.spec.ts" }
+        {
+          "kind": "file",
+          "path": "src/main/replica-divergence.ts",
+          "note": "create-only refs/orca/divergence refs; merge-tree conflict preview; no branch, index or worktree write."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-divergence.test.ts",
+          "note": "4 hermetic tests on real git: both tips preserved, conflict reported, nothing overwritten.",
+          "provedBy": [
+            "diverged replicas preserved as refs",
+            "conflict surfaced",
+            "neither side overwritten"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-pair-service-preserve.test.ts",
+          "note": "pair service preserveDivergence keeps both tips and leaves the worktree alone.",
+          "provedBy": [
+            "diverged replicas preserved as refs",
+            "neither side overwritten"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/project-replica-sync-format.test.ts",
+          "note": "CLI prints the conflicted paths and the preserved refs.",
+          "provedBy": [
+            "conflict surfaced"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/handlers/project-replica.test.ts",
+          "note": "orca project replica-preserve-divergence handler."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-divergence.spec.ts",
+          "note": "live two-host leg RAN and PASSED 2026-10-14 against the primitive (ctl path in the reason).",
+          "provedBy": [
+            "diverged replicas preserved as refs",
+            "conflict surfaced",
+            "neither side overwritten"
+          ]
+        },
+        {
+          "kind": "commit",
+          "sha": "ccf3575617d4",
+          "note": "pair service preserves divergence without touching the worktree"
+        },
+        {
+          "kind": "commit",
+          "sha": "5a3a6dac15d9",
+          "note": "orca project replica-sync, replica-preserve-divergence, replica-reconcile"
+        }
       ],
-      "reason": "Built (dws-exec X12): replica-divergence.ts preserves both tips as create-only refs/orca/divergence refs, surfaces conflicts via merge-tree, touches no branch/index/worktree; 4 hermetic tests pass, tsc clean; seed-p19 harness verb + refusal drill. Live two-host leg RAN and PASSED 2026-10-14 (Windows<->GEX44 disposable root; HWF19_ANCESTRY=diverged, HWF19_CONFLICT=conflicted seed.txt, HWF19_REFS=true, HWF19_NEITHER_OVERWRITTEN=true; evidence ctl/inputs/d4/20261014/X12/, laptop fix fa9e33b855 merged). Stays PARTIAL: not wired to the app UI/IPC, so conflict is not surfaced to users, and the spec is not covered by a tsc config"
+      "reason": "dwsrb phase 2 (2026-10-15): diverged replicas are preserved as create-only refs/orca/divergence refs, conflicts are surfaced from merge-tree, and no branch, index or worktree is touched; the primitive (replica-divergence.ts) and the pair-service path (preserveDivergence) are covered by hermetic tests on real git, and the path is reachable through projectReplica.preserveDivergence and orca project replica-preserve-divergence. The primitive ran live 2026-10-14 (X12: HWF19_ANCESTRY=diverged, HWF19_CONFLICT=conflicted seed.txt, HWF19_REFS=true, HWF19_NEITHER_OVERWRITTEN=true; evidence ctl/inputs/d4/20261014/X12/). Caveat: the pair-service, RPC and CLI path has no live two-host run, and the conflict is surfaced in CLI and RPC output, not in a Settings view."
     },
     {
       "id": 67,
@@ -2192,19 +2458,63 @@
       "done": "an old relay rejects new sync/fabric methods; client never widens",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X18 (hermetic vitest + tsc on exec/row-74); D4 live leg 2026-10-14",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 2",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         23
       ],
       "dependsOn": [],
       "evidence": [
-        { "kind": "file", "path": "src/main/ssh/ssh-relay-capabilities.ts" },
-        { "kind": "file", "path": "src/main/ssh/ssh-relay-capabilities.test.ts" },
-        { "kind": "file", "path": "tests/e2e/hwf-two-host-mixed-relay.spec.ts" }
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-relay-capabilities.ts"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-relay-capabilities.test.ts"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-mixed-relay.spec.ts"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-pair-service-mixed-relay.test.ts",
+          "note": "old relay without sync.v1: the call is refused client-side and the relation reads unknown relay-too-old."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/replica-remote-facts.test.ts",
+          "note": "sync.replicaFacts is sent only through requestGatedRelayMethod."
+        },
+        {
+          "kind": "file",
+          "path": "src/relay/replica-facts-handler.test.ts",
+          "note": "relay side of sync.replicaFacts advertised behind sync.v1."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/hwf-two-host-replica-verdict.unit.test.ts",
+          "note": "old-relay and current-relay verdicts keep PASS, FAIL and NOT_RUN apart."
+        },
+        {
+          "kind": "commit",
+          "sha": "81ce61bc6f49",
+          "note": "relay sync.replicaFacts fact reader behind sync.v1"
+        },
+        {
+          "kind": "commit",
+          "sha": "8bb8d7330ae5",
+          "note": "remote worktree facts cross the relay through the sync.v1 gate"
+        },
+        {
+          "kind": "commit",
+          "sha": "75541c8fa478",
+          "note": "two-host old-relay and current-relay A/B, NOT RUN"
+        }
       ],
-      "reason": "Client gate requestGatedRelayMethod fails closed (sync./fabric. need relay.status sync.v1/fabric.v1; no relay.status or MethodNotFound => RelayCapabilityUnsupportedError, never widened), 11 hermetic tests green. NOT measurable live yet: the gate has no production caller and no sync./fabric. method exists, so the client can never send one and a live zero is guaranteed by absence, not by the gate (D4 2026-10-14: count=0 with the owning relay logging 0 method lines; old-relay-p23 only writes a version marker, it installs no old relay). Live leg becomes meaningful when the first sync/fabric caller lands: it must route through requestGatedRelayMethod, and the leg needs a real old relay build plus an A/B control where a new relay DOES receive the method. Stays PARTIAL."
+      "reason": "READY_FOR_LIVE: old-relay-build — dwsrb phase 2 (2026-10-15): the gate now has a production caller (sync.replicaFacts goes through requestGatedRelayMethod, so a relay without sync.v1 is refused and the pair publishes unknown relay-too-old); hermetic suites are green. The D4 live zero of 2026-10-14 predates that caller, so it proved absence, not the gate. The old-relay leg and its current-relay control have NOT RUN. Commands: `npx playwright test tests/e2e/hwf-two-host-mixed-relay.spec.ts --config tests/playwright.config.ts --project=electron-headless -g \"old relay\"` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE (seeded p23 root), ORCA_HWF_P23_RELAY_PATH (an old relay build), optional ORCA_HWF_P23_EXPECTED_WORD; expected P23_NO_SYNC_FABRIC_SENT count=0 with P23_RELAY_LOGS and P23_RELAY_METHODS above 0 and HWF74_OLD_RELAY PASS (\"unverified (relay-too-old)\", exit 1). Control: same spec with -g \"current relay\" on a p23 root running the current relay; expected HWF74_CURRENT_RELAY PASS with \"sync.replicaFacts seen N time(s)\", N above 0."
     },
     {
       "id": 75,
