@@ -5,8 +5,14 @@ import {
   type FleetPlacementRequest
 } from './fleet-placement'
 import type { ExecutionHostId } from './execution-host'
+import type { NodeRequirement } from './node-manifest-eligibility'
 
-export type MissionJob = { jobId: string; requiredCapabilities?: readonly string[] }
+export type MissionJob = {
+  jobId: string
+  requiredCapabilities?: readonly string[]
+  /** A family set here replaces that family of the request requirement; unset families are inherited. */
+  requirement?: NodeRequirement
+}
 
 export type MissionJobPlacement = {
   jobId: string
@@ -26,6 +32,18 @@ export type MissionPlacementPlan = {
   hostCount: number
 }
 
+// Why: an explicitly undefined family on the job must not erase the inherited one.
+function mergeJobRequirement(
+  base: NodeRequirement | undefined,
+  job: NodeRequirement | undefined
+): NodeRequirement | undefined {
+  if (!job) {
+    return base
+  }
+  const set = Object.entries(job).filter(([, family]) => family !== undefined)
+  return { ...base, ...Object.fromEntries(set) }
+}
+
 /**
  * Spreads the jobs of ONE mission over distinct eligible hosts, so they can run concurrently on
  * separate machines. Every job is judged by planFleetPlacement per its own capability need; a host
@@ -43,8 +61,10 @@ export function planMissionPlacement(
   let rejected: FleetPlacementRejected[] = []
   const ordered = [...jobs].sort((a, b) => (a.jobId < b.jobId ? -1 : a.jobId > b.jobId ? 1 : 0))
   for (const job of ordered) {
+    const requirement = mergeJobRequirement(request.requirement, job.requirement)
     const proposal = planFleetPlacement(members, {
       ...request,
+      ...(requirement ? { requirement } : {}),
       requiredCapabilities: [
         ...(request.requiredCapabilities ?? []),
         ...(job.requiredCapabilities ?? [])
@@ -74,7 +94,11 @@ export function planMissionPlacement(
 export type MissionJobOutcome = { jobId: string; status: 'completed' | 'failed'; result?: string }
 
 export type IntegratedMissionResults = {
-  byHost: { hostKey: string; label: string; jobs: { jobId: string; status: string; result?: string }[] }[]
+  byHost: {
+    hostKey: string
+    label: string
+    jobs: { jobId: string; status: string; result?: string }[]
+  }[]
   completed: number
   failed: number
   /** Placed jobs with no outcome yet; the integration is not complete while any remain. */

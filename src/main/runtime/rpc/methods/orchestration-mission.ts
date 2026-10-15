@@ -11,6 +11,7 @@ import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcMethod } from '../core'
 import { isLocalRpcCaller } from '../local-rpc-caller'
+import { NodeRequirementParams } from '../node-requirement-params'
 import { DEFAULT_FLEET_SAMPLE_MAX_AGE_MS } from './fleet'
 import { requiredString } from '../schemas'
 
@@ -18,7 +19,8 @@ const MissionPlaceParams = z
   .object({
     run: z.string().min(1).optional(),
     from: requiredString('Missing --from'),
-    tasks: z.array(z.string().min(1)).min(1).max(64)
+    tasks: z.array(z.string().min(1)).min(1).max(64),
+    requirement: NodeRequirementParams.optional()
   })
   .strict()
 
@@ -71,10 +73,15 @@ export const ORCHESTRATION_MISSION_METHODS: RpcMethod[] = [
         throw new OrchestrationError('fleet_unavailable', 'No fleet observer is installed.')
       }
       const observation = await pending
-      const plan = planDispatchableMission(tasks, observation.members, {
-        now: observation.completedAt,
-        maxSampleAgeMs: DEFAULT_FLEET_SAMPLE_MAX_AGE_MS
-      })
+      const requirements = Object.fromEntries(
+        tasks.flatMap((taskId) => (params.requirement ? [[taskId, params.requirement]] : []))
+      )
+      const plan = planDispatchableMission(
+        tasks,
+        observation.members,
+        { now: observation.completedAt, maxSampleAgeMs: DEFAULT_FLEET_SAMPLE_MAX_AGE_MS },
+        { requirements }
+      )
       const placements = db.placeMissionTasks(
         run.id,
         plan.placements.map((p) => ({

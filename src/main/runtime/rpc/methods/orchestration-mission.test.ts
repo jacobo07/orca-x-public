@@ -106,6 +106,128 @@ describe('cross-host mission dispatch', () => {
     expect(db.listRunTaskPlacements(a.run_id)).toHaveLength(2)
   })
 
+  describe('resource requirement', () => {
+    const GB = 1024 ** 3
+    type PlaceResult = {
+      placements: { taskId: string; address: string; fingerprint: string }[]
+      unplaced: { jobId: string }[]
+    }
+
+    // Why: three dispatchable hosts; the 6 GiB runtime is third in the memory ranking, so only a requirement keeps it empty.
+    function useResourceFleet(): void {
+      observation.current = Promise.resolve({
+        ...fleet(),
+        members: [
+          member('local', 'fp-win', null, 16 * GB),
+          member('runtime:env-big', 'fp-big', FED, 24 * GB),
+          member('runtime:env-small', 'fp-small', FED, 6 * GB)
+        ]
+      })
+    }
+
+    it('places a task needing 8 GiB on a host that has it and persists that host', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'heavy' })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: [a.id],
+          requirement: { memory: { minAvailableBytes: 8 * GB } }
+        },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced).toEqual([])
+      expect(db.getTaskPlacement(a.id)).toMatchObject({
+        fingerprint: 'fp-big',
+        address: 'runtime:env-big',
+        label: 'runtime:env-big'
+      })
+    })
+
+    it('keeps every heavy task off the 6 GiB host even when it must double up', async () => {
+      setup()
+      useResourceFleet()
+      const ids = ['a', 'b', 'c'].map((spec) => db.createTask({ spec }).id)
+      await h.call(
+        'orchestration.missionPlace',
+        {
+          from: 'term_coord',
+          tasks: ids,
+          requirement: { memory: { minAvailableBytes: 8 * GB } }
+        },
+        ctx
+      )
+      const rows = ids.map((id) => db.getTaskPlacement(id))
+      expect(rows.every((row) => row !== undefined)).toBe(true)
+      expect(rows.map((row) => row?.fingerprint)).not.toContain('fp-small')
+      expect(new Set(rows.map((row) => row?.fingerprint))).toEqual(new Set(['fp-big', 'fp-win']))
+    })
+
+    it('control: without a requirement the third task lands on the 6 GiB host', async () => {
+      setup()
+      useResourceFleet()
+      const ids = ['a', 'b', 'c'].map((spec) => db.createTask({ spec }).id)
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        { from: 'term_coord', tasks: ids },
+        ctx
+      )) as PlaceResult
+      expect(plan.unplaced).toEqual([])
+      expect(ids.map((id) => db.getTaskPlacement(id)?.fingerprint).sort()).toEqual([
+        'fp-big',
+        'fp-small',
+        'fp-win'
+      ])
+    })
+
+    it('stays strict: an unknown requirement key or family key fails, nothing is placed', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'job a' })
+      for (const requirement of [
+        { cpu: { cores: 4 } },
+        { memory: { minAvailableBytes: 1, x: 1 } }
+      ]) {
+        await expect(
+          h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id], requirement },
+            ctx
+          )
+        ).rejects.toThrow(/Unrecognized key/)
+      }
+      expect(db.getTaskPlacement(a.id)).toBeUndefined()
+    })
+
+    it('still refuses a remote caller and a task that already left pending/ready', async () => {
+      setup()
+      useResourceFleet()
+      const a = db.createTask({ spec: 'job a' })
+      const requirement = { memory: { minAvailableBytes: 8 * GB } }
+      expect(
+        await codeOf(
+          h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id], requirement },
+            { ...ctx, pairedDeviceId: 'phone' }
+          )
+        )
+      ).toBe('remote_caller_refused')
+      db.updateTaskStatus(a.id, 'completed', 'done')
+      expect(
+        await codeOf(
+          h.call(
+            'orchestration.missionPlace',
+            { from: 'term_coord', tasks: [a.id], requirement },
+            ctx
+          )
+        )
+      ).toBe('task_not_placeable')
+    })
+  })
+
   it('refuses a remote caller and an unbound coordinator', async () => {
     setup()
     const a = db.createTask({ spec: 'job a' })
