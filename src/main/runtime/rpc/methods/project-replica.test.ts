@@ -33,7 +33,8 @@ const capsuleStubs = () => ({
   capsuleCreate: vi.fn(),
   capsuleList: vi.fn(),
   capsuleRestore: vi.fn(),
-  sync: vi.fn()
+  sync: vi.fn(),
+  preserveDivergence: vi.fn()
 })
 
 const compare = PROJECT_REPLICA_METHODS.find((m) => m.name === 'projectReplica.compare')!
@@ -206,7 +207,8 @@ function fakeService() {
     capsuleCreate: vi.fn(async () => ({ status: 'ok' as const, outcome: { kind: 'clean' as const } })),
     capsuleList: vi.fn(async () => ({ status: 'ok' as const, capsules: [] })),
     capsuleRestore: vi.fn(async () => ({ status: 'refused' as const, reason: 'worktree-not-clean' as const })),
-    sync: vi.fn()
+    sync: vi.fn(),
+    preserveDivergence: vi.fn()
   }
 }
 
@@ -241,9 +243,13 @@ describe('every projectReplica method is local-caller only', () => {
       const local = (await callMethod(method.name, PARAMS_OF[method.name])) as { reason?: string }
       expect(local.reason, method.name).not.toBe('remote-caller')
     }
-    for (const fn of Object.values(service)) {
+    // sync and preserveDivergence have no RPC method yet, so nothing may reach them.
+    const { sync, preserveDivergence, ...reachable } = service
+    for (const fn of Object.values(reachable)) {
       expect(fn).toHaveBeenCalledTimes(1)
     }
+    expect(sync).not.toHaveBeenCalled()
+    expect(preserveDivergence).not.toHaveBeenCalled()
   })
 
   it('answers unavailable for each capsule method when the slot is empty', async () => {

@@ -51,3 +51,32 @@ export type ReplicaSyncResult =
     }
   | ReplicaSyncUnavailable
   | ReplicaSyncNotFound
+
+/** What a pair looked like when an operation that needs a particular relation found a different one. */
+export type ReplicaObservedRelation = Exclude<ReplicaObservedAncestry, 'diverged'> | 'unknown'
+
+/** What merging the two tips would do. `unknown` is a failed probe and is never shown or mapped as clean. */
+export type ReplicaDivergenceConflict =
+  | { kind: 'clean' }
+  | { kind: 'conflicted'; paths: string[] }
+  | { kind: 'unknown'; reason: 'merge-tree-failed' }
+
+export type ReplicaPreserveFailureReason =
+  | 'tip-missing'
+  | 'bad-input'
+  | `compare-${ReplicaSyncComparisonFailure}`
+
+export type ReplicaPreserveDivergenceResult =
+  | {
+      status: 'ok'
+      refs: { local: string; remote: string }
+      mergeBase: string
+      conflict: ReplicaDivergenceConflict
+      /** True when both refs already existed at these tips (a repeated call); nothing was written. */
+      alreadyPreserved: boolean
+    }
+  | { status: 'refused'; reason: ReplicaSyncRefusal | 'ref-occupied' }
+  | { status: 'refused'; reason: 'not-diverged'; relation: ReplicaObservedRelation }
+  | { status: 'failed'; reason: ReplicaPreserveFailureReason; cause?: ReplicaFailureCauseWord }
+  | ReplicaSyncUnavailable
+  | ReplicaSyncNotFound

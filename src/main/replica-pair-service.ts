@@ -24,7 +24,12 @@ import {
   type ReplicaCapsuleOperations
 } from './replica-pair-service-capsule'
 import {
+  createReplicaDivergenceOperations,
+  type ReplicaDivergenceOperations
+} from './replica-pair-service-divergence'
+import {
   createReplicaSyncOperations,
+  type ReplicaPairLedger,
   type ReplicaSyncOperations
 } from './replica-pair-service-sync'
 import {
@@ -66,7 +71,8 @@ export type ReplicaPairService = {
   /** Every non-anchor setup of every project: stored answers re-fenced against the current local tip, never a clock. */
   relations(): Promise<Extract<ReplicaPairRelationsResult, { status: 'ok' }>>
 } & ReplicaCapsuleOperations &
-  ReplicaSyncOperations
+  ReplicaSyncOperations &
+  ReplicaDivergenceOperations
 
 type StoredPair = {
   /** Set when the local tip moved under the answer (a sync): the answer is kept only as the fact that it is stale. */
@@ -222,31 +228,34 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
   // Why: one guard for every worktree-mutating method of this service, so two effects never interleave on a worktree.
   const mutationGuard = deps.mutationGuard ?? createReplicaWorktreeMutationGuard()
   const capsules = createReplicaCapsuleOperations({ ...deps, mutationGuard })
-  const syncOperations = createReplicaSyncOperations({
-    ...deps,
-    mutationGuard,
-    ledger: {
-      async adoptEvidence(setup, anchor, evidence) {
-        // Why: never overlap a comparison of the same setup; the evidence is folded through the one comparison path.
-        await inFlight.get(setup.id)
-        await startComparison(setup, anchor, lazyAnchorRead(anchor), {
-          ok: true,
-          evidence,
-          refs: {}
-        })
-      },
-      markStale(setupId) {
-        const entry = stored.get(setupId)
-        if (entry) {
-          stored.set(setupId, { ...entry, stale: true })
-        }
+  const ledger: ReplicaPairLedger = {
+    async adoptEvidence(setup, anchor, evidence) {
+      // Why: never overlap a comparison of the same setup; the evidence is folded through the one comparison path.
+      await inFlight.get(setup.id)
+      await startComparison(setup, anchor, lazyAnchorRead(anchor), {
+        ok: true,
+        evidence,
+        refs: {}
+      })
+    },
+    async compareFresh(setup, anchor) {
+      await inFlight.get(setup.id)
+      const outcome = await startComparison(setup, anchor, lazyAnchorRead(anchor))
+      return { view: outcome.view, result: outcome.stored?.result ?? null }
+    },
+    markStale(setupId) {
+      const entry = stored.get(setupId)
+      if (entry) {
+        stored.set(setupId, { ...entry, stale: true })
       }
     }
-  })
+  }
+  const guardedDeps = { ...deps, mutationGuard, ledger }
 
   return {
     ...capsules,
-    ...syncOperations,
+    ...createReplicaSyncOperations(guardedDeps),
+    ...createReplicaDivergenceOperations(guardedDeps),
     async compare({ projectId, setupId }) {
       const setups = deps.listProjectHostSetups().filter((s) => s.projectId === projectId)
       if (setups.length === 0) {

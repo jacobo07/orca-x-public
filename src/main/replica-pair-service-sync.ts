@@ -7,9 +7,14 @@ import type {
   ReplicaSyncResult,
   ReplicaSyncUnavailable
 } from '../shared/replica-sync-view'
+import type { ReplicaPairView } from '../shared/replica-pair-view'
 import type { ReplicaPairEvidence } from '../shared/workspace-replica-state'
 import type { CapsuleGitRun } from './replica-capsule'
-import { openSshRelaySession, type SshRelaySessionDeps } from './replica-comparison-service'
+import {
+  openSshRelaySession,
+  type ReplicaComparisonResult,
+  type SshRelaySessionDeps
+} from './replica-comparison-service'
 import { guarded, locateReplicaTarget } from './replica-pair-service-target'
 import { replicaHostKey } from './replica-pair-views'
 import {
@@ -30,6 +35,11 @@ export type ReplicaPairLedger = {
   ): Promise<void>
   /** The local tip moved: the stored answer for this setup can no longer be trusted. */
   markStale(setupId: string): void
+  /** A comparison made now, after any one in flight, stored as the new answer; `result` is null when none reached the host. */
+  compareFresh(
+    setup: ProjectHostSetup,
+    anchor: ProjectHostSetup
+  ): Promise<{ view: ReplicaPairView; result: ReplicaComparisonResult | null }>
 }
 
 export type ReplicaSyncOperationDeps = {
