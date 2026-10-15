@@ -1441,30 +1441,127 @@
       "row": "HF Host identity for SSH targets",
       "owner": "ssh-relay-session + fleet-host-identity",
       "done": "an SSH target has a pinned host-key identity; a changed key is refused, never re-trusted",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "phase-14",
-      "measuredAt": "2026-10-01",
+      "measuredIn": "dwsrb phase 3",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         14
       ],
       "dependsOn": [],
       "evidence": [
-        { "kind": "file", "path": "src/main/ssh/ssh-host-key-pin-verifier.ts", "note": "the pin verifier ssh2's hostVerifier now consults (it no longer returns true for any key)" },
-        { "kind": "file", "path": "src/main/ssh/ssh-connection-host-key-pin.test.ts", "note": "unit: pinned, changed, first-contact and legacy paths on the connection" },
-        { "kind": "file", "path": "src/main/ssh/ssh-host-key-pin.real-sshd.test.ts", "note": "opt-in legs A-C over a real sshd (skips unless ORCA_REAL_SSHD_PORT is set)" },
-        { "kind": "file", "path": "tests/e2e/ssh-host-key-trust.spec.ts", "note": "the trust dialog in the real app (Leg D)" },
-        { "kind": "file", "path": "docs/dws/phase-14-host-identity-evidence.json", "note": "GEX44 private sshd: fence, witnesses, ssh-keygen fingerprints, per-leg verdicts" },
-        { "kind": "commit", "sha": "bd0197278", "note": "pin SSH host keys, refuse a changed key, first contact explicit" },
-        { "kind": "commit", "sha": "2e25fc8e8", "note": "trust prompt before a new host key; every other pin writer fenced" },
-        { "kind": "commit", "sha": "afb96e5ff", "note": "host identity shown in host management" },
-        { "kind": "commit", "sha": "b10b72e37", "note": "real-sshd evidence" },
-        { "kind": "commit", "sha": "059af5e87", "note": "a removed or re-pointed pin refuses automatic connects until re-trusted" },
-        { "kind": "commit", "sha": "0fff3967b", "note": "a pin recorded for another endpoint refuses automatic connects" },
-        { "kind": "commit", "sha": "46e1778bb", "note": "an automatic connect to a never-pinned target is refused host_key_unpinned (OD-2 grace closed); unit-level only, real-sshd legs not re-run" }
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-host-key-pin-verifier.ts",
+          "note": "the pin verifier ssh2's hostVerifier now consults (it no longer returns true for any key)"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-connection-host-key-pin.test.ts",
+          "note": "unit: pinned, changed, first-contact and legacy paths on the connection"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-host-key-pin.real-sshd.test.ts",
+          "note": "opt-in legs A-C over a real sshd on both transports (ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 for system OpenSSH); RAN on GEX44 2026-10-15; leg C rewritten to host_key_unpinned.",
+          "provedBy": [
+            "an SSH target has a pinned host-key identity",
+            "a changed key is refused, never re-trusted"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/ssh-host-key-trust.spec.ts",
+          "note": "the trust dialog in the real app (Leg D)"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/phase-14-host-identity-evidence.json",
+          "note": "GEX44 private sshd: fence, witnesses, ssh-keygen fingerprints, per-leg verdicts"
+        },
+        {
+          "kind": "commit",
+          "sha": "bd0197278",
+          "note": "pin SSH host keys, refuse a changed key, first contact explicit"
+        },
+        {
+          "kind": "commit",
+          "sha": "2e25fc8e8",
+          "note": "trust prompt before a new host key; every other pin writer fenced"
+        },
+        {
+          "kind": "commit",
+          "sha": "afb96e5ff",
+          "note": "host identity shown in host management"
+        },
+        {
+          "kind": "commit",
+          "sha": "b10b72e37",
+          "note": "real-sshd evidence"
+        },
+        {
+          "kind": "commit",
+          "sha": "059af5e87",
+          "note": "a removed or re-pointed pin refuses automatic connects until re-trusted"
+        },
+        {
+          "kind": "commit",
+          "sha": "0fff3967b",
+          "note": "a pin recorded for another endpoint refuses automatic connects"
+        },
+        {
+          "kind": "commit",
+          "sha": "46e1778bb",
+          "note": "an automatic connect to a never-pinned target is refused host_key_unpinned (OD-2 grace closed); unit-level only, real-sshd legs not re-run"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/system-ssh-host-key-observation.ts",
+          "note": "observes the one \"Server host key:\" line of the ControlMaster-creating probe; unobservable is a named state.",
+          "provedBy": [
+            "an SSH target has a pinned host-key identity"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/system-ssh-host-key-observation.test.ts",
+          "note": "observation parser: one line, none, several and a stale master are told apart.",
+          "provedBy": [
+            "an SSH target has a pinned host-key identity"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-connection-system-host-key.test.ts",
+          "note": "system transport pins at first contact, refuses a changed key, refuses an unpinned or unobservable automatic connect.",
+          "provedBy": [
+            "an SSH target has a pinned host-key identity",
+            "a changed key is refused, never re-trusted"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "src/main/environment-prepare-authority.test.ts",
+          "note": "prepare authority restates the system-transport host identity as verified or refused."
+        },
+        {
+          "kind": "commit",
+          "sha": "5e8d6915c6f7",
+          "note": "observe the host key OpenSSH verified for a system-transport session"
+        },
+        {
+          "kind": "commit",
+          "sha": "aeaff26bd39d",
+          "note": "system OpenSSH transport verifies the host key against the pin or refuses by name"
+        },
+        {
+          "kind": "commit",
+          "sha": "dbd288886ecd",
+          "note": "system-transport host identity re-stated for the prepare authority and the real-sshd legs"
+        }
       ],
-      "reason": "measured 2026-09-30/10-01 (phase 14): PARTIAL. Proven: the ssh2 transport pins the host key; on a real sshd on GEX44 (disposable root, generated keys, at 43b869962) first contact recorded exactly OpenSSH's own ssh-keygen fingerprint, a real key change was refused host_key_changed on interactive and automatic connects with the pin file unchanged, and the app's trust dialog passed 3/3 headless (REAL-APP, Leg D, after building the relay the e2e build omits). After review (LOCAL-HOST only, real-sshd legs not re-run): a target whose pin was removed or re-pointed, or whose pin names another endpoint, is refused on automatic connects and prompts on interactive ones. Open: system-OpenSSH transport parity is delegated (OD-3: its negotiated key is not portably observable below OpenSSH 8.5, research section 7), and a never-pinned target on an automatic connect still connects with a loud diagnostic (OD-2 legacy grace) instead of being refused."
+      "reason": "dwsrb phase 3 (2026-10-15): both transports now judge the host key against the pin or refuse by name. ssh2 (phase 14) pins at first contact and refuses a changed key; the system OpenSSH transport (5e8d6915c, aeaff26bd) observes the key OpenSSH verified (LogLevel=DEBUG1 on the ControlMaster-creating probe, exactly one \"Server host key:\" line) and compares it through the same verifyHostKeyAgainstPin, hostKeyVerdictAllowsConnect and refusalFromVerdict, or refuses host_key_unverifiable when it cannot observe. The OD-2 grace is closed (46e1778bb): a never-pinned automatic connect is host_key_unpinned. Observed on GEX44 (REAL-SSH / LOCAL-HOST, OpenSSH_9.6p1, private loopback sshd, throwaway keys; ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1): leg A pinned SHA256:D8HvyuasI9QYT2qT2mVqf+WRpSUrzFwwrgYqNUsRldQ equal to ssh-keygen -lf; leg C (never pinned, automatic) refused host_key_unpinned with no pin written; leg B (host key rotated on the same port) refused host_key_changed in interactive and automatic modes with the pin file sha unchanged; the same three legs pass on ssh2; a 40-iteration -O exit / new-master race gave 40/40 single observations. 57 new hermetic tests, 29 existing system-transport tests re-stated to interactive: true. Caveat: the real-sshd legs are one machine, not two hosts; Windows has no observation mechanism, so an automatic system-transport connect there is refused host_key_unverifiable; the OpenSSH version floor below 9.6 is unmeasured; a ProxyJump hop is not covered by the pin, so ProxyJump and ProxyCommand automatic connects are refused host_key_unverifiable (Owner packet); 59 src/main/ssh tests were already failing at base e1843e793 and 0 are new."
     },
     {
       "id": 57,
@@ -1526,8 +1623,8 @@
       "done": "a second client opens a host-only project; fs/git/pty/agents act on the owning host; reconnect keeps work",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "phase-15",
-      "measuredAt": "2026-10-01",
+      "measuredIn": "dwsrb phase 3",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         15
@@ -1593,9 +1690,59 @@
           "kind": "commit",
           "sha": "e6814ae2a",
           "note": "Run 3 evidence and the phase verdict table"
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/store/slices/agent-status-reconnect-retention.ts",
+          "note": "a live agent row survives SSH re-establishment, marked stale."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/store/slices/agent-status-reconnect-retention.test.ts",
+          "note": "retention seam: row kept, marked stale, cleared on a genuine end."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/store/slices/agent-status-outage-hook-replay.test.ts",
+          "note": "outage hook replay after typed input and reattach: the loss is not reproduced at the store (UNVERIFIED)."
+        },
+        {
+          "kind": "file",
+          "path": "src/relay/pty-handler-second-consumer-outage-replay.test.ts",
+          "note": "relay replays its buffer to a second consumer; identity mismatch only for another paneKey/tabId."
+        },
+        {
+          "kind": "file",
+          "path": "src/relay/preflight-handler-detect-agents-path.test.ts",
+          "note": "Codex detection on an SSH target follows PATH and fallbacks."
+        },
+        {
+          "kind": "commit",
+          "sha": "59cb2650e9ee",
+          "note": "a live row survives SSH re-establishment, marked stale"
+        },
+        {
+          "kind": "commit",
+          "sha": "4048a0487ba1",
+          "note": "outage hook replay after typed input and reattach"
+        },
+        {
+          "kind": "commit",
+          "sha": "087fd84a1fca",
+          "note": "Codex detection on an SSH target is measured"
+        },
+        {
+          "kind": "commit",
+          "sha": "70f417e5d1f4",
+          "note": "second-consumer outage replay and attach eligibility are measured"
+        },
+        {
+          "kind": "commit",
+          "sha": "f85c4ccd59d7",
+          "note": "Client B backfill reading states what B can observe"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 15, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2). Observed: a second client (paired web) and the desktop both open the host-only project with the laptop holding none of its content; terminal, fs and git act on the owning host from both clients (independent ssh reads, laptop absence scan with controls); a real claude process launches on the owning host and a hook posted there reaches both clients' agent-status stores (claim level: agent process + hook routing, no model turn); a carrier-only drop is recovered by Orca's own ladder (generation advances, no test-side connect) with the same relay, shell and agent pids, gap-free ticks and Client A backfill 13/13. Open legs keeping this PARTIAL: (1) the hook posted during the outage was delivered in 3 runs but LOST in 2 earlier attempts of a different pane ordering, cause not characterized; (2) no model turn (OD-1 default); (3) Client B is live after the reconnect but not backfilled for the outage window (0/13); (4) the pane's status row is absent while the transport re-establishes and returns with the replayed hook; (5) the SSH New-tab menu offers Claude but not Codex, so one provider was launched. SSH-DOCKER and localhost results were not used."
+      "reason": "READY_FOR_LIVE: remote-first-reconnect-rerun — dwsrb phase 3 (2026-10-15): the five open legs of the phase-15 run were taken one by one. (4) The hidden status row after SSH re-establishment is fixed: clearTransientAgentStatuses, driven by the main-process transient agentStatus:clear on connection_lost, removed live rows; they are now retained and marked stale (59cb2650e, seam agent-status-reconnect-retention.ts); a retained stale row for a dead agent after reconnect is known debt. (3) Client B backfill: the relay replays its whole buffer to any attach (13 ticks, about 0.6 KB against REPLAY_BUFFER_MAX 100 KB) and refuses only a different paneKey or tabId, so the earlier \"B reads its own PTY\" premise is contradicted (D-18 outcome O1, 70f417e5d, f85c4ccd5); the helper's empty-B text is now HWF_BACKFILL_B=not-measurable reason=b-buffer-holds-no-tick-of-pane-1-...; whether the runtime terminal.subscribe path, which the web client uses instead of relay pty.attach, delivers the SSH reconnect replay to an already-subscribed web client is UNMEASURED. (1) The hook posted during an outage: a store-level replay test (4048a0487) did not reproduce the loss, so the 2-in-5 loss stays UNVERIFIED, not fixed. (5) Codex is an environment fact (P1): the relay finds codex wherever PATH or its fallbacks expose it and the client does not filter it (087fd84a1); no product change. (2) No model turn: OWNER:model-turn-credential (OD-1). NOT RUN: the two-host rerun. Command: `npx playwright test tests/e2e/hwf-two-host-remote-first.spec.ts --config tests/playwright.config.ts --project=electron-headless` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_PROBE_FILE and ORCA_HWF_LOCAL_PORT. Expected: HWF_RELAY_PID before equals after, HWF_BACKFILL_A and HWF_BACKFILL_B lines present (B is a measurement, not an assumption), HWF_B_OUTAGE_ROW stated, and the agent status row present through the drop."
     },
     {
       "id": 60,
@@ -1604,8 +1751,8 @@
       "done": "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X20f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 3",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         16
@@ -1676,9 +1823,34 @@
           "kind": "file",
           "path": "src/shared/replica-topology.test.ts",
           "note": "dws-exec X20: grouped relation from ancestry evidence, diverged stays grouped"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/project-root-identity-relations-callsite.test.ts",
+          "note": "main-side projection passes relations to deriveReplicaTopology."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/store/replica-topology-relations-callsite.test.ts",
+          "note": "renderer selector passes published relations to deriveReplicaTopology."
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/replica-topology-relations-callsites.test.ts",
+          "note": "both call sites agree on every relation case."
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/replica-topology-relations-callsite-cases.ts",
+          "note": "the literal relation cases shared by both call-site pins."
+        },
+        {
+          "kind": "commit",
+          "sha": "314ca8aa8b0c",
+          "note": "both projection call sites agree on relations"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6, root /tmp/orca-hwf-p16-20261001T165645Z). Observed: a remote-less repo seeded with one first commit on the laptop and on GEX44 becomes ONE project git-root:<SEED_ROOT> with setups on local and ssh:<target> (L1, waitedMs 5033); after a same-host fork is added on GEX44 the GEX44 replica and the fork each fall back to their own repo: project, neither stays in the git-root project's sourceRepoIds, and the collision is surfaced as same-host-duplicate in Settings and the CLI, never merged (L2/L3B/L4B); shallow and unborn repos get no root identity with reasons shallow/unborn; a killed carrier leaves the replica listed with its root kept (L5). Open leg keeping this PARTIAL: a fork on another host is grouped with relation unverified; telling it from a diverged replica needs ancestry on transferred objects (row 63, phase 17). Re-checked 2026-10-10 in unit tests only (no two-host run), so the state stays PARTIAL. dws-exec X20 (2026-10-13, unit tests only, no two-host run): deriveReplicaTopology now takes SHA-fenced per-setup relations (row 63 ancestry) and a grouped member reports same/ahead/behind/diverged/unrelated instead of always unverified; a diverged pair stays grouped and visible, never merged, and an unknown or failed comparison stays unverified (4 new tests in replica-topology.test.ts). NOT WIRED: compareWithRelayReplica is not fed from the app SSH relay session, so no live relation is produced. dws-exec X20f (2026-10-14, D4): the opt-in tests/e2e/hwf-two-host-grouped-relation.spec.ts live two-host leg RAN and PASSED against a GEX44 disposable root (HWF60_PIN=SHA256:..., HWF60_REMOTE_AHEAD=2). It proves transport and ahead 2 only; it does not assert the relay compare result. compareWithRelayReplica is still not wired into the app SSH relay session, so no live grouped relation is produced by the app. State stays PARTIAL. dws-exec X20f D4 live leg PASS (HWF60_PIN + HWF60_REMOTE_AHEAD=2); its log is outside this repo: dws-exec ctl inputs/d4/20261014/X20/d4-ev-x20-20261014-164702.playwright.log."
+      "reason": "READY_FOR_LIVE: grouped-relation-result — dwsrb phase 3 (2026-10-15): the ledger line for row 60 was stale. Re-measured at HEAD: both production callers of deriveReplicaTopology (the renderer selector and the main-side client projection) pass relations (plans 02-03 and 02-08), and 314ca8aa8 pins both call sites to the same literal relation cases (same, ahead, behind, diverged, unrelated, unknown) so a diverged pair stays grouped and visible and an unknown comparison stays unverified. The anchor setup of a pair still reads unverified. NOT RUN: a live grouped relation produced by the app over a real SSH relay. Command: `npx playwright test tests/e2e/hwf-two-host-grouped-relation.spec.ts --config tests/playwright.config.ts --project=electron-headless` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_P17_PATH (P17_REPLICA_PATH from seed-p17). Expected: HWF60_PIN equals the run fingerprint and HWF60_REMOTE_AHEAD=2; that spec proves transport and ahead 2 only, so the relation sentence in Settings or orca project setups has no committed spec yet. X05 stays PROPOSE CLOSE."
     },
     {
       "id": 61,
@@ -1687,8 +1859,8 @@
       "done": "UI and CLI list every replica of a logical workspace with its host and role",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "phase-16",
-      "measuredAt": "2026-10-01",
+      "measuredIn": "dwsrb phase 3",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         16
@@ -1739,9 +1911,34 @@
           "kind": "commit",
           "sha": "8d4973149",
           "note": "Run 6 evidence: L3 and L4 observed"
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/handlers/project-setups-all-environments.ts",
+          "note": "fan-out over saved environments with typed per-runtime outcomes."
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/handlers/project-setups-all-environments.test.ts",
+          "note": "answered, unreachable, unauthorized, unsupported-by-host, failed, no-saved-environments, alsoReachedAs."
+        },
+        {
+          "kind": "file",
+          "path": "src/cli/replica-topology-format.test.ts",
+          "note": "CLI footer and per-runtime outcome sentences."
+        },
+        {
+          "kind": "commit",
+          "sha": "4a4236269804",
+          "note": "fan-out of project host setups over saved environments, typed outcomes"
+        },
+        {
+          "kind": "commit",
+          "sha": "74a69e0178ff",
+          "note": "orca project setups --all-environments"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 16, REAL-TWO-HOST: Windows Orca -> GEX44 disposable root over real ssh2; Run 6). Observed: Settings for the project shows the replica section with 2 grouped rows and the SSH row's host health reachable while connected (L3A), then 2 colliding items after a same-host fork (L3B); orca project setups --json, run against the e2e app's runtime (L4 plane REAL-TWO-HOST, not LOCAL-HOST), lists both replicas with hostId, provenance and membership (L4A) and a same-host-duplicate record naming both GEX44 setups (L4B); with the carrier killed the replica stays listed with health connecting, never reachable, and a never-probed repo reads identity-pending (L5). Open leg keeping this PARTIAL: the CLI lists one runtime's replicas; replicas owned by other paired Orca servers are not listed by the CLI; no phase owns the fan-out."
+      "reason": "READY_FOR_LIVE: paired-fanout — dwsrb phase 3 (2026-10-15): orca project setups --all-environments asks every saved environment projectHostSetup.list and nothing else, reports each runtime as answered, unreachable, unauthorized, unsupported-by-host or failed, never reads an unanswered runtime as no replicas, names zero saved environments as its own status no-saved-environments, and merges one runtime reached through two environments (alsoReachedAs); covered by hermetic tests (4a4236269, 74a69e017). NOT RUN: the fan-out over two real paired environments. Command: orca project setups --all-environments on a machine with two real paired environments saved, one reachable and one with its carrier down. Expected: the reachable runtime listed as answered with its replicas, host and role, the downed one as unreachable, and the exit not claiming the downed host holds nothing. The Settings UI half and the same-runtime CLI half were measured in phase 16."
     },
     {
       "id": 62,
@@ -2365,18 +2562,106 @@
       "done": "a working set translates through projectId to another host; each pane reattach/resume/restart/unavailable",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X14f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 3",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         21
       ],
       "dependsOn": [],
       "evidence": [
-        { "kind": "file", "path": "src/shared/project-working-set-host-translation.test.ts", "note": "16 hermetic tests: translation through projectId, typed refusals, per-pane reattach/resume/restart/unavailable" },
-        { "kind": "file", "path": "tests/e2e/hwf-two-host-continue-here.spec.ts", "note": "opt-in two-host leg, RAN and PASSED 2026-10-14 (D4)" }
+        {
+          "kind": "file",
+          "path": "src/shared/project-working-set-host-translation.test.ts",
+          "note": "16 hermetic tests: translation through projectId, typed refusals, per-pane reattach/resume/restart/unavailable"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-continue-here.spec.ts",
+          "note": "opt-in two-host leg, RAN and PASSED 2026-10-14 (D4)"
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/lib/project-working-set-continue-target.ts",
+          "note": "lookup-only target resolution; the key is never synthesized."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/lib/project-working-set-continue-target.test.ts",
+          "note": "target resolution and its refusals."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/lib/project-working-set-restore.test.ts",
+          "note": "restore path continues on another host; guard keyed by the target."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/lib/project-working-set-product-restore.test.ts",
+          "note": "product restore: continue-refused and continue-target-unavailable stay distinct."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/components/working-set/WorkingSetContinueAction.test.tsx",
+          "note": "Continue here action, eligible targets and per-pane result."
+        },
+        {
+          "kind": "file",
+          "path": "src/renderer/src/components/working-set/WorkingSetsDialog.test.tsx",
+          "note": "dialog hosts Continue here beside Restore."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/project-working-set-continue-here.spec.ts",
+          "note": "real-app legs OFFER, RESTORED, UNVERIFIED-AND-DOWN, TARGET-MISSING; 4 passed on GEX44 under xvfb."
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/helpers/working-set-continue-seed.ts",
+          "note": "seeds the second host setup, its workspace and its SSH availability into the store."
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/rb-phase-3-continue-here-app-leg-evidence.md",
+          "note": "plane, command, result, red-first record, mutant and what is not covered."
+        },
+        {
+          "kind": "commit",
+          "sha": "21d96b18c4f3",
+          "note": "restoreWorkingSet continues a set on another host"
+        },
+        {
+          "kind": "commit",
+          "sha": "cbb813b0e958",
+          "note": "continue-here availability is read from SSH state"
+        },
+        {
+          "kind": "commit",
+          "sha": "5401d27ff101",
+          "note": "continue-here failure arms stay distinct, guard keyed by the target"
+        },
+        {
+          "kind": "commit",
+          "sha": "44f73f7365e7",
+          "note": "continue-here result copy and per-pane view in five locales"
+        },
+        {
+          "kind": "commit",
+          "sha": "787930d04300",
+          "note": "Continue here action with eligible targets and per-pane result"
+        },
+        {
+          "kind": "commit",
+          "sha": "0cf7305df3c1",
+          "note": "Working Sets dialog hosts Continue here beside Restore"
+        },
+        {
+          "kind": "commit",
+          "sha": "83db534b45c8",
+          "note": "real-app Continue here legs on GEX44 under xvfb"
+        }
       ],
-      "reason": "measured 2026-10-14 (dws-exec X14f, D4): translateWorkingSetToHost re-points scope, location and startup cwd through the source and target setups of one projectId (typed refusals, no guessing) and planContinueOnHost labels each pane reattach/resume/restart/unavailable; 16 hermetic tests pass, tsc clean. The live two-host leg RAN and PASSED against a GEX44 disposable root (HWF21_TRANSLATE=translated, HWF21_TARGET_PATH=present, HWF21_NO_SETUP=target-setup-missing; evidence ctl/inputs/d4/20261014/X14/). The spec never launches Orca: the translation is a local pure function and only path existence is read over SSH. Not covered: no Orca launch or real pane reattach/resume on the target; not wired into the renderer restore path (project-working-set-restore.ts planNow still passes a same-scope target), so the user-visible Continue here flow is unbuilt. Stays PARTIAL."
+      "reason": "READY_FOR_LIVE: continue-here-in-app — dwsrb phase 3 (2026-10-15): Continue here is built end to end. translateWorkingSetToHost and planContinueOnHost now have production callers: restoreWorkingSet continues a set on another host's setup (21d96b18c), the target is resolved by lookup only and never synthesized, unknown SSH availability stays unverified and blocks apply, refusal and an unavailable target are distinct statuses (cbb813b0e, 5401d27ff), and the Working Sets dialog hosts the action beside Restore with a per-pane result (44f73f736, 787930d04, 0cf7305df). Observed in the real app (REAL-APP/STORE-SEEDED-HOST: GEX44 under xvfb, e2e build at 83db534b4, 4 passed): the offer appears only once another host holds a ready setup; a connected seeded host returns restored with sleeping rows and no new PTY; an unmeasured and a disconnected host both refuse and apply nothing, told apart by tone; a missing target workspace gives continue-target-unavailable. A red-first RESTORED run and an UNVERIFIED mutant are recorded in docs/dws/rb-phase-3-continue-here-app-leg-evidence.md. NOT RUN: a real two-host reattach to a live remote PTY; the target host's setup, workspace and SSH availability were seeded into the store, and no row was opened. Command: no committed spec drives it; seed a two-host run file, connect the target host, run Continue here from the Working Sets dialog, open a restored row and observe a reattach to the live PTY. The ja, ko and zh workingSet.continue strings are executor-authored, not native-reviewed."
     },
     {
       "id": 71,
@@ -2438,18 +2723,59 @@
       "done": "host drops, others continue, return creates no duplicate PTY/agent/job",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dws-exec X17f (D4)",
-      "measuredAt": "2026-10-14",
+      "measuredIn": "dwsrb phase 3",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         23
       ],
       "dependsOn": [],
       "evidence": [
-        { "kind": "file", "path": "src/main/ssh/ssh-relay-session-host-loss.test.ts" },
-        { "kind": "file", "path": "tests/e2e/hwf-two-host-host-loss.spec.ts" }
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-relay-session-host-loss.test.ts"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-host-loss.spec.ts"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/ssh/ssh-relay-session-host-return-no-duplicates.test.ts",
+          "note": "host return checked against an allow-list with a spawn control."
+        },
+        {
+          "kind": "file",
+          "path": "config/scripts/hwf-two-host-p23-root-guard-drill.mjs",
+          "note": "p23 root-guard drill: every refusal asserted, valid-root control exits 3."
+        },
+        {
+          "kind": "file",
+          "path": "config/scripts/hwf-two-host-p23-root-guard-drill.test.mjs",
+          "note": "drill self-test: 13/13, 3 mutants red."
+        },
+        {
+          "kind": "commit",
+          "sha": "0d378b61680d",
+          "note": "host return is checked against an allow-list with a spawn control"
+        },
+        {
+          "kind": "commit",
+          "sha": "54aca75741d2",
+          "note": "phase-23 root guard drill asserts every refusal and a valid-root control"
+        },
+        {
+          "kind": "commit",
+          "sha": "70f417e5d1f4",
+          "note": "second-consumer outage replay and attach eligibility are measured"
+        },
+        {
+          "kind": "commit",
+          "sha": "f85c4ccd59d7",
+          "note": "Client B backfill reading states what B can observe"
+        }
       ],
-      "reason": "Measured 2026-10-14 (D4): hermetic host-loss test plus the live two-host leg RAN and PASSED Windows<->GEX44 (x17b shell leg: same relay pid, same shell pid, no duplicate, HWF_LOCAL_CONTINUES 0->119; x17c agent leg: same agent pid, emitter alive, no row removals, no relaunch). Does NOT cover: a job/background-task duplicate check, the p23 refusal drill (not run), and host B backfill after outage (seen=0 of 13). Stays PARTIAL because done also names jobs. Live-leg evidence is outside this repo: dws-exec ctl inputs/d4/20261014/X17."
+      "reason": "READY_FOR_LIVE: host-loss-rerun — dwsrb phase 3 (2026-10-15): the two gaps of the 2026-10-14 reason are closed at hermetic level. Host return is checked against an allow-list with a spawn control (0d378b616: 7 tests, mutants red; the old regex missed pty.begin), and the p23 root-guard drill runs 13/13 with 3 mutants red, a valid-root control exiting 3 and refusals exiting 2 (54aca7574). Job and background-task duplication holds only because no host-loss hook exists in the orchestration tree: no code path re-dispatches on host return, which is evidence of absence, not of a test of a live run. Host B backfill after the outage is now stated, not assumed (see row 59, D-18 outcome O1). The mocks stand in for the mux and providers, so these tests do not observe the relay daemon. NOT RUN: the live rerun. Command: `npx playwright test tests/e2e/hwf-two-host-host-loss.spec.ts --config tests/playwright.config.ts --project=electron-headless` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE (root from new-root --phase 23) and ORCA_HWF_PROBE_FILE. Expected: HWF_LOCAL_CONTINUES with after above before, HWF_RELAY_PID before equals after, and no second shell, relay or agent process on return."
     },
     {
       "id": 74,
