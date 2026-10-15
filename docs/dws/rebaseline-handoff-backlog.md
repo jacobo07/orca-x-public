@@ -47,8 +47,11 @@ word from both measured sides, emitter lifetime 900 s (unverified live).
 - Owner decisions: units X05 X06 X16 X18 X19 (proposals in `.planning/workstreams/dwsrb/STATE.md` on GEX44);
   where vault/UKDL records for rows 52-54 and 76 live; the `dws-exec` cap.
 - Debt: row-17 laptop tunnel leg; orca-dws-serve claude version pin; provisioner symlink check; orca-svc login (row 45).
-- Power Pack fix `2f5f5e64` (progress fingerprint sees an excluded `.planning/`) is committed locally in the
-  PP repo on the laptop and in `ce5-env/pp` on GEX44 (`3cab9f89`); neither is pushed.
+- Power Pack fix `2f5f5e64` (progress fingerprint sees an excluded `.planning/`) is pushed to
+  `jacobo07/claude-power-pack` branch `feature/knowledge-acquisition` (tip `4752ce43`); its GEX44 port
+  `3cab9f89` lives in `ce5-env/pp`, which has no remote.
+- The laptop's Claude config without secrets is in the private repo `jacobo07/claude-config-laptop`
+  (README lists what was left out and why).
 
 ## Request for the other PC (verbatim from the Owner)
 
