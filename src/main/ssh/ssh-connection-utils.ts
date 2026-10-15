@@ -169,6 +169,8 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
 export type SshExecOptions = {
   wrapCommand?: boolean
   signal?: AbortSignal
+  // Why: only the system-transport probe that becomes the ControlMaster asks ssh to log the host key it verified.
+  observeHostKey?: boolean
 }
 
 export function createSshOperationAbortError(): Error & { name: string } {
@@ -230,7 +232,10 @@ export function buildConnectConfig(
   return config as ConnectConfig
 }
 
-function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
+export function resolveEffectiveHost(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): string {
   if (isOpenSshConfigBackedTarget(target) && resolved?.hostname) {
     return resolved.hostname
   }
@@ -240,7 +245,10 @@ function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | n
   return target.host || resolved?.hostname || target.label
 }
 
-function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
+export function resolveEffectivePort(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): number {
   if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolved.port || target.port || 22
   }

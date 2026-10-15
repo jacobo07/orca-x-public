@@ -34,6 +34,7 @@ import {
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import { removeControlSocketPath } from './ssh-control-socket'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
+import * as systemKey from './system-ssh-host-key-observation'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -738,7 +739,11 @@ export class SshConnection {
     }
 
     try {
-      await this.doSsh2ConnectWithTrust(config, connectGeneration, effectiveProxy)
+      await this.connectWithTrust(
+        () => this.doSsh2Connect(config, connectGeneration),
+        connectGeneration,
+        () => this.respawnProxy(config, effectiveProxy)
+      )
     } catch (err) {
       // Why: a refused host key must be rethrown before every fallback below (system ssh, agent/key retry, credential prompts); any of them would route around the pin.
       if (err instanceof SshHostKeyRefusedError) {
@@ -759,12 +764,12 @@ export class SshConnection {
           // Why: on macOS, per-app network policy can block Orca's direct TCP socket while the system OpenSSH binary is still allowed.
           await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
           return
-        } catch {
+        } catch (systemErr) {
           this.systemSshResolvedConfig = null
           this.systemSshControlMasterDisabledForSession = false
           this.systemSshGssapiOnlyForSession = false
           this.useSystemSshTransport = false
-          throw err
+          throw systemErr instanceof SshHostKeyRefusedError ? systemErr : err
         }
       }
 
@@ -923,12 +928,16 @@ export class SshConnection {
     this.proxyProcess?.kill()
     this.proxyProcess = null
 
+    // Why: only a probe that becomes the master can be bound to the session, and a stale master would hide the handshake.
+    const buildArgs = this.getSystemSshBuildArgsOptions()
+    const controlPath = await systemKey.retireControlMaster(this.target, buildArgs)
     // Why: this probe runs before remote platform detection; a raw echo works under POSIX shells, cmd.exe, and PowerShell, but `/bin/sh` wrapping does not.
     const channel = this.spawnTrackedSystemSshCommand('echo ORCA-SYSTEM-SSH-OK', {
-      wrapCommand: false
+      wrapCommand: false,
+      ...(controlPath ? { observeHostKey: true } : {})
     })
     try {
-      await new Promise<void>((resolve, reject) => {
+      const stderr = await new Promise<string>((resolve, reject) => {
         let stdout = ''
         let stderr = ''
         let settled = false
@@ -972,13 +981,13 @@ export class SshConnection {
                 stderr
               )
             ) {
-              this.setState('connected')
-              resolve()
+              resolve(stderr)
               return
             }
+            const detail = systemKey.stripOpenSshDebugLines(stderr)
             reject(
               new Error(
-                `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
+                `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${detail ? ` stderr: ${detail}` : ''}`
               )
             )
           })
@@ -995,9 +1004,21 @@ export class SshConnection {
         channel.on('error', onError)
         channel.on('close', onClose)
       })
+      await this.connectWithTrust(() => {
+        this.hostIdentity = systemKey.judgeIdentity(this.target, this.systemSshResolvedConfig, {
+          stderr,
+          controlPath,
+          interactive: this.interactiveGeneration === connectGeneration
+        })
+      }, connectGeneration)
+      this.setState('connected')
     } catch (err) {
       this.useSystemSshTransport = false
       this.systemSshResolvedConfig = null
+      if (err instanceof SshHostKeyRefusedError) {
+        this.hostIdentity = hostIdentityForRefusal(err.reason)
+        await systemKey.retireControlMaster(this.target, buildArgs)
+      }
       throw err
     }
   }
@@ -1024,6 +1045,7 @@ export class SshConnection {
       // Why: a timeout retry doubles the ladder step, but a stuck master can cause the first timeout.
       if (
         isDefiniteSystemSshHostFailure(err) ||
+        err instanceof SshHostKeyRefusedError ||
         (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
       ) {
         throw err
@@ -1214,14 +1236,14 @@ export class SshConnection {
     config.sock = p.sock
   }
 
-  // Why: an interactive first contact asks the owner once, then retries only with a pin naming exactly the offered key.
-  private async doSsh2ConnectWithTrust(
-    config: ConnectConfig,
+  // Why: an interactive first contact asks the owner once, then retries only with a pin naming exactly the offered key; both transports share it.
+  private async connectWithTrust(
+    attempt: () => Promise<void> | void,
     connectGeneration: number,
-    proxy: ReturnType<typeof resolveEffectiveProxy> | null | undefined
+    beforeRetry?: () => void
   ): Promise<void> {
     try {
-      await this.doSsh2Connect(config, connectGeneration)
+      await attempt()
     } catch (err) {
       const request = this.callbacks.onHostKeyTrustRequest
       if (
@@ -1247,8 +1269,8 @@ export class SshConnection {
         throw err
       }
       this.target = { ...this.target, hostKeyPin: adopted, hostKeyPinReset: undefined }
-      this.respawnProxy(config, proxy)
-      await this.doSsh2Connect(config, connectGeneration)
+      beforeRetry?.()
+      await attempt()
     }
   }
 
@@ -1547,8 +1569,9 @@ export class SshConnection {
   }
 
   private setState(status: SshConnectionStatus, error?: string): void {
-    // Why: system OpenSSH verifies against known_hosts itself; Orca never claims a pin it did not check.
-    const hostIdentity = this.useSystemSshTransport ? 'delegated-to-openssh' : this.hostIdentity
+    // Why: an unjudged system session stays delegated to OpenSSH; only a verdict on the observed key says more.
+    const delegated = this.useSystemSshTransport ? 'delegated-to-openssh' : undefined
+    const hostIdentity = this.hostIdentity ?? delegated
     const { hostIdentity: _previous, ...rest } = this.state
     this.state = {
       ...rest,

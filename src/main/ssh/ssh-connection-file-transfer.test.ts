@@ -36,7 +36,7 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
     await conn.uploadDirectory('/tmp/local-relay', 'C:/Users/me/.orca-remote/relay', {
       hostPlatform
     })
@@ -121,7 +121,7 @@ describe('SshConnection', () => {
       }
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
     const upload = conn.uploadDirectory('/tmp/local-relay', '/remote/relay', {
       signal: controller.signal
     })
@@ -148,7 +148,7 @@ describe('SshConnection', () => {
       }
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
     const write = conn.writeFile('/remote/relay/.version', '0.1.0', {
       signal: controller.signal
     })
@@ -175,7 +175,7 @@ describe('SshConnection', () => {
       }
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
     const uploadSession = await conn.openFileUploadSession()
     await conn.disconnect()
 

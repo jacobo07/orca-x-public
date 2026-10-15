@@ -6,7 +6,12 @@ export type SystemSshBuildArgsOptions = {
   disableControlMaster?: boolean
   suppressOrcaControlMaster?: boolean
   gssapiOnly?: boolean
+  // Why: only the probe that becomes the Orca ControlMaster asks ssh to log the host key it verified.
+  observeHostKey?: boolean
 }
+
+// Why: with LogLevel=DEBUG1 the ssh that handshakes logs the key it verified before authenticating; -v would keep a ControlPersist master's stderr pipe open and the probe would never close.
+export const SYSTEM_SSH_HOST_KEY_LOG_OPTION = 'LogLevel=DEBUG1'
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
   const args: string[] = []
@@ -42,6 +47,9 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', 'ControlPersist=300')
     args.push('-o', 'ServerAliveInterval=15')
     args.push('-o', 'ServerAliveCountMax=3')
+    if (options?.observeHostKey) {
+      args.push('-o', SYSTEM_SSH_HOST_KEY_LOG_OPTION)
+    }
   }
 
   const useConfigHost = shouldUseOpenSshConfigHost(target)

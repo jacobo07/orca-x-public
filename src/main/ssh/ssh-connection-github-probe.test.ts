@@ -44,7 +44,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -67,7 +67,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -89,7 +89,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -111,7 +111,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -140,7 +140,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -161,7 +161,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -204,7 +204,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)

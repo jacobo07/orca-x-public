@@ -41,7 +41,7 @@ describe('SshConnection', () => {
   it('tries system SSH first for targets that explicitly request GSSAPI authentication', async () => {
     const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), createCallbacks())
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
     await conn.exec('echo after-connect')
 
     expect(conn.getState().status).toBe('connected')
@@ -78,7 +78,7 @@ describe('SshConnection', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ source: 'manual', configHost: 'prod' }),
@@ -143,7 +143,7 @@ describe('SshConnection', () => {
       createCallbacks({ onCredentialRequest })
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -159,7 +159,7 @@ describe('SshConnection', () => {
     )
     const conn = new SshConnection(createTarget({ configHost: 'krb-host' }), createCallbacks())
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
@@ -235,7 +235,7 @@ describe('SshConnection', () => {
         createCallbacks({ onCredentialRequest })
       )
 
-      await conn.connect()
+      await conn.connect({ interactive: true })
 
       expect(conn.getState().status).toBe('connected')
       expect(conn.usesSystemSshTransport()).toBe(true)
@@ -261,7 +261,7 @@ describe('SshConnection', () => {
   it('publishes auth-failed when OpenSSH denies reconnect credentials', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     spawnSystemSshCommandMock.mockImplementation(() =>
       createFailingSystemCommandChannel(255, 'Permission denied (publickey,password).')

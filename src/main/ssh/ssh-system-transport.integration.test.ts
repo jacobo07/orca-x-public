@@ -207,7 +207,7 @@ describe('system SSH transport integration', () => {
     async () => {
       const conn = new SshConnection(makeTarget(), { onStateChange: vi.fn() })
       const onProgress = vi.fn()
-      await conn.connect()
+      await conn.connect({ interactive: true })
       expect(conn.usesSystemSshTransport()).toBe(true)
 
       const result = await deployAndLaunchRelay(conn, onProgress, 60, makeTarget().id)
@@ -235,7 +235,7 @@ describe('system SSH transport integration', () => {
         { ...makeTarget(), source: 'manual', gssapiAuthentication: true },
         { onStateChange: vi.fn() }
       )
-      await conn.connect()
+      await conn.connect({ interactive: true })
       try {
         expect(conn.usesSystemSshTransport()).toBe(true)
         expect(conn.getState().status).toBe('connected')

@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeHostKeyFingerprint,
+  hostKeyVerdictAllowsConnect,
   readHostKeyAlgorithm,
-  verifyHostKeyAgainstPin
+  refusalFromVerdict,
+  verifyHostKeyAgainstPin,
+  type OfferedHostKey
 } from './ssh-host-key-pin-verifier'
 import {
+  SystemSshHostKeyUnobservableError,
+  decideSystemSshHostKey,
   hostKeyObservationToOffered,
   parseSystemSshHostKeyObservation,
   stripOpenSshDebugLines
@@ -166,5 +171,145 @@ describe('stripOpenSshDebugLines', () => {
     expect(stripOpenSshDebugLines('  ssh: connect to host x port 22: Connection refused\n')).toBe(
       'ssh: connect to host x port 22: Connection refused'
     )
+  })
+})
+
+const ENDPOINT = { host: '127.0.0.1', port: 56183 }
+const OTHER_FINGERPRINT = FORGED
+const OFFERED: OfferedHostKey = {
+  fingerprint: KEYGEN_FINGERPRINT,
+  algorithm: 'ssh-ed25519',
+  ...ENDPOINT
+}
+
+function pinFor(fingerprint: string, endpoint = ENDPOINT): unknown {
+  return { fingerprint, ...endpoint, pinnedAt: 1, source: 'tofu-confirmed' }
+}
+
+describe('decideSystemSshHostKey', () => {
+  it('V-SYSKEY-MATCH: an observed key equal to the pin is pinned', () => {
+    const decision = decideSystemSshHostKey({
+      stderr: REAL_STDERR,
+      bound: true,
+      pin: pinFor(KEYGEN_FINGERPRINT),
+      endpoint: ENDPOINT,
+      interactive: false,
+      pinWasReset: false
+    })
+
+    expect(decision).toEqual({ kind: 'pinned' })
+  })
+
+  const pins: [string, unknown][] = [
+    ['no pin', undefined],
+    ['a matching pin', pinFor(KEYGEN_FINGERPRINT)],
+    ['a different key', pinFor(OTHER_FINGERPRINT)],
+    ['a pin for another endpoint', pinFor(KEYGEN_FINGERPRINT, { host: 'other.example', port: 22 })],
+    ['a damaged record', null]
+  ]
+  it.each(
+    pins.flatMap(([name, pin]) =>
+      [true, false].flatMap((interactive) =>
+        [true, false].map((reset) => [name, pin, interactive, reset] as const)
+      )
+    )
+  )(
+    'V-SYSKEY-PARITY: %s (interactive=%s, reset=%s) is decided exactly as the ssh2 path decides the same verdict',
+    (_name, pin, interactive, reset) => {
+      const verdict = verifyHostKeyAgainstPin(pin, OFFERED)
+      const allowed = hostKeyVerdictAllowsConnect(verdict, interactive, reset)
+
+      const decision = decideSystemSshHostKey({
+        stderr: REAL_STDERR,
+        bound: true,
+        pin,
+        endpoint: ENDPOINT,
+        interactive,
+        pinWasReset: reset
+      })
+
+      expect(decision.kind === 'pinned').toBe(allowed)
+      if (decision.kind === 'refused') {
+        const expected = refusalFromVerdict(verdict, OFFERED)
+        expect(decision.error.reason).toBe(expected.reason)
+        expect(decision.error.offered).toEqual(OFFERED)
+        expect(decision.error.pinnedFingerprint).toBe(expected.pinnedFingerprint)
+      }
+    }
+  )
+
+  it('V-SYSKEY-UNOBSERVABLE-AUTO: an automatic connect with no observation is refused host_key_unverifiable', () => {
+    const decision = decideSystemSshHostKey({
+      stderr: 'debug1: Connection established.\r\n',
+      bound: true,
+      pin: pinFor(KEYGEN_FINGERPRINT),
+      endpoint: ENDPOINT,
+      interactive: false,
+      pinWasReset: false
+    })
+
+    expect(decision.kind).toBe('refused')
+    if (decision.kind !== 'refused') {
+      return
+    }
+    expect(decision.error).toBeInstanceOf(SystemSshHostKeyUnobservableError)
+    expect(decision.error.reason).toBe('host_key_unverifiable')
+    expect(decision.error.offered.fingerprint).toBe('')
+    expect(decision.error.message).toContain('127.0.0.1:56183')
+  })
+
+  it('V-SYSKEY-UNOBSERVABLE-INTERACTIVE: an interactive connect with no observation stays delegated', () => {
+    const decision = decideSystemSshHostKey({
+      stderr: '',
+      bound: true,
+      pin: pinFor(KEYGEN_FINGERPRINT),
+      endpoint: ENDPOINT,
+      interactive: true,
+      pinWasReset: false
+    })
+
+    expect(decision).toEqual({ kind: 'delegated' })
+  })
+
+  it('V-SYSKEY-UNBOUND: a line is not used when the probe was not the ControlMaster', () => {
+    const base = {
+      stderr: REAL_STDERR,
+      bound: false,
+      pin: pinFor(KEYGEN_FINGERPRINT),
+      endpoint: ENDPOINT,
+      pinWasReset: false
+    }
+
+    expect(decideSystemSshHostKey({ ...base, interactive: true })).toEqual({ kind: 'delegated' })
+    const automatic = decideSystemSshHostKey({ ...base, interactive: false })
+    expect(automatic.kind).toBe('refused')
+    // Control: the same inputs bound to the master are pinned.
+    expect(decideSystemSshHostKey({ ...base, bound: true, interactive: false })).toEqual({
+      kind: 'pinned'
+    })
+  })
+
+  it('V-SYSKEY-NEVER-PINNED-UNOBSERVED: no unobservable capture yields pinned for any pin or mode', () => {
+    const captures = [
+      '',
+      'garbage',
+      REAL_STDERR_WITH_FORGED_BANNER,
+      'debug1: Server host key: ssh-ed25519'
+    ]
+    for (const stderr of captures) {
+      for (const [, pin] of pins) {
+        for (const interactive of [true, false]) {
+          const decision = decideSystemSshHostKey({
+            stderr,
+            bound: true,
+            pin,
+            endpoint: ENDPOINT,
+            interactive,
+            pinWasReset: true
+          })
+          expect(decision.kind).not.toBe('pinned')
+        }
+      }
+    }
   })
 })

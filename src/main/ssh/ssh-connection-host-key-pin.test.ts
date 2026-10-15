@@ -376,7 +376,7 @@ describe('SshConnection host key pinning', () => {
       createCallbacks()
     )
 
-    await conn.connect()
+    await conn.connect({ interactive: true })
 
     expect(conn.usesSystemSshTransport()).toBe(true)
     expect(clientInstances).toHaveLength(0)

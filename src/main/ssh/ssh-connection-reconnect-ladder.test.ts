@@ -267,7 +267,7 @@ describe('SshConnection', () => {
           onStateChange: vi.fn((_id, state) => statuses.push(state.status))
         })
       )
-      await conn.connect()
+      await conn.connect({ interactive: true })
       expect(conn.usesSystemSshTransport()).toBe(true)
 
       // The probe times out with OpenSSH prose, not an errno the transient code table matches.
