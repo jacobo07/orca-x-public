@@ -8,7 +8,7 @@ import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
 import { formatNodeManifests, nodeManifestsExitCode } from '../fleet-node-manifest-format'
 import { fleetPlacementExitCode, formatFleetPlacementView } from '../fleet-placement-format'
 import { printResult } from '../format'
-import { nodeRequirementFromFlags } from '../node-requirement-flags'
+import { megabyteFlagAsBytes, nodeRequirementFromFlags } from '../node-requirement-flags'
 import { RuntimeClientError } from '../runtime/types'
 
 const MAX_MODEL_PROBE_PORTS = 4
@@ -16,7 +16,7 @@ const MAX_MODEL_PROBE_PORTS = 4
 export function fleetPlacementParams(
   flags: Map<string, string | boolean>
 ): FleetPlacementViewParams {
-  const minMb = getOptionalPositiveIntegerFlag(flags, 'min-available-mb')
+  const minAvailableBytes = megabyteFlagAsBytes(flags, 'min-available-mb')
   const platform = getOptionalStringFlag(flags, 'platform')
   const capabilities = getOptionalStringFlag(flags, 'capabilities')
     ?.split(',')
@@ -26,7 +26,7 @@ export function fleetPlacementParams(
   // Why: memory keeps its legacy minAvailableBytes field, so the shared parser skips it here.
   const requirement = nodeRequirementFromFlags(flags, { includeMemory: false })
   return {
-    ...(minMb !== undefined ? { minAvailableBytes: minMb * 1024 * 1024 } : {}),
+    ...(minAvailableBytes !== undefined ? { minAvailableBytes } : {}),
     ...(platform ? { platform } : {}),
     ...(capabilities?.length ? { requiredCapabilities: capabilities } : {}),
     ...(maxSampleAgeMs !== undefined ? { maxSampleAgeMs } : {}),

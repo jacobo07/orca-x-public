@@ -4,7 +4,7 @@ import { RuntimeClientError } from './runtime/types'
 
 const BYTES_PER_MEGABYTE = 1024 * 1024
 
-function megabyteFlagAsBytes(
+export function megabyteFlagAsBytes(
   flags: Map<string, string | boolean>,
   name: string
 ): number | undefined {
@@ -15,6 +15,10 @@ function megabyteFlagAsBytes(
   // Why: a valueless or empty flag reads as absent downstream, which would silently drop the need.
   if (typeof raw !== 'string' || raw.trim().length === 0) {
     throw new RuntimeClientError('invalid_argument', `Missing value for --${name}.`)
+  }
+  // Why: Number() would read 0x10 and 1e3 as 16 and 1000, which is surprising for a resource gate.
+  if (!/^\d+$/.test(raw.trim())) {
+    throw new RuntimeClientError('invalid_argument', `Invalid positive integer for --${name}`)
   }
   const megabytes = getOptionalPositiveIntegerFlag(flags, name)
   if (megabytes === undefined) {

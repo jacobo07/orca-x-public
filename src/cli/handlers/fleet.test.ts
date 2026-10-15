@@ -134,6 +134,18 @@ describe('orca fleet placement', () => {
     ).toThrow(/min-available-mb/)
   })
 
+  it('refuses a memory floor that is not plain decimal or overflows the byte range', () => {
+    const tooMany = String(Math.floor(Number.MAX_SAFE_INTEGER / (1024 * 1024)) + 1)
+    for (const value of ['0x10', '1e3', '1e308', tooMany, '+5', '-5', '']) {
+      expect(() =>
+        fleetPlacementParams(new Map<string, string | boolean>([['min-available-mb', value]]))
+      ).toThrow(/min-available-mb/)
+    }
+    expect(() =>
+      fleetPlacementParams(new Map<string, string | boolean>([['min-available-mb', true]]))
+    ).toThrow(/min-available-mb/)
+  })
+
   it('exits 0 on a selection, 2 when none is eligible, 1 when it could not ask', () => {
     expect(fleetPlacementExitCode(okResult('runtime:vps'))).toBe(0)
     expect(fleetPlacementExitCode(okResult(null))).toBe(2)

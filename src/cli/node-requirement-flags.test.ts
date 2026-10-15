@@ -57,7 +57,11 @@ describe('nodeRequirementFromFlags', () => {
     ['-3', 'min-disk-mb'],
     ['abc', 'min-available-mb'],
     ['', 'min-vram-mb'],
-    [' ', 'min-disk-mb']
+    [' ', 'min-disk-mb'],
+    ['0x10', 'min-vram-mb'],
+    ['1e3', 'min-disk-mb'],
+    ['1e308', 'min-vram-mb'],
+    ['+5', 'min-disk-mb']
   ])('refuses %j for --%s naming the flag', (value, flag) => {
     expect(() =>
       nodeRequirementFromFlags(flagsOf([[flag, value]]), { includeMemory: true })
