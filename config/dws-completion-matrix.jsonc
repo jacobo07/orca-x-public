@@ -3037,9 +3037,9 @@
       "row": "HF Host loss and reconnect",
       "owner": "ssh-relay-session reconnect",
       "done": "host drops, others continue, return creates no duplicate PTY/agent/job",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 3",
+      "measuredIn": "dwsrb live queue (desktop PC -> GEX44)",
       "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
@@ -3089,9 +3089,17 @@
           "kind": "commit",
           "sha": "f85c4ccd59d7",
           "note": "Client B backfill reading states what B can observe"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-15-row-73-host-loss-evidence.md",
+          "note": "plane, commands, run-log lines and not-covered list for the 2026-10-15 live host-loss run.",
+          "provedBy": [
+            "host drops, others continue, return creates no duplicate PTY/agent/job"
+          ]
         }
       ],
-      "reason": "READY_FOR_LIVE: host-loss-rerun — dwsrb phase 3 (2026-10-15): the two gaps of the 2026-10-14 reason are closed at hermetic level. Host return is checked against an allow-list with a spawn control (0d378b616: 7 tests, mutants red; the old regex missed pty.begin), and the p23 root-guard drill runs 13/13 with 3 mutants red, a valid-root control exiting 3 and refusals exiting 2 (54aca7574). Job and background-task duplication holds only because no host-loss hook exists in the orchestration tree: no code path re-dispatches on host return, which is evidence of absence, not of a test of a live run. Host B backfill after the outage is now stated, not assumed (see row 59, D-18 outcome O1). The mocks stand in for the mux and providers, so these tests do not observe the relay daemon. NOT RUN: the live rerun. Command: `npx playwright test tests/e2e/hwf-two-host-host-loss.spec.ts --config tests/playwright.config.ts --project=electron-headless` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE (root from new-root --phase 23) and ORCA_HWF_PROBE_FILE. Expected: HWF_LOCAL_CONTINUES with after above before, HWF_RELAY_PID before equals after, and no second shell, relay or agent process on return."
+      "reason": "dwsrb live queue (2026-10-15, desktop PC -> GEX44, REAL-TWO-HOST): tests/e2e/hwf-two-host-host-loss.spec.ts passed both tests against /tmp/orca-hwf-p23-20261015T155939Z. Test 1: carrier dropped and restored (reconnect ladder, 5.7 s after restore); relay pid 2497523 and shell pid 2498333 unchanged, one shell before and after, same ptyId; the renderer counter kept running (HWF_LOCAL_CONTINUES 0 -> 109); both clients backfilled the 13 outage ticks (A 13/13, B 13/13). Test 2: a real claude process launched from the new-tab menu on the owning host kept pid 2522706 across the drop, the status row stayed, nothing relaunched, the hook posted during the outage was delivered (204) to both stores, and the outage emitter was alive after (first live confirmation of the 900 s tail from 17b6052e3). A first run of test 2 passed vacuously (NOT_RUN provider-binary-absent: the probe file lacked the provisioner PROVIDER_* lines) and was rerun with them. Teardown REMAINING=0, PROC_COUNT=0. Caveats: jobs and background tasks were not exercised live; they hold because no host-loss hook re-dispatches on return (evidence of absence). The agent had no model turn (OD-1). The app ran with --lang=en-US because in the Spanish UI at 1366 px the terminal strip covers the tab bar \"+\", a separate layout defect (docs/dws/live-2026-10-15-row-73-host-loss-evidence.md)."
     },
     {
       "id": 74,

@@ -9,9 +9,10 @@ Written on the laptop for a session on the other PC. Branches on GitHub (`jacobo
 
 ## State
 
-- Matrix: 24 of 76 rows PASS after rows 60 and 63 were restated on the desktop PC (was 22) (`node config/scripts/check-dws-completeness.mjs`). Of the 52 non-PASS rows,
-  21 are BLOCKED_EXTERNAL (12 UWCP control verbs, 2 UWCP lease store, rows 17 and 44 UWCP, 4 CPP write
-  authority: 52 53 54 76, row 45 orca-svc login), 9 are READY_FOR_LIVE (24 34 59 61 62 65 70 73 74), about 22 are phases 5-10 work.
+- Matrix: 25 of 76 rows PASS (`node config/scripts/check-dws-completeness.mjs`); the desktop PC restated
+  rows 60, 63 and 73 (was 22). Of the 51 non-PASS rows, 21 are BLOCKED_EXTERNAL (12 UWCP control verbs,
+  2 UWCP lease store, rows 17 and 44 UWCP, 4 CPP write authority: 52 53 54 76, row 45 orca-svc login),
+  8 are READY_FOR_LIVE (24 34 59 61 62 65 70 74), about 22 are phases 5-10 work.
 - GSD phases: 1-3 done, phase 4 executed and reviewed, its verifier never wrote `04-VERIFICATION.md`.
 - Ralph mission `m-07a78fbae3c7` on GEX44 is under a cost-breaker hold (Owner kept it, option 1):
   processed 405.7M vs 2 x estimate 10.2M. Goal `dws-exec` has 40.6M left on paper; the worker session's
@@ -21,18 +22,27 @@ Written on the laptop for a session on the other PC. Branches on GitHub (`jacobo
 ## Live legs (laptop or any Windows PC -> GEX44 over real SSH)
 
 Prerequisites on the PC that runs them: an `ssh gex44` alias with BatchMode key access, Git for Windows,
-about 6 GB of free RAM, and a SHORT working path (a long path broke `git fetch` with "Filename too long").
+and a SHORT working path (a long path broke `git fetch` with "Filename too long"). Building needs about
+6 GB of free RAM; running a leg on an existing build does not (the desktop PC ran row 73 with 2.7 GB free).
 Build in the worktree: `node config/scripts/build-relay.mjs`, `pnpm run build:cli`,
 `VITE_EXPOSE_STORE=true electron-vite build --mode e2e`, and `pnpm run build:web-from-renderer` for probe legs.
+The desktop PC's `C:\ox\out` holds such a build of the `28b881b58` tree.
 Driver per leg: `new-root`, `create`, `seed-p16`, `seed-local-p16`, `fetch-key`, `run-file`, the spec with
 `SKIP_BUILD=1`, `teardown`; always check `procs` reports `PROC_COUNT=0` afterwards.
+
+Probe file (`ORCA_HWF_PROBE_FILE`): the probe test's `HWF_PROBE_*` lines PLUS the provisioner `status`
+lines. Without `PROVIDER_CLAUDE` / `PROVIDER_CODEX` the agent leg prints `NOT_RUN provider-binary-absent`
+and still passes, so a green agent test is only a result when `HWF_AGENT_A_LAUNCH=observed` is printed.
+
+On a non-English UI, run the app in English for any leg that opens the tab bar "+" menu (probe, agent
+legs): see the layout defect under Other open items.
 
 | Row | Spec / grep | Result 2026-10-15 | Next |
 |---|---|---|---|
 | 63 | replica-pair `-g relay-compare-result`, phase 17, seed-p17 | PASS: `diverged +1/-2` live, `unverified (host-unreachable)` down | Done: row PASS (`docs/dws/live-2026-10-15-rows-60-63-evidence.md`) |
 | 60 | grouped-relation, phase 17 | PASS (transport + ahead 2); the row-63 run is a live grouped relation | Done: row PASS (same evidence file) |
-| 73 | host-loss, phase 23, probe from remote-first `-g "probes what the two clients expose"` | Test 1 PASS (relay pid, shell pid, no duplicate, local continues). Test 2 failed only on `emitterAlive`: the emitter's own 120 s tail ended before the check | Rerun with the emitter fix (unverified) |
-| 59 | remote-first, same probe | NOT RUN | Run after 73 |
+| 73 | host-loss, phase 23, probe from remote-first `-g "probes what the two clients expose"` | Desktop PC: both tests PASS; agent pid kept, emitter alive after the drop, backfill A and B 13/13 | Done: row PASS (`docs/dws/live-2026-10-15-row-73-host-loss-evidence.md`) |
+| 59 | remote-first, same probe | NOT RUN | Next: same root shape as 73 (phase 23 also works), English UI |
 | 74 | mixed-relay, phase 23, `ORCA_HWF_P23_RELAY_PATH` = old relay build (commit `5de29754c5`) | App correct (`unverified (relay-too-old)`), but the instrument is blind: the relay never logs request methods, so `"method":` counts are 0 on any relay | Build an instrument that sees relay methods |
 | 65 | replica-pair `-g disk-full-and-disconnect` | NOT RUN | Needs `ORCA_HWF_SMALL_FS_ROOT` on a <= 1 GiB filesystem on GEX44 |
 | 61 | `orca project setups --all-environments` | NOT RUN | Needs two real paired environments, one down |
@@ -40,10 +50,16 @@ Driver per leg: `new-root`, `create`, `seed-p16`, `seed-local-p16`, `fetch-key`,
 | 70 | Continue here reattach to a live remote PTY | NOT RUN | No spec exists yet |
 
 Harness fixes on this branch: provisioner over ssh stdin (Windows ENAMETOOLONG at 27 KB), row-63 expected
-word from both measured sides, emitter lifetime 900 s (unverified live).
+word from both measured sides, emitter lifetime 900 s (verified live on the desktop PC, row 73).
 
 ## Other open items
 
+- Layout defect, not fixed: in the Spanish UI at a 1366 px window the terminal strip's "Nuevo terminal"
+  button covers the tab bar "+" (`tab-bar-new-tab` at x=880; `elementFromPoint` at its centre is
+  `BUTTON[Nuevo terminal]`). In English the "+" sits at x=836 and is reachable. Users on a wider locale
+  cannot open the new-tab menu from that "+"; the hwf helpers click it with `force: true`, which hides the
+  interception and reads as "menu never opened". Needs a geometry test in the style of
+  `tests/e2e/workspace-left-column-geometry.spec.ts` and a fix in the tab-group header.
 - Owner decisions: units X05 X06 X16 X18 X19 (proposals in `.planning/workstreams/dwsrb/STATE.md` on GEX44);
   where vault/UKDL records for rows 52-54 and 76 live; the `dws-exec` cap.
 - Debt: row-17 laptop tunnel leg; orca-dws-serve claude version pin; provisioner symlink check; orca-svc login (row 45).
@@ -58,6 +74,6 @@ word from both measured sides, emitter lifetime 900 s (unverified live).
 "can you copy from the other PC (C:\Users\User\.claude\) its CLAUDE.md, the agents/ folder and
 skills/software-best-practices? Put them somewhere on this PC and I'll install them."
 
-Measured on the laptop 2026-10-15: `C:\Users\User\.claude\CLAUDE.md` (1 file), `agents\` (95 files),
-`skills\software-best-practices\` (2 files) all exist. Copy them into a staging folder, not over the other
-PC's own `~\.claude`; the Owner installs them.
+Done 2026-10-15 on the desktop PC: the 98 files (CLAUDE.md, `agents\` 95, `skills\software-best-practices\` 2)
+are staged in `C:\Users\Jacobo\Desktop\laptop-claude-staging`, each checked against its blob in
+`jacobo07/claude-config-laptop`. Nothing was written to `~\.claude`; the Owner installs them.
