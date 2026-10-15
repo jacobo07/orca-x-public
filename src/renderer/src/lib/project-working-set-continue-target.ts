@@ -101,7 +101,9 @@ export function resolveContinueTarget(input: ContinueTargetInput): ContinueTarge
 }
 
 /** A connection in progress is not yet a fact, so it reads unknown rather than down or up. */
-function availabilityOfSshStatus(status: SshConnectionStatus): RestorePlanTarget['hostAvailability'] {
+function availabilityOfSshStatus(
+  status: SshConnectionStatus
+): RestorePlanTarget['hostAvailability'] {
   switch (status) {
     case 'connected':
       return 'available'

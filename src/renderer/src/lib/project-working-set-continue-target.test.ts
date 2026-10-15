@@ -192,15 +192,22 @@ describe('hostAvailabilityFromSshState', () => {
 
   it('reads a local host as available and a runtime or runtime-owned host as unknown', () => {
     expect(hostAvailabilityFromSshState(setup({ hostId: 'local' }), new Map())).toBe('available')
-    expect(hostAvailabilityFromSshState(setup({ hostId: 'runtime:env-1' }), states('connected'))).toBe(
-      'unknown'
-    )
+    expect(
+      hostAvailabilityFromSshState(setup({ hostId: 'runtime:env-1' }), states('connected'))
+    ).toBe('unknown')
     const owned = new Map([
       [
         'runtime-ssh-1',
-        { targetId: 'runtime-ssh-1', status: 'connected' as const, error: null, reconnectAttempt: 0 }
+        {
+          targetId: 'runtime-ssh-1',
+          status: 'connected' as const,
+          error: null,
+          reconnectAttempt: 0
+        }
       ]
     ])
-    expect(hostAvailabilityFromSshState(setup({ hostId: 'ssh:runtime-ssh-1' }), owned)).toBe('unknown')
+    expect(hostAvailabilityFromSshState(setup({ hostId: 'ssh:runtime-ssh-1' }), owned)).toBe(
+      'unknown'
+    )
   })
 })

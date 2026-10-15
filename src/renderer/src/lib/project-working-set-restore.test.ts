@@ -180,7 +180,12 @@ function continueOn(over: Partial<HostTranslationRequest> = {}): HostTranslation
   return {
     projectId: 'proj-1',
     sourceSetup: hostSetup({}),
-    targetSetup: hostSetup({ id: 'setup-gex', hostId: 'ssh:gex44', repoId: 'repo-9', path: '/srv/orca' }),
+    targetSetup: hostSetup({
+      id: 'setup-gex',
+      hostId: 'ssh:gex44',
+      repoId: 'repo-9',
+      path: '/srv/orca'
+    }),
     targetOwnerKey: TARGET_OWNER,
     ...over
   }
@@ -319,8 +324,13 @@ describe('restoreWorkingSet with continueOn', () => {
 
   it('keeps a host that is known down blocked, and applies once it is known available', async () => {
     const down = setupContinue({ hostAvailability: () => 'unavailable' })
-    const refused = await restoreWorkingSet({ ...down.request, continueOn: continueOn() }, down.deps)
-    expect(refused).toMatchObject({ applied: { status: 'refused', blockers: ['host-unavailable'] } })
+    const refused = await restoreWorkingSet(
+      { ...down.request, continueOn: continueOn() },
+      down.deps
+    )
+    expect(refused).toMatchObject({
+      applied: { status: 'refused', blockers: ['host-unavailable'] }
+    })
     expect(down.store.getState().tabsByWorktree[TARGET_OWNER]).toBeUndefined()
 
     const up = setupContinue({ hostAvailability: () => 'available' })
