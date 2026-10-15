@@ -37,6 +37,7 @@ import { FsHandler } from './fs-handler'
 import { installRelayLogRotation } from './rotating-log-writer'
 import { GitHandler } from './git-handler'
 import { GitReplicaHandler, REPLICA_BUNDLE_RELAY_CAPABILITIES } from './git-replica-handler'
+import { ReplicaFactsHandler, SYNC_RELAY_CAPABILITIES } from './replica-facts-handler'
 import { PreflightHandler } from './preflight-handler'
 import {
   ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES,
@@ -724,6 +725,7 @@ async function main(): Promise<void> {
   watchRegistry.setWorktreePtyTeardown((rootPath) => ptyHandler.shutdownForWorktreePath(rootPath))
   const gitHandler = new GitHandler(dispatcher, context, watchRegistry)
   const gitReplicaHandler = new GitReplicaHandler(dispatcher)
+  void new ReplicaFactsHandler(dispatcher)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   void new EnvironmentRequirementsHandler(dispatcher)
@@ -949,6 +951,7 @@ async function main(): Promise<void> {
       ...SKILL_RELAY_CAPABILITIES,
       ...ENVIRONMENT_REQUIREMENTS_RELAY_CAPABILITIES,
       ...REPLICA_BUNDLE_RELAY_CAPABILITIES,
+      ...SYNC_RELAY_CAPABILITIES,
       ...FLEET_RESOURCES_RELAY_CAPABILITIES
     ],
     pid: process.pid,
