@@ -3,6 +3,7 @@
 import { execFile } from 'node:child_process'
 import { isAbsolute } from 'node:path'
 import { promisify } from 'node:util'
+import { REPLICA_FACTS_METHOD } from '../shared/replica-facts-wire'
 import { worktreeFactFromPorcelain } from '../shared/replica-worktree-facts'
 import type { WorktreeFact } from '../shared/workspace-replica-state'
 import type { RelayDispatcher } from './dispatcher'
@@ -11,7 +12,6 @@ import { buildRelayGitEnv } from './relay-command-env'
 const execFileAsync = promisify(execFile)
 
 export const SYNC_RELAY_CAPABILITIES = ['sync.v1'] as const
-export const REPLICA_FACTS_METHOD = 'sync.replicaFacts'
 const GIT_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_STATUS_BYTES = 8 * 1024 * 1024
 const STATUS_ARGV = ['status', '--porcelain=v1', '-z', '--untracked-files=all']

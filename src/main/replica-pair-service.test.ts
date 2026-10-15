@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createMockDispatcher, type RelayDispatcher } from '../relay/git-handler-test-setup'
 import { GitReplicaHandler } from '../relay/git-replica-handler'
+import { ReplicaFactsHandler } from '../relay/replica-facts-handler'
 import type { ProjectHostSetup } from '../shared/project-types'
 import { publishedRelationsOf } from '../shared/replica-pair-view'
 import { readLocalReplicaFacts } from './replica-local-facts'
@@ -104,6 +105,7 @@ beforeEach(() => {
   git(root, 'clone', '-q', local, remote)
   d = createMockDispatcher()
   h = new GitReplicaHandler(d as unknown as RelayDispatcher)
+  void new ReplicaFactsHandler(d as unknown as RelayDispatcher)
 })
 afterEach(async () => {
   for (const [key, value] of Object.entries(savedTmp)) {
@@ -159,10 +161,24 @@ describe('createReplicaPairService.compare over the real relay handler', () => {
     expect(pair.relation).toMatchObject({ kind: 'diverged', mergeBase: base, aheadCount: 1, behindCount: 1 })
   })
 
-  it('equal tips are same but not healthy while the remote worktree is not read', async () => {
+  it('equal tips against a relay without sync.v1 are same but not healthy', async () => {
     const pair = await pairOf(service(['git.replicaBundle'], [localSetup(), sshSetup()]))
     expect(pair.relation.kind).toBe('same')
     expect(pair.healthy).toBe(false)
+    expect(calls).not.toContain('sync.replicaFacts')
+  })
+
+  it('equal tips with both worktrees clean against a sync.v1 relay are healthy; control: a dirty remote is not', async () => {
+    const pair = await pairOf(service(['git.replicaBundle', 'sync.v1'], [localSetup(), sshSetup()]))
+    expect(pair.relation.kind).toBe('same')
+    expect(pair.healthy).toBe(true)
+    expect(calls).toContain('sync.replicaFacts')
+
+    resetSshRelayCapabilityCacheForTests()
+    writeFileSync(join(remote, 'wip.txt'), 'x')
+    const dirty = await pairOf(service(['git.replicaBundle', 'sync.v1'], [localSetup(), sshSetup()]))
+    expect(dirty.relation.kind).toBe('same')
+    expect(dirty.healthy).toBe(false)
   })
 
   it('a relay without git.replicaBundle is unknown relay-too-old and nothing healthy; control: the capable relay compares', async () => {

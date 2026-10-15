@@ -22,6 +22,12 @@ import {
   type SshRelaySessionDeps
 } from './replica-comparison-service'
 import { readLocalReplicaFacts, type LocalReplicaRead } from './replica-local-facts'
+import {
+  comparisonFoundEqualTips,
+  readRemoteWorktreeFact,
+  UNREAD_REMOTE_WORKTREE
+} from './replica-remote-facts'
+import { getSshConnectionGeneration } from './ssh/ssh-connection-generation'
 
 export type ReplicaPairServiceDeps = {
   listProjectHostSetups: () => readonly ProjectHostSetup[]
@@ -29,6 +35,7 @@ export type ReplicaPairServiceDeps = {
   sshSession?: Partial<SshRelaySessionDeps>
   now?: () => number
   readLocalFacts?: typeof readLocalReplicaFacts
+  readRemoteWorktreeFact?: typeof readRemoteWorktreeFact
 }
 
 export type ReplicaPairService = {
@@ -68,14 +75,13 @@ function pickAnchor(setups: readonly ProjectHostSetup[]): ProjectHostSetup | und
     .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))[0]
 }
 
-function remoteFactsOf(setup: ProjectHostSetup, result: ReplicaComparisonResult | null): ReplicaFacts {
+function remoteFactsOf(setup: ProjectHostSetup, result: ReplicaComparisonResult | null, worktree = UNREAD_REMOTE_WORKTREE): ReplicaFacts {
   const sha = result?.evidence?.observedTips[1] ?? UNREAD_REMOTE_TIP
   return {
     setupId: setup.id,
     hostId: setup.hostId,
     tip: { kind: 'commit', sha, ref: 'HEAD' },
-    // Why: the remote worktree is read through the relay gate in a later plan; until then equal tips are never healthy.
-    worktree: { kind: 'unknown', reason: 'remote-worktree-not-read' }
+    worktree
   }
 }
 
@@ -165,6 +171,8 @@ function localTipOf(f: ReplicaFacts): string | null {
 export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaPairService {
   const readLocalFacts = deps.readLocalFacts ?? readLocalReplicaFacts
   const getMultiplexer = deps.sshSession?.getMultiplexer ?? defaultGetMultiplexer
+  const getGeneration = deps.sshSession?.getGeneration ?? getSshConnectionGeneration
+  const readRemoteWorktree = deps.readRemoteWorktreeFact ?? readRemoteWorktreeFact
   // Why: a second compare of a setup that is mid-flight joins it, so one setup never holds two relay exports.
   const inFlight = new Map<string, Promise<ReplicaPairView>>()
   // Memory only: the last answer per setup, re-fenced on every read. Losing it costs one re-compare.
@@ -214,7 +222,16 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
       ...(deps.now ? { now: deps.now } : {}),
       deps: { ...deps.sshSession, getMultiplexer: () => mux }
     })
-    const remote = remoteFactsOf(setup, result)
+    // Why: the same multiplexer-bound request and generation as the comparison, so the sync.v1 probe is shared.
+    const worktree = comparisonFoundEqualTips(result)
+      ? await readRemoteWorktree({
+          connectionId,
+          generation: getGeneration(connectionId),
+          request: (method, params, options) => mux.request(method, params, options),
+          repoPath: setup.path
+        })
+      : UNREAD_REMOTE_WORKTREE
+    const remote = remoteFactsOf(setup, result, worktree)
     const relation = foldPair(local, anchorRead.shallow, remote, result)
     return {
       view: viewOf(setup, anchor, local, remote, relation, result.evidence !== null),

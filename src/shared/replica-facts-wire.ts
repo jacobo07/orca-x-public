@@ -1,5 +1,6 @@
 import type { WorktreeFact } from './workspace-replica-state'
 
+export const REPLICA_FACTS_METHOD = 'sync.replicaFacts'
 const MAX_REASON_LENGTH = 200
 
 export type ReplicaFactsWireResult =

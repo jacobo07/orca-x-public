@@ -104,8 +104,24 @@ pairing red.
 
 The harness covers the terminal stream only. It does **not** cover the session-tab
 sync channel, agent-session publications, file or Git RPCs, mobile/E2EE framing, or
-the relay transport. A change on those paths still needs its own reasoning against
-the three rules above.
+the relay transport (see the next section for its request-log test). A change on those
+paths still needs its own reasoning against the three rules above.
+
+## The relay transport: a second path with a request-log test
+
+The desktop talks to an SSH relay it deployed earlier, so relay and desktop skew too. A relay
+method of the `sync.` family is sent **only** through `requestGatedRelayMethod`
+(`src/main/ssh/ssh-relay-capabilities.ts`): the client probes `relay.status`, and a relay that
+does not advertise `sync.v1` is never sent the method. An old relay is a named unknown, never a
+widened request. `MethodNotFound` from a relay that did advertise it (swapped for an older one
+mid-session) evicts the cached capabilities and is read the same way, with no retry.
+
+`src/main/replica-pair-service-mixed-relay.test.ts` covers this path with a request log over a
+capable relay, an old relay, a swapped relay and a hostile one: it asserts the recorded method
+names, not only the outcome. The first user is `sync.replicaFacts` (the remote worktree fact); its
+answer is validated by `parseReplicaFactsWire`, and every failure reads as an unknown worktree.
+The hermetic test stands in for a real old relay build; that leg is owed in the live queue
+(`+LIVE:old-relay-build`).
 
 ## Not covered here: the local daemon protocol
 
@@ -124,5 +140,5 @@ negotiation: a feature constant plus a `supports…` predicate, one per capabili
 not an optional field.** Measured 2026-09-14: `retireIfNoLiveWork` shipped into v35
 without moving the number, so two builds advertised 35 — one answering it, one rejecting
 it as an unknown request type — and the older one was replaced under a racy count because
-no predicate could be written to tell them apart. Assuming *this* page governed that
+no predicate could be written to tell them apart. Assuming _this_ page governed that
 change is what deferred the fix for a session.
