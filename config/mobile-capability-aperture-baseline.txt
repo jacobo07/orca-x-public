@@ -287,8 +287,13 @@ projectReplica.capsuleList
 projectReplica.capsuleRestore
 # Added 2026-10-15, host-only by design: it uses this host's SSH session, so the handler refuses every remote caller.
 projectReplica.compare
+# Added 2026-10-15, host-only by design: answering would move a branch or write refs in this host's repositories on another client's behalf, so the handlers refuse every remote caller.
+projectReplica.preserveDivergence
+projectReplica.reconcile
 # Added 2026-10-15, host-only by design: its answers come from this host's SSH session, so the handler refuses every remote caller.
 projectReplica.relations
+# Added 2026-10-15, host-only by design: answering would move a branch or write refs in this host's repositories on another client's behalf, so the handler refuses every remote caller.
+projectReplica.sync
 repo.add
 repo.clone
 repo.create
