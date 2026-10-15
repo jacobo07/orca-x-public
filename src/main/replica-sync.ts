@@ -1,11 +1,9 @@
 // One-way safe sync (row 65): fast-forward the local checked-out branch to a proven descendant tip.
 // Order: generation fence -> tip fence -> descendant proof -> capsule (verified) -> git merge --ff-only -> verify.
 // Anything else (diverged, stale, disk-full, disconnect) stays a typed failure and never moves HEAD.
-import { randomUUID } from 'node:crypto'
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { gitExecFileAsync } from './git/runner'
+import { createCapsule, type CapsuleGitRun } from './replica-capsule'
+import { localCapsuleGit } from './replica-capsule-git'
 import {
   compareWithRelayReplica,
   type ReplicaComparisonFailure,
@@ -26,7 +24,7 @@ export type ReplicaSyncFailure =
   | `compare-${ReplicaComparisonFailure}`
 
 export type ReplicaSyncResult =
-  | { ok: true; from: string; to: string; capsuleRef: string; capsuleCommit: string }
+  | { ok: true; from: string; to: string; capsuleRef?: string; capsuleCommit?: string }
   | { ok: false; reason: ReplicaSyncFailure; capsuleRef?: string }
 
 export type GitRun = (argv: string[], opts: { cwd: string; env?: NodeJS.ProcessEnv }) => Promise<{ stdout: string }>
@@ -42,40 +40,6 @@ async function ok(run: Promise<unknown>): Promise<boolean> {
   }
 }
 
-/** Capsule = temp-index tree of the working state -> commit (parent HEAD) under refs/orca/capsules/*. */
-export async function createCapsule(
-  repoPath: string,
-  git: GitRun = defaultGit
-): Promise<{ ref: string; commit: string } | null> {
-  const scratch = await mkdtemp(join(tmpdir(), 'orca-capsule-'))
-  try {
-    const { stdout: gitDir } = await git(['rev-parse', '--absolute-git-dir'], { cwd: repoPath })
-    const index = join(scratch, 'index')
-    await copyFile(join(gitDir.trim(), 'index'), index).catch(() => {})
-    const env = { ...process.env, GIT_INDEX_FILE: index }
-    await git(['add', '-A', '--', '.'], { cwd: repoPath, env })
-    const { stdout: tree } = await git(['write-tree'], { cwd: repoPath, env })
-    const { stdout: head } = await git(['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: repoPath })
-    const { stdout: made } = await git(
-      ['-c', 'user.name=orca', '-c', 'user.email=orca@localhost', 'commit-tree', tree.trim(), '-p', head.trim(), '-m', 'orca capsule'],
-      { cwd: repoPath }
-    )
-    const commit = made.trim()
-    const ref = `refs/orca/capsules/${randomUUID()}`
-    await git(['update-ref', ref, commit], { cwd: repoPath })
-    // Verified before anything moves: the ref resolves to a commit whose tree is the one we wrote.
-    const { stdout: back } = await git(['rev-parse', '--verify', `${ref}^{tree}`], { cwd: repoPath })
-    if (back.trim() !== tree.trim()) {
-      return null
-    }
-    return { ref, commit }
-  } catch {
-    return null
-  } finally {
-    await rm(scratch, { recursive: true, force: true })
-  }
-}
-
 export async function fastForwardToDescendant(args: {
   repoPath: string
   /** HEAD sha the caller proved the descendant against. */
@@ -86,6 +50,8 @@ export async function fastForwardToDescendant(args: {
   evidenceGeneration: number
   currentGeneration: () => number
   git?: GitRun
+  /** Runner for the pre-move capsule; defaults to the local one. */
+  capsuleGit?: CapsuleGitRun
 }): Promise<ReplicaSyncResult> {
   const { repoPath, expectedLocalTip, targetTip, evidenceGeneration, currentGeneration } = args
   const git = args.git ?? defaultGit
@@ -113,25 +79,27 @@ export async function fastForwardToDescendant(args: {
     return { ok: false, reason: 'not-descendant' }
   }
 
-  const capsule = await createCapsule(repoPath, git)
-  if (!capsule) {
+  // A refused or throwing capsule must stop here: moving HEAD without a recoverable copy of the dirty tree is data loss.
+  const capsule = await createCapsule(args.capsuleGit ?? localCapsuleGit, repoPath).catch((): null => null)
+  if (!capsule || capsule.kind === 'refused') {
     return { ok: false, reason: 'capsule-failed' }
   }
+  const capsuleFields = capsule.kind === 'created' ? { capsuleRef: capsule.ref, capsuleCommit: capsule.sha } : {}
 
   // The capsule took time; fence again so a move during capture cannot be fast-forwarded over.
   if (currentGeneration() !== evidenceGeneration) {
-    return { ok: false, reason: 'stale-generation', capsuleRef: capsule.ref }
+    return { ok: false, reason: 'stale-generation', ...capsuleFields }
   }
   if ((await head()) !== expectedLocalTip) {
-    return { ok: false, reason: 'stale-tip', capsuleRef: capsule.ref }
+    return { ok: false, reason: 'stale-tip', ...capsuleFields }
   }
   if (!(await ok(git(['merge', '--ff-only', '--quiet', targetTip], { cwd: repoPath })))) {
-    return { ok: false, reason: 'ff-failed', capsuleRef: capsule.ref }
+    return { ok: false, reason: 'ff-failed', ...capsuleFields }
   }
   if ((await head()) !== targetTip) {
-    return { ok: false, reason: 'verify-failed', capsuleRef: capsule.ref }
+    return { ok: false, reason: 'verify-failed', ...capsuleFields }
   }
-  return { ok: true, from: expectedLocalTip, to: targetTip, capsuleRef: capsule.ref, capsuleCommit: capsule.commit }
+  return { ok: true, from: expectedLocalTip, to: targetTip, ...capsuleFields }
 }
 
 /** Relay -> local: compare, require "local behind", then fast-forward under the generation fence. */
@@ -144,6 +112,7 @@ export async function syncFromRelayReplica(args: {
   remoteRepoPath: string
   hostKey: string
   git?: GitRun
+  capsuleGit?: CapsuleGitRun
 }): Promise<ReplicaSyncResult> {
   // A relay request that throws (disconnect, timeout) is a transfer failure, never a crash or a guess.
   const compared = await compareWithRelayReplica({
@@ -170,6 +139,7 @@ export async function syncFromRelayReplica(args: {
     targetTip: observedTips[1],
     evidenceGeneration: args.generation,
     currentGeneration: args.currentGeneration,
-    git: args.git
+    git: args.git,
+    capsuleGit: args.capsuleGit
   })
 }

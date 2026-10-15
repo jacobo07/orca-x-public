@@ -1,4 +1,4 @@
-// Dirty-both reconciliation (row 67): two capsules cut from the SAME base (each a commit whose parent is that base)
+// Dirty-both reconciliation (row 67): two capsules cut from the SAME base (each a commit whose FIRST parent is that base)
 // are reconciled only when `git merge-tree --write-tree` reports a clean merge. Anything else is a typed conflict.
 // Nothing here touches a working tree or moves HEAD: a clean result is a commit under refs/orca/reconciled/*.
 import { randomUUID } from 'node:crypto'
@@ -17,7 +17,15 @@ export type ReconcileFailure =
   | 'commit-failed'
 
 export type ReconcileResult =
-  | { ok: true; base: string; tree: string; commit: string; ref: string }
+  | {
+      ok: true
+      base: string
+      tree: string
+      commit: string
+      ref: string
+      /** A capsule carried untracked files; the merge of the W trees does not include them. */
+      untrackedNotReconciled: boolean
+    }
   | { ok: false; reason: 'conflict'; base: string; conflictedPaths: string[] }
   | { ok: false; reason: Exclude<ReconcileFailure, 'conflict'> }
 
@@ -46,7 +54,7 @@ export function parseMergeTreeOutput(stdout: string): { tree: string; conflicted
 
 export async function reconcileDirtyBoth(args: {
   repoPath: string
-  /** Local and remote capsule commits. Both must have exactly this base as their single parent. */
+  /** Local and remote capsule commits (W). Both must have this base as their FIRST parent. */
   localCapsule: string
   remoteCapsule: string
   base: string
@@ -63,18 +71,20 @@ export async function reconcileDirtyBoth(args: {
   if (!l || !r || !b) {
     return { ok: false, reason: 'unknown-commit' }
   }
-  const parentOf = async (c: string): Promise<string | null> => {
+  // Capsule W parents are [base, index, optional untracked]; a third parent means untracked files exist.
+  const parentsOf = async (c: string): Promise<string[] | null> => {
     try {
       const parts = (await git(['rev-list', '--parents', '-n', '1', c], { cwd: repoPath })).stdout.trim().split(/\s+/)
-      return parts.length === 2 ? parts[1] : null
+      return parts.length >= 2 && parts.length <= 4 ? parts.slice(1) : null
     } catch {
       return null
     }
   }
-  const [lp, rp] = await Promise.all([parentOf(l), parentOf(r)])
-  if (lp !== b || rp !== b) {
+  const [lp, rp] = await Promise.all([parentsOf(l), parentsOf(r)])
+  if (!lp || !rp || lp[0] !== b || rp[0] !== b) {
     return { ok: false, reason: 'not-same-base' }
   }
+  const untrackedNotReconciled = lp.length === 3 || rp.length === 3
   let stdout: string
   try {
     stdout = (await git(['merge-tree', '--write-tree', '--name-only', l, r], { cwd: repoPath })).stdout
@@ -97,7 +107,7 @@ export async function reconcileDirtyBoth(args: {
     const commit = made.trim()
     const ref = `${RECONCILED_REF_PREFIX}${randomUUID()}`
     await git(['update-ref', ref, commit], { cwd: repoPath })
-    return { ok: true, base: b, tree, commit, ref }
+    return { ok: true, base: b, tree, commit, ref, untrackedNotReconciled }
   } catch {
     return { ok: false, reason: 'commit-failed' }
   }

@@ -2,6 +2,7 @@ import { expect, test } from './helpers/orca-app'
 import { asReplicaRun } from './helpers/hwf-two-host-replica-legs'
 import { execOnOwningHost, readHwfRunFile } from './helpers/hwf-two-host-ssh-target'
 import { fastForwardToDescendant, type GitRun } from '../../src/main/replica-sync'
+import { remoteCapsuleGit } from './helpers/hwf-two-host-remote-capsule-git'
 
 /**
  * REAL-TWO-HOST rung for phase 18 (row 65): the sync pipeline runs from the laptop with every git call executed on
@@ -28,6 +29,7 @@ test('fast-forward over SSH: capsule first, stale generation refused', async () 
     }
     return { stdout: r.out }
   }
+  const capsuleGit = remoteCapsuleGit((script) => execOnOwningHost(run, script))
   const sh = (s: string): string => {
     const r = execOnOwningHost(run, s)
     expect(r.status).toBe(0)
@@ -41,20 +43,22 @@ test('fast-forward over SSH: capsule first, stale generation refused', async () 
   sh(`git -C ${q(local)} fetch -q origin`)
   const stale = await fastForwardToDescendant({
     repoPath: local, expectedLocalTip: behind, targetTip: target,
-    evidenceGeneration: 1, currentGeneration: () => 2, git: remoteGit
+    evidenceGeneration: 1, currentGeneration: () => 2, git: remoteGit, capsuleGit
   })
   console.log(`HWF18_STALE=${stale.ok ? 'ok' : stale.reason}`)
   expect(stale).toEqual({ ok: false, reason: 'stale-generation' })
   expect(sh(`git -C ${q(local)} rev-parse HEAD`)).toBe(behind)
   const res = await fastForwardToDescendant({
     repoPath: local, expectedLocalTip: behind, targetTip: target,
-    evidenceGeneration: 1, currentGeneration: () => 1, git: remoteGit
+    evidenceGeneration: 1, currentGeneration: () => 1, git: remoteGit, capsuleGit
   })
   console.log(`HWF18_FF=${res.ok ? 'ok' : res.reason}`)
   expect(res.ok).toBe(true)
   expect(sh(`git -C ${q(local)} rev-parse HEAD`)).toBe(target)
   if (res.ok) {
-    console.log(`HWF18_CAPSULE=${res.capsuleRef.startsWith('refs/orca/capsules/') ? 'present' : 'missing'}`)
-    sh(`git -C ${q(local)} rev-parse --verify ${q(res.capsuleRef)}`)
+    // The clone is clean, so no capsule is cut; the dirty-tree capsule is covered by the hermetic tests.
+    console.log(`HWF18_CAPSULE=${res.capsuleRef === undefined ? 'none-clean' : 'unexpected'}`)
+    expect(res.capsuleRef).toBeUndefined()
+    expect(sh(`git -C ${q(local)} for-each-ref refs/orca/capsules`)).toBe('')
   }
 })

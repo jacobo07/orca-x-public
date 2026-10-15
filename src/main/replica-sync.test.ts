@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { GitReplicaHandler } from '../relay/git-replica-handler'
 import { createMockDispatcher, type RelayDispatcher } from '../relay/git-handler-test-setup'
 import type { ReplicaComparisonRequest } from './replica-comparison-service'
-import { createCapsule, fastForwardToDescendant, syncFromRelayReplica, type GitRun } from './replica-sync'
+import { fastForwardToDescendant, syncFromRelayReplica, type GitRun } from './replica-sync'
+import { localCapsuleGit } from './replica-capsule-git'
+import type { CapsuleGitRun } from './replica-capsule'
 import { gitExecFileAsync } from './git/runner'
 import { resetSshRelayCapabilityCacheForTests } from './ssh/ssh-relay-capabilities'
 
@@ -62,7 +64,7 @@ const relay =
     return d.callRequest(method, params)
   }
 
-const sync = (request: ReplicaComparisonRequest, gen = () => 1, g?: GitRun) =>
+const sync = (request: ReplicaComparisonRequest, gen = () => 1, g?: GitRun, c?: CapsuleGitRun) =>
   syncFromRelayReplica({
     connectionId: 'c',
     generation: 1,
@@ -71,17 +73,40 @@ const sync = (request: ReplicaComparisonRequest, gen = () => 1, g?: GitRun) =>
     localRepoPath: local,
     remoteRepoPath: remote,
     hostKey: 'gex44',
-    git: g
+    git: g,
+    capsuleGit: c
   })
 
 describe('syncFromRelayReplica', () => {
-  it('fast-forwards a clean behind replica, capsule first', async () => {
+  it('fast-forwards a clean behind replica with no capsule and no capsule fields', async () => {
     const tip = commitFile(remote, 'b.txt', 'b\n')
     const r = await sync(relay())
-    expect(r).toMatchObject({ ok: true, from: base, to: tip })
+    expect(r).toEqual({ ok: true, from: base, to: tip })
     expect(git(local, 'rev-parse', 'HEAD')).toBe(tip)
-    expect(capsules(local)).toHaveLength(1)
-    expect(git(local, 'rev-parse', `${capsules(local)[0]}^`)).toBe(base)
+    expect(capsules(local)).toHaveLength(0)
+  })
+
+  it('a dirty tree gets a full capsule (tracked, staged, untracked) before HEAD moves', async () => {
+    const tip = commitFile(remote, 'b.txt', 'b\n')
+    writeFileSync(join(local, 'a.txt'), 'dirty\n')
+    writeFileSync(join(local, 'staged.txt'), 'staged\n')
+    git(local, 'add', 'staged.txt')
+    writeFileSync(join(local, 'untracked.txt'), 'untracked\n')
+    const r = await sync(relay())
+    expect(r).toMatchObject({ ok: true, from: base, to: tip })
+    if (!r.ok) {
+      return
+    }
+    expect(r.capsuleRef?.startsWith('refs/orca/capsules/')).toBe(true)
+    expect(git(local, 'rev-parse', r.capsuleRef!)).toBe(r.capsuleCommit)
+    expect(capsules(local)).toEqual([r.capsuleRef])
+    const cap = r.capsuleCommit!
+    expect(git(local, 'rev-list', '--parents', '-n', '1', cap).split(' ').slice(1)).toHaveLength(3)
+    expect(git(local, 'rev-parse', `${cap}^1`)).toBe(base)
+    expect(git(local, 'show', `${cap}:a.txt`)).toBe('dirty')
+    expect(git(local, 'show', `${cap}^2:staged.txt`)).toBe('staged')
+    expect(git(local, 'show', `${cap}^3:untracked.txt`)).toBe('untracked')
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(tip)
   })
 
   it('preserves non-conflicting dirty work in the capsule and keeps it in the tree', async () => {
@@ -93,7 +118,7 @@ describe('syncFromRelayReplica', () => {
     expect(git(local, 'rev-parse', 'HEAD')).toBe(tip)
     const cap = capsules(local)[0]
     expect(git(local, 'show', `${cap}:a.txt`)).toBe('dirty')
-    expect(git(local, 'show', `${cap}:new.txt`)).toBe('untracked')
+    expect(git(local, 'show', `${cap}^3:new.txt`)).toBe('untracked')
     expect(readFileSync(join(local, 'a.txt'), 'utf8')).toBe('dirty\n')
   })
 
@@ -137,6 +162,7 @@ describe('syncFromRelayReplica', () => {
 
   it('disk-full during the merge is ff-failed, capsule kept, HEAD unmoved', async () => {
     commitFile(remote, 'b.txt', 'b\n')
+    writeFileSync(join(local, 'untracked.txt'), 'u\n')
     const full: GitRun = (argv, opts) =>
       argv[0] === 'merge' ? Promise.reject(new Error('ENOSPC: no space left on device')) : gitExecFileAsync(argv, opts)
     const r = await sync(relay(), () => 1, full)
@@ -145,18 +171,20 @@ describe('syncFromRelayReplica', () => {
     expect(capsules(local)).toHaveLength(1)
   })
 
-  it('generation moved before the merge is stale-generation', async () => {
+  it('generation moved while the capsule is cut is stale-generation, capsule kept', async () => {
     commitFile(remote, 'b.txt', 'b\n')
+    writeFileSync(join(local, 'untracked.txt'), 'u\n')
     let gen = 1
-    const bump: GitRun = (argv, opts) => {
-      if (argv[0] === 'update-ref') {
+    const bump: CapsuleGitRun = (argv, opts) => {
+      if (argv.includes('update-ref')) {
         gen = 2 // moves while the capsule is being captured
       }
-      return gitExecFileAsync(argv, opts)
+      return localCapsuleGit(argv, opts)
     }
-    const r = await sync(relay(), () => gen, bump)
+    const r = await sync(relay(), () => gen, undefined, bump)
     expect(r).toMatchObject({ ok: false, reason: 'stale-generation' })
     expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+    expect(capsules(local)).toHaveLength(1)
   })
 })
 
@@ -182,21 +210,45 @@ describe('fastForwardToDescendant', () => {
     expect(capsules(local)).toHaveLength(0)
   })
 
-  it('a failing capsule blocks the fast-forward', async () => {
-    const tip = commitFile(remote, 'b.txt', 'b\n')
-    git(local, 'fetch', '-q', remote, 'main')
-    const noCapsule: GitRun = (argv, opts) =>
-      argv[0] === 'write-tree' ? Promise.reject(new Error('ENOSPC')) : gitExecFileAsync(argv, opts)
-    const r = await fastForwardToDescendant({
-      repoPath: local,
-      expectedLocalTip: base,
-      targetTip: tip,
-      evidenceGeneration: 1,
-      currentGeneration: () => 1,
-      git: noCapsule
+  describe('a capsule that cannot be cut blocks the fast-forward before HEAD moves (D-05)', () => {
+    const prepare = (): string => {
+      const tip = commitFile(remote, 'b.txt', 'b\n')
+      git(local, 'fetch', '-q', remote, 'main')
+      writeFileSync(join(local, 'a.txt'), 'dirty\n')
+      return tip
+    }
+    const run = (tip: string, capsuleGit?: CapsuleGitRun) =>
+      fastForwardToDescendant({
+        repoPath: local,
+        expectedLocalTip: base,
+        targetTip: tip,
+        evidenceGeneration: 1,
+        currentGeneration: () => 1,
+        capsuleGit
+      })
+
+    it('a throwing capsule runner is capsule-failed', async () => {
+      const tip = prepare()
+      const broken: CapsuleGitRun = (argv, opts) =>
+        argv.includes('write-tree') ? Promise.reject(new Error('ENOSPC')) : localCapsuleGit(argv, opts)
+      expect(await run(tip, broken)).toEqual({ ok: false, reason: 'capsule-failed' })
+      expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+      expect(capsules(local)).toHaveLength(0)
     })
-    expect(r).toEqual({ ok: false, reason: 'capsule-failed' })
-    expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
-    expect(await createCapsule(local, noCapsule)).toBeNull()
+
+    it('a refused capsule (merge in progress) is capsule-failed', async () => {
+      const tip = prepare()
+      writeFileSync(join(local, '.git', 'MERGE_HEAD'), `${base}\n`)
+      expect(await run(tip)).toEqual({ ok: false, reason: 'capsule-failed' })
+      expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+    })
+
+    it('control: the working runner cuts the capsule and moves HEAD', async () => {
+      const tip = prepare()
+      const r = await run(tip, localCapsuleGit)
+      expect(r).toMatchObject({ ok: true, to: tip })
+      expect(git(local, 'rev-parse', 'HEAD')).toBe(tip)
+      expect(capsules(local)).toHaveLength(1)
+    })
   })
 })

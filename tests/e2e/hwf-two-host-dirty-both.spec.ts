@@ -2,7 +2,9 @@ import { expect, test } from './helpers/orca-app'
 import { asReplicaRun } from './helpers/hwf-two-host-replica-legs'
 import { execOnOwningHost, readHwfRunFile } from './helpers/hwf-two-host-ssh-target'
 import { reconcileDirtyBoth } from '../../src/main/replica-reconcile'
-import { createCapsule, type GitRun } from '../../src/main/replica-sync'
+import { createCapsule } from '../../src/main/replica-capsule'
+import type { GitRun } from '../../src/main/replica-sync'
+import { remoteCapsuleGit } from './helpers/hwf-two-host-remote-capsule-git'
 
 /**
  * REAL-TWO-HOST rung for phase 19 (row 67): dirty-both reconciliation with every git call executed on GEX44 over
@@ -29,14 +31,15 @@ test('dirty-both over SSH: disjoint edits reconcile, same-line edits conflict', 
     }
     return { stdout: r.out }
   }
+  const capsuleGit = remoteCapsuleGit((script) => execOnOwningHost(run, script))
   const sh = (s: string): string => {
     const r = execOnOwningHost(run, s)
     expect(r.status).toBe(0)
     return r.out.trim()
   }
   const files = sh(`git -C ${q(p17)} ls-files`).split('\n').filter(Boolean)
-  expect(files.length).toBeGreaterThan(0)
-  const shared = files[0]
+  expect(files.length).toBeGreaterThan(1)
+  const [shared, other] = files
   const base = sh(`git -C ${q(p17)} rev-parse HEAD`)
 
   const cutPair = async (tag: string, editA: string, editB: string): Promise<{ a: string; la: string; rb: string }> => {
@@ -45,20 +48,24 @@ test('dirty-both over SSH: disjoint edits reconcile, same-line edits conflict', 
     expect(a.startsWith('/tmp/orca-hwf-p17-') && b.startsWith('/tmp/orca-hwf-p17-')).toBe(true)
     sh(`git clone -q ${q(p17)} ${q(a)} && git clone -q ${q(p17)} ${q(b)}`)
     sh(`${editA.replace(/@R/g, q(a))} && ${editB.replace(/@R/g, q(b))}`)
-    const ca = await createCapsule(a, remoteGit)
-    const cb = await createCapsule(b, remoteGit)
-    expect(ca && cb).toBeTruthy()
-    sh(`git -C ${q(a)} fetch -q ${q(b)} ${q(cb!.ref)}`)
-    return { a, la: ca!.commit, rb: cb!.commit }
+    const ca = await createCapsule(capsuleGit, a)
+    const cb = await createCapsule(capsuleGit, b)
+    if (ca.kind !== 'created' || cb.kind !== 'created') {
+      throw new Error(`capsule not created: ${ca.kind} ${cb.kind}`)
+    }
+    sh(`git -C ${q(a)} fetch -q ${q(b)} ${q(cb.ref)}`)
+    return { a, la: ca.sha, rb: cb.sha }
   }
 
-  const ok = await cutPair('d', `echo local > @R/only-local.txt`, `echo remote > @R/only-remote.txt`)
+  // Tracked edits only: the capsule probes the index and untracked files on the calling host, not over SSH.
+  const ok = await cutPair('d', `echo local > @R/${shared}`, `echo remote > @R/${other}`)
   const clean = await reconcileDirtyBoth({ repoPath: ok.a, localCapsule: ok.la, remoteCapsule: ok.rb, base, git: remoteGit })
   console.log(`HWF19_DISJOINT=${clean.ok ? 'reconciled' : clean.reason}`)
   expect(clean.ok).toBe(true)
   if (clean.ok) {
-    expect(sh(`git -C ${q(ok.a)} ls-tree -r --name-only ${q(clean.commit)}`)).toContain('only-local.txt')
-    expect(sh(`git -C ${q(ok.a)} ls-tree -r --name-only ${q(clean.commit)}`)).toContain('only-remote.txt')
+    expect(clean.untrackedNotReconciled).toBe(false)
+    expect(sh(`git -C ${q(ok.a)} show ${q(`${clean.commit}:${shared}`)}`)).toBe('local')
+    expect(sh(`git -C ${q(ok.a)} show ${q(`${clean.commit}:${other}`)}`)).toBe('remote')
   }
 
   const bad = await cutPair('c', `echo local > @R/${shared}`, `echo remote > @R/${shared}`)
