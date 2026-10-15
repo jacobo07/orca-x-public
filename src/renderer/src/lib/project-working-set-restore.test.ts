@@ -4,6 +4,8 @@ import type { AppState } from '@/store/types'
 import type { WorkingSetRestoreEvidence } from '../../../shared/project-working-set-store-types'
 import { representativeManifest } from '../../../shared/project-working-set-test-fixtures'
 import type { ProjectWorkingSetManifest } from '../../../shared/project-working-set-types'
+import type { HostTranslationRequest } from '../../../shared/project-working-set-host-translation'
+import type { ProjectHostSetup } from '../../../shared/project-types'
 import { createTestStore, makeTab, makeWorktree } from '../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import type { WorkingSetStoreBridge } from './project-working-set-client'
@@ -153,5 +155,148 @@ describe('restoreWorkingSet', () => {
     const preview = await previewWorkingSetRestore(request, deps)
     expect(preview).toMatchObject({ status: 'planned', plan: { blockers: [] } })
     expect(store.getState().tabsByWorktree[OWNER]).toBeUndefined()
+  })
+})
+
+const TARGET_OWNER = 'repo-9::/srv/orca'
+
+function hostSetup(over: Partial<ProjectHostSetup>): ProjectHostSetup {
+  return {
+    id: 'setup-local',
+    projectId: 'proj-1',
+    hostId: 'local',
+    repoId: 'repo-1',
+    path: 'C:/work/orca',
+    displayName: 'orca',
+    setupState: 'ready',
+    setupMethod: 'cloned',
+    createdAt: 1,
+    updatedAt: 1,
+    ...over
+  }
+}
+
+function continueOn(over: Partial<HostTranslationRequest> = {}): HostTranslationRequest {
+  return {
+    projectId: 'proj-1',
+    sourceSetup: hostSetup({}),
+    targetSetup: hostSetup({ id: 'setup-gex', hostId: 'ssh:gex44', repoId: 'repo-9', path: '/srv/orca' }),
+    targetOwnerKey: TARGET_OWNER,
+    ...over
+  }
+}
+
+function setupContinue(overrides: Partial<WorkingSetRestoreDeps> = {}) {
+  const made = setup(overrides)
+  const state = made.store.getState()
+  made.store.setState({
+    repos: [
+      ...state.repos,
+      { id: 'repo-9', path: '/srv/orca', displayName: 'Orca', badgeColor: '#000', addedAt: 0 }
+    ],
+    worktreesByRepo: {
+      ...state.worktreesByRepo,
+      'repo-9': [makeWorktree({ id: TARGET_OWNER, repoId: 'repo-9', path: '/srv/orca' })]
+    }
+  } as Partial<AppState>)
+  return made
+}
+
+describe('restoreWorkingSet with continueOn', () => {
+  it('reads and probes by the source scope, asks presence and plans by the translated one', async () => {
+    const { store, deps, request, bridge, readPresence } = setupContinue({
+      hostAvailability: () => 'available'
+    })
+    const outcome = await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)
+
+    expect(bridge.read).toHaveBeenCalledExactlyOnceWith({
+      scope: scope,
+      workingSetId: request.workingSetId
+    })
+    expect(bridge.probeRestoreEvidence).toHaveBeenCalledExactlyOnceWith({
+      scope: scope,
+      workingSetId: request.workingSetId
+    })
+    expect(readPresence).toHaveBeenCalledTimes(2)
+    for (const [asked] of readPresence.mock.calls as unknown as [{ worktreeId: string }][]) {
+      expect(asked.worktreeId).toBe(TARGET_OWNER)
+    }
+    expect(outcome).toMatchObject({
+      status: 'planned',
+      plan: {
+        blockers: [],
+        scope: { executionHostId: 'ssh:gex44', ownerKey: TARGET_OWNER }
+      },
+      applied: { status: 'applied', ownerKey: TARGET_OWNER }
+    })
+    // Rows land sleeping in the TARGET workspace; the source workspace is untouched.
+    expect(store.getState().tabsByWorktree[TARGET_OWNER]).toHaveLength(5)
+    expect(store.getState().tabsByWorktree[OWNER]).toBeUndefined()
+    if (outcome.status !== 'planned' || !('panes' in outcome)) {
+      throw new Error('expected a continue outcome with a pane table')
+    }
+    expect(outcome.panes.map((pane) => `${pane.sourceTabId}:${pane.disposition}`)).toContain(
+      'tab-a:resume'
+    )
+  })
+
+  it('leaves every dependency call exactly as before when continueOn is absent', async () => {
+    const { deps, request, bridge, readPresence } = setup()
+    await restoreWorkingSet(request, deps)
+
+    expect((bridge.read as ReturnType<typeof vi.fn>).mock.calls).toEqual([
+      [{ scope, workingSetId: request.workingSetId }]
+    ])
+    expect((bridge.probeRestoreEvidence as ReturnType<typeof vi.fn>).mock.calls).toEqual([
+      [{ scope, workingSetId: request.workingSetId }]
+    ])
+    const askedKeys = (readPresence.mock.calls as unknown as [{ worktreeId: string }][]).map(
+      ([asked]) => asked.worktreeId
+    )
+    expect(askedKeys).toEqual([OWNER, OWNER])
+  })
+
+  it('returns the translation refusal and calls neither probe, presence, plan nor apply', async () => {
+    const { store, deps, request, bridge, readPresence } = setup({
+      hostAvailability: () => 'available'
+    })
+    const outcome = await restoreWorkingSet(
+      {
+        ...request,
+        continueOn: continueOn({
+          targetSetup: hostSetup({ id: 'same', hostId: 'local', repoId: 'repo-1' })
+        })
+      },
+      deps
+    )
+    expect(outcome).toEqual({ status: 'continue-refused', reason: 'same-host' })
+    expect(bridge.probeRestoreEvidence).not.toHaveBeenCalled()
+    expect(readPresence).not.toHaveBeenCalled()
+    expect(store.getState().tabsByWorktree[TARGET_OWNER]).toBeUndefined()
+    expect(store.getState().tabsByWorktree[OWNER]).toBeUndefined()
+  })
+
+  it('refuses a folder workspace source with location-kind-unsupported', async () => {
+    const { deps, request, bridge } = setup({ hostAvailability: () => 'available' })
+    const manifest = representativeManifest()
+    manifest.scope.location = {
+      kind: 'folder-workspace',
+      folderWorkspaceId: 'f1',
+      folderPath: 'C:/work/orca'
+    }
+    bridge.read = vi.fn(async () => ({ status: 'valid', manifest }))
+    expect(await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)).toEqual({
+      status: 'continue-refused',
+      reason: 'location-kind-unsupported'
+    })
+  })
+
+  it('still reports an unreadable set as unreadable, not as a refusal', async () => {
+    const { deps, request, bridge } = setup()
+    bridge.read = vi.fn(async () => ({ status: 'missing' }))
+    expect(await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)).toEqual({
+      status: 'unreadable',
+      read: { status: 'missing' }
+    })
   })
 })
