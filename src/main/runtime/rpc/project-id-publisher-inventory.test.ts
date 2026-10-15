@@ -59,6 +59,11 @@ const PUBLISHERS: Record<string, { class: PublisherClass; reason?: string }> = {
     class: 'no-project-id',
     reason: '`setup` is the worker setup receipt, not a ProjectHostSetup'
   },
+  'orchestration.missionPlace': {
+    class: 'no-project-id',
+    reason:
+      'reads the task subject project id to rank hosts; the result carries task id, host key and a boolean, never a project id'
+  },
   'orchestration.reviewRequest': {
     class: 'no-project-id',
     reason: '`projectId` is the caller-supplied review project label, never published back'
