@@ -60,6 +60,7 @@ Projects:
   project setup-delete      Remove a project host setup
   project requirements      Measure a repo's orca.yaml requirements on its host (runs nothing)
   project prepare           Show or run a repo's declared prepare steps by explicit approval hash
+  project replica-compare   Compare a project's setups with its local setup over the SSH relay (reads only)
 
 Repos:
   repo list                 List repos registered in Orca
@@ -263,6 +264,7 @@ Common Commands:
   orca project requirements --repo <selector> [--json]
   orca project prepare --repo <selector> --plan [--json]
   orca project prepare --repo <selector> --requirement <id> --approve <hash> [--json]
+  orca project replica-compare --project <id> [--setup <setup-id>] [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]

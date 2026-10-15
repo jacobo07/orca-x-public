@@ -62,6 +62,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
   },
   {
+    name: 'project-replica',
+    keys: ['project replica-compare'],
+    load: async () => (await import('./handlers/project-replica.js')).PROJECT_REPLICA_HANDLERS
+  },
+  {
     name: 'repo',
     keys: ['repo list', 'repo add', 'repo show', 'repo set-base-ref', 'repo search-refs'],
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
