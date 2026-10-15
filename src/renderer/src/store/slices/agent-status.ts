@@ -55,6 +55,10 @@ import {
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
+import {
+  markRowUnverified,
+  shouldRetainRowsOnConnectionLoss
+} from './agent-status-reconnect-retention'
 import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 
 /** Snapshot of a finished/vanished agent status entry, kept so the dashboard and sidebar hover
@@ -2583,6 +2587,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       let removed = false
       set((s) => {
         const worktreeIdsOnConnection = collectWorktreeIdsForConnection(s, connectionId)
+        const retain = shouldRetainRowsOnConnectionLoss(
+          s.sshConnectionStates.get(connectionId)?.status
+        )
         let next: Record<string, AgentStatusEntry> | null = null
         for (const [paneKey, existing] of Object.entries(s.agentStatusByPaneKey)) {
           if (existing.updatedAt > clearedAt) {
@@ -2599,8 +2606,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           if (!belongsToConnection) {
             continue
           }
+          // Why: a transient loss keeps the row, unverified, until a replayed hook; a terminal one removes it.
+          const kept = retain ? markRowUnverified(existing) : null
+          if (kept === existing) {
+            continue
+          }
           next ??= { ...s.agentStatusByPaneKey }
-          delete next[paneKey]
+          if (kept) {
+            next[paneKey] = kept
+          } else {
+            delete next[paneKey]
+          }
         }
         const wasAlreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds
         if (!next && wasAlreadyBlocked) {

@@ -12,6 +12,7 @@ import {
   sshConnectionStatesEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
+import { shouldRetainRowsOnConnectionLoss } from './agent-status-reconnect-retention'
 
 export type RemoteWorkspaceSyncStatus = {
   phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
@@ -87,7 +88,7 @@ function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
   targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
 }
 
-export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
+export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   removedSshTargetLabels: new Map(),
@@ -100,13 +101,18 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   portForwardsByConnection: {},
   detectedPortsByConnection: {},
 
-  setSshConnectionState: (targetId, state) =>
+  setSshConnectionState: (targetId, state) => {
+    // Why: rows kept unverified through a transient loss must go once the loss turns permanent.
+    let endsRetainedLoss = false
     set((s) => {
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
       if (sshConnectionStatesEqual(previous, state)) {
         return s
       }
+      endsRetainedLoss =
+        !shouldRetainRowsOnConnectionLoss(state.status) &&
+        targetId in s.transientClearedAgentStatusConnectionIds
       advanceLocalSshTargetConnectionGeneration(targetId)
       next.set(targetId, state)
       const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
@@ -122,7 +128,11 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
           : s.sshConnectedGeneration,
         transientClearedAgentStatusConnectionIds: blockedConnections
       }
-    }),
+    })
+    if (endsRetainedLoss) {
+      get().clearTransientAgentStatuses(targetId, Date.now())
+    }
+  },
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   setRemovedSshTargetLabels: (labels) =>
