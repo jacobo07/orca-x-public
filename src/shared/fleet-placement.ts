@@ -17,6 +17,7 @@ import {
 import { manifestOf } from './node-manifest'
 import { judgeNodeEligibility, type NodeRequirement } from './node-manifest-eligibility'
 import { isMeasurementStale } from './node-measurement-age'
+import { compareFreeMemoryThenFingerprint } from './placement-host-ranking'
 import type { FleetNodeResourcesObservation } from './node-resources'
 
 export type FleetPlacementMember = {
@@ -198,15 +199,7 @@ export function planFleetPlacement(
       isCurrent: group.fingerprint === request.currentFingerprint
     })
   }
-  eligible.sort((a, b) => {
-    if (a.availableMemory !== b.availableMemory) {
-      return b.availableMemory - a.availableMemory
-    }
-    if (a.isCurrent !== b.isCurrent) {
-      return a.isCurrent ? -1 : 1
-    }
-    return a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0
-  })
+  eligible.sort(compareFreeMemoryThenFingerprint)
   const selected = eligible[0] ?? null
   return {
     decision: selected ? 'selected' : 'no-eligible-host',

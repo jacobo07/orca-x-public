@@ -198,12 +198,16 @@ describe('fleet placement planning', () => {
     })
   })
 
-  it('prefers the current placement only on equal headroom, then the fingerprint', () => {
+  it('orders equal headroom by fingerprint even when the higher fingerprint is the current host', () => {
+    // Why: D-15 and D-13 drop the current-host tie-break; the marker is still reported for the CLI.
     const hosts = [member(vps, 'fp-b', 4 * GB), member(box, 'fp-a', 4 * GB)]
     expect(planFleetPlacement(hosts, request).selected?.fingerprint).toBe('fp-a')
-    expect(
-      planFleetPlacement(hosts, { ...request, currentFingerprint: 'fp-b' }).selected?.fingerprint
-    ).toBe('fp-b')
+    const current = planFleetPlacement(hosts, { ...request, currentFingerprint: 'fp-b' })
+    expect(current.selected?.fingerprint).toBe('fp-a')
+    expect(current.eligible.map((c) => [c.fingerprint, c.isCurrent])).toEqual([
+      ['fp-a', false],
+      ['fp-b', true]
+    ])
     expect(
       planFleetPlacement([member(vps, 'fp-b', 4 * GB), member(box, 'fp-a', 5 * GB)], {
         ...request,

@@ -95,3 +95,75 @@ describe('rankMissionCandidates', () => {
     expect(order(list)).toEqual(['fp-small', 'fp-big'])
   })
 })
+
+// Why: D-15 states the order once; every adjacent pair here is decided by exactly one term, the one under test.
+describe('mission ranking order table', () => {
+  type Variant = {
+    term: 'hydrated' | 'load' | 'free memory' | 'fingerprint'
+    winner: RankableCandidate
+    loser: RankableCandidate
+    hydrated: string[]
+    load: Record<string, number>
+  }
+  const variants: Variant[] = [
+    {
+      term: 'hydrated',
+      winner: candidate('fp-hy', 1),
+      loser: candidate('fp-aa', 64),
+      hydrated: ['fp-hy'],
+      load: { 'fp-hy': 9 }
+    },
+    {
+      term: 'load',
+      winner: candidate('fp-light', 1),
+      loser: candidate('fp-roomy', 64),
+      hydrated: [],
+      load: { 'fp-roomy': 1 }
+    },
+    {
+      term: 'free memory',
+      winner: candidate('fp-zz', 16),
+      loser: candidate('fp-aa', 8),
+      hydrated: [],
+      load: {}
+    },
+    {
+      term: 'fingerprint',
+      winner: candidate('fp-aa', 8),
+      loser: candidate('fp-zz', 8),
+      hydrated: [],
+      load: {}
+    }
+  ]
+
+  it.each(variants)('the $term term decides on its own', (variant) => {
+    for (const input of [
+      [variant.winner, variant.loser],
+      [variant.loser, variant.winner]
+    ]) {
+      const ranked = rankMissionCandidates(input, signals(variant.hydrated, variant.load))
+      expect(order(ranked)).toEqual([variant.winner.fingerprint, variant.loser.fingerprint])
+    }
+  })
+
+  it('orders five candidates exactly: hydrated, then least load, then most memory, then fingerprint', () => {
+    const list = [
+      candidate('fp-e', 8),
+      candidate('fp-d', 8),
+      candidate('fp-c', 24),
+      candidate('fp-b', 2),
+      candidate('fp-a', 1)
+    ]
+    const hydrated = ['fp-a']
+    const load = { 'fp-a': 7, 'fp-c': 1, 'fp-d': 1, 'fp-e': 1 }
+    const wanted = ['fp-a', 'fp-b', 'fp-c', 'fp-d', 'fp-e']
+    for (const shuffled of permutations(list)) {
+      expect(order(rankMissionCandidates(shuffled, signals(hydrated, load)))).toEqual(wanted)
+    }
+  })
+
+  it('does not know which candidate is the current host', () => {
+    const list = [{ ...candidate('fp-z', 8), isCurrent: true }, candidate('fp-a', 8)]
+    expect(order(rankMissionCandidates(list, signals([])))).toEqual(['fp-a', 'fp-z'])
+  })
+})

@@ -487,3 +487,58 @@ describe('mission job placement: dependent jobs may share a host, independent jo
     }
   })
 })
+
+describe('mission job placement: hydration ranks ahead of spread (D-15 over D-16)', () => {
+  const small = toRuntimeExecutionHostId('small')
+  const fleet = [
+    member(LOCAL_EXECUTION_HOST_ID, 'fp-win', 24 * GB),
+    member(small, 'fp-small', 8 * GB)
+  ]
+  const hostsOf = (plan: ReturnType<typeof planMissionPlacement>) =>
+    Object.fromEntries(plan.placements.map((p) => [p.jobId, p.fingerprint]))
+
+  it('without any hydration the mapping equals the load, memory, fingerprint mapping', () => {
+    const jobs: MissionJob[] = [{ jobId: 'a' }, { jobId: 'b' }, { jobId: 'c' }]
+    const none = hostsOf(planMissionPlacement(jobs, fleet, request))
+    expect(none).toEqual({ a: 'fp-win', b: 'fp-small', c: 'fp-win' })
+    const empty = jobs.map((job) => ({ ...job, hydratedAddresses: [] }))
+    expect(hostsOf(planMissionPlacement(empty, fleet, request))).toEqual(none)
+  })
+
+  it('with every eligible host hydrated the ranking reduces to load, memory, fingerprint', () => {
+    const both: ExecutionHostId[] = [LOCAL_EXECUTION_HOST_ID, small]
+    const jobs: MissionJob[] = ['a', 'b', 'c'].map((jobId) => ({ jobId, hydratedAddresses: both }))
+    expect(hostsOf(planMissionPlacement(jobs, fleet, request))).toEqual({
+      a: 'fp-win',
+      b: 'fp-small',
+      c: 'fp-win'
+    })
+  })
+
+  it('sends every independent task of a hydrated project to the hydrated host while it is eligible', () => {
+    const jobs: MissionJob[] = ['a', 'b', 'c'].map((jobId) => ({
+      jobId,
+      hydratedAddresses: [small]
+    }))
+    const plan = planMissionPlacement(jobs, fleet, request)
+    expect(hostsOf(plan)).toEqual({ a: 'fp-small', b: 'fp-small', c: 'fp-small' })
+    expect(plan.hostCount).toBe(1)
+  })
+
+  it('sends a task elsewhere once the hydrated host is no longer eligible for it', () => {
+    const plan = planMissionPlacement(
+      [
+        { jobId: 'a', hydratedAddresses: [small] },
+        {
+          jobId: 'b',
+          hydratedAddresses: [small],
+          requirement: { memory: { minAvailableBytes: 16 * GB } }
+        }
+      ],
+      fleet,
+      request
+    )
+    expect(hostsOf(plan)).toEqual({ a: 'fp-small', b: 'fp-win' })
+    expect(plan.placements.map((p) => p.hydrated)).toEqual([true, false])
+  })
+})
