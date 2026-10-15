@@ -157,6 +157,8 @@ export type ContinuePaneReason =
   | 'provider-session-present'
   | 'relaunchable'
   | 'host-unavailable'
+  /** The host's reachability was not measured: neither down nor available, so nothing is promised. */
+  | 'host-unverified'
   | 'live-elsewhere'
   | 'not-confirmed'
   | 'nothing-runnable'
@@ -201,13 +203,17 @@ export function planContinueOnHost(
       ownerKey: translated.manifest.scope.ownerKey
     }
   })
-  const hostDown = inputs.target.hostAvailability !== 'available'
+  const { hostAvailability } = inputs.target
   const panes: ContinuePane[] = plan.entries.flatMap((entry) =>
     entry.panes.map((pane): ContinuePane => {
       const base = { sourceTabId: entry.sourceTabId, targetTabId: entry.targetTabId, leafId: pane.leafId }
       const cap = pane.restoreTime.capability
-      if (hostDown) {
-        return { ...base, disposition: 'unavailable', reason: 'host-unavailable' }
+      if (hostAvailability !== 'available') {
+        return {
+          ...base,
+          disposition: 'unavailable',
+          reason: hostAvailability === 'unavailable' ? 'host-unavailable' : 'host-unverified'
+        }
       }
       if (pane.presence === 'live-here') {
         return { ...base, disposition: 'reattach', reason: 'live-on-target' }

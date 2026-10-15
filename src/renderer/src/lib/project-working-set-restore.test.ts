@@ -299,4 +299,45 @@ describe('restoreWorkingSet with continueOn', () => {
       read: { status: 'missing' }
     })
   })
+
+  it('plans an unverified host as a blocked restore with the table and applies nothing', async () => {
+    for (const hostAvailability of [undefined, () => 'unknown' as const]) {
+      const { store, deps, request } = setupContinue({ hostAvailability })
+      const outcome = await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)
+      expect(outcome).toMatchObject({
+        status: 'planned',
+        applied: { status: 'refused', blockers: ['host-unavailable'] }
+      })
+      if (outcome.status !== 'planned' || !('panes' in outcome)) {
+        throw new Error('expected a continue outcome with a pane table')
+      }
+      expect(outcome.panes.length).toBeGreaterThan(0)
+      expect(outcome.panes.every((pane) => pane.reason === 'host-unverified')).toBe(true)
+      expect(store.getState().tabsByWorktree[TARGET_OWNER]).toBeUndefined()
+    }
+  })
+
+  it('keeps a host that is known down blocked, and applies once it is known available', async () => {
+    const down = setupContinue({ hostAvailability: () => 'unavailable' })
+    const refused = await restoreWorkingSet({ ...down.request, continueOn: continueOn() }, down.deps)
+    expect(refused).toMatchObject({ applied: { status: 'refused', blockers: ['host-unavailable'] } })
+    expect(down.store.getState().tabsByWorktree[TARGET_OWNER]).toBeUndefined()
+
+    const up = setupContinue({ hostAvailability: () => 'available' })
+    const applied = await restoreWorkingSet({ ...up.request, continueOn: continueOn() }, up.deps)
+    expect(applied).toMatchObject({ applied: { status: 'applied' } })
+    expect(up.store.getState().tabsByWorktree[TARGET_OWNER]).toHaveLength(5)
+  })
+
+  it('asks the availability reader about the target setup, not the source', async () => {
+    const asked: string[] = []
+    const { deps, request } = setupContinue({
+      hostAvailability: (target) => {
+        asked.push(target.id)
+        return 'available'
+      }
+    })
+    await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)
+    expect(asked).toEqual(['setup-gex'])
+  })
 })

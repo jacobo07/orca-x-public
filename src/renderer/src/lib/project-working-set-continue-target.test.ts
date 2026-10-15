@@ -3,7 +3,12 @@ import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { WorkingSetLocation } from '../../../shared/project-working-set-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { makeWorktree } from '../store/slices/store-test-helpers'
-import { resolveContinueTarget, type ContinueTargetInput } from './project-working-set-continue-target'
+import type { SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
+import {
+  hostAvailabilityFromSshState,
+  resolveContinueTarget,
+  type ContinueTargetInput
+} from './project-working-set-continue-target'
 
 function setup(over: Partial<ProjectHostSetup>): ProjectHostSetup {
   return {
@@ -153,5 +158,49 @@ describe('resolveContinueTarget', () => {
         input({ sourceLocation: { ...SOURCE_LOCATION, worktreePath: 'D:/elsewhere' } })
       )
     ).toEqual({ status: 'refused', reason: 'location-outside-source-setup' })
+  })
+})
+
+describe('hostAvailabilityFromSshState', () => {
+  const sshSetup = setup({ id: 'setup-gex', hostId: 'ssh:gex44' })
+  const states = (status: SshConnectionStatus): Map<string, SshConnectionState> =>
+    new Map([['gex44', { targetId: 'gex44', status, error: null, reconnectAttempt: 0 }]])
+
+  // A record keyed by the status union: adding a status without a row here fails to compile.
+  const EXPECTED: Record<SshConnectionStatus, 'available' | 'unavailable' | 'unknown'> = {
+    connected: 'available',
+    disconnected: 'unavailable',
+    'auth-failed': 'unavailable',
+    'reconnection-failed': 'unavailable',
+    error: 'unavailable',
+    connecting: 'unknown',
+    'deploying-relay': 'unknown',
+    reconnecting: 'unknown'
+  }
+
+  it.each(Object.entries(EXPECTED) as [SshConnectionStatus, string][])(
+    'reads %s as %s',
+    (status, expected) => {
+      expect(hostAvailabilityFromSshState(sshSetup, states(status))).toBe(expected)
+    }
+  )
+
+  it('reads a missing state entry as unknown, never as available or unavailable', () => {
+    expect(hostAvailabilityFromSshState(sshSetup, new Map())).toBe('unknown')
+    expect(hostAvailabilityFromSshState(sshSetup, states('connected'))).toBe('available')
+  })
+
+  it('reads a local host as available and a runtime or runtime-owned host as unknown', () => {
+    expect(hostAvailabilityFromSshState(setup({ hostId: 'local' }), new Map())).toBe('available')
+    expect(hostAvailabilityFromSshState(setup({ hostId: 'runtime:env-1' }), states('connected'))).toBe(
+      'unknown'
+    )
+    const owned = new Map([
+      [
+        'runtime-ssh-1',
+        { targetId: 'runtime-ssh-1', status: 'connected' as const, error: null, reconnectAttempt: 0 }
+      ]
+    ])
+    expect(hostAvailabilityFromSshState(setup({ hostId: 'ssh:runtime-ssh-1' }), owned)).toBe('unknown')
   })
 })

@@ -15,6 +15,7 @@ import {
   type HostTranslationRequest
 } from '../../../shared/project-working-set-host-translation'
 import type { ProjectHostSetup } from '../../../shared/project-types'
+import { hostAvailabilityFromSshState } from './project-working-set-continue-target'
 import {
   planWorkingSetRestore,
   type RestorePlanTarget,
@@ -93,7 +94,9 @@ function defaultDeps(): WorkingSetRestoreDeps {
     bridge: window.api.workingSet,
     readPresence: (request) => window.api.agentStatus.readLivePresence(request),
     now: () => Date.now(),
-    newId: () => crypto.randomUUID()
+    newId: () => crypto.randomUUID(),
+    hostAvailability: (target) =>
+      hostAvailabilityFromSshState(target, useAppStore.getState().sshConnectionStates)
   }
 }
 
@@ -188,6 +191,7 @@ export async function previewWorkingSetRestore(
 function planContinueNow(
   manifest: ProjectWorkingSetManifest,
   continueOn: HostTranslationRequest,
+  hostAvailability: RestorePlanTarget['hostAvailability'],
   facts: {
     evidence: WorkingSetRestoreEvidence | null
     presence: Record<string, LiveAgentSessionPresenceWireKind>
@@ -201,9 +205,7 @@ function planContinueNow(
     presence: facts.presence,
     target: {
       openTabCount: countWorkspaceOpenTabs(deps.store.getState(), continueOn.targetOwnerKey),
-      hostAvailability: continueOn.targetSetup
-        ? (deps.hostAvailability?.(continueOn.targetSetup) ?? 'unknown')
-        : 'unknown'
+      hostAvailability
     },
     newTabId: deps.newId
   })
@@ -238,20 +240,35 @@ export async function restoreWorkingSet(
   )
   // No await from here: the plan's view of the workspace is the one the replace acts on.
   if (continueOn) {
-    const continued = planContinueNow(facts.manifest, continueOn, facts, request, deps)
+    const hostAvailability = continueOn.targetSetup
+      ? (deps.hostAvailability?.(continueOn.targetSetup) ?? 'unknown')
+      : 'unknown'
+    const continued = planContinueNow(
+      facts.manifest,
+      continueOn,
+      hostAvailability,
+      facts,
+      request,
+      deps
+    )
     if (continued.kind === 'refused') {
       return { status: 'continue-refused', reason: continued.reason }
     }
-    return {
-      status: 'planned',
-      plan: continued.plan,
-      panes: continued.panes,
-      applied: applyWorkingSetRestorePlan(continued.plan, {
-        store: deps.store,
-        now: deps.now,
-        newId: deps.newId
-      })
-    }
+    // Why refuse on unknown too: the planner only blocks a host known down, and nothing is promised on a guess.
+    const applied: WorkingSetApplyResult =
+      hostAvailability === 'available'
+        ? applyWorkingSetRestorePlan(continued.plan, {
+            store: deps.store,
+            now: deps.now,
+            newId: deps.newId
+          })
+        : {
+            status: 'refused',
+            blockers: continued.plan.blockers.includes('host-unavailable')
+              ? continued.plan.blockers
+              : [...continued.plan.blockers, 'host-unavailable']
+          }
+    return { status: 'planned', plan: continued.plan, panes: continued.panes, applied }
   }
   const plan = planNow(facts.manifest, facts, request, deps)
   return {

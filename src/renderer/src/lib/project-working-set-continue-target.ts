@@ -3,7 +3,10 @@ import {
   type HostTranslationRefusal,
   type HostTranslationRequest
 } from '../../../shared/project-working-set-host-translation'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { RestorePlanTarget } from '../../../shared/project-working-set-restore-plan'
+import type { SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
 import type { WorkingSetScopeKey } from '../../../shared/project-working-set-store-types'
 import {
   PROJECT_WORKING_SET_MANIFEST_VERSION,
@@ -95,4 +98,42 @@ export function resolveContinueTarget(input: ContinueTargetInput): ContinueTarge
       targetOwnerKey: matches[0].id
     }
   }
+}
+
+/** A connection in progress is not yet a fact, so it reads unknown rather than down or up. */
+function availabilityOfSshStatus(status: SshConnectionStatus): RestorePlanTarget['hostAvailability'] {
+  switch (status) {
+    case 'connected':
+      return 'available'
+    case 'disconnected':
+    case 'auth-failed':
+    case 'reconnection-failed':
+    case 'error':
+      return 'unavailable'
+    case 'connecting':
+    case 'deploying-relay':
+    case 'reconnecting':
+      return 'unknown'
+    default: {
+      const unreachable: never = status
+      return unreachable
+    }
+  }
+}
+
+/** Reachability of a continue target, read from the SSH connection state the store already holds. */
+export function hostAvailabilityFromSshState(
+  setup: ProjectHostSetup,
+  states: ReadonlyMap<string, SshConnectionState>
+): RestorePlanTarget['hostAvailability'] {
+  const host = parseExecutionHostId(setup.hostId)
+  if (host?.kind === 'local') {
+    return 'available'
+  }
+  // Why unknown: a runtime owns its own transport and a runtime-owned SSH target is not a user host.
+  if (host?.kind !== 'ssh' || isRuntimeOwnedSshTargetId(host.targetId)) {
+    return 'unknown'
+  }
+  const state = states.get(host.targetId)
+  return state ? availabilityOfSshStatus(state.status) : 'unknown'
 }

@@ -196,14 +196,37 @@ describe('planContinueOnHost', () => {
     expect(dispositions(r)).toContain('tab-a:unavailable:live-elsewhere')
   })
 
-  it('makes every pane unavailable when the target host is down or unmeasured', () => {
+  it('makes every pane unavailable with host-unavailable when the target host is down', () => {
     const m = representativeManifest()
-    for (const availability of ['unavailable', 'unknown'] as const) {
-      const r = planContinueOnHost(m, request(), planInputs(m, { availability }))
-      expect(r.kind === 'planned' && r.panes.every((p) => p.reason === 'host-unavailable')).toBe(true)
-    }
     const down = planContinueOnHost(m, request(), planInputs(m, { availability: 'unavailable' }))
+    expect(down.kind === 'planned' && down.panes.every((p) => p.reason === 'host-unavailable')).toBe(true)
     expect(down.kind === 'planned' && down.plan.blockers).toContain('host-unavailable')
+  })
+
+  it('makes every pane unavailable with host-unverified when the target host is unmeasured', () => {
+    const m = representativeManifest()
+    const r = planContinueOnHost(m, request(), planInputs(m, { availability: 'unknown' }))
+    expect(r.kind === 'planned' && r.panes.length).toBeGreaterThan(0)
+    expect(
+      r.kind === 'planned' &&
+        r.panes.every((p) => p.disposition === 'unavailable' && p.reason === 'host-unverified')
+    ).toBe(true)
+  })
+
+  it('computes all four dispositions when the host is available (control for the unknown case)', () => {
+    const m = representativeManifest()
+    const r = planContinueOnHost(
+      m,
+      request(),
+      planInputs(m, {
+        presence: { [`tab-a:${leafId(1)}`]: 'live-here', [`tab-b:${leafId(2)}`]: 'live-elsewhere' }
+      })
+    )
+    const d = r.kind === 'planned' ? new Set(r.panes.map((p) => p.disposition)) : new Set()
+    expect([...d].sort()).toEqual(['reattach', 'restart', 'unavailable'])
+    const resumed = planContinueOnHost(m, request(), planInputs(m))
+    expect(resumed.kind === 'planned' && resumed.panes.some((p) => p.disposition === 'resume')).toBe(true)
+    expect(resumed.kind === 'planned' && resumed.panes.some((p) => p.reason === 'host-unverified')).toBe(false)
   })
 
   it('passes a refusal through untouched', () => {
