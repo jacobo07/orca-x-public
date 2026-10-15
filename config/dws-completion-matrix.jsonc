@@ -2029,9 +2029,9 @@
       "row": "HF Logical workspace identity without a remote",
       "owner": "project-host-setup-projection",
       "done": "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 3",
+      "measuredIn": "dwsrb live queue (laptop -> GEX44)",
       "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
@@ -2128,9 +2128,27 @@
           "kind": "commit",
           "sha": "314ca8aa8b0c",
           "note": "both projection call sites agree on relations"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-replica-pair.spec.ts",
+          "note": "relay-compare-result leg RAN and PASSED live 2026-10-15 (laptop -> GEX44): a remote-less local replica and the GEX44 replica grouped into one Project by root, and the diverged pair's relation printed by the CLI.",
+          "provedBy": [
+            "a remote-less repo on two hosts derives one Project; fork collisions surfaced, never merged"
+          ]
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-15-rows-60-63-evidence.md",
+          "note": "plane, command, observed steps and not-covered list for the 2026-10-15 live legs."
+        },
+        {
+          "kind": "commit",
+          "sha": "b6bf94d37",
+          "note": "live run record: HWF63_COMPARE_LIVE PASS diverged +1/-2 over the grouped pair"
         }
       ],
-      "reason": "READY_FOR_LIVE: grouped-relation-result — dwsrb phase 3 (2026-10-15): the ledger line for row 60 was stale. Re-measured at HEAD: both production callers of deriveReplicaTopology (the renderer selector and the main-side client projection) pass relations (plans 02-03 and 02-08), and 314ca8aa8 pins both call sites to the same literal relation cases (same, ahead, behind, diverged, unrelated, unknown) so a diverged pair stays grouped and visible and an unknown comparison stays unverified. The anchor setup of a pair still reads unverified. NOT RUN: a live grouped relation produced by the app over a real SSH relay. Command: `npx playwright test tests/e2e/hwf-two-host-grouped-relation.spec.ts --config tests/playwright.config.ts --project=electron-headless` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_P17_PATH (P17_REPLICA_PATH from seed-p17). Expected: HWF60_PIN equals the run fingerprint and HWF60_REMOTE_AHEAD=2; that spec proves transport and ahead 2 only, so the relation sentence in Settings or orca project setups has no committed spec yet. X05 stays PROPOSE CLOSE."
+      "reason": "dwsrb live queue (2026-10-15, laptop -> GEX44, REAL-TWO-HOST): the relay-compare-result leg of tests/e2e/hwf-two-host-replica-pair.spec.ts grouped a remote-less local replica (seed-local-p16: git init, no remote, plus a host commit) and the GEX44 replica into one Project by root identity (waitForRootGrouping), and `orca project replica-compare` printed the pair as `diverged +1/-2` with exit 0: a fork on two hosts stays one Project with its relation surfaced, never merged. The grouped-relation spec also passed that day (pin plus remote ahead 2). Both production callers of deriveReplicaTopology pass relations, pinned by 314ca8aa8; same-host fork collision records were observed in phase 16 Run 6 and are covered hermetically. Caveats: the run log stayed on the laptop and the values come from commit b6bf94d37 (docs/dws/live-2026-10-15-rows-60-63-evidence.md); the rendered Settings relation row is row 62 and was not read; the anchor setup of a pair still reads unverified. X05 (closing the unit branches) stays the Owner's decision."
     },
     {
       "id": 61,
@@ -2318,9 +2336,9 @@
       "row": "HF Cross-host comparison transport",
       "owner": "relay git + bundle",
       "done": "ancestry decided on transferred objects (bundle verified); relay capability-probed",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 2",
+      "measuredIn": "dwsrb live queue (laptop -> GEX44)",
       "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
@@ -2402,9 +2420,27 @@
           "kind": "commit",
           "sha": "fa2e1f015872",
           "note": "two-host live legs for replica compare and sync failures, NOT RUN"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-15-rows-60-63-evidence.md",
+          "note": "plane, command, observed steps and not-covered list for the 2026-10-15 live relay-compare-result leg.",
+          "provedBy": [
+            "ancestry decided on transferred objects (bundle verified); relay capability-probed"
+          ]
+        },
+        {
+          "kind": "commit",
+          "sha": "b6bf94d37",
+          "note": "relay-compare-result RAN and PASSED live: diverged +1/-2 exit 0, then unverified (host-unreachable) exit 1"
+        },
+        {
+          "kind": "commit",
+          "sha": "8f95517ee",
+          "note": "provisioner over ssh stdin, so two-host legs reach create from Windows"
         }
       ],
-      "reason": "READY_FOR_LIVE: relay-compare-result — dwsrb phase 2 (2026-10-15): compareWithSshRelayReplica now has callers through the pair service (orca project replica-compare, the replicaPair IPC, the Settings Compare action) and reads remote worktree facts through sync.replicaFacts behind the sync.v1 gate; hermetic suites are green. The transport precondition ran live 2026-10-14 (X08: pin plus remote ahead 2); the relay compare RESULT leg has NOT RUN. Command: `npx playwright test tests/e2e/hwf-two-host-replica-pair.spec.ts --config tests/playwright.config.ts --project=electron-headless -g relay-compare-result` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_P17_PATH, ORCA_HWF_LOCAL_PORT. Expected: HWF63_REMOTE_AHEAD=2, then HWF63_COMPARE_LIVE PASS with the setup/host line \"behind 2\" and exit 0, then with the carrier down \"unverified (host-unreachable)\" and exit 1. One comparison path remains: compareReplicaViaRelay at exec/row-63@e38da01d3 is superseded by the single path (compareWithSshRelayReplica through the pair service) pending the Owner's decision on packet X06."
+      "reason": "dwsrb live queue (2026-10-15, laptop -> GEX44, REAL-TWO-HOST): the relay-compare-result leg of tests/e2e/hwf-two-host-replica-pair.spec.ts RAN and PASSED. With the remote replica measured two ahead of the seed root and the local replica one ahead, `orca project replica-compare` printed `diverged +1/-2` for the SSH setup and exited 0; with the carrier killed it printed `unverified (host-unreachable)` and exited 1. That path goes through the pair service and compareWithSshRelayReplica: relay capability probe, bundle export, sha256-checked chunked pull, bundle verify, fetch, ancestry decided on the received objects. The expected word now comes from both measured sides (b6bf94d37), since seed-local-p16 adds a host commit and the earlier \"behind 2\" was an assumption. The transport precondition ran live 2026-10-14 (X08). Caveats: the run log stayed on the laptop and the values come from commit b6bf94d37 (docs/dws/live-2026-10-15-rows-60-63-evidence.md); old relays without sync.v1 read relay-too-old (row 74). X06 (superseding compareReplicaViaRelay at exec/row-63@e38da01d3) stays the Owner's decision."
     },
     {
       "id": 64,

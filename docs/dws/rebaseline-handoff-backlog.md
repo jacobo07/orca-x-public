@@ -9,9 +9,9 @@ Written on the laptop for a session on the other PC. Branches on GitHub (`jacobo
 
 ## State
 
-- Matrix: 22 of 76 rows PASS (`node config/scripts/check-dws-completeness.mjs`). Of the 54 non-PASS rows,
+- Matrix: 24 of 76 rows PASS after rows 60 and 63 were restated on the desktop PC (was 22) (`node config/scripts/check-dws-completeness.mjs`). Of the 52 non-PASS rows,
   21 are BLOCKED_EXTERNAL (12 UWCP control verbs, 2 UWCP lease store, rows 17 and 44 UWCP, 4 CPP write
-  authority: 52 53 54 76, row 45 orca-svc login), 10 are READY_FOR_LIVE, about 23 are phases 5-10 work.
+  authority: 52 53 54 76, row 45 orca-svc login), 9 are READY_FOR_LIVE (24 34 59 61 62 65 70 73 74), about 22 are phases 5-10 work.
 - GSD phases: 1-3 done, phase 4 executed and reviewed, its verifier never wrote `04-VERIFICATION.md`.
 - Ralph mission `m-07a78fbae3c7` on GEX44 is under a cost-breaker hold (Owner kept it, option 1):
   processed 405.7M vs 2 x estimate 10.2M. Goal `dws-exec` has 40.6M left on paper; the worker session's
@@ -29,8 +29,8 @@ Driver per leg: `new-root`, `create`, `seed-p16`, `seed-local-p16`, `fetch-key`,
 
 | Row | Spec / grep | Result 2026-10-15 | Next |
 |---|---|---|---|
-| 63 | replica-pair `-g relay-compare-result`, phase 17, seed-p17 | PASS: `diverged +1/-2` live, `unverified (host-unreachable)` down | Restate the row |
-| 60 | grouped-relation, phase 17 | PASS (transport + ahead 2); the row-63 run is a live grouped relation | Restate the row |
+| 63 | replica-pair `-g relay-compare-result`, phase 17, seed-p17 | PASS: `diverged +1/-2` live, `unverified (host-unreachable)` down | Done: row PASS (`docs/dws/live-2026-10-15-rows-60-63-evidence.md`) |
+| 60 | grouped-relation, phase 17 | PASS (transport + ahead 2); the row-63 run is a live grouped relation | Done: row PASS (same evidence file) |
 | 73 | host-loss, phase 23, probe from remote-first `-g "probes what the two clients expose"` | Test 1 PASS (relay pid, shell pid, no duplicate, local continues). Test 2 failed only on `emitterAlive`: the emitter's own 120 s tail ended before the check | Rerun with the emitter fix (unverified) |
 | 59 | remote-first, same probe | NOT RUN | Run after 73 |
 | 74 | mixed-relay, phase 23, `ORCA_HWF_P23_RELAY_PATH` = old relay build (commit `5de29754c5`) | App correct (`unverified (relay-too-old)`), but the instrument is blind: the relay never logs request methods, so `"method":` counts are 0 on any relay | Build an instrument that sees relay methods |
