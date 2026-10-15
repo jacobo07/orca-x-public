@@ -161,6 +161,22 @@ describe('parseArgs', () => {
 
     expect(parsed.flags.get('workspace')).toBe('new')
   })
+
+  it('reads --apply as a boolean so it never consumes the next token', () => {
+    const parsed = parseArgs([
+      'project',
+      'replica-capsule-restore',
+      '--setup',
+      's',
+      '--capsule',
+      'refs/orca/capsules/x',
+      '--apply',
+      'trailing'
+    ])
+
+    expect(parsed.flags.get('apply')).toBe(true)
+    expect(parsed.flags.get('capsule')).toBe('refs/orca/capsules/x')
+  })
 })
 
 describe('command aliases', () => {

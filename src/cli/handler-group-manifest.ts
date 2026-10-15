@@ -63,7 +63,12 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'project-replica',
-    keys: ['project replica-compare'],
+    keys: [
+      'project replica-compare',
+      'project replica-capsule',
+      'project replica-capsule-list',
+      'project replica-capsule-restore'
+    ],
     load: async () => (await import('./handlers/project-replica.js')).PROJECT_REPLICA_HANDLERS
   },
   {

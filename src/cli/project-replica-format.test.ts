@@ -8,7 +8,13 @@ import {
   type TipFact,
   type WorktreeFact
 } from '../shared/workspace-replica-state'
-import { formatReplicaCompare, formatReplicaRelation } from './project-replica-format'
+import {
+  formatReplicaCapsuleCreate,
+  formatReplicaCapsuleList,
+  formatReplicaCapsuleRestore,
+  formatReplicaCompare,
+  formatReplicaRelation
+} from './project-replica-format'
 
 const SHA_A = 'a'.repeat(40)
 const SHA_B = 'b'.repeat(40)
@@ -151,5 +157,135 @@ describe('formatReplicaCompare: refusals, absences and not-found', () => {
   it('keeps the unavailable text pointing at the desktop runtime', () => {
     const { text } = formatReplicaCompare({ status: 'unavailable', reason: 'no-replica-service' })
     expect(text).toContain("desktop app's runtime")
+  })
+})
+
+describe('capsule formatters', () => {
+  const REF = `refs/orca/capsules/${'d'.repeat(40)}`
+  const base = 'b'.repeat(40)
+  const created = (extra: { alreadyExisted?: boolean; omitted?: number }) =>
+    formatReplicaCapsuleCreate(
+      {
+        status: 'ok',
+        outcome: {
+          kind: 'created',
+          ref: REF,
+          sha: 'd'.repeat(40),
+          base,
+          alreadyExisted: extra.alreadyExisted ?? false,
+          omissions: Array.from({ length: extra.omitted ?? 0 }, (_, i) => ({
+            path: `f${i}`,
+            reason: 'unreadable'
+          })) as never,
+          partial: (extra.omitted ?? 0) > 0
+        }
+      },
+      's'
+    )
+
+  it('create: created prints the ref and base; already existed and partial add lines; exit 0', () => {
+    expect(created({})).toEqual({ text: `created ${REF} (base bbbbbbb)`, exitCode: 0 })
+    const more = created({ alreadyExisted: true, omitted: 2 })
+    expect(more.text).toContain('already existed')
+    expect(more.text).toContain('partial: 2 paths omitted')
+    expect(more.exitCode).toBe(0)
+  })
+
+  it('create: clean prints nothing-to-capture and exits 0; every other status exits 1', () => {
+    expect(formatReplicaCapsuleCreate({ status: 'ok', outcome: { kind: 'clean' } }, 's')).toEqual({
+      text: 'nothing to capture: the worktree is clean',
+      exitCode: 0
+    })
+    for (const result of [
+      { status: 'refused', reason: 'worktree-busy' },
+      { status: 'unavailable', reason: 'no-replica-service' },
+      { status: 'not-found', reason: 'unknown-setup' }
+    ] as const) {
+      expect(formatReplicaCapsuleCreate(result, 's').exitCode).toBe(1)
+    }
+  })
+
+  it('create: a remote setup names the local-setup requirement and the setup', () => {
+    const { text } = formatReplicaCapsuleCreate(
+      { status: 'refused', reason: 'remote-capsule-unsupported' },
+      'gex44'
+    )
+    expect(text).toContain('local setup')
+    expect(text).toContain('gex44')
+  })
+
+  it('list: one line per capsule, damaged lines exit 1, control: none damaged exits 0', () => {
+    const good = { ref: REF, sha: 'd'.repeat(40), baseTip: base, partial: true }
+    const okOnly = formatReplicaCapsuleList({ status: 'ok', capsules: [good] }, 's')
+    expect(okOnly.text).toContain(REF)
+    expect(okOnly.exitCode).toBe(0)
+    const withBad = formatReplicaCapsuleList(
+      {
+        status: 'ok',
+        capsules: [good, { ref: 'refs/orca/capsules/x', damaged: true, reason: 'r' }]
+      },
+      's'
+    )
+    expect(withBad.text.split('\n')).toHaveLength(2)
+    expect(withBad.text).toContain('damaged refs/orca/capsules/x (r)')
+    expect(withBad.exitCode).toBe(1)
+  })
+
+  it('restore: plan prints three counts and the hint, applied prints applied; both exit 0', () => {
+    const description = {
+      ref: REF,
+      sha: 'd'.repeat(40),
+      base,
+      partial: false,
+      changes: { tracked: 2, staged: 1, untracked: 3 }
+    }
+    const plan = formatReplicaCapsuleRestore(
+      { status: 'ok', outcome: { kind: 'plan', ...description } },
+      's'
+    )
+    expect(plan.text).toContain('tracked 2')
+    expect(plan.text).toContain('staged 1')
+    expect(plan.text).toContain('untracked 3')
+    expect(plan.text).toContain('plan only; re-run with --apply to change the worktree')
+    expect(plan.exitCode).toBe(0)
+    const applied = formatReplicaCapsuleRestore(
+      {
+        status: 'ok',
+        outcome: {
+          kind: 'applied',
+          ...description,
+          verified: { worktree: 't', index: 'i', untracked: null },
+          warnings: ['w1']
+        }
+      },
+      's'
+    )
+    expect(applied.text).toContain('applied')
+    expect(applied.text).not.toContain('plan only')
+    expect(applied.text).toContain('w1')
+    expect(applied.exitCode).toBe(0)
+  })
+
+  it('restore: refused and failed exit 1; failed prints the recovery verbatim', () => {
+    const refused = formatReplicaCapsuleRestore(
+      { status: 'refused', reason: 'untracked-collision', detail: 'a.txt exists' },
+      's'
+    )
+    expect(refused.text).toContain('untracked-collision')
+    expect(refused.text).toContain('a.txt exists')
+    expect(refused.exitCode).toBe(1)
+    const failed = formatReplicaCapsuleRestore(
+      {
+        status: 'failed',
+        reason: 'verify-failed',
+        ref: REF,
+        detail: 'd',
+        recovery: 'R E C O V E R'
+      },
+      's'
+    )
+    expect(failed.text).toContain('R E C O V E R')
+    expect(failed.text).toContain('verify-failed')
+    expect(failed.exitCode).toBe(1)
   })
 })
