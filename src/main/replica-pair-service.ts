@@ -8,7 +8,8 @@ import {
   deriveReplicaRelation,
   isReplicaRelationHealthy,
   type ReplicaFacts,
-  type ReplicaRelation
+  type ReplicaRelation,
+  type ReplicaUnknownReason
 } from '../shared/workspace-replica-state'
 import {
   compareWithSshRelayReplica,
@@ -109,20 +110,64 @@ function viewOf(
   }
 }
 
+// Why: loaded on demand so this module stays importable without the Electron-bound SSH layer.
+const defaultGetMultiplexer: SshRelaySessionDeps['getMultiplexer'] = async (id) =>
+  (await import('./ipc/ssh')).getActiveMultiplexer(id)
+
+function unknownView(
+  setup: ProjectHostSetup,
+  anchor: ProjectHostSetup | undefined,
+  reason: ReplicaUnknownReason
+): ReplicaPairView {
+  const folder: ReplicaFacts = { kind: 'folder' }
+  const relation: ReplicaRelation = { kind: 'unknown', reason }
+  return viewOf(setup, anchor, folder, folder, relation, false)
+}
+
 export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaPairService {
   const readLocalFacts = deps.readLocalFacts ?? readLocalReplicaFacts
+  const getMultiplexer = deps.sshSession?.getMultiplexer ?? defaultGetMultiplexer
+  const lazyAnchorRead = (anchor: ProjectHostSetup): (() => Promise<LocalReplicaRead>) => {
+    let pending: Promise<LocalReplicaRead> | null = null
+    return () => {
+      pending ??= readLocalFacts({
+        setupId: anchor.id,
+        hostId: anchor.hostId,
+        path: anchor.path,
+        ...(anchor.kind ? { kind: anchor.kind } : {})
+      })
+      return pending
+    }
+  }
+  // Why: a second compare of a setup that is mid-flight joins it, so one setup never holds two relay exports.
+  const inFlight = new Map<string, Promise<ReplicaPairView>>()
 
   async function comparePair(
     setup: ProjectHostSetup,
     anchor: ProjectHostSetup | undefined,
-    anchorRead: LocalReplicaRead | null
+    readAnchor: () => Promise<LocalReplicaRead>
   ): Promise<ReplicaPairView> {
-    const parsed = parseExecutionHostId(setup.hostId)
-    if (!anchor || !anchorRead || parsed?.kind !== 'ssh') {
-      const remote = remoteFactsOf(setup, null)
-      const local: ReplicaFacts = anchorRead ? anchorFactsOf(anchorRead) : { kind: 'folder' }
-      return viewOf(setup, anchor, local, remote, { kind: 'unknown', reason: 'not-compared' }, false)
+    if (!anchor) {
+      return unknownView(setup, anchor, 'no-comparison-site')
     }
+    // Folder workspaces have no history to compare, whichever side they are on.
+    if (setup.kind === 'folder' || anchor.kind === 'folder') {
+      return unknownView(setup, anchor, 'not-a-git-repo')
+    }
+    const parsed = parseExecutionHostId(setup.hostId)
+    if (parsed?.kind === 'local') {
+      return unknownView(setup, anchor, 'no-comparison-site')
+    }
+    if (parsed?.kind !== 'ssh') {
+      return unknownView(setup, anchor, 'transport-unsupported-host')
+    }
+    const connectionId = setup.connectionId ?? parsed.targetId
+    // Why: compareWithSshRelayReplica reads a missing multiplexer as an old relay, which would mislabel an unconnected host.
+    const mux = await getMultiplexer(connectionId)
+    if (!mux || mux.isDisposed()) {
+      return unknownView(setup, anchor, 'host-unreachable')
+    }
+    const anchorRead = await readAnchor()
     const local = anchorFactsOf(anchorRead)
     const usable =
       local.kind !== 'folder' && (local.tip.kind === 'commit' || local.tip.kind === 'detached')
@@ -131,16 +176,33 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
       return viewOf(setup, anchor, local, remote, deriveReplicaRelation(local, remote), false)
     }
     const result = await compareWithSshRelayReplica({
-      connectionId: setup.connectionId ?? parsed.targetId,
+      connectionId,
       localRepoPath: anchor.path,
       remoteRepoPath: setup.path,
       hostKey: replicaHostKey(setup.hostId),
       ...(deps.now ? { now: deps.now } : {}),
-      ...(deps.sshSession ? { deps: deps.sshSession } : {})
+      deps: { ...deps.sshSession, getMultiplexer: () => mux }
     })
     const remote = remoteFactsOf(setup, result)
     const relation = foldPair(local, anchorRead.shallow, remote, result)
     return viewOf(setup, anchor, local, remote, relation, result.evidence !== null)
+  }
+
+  function pairFor(
+    setup: ProjectHostSetup,
+    anchor: ProjectHostSetup | undefined,
+    readAnchor: () => Promise<LocalReplicaRead>
+  ): Promise<ReplicaPairView> {
+    const joined = inFlight.get(setup.id)
+    if (joined) {
+      return joined
+    }
+    const started = comparePair(setup, anchor, readAnchor)
+      // One setup's failure is that setup's unknown; it never rejects the project call.
+      .catch((): ReplicaPairView => unknownView(setup, anchor, 'transfer-interrupted'))
+      .finally(() => inFlight.delete(setup.id))
+    inFlight.set(setup.id, started)
+    return started
   }
 
   return {
@@ -154,16 +216,9 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
       }
       const anchor = pickAnchor(setups)
       const targets = setups.filter((s) => s.id !== anchor?.id && (setupId === undefined || s.id === setupId))
-      const anchorRead =
-        anchor && targets.length > 0
-          ? await readLocalFacts({
-              setupId: anchor.id,
-              hostId: anchor.hostId,
-              path: anchor.path,
-              ...(anchor.kind ? { kind: anchor.kind } : {})
-            })
-          : null
-      const pairs = await Promise.all(targets.map((s) => comparePair(s, anchor, anchorRead)))
+      // Read lazily and once per call: arms that never reach the anchor's history spend no git.
+      const readAnchor = anchor ? lazyAnchorRead(anchor) : () => Promise.reject(new Error('no anchor setup'))
+      const pairs = await Promise.all(targets.map((s) => pairFor(s, anchor, readAnchor)))
       return { status: 'ok', pairs }
     }
   }

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -28,6 +28,9 @@ let remote: string
 let d: ReturnType<typeof createMockDispatcher>
 let h: GitReplicaHandler
 let calls: string[]
+let log: string[]
+let scratch: string
+const savedTmp = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP }
 
 const setup = (over: Partial<ProjectHostSetup> & Pick<ProjectHostSetup, 'id' | 'hostId' | 'path'>): ProjectHostSetup => ({
   projectId: 'p1',
@@ -40,26 +43,36 @@ const setup = (over: Partial<ProjectHostSetup> & Pick<ProjectHostSetup, 'id' | '
   ...over
 })
 
-function sshSession(capabilities: string[]) {
+type SessionHooks = {
+  live?: (connectionId: string) => boolean
+  beforeRequest?: (connectionId: string, method: string) => Promise<void> | void
+}
+
+function sshSession(capabilities: string[], hooks: SessionHooks = {}) {
   return {
-    getMultiplexer: () => ({
-      isDisposed: () => false,
-      request: async (method: string, params?: Record<string, unknown>) => {
-        calls.push(method)
-        if (method === 'relay.status') {
-          return { capabilities }
-        }
-        return d.callRequest(method, params ?? {})
-      }
-    }),
+    getMultiplexer: (connectionId: string) =>
+      hooks.live && !hooks.live(connectionId)
+        ? undefined
+        : {
+            isDisposed: () => false,
+            request: async (method: string, params?: Record<string, unknown>) => {
+              calls.push(method)
+              log.push(`${connectionId}:${method}`)
+              await hooks.beforeRequest?.(connectionId, method)
+              if (method === 'relay.status') {
+                return { capabilities }
+              }
+              return d.callRequest(method, params ?? {})
+            }
+          },
     getGeneration: () => 1
   }
 }
 
-function service(capabilities: string[], setups: ProjectHostSetup[]) {
+function service(capabilities: string[], setups: ProjectHostSetup[], hooks?: SessionHooks) {
   return createReplicaPairService({
     listProjectHostSetups: () => setups,
-    sshSession: sshSession(capabilities),
+    sshSession: sshSession(capabilities, hooks),
     now: () => 7
   })
 }
@@ -70,7 +83,12 @@ const sshSetup = () => setup({ id: 'box', hostId: 'ssh:gex44', connectionId: 'ge
 beforeEach(() => {
   resetSshRelayCapabilityCacheForTests()
   calls = []
+  log = []
   root = mkdtempSync(join(tmpdir(), 'rps-'))
+  // Why: compare stages bundles under os.tmpdir(); a private one keeps parallel suites that list the shared one honest.
+  scratch = join(root, 'scratch')
+  mkdirSync(scratch)
+  process.env.TMPDIR = process.env.TMP = process.env.TEMP = scratch
   local = join(root, 'local')
   remote = join(root, 'remote')
   git(root, 'init', '-q', '-b', 'main', local)
@@ -80,6 +98,13 @@ beforeEach(() => {
   h = new GitReplicaHandler(d as unknown as RelayDispatcher)
 })
 afterEach(async () => {
+  for (const [key, value] of Object.entries(savedTmp)) {
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
   await h.dispose()
   rmSync(root, { recursive: true, force: true })
 })
@@ -108,6 +133,7 @@ describe('createReplicaPairService.compare over the real relay handler', () => {
     })
     expect(pair.relation).toMatchObject({ observedTips: [git(local, 'rev-parse', 'HEAD'), git(remote, 'rev-parse', 'HEAD')] })
     expect(pair.remoteTip).toBe(git(remote, 'rev-parse', 'HEAD'))
+    expect(readdirSync(scratch).filter((n) => n.startsWith('orca-replica-recv-'))).toEqual([])
   })
 
   it('the setup behind the anchor reads as the anchor ahead', async () => {
@@ -182,5 +208,151 @@ describe('replicaHostKey', () => {
   it('matches the ref-safe pattern', () => {
     expect(replicaHostKey('ssh:gex44')).toMatch(/^[A-Za-z0-9._-]+$/)
     expect(replicaHostKey('ssh:we%20ird host/../x')).toMatch(/^[A-Za-z0-9._-]+$/)
+  })
+})
+
+describe('failure arms and single-flight', () => {
+  const exportsOf = (connectionId: string) => log.filter((e) => e === `${connectionId}:git.replicaBundleExport`)
+  const byId = (pairs: Awaited<ReturnType<ReturnType<typeof service>['compare']>>) => {
+    expect(pairs.status).toBe('ok')
+    return new Map(pairs.status === 'ok' ? pairs.pairs.map((p) => [p.setupId, p]) : [])
+  }
+
+  it('a host with no live multiplexer is host-unreachable with no relay request; control: the connected host compares', async () => {
+    commit(remote, 'r1')
+    const up = setup({ id: 'up', hostId: 'ssh:up', connectionId: 'up', path: remote, createdAt: 2 })
+    const down = setup({ id: 'down', hostId: 'ssh:down', connectionId: 'down', path: remote, createdAt: 3 })
+    const res = await service(['git.replicaBundle'], [localSetup(), up, down], { live: (id) => id === 'up' }).compare({
+      projectId: 'p1'
+    })
+    const pairs = byId(res)
+    expect(pairs.get('down')?.relation).toEqual({ kind: 'unknown', reason: 'host-unreachable' })
+    expect(pairs.get('down')?.healthy).toBe(false)
+    expect(log.filter((e) => e.startsWith('down:'))).toEqual([])
+    expect(pairs.get('up')?.relation.kind).toBe('behind')
+    expect(exportsOf('up')).toHaveLength(1)
+  })
+
+  it('a runtime-owned host is transport-unsupported-host and makes no relay request; control: ssh compares', async () => {
+    const rt = setup({ id: 'rt', hostId: 'runtime:env1', path: remote, createdAt: 2 })
+    const pairs = byId(await service(['git.replicaBundle'], [localSetup(), rt, sshSetup()]).compare({ projectId: 'p1' }))
+    expect(pairs.get('rt')?.relation).toEqual({ kind: 'unknown', reason: 'transport-unsupported-host' })
+    expect(pairs.get('box')?.relation.kind).toBe('same')
+    expect(log.every((e) => e.startsWith('gex44:'))).toBe(true)
+  })
+
+  it('a project with no local setup is no-comparison-site for every setup; control: with an anchor it compares', async () => {
+    const a = setup({ id: 'a', hostId: 'ssh:a', connectionId: 'a', path: remote, createdAt: 1 })
+    const b = setup({ id: 'b', hostId: 'ssh:b', connectionId: 'b', path: remote, createdAt: 2 })
+    const pairs = byId(await service(['git.replicaBundle'], [a, b]).compare({ projectId: 'p1' }))
+    expect([...pairs.values()].map((p) => p.relation)).toEqual([
+      { kind: 'unknown', reason: 'no-comparison-site' },
+      { kind: 'unknown', reason: 'no-comparison-site' }
+    ])
+    expect(pairs.get('a')?.anchorSetupId).toBeNull()
+    expect(log).toEqual([])
+    const withAnchor = byId(await service(['git.replicaBundle'], [localSetup(), a, b]).compare({ projectId: 'p1' }))
+    expect(withAnchor.get('a')?.relation.kind).toBe('same')
+  })
+
+  it('a folder setup on either side is not-a-git-repo with no relay request; control: git setups compare', async () => {
+    const folderRemote = setup({ id: 'fr', hostId: 'ssh:gex44', connectionId: 'gex44', path: remote, kind: 'folder', createdAt: 2 })
+    const remoteSide = byId(await service(['git.replicaBundle'], [localSetup(), folderRemote]).compare({ projectId: 'p1' }))
+    expect(remoteSide.get('fr')?.relation).toEqual({ kind: 'unknown', reason: 'not-a-git-repo' })
+    const folderAnchor = setup({ id: 'anchor', hostId: 'local', path: local, kind: 'folder', createdAt: 1 })
+    const anchorSide = byId(await service(['git.replicaBundle'], [folderAnchor, sshSetup()]).compare({ projectId: 'p1' }))
+    expect(anchorSide.get('box')?.relation).toEqual({ kind: 'unknown', reason: 'not-a-git-repo' })
+    expect(log).toEqual([])
+    const control = byId(await service(['git.replicaBundle'], [localSetup(), sshSetup()]).compare({ projectId: 'p1' }))
+    expect(control.get('box')?.relation.kind).toBe('same')
+  })
+
+  it('an anchor path that is not a repository reads not-a-git-repo; an unborn anchor reads unborn', async () => {
+    const plain = join(root, 'plain')
+    git(root, 'init', '-q', '-b', 'main', plain)
+    const unborn = byId(
+      await service(['git.replicaBundle'], [setup({ id: 'anchor', hostId: 'local', path: plain }), sshSetup()]).compare({ projectId: 'p1' })
+    )
+    expect(unborn.get('box')?.relation).toEqual({ kind: 'unknown', reason: 'unborn' })
+    rmSync(join(plain, '.git'), { recursive: true, force: true })
+    const notRepo = byId(
+      await service(['git.replicaBundle'], [setup({ id: 'anchor', hostId: 'local', path: plain }), sshSetup()]).compare({ projectId: 'p1' })
+    )
+    expect(notRepo.get('box')?.relation).toEqual({ kind: 'unknown', reason: 'not-a-git-repo' })
+    expect(log).toEqual([])
+  })
+
+  it('two concurrent compares of one setup make one relay export; control: sequential compares each export', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const svc = service(['git.replicaBundle'], [localSetup(), sshSetup()], {
+      beforeRequest: (_id, method) => (method === 'git.replicaBundleExport' ? gate : undefined)
+    })
+    const first = svc.compare({ projectId: 'p1' })
+    const second = svc.compare({ projectId: 'p1' })
+    // Let both reach the gated export before releasing it.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    release()
+    const [a, b] = await Promise.all([first, second])
+    expect(exportsOf('gex44')).toHaveLength(1)
+    expect(a).toEqual(b)
+
+    log = []
+    resetSshRelayCapabilityCacheForTests()
+    const seq = service(['git.replicaBundle'], [localSetup(), sshSetup()])
+    await seq.compare({ projectId: 'p1' })
+    await seq.compare({ projectId: 'p1' })
+    expect(exportsOf('gex44')).toHaveLength(2)
+  })
+
+  it('two different setups compare independently', async () => {
+    const other = join(root, 'other')
+    git(root, 'clone', '-q', local, other)
+    commit(other, 'o1')
+    const second = setup({ id: 'box2', hostId: 'ssh:other', connectionId: 'other', path: other, createdAt: 3 })
+    const pairs = byId(await service(['git.replicaBundle'], [localSetup(), sshSetup(), second]).compare({ projectId: 'p1' }))
+    expect(exportsOf('gex44')).toHaveLength(1)
+    expect(exportsOf('other')).toHaveLength(1)
+    expect(pairs.get('box')?.relation.kind).toBe('same')
+    expect(pairs.get('box2')?.relation).toMatchObject({ kind: 'behind', count: 1 })
+  })
+
+  it('an error inside one setup is that setup\'s unknown and never drops the others', async () => {
+    commit(remote, 'r1')
+    const bad = setup({ id: 'bad', hostId: 'ssh:bad', connectionId: 'bad', path: remote, createdAt: 3 })
+    const svc = service(['git.replicaBundle'], [localSetup(), sshSetup(), bad], {
+      beforeRequest: (id, method) => {
+        if (id === 'bad' && method === 'git.replicaBundleExport') {
+          throw new Error('connection reset')
+        }
+      }
+    })
+    const pairs = byId(await svc.compare({ projectId: 'p1' }))
+    expect(pairs.get('bad')?.relation).toEqual({ kind: 'unknown', reason: 'transfer-interrupted' })
+    expect(pairs.get('bad')?.healthy).toBe(false)
+    expect(pairs.get('box')?.relation).toMatchObject({ kind: 'behind', count: 1 })
+  })
+
+  it('stages the bundle in the private tmpdir while it transfers and leaves nothing after', async () => {
+    commit(remote, 'r1')
+    const during: boolean[] = []
+    const svc = service(['git.replicaBundle'], [localSetup(), sshSetup()], {
+      beforeRequest: (_id, method) => {
+        if (method === 'git.replicaBundleRead') {
+          during.push(readdirSync(scratch).some((n) => n.startsWith('orca-replica-recv-')))
+        }
+      }
+    })
+    await svc.compare({ projectId: 'p1' })
+    // Station control: the scratch dir was observably in use, so the empty listing after is a real absence.
+    expect(during.length).toBeGreaterThan(0)
+    expect(during.every(Boolean)).toBe(true)
+    expect(readdirSync(scratch).filter((n) => n.startsWith('orca-replica-recv-'))).toEqual([])
+  })
+
+  it('hosts that differ only in punctuation derive different host keys; the same host derives one key', () => {
+    expect(replicaHostKey('ssh:a/b')).not.toBe(replicaHostKey('ssh:a_b'))
+    expect(replicaHostKey('ssh:a.b')).not.toBe(replicaHostKey('ssh:a-b'))
+    expect(replicaHostKey('ssh:a/b')).toBe(replicaHostKey('ssh:a/b'))
   })
 })

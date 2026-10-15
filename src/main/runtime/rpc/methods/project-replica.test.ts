@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -32,6 +32,7 @@ let local: string
 let remote: string
 let d: ReturnType<typeof createMockDispatcher>
 let h: GitReplicaHandler
+const savedTmp = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP }
 
 const setup = (
   over: Partial<ProjectHostSetup> & Pick<ProjectHostSetup, 'id' | 'hostId' | 'path'>
@@ -68,6 +69,9 @@ function installReal(capabilities: string[]): void {
 beforeEach(() => {
   resetSshRelayCapabilityCacheForTests()
   root = mkdtempSync(join(tmpdir(), 'prr-'))
+  // Why: compare stages bundles under os.tmpdir(); a private one keeps parallel suites that list the shared one honest.
+  mkdirSync(join(root, 'scratch'))
+  process.env.TMPDIR = process.env.TMP = process.env.TEMP = join(root, 'scratch')
   local = join(root, 'local')
   remote = join(root, 'remote')
   git(root, 'init', '-q', '-b', 'main', local)
@@ -77,6 +81,13 @@ beforeEach(() => {
   h = new GitReplicaHandler(d as unknown as RelayDispatcher)
 })
 afterEach(async () => {
+  for (const [key, value] of Object.entries(savedTmp)) {
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
   installReplicaPairService(null)
   await h.dispose()
   rmSync(root, { recursive: true, force: true })
