@@ -6,12 +6,15 @@ import {
 } from './fleet-placement'
 import type { ExecutionHostId } from './execution-host'
 import type { NodeRequirement } from './node-manifest-eligibility'
+import { rankMissionCandidates } from './placement-host-ranking'
 
 export type MissionJob = {
   jobId: string
   requiredCapabilities?: readonly string[]
   /** A family set here replaces that family of the request requirement; unset families are inherited. */
   requirement?: NodeRequirement
+  /** Hosts that hold the job's project; a ranking term over already eligible hosts, never eligibility. */
+  hydratedAddresses?: readonly ExecutionHostId[]
 }
 
 export type MissionJobPlacement = {
@@ -22,6 +25,8 @@ export type MissionJobPlacement = {
   /** Address the dispatch path must re-resolve before acting; this alone authorizes nothing. */
   address: ExecutionHostId
   label: string
+  /** True when the chosen host held the job's project; absent on placements built elsewhere. */
+  hydrated?: boolean
 }
 
 export type MissionPlacementPlan = {
@@ -80,17 +85,21 @@ export function planMissionPlacement(
       unplaced.push({ jobId: job.jobId, reason: 'no-eligible-host' })
       continue
     }
-    // Stable sort: the fleet ranking (most memory first) breaks ties between equally loaded hosts.
-    const pick = [...proposal.eligible].sort(
-      (a, b) => (load.get(a.key) ?? 0) - (load.get(b.key) ?? 0)
-    )[0]
+    const hydratedHosts = new Set<string>(job.hydratedAddresses ?? [])
+    const isHydrated = (c: { addresses: readonly string[] }) =>
+      c.addresses.some((address) => hydratedHosts.has(address))
+    const pick = rankMissionCandidates(proposal.eligible, {
+      isHydrated,
+      loadOf: (c) => load.get(c.key) ?? 0
+    })[0]
     load.set(pick.key, (load.get(pick.key) ?? 0) + 1)
     placements.push({
       jobId: job.jobId,
       fingerprint: pick.fingerprint,
       hostKey: pick.key,
       address: pick.evidenceAddress,
-      label: pick.label
+      label: pick.label,
+      hydrated: isHydrated(pick)
     })
   }
   return { placements, unplaced, rejected, rejectedByJob, hostCount: load.size }

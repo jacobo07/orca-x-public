@@ -1,11 +1,13 @@
 import { z } from 'zod'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { hydratedAddressesForProject } from '../../../../shared/mission-job-locality'
 import { integrateMissionResults } from '../../../../shared/mission-job-placement'
 import { readFleetObservation } from '../../../fleet/fleet-observation-slot'
 import {
   dispatchRanOnPlacement,
   planDispatchableMission
 } from '../../orchestration/mission-dispatch-placement'
+import { parseDelegationSubject } from '../../orchestration/agent-task-contract'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -90,11 +92,21 @@ export const ORCHESTRATION_MISSION_METHODS: RpcMethod[] = [
           return params.requirement || own ? [[taskId, { ...params.requirement, ...own }]] : []
         })
       )
+      // Why: a subject-less or unreadable task has no project to prefer a host for; it is still placed.
+      const setups = runtime.listProjectHostSetups()
+      const hydratedAddresses = Object.fromEntries(
+        tasks.flatMap((taskId) => {
+          const subject = parseDelegationSubject(db.getTask(taskId)?.subject ?? null)
+          return subject.kind === 'subject'
+            ? [[taskId, hydratedAddressesForProject(subject.subject.projectId, setups)]]
+            : []
+        })
+      )
       const plan = planDispatchableMission(
         tasks,
         observation.members,
         { now: observation.completedAt, maxSampleAgeMs: DEFAULT_FLEET_SAMPLE_MAX_AGE_MS },
-        { requirements }
+        { requirements, hydratedAddresses }
       )
       const placements = db.placeMissionTasks(
         run.id,
@@ -113,7 +125,12 @@ export const ORCHESTRATION_MISSION_METHODS: RpcMethod[] = [
         rejected: plan.rejected,
         rejectedByJob: plan.rejectedByJob,
         notDispatchable: plan.notDispatchable,
-        hostCount: plan.hostCount
+        hostCount: plan.hostCount,
+        locality: plan.placements.map((p) => ({
+          taskId: p.jobId,
+          hostKey: p.hostKey,
+          hydrated: p.hydrated === true
+        }))
       }
     }
   }),

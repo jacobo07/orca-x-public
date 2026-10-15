@@ -325,3 +325,35 @@ describe('assertWorkerStartMatchesPlacement', () => {
     expect(changed?.data).toMatchObject({ reason: 'peer-fingerprint-changed' })
   })
 })
+
+describe('planDispatchableMission with a hydrated host', () => {
+  const request = { now: NOW, maxSampleAgeMs: 60_000 }
+  const hosts = () => [
+    member('local', 'fp-win', null, 24 * GB),
+    member('runtime:env-small', 'fp-small', FED, 8 * GB),
+    member('ssh:relay', 'ssh-hostkey:r', FED, 64 * GB)
+  ]
+
+  it('gives each task its own hydrated addresses and places it there', () => {
+    const plan = planDispatchableMission(['a', 'b'], hosts(), request, {
+      hydratedAddresses: { a: ['runtime:env-small'], b: ['local'] }
+    })
+    expect(plan.placements.map((p) => [p.jobId, p.address, p.hydrated])).toEqual([
+      ['a', 'runtime:env-small', true],
+      ['b', 'local', true]
+    ])
+  })
+
+  it('control: no hydrated addresses leaves the memory order', () => {
+    const plan = planDispatchableMission(['a'], hosts(), request)
+    expect(plan.placements.map((p) => [p.address, p.hydrated])).toEqual([['local', false]])
+  })
+
+  it('never places on a hydrated SSH relay', () => {
+    const plan = planDispatchableMission(['a'], hosts(), request, {
+      hydratedAddresses: { a: ['ssh:relay'] }
+    })
+    expect(plan.placements.map((p) => [p.address, p.hydrated])).toEqual([['local', false]])
+    expect(plan.notDispatchable.map((m) => m.address)).toEqual(['ssh:relay'])
+  })
+})

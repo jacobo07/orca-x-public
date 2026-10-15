@@ -5,7 +5,11 @@ import {
   type ExecutionHostId
 } from './execution-host'
 import type { FleetPlacementMember } from './fleet-placement'
-import { integrateMissionResults, planMissionPlacement } from './mission-job-placement'
+import {
+  integrateMissionResults,
+  planMissionPlacement,
+  type MissionJob
+} from './mission-job-placement'
 import type { FleetNodeResourcesObservation } from './node-resources'
 
 const GB = 1024 ** 3
@@ -261,5 +265,93 @@ describe('mission job placement by resource requirement', () => {
     expect(byJob.c).toHaveLength(3)
     expect(plan.unplaced).toEqual([{ jobId: 'c', reason: 'no-eligible-host' }])
     expect(plan.rejected).toEqual(byJob.c)
+  })
+})
+
+describe('mission job placement: a host that already holds the project', () => {
+  const small = toRuntimeExecutionHostId('small')
+  const fleet = [
+    member(LOCAL_EXECUTION_HOST_ID, 'fp-win', 24 * GB),
+    member(small, 'fp-small', 8 * GB)
+  ]
+  const placedOn = (plan: ReturnType<typeof planMissionPlacement>) =>
+    plan.placements.map((p) => [p.jobId, p.fingerprint, p.hydrated])
+
+  it('places a job on the hydrated smaller host ahead of the roomier one', () => {
+    const plan = planMissionPlacement([{ jobId: 'a', hydratedAddresses: [small] }], fleet, request)
+    expect(placedOn(plan)).toEqual([['a', 'fp-small', true]])
+  })
+
+  it('control: a job with no hydration preference goes to the roomier host and says not hydrated', () => {
+    const plan = planMissionPlacement([{ jobId: 'a' }], fleet, request)
+    expect(placedOn(plan)).toEqual([['a', 'fp-win', false]])
+    const empty = planMissionPlacement([{ jobId: 'a', hydratedAddresses: [] }], fleet, request)
+    expect(placedOn(empty)).toEqual([['a', 'fp-win', false]])
+  })
+
+  it('never makes an ineligible hydrated host a candidate', () => {
+    const plan = planMissionPlacement(
+      [
+        {
+          jobId: 'a',
+          hydratedAddresses: [small],
+          requirement: { memory: { minAvailableBytes: 16 * GB } }
+        }
+      ],
+      fleet,
+      request
+    )
+    expect(placedOn(plan)).toEqual([['a', 'fp-win', false]])
+    expect(plan.rejectedByJob[0].rejected.map((r) => r.fingerprint)).toEqual(['fp-small'])
+  })
+
+  it('does not rank an unmeasured hydrated host', () => {
+    const down = [
+      member(LOCAL_EXECUTION_HOST_ID, 'fp-win', 24 * GB),
+      member(small, 'fp-small', null)
+    ]
+    const plan = planMissionPlacement([{ jobId: 'a', hydratedAddresses: [small] }], down, request)
+    expect(placedOn(plan)).toEqual([['a', 'fp-win', false]])
+  })
+
+  it('treats a hydrated address of any of the host addresses as the host being hydrated', () => {
+    const twin = [
+      member(LOCAL_EXECUTION_HOST_ID, 'fp-win', 24 * GB),
+      member(small, 'fp-small', 8 * GB),
+      member(toRuntimeExecutionHostId('small-alias'), 'fp-small', 8 * GB)
+    ]
+    const plan = planMissionPlacement(
+      [{ jobId: 'a', hydratedAddresses: [toRuntimeExecutionHostId('small-alias')] }],
+      twin,
+      request
+    )
+    expect(placedOn(plan)).toEqual([['a', 'fp-small', true]])
+  })
+
+  it('still spreads: a second hydrated job goes to the unused host only after hydration ranks first', () => {
+    const plan = planMissionPlacement(
+      [
+        { jobId: 'a', hydratedAddresses: [small] },
+        { jobId: 'b', hydratedAddresses: [small] }
+      ],
+      fleet,
+      request
+    )
+    // Why: D-15 ranks hydration above load, so both jobs prefer the host holding the project.
+    expect(placedOn(plan)).toEqual([
+      ['a', 'fp-small', true],
+      ['b', 'fp-small', true]
+    ])
+  })
+
+  it('is deterministic for any input order with hydration present', () => {
+    const jobs: MissionJob[] = [
+      { jobId: 'a', hydratedAddresses: [small] },
+      { jobId: 'b' },
+      { jobId: 'c', hydratedAddresses: [LOCAL_EXECUTION_HOST_ID] }
+    ]
+    const one = planMissionPlacement(jobs, fleet, request)
+    const two = planMissionPlacement(jobs.toReversed(), fleet.toReversed(), request)
+    expect(two).toEqual(one)
   })
 })

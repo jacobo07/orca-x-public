@@ -1,4 +1,8 @@
-import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type { FleetPlacementMember, FleetPlacementRequest } from '../../../shared/fleet-placement'
 import type { NodeRequirement } from '../../../shared/node-manifest-eligibility'
 import {
@@ -30,6 +34,8 @@ export function isDispatchableMember(member: FleetPlacementMember): boolean {
 export type DispatchableMissionOptions = {
   /** Per-task resource need keyed by task id; a task with no entry inherits the request's. */
   requirements?: Readonly<Record<string, NodeRequirement>>
+  /** Hosts holding each task's project, keyed by task id; a task with no entry has no preference. */
+  hydratedAddresses?: Readonly<Record<string, readonly ExecutionHostId[]>>
 }
 
 export function planDispatchableMission(
@@ -43,7 +49,11 @@ export function planDispatchableMission(
     .filter((m) => !isDispatchableMember(m))
     .map((m) => ({ address: m.address, label: m.label, reason: 'not-dispatchable' as const }))
   const plan = planMissionPlacement(
-    taskIds.map((jobId) => ({ jobId, requirement: options.requirements?.[jobId] })),
+    taskIds.map((jobId) => ({
+      jobId,
+      requirement: options.requirements?.[jobId],
+      hydratedAddresses: options.hydratedAddresses?.[jobId]
+    })),
     dispatchable,
     request
   )

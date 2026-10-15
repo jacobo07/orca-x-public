@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FleetObservation } from '../../../../shared/fleet-placement-view'
 import type { FleetPlacementMember } from '../../../../shared/fleet-placement'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION,
@@ -522,5 +523,108 @@ describe('cross-host mission dispatch', () => {
     expect(r.pending).toEqual([b.id])
     expect(r.jobs.find((j) => j.jobId === a.id)?.ranOnPlacement).toBe(true)
     expect(r.jobs.find((j) => j.jobId === b.id)?.ranOnPlacement).toBe(false)
+  })
+
+  describe('hydrated host preference', () => {
+    const GB = 1024 ** 3
+    type PlaceResult = {
+      placements: { taskId: string; address: string; fingerprint: string }[]
+      unplaced: { jobId: string }[]
+      locality?: { taskId: string; hostKey: string; hydrated: boolean }[]
+    }
+
+    function setupRecord(
+      projectId: string,
+      hostId: ProjectHostSetup['hostId'],
+      setupState: ProjectHostSetup['setupState'] = 'ready',
+      updatedAt = 0
+    ): ProjectHostSetup {
+      return {
+        id: `${projectId}@${hostId}`,
+        projectId,
+        hostId,
+        repoId: `${projectId}@${hostId}`,
+        path: '/work',
+        displayName: projectId,
+        setupState,
+        setupMethod: 'legacy-repo',
+        createdAt: 0,
+        updatedAt
+      }
+    }
+
+    // Why: A is roomier than B, so only a hydration preference can send a task to B.
+    function useTwoRuntimes(setups: ProjectHostSetup[]): void {
+      observation.current = Promise.resolve({
+        ...fleet(),
+        members: [
+          member('runtime:env-a', 'fp-a', FED, 24 * GB),
+          member('runtime:env-b', 'fp-b', FED, 8 * GB)
+        ]
+      })
+      vi.spyOn(runtime, 'listProjectHostSetups').mockReturnValue(setups)
+    }
+
+    const subjectOf = (projectId: string) => ({ projectId, worktreePath: null, revision: null })
+
+    it('places a task on the smaller host that holds its project and records it', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        { from: 'term_coord', tasks: [a.id] },
+        ctx
+      )) as PlaceResult
+      expect(db.getTaskPlacement(a.id)).toMatchObject({
+        fingerprint: 'fp-b',
+        address: 'runtime:env-b',
+        label: 'runtime:env-b'
+      })
+      expect(plan.locality).toEqual([{ taskId: a.id, hostKey: 'fingerprint:fp-b', hydrated: true }])
+    })
+
+    it('control: a task of another project goes to the roomier host and is not hydrated', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const a = db.createTask({ spec: 'job', subject: subjectOf('Q') })
+      const plan = (await h.call(
+        'orchestration.missionPlace',
+        { from: 'term_coord', tasks: [a.id] },
+        ctx
+      )) as PlaceResult
+      expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+      expect(plan.locality).toEqual([
+        { taskId: a.id, hostKey: 'fingerprint:fp-a', hydrated: false }
+      ])
+    })
+
+    it('control: a setup that is not ready changes nothing, whatever the state', async () => {
+      for (const state of ['not-set-up', 'setting-up', 'error', 'unsupported'] as const) {
+        setup()
+        useTwoRuntimes([setupRecord('P', 'runtime:env-b', state)])
+        const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+        await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+        expect(db.getTaskPlacement(a.id)?.fingerprint, state).toBe('fp-a')
+        h.cleanup()
+        vi.restoreAllMocks()
+      }
+    })
+
+    it('control: a task with no subject goes to the roomier host', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-b')])
+      const a = db.createTask({ spec: 'job' })
+      await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+      expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+    })
+
+    it('control: a setup whose host is not a member goes unused', async () => {
+      setup()
+      useTwoRuntimes([setupRecord('P', 'runtime:env-elsewhere')])
+      const a = db.createTask({ spec: 'job', subject: subjectOf('P') })
+      await h.call('orchestration.missionPlace', { from: 'term_coord', tasks: [a.id] }, ctx)
+      expect(db.getTaskPlacement(a.id)?.fingerprint).toBe('fp-a')
+    })
   })
 })
