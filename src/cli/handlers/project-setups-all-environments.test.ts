@@ -211,6 +211,33 @@ describe('listSetupsAcrossEnvironments', () => {
     expect(JSON.stringify(listing)).not.toContain('\\u001b')
   })
 
+  it('fails one runtime that answers a malformed setups list and still lists the others', async () => {
+    const { deps } = harness([env('bad'), env('good')], {
+      'env-bad': { setups: undefined as unknown as ProjectHostSetupWithReplicaTopology[], runtimeId: 'rt-bad' },
+      'env-good': { setups: [setup('s1')], runtimeId: 'rt-good' }
+    })
+
+    const listing = await listSetupsAcrossEnvironments(deps)
+
+    expect(entryFor(listing.entries, 'bad')).toMatchObject({
+      outcome: 'failed',
+      code: 'runtime_malformed_answer'
+    })
+    expect(entryFor(listing.entries, 'good')).toMatchObject({ outcome: 'answered' })
+  })
+
+  it('strips control characters from a host-supplied runtime id and keeps a plain id as-is', async () => {
+    const { deps } = harness([env('esc'), env('plain')], {
+      'env-esc': { setups: [setup('s1')], runtimeId: 'rt\u001b[31m-esc\u0007' },
+      'env-plain': { setups: [setup('s2')], runtimeId: 'rt-plain' }
+    })
+
+    const listing = await listSetupsAcrossEnvironments(deps)
+
+    expect(entryFor(listing.entries, 'esc')).toMatchObject({ runtimeId: 'rt[31m-esc' })
+    expect(entryFor(listing.entries, 'plain')).toMatchObject({ runtimeId: 'rt-plain' })
+  })
+
   it('lists an old host that reports no topology with its setups, not as having no replicas', async () => {
     const { deps } = harness([env('old')], {
       'env-old': {

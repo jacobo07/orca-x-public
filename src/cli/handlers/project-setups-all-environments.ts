@@ -109,6 +109,21 @@ async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
   }
 }
 
+class FanOutMalformedAnswerError extends Error {
+  readonly code = 'runtime_malformed_answer'
+  constructor() {
+    super('runtime answered with a malformed setups list')
+  }
+}
+
+// Why: the runtime id comes from the paired host and is printed to a terminal.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g
+
+function stripControlCharacters(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : value.replace(CONTROL_CHARACTERS, '')
+}
+
 async function queryEnvironment(
   environment: FanOutEnvironment,
   deps: FanOutDeps
@@ -119,10 +134,14 @@ async function queryEnvironment(
       client.call<SetupsListResult>('projectHostSetup.list'),
       deps.timeoutMs
     )
+    // Why: a malformed answer must fail this one runtime, not throw in the merge and sink the listing.
+    if (!Array.isArray(response.result?.setups)) {
+      throw new FanOutMalformedAnswerError()
+    }
     return {
       outcome: 'answered',
       environment: environment.name,
-      runtimeId: response._meta?.runtimeId ?? environment.runtimeId,
+      runtimeId: stripControlCharacters(response._meta?.runtimeId) ?? environment.runtimeId,
       setups: response.result.setups,
       ...(response.result.identityCollisions
         ? { identityCollisions: response.result.identityCollisions }
@@ -164,7 +183,7 @@ function mergeSameRuntime(entries: readonly FanOutEntry[]): FanOutEntry[] {
   return merged
 }
 
-/** Read-only: asks each saved environment `projectHostSetup.list` and nothing else. */
+/** Asks each saved environment `projectHostSetup.list` and nothing else; the shared client still records last-used on a success. */
 export async function listSetupsAcrossEnvironments(deps: FanOutDeps): Promise<FanOutListing> {
   const environments = deps.listEnvironments()
   if (environments.length === 0) {

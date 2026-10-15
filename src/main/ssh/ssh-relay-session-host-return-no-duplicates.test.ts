@@ -303,7 +303,7 @@ describe('SshRelaySession host return does not duplicate anything (row 73)', () 
     expect(sessionA.getState()).toBe('ready')
   })
 
-  it('the session cannot re-dispatch orchestration work because it does not import that tree', () => {
+  it('the session has no direct static import of the orchestration tree (transitive, dynamic and require imports are not checked)', () => {
     // Arrange
     const source = readFileSync(join(__dirname, 'ssh-relay-session.ts'), 'utf8')
 
