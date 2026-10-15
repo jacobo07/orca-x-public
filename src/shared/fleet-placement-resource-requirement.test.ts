@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from './execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import type { FleetHostIdentity } from './fleet-host-identity'
 import type { FleetHostFacts, FleetResourceSample } from './fleet-resource-observation'
 import { planFleetPlacement, type FleetPlacementMember } from './fleet-placement'
+import type { FleetNodeResourcesObservation } from './node-resources'
 
 const GB = 1024 ** 3
 const NOW = 1_000_000
@@ -139,5 +145,262 @@ describe('memory requirement reaches the single judge', () => {
     expect(planFleetPlacement(fleet(), request)).toEqual(
       planFleetPlacement(fleet(), { ...request, requirement: {} })
     )
+  })
+})
+
+function resources(
+  parts: Partial<Omit<FleetNodeResourcesObservation, 'startedAt'>> = {},
+  startedAt = NOW - 1_000
+): FleetNodeResourcesObservation {
+  return {
+    startedAt,
+    runtimeId: 'rt',
+    disk: { outcome: 'unknown', reason: 'not-attempted' },
+    gpu: { outcome: 'unknown', reason: 'no-gpu-tool' },
+    models: { outcome: 'unknown', reason: 'no-probe-configured' },
+    ...parts
+  }
+}
+
+const gpu = (freeBytes: number): FleetNodeResourcesObservation['gpu'] => ({
+  outcome: 'measured',
+  gpus: [{ name: 'gpu0', totalBytes: 24 * GB, freeBytes }]
+})
+const vramNeed = (minFreeBytes: number) => ({ requirement: { vram: { minFreeBytes } } })
+const eligibleOf = (plan: ReturnType<typeof planFleetPlacement>) =>
+  plan.eligible.map((c) => c.fingerprint)
+const reasonsOf = (plan: ReturnType<typeof planFleetPlacement>, fingerprint: string) =>
+  plan.rejected.find((r) => r.fingerprint === fingerprint)?.reasons
+
+describe('VRAM requirement', () => {
+  it('rejects measured VRAM below the need with both figures, selects sufficient VRAM', () => {
+    const plan = planFleetPlacement(
+      [
+        member(mid, 'fp-low', measuredSample(8 * GB), {
+          nodeResources: resources({ gpu: gpu(4 * GB) })
+        }),
+        member(big, 'fp-ok', measuredSample(8 * GB), {
+          nodeResources: resources({ gpu: gpu(16 * GB) })
+        })
+      ],
+      { ...request, ...vramNeed(8 * GB) }
+    )
+
+    expect(plan.selected?.fingerprint).toBe('fp-ok')
+    expect(reasonsOf(plan, 'fp-low')).toEqual([
+      { reason: 'insufficient-vram', freeBytes: 4 * GB, required: 8 * GB }
+    ])
+  })
+
+  it('rejects absent nodeResources as resource-unknown for vram and never selects it', () => {
+    const plan = planFleetPlacement([member(big, 'fp-none', measuredSample(24 * GB))], {
+      ...request,
+      ...vramNeed(1)
+    })
+
+    expect(plan.decision).toBe('no-eligible-host')
+    expect(reasonsOf(plan, 'fp-none')).toEqual([
+      { reason: 'resource-unknown', family: 'vram', cause: 'unmeasured', detail: 'not-attempted' }
+    ])
+  })
+
+  it('reads a host with no GPU probe as unknown, never as zero bytes', () => {
+    const plan = planFleetPlacement(
+      [member(big, 'fp-nogpu', measuredSample(24 * GB), { nodeResources: resources() })],
+      { ...request, ...vramNeed(1) }
+    )
+
+    expect(reasonsOf(plan, 'fp-nogpu')).toEqual([
+      { reason: 'resource-unknown', family: 'vram', cause: 'unmeasured', detail: 'no-gpu-tool' }
+    ])
+  })
+
+  it('reads a GPU reading older than its trust window as stale and never compares it', () => {
+    const plan = planFleetPlacement(
+      [
+        member(big, 'fp-stale', measuredSample(24 * GB), {
+          nodeResources: resources({ gpu: gpu(20 * GB) }, NOW - 60_001)
+        })
+      ],
+      { ...request, ...vramNeed(8 * GB) }
+    )
+
+    expect(plan.decision).toBe('no-eligible-host')
+    expect(reasonsOf(plan, 'fp-stale')).toEqual([
+      {
+        reason: 'resource-unknown',
+        family: 'vram',
+        cause: 'stale',
+        detail: 'measurement older than its max age'
+      }
+    ])
+  })
+
+  it('D-13: excludes the most-free-memory host with unknown VRAM and selects measured VRAM', () => {
+    const hosts = () => [
+      member(big, 'fp-rich', measuredSample(48 * GB)),
+      member(mid, 'fp-gpu', measuredSample(10 * GB), {
+        nodeResources: resources({ gpu: gpu(12 * GB) })
+      })
+    ]
+    const withVram = planFleetPlacement(hosts(), { ...request, ...vramNeed(8 * GB) })
+
+    expect(withVram.selected?.fingerprint).toBe('fp-gpu')
+    expect(reasonsOf(withVram, 'fp-rich')?.map((r) => r.reason)).toEqual(['resource-unknown'])
+
+    // Control: without the VRAM need the same fleet picks the richest host by memory.
+    expect(planFleetPlacement(hosts(), request).selected?.fingerprint).toBe('fp-rich')
+  })
+
+  it('judges on facts, not on isCurrent, label or address', () => {
+    const plan = planFleetPlacement(
+      [
+        member(LOCAL_EXECUTION_HOST_ID, 'fp-self', measuredSample(48 * GB)),
+        member(mid, 'fp-gpu', measuredSample(10 * GB), {
+          nodeResources: resources({ gpu: gpu(12 * GB) })
+        })
+      ],
+      { ...request, ...vramNeed(8 * GB), currentFingerprint: 'fp-self' }
+    )
+
+    expect(plan.selected?.fingerprint).toBe('fp-gpu')
+  })
+
+  it('judges the recorded GEX44 reading: rejected for 8 GiB, selected for 2 GiB', () => {
+    // Why: figures recorded in docs/dws/phase-5-node-manifest.md (fan-out-gex44, 2026-10-14); totals were not recorded.
+    const recordedMemoryAvailable = 59193368576
+    const recordedVramFree = 3245342720
+    const gex44 = () =>
+      member(big, 'fp-gex44', measuredSample(recordedMemoryAvailable), {
+        nodeResources: resources({ gpu: gpu(recordedVramFree) })
+      })
+
+    const tooBig = planFleetPlacement([gex44()], {
+      ...request,
+      requirement: { memory: { minAvailableBytes: 8 * GB }, vram: { minFreeBytes: 8 * GB } }
+    })
+    expect(reasonsOf(tooBig, 'fp-gex44')).toEqual([
+      { reason: 'insufficient-vram', freeBytes: 3245342720, required: 8 * GB }
+    ])
+
+    const fits = planFleetPlacement([gex44()], {
+      ...request,
+      requirement: { memory: { minAvailableBytes: 8 * GB }, vram: { minFreeBytes: 2 * GB } }
+    })
+    expect(fits.selected).toMatchObject({ fingerprint: 'fp-gex44', availableMemory: 59193368576 })
+  })
+})
+
+describe('disk and resident model requirement', () => {
+  const diskOf = (availableBytes: number): FleetNodeResourcesObservation['disk'] => ({
+    outcome: 'measured',
+    filesystems: [{ path: '/', totalBytes: 1000 * GB, availableBytes }]
+  })
+
+  it('rejects free disk below the need and selects enough disk', () => {
+    const plan = planFleetPlacement(
+      [
+        member(mid, 'fp-full', measuredSample(8 * GB), {
+          nodeResources: resources({ disk: diskOf(5 * GB) })
+        }),
+        member(big, 'fp-roomy', measuredSample(8 * GB), {
+          nodeResources: resources({ disk: diskOf(500 * GB) })
+        })
+      ],
+      { ...request, requirement: { disk: { minAvailableBytes: 100 * GB } } }
+    )
+
+    expect(plan.selected?.fingerprint).toBe('fp-roomy')
+    expect(reasonsOf(plan, 'fp-full')).toEqual([
+      { reason: 'insufficient-disk', availableBytes: 5 * GB, required: 100 * GB }
+    ])
+  })
+
+  it('reads a requested path that was not measured as resource-unknown path-not-measured', () => {
+    const plan = planFleetPlacement(
+      [
+        member(big, 'fp-a', measuredSample(8 * GB), {
+          nodeResources: resources({ disk: diskOf(500 * GB) })
+        })
+      ],
+      { ...request, requirement: { disk: { minAvailableBytes: 1, path: '/data' } } }
+    )
+
+    expect(reasonsOf(plan, 'fp-a')).toEqual([
+      { reason: 'resource-unknown', family: 'disk', cause: 'path-not-measured', detail: '/data' }
+    ])
+  })
+
+  it('rejects a model absent from fully answering endpoints, selects a host serving it', () => {
+    const serving = (modelIds: string[], unansweredPorts: number[] = []) =>
+      resources({
+        models: { outcome: 'measured', endpoints: [{ port: 8081, modelIds }], unansweredPorts }
+      })
+    const plan = planFleetPlacement(
+      [
+        member(mid, 'fp-other', measuredSample(8 * GB), { nodeResources: serving(['llama-3']) }),
+        member(big, 'fp-has', measuredSample(8 * GB), {
+          nodeResources: serving(['qwen3-coder-30b'])
+        })
+      ],
+      { ...request, requirement: { residentModel: { modelId: 'qwen3-coder-30b' } } }
+    )
+
+    expect(plan.selected?.fingerprint).toBe('fp-has')
+    expect(reasonsOf(plan, 'fp-other')).toEqual([
+      { reason: 'model-not-resident', modelId: 'qwen3-coder-30b' }
+    ])
+
+    const maybe = planFleetPlacement(
+      [
+        member(mid, 'fp-other', measuredSample(8 * GB), {
+          nodeResources: serving(['llama-3'], [8082])
+        })
+      ],
+      { ...request, requirement: { residentModel: { modelId: 'qwen3-coder-30b' } } }
+    )
+    expect(reasonsOf(maybe, 'fp-other')).toEqual([
+      {
+        reason: 'resource-unknown',
+        family: 'residentModel',
+        cause: 'unmeasured',
+        detail: 'some probed ports did not answer'
+      }
+    ])
+  })
+})
+
+describe('transports without node resources (D-06)', () => {
+  it('gives a local, a runtime and an ssh-hostkey member resource-unknown for a VRAM need', () => {
+    // Why: the not-dispatchable refusal for the SSH relay member is covered by the mission placement plan (04-03).
+    const sshHost = toSshExecutionHostId('target-1')
+    const plan = planFleetPlacement(
+      [
+        member(LOCAL_EXECUTION_HOST_ID, 'fp-local', measuredSample(16 * GB)),
+        member(mid, 'fp-runtime', measuredSample(16 * GB)),
+        member(sshHost, 'ssh-hostkey:SHA256:abc', measuredSample(16 * GB))
+      ],
+      { ...request, ...vramNeed(1 * GB) }
+    )
+
+    expect(plan.decision).toBe('no-eligible-host')
+    for (const fingerprint of ['fp-local', 'fp-runtime', 'ssh-hostkey:SHA256:abc']) {
+      expect(reasonsOf(plan, fingerprint)).toEqual([
+        { reason: 'resource-unknown', family: 'vram', cause: 'unmeasured', detail: 'not-attempted' }
+      ])
+    }
+    expect(eligibleOf(plan)).toEqual([])
+  })
+
+  it('does not mistake a malformed measured memory sample for enough memory', () => {
+    const plan = planFleetPlacement([member(big, 'fp-bad', measuredSample(1.5))], {
+      ...request,
+      requirement: { memory: { minAvailableBytes: 1 } }
+    })
+
+    expect(plan.decision).toBe('no-eligible-host')
+    expect(reasonsOf(plan, 'fp-bad')).toEqual([
+      expect.objectContaining({ reason: 'resource-unknown', family: 'memory', cause: 'unmeasured' })
+    ])
   })
 })
