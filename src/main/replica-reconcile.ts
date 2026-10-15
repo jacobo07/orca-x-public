@@ -1,7 +1,6 @@
 // Dirty-both reconciliation (row 67): two capsules cut from the SAME base (each a commit whose FIRST parent is that base)
 // are reconciled only when `git merge-tree --write-tree` reports a clean merge. Anything else is a typed conflict.
 // Nothing here touches a working tree or moves HEAD: a clean result is a commit under refs/orca/reconciled/*.
-import { randomUUID } from 'node:crypto'
 import { gitExecFileAsync } from './git/runner'
 import type { GitRun } from './replica-sync'
 
@@ -36,6 +35,26 @@ async function revParse(git: GitRun, cwd: string, rev: string): Promise<string |
     return (await git(['rev-parse', '--verify', `${rev}^{commit}`], { cwd })).stdout.trim()
   } catch {
     return null
+  }
+}
+
+/** The later committer time of the two capsules, as git's raw date: a pure function of the inputs. */
+async function commitTime(git: GitRun, cwd: string, commits: string[]): Promise<string> {
+  const times = (await git(['log', '--no-walk', '--format=%ct', ...commits], { cwd })).stdout
+    .trim()
+    .split('\n')
+    .map(Number)
+  return `${Math.max(...times)} +0000`
+}
+
+/** Creates the ref, or accepts it already pointing at the same commit; an existing ref is never moved. */
+async function createOrSame(git: GitRun, cwd: string, ref: string, commit: string): Promise<boolean> {
+  try {
+    await git(['update-ref', ref, commit, '0'.repeat(commit.length)], { cwd })
+    return true
+  } catch {
+    const existing = await revParse(git, cwd, ref)
+    return existing === commit
   }
 }
 
@@ -100,13 +119,17 @@ export async function reconcileDirtyBoth(args: {
     return { ok: false, reason: 'merge-tree-unsupported' }
   }
   try {
+    // Why: inputs alone decide the commit and the ref, so re-running the same reconcile finds what it made, never a twin.
+    const when = await commitTime(git, repoPath, [l, r])
     const { stdout: made } = await git(
       ['-c', 'user.name=orca', '-c', 'user.email=orca@localhost', 'commit-tree', tree, '-p', l, '-p', r, '-m', 'orca dirty-both reconcile'],
-      { cwd: repoPath }
+      { cwd: repoPath, env: { ...process.env, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } }
     )
     const commit = made.trim()
-    const ref = `${RECONCILED_REF_PREFIX}${randomUUID()}`
-    await git(['update-ref', ref, commit], { cwd: repoPath })
+    const ref = `${RECONCILED_REF_PREFIX}${l.slice(0, 12)}-${r.slice(0, 12)}`
+    if (!(await createOrSame(git, repoPath, ref, commit))) {
+      return { ok: false, reason: 'commit-failed' }
+    }
     return { ok: true, base: b, tree, commit, ref, untrackedNotReconciled }
   } catch {
     return { ok: false, reason: 'commit-failed' }

@@ -1,5 +1,6 @@
 // Closed results of replica sync, divergence preservation and dirty-both reconcile as the pair service, the RPC
 // and the CLI see them. Mirrors the main-process primitives and imports nothing from src/main.
+import type { CapsuleOmission } from './replica-capsule-plan'
 
 /** Refusals decided from the stored setup alone, before any git or relay call. */
 export type ReplicaSyncRefusal =
@@ -78,5 +79,35 @@ export type ReplicaPreserveDivergenceResult =
   | { status: 'refused'; reason: ReplicaSyncRefusal | 'ref-occupied' }
   | { status: 'refused'; reason: 'not-diverged'; relation: ReplicaObservedRelation }
   | { status: 'failed'; reason: ReplicaPreserveFailureReason; cause?: ReplicaFailureCauseWord }
+  | ReplicaSyncUnavailable
+  | ReplicaSyncNotFound
+
+export type ReplicaReconcileRefusal =
+  | ReplicaSyncRefusal
+  | 'invalid-input'
+  | 'local-clean'
+  | 'unknown-commit'
+  | 'not-same-base'
+  | 'merge-tree-unsupported'
+  | 'capsule-unmerged'
+  | 'capsule-unstable'
+
+export type ReplicaReconcileResult =
+  | {
+      status: 'ok'
+      base: string
+      tree: string
+      /** The merge commit, kept under `ref`; nothing was checked out and HEAD did not move. */
+      commit: string
+      ref: string
+      localCapsuleRef: string
+      /** Paths the local capsule left out; the reconciled commit does not contain them either. */
+      localOmissions: CapsuleOmission[]
+      /** A capsule carried untracked files that the reconciled tree does not include. */
+      untrackedNotReconciled: boolean
+    }
+  | { status: 'refused'; reason: ReplicaReconcileRefusal }
+  | { status: 'failed'; reason: 'conflict'; base: string; conflictedPaths: string[] }
+  | { status: 'failed'; reason: 'commit-failed' }
   | ReplicaSyncUnavailable
   | ReplicaSyncNotFound

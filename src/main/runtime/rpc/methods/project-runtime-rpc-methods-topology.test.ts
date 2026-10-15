@@ -114,7 +114,8 @@ function fakeService(views: ReplicaPairView[]) {
     capsuleList: vi.fn(),
     capsuleRestore: vi.fn(),
     sync: vi.fn(),
-    preserveDivergence: vi.fn()
+    preserveDivergence: vi.fn(),
+    reconcile: vi.fn()
   }
   return { service, relations }
 }

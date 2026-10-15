@@ -28,6 +28,10 @@ import {
   type ReplicaDivergenceOperations
 } from './replica-pair-service-divergence'
 import {
+  createReplicaReconcileOperations,
+  type ReplicaReconcileOperations
+} from './replica-pair-service-reconcile'
+import {
   createReplicaSyncOperations,
   type ReplicaPairLedger,
   type ReplicaSyncOperations
@@ -72,7 +76,8 @@ export type ReplicaPairService = {
   relations(): Promise<Extract<ReplicaPairRelationsResult, { status: 'ok' }>>
 } & ReplicaCapsuleOperations &
   ReplicaSyncOperations &
-  ReplicaDivergenceOperations
+  ReplicaDivergenceOperations &
+  ReplicaReconcileOperations
 
 type StoredPair = {
   /** Set when the local tip moved under the answer (a sync): the answer is kept only as the fact that it is stale. */
@@ -256,6 +261,7 @@ export function createReplicaPairService(deps: ReplicaPairServiceDeps): ReplicaP
     ...capsules,
     ...createReplicaSyncOperations(guardedDeps),
     ...createReplicaDivergenceOperations(guardedDeps),
+    ...createReplicaReconcileOperations(guardedDeps),
     async compare({ projectId, setupId }) {
       const setups = deps.listProjectHostSetups().filter((s) => s.projectId === projectId)
       if (setups.length === 0) {
