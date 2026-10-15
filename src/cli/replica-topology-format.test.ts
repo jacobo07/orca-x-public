@@ -3,10 +3,13 @@ import type { Project } from '../shared/project-types'
 import type { ProjectHostSetupWithReplicaTopology } from '../shared/replica-topology'
 import { PROJECT_HANDLERS } from './handlers/project'
 import { formatProjectHostSetupList, formatProjectList } from './project-format'
+import type { FanOutListing } from './handlers/project-setups-all-environments'
 import {
+  formatFanOutListing,
   identityBasisOfProjectId,
   NOT_REPORTED_BY_HOST,
-  REPLICA_LIST_HEADER
+  REPLICA_LIST_HEADER,
+  replicaListFooter
 } from './replica-topology-format'
 
 const ROOT_PROJECT_ID = `git-root:${'a'.repeat(40)}`
@@ -213,5 +216,110 @@ describe('project list identity basis', () => {
 
     expect(lines[0]).toMatch(/basis:git-root$/)
     expect(lines[1]).toMatch(/basis:host-local$/)
+  })
+})
+
+describe('formatFanOutListing (row 61)', () => {
+  const answered = (
+    environment: string,
+    runtimeId: string | null,
+    setups: ProjectHostSetupWithReplicaTopology[],
+    alsoReachedAs?: string[]
+  ): FanOutListing['entries'][number] => ({
+    outcome: 'answered',
+    environment,
+    runtimeId,
+    setups,
+    ...(alsoReachedAs ? { alsoReachedAs } : {})
+  })
+  const listing = (entries: FanOutListing['entries']): FanOutListing => ({
+    status: 'queried',
+    entries,
+    queried: entries.map((entry) => entry.environment)
+  })
+
+  it('prints one section per runtime with the shared header and rows, and the queried-runtimes footer', () => {
+    const text = formatFanOutListing(
+      listing([
+        answered('alpha', 'rt-a', [grouped('a', 'local')]),
+        answered('beta', 'rt-b', [grouped('b', 'ssh:gpu-vm')])
+      ])
+    )
+    const lines = text.split('\n')
+
+    expect(lines[0]).toBe('alpha (runtime rt-a)')
+    expect(lines[1]).toBe(REPLICA_LIST_HEADER)
+    expect(lines[2]).toContain('host:local  ready  cloned  grouped  unverified  /srv/a')
+    expect(lines[3]).toBe('beta (runtime rt-b)')
+    expect(lines.at(-1)).toBe(
+      'Queried 2 saved environments: alpha, beta. Replicas owned by Orca servers that are not saved as environments are not listed here.'
+    )
+  })
+
+  it('replaces the single-runtime footer sentence in this mode', () => {
+    const text = formatFanOutListing(listing([answered('alpha', 'rt-a', [grouped('a', 'local')])]))
+
+    expect(text).not.toContain(replicaListFooter())
+    expect(text).not.toContain('replicas owned by other paired Orca servers are not listed here')
+  })
+
+  it.each([
+    ['unreachable', 'could not reach this Orca server'],
+    ['unauthorized', 'rejected the saved pairing'],
+    ['unsupported-by-host', "this server's Orca version cannot report project host setups"]
+  ] as const)(
+    'prints a %s runtime as its own line that says its replicas are unknown',
+    (outcome, words) => {
+      const text = formatFanOutListing(
+        listing([
+          answered('up', 'rt-up', [grouped('a', 'local')]),
+          { outcome, environment: 'down', runtimeId: null }
+        ])
+      )
+
+      const line = text.split('\n').find((candidate) => candidate.startsWith('down: '))
+      expect(line).toContain(outcome.replaceAll('-', ' '))
+      expect(line).toContain(words)
+      expect(line).toContain('replicas unknown, not none')
+      // Control: the answered neighbour still prints its row.
+      expect(text).toContain('/srv/a')
+    }
+  )
+
+  it('prints a failed runtime with its error code only', () => {
+    const text = formatFanOutListing(
+      listing([
+        { outcome: 'failed', environment: 'odd', runtimeId: null, code: 'invalid_runtime_response' }
+      ])
+    )
+
+    expect(text).toContain('odd: failed (error code invalid_runtime_response)')
+    expect(text).toContain('replicas unknown, not none')
+  })
+
+  it('lists an old host with the explicit unknown words and an empty runtime as empty, not as an error', () => {
+    const text = formatFanOutListing(
+      listing([answered('old', 'rt-old', [setup('legacy')]), answered('bare', 'rt-bare', [])])
+    )
+
+    expect(text.match(/not reported by this host's Orca version/g)).toHaveLength(3)
+    expect(text).toContain('bare (runtime rt-bare)\nNo project host setups found.')
+  })
+
+  it('says when one runtime was reached through several saved environments, and when its id is unknown', () => {
+    const text = formatFanOutListing(
+      listing([answered('first', 'rt-same', [], ['second']), answered('third', null, [])])
+    )
+
+    expect(text).toContain('first (runtime rt-same; also saved as: second)')
+    expect(text).toContain('third (runtime id not reported)')
+  })
+
+  it('says nothing was asked when no environment is saved', () => {
+    const text = formatFanOutListing({ status: 'no-saved-environments', entries: [], queried: [] })
+
+    expect(text).toContain('No saved environments, so no other Orca server was asked.')
+    expect(text).toContain('orca environment add')
+    expect(text).not.toContain('Queried')
   })
 })

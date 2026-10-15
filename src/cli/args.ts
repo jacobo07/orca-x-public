@@ -15,6 +15,7 @@ export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
 const GLOBAL_VALUE_FLAGS = new Set(['pairing-code', 'environment'])
 export const BOOLEAN_FLAGS = new Set([
   'all',
+  'all-environments',
   'apply',
   'attachments',
   'children',

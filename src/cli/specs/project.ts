@@ -12,11 +12,17 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['project', 'setups'],
     summary: 'List project host setups',
-    usage: 'orca project setups [--project <id>] [--host <host-id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
-    notes: ['A setup means a project is available on a host at a concrete filesystem path.'],
+    usage: 'orca project setups [--project <id>] [--host <host-id>] [--all-environments] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'all-environments'],
+    notes: [
+      'A setup means a project is available on a host at a concrete filesystem path.',
+      '--all-environments asks every saved environment (see `orca environment list`) for its setups; read-only, one projectHostSetup.list per environment.',
+      'A server that cannot answer is listed as its own entry: unreachable, unauthorized, unsupported-by-host (its Orca version cannot report setups) or failed (with an error code). Its replicas are unknown, never none.',
+      '--all-environments cannot be combined with --environment or --pairing-code. With --json the result is { ok, result: { status, queried, entries[] } }; each entry has outcome, environment and runtimeId, and answered entries carry setups.'
+    ],
     examples: [
       'orca project setups',
+      'orca project setups --all-environments',
       'orca project setups --project github:stablyai/orca',
       'orca project setups --host local'
     ]

@@ -261,7 +261,7 @@ Common Commands:
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--tab] [--json]
   orca project list [--json]
-  orca project setups [--project <id>] [--host <host-id>] [--json]
+  orca project setups [--project <id>] [--host <host-id>] [--all-environments] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
   orca project setup-clone --project <id> --host <host-id> --url <clone-url> --destination <path> [--display-name <name>] [--json]
   orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]

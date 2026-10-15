@@ -2,6 +2,7 @@ import type {
   ProjectHostSetupWithReplicaTopology,
   ReplicaTopologyEntry
 } from '../shared/replica-topology'
+import type { FanOutEntry, FanOutListing } from './handlers/project-setups-all-environments'
 
 export const NOT_REPORTED_BY_HOST = "not reported by this host's Orca version"
 
@@ -11,6 +12,50 @@ const DEFAULT_RUNTIME_LABEL = 'the connected Orca runtime'
 
 export function replicaListFooter(runtimeLabel: string = DEFAULT_RUNTIME_LABEL): string {
   return `Replicas known to ${runtimeLabel}; replicas owned by other paired Orca servers are not listed here.`
+}
+
+const FAN_OUT_NO_ENVIRONMENTS =
+  'No saved environments, so no other Orca server was asked. Save a paired server with `orca environment add --name <name> --pairing-code <code>`.'
+
+// Why: every unanswered runtime states that its replicas are unknown, so a failure never reads as "none".
+const FAN_OUT_UNANSWERED_TEXT = {
+  unreachable: 'unreachable (could not reach this Orca server)',
+  unauthorized: 'unauthorized (this Orca server rejected the saved pairing)',
+  'unsupported-by-host':
+    "unsupported by host (this server's Orca version cannot report project host setups)"
+} as const
+
+function fanOutSectionHeading(entry: Extract<FanOutEntry, { outcome: 'answered' }>): string {
+  const runtime = entry.runtimeId ? `runtime ${entry.runtimeId}` : 'runtime id not reported'
+  const aliases = entry.alsoReachedAs?.length
+    ? `; also saved as: ${entry.alsoReachedAs.join(', ')}`
+    : ''
+  return `${entry.environment} (${runtime}${aliases})`
+}
+
+function formatFanOutEntry(entry: FanOutEntry): string {
+  if (entry.outcome === 'answered') {
+    const body =
+      entry.setups.length === 0
+        ? 'No project host setups found.'
+        : [REPLICA_LIST_HEADER, ...entry.setups.map(formatReplicaListRow)].join('\n')
+    return `${fanOutSectionHeading(entry)}\n${body}`
+  }
+  const reason =
+    entry.outcome === 'failed'
+      ? `failed (error code ${entry.code ?? 'unknown_error'})`
+      : FAN_OUT_UNANSWERED_TEXT[entry.outcome]
+  return `${entry.environment}: ${reason}; replicas unknown, not none.`
+}
+
+/** `project setups --all-environments`: one section per runtime, then which environments were asked. */
+export function formatFanOutListing(listing: FanOutListing): string {
+  if (listing.status === 'no-saved-environments') {
+    return FAN_OUT_NO_ENVIRONMENTS
+  }
+  const count = listing.queried.length
+  const footer = `Queried ${count} saved environment${count === 1 ? '' : 's'}: ${listing.queried.join(', ')}. Replicas owned by Orca servers that are not saved as environments are not listed here.`
+  return [...listing.entries.map(formatFanOutEntry), footer].join('\n')
 }
 
 /** The word the pair service published, with its count or closed reason when it carries one. */

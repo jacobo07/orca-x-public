@@ -1,5 +1,10 @@
 import type { ProjectIdentityCollision } from '../../shared/project-identity-collisions'
 import type { ProjectHostSetupWithReplicaTopology } from '../../shared/replica-topology'
+import { getOptionalStringFlag } from '../flags'
+import { formatFanOutListing } from '../replica-topology-format'
+import { getDefaultUserDataPath, RuntimeClient } from '../runtime-client'
+import { listEnvironments } from '../runtime/environments'
+import { RuntimeClientError } from '../runtime/types'
 
 export type FanOutEnvironment = {
   id: string
@@ -173,5 +178,64 @@ export async function listSetupsAcrossEnvironments(deps: FanOutDeps): Promise<Fa
     status: 'queried',
     entries: mergeSameRuntime(entries),
     queried: environments.map((environment) => environment.name)
+  }
+}
+
+/** The fan-out picks its own targets, so an explicit target is a contradiction, not a filter. */
+function refuseExplicitTarget(flags: Map<string, string | boolean>): void {
+  for (const other of ['environment', 'pairing-code']) {
+    if (flags.has(other)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--all-environments queries every saved environment and cannot be combined with --${other}.`
+      )
+    }
+  }
+}
+
+export async function runProjectSetupsAllEnvironments(
+  ctx: { flags: Map<string, string | boolean>; json: boolean },
+  deps: FanOutDeps
+): Promise<void> {
+  // Why: refuse before listing environments or building any client, so no credential is touched.
+  refuseExplicitTarget(ctx.flags)
+  const projectFilter = getOptionalStringFlag(ctx.flags, 'project')
+  const hostFilter = getOptionalStringFlag(ctx.flags, 'host')
+  const listing = await listSetupsAcrossEnvironments(deps)
+  const filtered: FanOutListing = {
+    ...listing,
+    entries: listing.entries.map((entry) =>
+      entry.outcome === 'answered'
+        ? {
+            ...entry,
+            setups: entry.setups.filter(
+              (setup) =>
+                (projectFilter === undefined || setup.projectId === projectFilter) &&
+                (hostFilter === undefined || setup.hostId === hostFilter)
+            )
+          }
+        : entry
+    )
+  }
+  console.log(
+    ctx.json
+      ? JSON.stringify({ ok: true, result: filtered }, null, 2)
+      : formatFanOutListing(filtered)
+  )
+}
+
+// Why: a runtime that stays silent past this bound becomes an `unreachable` entry instead of stalling the listing.
+const FAN_OUT_RUNTIME_TIMEOUT_MS = 15_000
+
+export function savedEnvironmentFanOut(): FanOutDeps {
+  const userDataPath = getDefaultUserDataPath()
+  return {
+    // Why: only id, name and runtime id leave the store record; the pairing credential never does.
+    listEnvironments: () =>
+      listEnvironments(userDataPath).map(({ id, name, runtimeId }) => ({ id, name, runtimeId })),
+    // Why: a null pairing code stops ORCA_PAIRING_CODE from leaking into a per-environment client.
+    createClient: (selector, timeoutMs) =>
+      new RuntimeClient(userDataPath, timeoutMs, null, selector),
+    timeoutMs: FAN_OUT_RUNTIME_TIMEOUT_MS
   }
 }

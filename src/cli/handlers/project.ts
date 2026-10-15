@@ -33,6 +33,10 @@ import {
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
+import {
+  runProjectSetupsAllEnvironments,
+  savedEnvironmentFanOut
+} from './project-setups-all-environments'
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
   const kind = getOptionalStringFlag(flags, 'kind')
@@ -50,7 +54,12 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{ projects: Project[] }>('project.list')
     printResult(result, json, formatProjectList)
   },
-  'project setups': async ({ flags, client, json }) => {
+  'project setups': async (ctx) => {
+    if (ctx.flags.get('all-environments') === true) {
+      await runProjectSetupsAllEnvironments(ctx, savedEnvironmentFanOut())
+      return
+    }
+    const { flags, client, json } = ctx
     const projectFilter = getOptionalStringFlag(flags, 'project')
     const hostFilter = getOptionalStringFlag(flags, 'host')
     // Why: this list already carries `identityCollisions` for a host that reports them, so a
