@@ -19,8 +19,8 @@
       "done": "Workstreams visible from two authorized clients",
       "state": "ABSENT",
       "stateSource": "measured",
-      "measuredIn": "phase-1",
-      "measuredAt": "2026-09-28",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         4
@@ -33,9 +33,14 @@
           "kind": "file",
           "path": "config/scripts/workstream-surface.characterization.test.mjs",
           "note": "RED characterization: no Orca surface lists Workstreams today; Phase 4 inverts it in place"
+        },
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
         }
       ],
-      "reason": "Measured 2026-09-28: structural sweep over renderer/shared/mobile/preload/main-ipc found zero Workstream producers or surfaces (0 raw hits before exclusions); Workstreams are not visible from any Orca surface today"
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: the sweep returns 1 file (src/shared/execution-effect-refusals.ts, the Cancel refusal constants, lists no Workstream) so the reason holds, and the only Workstream source is the goal log behind uwcp.control/1 forced-command verbs (vault/specs/uwcp.md:87,94) which no GEX44-visible tip implements; nothing exists for a surface to read.; measured=`git grep -l -i -w workstream -- src/renderer src/shared src/preload src/main/ipc mobile ':!*.test.ts'`. Prior (2026-09-28): Measured 2026-09-28: structural sweep over renderer/shared/mobile/preload/main-ipc found zero Workstream producers or surfaces (0 raw hits before exclusions); Workstreams are not visible from any Orca surface today"
     },
     {
       "id": 2,
@@ -44,8 +49,8 @@
       "done": "new paired device lists Workstreams, sees no contents",
       "state": "ABSENT",
       "stateSource": "measured",
-      "measuredIn": "phase-1",
-      "measuredAt": "2026-09-28",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         4
@@ -58,9 +63,14 @@
           "kind": "file",
           "path": "config/scripts/workstream-surface.characterization.test.mjs",
           "note": "RED characterization: no Orca surface lists Workstreams today; Phase 4 inverts it in place"
+        },
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
         }
       ],
-      "reason": "Measured 2026-09-28: same structural sweep as row 1 — no Workstream listing surface exists for any client, paired or not, so a paired device cannot list Workstreams today"
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: the only RPC hits are errors.ts, methods/index.ts and workstream-cancel.ts (the refusing Cancel), no listing method for a paired device, so there is no Workstream list to scope.; measured=`git grep -n -i -E 'workstream' -- src/main/runtime/rpc ':!*.test.ts'`. Prior (2026-09-28): Measured 2026-09-28: same structural sweep as row 1 — no Workstream listing surface exists for any client, paired or not, so a paired device cannot list Workstreams today"
     },
     {
       "id": 3,
@@ -104,7 +114,7 @@
       "owner": "UWCP authority record",
       "done": "device without scope refused an Operator Event",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4,
@@ -114,8 +124,21 @@
         "UWCP control verbs (other pane)",
         "Phases 2-11"
       ],
-      "evidence": [],
-      "reason": "Orca side. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged."
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        },
+        {
+          "kind": "file",
+          "path": "src/main/runtime/rpc/methods/workstream-cancel.ts",
+          "note": "dwsrb phase 1 measured line 19"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: the only refusal is workstream_authority_unavailable naming authority uwcp.control/1 (src/shared/execution-effect-refusals.ts:21), a truthful refusal for Cancel and not a device-scope check; no Operator Event method exists in src to refuse (git grep -E \"'operator\\.|operator\\.(issue|event|ack)\" over non-test src outside the monaco grammars finds none), so the Orca precondition is already built and the authority record is UWCP.; measured=src/main/runtime/rpc/methods/workstream-cancel.ts:19. Prior (stage-zero-seed): Orca side. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged.",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 5,
@@ -123,7 +146,7 @@
       "owner": "UWCP goal log",
       "done": "Orca shows the same id from two clients",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4
@@ -131,8 +154,16 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "UWCP S1"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: the single hit is the inbound param of the refusing workstream.cancel (workstream-cancel.ts:9), so Orca has no source from which to obtain a Workstream id to show from two clients.; measured=`git grep -n -i -E 'workstreamId|workstream_id' -- src ':!*.test.ts'`. Prior (stage-zero-seed): UWCP S1",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 6,
@@ -157,7 +188,7 @@
       "owner": "UWCP epoch / orchestration run",
       "done": "new execution id, same Workstream, lineage visible",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4
@@ -165,8 +196,16 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — new execution id, same Workstream, lineage visible not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: hits are worktree lineage (parent worktree) and SSH executionIdentity for git reads, no Workstream execution id or epoch lineage; \"same Workstream\" needs UWCP identity and epoch events, the row 6 carrier is the only Orca-side part.; measured=`git grep -n -E 'executionId|lineage' -- src ':!*.test.ts' ':!src/cli/bundled-skill-guides.ts'`. Prior (stage-zero-seed): Stage Zero: PARTIAL — new execution id, same Workstream, lineage visible not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 8,
@@ -174,7 +213,7 @@
       "owner": "UWCP brief+capsule, cogws resume",
       "done": "kill execution, successor continues from frontier",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         12
@@ -182,8 +221,16 @@
       "dependsOn": [
         "Phases 2-11"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — kill execution, successor continues from frontier not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: hits are PTY drain frontiers and focus/instance successors, no brief frontier or successor epoch; the capsule half is PRESENT (S2=PRESENT) but the successor start and brief are uwcp.control/1 epoch verbs; Stop Execution is LIVE (docs/reference/detach-stop-cancel-effects.md:11) so only the continuation is missing.; measured=`git grep -n -i -E 'frontier|successor' -- src ':!*.test.ts' ':!src/cli/bundled-skill-guides.ts'`. Prior (stage-zero-seed): Stage Zero: PARTIAL — kill execution, successor continues from frontier not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 9,
@@ -329,7 +376,7 @@
       "owner": "mobile runtime client",
       "done": "mobile reads state + sends one Operator Event",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4
@@ -337,8 +384,16 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — mobile reads state + sends one Operator Event not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: 0 hits across 1266 tracked mobile files (control: pairing hits exist), workstream.cancel is desktop-only by design (config/mobile-capability-aperture-baseline.txt:329-331), and a mobile read of Workstream state needs the rows 1/2 runtime source first, so no mobile surface is buildable ahead of the Operator Event consumer.; measured=`git grep -n -i -E 'operator.?event|workstream' -- mobile ':!*.test.ts'`. Prior (stage-zero-seed): Stage Zero: PARTIAL — mobile reads state + sends one Operator Event not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 13,
@@ -346,7 +401,7 @@
       "owner": "UWCP",
       "done": "cited UWCP gate",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4
@@ -354,8 +409,16 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "other pane"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT (re-run at CPP 30fdbf0fc73a: tips=83 hits=0 controlHits=73): the matrix dependsOn cites only \"UWCP control verbs (other pane)\", so the cited gate is UWCP-control-verbs and it reads ABSENT; Orca owns no artifact for a gate that lives in the CPP repo.; measured=`node .planning/workstreams/dwsrb/phases/01-reality-re-scan-and-blocker-ledger/01-uwcp-ref-sweep.mjs --content-re 'uwcp\\.control|uwcp_control|forced[-_ ]command' --pathspec '*.py' --pathspec '*.sh' --pathspec '*.mjs' --pathspec '*.js' --pathspec '*.ts' --pathspec ':(exclude)vault' --pathspec ':(exclude)docs' --control-content-re 'operator\\.' --control-pathspec modules/gsd_x/goal/intervention.py`. Prior (stage-zero-seed): other pane",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 14,
@@ -363,7 +426,7 @@
       "owner": "UWCP brief",
       "done": "visible in Orca",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4
@@ -371,8 +434,16 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — visible in Orca not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: renderer hits are only focus-successor and settle comments (worktree-delete-execution.ts, pty-connection.ts), no brief or frontier view; the frontier is the UWCP brief (spec table row \"resume capsule\" goal/brief.py) served through the status view of uwcp.control/1, so there is nothing for Orca to render yet.; measured=`git grep -n -i -E 'frontier|successor' -- src/renderer ':!*.test.ts'`. Prior (stage-zero-seed): Stage Zero: PARTIAL — visible in Orca not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 15,
@@ -380,7 +451,7 @@
       "owner": "UWCP log",
       "done": "visible in Orca, survives client switch",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4
@@ -388,8 +459,16 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — visible in Orca, survives client switch not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: hits are code comments and provider-words notices (ConversationNotice.tsx:8, conversation-live-state.ts:36), no Workstream evidence log surface; the evidence log is the UWCP goal log read through control verbs, and \"survives client switch\" needs row 5 identity first.; measured=`git grep -n -i -w evidence -- src/renderer src/shared ':!*.test.ts'`. Prior (stage-zero-seed): Stage Zero: PARTIAL — visible in Orca, survives client switch not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 16,
@@ -507,7 +586,7 @@
       "owner": "UWCP lease store",
       "done": "contention golden",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         6
@@ -516,8 +595,16 @@
         "Phase 5",
         "UWCP lease store S4-S5"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — contention golden not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-lease-store-S4-S5 — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): lease-store=ABSENT (STATE probe: modules/lease/store.py@30fdbf0fc73a has 0 production callers on the UWCP enqueue or dispatch path); no governor in src, the 9 hits are lock-contention comments in ssh/window/pty/claude-accounts code; the reservation authority is the UWCP S4-25 VPS store (uwcp.md:221-222), an Orca-side governor would be a second authority (uwcp.md:255 a lease that does not gate the effective enqueuer is not a lease); mission-job-placement.ts load spread is not arbitration; measured=`git grep -n -i -E 'contention|ResourceGovernor|resource-governor' -- src ':!*.test.ts'`. Prior (stage-zero-seed): Stage Zero: ABSENT — contention golden not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 21,
@@ -525,7 +612,7 @@
       "owner": "UWCP lease store",
       "done": "forged/stale lease refused",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         6
@@ -534,8 +621,16 @@
         "Phase 5",
         "UWCP lease store S4-S5"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — forged/stale lease refused not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-lease-store-S4-S5 — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): lease-store=ABSENT (no production caller of the fenced LeaseStore, S4-26 fencing tests are CPP-side); the lease and leases hits (-w, plus -w leases) are unrelated (electron-debugger-lease, git status read lease, ssh pty leases, FederationAckLease) and none is a resource lease; the only mentions are comments src/shared/fleet-placement.ts:67 and db.ts:4612 that dispatch must re-resolve lease; no token format exists to validate forged or stale, Orca has nothing buildable before S5-30 issues one; measured=`git grep -n -i -w lease -- src ':!*.test.ts'`. Prior (stage-zero-seed): Stage Zero: ABSENT — forged/stale lease refused not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 22,
@@ -784,7 +879,7 @@
       "owner": "UWCP epochs / remote agent",
       "done": "same Workstream, different host",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         12
@@ -792,8 +887,16 @@
       "dependsOn": [
         "Phases 2-11"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — same Workstream, different host not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: 0 hits in the host-translation module (it exists, grep exit 1) and the only src/main/runtime hits are the refusing Cancel, so no Workstream identity crosses a host move; \"same Workstream, different host\" needs the row 5 identity and the UWCP epoch node/authority_home fields (vault/specs/uwcp.md:68), the host half is Orca's but cannot be judged without them.; measured=`grep -n -i workstream src/shared/project-working-set-host-translation.ts`. Prior (stage-zero-seed): Stage Zero: PARTIAL — same Workstream, different host not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 34,
@@ -901,7 +1004,7 @@
       "owner": "UWCP operator.*",
       "done": "issued from Orca, consumed remotely",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         4
@@ -909,8 +1012,16 @@
       "dependsOn": [
         "UWCP control verbs (other pane)"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — issued from Orca, consumed remotely not yet evidenced. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged."
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-control-verbs — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): control-verbs=ABSENT: the only issuing-side hit is the 'workstream.cancel' method name (workstream-cancel.ts:16), which refuses; the consumer is the uwcp.control/1 forced-command surface (vault/specs/uwcp.md:87) and operator.* exists only as the CPP precursor modules/gsd_x/goal/intervention.py (not a forced-command surface), so an Operator Event cannot be consumed remotely yet.; measured=`git grep -n -E \"'workstream\\.|operator\\.\" -- src ':!*.test.ts' ':!src/renderer/src/lib/monaco-languages'`. Prior (stage-zero-seed): Stage Zero: PARTIAL — issued from Orca, consumed remotely not yet evidenced. Phase 3 added workstream.cancel, which refuses workstream_authority_unavailable (authority uwcp.control/1, not built); it is a truthful refusal, not the authority, so this row is unchanged.",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 39,
@@ -1017,7 +1128,7 @@
       "owner": "UWCP routing_priors + reviews",
       "done": "verified-only priors",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         10
@@ -1026,8 +1137,16 @@
         "Phase 7",
         "Phase 9"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — verified-only priors not yet evidenced"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: UWCP-routing_priors — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): routing_priors=ABSENT (STATE probe: no vault/datasets/uwcp/routing_priors.jsonl at any of 83 tips, hits=0 controlHits=73; only external_failure_corpus.jsonl exists beside it, re-listed read-only); Orca has 0 references; the dataset is the UWCP S6a benchmark output with its writer in CPP (uwcp.md:124), so there is no schema or consumer for Orca to emit verified records against; revisit when the dataset appears, inputs from rows 37 and 43 are Orca-side; measured=`git grep -n -i -E 'routing_priors|routingPriors' -- src | head`. Prior (stage-zero-seed): Stage Zero: ABSENT — verified-only priors not yet evidenced",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 45,
@@ -1036,8 +1155,8 @@
       "done": "before/after MB + process tree",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "phase-2",
-      "measuredAt": "2026-09-30",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         2
@@ -1067,9 +1186,14 @@
           "kind": "file",
           "path": "docs/dws/phase-2-offload-3-summary.json",
           "note": "02-08 offload-3d summary: desktopRootPidValid true, legWindowCovered true, 110 samples, no failed legs"
+        },
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
         }
       ],
-      "reason": "re-measured 2026-09-30 (02-08 continuation, counted sweep offload-3d): PARTIAL, SC4 BLOCKED at rung 4 (rung 1 no FAIL on vitest, tsc, workload-wrapper; rung 2 machine comparability verdict COMPARABLE; rung 3 bracket OK, free-memory drift 201.35MB < workload peak delta 954.505MB; no agent sweep ran because the agent-turn leg is BLOCKED, so claude/codex absence is vacuous); desktop subtree resolved (desktopSubtreeSize 40); esbuild, indexer and orca-cli UNJUDGED (never sighted by the baseline); a codex.exe app-server (pid 29228, the desktop Codex app, one sample of 110) was seen on the laptop and is disclosed, not judged against the offload. Superseded earlier 02-08 text: PARTIAL at rung 2 with comparability UNJUDGED because three launches failed before the workload. Earlier text: measured 2026-09-28, corrected 2026-09-30 (02-07): absence of local claude/codex/vitest/build/indexer processes during offload was judged by run nonce only, because the remote manifest carried no desktopRootPid (desktop subtree size 1), so the desktop's own subtree was never searched; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
+      "reason": "BLOCKED_EXTERNAL: Owner:orca-svc-provider-login — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): User=orca-svc ActiveState=active MainPID=978766 (the 2026-09-30 evidence cites MainPID 1181474, so the unit has restarted since, not by this plan); ls -ld ~orca-svc/.claude ~orca-svc/.codex returned Permission denied for both (/home/orca-svc is drwx------) so UNVERIFIED:orca-svc-home-unreadable and the class rests on the reason's last measured statement, docs/dws/phase-2-agent-leg.json:25-28 (Not logged in, exit=1, 2026-09-29/30); remaining gap is the agent-turn leg (claude/codex absence stays vacuous) which only an interactive login as orca-svc closes; no Orca-side artifact is missing: dws-offload-run.ps1 and tests/e2e/dws-offload-workload.spec.ts are committed and esbuild/indexer/orca-cli are honest UNJUDGED (no positive control in the baseline), not an instrument defect; +LIVE:laptop-ram-before-after-leg (laptop Windows run, to be queued by Phase 6); measured=`systemctl show orca-dws-serve -p User -p ActiveState -p MainPID`. Prior (2026-09-30): re-measured 2026-09-30 (02-08 continuation, counted sweep offload-3d): PARTIAL, SC4 BLOCKED at rung 4 (rung 1 no FAIL on vitest, tsc, workload-wrapper; rung 2 machine comparability verdict COMPARABLE; rung 3 bracket OK, free-memory drift 201.35MB < workload peak delta 954.505MB; no agent sweep ran because the agent-turn leg is BLOCKED, so claude/codex absence is vacuous); desktop subtree resolved (desktopSubtreeSize 40); esbuild, indexer and orca-cli UNJUDGED (never sighted by the baseline); a codex.exe app-server (pid 29228, the desktop Codex app, one sample of 110) was seen on the laptop and is disclosed, not judged against the offload. Superseded earlier 02-08 text: PARTIAL at rung 2 with comparability UNJUDGED because three launches failed before the workload. Earlier text: measured 2026-09-28, corrected 2026-09-30 (02-07): absence of local claude/codex/vitest/build/indexer processes during offload was judged by run nonce only, because the remote manifest carried no desktopRootPid (desktop subtree size 1), so the desktop's own subtree was never searched; the quantitative before/after MB bracket is honestly INCONCLUSIVE on this host (free-memory drift swamps the signal), not faked as a PASS -- the plan's own formula (\"PASS iff absence PASS with positive controls AND the delta is not INCONCLUSIVE\") is not met"
     },
     {
       "id": 46,
@@ -1226,7 +1350,7 @@
       "owner": "vault",
       "done": "records written",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         13
@@ -1234,8 +1358,16 @@
       "dependsOn": [
         "Phase 12"
       ],
-      "evidence": [],
-      "reason": "program"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): the Knowledge Vault is the PP vault (vault/lessons holds 46 tracked files at CPP 30fdbf0fc73a, none names dws) and docs/orca-cognitive-workspace-spec.md:184 states \"no second Knowledge Vault\" while this repo documents no vault location (git ls-files docs | grep -i -E 'vault|knowledge' finds only docs/ai-vault-process-isolation-plan.md, the session AI-vault feature); ROADMAP Phase 10 SC1 expects \"this repo's documented locations\", so +OWNER:name-vault-record-location-or-authorize-cpp-write; staging records here (docs/dws) would not be the vault.; measured=`ls /home/kobii/.claude/skills/claude-power-pack/vault | head -30`. Prior (stage-zero-seed): program",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 53,
@@ -1243,7 +1375,7 @@
       "owner": "ukdl",
       "done": "evidence-backed rules",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         13
@@ -1251,8 +1383,16 @@
       "dependsOn": [
         "Phase 12"
       ],
-      "evidence": [],
-      "reason": "program"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): UKDL lives in the PP repo (vault/knowledge_base/ukdl-universal.md and per-topic UKDL_CANDIDATES_*.md at 30fdbf0fc73a) and a project hard rule is one entry in that project's UKDL section, while this repo tracks no UKDL file (git ls-files | grep -i ukdl is empty, only the ukdl/1.0 wire envelope is named in docs/reference/autonomous-engineering-os.md:37); done cannot be met in this repo, +OWNER:name-vault-record-location-or-authorize-cpp-write as for row 52.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i ukdl | head`. Prior (stage-zero-seed): program",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 54,
@@ -1260,7 +1400,7 @@
       "owner": "CPP baseline compiler",
       "done": "promoted standards",
       "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
       "required": true,
       "phases": [
         13
@@ -1268,8 +1408,16 @@
       "dependsOn": [
         "Phase 12"
       ],
-      "evidence": [],
-      "reason": "program"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): the Constitutive Baseline Ratchet is CPP-only (modules/tower/ratchet.py and baselines.py, tools/family_baseline.py, vault/tower/baselines/, wiki/components/constitutive-baseline-ratchet.md status LIVE at 30fdbf0fc73a) so promoted standards are written there; this repo's own ratchets (config/scripts/check-max-lines-ratchet.mjs, 17 config/*baseline*.txt) are not the CBR and do not satisfy the row.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i -E 'ratchet|baseline' | head -20`. Prior (stage-zero-seed): program",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15"
     },
     {
       "id": 55,
@@ -2133,15 +2281,21 @@
       "done": "family multi_host_fabric B0 built from verified origins; a synthetic future violation goes red",
       "state": "ABSENT",
       "stateSource": "measured",
-      "measuredIn": "HF reality scan, session 68553ff0 (Explore sweep of src/, config/, docs/)",
-      "measuredAt": "2026-09-27",
+      "measuredIn": "dwsrb phase 1",
+      "measuredAt": "2026-10-15",
       "required": true,
       "phases": [
         24
       ],
       "dependsOn": [],
-      "evidence": [],
-      "reason": "Measured 2026-09-27: tower has 4 families, none multi-host"
+      "evidence": [
+        {
+          "kind": "commit",
+          "sha": "a3e7239a51db",
+          "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        }
+      ],
+      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): CPP 30fdbf0fc73a has 4 families (vault/tower/families/{kobiicraft_mode,persistent_state,web_surface,wii_homebrew}.json) and git grep multi_host_fabric over the whole CPP tree finds 0 hits (control: persistent_state hits in modules/tower), so the reason holds with no STALE-REASON; the family JSON, its vault/tower/baselines/multi_host_fabric/B0.json and the red-on-violation test (tools/test_tower_*.py style) all live in the PP repo, and the checkout being group-writable by this user (mode 775) is not write authority since STATE Authority grants none.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i -E 'tower|famil' | head -30`. Prior (2026-09-27): Measured 2026-09-27: tower has 4 families, none multi-host"
     }
   ],
   "namedDebt": [
