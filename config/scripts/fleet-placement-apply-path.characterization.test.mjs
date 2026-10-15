@@ -146,7 +146,7 @@ export function listProductionFiles(root, relativeRoots) {
 }
 
 /** Pure: files -> repo-relative paths, read(p) -> source|null, exists(p) -> boolean. */
-export function sweepFleetProposalConsumers({ files, read, exists }) {
+export function sweepFleetProposalConsumers({ files, read, exists, subjects = SUBJECT_MODULES }) {
   const importers = new Map()
   const viewMethodCallers = []
   let scanned = 0
@@ -159,7 +159,7 @@ export function sweepFleetProposalConsumers({ files, read, exists }) {
     const names = new Set()
     for (const entry of importsOf(source)) {
       const resolved = resolveSpecifier(file, entry.specifier, exists)
-      if (resolved && SUBJECT_MODULES.includes(resolved)) {
+      if (resolved && subjects.includes(resolved)) {
         names.add(entry.name ?? '*')
       }
     }
@@ -198,6 +198,12 @@ const sweep = sweepFleetProposalConsumers({
   files: productionFiles,
   read: readRepoFile,
   exists: repoFileExists
+})
+const applyModuleSweep = sweepFleetProposalConsumers({
+  files: productionFiles,
+  read: readRepoFile,
+  exists: repoFileExists,
+  subjects: APPLY_MODULES
 })
 
 describe('dws characterization (b): the fleet placement proposal has an apply path and it is exactly the declared one', () => {
@@ -290,5 +296,252 @@ describe('dws characterization (b): the fleet placement proposal has an apply pa
     ])
     expect(result.viewMethodCallers).toContain('src/main/fleet/fleet-placement-caller.ts')
     expect(result.importers.has('src/main/fleet/fleet-placement-colors-user.ts')).toBe(false)
+  })
+})
+
+const ORCHESTRATION_MISSION = 'src/main/runtime/rpc/methods/orchestration-mission.ts'
+const ORCHESTRATION_WORKERS = 'src/main/runtime/rpc/methods/orchestration-workers.ts'
+const DISPATCH_PLACEMENT = 'src/main/runtime/orchestration/mission-dispatch-placement.ts'
+const JOB_PLACEMENT = 'src/shared/mission-job-placement.ts'
+
+// Every token the apply chain needs, per file; `ident` is what the in-memory mutant renames.
+export const APPLY_CHAIN = Object.freeze([
+  {
+    file: ORCHESTRATION_MISSION,
+    token: 'planDispatchableMission',
+    ident: 'planDispatchableMission',
+    pattern: /\bplanDispatchableMission\s*\(/
+  },
+  {
+    file: ORCHESTRATION_MISSION,
+    token: 'placeMissionTasks',
+    ident: 'placeMissionTasks',
+    pattern: /\bplaceMissionTasks\s*\(/
+  },
+  {
+    file: DISPATCH_PLACEMENT,
+    token: 'planMissionPlacement',
+    ident: 'planMissionPlacement',
+    pattern: /\bplanMissionPlacement\s*\(/
+  },
+  {
+    file: DISPATCH_PLACEMENT,
+    token: 'export assertWorkerStartMatchesPlacement',
+    ident: 'assertWorkerStartMatchesPlacement',
+    pattern: /\bexport\s+function\s+assertWorkerStartMatchesPlacement\b/
+  },
+  {
+    file: ORCHESTRATION_WORKERS,
+    token: 'call assertWorkerStartMatchesPlacement',
+    ident: 'assertWorkerStartMatchesPlacement',
+    pattern: /\bassertWorkerStartMatchesPlacement\s*\(/
+  },
+  {
+    file: JOB_PLACEMENT,
+    token: 'planFleetPlacement',
+    ident: 'planFleetPlacement',
+    pattern: /\bplanFleetPlacement\s*\(/
+  },
+  {
+    file: JOB_PLACEMENT,
+    token: 'proposal.eligible',
+    ident: 'proposal.eligible',
+    pattern: /\bproposal\.eligible\b/
+  }
+])
+
+/** Blanks comments and string/template contents, so a token living only there cannot count. */
+export function stripCommentsAndStrings(source) {
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    const c = source[i]
+    const next = source[i + 1]
+    if (c === '/' && next === '/') {
+      while (i < source.length && source[i] !== '\n') {
+        i++
+      }
+    } else if (c === '/' && next === '*') {
+      i += 2
+      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) {
+        i++
+      }
+      i += 2
+      out += ' '
+    } else if (c === "'" || c === '"' || c === '`') {
+      out += c
+      i++
+      while (i < source.length && source[i] !== c) {
+        i += source[i] === '\\' ? 2 : 1
+      }
+      out += c
+      i++
+    } else {
+      out += c
+      i++
+    }
+  }
+  return out
+}
+
+/** Pure: path -> source map in; the chain tokens that are absent out (a missing file misses all its tokens). */
+export function missingApplyChainTokens(sources, chain = APPLY_CHAIN) {
+  const stripped = new Map()
+  return chain
+    .filter((entry) => {
+      if (!stripped.has(entry.file)) {
+        const text = sources[entry.file]
+        stripped.set(entry.file, typeof text === 'string' ? stripCommentsAndStrings(text) : null)
+      }
+      const text = stripped.get(entry.file)
+      return text === null || !entry.pattern.test(text)
+    })
+    .map((entry) => ({ file: entry.file, token: entry.token }))
+}
+
+export function applyChainHolds(sources) {
+  return missingApplyChainTokens(sources).length === 0
+}
+
+// Production importers of the two apply modules (tests and tests/e2e sit outside PRODUCTION_ROOTS by design).
+export const APPLY_MODULE_IMPORTERS = Object.freeze({
+  [ORCHESTRATION_MISSION]: {
+    reason:
+      'orchestration.missionPlace plans through planDispatchableMission and persists with db.placeMissionTasks; missionResults reads dispatchRanOnPlacement and integrateMissionResults'
+  },
+  [ORCHESTRATION_WORKERS]: {
+    reason:
+      'orchestration.workerStart calls assertWorkerStartMatchesPlacement before any dispatch row exists, re-reading the peer fingerprint at the effect'
+  },
+  [DISPATCH_PLACEMENT]: {
+    reason:
+      'the dispatch module imports planMissionPlacement from the job module and filters dispatchable members first'
+  }
+})
+
+const SYNTHETIC_CHAIN_SOURCES = Object.freeze({
+  [ORCHESTRATION_MISSION]:
+    'const plan = planDispatchableMission(tasks, members, request)\ndb.placeMissionTasks(run.id, plan.placements)',
+  [ORCHESTRATION_WORKERS]: 'assertWorkerStartMatchesPlacement(placement, remote)',
+  [DISPATCH_PLACEMENT]:
+    'const plan = planMissionPlacement(jobs, members, request)\nexport function assertWorkerStartMatchesPlacement() {}',
+  [JOB_PLACEMENT]:
+    'const proposal = planFleetPlacement(members, request)\nconst pick = proposal.eligible[0]'
+})
+
+function realChainSources() {
+  const sources = {}
+  for (const file of Object.keys(SYNTHETIC_CHAIN_SOURCES)) {
+    const text = readRepoFile(file)
+    expect(text, `${file} could not be read`).not.toBeNull()
+    sources[file] = text
+  }
+  return sources
+}
+
+describe('dws characterization (b): the apply chain acts on the proposal and re-resolves at the effect', () => {
+  it('the chain holds at the tree: missionPlace plans then persists, the planners judge, the start is re-checked', () => {
+    expect(missingApplyChainTokens(realChainSources())).toEqual([])
+    expect(applyChainHolds(realChainSources())).toBe(true)
+  })
+
+  it('synthetic positive control: sources carrying every token satisfy the predicate', () => {
+    expect(applyChainHolds({ ...SYNTHETIC_CHAIN_SOURCES })).toBe(true)
+  })
+
+  it('synthetic negative controls: a dropped call, an absent file and a mere import are refused', () => {
+    const dropped = {
+      ...SYNTHETIC_CHAIN_SOURCES,
+      [ORCHESTRATION_MISSION]: 'const plan = planDispatchableMission(tasks, members, request)'
+    }
+    expect(applyChainHolds(dropped)).toBe(false)
+    expect(missingApplyChainTokens(dropped).map((m) => m.token)).toEqual(['placeMissionTasks'])
+    const { [JOB_PLACEMENT]: _omitted, ...absent } = SYNTHETIC_CHAIN_SOURCES
+    expect(applyChainHolds(absent)).toBe(false)
+    const importOnly = {
+      ...SYNTHETIC_CHAIN_SOURCES,
+      [JOB_PLACEMENT]:
+        "import { planFleetPlacement } from './fleet-placement'\nconst pick = proposal.eligible[0]"
+    }
+    expect(applyChainHolds(importOnly)).toBe(false)
+  })
+
+  it('synthetic negative controls: tokens only inside a line comment, a block comment or a string do not count', () => {
+    for (const hidden of [
+      '// db.placeMissionTasks(run.id, plan)',
+      '/* db.placeMissionTasks(run.id, plan) */',
+      "const doc = 'db.placeMissionTasks(run.id, plan)'",
+      'const doc = `db.placeMissionTasks(run.id, plan)`'
+    ]) {
+      const sources = {
+        ...SYNTHETIC_CHAIN_SOURCES,
+        [ORCHESTRATION_MISSION]: `const plan = planDispatchableMission(tasks, members, request)\n${hidden}`
+      }
+      expect(applyChainHolds(sources), hidden).toBe(false)
+    }
+    // Control for the stripper itself: code after a comment on the next line is still seen.
+    const afterComment = {
+      ...SYNTHETIC_CHAIN_SOURCES,
+      [ORCHESTRATION_MISSION]:
+        '// note\nconst plan = planDispatchableMission(tasks, members, request) /* x */\ndb.placeMissionTasks(run.id, plan)'
+    }
+    expect(applyChainHolds(afterComment)).toBe(true)
+  })
+
+  // M7 runs on text in memory only; plan 04-01 shares the checkout, so no source file is ever edited.
+  it.each(APPLY_CHAIN.map((entry) => [`${entry.file} :: ${entry.token}`, entry]))(
+    'M7 in-memory mutation: renaming %s in the real source breaks the chain',
+    (_label, entry) => {
+      const real = realChainSources()
+      expect(applyChainHolds(real)).toBe(true)
+      const text = real[entry.file]
+      const mutated = text.replaceAll(entry.ident, `${entry.ident}Mutated`)
+      expect(
+        mutated,
+        `${entry.ident} not present in ${entry.file}: a mutation that changed nothing`
+      ).not.toBe(text)
+      expect(applyChainHolds({ ...real, [entry.file]: mutated })).toBe(false)
+    }
+  )
+
+  it('the importers of the two apply modules are exactly the declared set', () => {
+    const found = [...applyModuleSweep.importers.keys()].sort()
+    const declared = Object.keys(APPLY_MODULE_IMPORTERS).sort()
+    expect(
+      found.filter((f) => !declared.includes(f)),
+      'new importer of an apply module — declare it in APPLY_MODULE_IMPORTERS with a reason'
+    ).toEqual([])
+    expect(
+      declared.filter((f) => !found.includes(f)),
+      'declared importer of an apply module no longer imports one — stale entry'
+    ).toEqual([])
+    for (const [file, entry] of Object.entries(APPLY_MODULE_IMPORTERS)) {
+      expect(entry.reason.trim().length, `${file} has no reason`).toBeGreaterThan(0)
+    }
+  })
+
+  it('apply-importer sweep controls: the subjects parameter retargets the sweep and the default is unchanged', () => {
+    expect(applyModuleSweep.importers.get(ORCHESTRATION_WORKERS)).toEqual(
+      expect.arrayContaining(['assertWorkerStartMatchesPlacement'])
+    )
+    expect(sweep.importers.has(ORCHESTRATION_WORKERS)).toBe(false)
+    const map = new Map([
+      [JOB_PLACEMENT, 'export function planMissionPlacement() {}'],
+      [
+        'src/main/runtime/orchestration/synthetic-apply-user.ts',
+        "import { planMissionPlacement } from '../../../shared/mission-job-placement'\nplanMissionPlacement()"
+      ]
+    ])
+    const synthetic = {
+      files: ['src/main/runtime/orchestration/synthetic-apply-user.ts'],
+      read: (p) => map.get(p) ?? null,
+      exists: (p) => map.has(p)
+    }
+    expect(
+      sweepFleetProposalConsumers({ ...synthetic, subjects: [JOB_PLACEMENT] }).importers.has(
+        'src/main/runtime/orchestration/synthetic-apply-user.ts'
+      )
+    ).toBe(true)
+    expect(sweepFleetProposalConsumers(synthetic).importers.size).toBe(0)
   })
 })
