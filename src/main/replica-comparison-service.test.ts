@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import type * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,7 +13,37 @@ import {
   compareWithSshRelayReplica,
   type ReplicaComparisonRequest
 } from './replica-comparison-service'
+import type { gitExecFileAsync } from './git/runner'
 import { resetSshRelayCapabilityCacheForTests } from './ssh/ssh-relay-capabilities'
+
+// Pass-through fakes; a test arms one fault: the local bundle write, or only `git fetch`.
+const fault = vi.hoisted(() => ({ write: null as unknown, fetch: null as unknown }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const real = await importOriginal<typeof fsPromises>()
+  return {
+    ...real,
+    open: async (...args: Parameters<typeof fsPromises.open>) => {
+      const handle = await real.open(...args)
+      return new Proxy(handle, {
+        get(target, key) {
+          if (key === 'write' && fault.write) {
+            return () => Promise.reject(fault.write)
+          }
+          const value = Reflect.get(target, key)
+          return typeof value === 'function' ? value.bind(target) : value
+        }
+      })
+    }
+  }
+})
+vi.mock('./git/runner', async (importOriginal) => {
+  const real = await importOriginal<Record<string, unknown> & { gitExecFileAsync: typeof gitExecFileAsync }>()
+  return {
+    ...real,
+    gitExecFileAsync: (argv: string[], options: Parameters<typeof gitExecFileAsync>[1]) =>
+      argv[0] === 'fetch' && fault.fetch ? Promise.reject(fault.fetch) : real.gitExecFileAsync(argv, options)
+  }
+})
 
 const ENV = {
   ...process.env,
@@ -33,6 +64,7 @@ let remote: string
 let d: ReturnType<typeof createMockDispatcher>
 let h: GitReplicaHandler
 let calls: string[]
+let savedTmpdir: string | undefined
 
 function relay(capabilities: string[], tamper?: (method: string, r: unknown) => unknown): ReplicaComparisonRequest {
   return async (method, params) => {
@@ -48,7 +80,13 @@ function relay(capabilities: string[], tamper?: (method: string, r: unknown) => 
 beforeEach(() => {
   resetSshRelayCapabilityCacheForTests()
   calls = []
+  fault.write = null
+  fault.fetch = null
+  savedTmpdir = process.env.TMPDIR
   root = mkdtempSync(join(tmpdir(), 'x08-'))
+  // The scratch directory is listed by name below: give this file a tmpdir no other test writes to.
+  mkdirSync(join(root, 'tmp'))
+  process.env.TMPDIR = join(root, 'tmp')
   local = join(root, 'local')
   remote = join(root, 'remote')
   git(root, 'init', '-q', '-b', 'main', local)
@@ -59,6 +97,11 @@ beforeEach(() => {
 })
 afterEach(async () => {
   await h.dispose()
+  if (savedTmpdir === undefined) {
+    delete process.env.TMPDIR
+  } else {
+    process.env.TMPDIR = savedTmpdir
+  }
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -142,6 +185,60 @@ describe('compareWithRelayReplica', () => {
   it('a malformed export response is relay-bad-response', async () => {
     const r = await run(relay(['git.replicaBundle'], (m, x) => (m === 'git.replicaBundleExport' ? { nope: 1 } : x)))
     expect(r).toMatchObject({ ok: false, reason: 'relay-bad-response' })
+  })
+})
+
+const scratchDirs = (): string[] => readdirSync(tmpdir()).filter((n) => n.startsWith('orca-replica-recv-'))
+const errno = (code: string, message: string): Error => Object.assign(new Error(message), { code })
+
+describe('the disk-full cause (row 65)', () => {
+  it('a local ENOSPC while writing the bundle is transfer-interrupted with cause disk-full, not a throw', async () => {
+    commit(remote, 'r1')
+    fault.write = errno('ENOSPC', 'ENOSPC: no space left on device, write')
+    const r = await run(relay(['git.replicaBundle']))
+    expect(r).toEqual({ ok: false, reason: 'transfer-interrupted', evidence: null, cause: 'disk-full' })
+    expect(calls.at(-1)).toBe('git.replicaBundleRelease')
+    expect(scratchDirs()).toEqual([])
+    expect(git(local, 'for-each-ref', 'refs/orca/replicas')).toBe('')
+  })
+
+  it('control: a relay call that rejects with ECONNRESET still throws to the caller unchanged', async () => {
+    commit(remote, 'r1')
+    const dropped = relay(['git.replicaBundle'])
+    const failing: ReplicaComparisonRequest = (m, p, o) =>
+      m === 'git.replicaBundleRead' ? Promise.reject(errno('ECONNRESET', 'read ECONNRESET')) : dropped(m, p, o)
+    await expect(run(failing)).rejects.toThrow('read ECONNRESET')
+    expect(scratchDirs()).toEqual([])
+  })
+
+  it('control: a local write error that is not a full disk is still thrown, with no cause result', async () => {
+    commit(remote, 'r1')
+    fault.write = errno('EACCES', 'EACCES: permission denied, write')
+    await expect(run(relay(['git.replicaBundle']))).rejects.toThrow('EACCES')
+    expect(scratchDirs()).toEqual([])
+  })
+
+  it('an ENOSPC in the receive fetch is carried into the comparison failure', async () => {
+    commit(remote, 'r1')
+    fault.fetch = errno('ENOSPC', 'Command failed')
+    const r = await run(relay(['git.replicaBundle']))
+    expect(r).toEqual({ ok: false, reason: 'transfer-interrupted', evidence: null, cause: 'disk-full' })
+    expect(git(local, 'for-each-ref', 'refs/orca/replicas')).toBe('')
+  })
+
+  it('control: a fetch that fails with a disconnect has no cause key', async () => {
+    commit(remote, 'r1')
+    fault.fetch = errno('ECONNRESET', 'read ECONNRESET')
+    const r = await run(relay(['git.replicaBundle']))
+    expect(r).toEqual({ ok: false, reason: 'transfer-interrupted', evidence: null })
+    expect('cause' in r).toBe(false)
+  })
+
+  it('control: the same input without a fault succeeds and carries no cause', async () => {
+    commit(remote, 'r1')
+    const r = await run(relay(['git.replicaBundle']))
+    expect(r.ok).toBe(true)
+    expect('cause' in r).toBe(false)
   })
 })
 

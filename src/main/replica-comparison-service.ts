@@ -14,6 +14,7 @@ import {
 } from '../shared/workspace-replica-state'
 import { gitExecFileAsync } from './git/runner'
 import { decideReplicaAncestry, receiveReplicaBundle, type DeclaredHead } from './replica-bundle-receive'
+import { isDiskFullError, type ReplicaFailureCause } from './replica-failure-cause'
 import { getSshConnectionGeneration } from './ssh/ssh-connection-generation'
 import { relaySupportsReplicaBundle, type RelayCapabilityRequest } from './ssh/ssh-relay-capabilities'
 
@@ -33,7 +34,12 @@ export type ReplicaComparisonFailure =
 
 export type ReplicaComparisonResult =
   | { ok: true; evidence: ReplicaPairEvidence; refs: Record<string, string> }
-  | { ok: false; reason: ReplicaComparisonFailure; evidence: ReplicaPairEvidence | null }
+  | {
+      ok: false
+      reason: ReplicaComparisonFailure
+      evidence: ReplicaPairEvidence | null
+      cause?: ReplicaFailureCause
+    }
 
 function parseHeads(value: unknown): DeclaredHead[] | null {
   if (!Array.isArray(value)) {
@@ -124,7 +130,15 @@ export async function compareWithRelayReplica(args: {
         if (buf.length !== chunk.bytesRead) {
           return { ok: false, reason: 'transfer-interrupted', evidence: null }
         }
-        await fh.write(buf, 0, buf.length, offset)
+        try {
+          await fh.write(buf, 0, buf.length, offset)
+        } catch (error) {
+          // Only the local write can fill this host's disk; any other write error propagates as before.
+          if (isDiskFullError(error)) {
+            return { ok: false, reason: 'transfer-interrupted', evidence: null, cause: 'disk-full' }
+          }
+          throw error
+        }
         hash.update(buf)
         offset += buf.length
         if (chunk.eof === true) {
@@ -149,7 +163,12 @@ export async function compareWithRelayReplica(args: {
       hostKey
     })
     if (!received.ok) {
-      return { ok: false, reason: received.reason, evidence: null }
+      return {
+        ok: false,
+        reason: received.reason,
+        evidence: null,
+        ...(received.cause ? { cause: received.cause } : {})
+      }
     }
     let localTip: string
     try {

@@ -1,16 +1,57 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GitReplicaHandler } from '../relay/git-replica-handler'
 import { createMockDispatcher, type RelayDispatcher } from '../relay/git-handler-test-setup'
-import type { ReplicaComparisonRequest } from './replica-comparison-service'
+import type { compareWithRelayReplica, ReplicaComparisonRequest } from './replica-comparison-service'
 import { fastForwardToDescendant, syncFromRelayReplica, type GitRun } from './replica-sync'
 import { localCapsuleGit } from './replica-capsule-git'
 import type { CapsuleGitRun } from './replica-capsule'
 import { gitExecFileAsync } from './git/runner'
 import { resetSshRelayCapabilityCacheForTests } from './ssh/ssh-relay-capabilities'
+
+// Pass-through fakes; a test arms one fault (local bundle write, `git fetch`) or reads the last comparison result.
+const fault = vi.hoisted(() => ({ write: null as unknown, fetch: null as unknown, lastComparison: null as unknown }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const real = await importOriginal<typeof fsPromises>()
+  return {
+    ...real,
+    open: async (...args: Parameters<typeof fsPromises.open>) => {
+      const handle = await real.open(...args)
+      return new Proxy(handle, {
+        get(target, key) {
+          if (key === 'write' && fault.write) {
+            return () => Promise.reject(fault.write)
+          }
+          const value = Reflect.get(target, key)
+          return typeof value === 'function' ? value.bind(target) : value
+        }
+      })
+    }
+  }
+})
+vi.mock('./git/runner', async (importOriginal) => {
+  const real = await importOriginal<Record<string, unknown> & { gitExecFileAsync: typeof gitExecFileAsync }>()
+  return {
+    ...real,
+    gitExecFileAsync: (argv: string[], options: Parameters<typeof gitExecFileAsync>[1]) =>
+      argv[0] === 'fetch' && fault.fetch ? Promise.reject(fault.fetch) : real.gitExecFileAsync(argv, options)
+  }
+})
+vi.mock('./replica-comparison-service', async (importOriginal) => {
+  const real = await importOriginal<Record<string, unknown> & { compareWithRelayReplica: typeof compareWithRelayReplica }>()
+  return {
+    ...real,
+    compareWithRelayReplica: async (...args: Parameters<typeof compareWithRelayReplica>) => {
+      const result = await real.compareWithRelayReplica(...args)
+      fault.lastComparison = result
+      return result
+    }
+  }
+})
 
 const ENV = {
   ...process.env,
@@ -36,9 +77,17 @@ let remote: string
 let base: string
 let d: ReturnType<typeof createMockDispatcher>
 let h: GitReplicaHandler
+let savedTmpdir: string | undefined
 beforeEach(() => {
   resetSshRelayCapabilityCacheForTests()
+  fault.write = null
+  fault.fetch = null
+  fault.lastComparison = null
+  savedTmpdir = process.env.TMPDIR
   root = mkdtempSync(join(tmpdir(), 'x11-'))
+  // The bundle scratch directory lands under os.tmpdir(): keep it inside this test's root.
+  mkdirSync(join(root, 'tmp'))
+  process.env.TMPDIR = join(root, 'tmp')
   local = join(root, 'local')
   remote = join(root, 'remote')
   git(root, 'init', '-q', '-b', 'main', local)
@@ -49,6 +98,11 @@ beforeEach(() => {
 })
 afterEach(async () => {
   await h.dispose()
+  if (savedTmpdir === undefined) {
+    delete process.env.TMPDIR
+  } else {
+    process.env.TMPDIR = savedTmpdir
+  }
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -136,7 +190,9 @@ describe('syncFromRelayReplica', () => {
     commitFile(remote, 'b.txt', 'b\n')
     commitFile(local, 'c.txt', 'c\n')
     const head = git(local, 'rev-parse', 'HEAD')
-    expect(await sync(relay())).toEqual({ ok: false, reason: 'not-behind' })
+    const r = await sync(relay())
+    expect(r).toMatchObject({ ok: false, reason: 'not-behind' })
+    expect(!r.ok && r.evidence).toBe((fault.lastComparison as { evidence: unknown }).evidence)
     expect(git(local, 'rev-parse', 'HEAD')).toBe(head)
     expect(capsules(local)).toHaveLength(0)
   })
@@ -185,6 +241,139 @@ describe('syncFromRelayReplica', () => {
     expect(r).toMatchObject({ ok: false, reason: 'stale-generation' })
     expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
     expect(capsules(local)).toHaveLength(1)
+  })
+})
+
+const errno = (code: string, message: string): Error => Object.assign(new Error(message), { code })
+const ffCalls = (calls: string[][]): GitRun => (argv, opts) => {
+  calls.push(argv)
+  return gitExecFileAsync(argv, opts)
+}
+
+describe('the failure cause and the not-behind evidence (row 65)', () => {
+  it('a local ENOSPC writing the bundle is compare-transfer-interrupted with cause disk-full, HEAD unmoved', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    fault.write = errno('ENOSPC', 'ENOSPC: no space left on device, write')
+    expect(await sync(relay())).toEqual({ ok: false, reason: 'compare-transfer-interrupted', cause: 'disk-full' })
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+    expect(capsules(local)).toHaveLength(0)
+  })
+
+  it('an ENOSPC in the receive fetch is compare-transfer-interrupted with cause disk-full, no replica ref', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    fault.fetch = errno('ENOSPC', 'Command failed')
+    expect(await sync(relay())).toEqual({ ok: false, reason: 'compare-transfer-interrupted', cause: 'disk-full' })
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+    expect(git(local, 'for-each-ref', 'refs/orca/replicas')).toBe('')
+  })
+
+  it('a thrown comparison error that is a full disk carries the cause', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    const request: ReplicaComparisonRequest = async (m, p, o) => {
+      if (m === 'git.replicaBundleExport') {
+        throw errno('ENOSPC', 'ENOSPC: no space left on device')
+      }
+      return relay()(m, p, o)
+    }
+    expect(await sync(request)).toEqual({ ok: false, reason: 'compare-transfer-interrupted', cause: 'disk-full' })
+  })
+
+  it('control: a relay disconnect is compare-transfer-interrupted with no cause key', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    const request: ReplicaComparisonRequest = async (m, p, o) => {
+      if (m === 'git.replicaBundleRead') {
+        throw errno('ECONNRESET', 'read ECONNRESET')
+      }
+      return relay()(m, p, o)
+    }
+    const r = await sync(request)
+    expect(r).toEqual({ ok: false, reason: 'compare-transfer-interrupted' })
+    expect('cause' in r).toBe(false)
+  })
+
+  it('control: a fetch that fails with a disconnect has no cause key', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    fault.fetch = errno('ECONNRESET', 'read ECONNRESET')
+    const r = await sync(relay())
+    expect(r).toEqual({ ok: false, reason: 'compare-transfer-interrupted' })
+    expect('cause' in r).toBe(false)
+  })
+
+  it('control: a stale generation is stale-generation with no cause key', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    const r = await sync(relay(), () => 2)
+    expect(r).toEqual({ ok: false, reason: 'stale-generation' })
+    expect('cause' in r).toBe(false)
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+  })
+
+  it('an ENOSPC at the capsule write is capsule-failed with cause disk-full; no merge runs and HEAD is unmoved', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    writeFileSync(join(local, 'a.txt'), 'dirty\n')
+    const calls: string[][] = []
+    const full: CapsuleGitRun = (argv, opts) =>
+      argv.includes('write-tree')
+        ? Promise.reject(errno('ENOSPC', 'error: unable to write file: No space left on device'))
+        : localCapsuleGit(argv, opts)
+    const r = await sync(relay(), () => 1, ffCalls(calls), full)
+    expect(r).toEqual({ ok: false, reason: 'capsule-failed', cause: 'disk-full' })
+    expect(calls.some((argv) => argv[0] === 'merge')).toBe(false)
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+    expect(readFileSync(join(local, 'a.txt'), 'utf8')).toBe('dirty\n')
+    expect(capsules(local)).toHaveLength(0)
+  })
+
+  it('control: a capsule that fails for another reason is capsule-failed with no cause key', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    writeFileSync(join(local, 'a.txt'), 'dirty\n')
+    const broken: CapsuleGitRun = (argv, opts) =>
+      argv.includes('write-tree') ? Promise.reject(errno('EACCES', 'permission denied')) : localCapsuleGit(argv, opts)
+    const r = await sync(relay(), () => 1, undefined, broken)
+    expect(r).toEqual({ ok: false, reason: 'capsule-failed' })
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+  })
+
+  it('an ENOSPC at the fast-forward is ff-failed with cause disk-full, capsule kept, HEAD unmoved', async () => {
+    commitFile(remote, 'b.txt', 'b\n')
+    writeFileSync(join(local, 'untracked.txt'), 'u\n')
+    const full: GitRun = (argv, opts) =>
+      argv[0] === 'merge'
+        ? Promise.reject(Object.assign(new Error('Command failed'), { stderr: 'fatal: No space left on device' }))
+        : gitExecFileAsync(argv, opts)
+    const r = await sync(relay(), () => 1, full)
+    expect(r).toMatchObject({ ok: false, reason: 'ff-failed', cause: 'disk-full' })
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(base)
+    expect(capsules(local)).toHaveLength(1)
+  })
+
+  it('control: a fast-forward refused by a dirty overwrite is ff-failed with no cause key', async () => {
+    commitFile(remote, 'a.txt', 'remote change\n')
+    writeFileSync(join(local, 'a.txt'), 'dirty\n')
+    const r = await sync(relay())
+    expect(r).toMatchObject({ ok: false, reason: 'ff-failed' })
+    expect('cause' in r).toBe(false)
+  })
+
+  it('not-behind returns the comparison evidence object for diverged, ahead and same, and changes nothing', async () => {
+    const same = await sync(relay())
+    expect(same).toMatchObject({ ok: false, reason: 'not-behind' })
+    expect(!same.ok && same.evidence).toBe((fault.lastComparison as { evidence: unknown }).evidence)
+    expect(!same.ok && same.evidence?.outcome).toEqual({ ok: true, ancestry: { kind: 'same' } })
+    commitFile(local, 'c.txt', 'c\n')
+    const ahead = await sync(relay())
+    expect(!ahead.ok && ahead.evidence?.outcome).toMatchObject({ ok: true, ancestry: { kind: 'ahead', count: 1 } })
+    commitFile(remote, 'b.txt', 'b\n')
+    const head = git(local, 'rev-parse', 'HEAD')
+    const diverged = await sync(relay())
+    expect(!diverged.ok && diverged.evidence?.observedTips[0]).toBe(head)
+    expect(!diverged.ok && diverged.evidence?.outcome).toMatchObject({ ok: true, ancestry: { kind: 'diverged' } })
+    expect(git(local, 'rev-parse', 'HEAD')).toBe(head)
+    expect(capsules(local)).toHaveLength(0)
+  })
+
+  it('control: a behind replica succeeds with no evidence and no cause field', async () => {
+    const tip = commitFile(remote, 'b.txt', 'b\n')
+    expect(await sync(relay())).toEqual({ ok: true, from: base, to: tip })
   })
 })
 

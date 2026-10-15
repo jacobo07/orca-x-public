@@ -1,9 +1,11 @@
 // One-way safe sync (row 65): fast-forward the local checked-out branch to a proven descendant tip.
 // Order: generation fence -> tip fence -> descendant proof -> capsule (verified) -> git merge --ff-only -> verify.
 // Anything else (diverged, stale, disk-full, disconnect) stays a typed failure and never moves HEAD.
+import type { ReplicaPairEvidence } from '../shared/workspace-replica-state'
 import { gitExecFileAsync } from './git/runner'
 import { createCapsule, type CapsuleGitRun } from './replica-capsule'
 import { localCapsuleGit } from './replica-capsule-git'
+import { isDiskFullError, type ReplicaFailureCause } from './replica-failure-cause'
 import {
   compareWithRelayReplica,
   type ReplicaComparisonFailure,
@@ -25,11 +27,23 @@ export type ReplicaSyncFailure =
 
 export type ReplicaSyncResult =
   | { ok: true; from: string; to: string; capsuleRef?: string; capsuleCommit?: string }
-  | { ok: false; reason: ReplicaSyncFailure; capsuleRef?: string }
+  | {
+      ok: false
+      reason: ReplicaSyncFailure
+      capsuleRef?: string
+      /** Set only when the local disk was full; a disconnect or a stale generation carries none. */
+      cause?: ReplicaFailureCause
+      /** The comparison a `not-behind` was decided on. */
+      evidence?: ReplicaPairEvidence
+    }
 
 export type GitRun = (argv: string[], opts: { cwd: string; env?: NodeJS.ProcessEnv }) => Promise<{ stdout: string }>
 
 const defaultGit: GitRun = (argv, opts) => gitExecFileAsync(argv, opts)
+
+function causeOf(error: unknown): { cause?: ReplicaFailureCause } {
+  return isDiskFullError(error) ? { cause: 'disk-full' } : {}
+}
 
 async function ok(run: Promise<unknown>): Promise<boolean> {
   try {
@@ -80,9 +94,13 @@ export async function fastForwardToDescendant(args: {
   }
 
   // A refused or throwing capsule must stop here: moving HEAD without a recoverable copy of the dirty tree is data loss.
-  const capsule = await createCapsule(args.capsuleGit ?? localCapsuleGit, repoPath).catch((): null => null)
+  let capsuleError: unknown
+  const capsule = await createCapsule(args.capsuleGit ?? localCapsuleGit, repoPath).catch((error: unknown): null => {
+    capsuleError = error
+    return null
+  })
   if (!capsule || capsule.kind === 'refused') {
-    return { ok: false, reason: 'capsule-failed' }
+    return { ok: false, reason: 'capsule-failed', ...causeOf(capsuleError) }
   }
   const capsuleFields = capsule.kind === 'created' ? { capsuleRef: capsule.ref, capsuleCommit: capsule.sha } : {}
 
@@ -93,8 +111,16 @@ export async function fastForwardToDescendant(args: {
   if ((await head()) !== expectedLocalTip) {
     return { ok: false, reason: 'stale-tip', ...capsuleFields }
   }
-  if (!(await ok(git(['merge', '--ff-only', '--quiet', targetTip], { cwd: repoPath })))) {
-    return { ok: false, reason: 'ff-failed', ...capsuleFields }
+  let mergeError: unknown
+  const merged = await git(['merge', '--ff-only', '--quiet', targetTip], { cwd: repoPath }).then(
+    () => true,
+    (error: unknown) => {
+      mergeError = error
+      return false
+    }
+  )
+  if (!merged) {
+    return { ok: false, reason: 'ff-failed', ...causeOf(mergeError), ...capsuleFields }
   }
   if ((await head()) !== targetTip) {
     return { ok: false, reason: 'verify-failed', ...capsuleFields }
@@ -115,6 +141,7 @@ export async function syncFromRelayReplica(args: {
   capsuleGit?: CapsuleGitRun
 }): Promise<ReplicaSyncResult> {
   // A relay request that throws (disconnect, timeout) is a transfer failure, never a crash or a guess.
+  let compareError: unknown
   const compared = await compareWithRelayReplica({
     connectionId: args.connectionId,
     generation: args.generation,
@@ -122,16 +149,19 @@ export async function syncFromRelayReplica(args: {
     localRepoPath: args.localRepoPath,
     remoteRepoPath: args.remoteRepoPath,
     hostKey: args.hostKey
-  }).catch((): null => null)
+  }).catch((error: unknown): null => {
+    compareError = error
+    return null
+  })
   if (!compared) {
-    return { ok: false, reason: 'compare-transfer-interrupted' }
+    return { ok: false, reason: 'compare-transfer-interrupted', ...causeOf(compareError) }
   }
   if (!compared.ok) {
-    return { ok: false, reason: `compare-${compared.reason}` }
+    return { ok: false, reason: `compare-${compared.reason}`, ...(compared.cause ? { cause: compared.cause } : {}) }
   }
   const { outcome, observedTips } = compared.evidence
   if (!outcome.ok || outcome.ancestry.kind !== 'behind') {
-    return { ok: false, reason: 'not-behind' }
+    return { ok: false, reason: 'not-behind', evidence: compared.evidence }
   }
   return fastForwardToDescendant({
     repoPath: args.localRepoPath,
