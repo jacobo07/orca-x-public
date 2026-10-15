@@ -10,6 +10,53 @@
     }
   },
   "workingSet": {
+    "continue": {
+      "action": "在此继续",
+      "running": "正在继续…",
+      "targetLabel": "继续到",
+      "targetPlaceholder": "选择主机",
+      "result": {
+        "restored": "已在另一台主机上恢复。尚未启动任何内容；标签页只有在打开时才会启动。",
+        "restoredEmpty": "已恢复，但此快照没有可打开的终端。",
+        "restoredUnlisted": "已恢复，但无法列出每个标签页将执行的操作。",
+        "hostUnverified": "尚未验证该主机，因此未恢复任何内容。连接后请重试。",
+        "inFlight": "该工作区的另一次恢复尚未完成。"
+      },
+      "refusal": {
+        "sourceSetupProjectMismatch": "此工作区的设置与要继续的项目不一致。",
+        "targetSetupProjectMismatch": "该主机上的设置属于另一个项目。",
+        "targetSetupMissing": "此项目尚未在该主机上设置。",
+        "targetSetupNotReady": "此项目在该主机上的设置尚未就绪。",
+        "sameHost": "此快照已经属于该主机。",
+        "sourceHostMismatch": "此快照保存于与此工作区设置不同的主机。",
+        "locationOutsideSourceSetup": "此工作区位于项目文件夹之外，因此在该主机上没有对应位置。",
+        "locationKindUnsupported": "只有项目的工作树可以在另一台主机上继续，普通文件夹不行。",
+        "startupCwdOutsideSourceSetup": "此快照中的某个终端在项目文件夹之外启动，因此无法在该主机上对应。"
+      },
+      "unavailable": {
+        "targetWorkspaceMissing": "尚未在那里设置：该主机上此工作区的副本在此客户端中未打开。未更改任何内容。",
+        "sourceSetupMissing": "找不到此工作区自身的设置，因此无法在其他主机上继续。"
+      },
+      "pane": {
+        "label": "终端 {{number}}",
+        "disposition": {
+          "reattach": "重新连接到正在运行的终端",
+          "resume": "恢复智能体会话",
+          "restart": "在其文件夹中启动新终端",
+          "unavailable": "无法在那里打开"
+        },
+        "reason": {
+          "liveOnTarget": "已在那里运行。",
+          "providerSessionPresent": "其智能体会话在该主机上。",
+          "relaunchable": "可以按已保存的启动方式重新启动。",
+          "hostUnavailable": "该主机不可用。",
+          "hostUnverified": "尚未验证该主机。",
+          "liveElsewhere": "已在别处打开。",
+          "notConfirmed": "无法在那里确认其会话。",
+          "nothingRunnable": "没有可运行的内容。"
+        }
+      }
+    },
     "dormantTerminal": {
       "title": "已恢复，未运行",
       "sleptTitle": "已休眠，未运行",

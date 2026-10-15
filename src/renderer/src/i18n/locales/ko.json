@@ -10,6 +10,53 @@
     }
   },
   "workingSet": {
+    "continue": {
+      "action": "여기서 계속",
+      "running": "계속하는 중…",
+      "targetLabel": "계속할 곳",
+      "targetPlaceholder": "호스트 선택",
+      "result": {
+        "restored": "다른 호스트에 복원했습니다. 아무것도 시작되지 않았으며, 탭은 열 때만 시작됩니다.",
+        "restoredEmpty": "복원했지만 이 스냅샷에는 열 터미널이 없습니다.",
+        "restoredUnlisted": "복원했지만 각 탭의 동작을 나열하지 못했습니다.",
+        "hostUnverified": "해당 호스트가 아직 확인되지 않아 아무것도 복원하지 않았습니다. 연결된 후 다시 시도하세요.",
+        "inFlight": "해당 작업 공간에 대한 다른 복원이 아직 끝나지 않았습니다."
+      },
+      "refusal": {
+        "sourceSetupProjectMismatch": "이 작업 공간의 설정이 계속하려는 프로젝트와 일치하지 않습니다.",
+        "targetSetupProjectMismatch": "해당 호스트의 설정은 다른 프로젝트의 것입니다.",
+        "targetSetupMissing": "이 프로젝트는 해당 호스트에 아직 설정되지 않았습니다.",
+        "targetSetupNotReady": "해당 호스트의 이 프로젝트 설정이 아직 준비되지 않았습니다.",
+        "sameHost": "이 스냅샷은 이미 해당 호스트에 속해 있습니다.",
+        "sourceHostMismatch": "이 스냅샷은 이 작업 공간의 설정과 다른 호스트에서 저장되었습니다.",
+        "locationOutsideSourceSetup": "이 작업 공간은 프로젝트 폴더 밖에 있어 해당 호스트에 대응하는 위치가 없습니다.",
+        "locationKindUnsupported": "다른 호스트에서 계속할 수 있는 것은 프로젝트 워크트리뿐이며 일반 폴더는 안 됩니다.",
+        "startupCwdOutsideSourceSetup": "이 스냅샷의 터미널이 프로젝트 폴더 밖에서 시작되어 해당 호스트에서 대응시킬 수 없습니다."
+      },
+      "unavailable": {
+        "targetWorkspaceMissing": "아직 설정되지 않음: 해당 호스트의 이 작업 공간이 이 클라이언트에서 열려 있지 않습니다. 아무것도 변경하지 않았습니다.",
+        "sourceSetupMissing": "이 작업 공간 자체의 설정을 찾을 수 없어 다른 호스트에서 계속할 수 없습니다."
+      },
+      "pane": {
+        "label": "터미널 {{number}}",
+        "disposition": {
+          "reattach": "실행 중인 터미널에 다시 연결합니다",
+          "resume": "에이전트 세션을 재개합니다",
+          "restart": "해당 폴더에서 새 터미널을 시작합니다",
+          "unavailable": "그곳에서는 열 수 없습니다"
+        },
+        "reason": {
+          "liveOnTarget": "이미 그곳에서 실행 중입니다.",
+          "providerSessionPresent": "에이전트 세션이 해당 호스트에 있습니다.",
+          "relaunchable": "저장된 실행 설정으로 다시 시작할 수 있습니다.",
+          "hostUnavailable": "해당 호스트를 사용할 수 없습니다.",
+          "hostUnverified": "해당 호스트가 아직 확인되지 않았습니다.",
+          "liveElsewhere": "다른 곳에서 열려 있습니다.",
+          "notConfirmed": "그곳에서 세션을 확인하지 못했습니다.",
+          "nothingRunnable": "실행할 것이 없습니다."
+        }
+      }
+    },
     "dormantTerminal": {
       "title": "복원됨, 실행 안 함",
       "sleptTitle": "절전 중, 실행 안 함",

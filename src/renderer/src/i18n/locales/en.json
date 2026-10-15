@@ -39,6 +39,53 @@
     }
   },
   "workingSet": {
+    "continue": {
+      "action": "Continue here",
+      "running": "Continuing…",
+      "targetLabel": "Continue on",
+      "targetPlaceholder": "Choose a host",
+      "result": {
+        "restored": "Restored on the other host. Nothing has started; each tab starts only when you open it.",
+        "restoredEmpty": "Restored, but this snapshot has no terminals to open.",
+        "restoredUnlisted": "Restored, but what each tab will do couldn't be listed.",
+        "hostUnverified": "That host hasn't been verified yet, so nothing was restored. Try again once it's connected.",
+        "inFlight": "Another restore into that workspace hasn't finished."
+      },
+      "refusal": {
+        "sourceSetupProjectMismatch": "This workspace's setup doesn't match the project being continued.",
+        "targetSetupProjectMismatch": "That host's setup is for a different project.",
+        "targetSetupMissing": "This project isn't set up on that host yet.",
+        "targetSetupNotReady": "This project's setup on that host isn't ready yet.",
+        "sameHost": "This snapshot already belongs to that host.",
+        "sourceHostMismatch": "This snapshot was saved on a different host than this workspace's setup.",
+        "locationOutsideSourceSetup": "This workspace is outside the project's folder, so it has no matching place on that host.",
+        "locationKindUnsupported": "Only project worktrees can continue on another host, not plain folders.",
+        "startupCwdOutsideSourceSetup": "A terminal in this snapshot started outside the project's folder, so it can't be matched on that host."
+      },
+      "unavailable": {
+        "targetWorkspaceMissing": "Not set up there yet: that host's copy of this workspace isn't open in this client. Nothing was changed.",
+        "sourceSetupMissing": "This workspace's own setup couldn't be found, so it can't continue elsewhere."
+      },
+      "pane": {
+        "label": "Terminal {{number}}",
+        "disposition": {
+          "reattach": "Reconnects to the running terminal",
+          "resume": "Resumes the agent session",
+          "restart": "Starts a new terminal in its folder",
+          "unavailable": "Can't be opened there"
+        },
+        "reason": {
+          "liveOnTarget": "It's already running there.",
+          "providerSessionPresent": "Its agent session is on that host.",
+          "relaunchable": "It can be started again from its saved launch.",
+          "hostUnavailable": "That host isn't available.",
+          "hostUnverified": "That host hasn't been verified yet.",
+          "liveElsewhere": "It's open somewhere else.",
+          "notConfirmed": "Its session couldn't be confirmed there.",
+          "nothingRunnable": "There's nothing to run."
+        }
+      }
+    },
     "dormantTerminal": {
       "title": "Restored, not running",
       "sleptTitle": "Asleep, not running",

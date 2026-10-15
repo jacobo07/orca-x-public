@@ -10,6 +10,53 @@
     }
   },
   "workingSet": {
+    "continue": {
+      "action": "Continuar aquí",
+      "running": "Continuando…",
+      "targetLabel": "Continuar en",
+      "targetPlaceholder": "Elige un host",
+      "result": {
+        "restored": "Restaurado en el otro host. No se ha iniciado nada; cada pestaña se inicia solo cuando la abres.",
+        "restoredEmpty": "Restaurado, pero esta snapshot no tiene terminales que abrir.",
+        "restoredUnlisted": "Restaurado, pero no se pudo listar qué hará cada pestaña.",
+        "hostUnverified": "Ese host aún no se ha verificado, así que no se restauró nada. Inténtalo de nuevo cuando esté conectado.",
+        "inFlight": "Otra restauración en ese espacio de trabajo no ha terminado."
+      },
+      "refusal": {
+        "sourceSetupProjectMismatch": "La configuración de este espacio de trabajo no coincide con el proyecto que se continúa.",
+        "targetSetupProjectMismatch": "La configuración de ese host es de otro proyecto.",
+        "targetSetupMissing": "Este proyecto aún no está configurado en ese host.",
+        "targetSetupNotReady": "La configuración de este proyecto en ese host aún no está lista.",
+        "sameHost": "Esta snapshot ya pertenece a ese host.",
+        "sourceHostMismatch": "Esta snapshot se guardó en un host distinto al de la configuración de este espacio de trabajo.",
+        "locationOutsideSourceSetup": "Este espacio de trabajo está fuera de la carpeta del proyecto, así que no tiene un lugar equivalente en ese host.",
+        "locationKindUnsupported": "Solo los worktrees de un proyecto pueden continuar en otro host, no las carpetas simples.",
+        "startupCwdOutsideSourceSetup": "Una terminal de esta snapshot se inició fuera de la carpeta del proyecto, así que no se puede equiparar en ese host."
+      },
+      "unavailable": {
+        "targetWorkspaceMissing": "Aún no configurado allí: la copia de este espacio de trabajo en ese host no está abierta en este cliente. No se cambió nada.",
+        "sourceSetupMissing": "No se encontró la configuración de este espacio de trabajo, así que no puede continuar en otro host."
+      },
+      "pane": {
+        "label": "Terminal {{number}}",
+        "disposition": {
+          "reattach": "Se reconecta a la terminal en ejecución",
+          "resume": "Reanuda la sesión del agente",
+          "restart": "Inicia una terminal nueva en su carpeta",
+          "unavailable": "No se puede abrir allí"
+        },
+        "reason": {
+          "liveOnTarget": "Ya se está ejecutando allí.",
+          "providerSessionPresent": "Su sesión del agente está en ese host.",
+          "relaunchable": "Se puede volver a iniciar desde su lanzamiento guardado.",
+          "hostUnavailable": "Ese host no está disponible.",
+          "hostUnverified": "Ese host aún no se ha verificado.",
+          "liveElsewhere": "Está abierta en otro sitio.",
+          "notConfirmed": "No se pudo confirmar su sesión allí.",
+          "nothingRunnable": "No hay nada que ejecutar."
+        }
+      }
+    },
     "dormantTerminal": {
       "title": "Restaurada, sin ejecutar",
       "sleptTitle": "Dormida, sin ejecutar",

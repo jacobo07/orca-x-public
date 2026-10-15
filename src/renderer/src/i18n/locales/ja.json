@@ -10,6 +10,53 @@
     }
   },
   "workingSet": {
+    "continue": {
+      "action": "ここで続行",
+      "running": "続行中…",
+      "targetLabel": "続行先",
+      "targetPlaceholder": "ホストを選択",
+      "result": {
+        "restored": "もう一方のホストに復元しました。何も起動していません。タブは開いたときにだけ起動します。",
+        "restoredEmpty": "復元しましたが、このスナップショットには開くターミナルがありません。",
+        "restoredUnlisted": "復元しましたが、各タブの動作を一覧にできませんでした。",
+        "hostUnverified": "そのホストはまだ確認できていないため、何も復元していません。接続後にもう一度お試しください。",
+        "inFlight": "そのワークスペースへの別の復元がまだ完了していません。"
+      },
+      "refusal": {
+        "sourceSetupProjectMismatch": "このワークスペースのセットアップは、続行するプロジェクトと一致しません。",
+        "targetSetupProjectMismatch": "そのホストのセットアップは別のプロジェクトのものです。",
+        "targetSetupMissing": "このプロジェクトはそのホストにまだセットアップされていません。",
+        "targetSetupNotReady": "そのホストでのこのプロジェクトのセットアップはまだ準備できていません。",
+        "sameHost": "このスナップショットはすでにそのホストのものです。",
+        "sourceHostMismatch": "このスナップショットは、このワークスペースのセットアップとは別のホストで保存されました。",
+        "locationOutsideSourceSetup": "このワークスペースはプロジェクトのフォルダーの外にあるため、そのホストに対応する場所がありません。",
+        "locationKindUnsupported": "別のホストで続行できるのはプロジェクトのワークツリーだけで、通常のフォルダーはできません。",
+        "startupCwdOutsideSourceSetup": "このスナップショットのターミナルがプロジェクトのフォルダーの外で起動していたため、そのホストでは対応付けられません。"
+      },
+      "unavailable": {
+        "targetWorkspaceMissing": "まだセットアップされていません。そのホストのこのワークスペースは、このクライアントで開かれていません。何も変更していません。",
+        "sourceSetupMissing": "このワークスペース自身のセットアップが見つからないため、他のホストで続行できません。"
+      },
+      "pane": {
+        "label": "ターミナル {{number}}",
+        "disposition": {
+          "reattach": "実行中のターミナルに再接続します",
+          "resume": "エージェントのセッションを再開します",
+          "restart": "そのフォルダーで新しいターミナルを起動します",
+          "unavailable": "そこでは開けません"
+        },
+        "reason": {
+          "liveOnTarget": "すでにそこで実行中です。",
+          "providerSessionPresent": "エージェントのセッションがそのホストにあります。",
+          "relaunchable": "保存された起動設定からもう一度起動できます。",
+          "hostUnavailable": "そのホストを利用できません。",
+          "hostUnverified": "そのホストはまだ確認できていません。",
+          "liveElsewhere": "別の場所で開いています。",
+          "notConfirmed": "そこでセッションを確認できませんでした。",
+          "nothingRunnable": "実行できるものがありません。"
+        }
+      }
+    },
     "dormantTerminal": {
       "title": "復元済み・未実行",
       "sleptTitle": "スリープ中・未実行",
