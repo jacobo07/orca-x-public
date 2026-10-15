@@ -1,4 +1,4 @@
-import type { FleetPlacementRejection } from '../shared/fleet-placement'
+import type { FleetPlacementRejected, FleetPlacementRejection } from '../shared/fleet-placement'
 import type { FleetPlacementViewResult } from '../shared/fleet-placement-view'
 import { formatByteCount } from './workspace-format'
 
@@ -46,6 +46,16 @@ function describeRejection(rejection: FleetPlacementRejection): string {
       return `unrecognized reason ${JSON.stringify((unrecognized as { reason?: unknown }).reason)}`
     }
   }
+}
+
+export type RejectedHostReasons = Pick<FleetPlacementRejected, 'addresses' | 'reasons'>
+
+/** One indented line per host that was refused, in the words `fleet placement` uses. */
+export function formatRejectedHostLines(rejected: readonly RejectedHostReasons[]): string[] {
+  return rejected.map(
+    (host) =>
+      `    x ${host.addresses.join(', ')}: ${host.reasons.map(describeRejection).join('; ') || 'not judged'}`
+  )
 }
 
 export function formatFleetPlacementView(result: FleetPlacementViewResult): string {

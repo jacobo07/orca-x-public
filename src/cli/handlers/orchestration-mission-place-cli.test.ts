@@ -5,6 +5,7 @@ const callMock = vi.fn()
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
+import { printResult } from '../format'
 import { normalizeCommandPositionals, parseArgs, specPaths, validateCommandAndFlags } from '../args'
 import { COMMAND_SPECS } from '../specs'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -31,7 +32,7 @@ async function runMissionPlace(argv: string[]): Promise<void> {
     flags: parsed.flags,
     client: { call: callMock },
     cwd: '/tmp/repo',
-    json: false
+    json: parsed.flags.has('json')
   } as never)
 }
 
@@ -130,5 +131,173 @@ describe('orca orchestration mission-place argv to RPC', () => {
       ])
     ).rejects.toThrow(/Unknown flag --min-gpu-mb/)
     expect(callMock).not.toHaveBeenCalled()
+  })
+})
+
+const GB = 1024 ** 3
+
+type Plan = typeof emptyPlan.result & Record<string, unknown>
+
+// Why: the text a pre-04-04 CLI printed for every result, kept literal so a drift shows as a diff.
+const legacyText = (plan: Plan): string =>
+  [
+    `Mission placed on ${plan.hostCount} host(s) in ${plan.runId}`,
+    ...(plan.placements as { task_id: string; label: string; address: string }[]).map(
+      (p) => `  ${p.task_id} -> ${p.label} (${p.address})`
+    ),
+    ...(plan.unplaced as { jobId: string; reason: string }[]).map(
+      (u) => `  ${u.jobId}: ${u.reason}`
+    )
+  ].join('\n')
+
+async function textFor(plan: Plan, extraArgv: string[] = []): Promise<string> {
+  vi.mocked(printResult).mockReset()
+  callMock.mockResolvedValue({ result: plan })
+  await runMissionPlace([
+    'orchestration',
+    'mission-place',
+    '--tasks',
+    't1,t2',
+    '--from',
+    'term_coord',
+    ...extraArgv
+  ])
+  const [response, json, format] = vi.mocked(printResult).mock.calls[0] as unknown as [
+    { result: Plan },
+    boolean,
+    (value: Plan) => string
+  ]
+  expect(json).toBe(false)
+  return format(response.result)
+}
+
+const unplacedPlan = (): Plan =>
+  ({
+    runId: 'run_1',
+    hostCount: 3,
+    placements: [{ task_id: 't1', address: 'local', label: 'this pc' }],
+    unplaced: [{ jobId: 't2', reason: 'no-eligible-host' }],
+    rejected: [],
+    notDispatchable: [{ address: 'ssh:box', label: 'relay box' }],
+    rejectedByJob: [
+      {
+        jobId: 't2',
+        rejected: [
+          {
+            key: 'runtime:small',
+            fingerprint: 'fp-small',
+            addresses: ['runtime:small'],
+            reasons: [{ reason: 'insufficient-memory', availableMemory: GB, required: 4 * GB }]
+          },
+          {
+            key: 'runtime:mute',
+            fingerprint: 'fp-mute',
+            addresses: ['runtime:mute'],
+            reasons: [
+              {
+                reason: 'resource-unknown',
+                family: 'vram',
+                cause: 'unmeasured',
+                detail: 'no gpu probe'
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }) as unknown as Plan
+
+describe('mission-place text output', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    process.exitCode = undefined
+  })
+
+  it('says why a task is unplaced, per host, with both memory figures and the unmeasured VRAM', async () => {
+    const text = await textFor(unplacedPlan())
+    const lines = text.split('\n')
+    const at = lines.findIndex((line) => line === '  t2: no-eligible-host')
+    expect(at).toBeGreaterThan(-1)
+    expect(lines[at + 1]).toMatch(
+      /^ {4}x runtime:small: 1(\.0)? GB available, 4(\.0)? GB required$/
+    )
+    expect(lines[at + 2]).toBe('    x runtime:mute: vram unknown (unmeasured: no gpu probe)')
+    expect(text).toContain('relay box (ssh:box)')
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('prints exactly the old lines when the host sent no rejectedByJob', async () => {
+    const plan = unplacedPlan()
+    delete (plan as Record<string, unknown>).rejectedByJob
+    expect(await textFor(plan)).toBe(legacyText(plan))
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('leaves the exit code alone when everything is placed', async () => {
+    const text = await textFor(emptyPlan.result as Plan)
+    expect(text).toBe(legacyText(emptyPlan.result as Plan))
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('passes the result through for --json', async () => {
+    vi.mocked(printResult).mockReset()
+    const plan = {
+      ...unplacedPlan(),
+      locality: [{ taskId: 't1', hostKey: 'local', hydrated: true }]
+    }
+    callMock.mockResolvedValue({ result: plan })
+    await runMissionPlace([
+      'orchestration',
+      'mission-place',
+      '--tasks',
+      't1,t2',
+      '--from',
+      'term_coord',
+      '--json'
+    ])
+    const [response, json] = vi.mocked(printResult).mock.calls[0] as unknown as [
+      { result: Plan },
+      boolean
+    ]
+    expect(json).toBe(true)
+    expect(response.result).toBe(plan)
+  })
+
+  it('marks a placement whose locality entry says hydrated, and only that one', async () => {
+    const plan = {
+      runId: 'run_1',
+      hostCount: 2,
+      placements: [
+        { task_id: 't1', address: 'runtime:gex', label: 'gex44' },
+        { task_id: 't2', address: 'local', label: 'this pc' }
+      ],
+      unplaced: [],
+      rejected: [],
+      notDispatchable: [],
+      locality: [
+        { taskId: 't1', hostKey: 'fp-gex', hydrated: true },
+        { taskId: 't2', hostKey: 'local', hydrated: false }
+      ]
+    } as unknown as Plan
+    const lines = (await textFor(plan)).split('\n')
+    expect(lines.find((line) => line.includes('t1 ->'))).toBe(
+      '  t1 -> gex44 (runtime:gex) [project already there]'
+    )
+    expect(lines.find((line) => line.includes('t2 ->'))).toBe('  t2 -> this pc (local)')
+  })
+
+  it('prints the old text when the result has no locality list', async () => {
+    const plan = {
+      runId: 'run_1',
+      hostCount: 2,
+      placements: [
+        { task_id: 't1', address: 'runtime:gex', label: 'gex44' },
+        { task_id: 't2', address: 'local', label: 'this pc' }
+      ],
+      unplaced: [],
+      rejected: [],
+      notDispatchable: []
+    } as unknown as Plan
+    expect(await textFor(plan)).toBe(legacyText(plan))
   })
 })

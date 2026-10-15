@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import { formatRejectedHostLines, type RejectedHostReasons } from '../fleet-placement-format'
 import { printResult } from '../format'
 import { nodeRequirementFromFlags } from '../node-requirement-flags'
 import type { RuntimeClient } from '../runtime-client'
@@ -28,6 +29,40 @@ type MissionPlaceResult = {
   placements: { task_id: string; address: string; label: string }[]
   unplaced: { jobId: string; reason: string }[]
   notDispatchable: { address: string; label: string }[]
+  // Why: absent from an older host; the text then stays exactly what it was.
+  rejectedByJob?: { jobId: string; rejected: RejectedHostReasons[] }[]
+  // Why: the host states hydration; the CLI marks it and never infers it.
+  locality?: { taskId: string; hostKey: string; hydrated: boolean }[]
+}
+
+function unplacedLines(plan: MissionPlaceResult): string[] {
+  const byJob = plan.rejectedByJob
+  return plan.unplaced.flatMap((u) => {
+    const line = `  ${u.jobId}: ${u.reason}`
+    if (!byJob) {
+      return [line]
+    }
+    const rejected = byJob.find((entry) => entry.jobId === u.jobId)?.rejected ?? []
+    return [line, ...formatRejectedHostLines(rejected)]
+  })
+}
+
+function notDispatchableLines(plan: MissionPlaceResult): string[] {
+  // Why: only the detailed (new-host) output explains refusals, so an old host's text is unchanged.
+  if (!plan.rejectedByJob || plan.unplaced.length === 0) {
+    return []
+  }
+  return plan.notDispatchable.map((h) => `  not dispatchable: ${h.label} (${h.address})`)
+}
+
+function placementLines(plan: MissionPlaceResult): string[] {
+  const hydrated = new Set(
+    (plan.locality ?? []).filter((entry) => entry.hydrated === true).map((entry) => entry.taskId)
+  )
+  return plan.placements.map(
+    (p) =>
+      `  ${p.task_id} -> ${p.label} (${p.address})${hydrated.has(p.task_id) ? ' [project already there]' : ''}`
+  )
 }
 
 type MissionResults = {
@@ -72,8 +107,9 @@ export function missionHandlers(deps: MissionHandlerDeps): Record<string, Comman
       printResult(result, json, (plan) =>
         [
           `Mission placed on ${plan.hostCount} host(s) in ${plan.runId}`,
-          ...plan.placements.map((p) => `  ${p.task_id} -> ${p.label} (${p.address})`),
-          ...plan.unplaced.map((u) => `  ${u.jobId}: ${u.reason}`)
+          ...placementLines(plan),
+          ...unplacedLines(plan),
+          ...notDispatchableLines(plan)
         ].join('\n')
       )
     },

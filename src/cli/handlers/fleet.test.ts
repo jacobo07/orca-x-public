@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { FleetPlacementViewResult } from '../../shared/fleet-placement-view'
 import { fleetPlacementExitCode, formatFleetPlacementView } from '../fleet-placement-format'
+import { parseArgs, validateCommandAndFlags } from '../args'
+import { COMMAND_SPECS } from '../specs'
 import { FLEET_HANDLERS, fleetManifestParams, fleetPlacementParams } from './fleet'
 
 const GB = 1024 ** 3
@@ -67,6 +69,63 @@ describe('orca fleet placement', () => {
       requiredCapabilities: ['cap.a', 'cap.b'],
       maxSampleAgeMs: 5000
     })
+  })
+
+  it('adds the VRAM and disk need as a strict requirement beside the legacy memory field', () => {
+    const MB = 1024 * 1024
+    expect(
+      fleetPlacementParams(
+        new Map<string, string | boolean>([
+          ['min-vram-mb', '8192'],
+          ['min-disk-mb', '2048']
+        ])
+      )
+    ).toStrictEqual({
+      requirement: { vram: { minFreeBytes: 8192 * MB }, disk: { minAvailableBytes: 2048 * MB } }
+    })
+    const both = fleetPlacementParams(
+      new Map<string, string | boolean>([
+        ['min-available-mb', '4096'],
+        ['min-vram-mb', '8192']
+      ])
+    )
+    expect(both).toStrictEqual({
+      minAvailableBytes: 4 * GB,
+      requirement: { vram: { minFreeBytes: 8192 * MB } }
+    })
+    expect(both.requirement).not.toHaveProperty('memory')
+    expect(
+      fleetPlacementParams(new Map<string, string | boolean>([['min-available-mb', '4096']]))
+    ).toStrictEqual({ minAvailableBytes: 4 * GB })
+  })
+
+  it('rejects a bad VRAM or disk figure instead of sending a guess', () => {
+    for (const [flag, value] of [
+      ['min-vram-mb', '0'],
+      ['min-vram-mb', 'x'],
+      ['min-disk-mb', '2.5'],
+      ['min-disk-mb', '']
+    ]) {
+      expect(() =>
+        fleetPlacementParams(new Map<string, string | boolean>([[flag, value]]))
+      ).toThrow(new RegExp(`--${flag}`))
+    }
+  })
+
+  it('accepts the new flags in the placement spec and still refuses unknown ones', () => {
+    const accepted = parseArgs([
+      'fleet',
+      'placement',
+      '--min-vram-mb',
+      '8192',
+      '--min-disk-mb',
+      '5'
+    ])
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, accepted)).not.toThrow()
+    const refused = parseArgs(['fleet', 'placement', '--min-gpu-mb', '5'])
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, refused)).toThrow(
+      /Unknown flag --min-gpu-mb/
+    )
   })
 
   it('rejects a non-integer memory floor instead of sending a guess', () => {

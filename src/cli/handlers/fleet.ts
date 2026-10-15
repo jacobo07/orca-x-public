@@ -8,6 +8,7 @@ import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
 import { formatNodeManifests, nodeManifestsExitCode } from '../fleet-node-manifest-format'
 import { fleetPlacementExitCode, formatFleetPlacementView } from '../fleet-placement-format'
 import { printResult } from '../format'
+import { nodeRequirementFromFlags } from '../node-requirement-flags'
 import { RuntimeClientError } from '../runtime/types'
 
 const MAX_MODEL_PROBE_PORTS = 4
@@ -22,11 +23,14 @@ export function fleetPlacementParams(
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)
   const maxSampleAgeMs = getOptionalPositiveIntegerFlag(flags, 'max-sample-age-ms')
+  // Why: memory keeps its legacy minAvailableBytes field, so the shared parser skips it here.
+  const requirement = nodeRequirementFromFlags(flags, { includeMemory: false })
   return {
     ...(minMb !== undefined ? { minAvailableBytes: minMb * 1024 * 1024 } : {}),
     ...(platform ? { platform } : {}),
     ...(capabilities?.length ? { requiredCapabilities: capabilities } : {}),
-    ...(maxSampleAgeMs !== undefined ? { maxSampleAgeMs } : {})
+    ...(maxSampleAgeMs !== undefined ? { maxSampleAgeMs } : {}),
+    ...(requirement ? { requirement } : {})
   }
 }
 
