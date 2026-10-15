@@ -6,6 +6,9 @@ import {
   type AuthorizePrepareInput
 } from './environment-prepare-authority'
 import { prepareApprovalHash } from '../shared/environment-prepare-plan'
+import { decideSystemSshHostKey } from './ssh/system-ssh-host-key-observation'
+import { hostIdentityForRefusal } from './ssh/ssh-host-key-pin-verifier'
+import type { SshHostIdentityStatus } from '../shared/ssh-types'
 import type { EnvironmentRequirement } from '../shared/environment-requirement-types'
 
 const HOST = 'ssh:t1@0123456789abcdef'
@@ -190,6 +193,79 @@ describe('authorizePrepareStep', () => {
       remeasuredState: 'satisfied'
     })
     expect(await run(input)).toEqual({ authorized: false, reason: 'contract-unreadable' })
+  })
+})
+
+// Why: the system transport now reports what it verified; this pins how the prepare authority reads each answer (row 56, D-32).
+describe('authorizePrepareStep reading the system OpenSSH transport', () => {
+  const KEY = `SHA256:${'A'.repeat(43)}`
+  const OTHER = `SHA256:${'B'.repeat(43)}`
+  const endpoint = { host: 'example.com', port: 22 }
+  const pin = { fingerprint: KEY, ...endpoint, pinnedAt: 1, source: 'tofu-confirmed' }
+  const line = (key: string): string => `debug1: Server host key: ssh-ed25519 ${key}\n`
+
+  // The identity setState publishes for a decision: pinned, delegated (nothing said), or the refusal's status.
+  function identityFor(input: { stderr: string; bound: boolean; interactive: boolean }): string {
+    const decision = decideSystemSshHostKey({ ...input, pin, endpoint, pinWasReset: false })
+    if (decision.kind === 'pinned') {
+      return 'pinned' satisfies SshHostIdentityStatus
+    }
+    if (decision.kind === 'delegated') {
+      return 'delegated-to-openssh' satisfies SshHostIdentityStatus
+    }
+    return hostIdentityForRefusal(decision.error.reason)
+  }
+
+  it('an observed key equal to the pin reads pinned and is trusted as before', async () => {
+    const identity = identityFor({ stderr: line(KEY), bound: true, interactive: false })
+    expect(identity).toBe('pinned')
+    expect((await run(await baseInput({ hostIdentity: identity }))).authorized).toBe(true)
+  })
+
+  it('RESTATED, not changed: delegated-to-openssh (unobserved, interactive) is decided exactly as before, trusted', async () => {
+    const identity = identityFor({ stderr: '', bound: true, interactive: true })
+    expect(identity).toBe('delegated-to-openssh')
+    expect((await run(await baseInput({ hostIdentity: identity }))).authorized).toBe(true)
+  })
+
+  it('control: an unobservable automatic connect is unverifiable and not trusted', async () => {
+    const identity = identityFor({ stderr: '', bound: true, interactive: false })
+    expect(identity).toBe('unverifiable')
+    expect(await run(await baseInput({ hostIdentity: identity }))).toEqual({
+      authorized: false,
+      reason: 'host-identity-unverified'
+    })
+  })
+
+  it('control: a changed key is refused-changed and not trusted', async () => {
+    const identity = identityFor({ stderr: line(OTHER), bound: true, interactive: false })
+    expect(identity).toBe('refused-changed')
+    expect((await run(await baseInput({ hostIdentity: identity }))).authorized).toBe(false)
+  })
+
+  it('nothing the system path can say without an observation is pinned', () => {
+    for (const stderr of [
+      '',
+      'debug1: unrelated\n',
+      line(KEY) + line(KEY),
+      line(OTHER) + line(KEY)
+    ]) {
+      for (const interactive of [true, false]) {
+        for (const bound of [true, false]) {
+          const unobserved =
+            !bound ||
+            stderr === '' ||
+            stderr.startsWith('debug1: unrelated') ||
+            stderr.split('\n').length > 2
+          if (unobserved) {
+            expect(
+              identityFor({ stderr, bound, interactive }),
+              JSON.stringify({ stderr, interactive, bound })
+            ).not.toBe('pinned')
+          }
+        }
+      }
+    }
   })
 })
 

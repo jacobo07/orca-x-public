@@ -11,11 +11,7 @@ import {
   setSshTargetHostKeyPin
 } from '../persistence/leasing-ssh-ptys/ssh-target-state'
 import { SshConnection } from './ssh-connection'
-import {
-  SshHostKeyRefusedError,
-  getUnpinnedAutomaticConnectCount,
-  resetUnpinnedAutomaticConnectCounts
-} from './ssh-host-key-pin-verifier'
+import { SshHostKeyRefusedError } from './ssh-host-key-pin-verifier'
 
 // Why: protected-secret-persistence imports electron at module load; nothing here reaches safeStorage.
 vi.mock('electron', () => ({ safeStorage: {}, app: { getPath: () => tmpdir() } }))
@@ -25,6 +21,7 @@ vi.mock('electron', () => ({ safeStorage: {}, app: { getPath: () => tmpdir() } }
  * ORCA_REAL_SSHD_PORT / _USER / _KEY are the sshd and client identity, ORCA_REAL_SSHD_FP_A / _FP_B the
  * OpenSSH-computed fingerprints of the two host keys, ORCA_REAL_SSHD_LEG is A, B or C (one leg per run),
  * ORCA_REAL_SSHD_USERDATA is Leg A's userData dir, read by Leg B. Without a port this file is skipped: NOT RUN.
+ * ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 runs the same legs over the system OpenSSH transport (row 56); a skipped run says NOT RUN.
  */
 const PORT = Number(process.env.ORCA_REAL_SSHD_PORT ?? '0')
 const USER = process.env.ORCA_REAL_SSHD_USER ?? ''
@@ -34,6 +31,12 @@ const FP_B = process.env.ORCA_REAL_SSHD_FP_B ?? ''
 const LEG = process.env.ORCA_REAL_SSHD_LEG ?? ''
 const LEG_A_USERDATA = process.env.ORCA_REAL_SSHD_USERDATA ?? ''
 const STATE_FILE = 'orca-data.json'
+const SYSTEM = process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1'
+const TRANSPORT = SYSTEM ? 'system-openssh' : 'ssh2'
+
+if (!PORT) {
+  process.stdout.write(`NOT RUN: real-sshd legs (no ORCA_REAL_SSHD_PORT) transport=${TRANSPORT}\n`)
+}
 
 type FileState = { sshTargets: SshTarget[] }
 
@@ -104,9 +107,11 @@ describe.skipIf(!PORT)('SSH host key pin over a real sshd', () => {
         await conn.connect({ interactive: true })
         expect(conn.getState().status).toBe('connected')
         expect(conn.getState().hostIdentity).toBe('pinned')
+        expect(conn.usesSystemSshTransport()).toBe(SYSTEM)
       } finally {
         await conn.disconnect()
       }
+      console.log(`PLANE=REAL-SSH/LOCAL-HOST LEG=A TRANSPORT=${TRANSPORT}`)
       const persisted = (JSON.parse(readFileSync(join(userData, STATE_FILE), 'utf8')) as FileState)
         .sshTargets[0].hostKeyPin
       expect(trustRequests).toEqual([FP_A])
@@ -150,7 +155,9 @@ describe.skipIf(!PORT)('SSH host key pin over a real sshd', () => {
           false
         )
         expect(conn.getTarget().hostKeyPin?.fingerprint).toBe(FP_A)
-        console.log(`LEG_B_REFUSED interactive=${interactive} reason=${refusal.reason}`)
+        console.log(
+          `PLANE=REAL-SSH/LOCAL-HOST LEG=B TRANSPORT=${TRANSPORT} LEG_B_REFUSED interactive=${interactive} reason=${refusal.reason}`
+        )
       }
 
       const after = sha256File(file)
@@ -160,9 +167,7 @@ describe.skipIf(!PORT)('SSH host key pin over a real sshd', () => {
   }
 
   if (LEG === 'C') {
-    it('V-REAL-C: an unpinned target connects on an automatic attempt and no pin is written', async () => {
-      resetUnpinnedAutomaticConnectCounts()
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    it('V-REAL-C: an unpinned automatic connect is refused host_key_unpinned and no pin is written', async () => {
       const userData = mkdtempSync(join(tmpdir(), 'orca-real-sshd-c-'))
       const { ops, state } = openFileState(userData)
       addSshTarget(ops, manualTarget('real-c', 'real-sshd-c'))
@@ -171,23 +176,22 @@ describe.skipIf(!PORT)('SSH host key pin over a real sshd', () => {
         onStateChange: noopStateChange,
         onHostKeyTrustRequest
       })
-      try {
-        await conn.connect()
-        expect(conn.getState().status).toBe('connected')
-        expect(conn.getState().hostIdentity).toBe('unpinned-legacy')
-      } finally {
-        await conn.disconnect()
-      }
-      expect(getUnpinnedAutomaticConnectCount('real-c')).toBe(1)
-      expect(
-        warn.mock.calls.some((call) => String(call[0]).includes('unpinned automatic connect'))
-      ).toBe(true)
+      const err = await conn.connect().then(
+        () => null,
+        (caught: unknown) => caught
+      )
+      expect(err).toBeInstanceOf(SshHostKeyRefusedError)
+      expect((err as SshHostKeyRefusedError).reason).toBe('host_key_unpinned')
+      expect((err as SshHostKeyRefusedError).offered.fingerprint).toBe(FP_A)
+      expect(conn.getState()).toMatchObject({ status: 'error', hostIdentity: 'refused-unpinned' })
+      // Why: an automatic connect has no consent surface, so the owner is never asked.
       expect(onHostKeyTrustRequest).not.toHaveBeenCalled()
       const persisted = JSON.parse(readFileSync(join(userData, STATE_FILE), 'utf8')) as FileState
       expect(persisted.sshTargets[0].hostKeyPin).toBeUndefined()
       expect(conn.getTarget().hostKeyPin).toBeUndefined()
-      // Why: the warn is spied; report what the diagnostic said so the run log carries it.
-      process.stdout.write(`LEG_C_DIAGNOSTIC=${String(warn.mock.calls[0]?.[0])}\n`)
+      console.log(
+        `PLANE=REAL-SSH/LOCAL-HOST LEG=C TRANSPORT=${TRANSPORT} LEG_C_REFUSED reason=${(err as SshHostKeyRefusedError).reason}`
+      )
     })
   }
 })
