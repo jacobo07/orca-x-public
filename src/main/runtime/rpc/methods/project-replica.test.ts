@@ -1,11 +1,16 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockDispatcher, type RelayDispatcher } from '../../../../relay/git-handler-test-setup'
 import { GitReplicaHandler } from '../../../../relay/git-replica-handler'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type {
+  ReplicaCapsuleCreateResult,
+  ReplicaCapsuleListResult,
+  ReplicaCapsuleRestoreResult
+} from '../../../../shared/replica-capsule-view'
 import type { ReplicaPairCompareResult, ReplicaPairRelationsResult } from '../../../../shared/replica-pair-view'
 import { createReplicaPairService } from '../../../replica-pair-service'
 import { installReplicaPairService } from '../../../replica-pair-service-slot'
@@ -177,31 +182,156 @@ describe('projectReplica.relations', () => {
   })
 })
 
+const ALL_NAMES = [
+  'projectReplica.compare',
+  'projectReplica.relations',
+  'projectReplica.capsuleCreate',
+  'projectReplica.capsuleList',
+  'projectReplica.capsuleRestore'
+]
+
+const capsule = (name: string) => PROJECT_REPLICA_METHODS.find((m) => m.name === name)!
+const callMethod = (name: string, params: unknown, ctx: Partial<RpcContext> = {}) =>
+  capsule(name).handler(params, { runtime: {} as RpcContext['runtime'], ...ctx })
+
+function fakeService() {
+  return {
+    compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+    relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
+    capsuleCreate: vi.fn(async () => ({ status: 'ok' as const, outcome: { kind: 'clean' as const } })),
+    capsuleList: vi.fn(async () => ({ status: 'ok' as const, capsules: [] })),
+    capsuleRestore: vi.fn(async () => ({ status: 'refused' as const, reason: 'worktree-not-clean' as const }))
+  }
+}
+
+const REMOTE_CALLERS: Partial<RpcContext>[] = [
+  { clientKind: 'mobile' },
+  { pairedDeviceId: 'dev-1' },
+  { clientId: 'token' },
+  { connectionId: 'socket-1' },
+  { authenticatedCallerFingerprint: 'fp' }
+]
+const PARAMS_OF: Record<string, unknown> = {
+  'projectReplica.compare': { projectId: 'p1' },
+  'projectReplica.relations': undefined,
+  'projectReplica.capsuleCreate': { setupId: 's1' },
+  'projectReplica.capsuleList': { setupId: 's1' },
+  'projectReplica.capsuleRestore': { setupId: 's1', capsule: 'f'.repeat(40) }
+}
+
 describe('every projectReplica method is local-caller only', () => {
+  it('registers exactly the five methods this surface owns', () => {
+    expect(PROJECT_REPLICA_METHODS.map((m) => m.name)).toEqual(ALL_NAMES)
+  })
+
   it('refuses each remote caller shape before any service call; control: a local caller is not refused', async () => {
-    const service = {
-      compare: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
-      relations: vi.fn(async () => ({ status: 'ok' as const, pairs: [] })),
-      ...capsuleStubs()
-    }
+    const service = fakeService()
     installReplicaPairService(service)
-    const remoteCallers: Partial<RpcContext>[] = [
-      { clientKind: 'mobile' },
-      { pairedDeviceId: 'dev-1' },
-      { clientId: 'token' },
-      { connectionId: 'socket-1' },
-      { authenticatedCallerFingerprint: 'fp' }
-    ]
-    expect(PROJECT_REPLICA_METHODS.length).toBeGreaterThanOrEqual(2)
     for (const method of PROJECT_REPLICA_METHODS) {
-      for (const ctx of remoteCallers) {
-        const res = await method.handler({ projectId: 'p1' }, { runtime: {} as RpcContext['runtime'], ...ctx })
+      for (const ctx of REMOTE_CALLERS) {
+        const res = await callMethod(method.name, PARAMS_OF[method.name], ctx)
         expect(res, `${method.name} ${JSON.stringify(ctx)}`).toEqual({ status: 'refused', reason: 'remote-caller' })
       }
-      const local = (await method.handler({ projectId: 'p1' }, { runtime: {} as RpcContext['runtime'] })) as { status: string }
-      expect(local.status, method.name).not.toBe('refused')
+      const local = (await callMethod(method.name, PARAMS_OF[method.name])) as { reason?: string }
+      expect(local.reason, method.name).not.toBe('remote-caller')
     }
-    expect(service.compare).toHaveBeenCalledTimes(1)
-    expect(service.relations).toHaveBeenCalledTimes(1)
+    for (const fn of Object.values(service)) {
+      expect(fn).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('answers unavailable for each capsule method when the slot is empty', async () => {
+    for (const name of ALL_NAMES.filter((n) => n.includes('capsule'))) {
+      await expect(callMethod(name, PARAMS_OF[name])).resolves.toEqual({
+        status: 'unavailable',
+        reason: 'no-replica-service'
+      })
+    }
+  })
+})
+
+describe('projectReplica capsule params', () => {
+  const ok = (name: string, params: unknown): boolean => capsule(name).params!.safeParse(params).success
+
+  it('capsuleCreate and capsuleList take only a setupId', () => {
+    for (const name of ['projectReplica.capsuleCreate', 'projectReplica.capsuleList']) {
+      expect(ok(name, { setupId: 's1' }), name).toBe(true)
+      expect(ok(name, {}), name).toBe(false)
+      expect(ok(name, { setupId: '' }), name).toBe(false)
+      expect(ok(name, { setupId: 1 }), name).toBe(false)
+      expect(ok(name, { setupId: 's1', path: '/tmp' }), name).toBe(false)
+    }
+  })
+
+  it('capsuleRestore takes setupId, capsule and a strictly boolean apply', () => {
+    const name = 'projectReplica.capsuleRestore'
+    const base = { setupId: 's1', capsule: 'f'.repeat(40) }
+    expect(ok(name, base)).toBe(true)
+    expect(ok(name, { ...base, apply: true })).toBe(true)
+    expect(ok(name, { ...base, apply: false })).toBe(true)
+    expect(ok(name, { ...base, apply: 'true' })).toBe(false)
+    expect(ok(name, { ...base, apply: 1 })).toBe(false)
+    expect(ok(name, { setupId: 's1' })).toBe(false)
+    expect(ok(name, { ...base, extra: 1 })).toBe(false)
+  })
+})
+
+describe('projectReplica capsule methods reach the service', () => {
+  it('capsuleCreate and capsuleList pass the setup id through and return the closed union unchanged', async () => {
+    const service = fakeService()
+    installReplicaPairService(service)
+    const created = (await callMethod('projectReplica.capsuleCreate', { setupId: 's1' })) as ReplicaCapsuleCreateResult
+    expect(created).toEqual({ status: 'ok', outcome: { kind: 'clean' } })
+    expect(service.capsuleCreate).toHaveBeenCalledWith({ setupId: 's1' })
+    const listed = (await callMethod('projectReplica.capsuleList', { setupId: 's1' })) as ReplicaCapsuleListResult
+    expect(listed).toEqual({ status: 'ok', capsules: [] })
+    expect(service.capsuleList).toHaveBeenCalledWith({ setupId: 's1' })
+  })
+
+  it('capsuleRestore passes apply only for the boolean true; absent, false and look-alikes are plan', async () => {
+    const service = fakeService()
+    installReplicaPairService(service)
+    const capsuleRef = 'f'.repeat(40)
+    const modeOf = async (extra: object): Promise<unknown> => {
+      service.capsuleRestore.mockClear()
+      const res = (await callMethod('projectReplica.capsuleRestore', {
+        setupId: 's1',
+        capsule: capsuleRef,
+        ...extra
+      })) as ReplicaCapsuleRestoreResult
+      expect(res.status).toBe('refused')
+      return (service.capsuleRestore.mock.calls[0] as unknown[])[0]
+    }
+    expect(await modeOf({ apply: true })).toEqual({ setupId: 's1', capsule: capsuleRef, mode: 'apply' })
+    expect(await modeOf({})).toEqual({ setupId: 's1', capsule: capsuleRef, mode: 'plan' })
+    expect(await modeOf({ apply: false })).toEqual({ setupId: 's1', capsule: capsuleRef, mode: 'plan' })
+    // The handler does not lean on the schema alone: a truthy non-boolean that bypassed it is still plan.
+    expect(await modeOf({ apply: 'yes' })).toEqual({ setupId: 's1', capsule: capsuleRef, mode: 'plan' })
+    expect(await modeOf({ apply: 1 })).toEqual({ setupId: 's1', capsule: capsuleRef, mode: 'plan' })
+  })
+
+  it('a local caller reaches the real service and createCapsule over a temp repo', async () => {
+    installReplicaPairService(
+      createReplicaPairService({ listProjectHostSetups: () => [setup({ id: 'anchor', hostId: 'local', path: local })] })
+    )
+    expect(await callMethod('projectReplica.capsuleCreate', { setupId: 'anchor' })).toEqual({
+      status: 'ok',
+      outcome: { kind: 'clean' }
+    })
+    writeFileSync(join(local, 'dirty.txt'), 'dirty\n')
+    const res = (await callMethod('projectReplica.capsuleCreate', { setupId: 'anchor' })) as ReplicaCapsuleCreateResult
+    expect(res).toMatchObject({ status: 'ok', outcome: { kind: 'created', alreadyExisted: false } })
+    const ref = (res as { outcome: { ref: string } }).outcome.ref
+    expect(git(local, 'rev-parse', '--verify', ref)).toMatch(/^[0-9a-f]{40}$/)
+    expect(await callMethod('projectReplica.capsuleList', { setupId: 'anchor' })).toMatchObject({
+      status: 'ok',
+      capsules: [{ ref }]
+    })
+    // The remote caller changes nothing: its refusal leaves the repo as it was.
+    const before = git(local, 'for-each-ref', 'refs/orca/capsules')
+    writeFileSync(join(local, 'other.txt'), 'other\n')
+    await callMethod('projectReplica.capsuleCreate', { setupId: 'anchor' }, { clientKind: 'mobile' })
+    expect(git(local, 'for-each-ref', 'refs/orca/capsules')).toBe(before)
+    expect(existsSync(join(local, 'other.txt'))).toBe(true)
   })
 })

@@ -1,10 +1,24 @@
 import { z } from 'zod'
-import type { ReplicaPairCompareResult, ReplicaPairRelationsResult } from '../../../../shared/replica-pair-view'
+import type {
+  ReplicaCapsuleCreateResult,
+  ReplicaCapsuleListResult,
+  ReplicaCapsuleRestoreResult
+} from '../../../../shared/replica-capsule-view'
+import type {
+  ReplicaPairCompareResult,
+  ReplicaPairRelationsResult
+} from '../../../../shared/replica-pair-view'
 import { readReplicaPairService } from '../../../replica-pair-service-slot'
 import { defineMethod, type RpcMethod } from '../core'
 import { isLocalRpcCaller } from '../local-rpc-caller'
 
-const CompareParams = z.object({ projectId: z.string().min(1), setupId: z.string().min(1).optional() }).strict()
+const SetupParams = z.object({ setupId: z.string().min(1) }).strict()
+const RestoreParams = z
+  .object({ setupId: z.string().min(1), capsule: z.string().min(1), apply: z.boolean().optional() })
+  .strict()
+const CompareParams = z
+  .object({ projectId: z.string().min(1), setupId: z.string().min(1).optional() })
+  .strict()
 
 export const PROJECT_REPLICA_METHODS: RpcMethod[] = [
   defineMethod({
@@ -32,6 +46,51 @@ export const PROJECT_REPLICA_METHODS: RpcMethod[] = [
       }
       const service = readReplicaPairService()
       return service ? service.relations() : { status: 'unavailable', reason: 'no-replica-service' }
+    }
+  }),
+  defineMethod({
+    name: 'projectReplica.capsuleCreate',
+    params: SetupParams,
+    handler: async (params, ctx): Promise<ReplicaCapsuleCreateResult> => {
+      // Why: answering would write capsule refs into this host's worktrees on another client's behalf.
+      if (!isLocalRpcCaller(ctx)) {
+        return { status: 'refused', reason: 'remote-caller' }
+      }
+      const service = readReplicaPairService()
+      return service
+        ? service.capsuleCreate(params)
+        : { status: 'unavailable', reason: 'no-replica-service' }
+    }
+  }),
+  defineMethod({
+    name: 'projectReplica.capsuleList',
+    params: SetupParams,
+    handler: async (params, ctx): Promise<ReplicaCapsuleListResult> => {
+      // Why: same reason as capsuleCreate; the listing is this host's own refs.
+      if (!isLocalRpcCaller(ctx)) {
+        return { status: 'refused', reason: 'remote-caller' }
+      }
+      const service = readReplicaPairService()
+      return service
+        ? service.capsuleList(params)
+        : { status: 'unavailable', reason: 'no-replica-service' }
+    }
+  }),
+  defineMethod({
+    name: 'projectReplica.capsuleRestore',
+    params: RestoreParams,
+    handler: async (params, ctx): Promise<ReplicaCapsuleRestoreResult> => {
+      // Why: apply overwrites this host's worktree files, so a remote client may never ask for it.
+      if (!isLocalRpcCaller(ctx)) {
+        return { status: 'refused', reason: 'remote-caller' }
+      }
+      const service = readReplicaPairService()
+      if (!service) {
+        return { status: 'unavailable', reason: 'no-replica-service' }
+      }
+      // Why: only the boolean true applies; absent or anything else is plan, which changes nothing.
+      const mode = params.apply === true ? 'apply' : 'plan'
+      return service.capsuleRestore({ setupId: params.setupId, capsule: params.capsule, mode })
     }
   })
 ]

@@ -281,6 +281,10 @@ projectHostSetup.delete
 projectHostSetup.list
 projectHostSetup.setupExistingFolder
 projectHostSetup.update
+# Added 2026-10-15, host-only by design: answering would operate on this host's worktrees and refs on another client's behalf, so the handlers refuse every remote caller.
+projectReplica.capsuleCreate
+projectReplica.capsuleList
+projectReplica.capsuleRestore
 # Added 2026-10-15, host-only by design: it uses this host's SSH session, so the handler refuses every remote caller.
 projectReplica.compare
 # Added 2026-10-15, host-only by design: its answers come from this host's SSH session, so the handler refuses every remote caller.
