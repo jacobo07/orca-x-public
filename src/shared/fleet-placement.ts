@@ -38,6 +38,7 @@ export type FleetPlacementRequest = {
   requirement?: NodeRequirement
   platform?: NodeJS.Platform
   requiredCapabilities?: readonly string[]
+  // Why: marker only; it stamps isCurrent and is not a ranking term since Phase 4.
   currentFingerprint?: string | null
 }
 

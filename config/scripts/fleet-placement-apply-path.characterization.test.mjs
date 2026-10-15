@@ -66,7 +66,7 @@ export const PROPOSAL_CONSUMERS = Object.freeze({
   'src/shared/mission-job-placement.ts': {
     role: 'apply',
     reason:
-      'calls planFleetPlacement once per job and turns proposal.eligible into per-job placements by least load; the plan authorizes nothing, dispatch re-resolves identity (D-10)'
+      'calls planFleetPlacement once per job and turns proposal.eligible into per-job placements ranked hydrated, then lower load, then more free memory, then lower fingerprint; the plan authorizes nothing, dispatch re-resolves identity (D-10)'
   },
   'src/main/runtime/orchestration/mission-dispatch-placement.ts': {
     role: 'apply',

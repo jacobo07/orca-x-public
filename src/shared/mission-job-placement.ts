@@ -80,9 +80,10 @@ function relatedJobPairs(jobs: readonly MissionJob[]): (a: string, b: string) =>
 
 /**
  * Spreads the jobs of ONE mission over distinct eligible hosts, so they can run concurrently on
- * separate machines. Every job is judged by planFleetPlacement per its own capability need; a host
- * already holding an unrelated job of this mission is used again only when no unused eligible host
- * remains, while a job may share a host with a job it depends on, or that depends on it.
+ * separate machines, preferring a host that already holds the project (hydration) before load.
+ * Every job is judged by planFleetPlacement per its own capability need; a host already holding an
+ * unrelated job of this mission is used again only when no unused eligible host remains, while a
+ * job may share a host with a job it depends on, or that depends on it.
  * Deterministic for any input order. A plan authorizes nothing: dispatch re-resolves identity.
  */
 export function planMissionPlacement(
