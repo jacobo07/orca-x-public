@@ -10,6 +10,12 @@ import {
   type FleetResourceSample,
   type FleetUnmeasuredOutcome
 } from './fleet-resource-observation'
+import {
+  resourceRejectionsOf,
+  type FleetResourceRejection
+} from './fleet-placement-resource-rejection'
+import { manifestOf } from './node-manifest'
+import { judgeNodeEligibility, type NodeRequirement } from './node-manifest-eligibility'
 import { isMeasurementStale } from './node-measurement-age'
 import type { FleetNodeResourcesObservation } from './node-resources'
 
@@ -27,6 +33,8 @@ export type FleetPlacementRequest = {
   now: number
   maxSampleAgeMs: number
   minAvailableBytes?: number
+  /** Memory, disk, VRAM and resident model needs, judged by judgeNodeEligibility. */
+  requirement?: NodeRequirement
   platform?: NodeJS.Platform
   requiredCapabilities?: readonly string[]
   currentFingerprint?: string | null
@@ -42,7 +50,7 @@ export type FleetPlacementRejection =
   | { reason: 'platform-mismatch'; platform: NodeJS.Platform }
   | { reason: 'capabilities-unknown' }
   | { reason: 'capability-missing'; capabilities: string[] }
-  | { reason: 'insufficient-memory'; availableMemory: number; required: number }
+  | FleetResourceRejection
 
 export type FleetPlacementCandidate = {
   key: string
@@ -90,6 +98,18 @@ function compareEvidence(a: FleetPlacementMember, b: FleetPlacementMember): numb
   return compareFleetAddresses(a.address, b.address)
 }
 
+// Why: the legacy minAvailableBytes and requirement.memory are one memory need; the larger bound wins.
+function mergedRequirement(request: FleetPlacementRequest): NodeRequirement | null {
+  const legacy = request.minAvailableBytes ?? 0
+  const memoryNeed = Math.max(request.requirement?.memory?.minAvailableBytes ?? 0, legacy)
+  const merged: NodeRequirement = { ...request.requirement }
+  if (request.requirement?.memory || legacy > 0) {
+    merged.memory = { minAvailableBytes: memoryNeed }
+  }
+  const hasFamily = Object.values(merged).some((family) => family !== undefined)
+  return hasFamily ? merged : null
+}
+
 function judge(
   member: FleetPlacementMember,
   request: FleetPlacementRequest
@@ -130,13 +150,15 @@ function judge(
       }
     }
   }
-  const minimum = request.minAvailableBytes ?? 0
-  if (sample.outcome === 'measured' && minimum > 0 && sample.availableMemory < minimum) {
-    reasons.push({
-      reason: 'insufficient-memory',
-      availableMemory: sample.availableMemory,
-      required: minimum
-    })
+  const requirement = mergedRequirement(request)
+  if (requirement) {
+    const manifest = manifestOf(member, request.now, { memoryMaxAgeMs: request.maxSampleAgeMs })
+    const sampleStale = reasons.some((r) => r.reason === 'sample-stale')
+    reasons.push(
+      ...resourceRejectionsOf(judgeNodeEligibility(manifest, requirement, request.now), {
+        memoryAlreadyReported: sample.outcome !== 'measured' || sampleStale
+      })
+    )
   }
   return reasons
 }

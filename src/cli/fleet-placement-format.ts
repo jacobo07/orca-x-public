@@ -32,6 +32,19 @@ function describeRejection(rejection: FleetPlacementRejection): string {
       return `missing ${rejection.capabilities.join(', ')}`
     case 'insufficient-memory':
       return `${formatByteCount(rejection.availableMemory)} available, ${formatByteCount(rejection.required)} required`
+    case 'insufficient-disk':
+      return `${formatByteCount(rejection.availableBytes)} disk free, ${formatByteCount(rejection.required)} required`
+    case 'insufficient-vram':
+      return `${formatByteCount(rejection.freeBytes)} VRAM free, ${formatByteCount(rejection.required)} required`
+    case 'model-not-resident':
+      return `model ${rejection.modelId} is not resident`
+    case 'resource-unknown':
+      return `${rejection.family} unknown (${rejection.cause}: ${rejection.detail})`
+    default: {
+      // Why: a newer host may send a reason this client predates; print it instead of crashing.
+      const unrecognized: never = rejection
+      return `unrecognized reason ${JSON.stringify((unrecognized as { reason?: unknown }).reason)}`
+    }
   }
 }
 

@@ -81,7 +81,10 @@ function measured<V>(
   return { status: 'measured', value, measured_at: measuredAt, max_age_ms: maxAgeMs, source }
 }
 
-function memoryOf(sample: FleetPlacementMember['sample']): NodeManifest['measurements']['memory'] {
+function memoryOf(
+  sample: FleetPlacementMember['sample'],
+  maxAgeMs: number
+): NodeManifest['measurements']['memory'] {
   if (sample.outcome !== 'measured') {
     return unknown(sample.outcome, sample.detail)
   }
@@ -96,7 +99,7 @@ function memoryOf(sample: FleetPlacementMember['sample']): NodeManifest['measure
       available_source: sample.availableMemorySource
     },
     sample.startedAt,
-    DEFAULT_NODE_MAX_AGE_MS.memory,
+    maxAgeMs,
     sample.availableMemorySource
   )
 }
@@ -199,7 +202,12 @@ function residentModelOf(
   )
 }
 
-function manifestOf(member: FleetPlacementMember, observedAt: number): NodeManifest {
+// Why: a placement request owns its own sample age policy; every other family keeps its default.
+export function manifestOf(
+  member: FleetPlacementMember,
+  observedAt: number,
+  options: { memoryMaxAgeMs?: number } = {}
+): NodeManifest {
   const resources = member.nodeResources
   const notAttempted = unknown('not-attempted', 'node resources were not collected')
   return {
@@ -214,7 +222,7 @@ function manifestOf(member: FleetPlacementMember, observedAt: number): NodeManif
       capabilities: member.facts.capabilities ? [...member.facts.capabilities] : null
     },
     measurements: {
-      memory: memoryOf(member.sample),
+      memory: memoryOf(member.sample, options.memoryMaxAgeMs ?? DEFAULT_NODE_MAX_AGE_MS.memory),
       disk: resources ? diskOf(resources) : notAttempted,
       vram: resources ? vramOf(resources) : notAttempted,
       resident_model: resources ? residentModelOf(resources) : notAttempted
