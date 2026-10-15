@@ -268,6 +268,12 @@
       "reason": "The emulator pane launches and drives an emulator running on the developer machine: emulator.launch, .install, .tap, .type, .gesture, .logcat and twelve more. A phone cannot host an emulator, and pointing a phone at a remote one duplicates what the phone already is -- the useful mobile equivalent of 'test this on a handset' is the handset. All 19 methods are host-only and should stay so. Enumerated by config/scripts/check-mobile-capability-aperture.mjs; classified in config/mobile-capability-aperture-audit.md."
     },
     {
+      "id": "replica.pair-compare",
+      "title": "Comparing a project's setups against the local anchor over the SSH relay",
+      "disposition": "desktop-only",
+      "reason": "The pair service runs in the desktop main process and spends that process's own SSH relay session to read each remote setup. A phone or web client has no such session and must not borrow the desktop's credentials, so the replicaPair IPC channels exist on desktop only and the web preload answers the closed refusal remote-caller without sending a request. The runtime RPC projectReplica.compare is local-caller-only for the same reason."
+    },
+    {
       "id": "updater.application-self-update",
       "title": "The application updates itself in place",
       "disposition": "not-applicable",

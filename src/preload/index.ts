@@ -3214,6 +3214,10 @@ const api = {
     measureRequirements: (args) => ipcRenderer.invoke('environment:measureRequirements', args),
     runPrepareStep: (args) => ipcRenderer.invoke('environment:runPrepareStep', args)
   } satisfies PreloadApi['environment'],
+  replicaPair: {
+    compare: (args) => ipcRenderer.invoke('replicaPair:compare', args),
+    relations: () => ipcRenderer.invoke('replicaPair:relations')
+  } satisfies PreloadApi['replicaPair'],
 
   conversations: {
     list: () => ipcRenderer.invoke('conversations:list'),

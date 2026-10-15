@@ -899,6 +899,11 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           )
         )
     },
+    // Why: the web client has no local host, and the pair service spends this desktop's SSH credentials.
+    replicaPair: {
+      compare: async () => ({ status: 'refused', reason: 'remote-caller' }),
+      relations: async () => ({ status: 'refused', reason: 'remote-caller' })
+    },
     cache: {
       getGitHub: () =>
         Promise.resolve(
