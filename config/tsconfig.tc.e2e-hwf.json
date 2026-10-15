@@ -1,0 +1,24 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": [
+    "../tests/e2e/hwf-two-host-*.spec.ts",
+    "../tests/e2e/helpers/hwf-two-host-*.ts",
+    // Why: ambient declarations only; imports pull in the rest of src/ that the specs reach.
+    "../src/renderer/src/env.d.ts",
+    "../src/types/**/*"
+  ],
+  "compilerOptions": {
+    // Why: no tsbuildinfo is written next to the other tc projects; this one only reports.
+    "composite": false,
+    "incremental": false,
+    "noEmit": true,
+    "types": ["node"],
+    // Why: page.evaluate bodies and the renderer store the helpers import use DOM globals.
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@renderer/*": ["../src/renderer/src/*"],
+      "@/*": ["../src/renderer/src/*"]
+    }
+  }
+}
