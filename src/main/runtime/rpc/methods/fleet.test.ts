@@ -137,6 +137,126 @@ describe('fleet.placementView', () => {
   })
 })
 
+describe('fleet.placementView requirement', () => {
+  const unknownReading = { outcome: 'unknown', reason: 'no-gpu-tool' } as const
+  const gpuReply = (freeBytes: number) => ({
+    schema: 'orca.node-resources/1',
+    disk: unknownReading,
+    gpu: {
+      outcome: 'measured',
+      gpus: [{ name: 'gpu0', totalBytes: 24 * GB, freeBytes }]
+    },
+    models: unknownReading
+  })
+  const vram = (minFreeBytes: number) => ({ requirement: { vram: { minFreeBytes } } })
+
+  it('echoes a requirement and rejects a member with no nodeResources as resource-unknown', async () => {
+    installLocalOnly()
+
+    const result = await call(vram(8 * GB))
+
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') {
+      return
+    }
+    expect(result.request.requirement).toEqual({ vram: { minFreeBytes: 8 * GB } })
+    expect(result.proposal.decision).toBe('no-eligible-host')
+    expect(result.proposal.rejected[0]?.reasons).toEqual([
+      expect.objectContaining({ reason: 'resource-unknown', family: 'vram', cause: 'unmeasured' })
+    ])
+  })
+
+  it('control: a member with enough measured VRAM is selected', async () => {
+    installLocalOnly({ collectLocalNodeResources: async () => gpuReply(12 * GB) })
+
+    const result = await call(vram(8 * GB))
+
+    expect(result.status === 'ok' && result.proposal.selected).toMatchObject({
+      evidenceAddress: 'local'
+    })
+  })
+
+  it('rejects measured VRAM below the need with both figures', async () => {
+    installLocalOnly({ collectLocalNodeResources: async () => gpuReply(4 * GB) })
+
+    const result = await call(vram(8 * GB))
+
+    expect(result.status === 'ok' && result.proposal.rejected[0]?.reasons).toEqual([
+      { reason: 'insufficient-vram', freeBytes: 4 * GB, required: 8 * GB }
+    ])
+  })
+
+  it('judges a memory requirement through the same judge as the legacy field', async () => {
+    installLocalOnly()
+
+    const result = await call({ requirement: { memory: { minAvailableBytes: 8 * GB } } })
+
+    expect(result.status === 'ok' && result.proposal.rejected[0]?.reasons).toEqual([
+      { reason: 'insufficient-memory', availableMemory: 4 * GB, required: 8 * GB }
+    ])
+  })
+
+  it('answers a call without requirement exactly as before', async () => {
+    installLocalOnly()
+
+    const result = await call({ minAvailableBytes: 1 * GB })
+
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') {
+      return
+    }
+    expect(result.request).toEqual({
+      now: result.observation.completedAt,
+      maxSampleAgeMs: 60_000,
+      minAvailableBytes: 1 * GB
+    })
+    expect(result.request).not.toHaveProperty('requirement')
+    expect(result.proposal.selected).toMatchObject({ availableMemory: 4 * GB })
+  })
+
+  it('stays strict: unknown top-level and nested fields fail closed', () => {
+    const params = method.params!
+
+    expect(params.safeParse(vram(1)).success).toBe(true)
+    expect(params.safeParse({ minVramBytes: 1 }).success).toBe(false)
+    expect(params.safeParse({ requirement: { vram: { minFreeBytes: 1, bogus: 1 } } }).success).toBe(
+      false
+    )
+    expect(params.safeParse({ requirement: { gpu: { minFreeBytes: 1 } } }).success).toBe(false)
+    expect(params.safeParse({ requirement: { memory: { minAvailableBytes: 0 } } }).success).toBe(
+      false
+    )
+    expect(params.safeParse({ requirement: { vram: { minFreeBytes: Infinity } } }).success).toBe(
+      false
+    )
+    expect(
+      params.safeParse({ requirement: { disk: { minAvailableBytes: 1, path: '' } } }).success
+    ).toBe(false)
+    expect(params.safeParse({ requirement: { residentModel: { modelId: '' } } }).success).toBe(
+      false
+    )
+  })
+
+  it('accepts every NodeRequirement family and still refuses remote callers', async () => {
+    installLocalOnly()
+    const full = {
+      requirement: {
+        memory: { minAvailableBytes: 1 },
+        disk: { minAvailableBytes: 1, path: '/' },
+        vram: { minFreeBytes: 1 },
+        residentModel: { modelId: 'm' }
+      }
+    }
+
+    expect(method.params!.safeParse(full).success).toBe(true)
+    await expect(call(full, { clientKind: 'mobile' })).resolves.toEqual({
+      status: 'refused',
+      reason: 'remote-caller'
+    })
+    expect(reads).toBe(0)
+  })
+})
+
 describe('fleet.nodeManifests', () => {
   const manifestMethod = FLEET_METHODS.find((entry) => entry.name === 'fleet.nodeManifests')!
   const callManifests = (params: unknown, ctx: Partial<RpcContext> = {}) =>

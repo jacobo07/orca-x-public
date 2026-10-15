@@ -3,6 +3,7 @@ import type {
   FleetPlacementProposal,
   FleetPlacementRequest
 } from './fleet-placement'
+import type { NodeRequirement } from './node-manifest-eligibility'
 
 /** Counts only, so no fingerprint, host or key crosses the wire. */
 export type FleetSshHostIdentityCounts = {
@@ -60,6 +61,8 @@ export type FleetObservation = {
 
 export type FleetPlacementViewParams = {
   minAvailableBytes?: number
+  /** Optional: an older host rejects it as an unknown field, which fails closed. */
+  requirement?: NodeRequirement
   platform?: string
   requiredCapabilities?: string[]
   currentFingerprint?: string

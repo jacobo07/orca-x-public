@@ -7,12 +7,14 @@ import type { NodeResourcesReply } from '../../../fleet/node-resources-measure'
 import { readNodeResources } from '../../../fleet/node-resources-slot'
 import { defineMethod, type RpcMethod } from '../core'
 import { isLocalRpcCaller } from '../local-rpc-caller'
+import { NodeRequirementParams } from '../node-requirement-params'
 
 export const DEFAULT_FLEET_SAMPLE_MAX_AGE_MS = 60_000
 
 const PlacementViewParams = z
   .object({
     minAvailableBytes: z.number().finite().nonnegative().optional(),
+    requirement: NodeRequirementParams.optional(),
     platform: z.string().min(1).optional(),
     requiredCapabilities: z.array(z.string().min(1)).optional(),
     currentFingerprint: z.string().min(1).optional(),
@@ -47,6 +49,7 @@ export const FLEET_METHODS: RpcMethod[] = [
         ...(params?.minAvailableBytes !== undefined
           ? { minAvailableBytes: params.minAvailableBytes }
           : {}),
+        ...(params?.requirement ? { requirement: params.requirement } : {}),
         ...(params?.platform ? { platform: params.platform as NodeJS.Platform } : {}),
         ...(params?.requiredCapabilities
           ? { requiredCapabilities: params.requiredCapabilities }
