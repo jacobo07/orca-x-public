@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -299,5 +301,57 @@ describe('mission-place text output', () => {
       notDispatchable: []
     } as unknown as Plan
     expect(await textFor(plan)).toBe(legacyText(plan))
+  })
+})
+
+const USAGE_PREFIX = 'orca orchestration mission-place'
+
+// Why: __dirname works under both Vitest and the CommonJS tsc emit that type-checks this file.
+const SPEC_DOC = join(__dirname, '..', '..', '..', 'docs', 'cross-host-mission-dispatch-spec.md')
+
+function documentedUsageLines(markdown: string): string[] {
+  return markdown
+    .split('\n')
+    .flatMap((line) => line.match(/`orca orchestration mission-place[^`]*`/g) ?? [])
+    .map((span) => span.slice(1, -1))
+}
+
+// Why: placeholders become fixed values and optional brackets are dropped, so the line runs as typed.
+function runnableForm(usage: string): string[] {
+  return usage
+    .replace(/<n>/g, '1024')
+    .replace(/<[^>]+>/g, 'x1')
+    .replace(/[[\]]/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(1)
+}
+
+function validateUsage(usage: string): void {
+  const parsed = normalizeCommandPositionals(
+    COMMAND_SPECS,
+    parseArgs(runnableForm(usage), COMMAND_PATHS)
+  )
+  validateCommandAndFlags(COMMAND_SPECS, parsed)
+  expect(parsed.commandPath).toEqual(['orchestration', 'mission-place'])
+  expect(parsed.flags.get('tasks')).toEqual(expect.any(String))
+}
+
+describe('cross-host dispatch spec usage lines', () => {
+  const lines = documentedUsageLines(readFileSync(SPEC_DOC, 'utf8'))
+
+  it('documents the plain command and the resource flags, and the parser accepts each', () => {
+    expect(lines.length).toBeGreaterThanOrEqual(2)
+    expect(lines.some((line) => line.includes('--min-vram-mb'))).toBe(true)
+    for (const line of lines) {
+      validateUsage(line)
+    }
+  })
+
+  it('station control: a usage line with an unknown flag or the old repeated form is refused', () => {
+    expect(() => validateUsage(`${USAGE_PREFIX} --tasks <a,b> --min-gpu-mb <n>`)).toThrow(
+      /Unknown flag/
+    )
+    expect(() => validateUsage(`${USAGE_PREFIX} --task <a> --task <b>`)).toThrow()
   })
 })

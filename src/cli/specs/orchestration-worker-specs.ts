@@ -3,7 +3,7 @@ import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'mission-place'],
-    summary: 'Place each task of one mission on a distinct dispatchable host',
+    summary: 'Place each task of one mission on a dispatchable host, spread across hosts by load',
     usage:
       'orca orchestration mission-place --tasks <task_id,task_id> [--min-available-mb <n>] [--min-vram-mb <n>] [--min-disk-mb <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [

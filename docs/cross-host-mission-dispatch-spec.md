@@ -42,7 +42,7 @@ placement to the existing effect.
 
 ### D1. Placement is recorded by a planner, and the effect checks it
 
-New local RPC `orchestration.missionPlace { run, tasks: string[], from }` (coordinator-bound like
+New local RPC `orchestration.missionPlace { run, tasks: string[], from, requirement?, taskRequirements? }` (coordinator-bound like
 `workerStart`: `from` must be the terminal bound to the Run):
 
 1. Observe the fleet once (the same observer `fleet.placementView` uses).
@@ -72,19 +72,40 @@ one check before any effect, for a task that **has** a recorded placement:
 
 A task without a placement behaves exactly as today, so every existing caller is unchanged.
 
-### D2. No wire change
+### D2. Optional wire fields only
 
-`missionPlace` runs on the coordinator's own runtime. The `workerStart` check reads only local
-state. The remote still receives the `federationAttachStart` it already accepts. A remote that lacks
+`missionPlace` runs on the coordinator's own runtime, and the `workerStart` check reads only local
+state. The remote still receives the `federationAttachStart` it already accepts; a remote that lacks
 the federation capability never becomes a dispatchable member, so it is rejected in the plan instead
-of failing at start. (Per `docs/reference/remote-wire-compatibility.md`: no new field, opcode or
-published content.)
+of failing at start.
+
+`orchestration.missionPlace` itself gained optional fields (per `docs/reference/remote-wire-compatibility.md`):
+
+- params: `requirement` (one strict resource need applied to every task) and `taskRequirements`
+  (a per-task need, keyed by a task in `tasks`, replacing the global need family by family).
+- result: `rejectedByJob` (for each task, which hosts were refused and why) and `locality` (entries
+  with exactly `taskId`, `hostKey` and `hydrated`, stating whether the placed host already holds the
+  project).
+
+Params are strict. A newer client that sends `requirement` or `taskRequirements` to an older local
+runtime therefore fails closed on the unknown field instead of placing work without the need. An
+older host's result simply lacks the new result fields, and the CLI prints it as before. Nothing else
+on the wire changed: no opcode, no published content, no new method.
 
 ### D3. CLI
 
-`orca orchestration mission-place --run <id> --task <a> --task <b> --from <terminal> [--json]`
+`orca orchestration mission-place --tasks <a,b> [--run <id>] [--from <terminal>] [--json]`
 maps to D1. Starting stays `orca orchestration worker-start --task <a> [--on <env>]`, so the
 coordinator, or a test, starts each placed job with the address the plan returned.
+
+A task's resource need is stated with
+`orca orchestration mission-place --tasks <a,b> --min-available-mb <n> --min-vram-mb <n> --min-disk-mb <n>`.
+Each flag is a whole number of megabytes, converted to bytes and sent as the strict `requirement`
+object; a value that is not a positive integer, or that overflows in bytes, is refused before any
+request. A task is placed only on a host whose measured figures meet the need: an unmeasured or
+stale figure is never enough, and an unplaced task is printed with each host's reason. The same
+flags (`--min-vram-mb`, `--min-disk-mb`, plus the older `--min-available-mb`) shape
+`orca fleet placement`.
 
 ### D4. Results
 
