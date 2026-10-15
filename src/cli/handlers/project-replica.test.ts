@@ -461,7 +461,7 @@ describe('orca project replica-sync', () => {
       reason: 'not-behind',
       observedAncestry: 'same'
     })
-    expect(printed).toBe('nothing to sync: the replica is same')
+    expect(printed).toBe('nothing to sync: the replica is at the same commit as this machine')
     expect(process.exitCode).toBe(1)
   })
 

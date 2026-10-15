@@ -1,4 +1,5 @@
 import type {
+  ReplicaObservedAncestry,
   ReplicaPreserveDivergenceResult,
   ReplicaReconcileRefusal,
   ReplicaReconcileResult,
@@ -44,6 +45,15 @@ function notFoundLine(command: string, reason: string): ReplicaCommandOutput {
 
 function capsuleNote(capsuleRef: string | undefined): string[] {
   return capsuleRef ? [`previous state saved as ${capsuleRef}`] : []
+}
+
+// Why: observedAncestry is relative to the local anchor ("ahead" = this machine is ahead), so each line states the direction from the user's side.
+const NOT_BEHIND_SENTENCE: Record<ReplicaObservedAncestry, string> = {
+  same: 'the replica is at the same commit as this machine',
+  ahead: 'this machine is ahead of the replica; sync only pulls from the replica',
+  behind: 'the replica is ahead of this machine',
+  diverged: 'the histories have diverged; see replica-preserve-divergence',
+  unrelated: 'the histories are unrelated'
 }
 
 /** Sync: only an ok result exits 0; a full disk, a lost connection and a stale generation read differently. */
@@ -98,7 +108,13 @@ function syncFailureLines(result: Extract<ReplicaSyncResult, { status: 'failed' 
         'check that the SSH connection is up and that the relay on the host is current'
       ]
     case 'not-behind':
-      return [`nothing to sync: the replica is ${result.observedAncestry ?? 'not behind'}`]
+      return [
+        `nothing to sync: ${
+          result.observedAncestry
+            ? NOT_BEHIND_SENTENCE[result.observedAncestry]
+            : 'the replica is not behind'
+        }`
+      ]
     case 'verify-failed':
       // Why: the merge ran and HEAD is not at the remote tip, so "HEAD was not moved" would be false.
       return [

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type {
+  ReplicaObservedAncestry,
   ReplicaPreserveDivergenceResult,
   ReplicaReconcileResult,
   ReplicaSyncResult
@@ -72,15 +73,48 @@ describe('formatReplicaSync', () => {
     expect(sync({ status: 'ok', from: FROM, to: TO }).exitCode).toBe(0)
   })
 
-  it('not-behind names what the comparison found and is not a success', () => {
-    const behindNot = sync({ status: 'failed', reason: 'not-behind', observedAncestry: 'diverged' })
-    expect(behindNot).toEqual({ text: 'nothing to sync: the replica is diverged', exitCode: 1 })
-    expect(sync({ status: 'failed', reason: 'not-behind', observedAncestry: 'same' }).text).toBe(
-      'nothing to sync: the replica is same'
-    )
-    expect(sync({ status: 'failed', reason: 'not-behind' }).text).toBe(
-      'nothing to sync: the replica is not behind'
-    )
+  // observedAncestry is anchor-relative: `ahead` means THIS machine holds commits the replica lacks.
+  describe('not-behind states the direction from this machine, never the anchor-relative word', () => {
+    const notBehind = (observedAncestry?: ReplicaObservedAncestry) =>
+      sync({
+        status: 'failed',
+        reason: 'not-behind',
+        ...(observedAncestry ? { observedAncestry } : {})
+      })
+
+    it('ahead: this machine is ahead of the replica, and the replica is never called ahead', () => {
+      const out = notBehind('ahead')
+      expect(out.exitCode).toBe(1)
+      expect(out.text).toBe(
+        'nothing to sync: this machine is ahead of the replica; sync only pulls from the replica'
+      )
+      expect(out.text).not.toMatch(/replica is ahead/)
+    })
+
+    it('same: names the shared commit instead of the word same', () => {
+      expect(notBehind('same').text).toBe(
+        'nothing to sync: the replica is at the same commit as this machine'
+      )
+    })
+
+    it('diverged: names the histories and the way out', () => {
+      const out = notBehind('diverged')
+      expect(out).toEqual({
+        text: 'nothing to sync: the histories have diverged; see replica-preserve-divergence',
+        exitCode: 1
+      })
+    })
+
+    it('behind (not reachable through not-behind): the replica is ahead of this machine', () => {
+      const out = notBehind('behind')
+      expect(out.text).toContain('the replica is ahead of this machine')
+      expect(out.text).not.toContain('this machine is ahead')
+    })
+
+    it('unrelated and an absent ancestry stay honest', () => {
+      expect(notBehind('unrelated').text).toBe('nothing to sync: the histories are unrelated')
+      expect(notBehind().text).toBe('nothing to sync: the replica is not behind')
+    })
   })
 
   it('other failures print their reason and say HEAD was not moved; the capsule is named when one was saved', () => {
