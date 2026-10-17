@@ -2160,10 +2160,10 @@
       "row": "HF Replica topology surface",
       "owner": "Project + ProjectHostSetup",
       "done": "UI and CLI list every replica of a logical workspace with its host and role",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 3",
-      "measuredAt": "2026-10-15",
+      "measuredIn": "rb-live live legs (laptop -> GEX44) + dwsrb phase 16",
+      "measuredAt": "2026-10-17",
       "required": true,
       "phases": [
         16
@@ -2217,6 +2217,16 @@
         },
         {
           "kind": "file",
+          "path": "docs/dws/live-2026-10-17-row-61-evidence.md",
+          "note": "live fan-out over two paired environments, control and carrier-down legs"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-fanout-environments.spec.ts",
+          "note": "opt-in REAL-TWO-HOST fan-out spec (control, then carrier killed)"
+        },
+        {
+          "kind": "file",
           "path": "src/cli/handlers/project-setups-all-environments.ts",
           "note": "fan-out over saved environments with typed per-runtime outcomes."
         },
@@ -2241,7 +2251,7 @@
           "note": "orca project setups --all-environments"
         }
       ],
-      "reason": "READY_FOR_LIVE: paired-fanout — dwsrb phase 3 (2026-10-15): orca project setups --all-environments asks every saved environment projectHostSetup.list and nothing else, reports each runtime as answered, unreachable, unauthorized, unsupported-by-host or failed, never reads an unanswered runtime as no replicas, names zero saved environments as its own status no-saved-environments, and merges one runtime reached through two environments (alsoReachedAs); covered by hermetic tests (4a4236269, 74a69e017). NOT RUN: the fan-out over two real paired environments. Command: orca project setups --all-environments on a machine with two real paired environments saved, one reachable and one with its carrier down. Expected: the reachable runtime listed as answered with its replicas, host and role, the downed one as unreachable, and the exit not claiming the downed host holds nothing. The Settings UI half and the same-runtime CLI half were measured in phase 16."
+      "reason": "PASS: the fan-out over two real paired environments was measured live 2026-10-17 (laptop -> two disposable p22 serves on GEX44 behind ssh -L carriers, isolated e2e userData). Control: with both carriers up the real CLI read both runtimes answered, each with its setup, host and role. After the second carrier was killed the CLI read it unreachable with no setups (not an empty list), the other still answered, and the text exit said replicas unknown, not none. The Settings UI half and the same-runtime CLI half were measured in phase 16. Not covered: each runtime held one replica (membership sole/identity-pending, role legacy), so a multi-replica fan-out is not live-measured; unauthorized/unsupported-by-host/failed outcomes are unit-only. Teardown REMAINING=0 PROC_COUNT=0, witness unchanged on both roots. Evidence: docs/dws/live-2026-10-17-row-61-evidence.md."
     },
     {
       "id": 62,
