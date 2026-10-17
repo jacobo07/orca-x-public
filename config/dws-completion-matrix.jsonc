@@ -870,6 +870,11 @@
           "note": "real handler: a hydrated host chosen when eligible, never when short of memory, stale, or an ssh relay; updatedAt not read."
         },
         {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-17-rows-24-34-evidence.md",
+          "note": "live laptop -> GEX44 leg: hydrated low-memory host chosen over the roomier one, with a no-setup control, read back from persisted task_placements."
+        },
+        {
           "kind": "commit",
           "sha": "a2a53e35e6ca",
           "note": "hydration fact reader and the ranking module"
@@ -890,9 +895,9 @@
           "note": "ranking order pinned by a table golden, the proposal breaks ties by fingerprint"
         }
       ],
-      "reason": "READY_FOR_LIVE: hydrated-node-two-host - a host holding a ready setup of the task project is preferred, proven on the real orchestration.missionPlace handler with a fake registry and a fake fleet observation (a2a53e35e, 61918c23b, 2553ea8d0, da855210d). Hydration is a registry claim: runtime.listProjectHostSetups is read once inside the call and a host counts only at setupState ready; updatedAt is not read (a setup at updatedAt 0, 1 or now gives the same placement), so no freshness window is claimed and the row stays PARTIAL even on the pure result. Ranking is hydrated first, then lower load, then more free memory, then lower fingerprint; hydration never makes an ineligible host eligible (a hydrated host short of memory, with a stale sample, or an ssh relay is not placed). The result carries locality per task. NOT RUN: a real two-host leg with a project actually hydrated on one paired host. Leg: seed a ready project host setup on one of two paired hosts, run orca orchestration mission-place for a task of that project, read locality[].hydrated and the persisted placement; no committed two-host spec seeds a setup yet.",
-      "measuredIn": "dwsrb phase 4",
-      "measuredAt": "2026-10-15"
+      "reason": "READY_FOR_LIVE: hydrated-node-two-host - a host holding a ready setup of the task project is preferred, proven on the real orchestration.missionPlace handler with a fake registry and a fake fleet observation (a2a53e35e, 61918c23b, 2553ea8d0, da855210d). Hydration is a registry claim: runtime.listProjectHostSetups is read once inside the call and a host counts only at setupState ready; updatedAt is not read (a setup at updatedAt 0, 1 or now gives the same placement), so no freshness window is claimed and the row stays PARTIAL even on the pure result. Ranking is hydrated first, then lower load, then more free memory, then lower fingerprint; hydration never makes an ineligible host eligible (a hydrated host short of memory, with a stale sample, or an ssh relay is not placed). The result carries locality per task. Live 2026-10-17 (laptop -> GEX44, rb-live): tests/e2e/hwf-two-host-mission-locality.spec.ts passed (evidence rbl d4-ev-r24h-20261017-213756, docs/dws/live-2026-10-17-rows-24-34-evidence.md). Measured free memory local 10.6 GB vs the paired GEX44 runtime 59.3 GB; the project had a ready setup on local alone (listProjectHostSetups read back). A control task of a project with no setup went to the roomier GEX44 runtime with hydrated false; the task of the hydrated project went to the lower-memory local host with locality hydrated true, and both placements were read back from the app's persisted task_placements. Still PARTIAL: the hydrated setup was the laptop's own repo-backed setup, so the remote-only import path (setupExistingFolder on a paired host) was not the discriminating leg, and the no-freshness-window caveat above stands (updatedAt is not read).",
+      "measuredIn": "rb-live live legs (laptop -> GEX44) + dwsrb phase 4",
+      "measuredAt": "2026-10-17"
     },
     {
       "id": 25,
@@ -1111,7 +1116,7 @@
       "row": "Automatic distribution",
       "owner": "orchestration + routing + placement",
       "done": "golden",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
       "required": true,
       "phases": [
@@ -1138,6 +1143,11 @@
           "note": "the live two-host leg for this row; skipped (NOT RUN) without ORCA_HWF_TWO_HOST=1 and ORCA_HWF_RUN_FILE."
         },
         {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-17-rows-24-34-evidence.md",
+          "note": "live laptop -> GEX44 leg: missionPlace on the app's handler, a and b on different hosts, read back from persisted task_placements."
+        },
+        {
           "kind": "commit",
           "sha": "ec2e1420c178",
           "note": "golden: four tasks over three hosts and a relay placed with no host choice"
@@ -1158,9 +1168,9 @@
           "note": "dependency relation is transitive and cycle safe"
         }
       ],
-      "reason": "READY_FOR_LIVE: app-mission-place-two-host - the golden passes: four tasks over three hosts and an ssh relay are placed with no host choice by the caller and the mapping is read from the persisted task_placements rows (t1 memory 8 GiB and t2 VRAM 8 GiB on the 24 GiB runtime, t3 on local, t4 on the second runtime, the relay never placed), and it holds under every rotation of the fleet members and of the task list; the spread golden adds that independent tasks use different hosts (ec2e1420c, a070a7a15, bf6742acc, 1b097e3e5). Plane: the real handler over the in-memory OrchestrationDb with a fake fleet observation. Live 2026-10-15 (desktop PC -> GEX44, /tmp/orca-hwf-p17-20261015T184859Z): tests/e2e/hwf-two-host-mission-placement.spec.ts passed; the app's fleet placement proposal over a real SSH connection listed two distinct eligible hosts with measured memory (GEX44 57.3 GB proc-meminfo, the PC 3.4 GB) and two jobs were spread one per host (HWF22_CROSSHOST hosts=2). Instrument limit: that spec runs planMissionPlacement in the Playwright process on members rebuilt from the CLI proposal, so it proves the live proposal, not the app's mission handler or persisted task_placements. NOT RUN: orca orchestration mission-place over two real paired hosts (it needs a Task Run with a bound coordinator terminal and orchestration tasks); expected: task_placements rows on two distinct hosts read back from the app.",
-      "measuredIn": "dwsrb live queue (desktop PC -> GEX44)",
-      "measuredAt": "2026-10-15"
+      "reason": "READY_FOR_LIVE: app-mission-place-two-host - the golden passes: four tasks over three hosts and an ssh relay are placed with no host choice by the caller and the mapping is read from the persisted task_placements rows (t1 memory 8 GiB and t2 VRAM 8 GiB on the 24 GiB runtime, t3 on local, t4 on the second runtime, the relay never placed), and it holds under every rotation of the fleet members and of the task list; the spread golden adds that independent tasks use different hosts (ec2e1420c, a070a7a15, bf6742acc, 1b097e3e5). Plane: the real handler over the in-memory OrchestrationDb with a fake fleet observation. Live 2026-10-15 (desktop PC -> GEX44, /tmp/orca-hwf-p17-20261015T184859Z): tests/e2e/hwf-two-host-mission-placement.spec.ts passed; the app's fleet placement proposal over a real SSH connection listed two distinct eligible hosts with measured memory (GEX44 57.3 GB proc-meminfo, the PC 3.4 GB) and two jobs were spread one per host (HWF22_CROSSHOST hosts=2). Instrument limit: that spec runs planMissionPlacement in the Playwright process on members rebuilt from the CLI proposal, so it proves the live proposal, not the app's mission handler or persisted task_placements. Live 2026-10-17 (laptop -> GEX44, rb-live): tests/e2e/hwf-two-host-mission-locality.spec.ts passed (evidence rbl d4-ev-r24h-20261017-213756, docs/dws/live-2026-10-17-rows-24-34-evidence.md): orchestration.missionPlace on the app's own handler over the laptop and a paired GEX44 serve, three independent-or-dependent tasks (a, b, c depends on a) placed on hostCount 2 with a on local and b on the GEX44 runtime (c, which depends on a, shares one of the two), read back from the app's persisted task_placements rows (a and b on different addresses, 2 distinct addresses over the three tasks); ssh carrier up, teardown REMAINING=0 PROC_COUNT=0, witness unchanged.",
+      "measuredIn": "rb-live live legs (laptop -> GEX44) + dwsrb live queue",
+      "measuredAt": "2026-10-17"
     },
     {
       "id": 35,
