@@ -3124,10 +3124,10 @@
       "row": "HF Mixed relay versions fail closed",
       "owner": "relay-handshake + capability probes",
       "done": "an old relay rejects new sync/fabric methods; client never widens",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 2",
-      "measuredAt": "2026-10-15",
+      "measuredIn": "rb-live live legs (laptop -> GEX44)",
+      "measuredAt": "2026-10-17",
       "required": true,
       "phases": [
         23
@@ -3180,9 +3180,22 @@
           "kind": "commit",
           "sha": "75541c8fa478",
           "note": "two-host old-relay and current-relay A/B, NOT RUN"
+        },
+        {
+          "kind": "commit",
+          "sha": "379b49388f",
+          "note": "e2e-only sent-method tally at SshChannelMultiplexer.sendMessage; relays never log request methods"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-17-row-74-evidence.md",
+          "note": "plane, instrument, three relays (current, git.replicaBundle-without-sync.v1 at 35c5b399d0, pre-replica 5de29754c5) on an equal-tips pair, and the not-covered list.",
+          "provedBy": [
+            "an old relay rejects new sync/fabric methods; client never widens"
+          ]
         }
       ],
-      "reason": "READY_FOR_LIVE: old-relay-build — dwsrb phase 2 (2026-10-15): the gate now has a production caller (sync.replicaFacts goes through requestGatedRelayMethod, so a relay without sync.v1 is refused and the pair publishes unknown relay-too-old); hermetic suites are green. The D4 live zero of 2026-10-14 predates that caller, so it proved absence, not the gate. The old-relay leg and its current-relay control have NOT RUN. Commands: `npx playwright test tests/e2e/hwf-two-host-mixed-relay.spec.ts --config tests/playwright.config.ts --project=electron-headless -g \"old relay\"` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE (seeded p23 root), ORCA_HWF_P23_RELAY_PATH (an old relay build), optional ORCA_HWF_P23_EXPECTED_WORD; expected P23_NO_SYNC_FABRIC_SENT count=0 with P23_RELAY_LOGS and P23_RELAY_METHODS above 0 and HWF74_OLD_RELAY PASS (\"unverified (relay-too-old)\", exit 1). Control: same spec with -g \"current relay\" on a p23 root running the current relay; expected HWF74_CURRENT_RELAY PASS with \"sync.replicaFacts seen N time(s)\", N above 0."
+      "reason": "PASS (live 2026-10-17, laptop -> GEX44, equal-tips pair, sent-method tally). Control: the current relay compared `same` and was sent sync.replicaFacts once. Gate: a relay with git.replicaBundle but no sync.v1 (35c5b399d0) compared for real (git.replicaBundleExport 1), printed unverified (worktree-not-verified-clean) exit 1, and was sent 0 sync./fabric. methods of 74. Pre-replica relay (5de29754c5): unverified (relay-too-old), 0 of 71. Caveats: fabric.* has no production caller, so its zero is absence (prefix gate unit-tested); the mid-session relay swap (MethodNotFound eviction) is unit-only."
     },
     {
       "id": 75,
