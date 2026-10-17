@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -8,6 +8,7 @@ import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
   connectHwfTargetWithTrust,
   disconnectHwfTarget,
+  execOnOwningHost,
   readHwfLocalPort,
   readHwfRunFile
 } from './helpers/hwf-two-host-ssh-target'
@@ -55,13 +56,17 @@ test.use({ seedTestRepo: false, orcaAppExtraEnv: { ORCA_RELAY_PATH: relayPath, .
 
 test.describe.configure({ mode: 'serial' })
 
-// Methods this app wrote to its relays, in the shared verdict's shape: `logs` is 1 when the tally
-// exists and `methods` the total sent, so a missing tally (switch off, nothing sent) fails the control.
-async function readSentMethodCounts(app: ElectronApplication): Promise<RelayLogCounts> {
-  const tally = (await app.evaluate(
+async function readSentTally(app: ElectronApplication): Promise<Record<string, number> | null> {
+  return (await app.evaluate(
     (_electron, key) => (globalThis as Record<string, unknown>)[key] ?? null,
     TALLY_KEY
   )) as Record<string, number> | null
+}
+
+// Methods this app wrote to its relays, in the shared verdict's shape: `logs` is 1 when the tally
+// exists and `methods` the total sent, so a missing tally (switch off, nothing sent) fails the control.
+async function readSentMethodCounts(app: ElectronApplication): Promise<RelayLogCounts> {
+  const tally = await readSentTally(app)
   const entries = Object.entries(tally ?? {})
   const sum = (keep: (method: string) => boolean): number =>
     entries.filter(([m]) => keep(m)).reduce((n, [, c]) => n + c, 0)
@@ -77,7 +82,11 @@ async function readSentMethodCounts(app: ElectronApplication): Promise<RelayLogC
 function installOldRelay(run: HwfRun): void {
   const verb = spawnSync(
     process.execPath,
-    [path.join(process.cwd(), 'config', 'scripts', 'hwf-two-host-remote.mjs'), 'old-relay-p23', run.root],
+    [
+      path.join(process.cwd(), 'config', 'scripts', 'hwf-two-host-remote.mjs'),
+      'old-relay-p23',
+      run.root
+    ],
     { encoding: 'utf8' }
   )
   expect(verb.status).toBe(0)
@@ -130,15 +139,39 @@ function seededRunOrNull(run: HwfRun): HwfReplicaRun | null {
   }
 }
 
+// Why: the p16 seeds diverge by design (one host commit each), and the remote worktree fact, the
+// only sync.* request, is read only for equal tips. Fresh clones of both seeds, reset to the shared
+// seed root, are the one pair on which the sync.v1 gate is reached at all.
+function makeEqualTipsPair(run: HwfReplicaRun, leg: string): { local: string; remote: string } {
+  expect(run.seedRoot).toMatch(/^[0-9a-f]{40}$/)
+  const remote = `${path.posix.dirname(run.replicaPath)}/p23-equal-${leg}`
+  const made = execOnOwningHost(
+    run,
+    `git clone -q '${run.replicaPath}' '${remote}' && git -C '${remote}' reset -q --hard ${run.seedRoot} && git -C '${remote}' rev-parse HEAD`
+  )
+  expect(made.status, made.out).toBe(0)
+  expect(made.out.trim().split('\n').pop()).toBe(run.seedRoot)
+  const local = path.join(path.dirname(run.localReplicaPath), `p23-equal-${leg}`)
+  const git = (args: string[]): string =>
+    execFileSync('git', ['-c', 'core.autocrlf=false', ...args], { encoding: 'utf8' }).trim()
+  git(['clone', '-q', '--no-hardlinks', run.localReplicaPath, local])
+  git(['-C', local, 'reset', '-q', '--hard', run.seedRoot])
+  expect(git(['-C', local, 'rev-parse', 'HEAD'])).toBe(run.seedRoot)
+  console.log(`HWF74_EQUAL_TIPS leg=${leg} tip=${run.seedRoot}`)
+  return { local, remote }
+}
+
 async function compareEqualTipsPair(
   orcaPage: Page,
   userData: string,
   run: HwfReplicaRun,
-  connected: { targetId: string; label: string }
+  connected: { targetId: string; label: string },
+  leg: string
 ): Promise<{ output: string; status: number }> {
   await waitForSshConnected(orcaPage, connected.targetId, { timeoutMs: 60_000 })
-  const localRepoId = await addLocalReplica(orcaPage, run.localReplicaPath)
-  const remoteRepoId = await addRemoteRepo(orcaPage, connected, run.replicaPath, 'HWF74 p23')
+  const pair = makeEqualTipsPair(run, leg)
+  const localRepoId = await addLocalReplica(orcaPage, pair.local)
+  const remoteRepoId = await addRemoteRepo(orcaPage, connected, pair.remote, 'HWF74 p23')
   const grouping = await waitForRootGrouping(orcaPage, run.seedRoot, [localRepoId, remoteRepoId])
   const r = runCliRaw(['project', 'replica-compare', '--project', grouping.projectId], userData)
   console.log(`HWF74_COMPARE exit=${r.status} out=${r.stdout.trim()}`)
@@ -175,7 +208,7 @@ test('old relay: replica-compare says so and sends no sync/fabric method', async
   const { carrier, target } = await openTarget(orcaPage, run)
   try {
     const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-    const compare = await compareEqualTipsPair(orcaPage, userData, seeded, target)
+    const compare = await compareEqualTipsPair(orcaPage, userData, seeded, target, 'old')
     const verdict = oldRelayVerdict({
       compareOutput: compare.output,
       compareStatus: compare.status,
@@ -184,6 +217,13 @@ test('old relay: replica-compare says so and sends no sync/fabric method', async
     })
     logLeg('HWF74_OLD_RELAY', verdict)
     requirePass('old relay: replica-compare says so and sends no sync/fabric method', verdict)
+    if (expectedWord === WORKTREE_UNVERIFIED_WORD) {
+      // Why: a relay with git.replicaBundle but no sync.v1 must have compared for real, or the
+      // sync.v1 gate was never reached and the zero above came from an earlier refusal.
+      const exports = (await readSentTally(electronApp))?.['git.replicaBundleExport'] ?? 0
+      console.log(`HWF74_GATE_REACHED replicaBundleExport=${exports}`)
+      expect(exports).toBeGreaterThan(0)
+    }
   } finally {
     await disconnectHwfTarget(orcaPage, target.targetId)
     await carrier.kill()
@@ -200,7 +240,10 @@ test.describe('current relay', () => {
     const run = readHwfRunFile()
     const seeded = seededRunOrNull(run)
     if (seeded === null) {
-      skipUnseeded('HWF74_CURRENT_RELAY', 'the p23 run file has no replica seeds (run-file --seed --local-seed)')
+      skipUnseeded(
+        'HWF74_CURRENT_RELAY',
+        'the p23 run file has no replica seeds (run-file --seed --local-seed)'
+      )
       return
     }
     await waitForSessionReady(orcaPage)
@@ -208,11 +251,14 @@ test.describe('current relay', () => {
     try {
       const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
       const before = await readSentMethodCounts(electronApp)
-      await compareEqualTipsPair(orcaPage, userData, seeded, target)
+      await compareEqualTipsPair(orcaPage, userData, seeded, target, 'current')
       const after = await readSentMethodCounts(electronApp)
       // Why: only the requests this compare added count toward the control.
       const verdict = currentRelayVerdict({
-        relayLogCounts: { ...after, replicaFacts: (after.replicaFacts ?? 0) - (before.replicaFacts ?? 0) }
+        relayLogCounts: {
+          ...after,
+          replicaFacts: (after.replicaFacts ?? 0) - (before.replicaFacts ?? 0)
+        }
       })
       logLeg('HWF74_CURRENT_RELAY', verdict)
       requirePass('current relay: sync.replicaFacts is sent', verdict)
