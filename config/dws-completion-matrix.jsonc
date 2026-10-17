@@ -2916,8 +2916,8 @@
       "done": "a working set translates through projectId to another host; each pane reattach/resume/restart/unavailable",
       "state": "PARTIAL",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 3",
-      "measuredAt": "2026-10-15",
+      "measuredIn": "rb-live phase 3 (r70b)",
+      "measuredAt": "2026-10-17",
       "required": true,
       "phases": [
         21
@@ -3013,9 +3013,19 @@
           "kind": "commit",
           "sha": "83db534b45c8",
           "note": "real-app Continue here legs on GEX44 under xvfb"
+        },
+        {
+          "kind": "file",
+          "path": "tests/e2e/hwf-two-host-continue-here-ssh.spec.ts",
+          "note": "REAL-SSH leg: disconnected refuses, reconnected restores dormant rows, Open starts a shell on GEX44; 1 passed 2026-10-17 (r70b)."
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-17-row-70-evidence.md",
+          "note": "r70b result, r70a red, dispositions observed, reattach/resume not covered."
         }
       ],
-      "reason": "READY_FOR_LIVE: continue-here-in-app — dwsrb phase 3 (2026-10-15): Continue here is built end to end. translateWorkingSetToHost and planContinueOnHost now have production callers: restoreWorkingSet continues a set on another host's setup (21d96b18c), the target is resolved by lookup only and never synthesized, unknown SSH availability stays unverified and blocks apply, refusal and an unavailable target are distinct statuses (cbb813b0e, 5401d27ff), and the Working Sets dialog hosts the action beside Restore with a per-pane result (44f73f736, 787930d04, 0cf7305df). Observed in the real app (REAL-APP/STORE-SEEDED-HOST: GEX44 under xvfb, e2e build at 83db534b4, 4 passed): the offer appears only once another host holds a ready setup; a connected seeded host returns restored with sleeping rows and no new PTY; an unmeasured and a disconnected host both refuse and apply nothing, told apart by tone; a missing target workspace gives continue-target-unavailable. A red-first RESTORED run and an UNVERIFIED mutant are recorded in docs/dws/rb-phase-3-continue-here-app-leg-evidence.md. NOT RUN: a real two-host reattach to a live remote PTY; the target host's setup, workspace and SSH availability were seeded into the store, and no row was opened. Command: no committed spec drives it; seed a two-host run file, connect the target host, run Continue here from the Working Sets dialog, open a restored row and observe a reattach to the live PTY. The ja, ko and zh workingSet.continue strings are executor-authored, not native-reviewed."
+      "reason": "REAL-SSH leg PASSED 2026-10-17 (r70b, laptop -> GEX44): tests/e2e/hwf-two-host-continue-here-ssh.spec.ts 1 passed. The laptop and GEX44 replicas (one root commit) became one git-root project without any store write; a really disconnected target refused Continue here and applied nothing; reconnected, the same click restored 3 dormant rows with no process; Open on the restart row started a shell on kobicraft-gex44 in the remote replica; teardown REMAINING=0 PROC_COUNT=0, witness unchanged. Dispositions observed: restart/relaunchable x1, unavailable/nothing-runnable x2. NOT OBSERVED: reattach (needs the pane's agent session live-here on the target; no leg has an agent pane yet) and resume (needs an exact-resume provider session from a real model turn on GEX44, OWNER OD-1). Evidence docs/dws/live-2026-10-17-row-70-evidence.md."
     },
     {
       "id": 71,
