@@ -1,14 +1,13 @@
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 
 import { expect, test } from './helpers/orca-app'
 import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
   connectHwfTargetWithTrust,
   disconnectHwfTarget,
-  execOnOwningHost,
   readHwfLocalPort,
   readHwfRunFile
 } from './helpers/hwf-two-host-ssh-target'
@@ -28,7 +27,6 @@ import {
   currentRelayVerdict,
   notRunVerdict,
   oldRelayVerdict,
-  parseRelayLogCounts,
   requirePass,
   type LegVerdict,
   type RelayLogCounts
@@ -47,78 +45,77 @@ test.skip(
 
 const relayPath = process.env.ORCA_HWF_P23_RELAY_PATH ?? path.join(process.cwd(), 'out', 'relay')
 
-test.use({ seedTestRepo: false, orcaAppExtraEnv: { ORCA_RELAY_PATH: relayPath } })
+// Why: no relay logs request methods (an old one never will), so the instrument is the app's own
+// count at the multiplexer write, switched on only for this spec. The current-relay test is its
+// positive control: the same tally must see sync.replicaFacts there.
+const TALLY_ENV = { ORCA_E2E_RELAY_METHOD_TALLY: '1' }
+const TALLY_KEY = '__orcaRelaySentMethods'
+
+test.use({ seedTestRepo: false, orcaAppExtraEnv: { ORCA_RELAY_PATH: relayPath, ...TALLY_ENV } })
 
 test.describe.configure({ mode: 'serial' })
 
-test('old relay: sync/fabric methods are never sent', async ({ orcaPage }) => {
-  const run = readHwfRunFile()
-  expect(run.root).toMatch(/^\/tmp\/orca-hwf-p23-[0-9A-Za-z]+$/)
-  await waitForSessionReady(orcaPage)
+// Methods this app wrote to its relays, in the shared verdict's shape: `logs` is 1 when the tally
+// exists and `methods` the total sent, so a missing tally (switch off, nothing sent) fails the control.
+async function readSentMethodCounts(app: ElectronApplication): Promise<RelayLogCounts> {
+  const tally = (await app.evaluate(
+    (_electron, key) => (globalThis as Record<string, unknown>)[key] ?? null,
+    TALLY_KEY
+  )) as Record<string, number> | null
+  const entries = Object.entries(tally ?? {})
+  const sum = (keep: (method: string) => boolean): number =>
+    entries.filter(([m]) => keep(m)).reduce((n, [, c]) => n + c, 0)
+  console.log(`HWF74_SENT_TALLY ${JSON.stringify(tally)}`)
+  return {
+    logs: tally === null ? 0 : 1,
+    methods: sum(() => true),
+    syncOrFabric: sum((m) => /^(sync|fabric)\./.test(m)),
+    replicaFacts: sum((m) => m === 'sync.replicaFacts')
+  }
+}
 
+function installOldRelay(run: HwfRun): void {
   const verb = spawnSync(
     process.execPath,
-    [
-      path.join(process.cwd(), 'config', 'scripts', 'hwf-two-host-remote.mjs'),
-      'old-relay-p23',
-      run.root
-    ],
+    [path.join(process.cwd(), 'config', 'scripts', 'hwf-two-host-remote.mjs'), 'old-relay-p23', run.root],
     { encoding: 'utf8' }
   )
   expect(verb.status).toBe(0)
   expect(verb.stdout).toContain('P23_OLD_RELAY version=0.0.0')
   console.log(verb.stdout.trim())
+}
 
+async function openTarget(orcaPage: Page, run: HwfRun) {
   // Why: the target is 127.0.0.1:<local port>; without the carrier forward nothing listens there.
   const carrier = await startHwfCarrier(run, readHwfLocalPort())
-  const target = await connectHwfTargetWithTrust(orcaPage, run, readHwfLocalPort()).catch(async (err) => {
-    await carrier.kill()
-    throw err
-  })
+  const target = await connectHwfTargetWithTrust(orcaPage, run, readHwfLocalPort()).catch(
+    async (err) => {
+      await carrier.kill()
+      throw err
+    }
+  )
+  return { carrier, target }
+}
+
+test('old relay: sync/fabric methods are never sent', async ({ orcaPage, electronApp }) => {
+  const run = readHwfRunFile()
+  expect(run.root).toMatch(/^\/tmp\/orca-hwf-p23-[0-9A-Za-z]+$/)
+  await waitForSessionReady(orcaPage)
+  installOldRelay(run)
+  const { carrier, target } = await openTarget(orcaPage, run)
   try {
-    // The owning host's own relay log is the independent instrument: zero gated requests arrived.
-    const count = execOnOwningHost(
-      run,
-      "cat $(find . -name 'relay*.log' -type f 2>/dev/null) /dev/null | grep -Ec '\"method\":\"(sync|fabric)\\.' || true"
-    )
-    const n = Number(count.out.trim().split('\n').pop())
-    // Positive control: a zero from no log, or a log that records no methods, proves nothing.
-    const control = execOnOwningHost(
-      run,
-      "F=$(find . -name 'relay*.log' -type f 2>/dev/null); echo \"P23_RELAY_LOGS=$(echo $F | wc -w)\"; echo \"P23_RELAY_METHODS=$(cat $F /dev/null | grep -Ec '\"method\":' || true)\""
-    )
-    console.log(control.out.trim())
-    console.log(`P23_NO_SYNC_FABRIC_SENT count=${n}`)
-    expect(Number(/P23_RELAY_LOGS=(\d+)/.exec(control.out)?.[1] ?? 0)).toBeGreaterThan(0)
-    expect(Number(/P23_RELAY_METHODS=(\d+)/.exec(control.out)?.[1] ?? 0)).toBeGreaterThan(0)
-    expect(n).toBe(0)
+    await waitForSshConnected(orcaPage, target.targetId, { timeoutMs: 60_000 })
+    const counts = await readSentMethodCounts(electronApp)
+    console.log(`P23_NO_SYNC_FABRIC_SENT count=${counts.syncOrFabric} methods=${counts.methods}`)
+    // Positive control: a zero from a tally that saw no writes proves nothing.
+    expect(counts.logs).toBe(1)
+    expect(counts.methods).toBeGreaterThan(0)
+    expect(counts.syncOrFabric).toBe(0)
   } finally {
     await disconnectHwfTarget(orcaPage, target.targetId)
     await carrier.kill()
   }
 })
-
-// Why: the same three greps as the test above, plus the sync.replicaFacts count the current relay must show.
-function readRelayLogCounts(run: HwfRun): RelayLogCounts | null {
-  const logs = "cat $(find . -name 'relay*.log' -type f 2>/dev/null) /dev/null"
-  const control = execOnOwningHost(
-    run,
-    'F=$(find . -name \'relay*.log\' -type f 2>/dev/null); echo "P23_RELAY_LOGS=$(echo $F | wc -w)"; echo "P23_RELAY_METHODS=$(cat $F /dev/null | grep -Ec \'"method":\' || true)"'
-  )
-  const syncFabric = execOnOwningHost(
-    run,
-    `${logs} | grep -Ec '"method":"(sync|fabric)\\.' || true`
-  )
-  const replicaFacts = execOnOwningHost(
-    run,
-    `${logs} | grep -Ec '"method":"sync\\.replicaFacts"' || true`
-  )
-  return parseRelayLogCounts({
-    controlOut: control.out,
-    syncFabricOut: syncFabric.out,
-    replicaFactsOut: replicaFacts.out
-  })
-}
 
 function logLeg(leg: string, v: LegVerdict): void {
   console.log(`${leg} ${v.verdict} ${v.cause}`)
@@ -148,54 +145,41 @@ async function compareEqualTipsPair(
   return { output: r.stdout, status: r.status }
 }
 
+function skipUnseeded(leg: string, cause: string): void {
+  const v = notRunVerdict(cause)
+  logLeg(leg, v)
+  test.info().annotations.push({ type: 'NOT RUN', description: v.cause })
+  test.skip(true, `${v.cause}; a skip is NOT RUN`)
+}
+
 test('old relay: replica-compare says so and sends no sync/fabric method', async ({
   orcaPage,
   electronApp
 }) => {
   test.setTimeout(900_000)
-  const reason = 'needs ORCA_HWF_P23_RELAY_PATH naming a pre-sync relay build; a skip is NOT RUN'
   const run = readHwfRunFile()
   const seeded = seededRunOrNull(run)
   if (!process.env.ORCA_HWF_P23_RELAY_PATH || seeded === null) {
-    const v = notRunVerdict(
+    skipUnseeded(
+      'HWF74_OLD_RELAY',
       seeded === null
         ? 'the p23 run file has no replica seeds (run-file --seed --local-seed)'
-        : reason
+        : 'needs ORCA_HWF_P23_RELAY_PATH naming a pre-sync relay build'
     )
-    logLeg('HWF74_OLD_RELAY', v)
-    test.info().annotations.push({ type: 'NOT RUN', description: v.cause })
-    test.skip(true, `${v.cause}; a skip is NOT RUN`)
     return
   }
   const expectedWord = process.env.ORCA_HWF_P23_EXPECTED_WORD ?? RELAY_TOO_OLD_WORD
   expect([RELAY_TOO_OLD_WORD, WORKTREE_UNVERIFIED_WORD]).toContain(expectedWord)
   await waitForSessionReady(orcaPage)
-  const verb = spawnSync(
-    process.execPath,
-    [
-      path.join(process.cwd(), 'config', 'scripts', 'hwf-two-host-remote.mjs'),
-      'old-relay-p23',
-      run.root
-    ],
-    { encoding: 'utf8' }
-  )
-  expect(verb.status).toBe(0)
-  expect(verb.stdout).toContain('P23_OLD_RELAY version=0.0.0')
-
-  const carrier = await startHwfCarrier(run, readHwfLocalPort())
-  const target = await connectHwfTargetWithTrust(orcaPage, run, readHwfLocalPort()).catch(
-    async (err) => {
-      await carrier.kill()
-      throw err
-    }
-  )
+  installOldRelay(run)
+  const { carrier, target } = await openTarget(orcaPage, run)
   try {
     const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const compare = await compareEqualTipsPair(orcaPage, userData, seeded, target)
     const verdict = oldRelayVerdict({
       compareOutput: compare.output,
       compareStatus: compare.status,
-      relayLogCounts: readRelayLogCounts(run),
+      relayLogCounts: await readSentMethodCounts(electronApp),
       expectedWord
     })
     logLeg('HWF74_OLD_RELAY', verdict)
@@ -207,44 +191,29 @@ test('old relay: replica-compare says so and sends no sync/fabric method', async
 })
 
 test.describe('current relay', () => {
-  // Needs a p23 root whose relay log directory is the one the old-relay tests read, with the current relay installed.
-  test.use({ orcaAppExtraEnv: { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') } })
+  test.use({
+    orcaAppExtraEnv: { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay'), ...TALLY_ENV }
+  })
 
   test('current relay: sync.replicaFacts is sent', async ({ orcaPage, electronApp }) => {
     test.setTimeout(900_000)
     const run = readHwfRunFile()
     const seeded = seededRunOrNull(run)
     if (seeded === null) {
-      const v = notRunVerdict(
-        'the p23 run file has no replica seeds (run-file --seed --local-seed)'
-      )
-      logLeg('HWF74_CURRENT_RELAY', v)
-      test.info().annotations.push({ type: 'NOT RUN', description: v.cause })
-      test.skip(true, `${v.cause}; a skip is NOT RUN`)
+      skipUnseeded('HWF74_CURRENT_RELAY', 'the p23 run file has no replica seeds (run-file --seed --local-seed)')
       return
     }
     await waitForSessionReady(orcaPage)
-    const carrier = await startHwfCarrier(run, readHwfLocalPort())
-    const target = await connectHwfTargetWithTrust(orcaPage, run, readHwfLocalPort()).catch(
-      async (err) => {
-        await carrier.kill()
-        throw err
-      }
-    )
+    const { carrier, target } = await openTarget(orcaPage, run)
     try {
       const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-      const before = readRelayLogCounts(run)
+      const before = await readSentMethodCounts(electronApp)
       await compareEqualTipsPair(orcaPage, userData, seeded, target)
-      const after = readRelayLogCounts(run)
-      // Why: the log may hold earlier runs, so only the requests this compare added count.
-      const counts =
-        before === null ||
-        after === null ||
-        before.replicaFacts === null ||
-        after.replicaFacts === null
-          ? null
-          : { ...after, replicaFacts: after.replicaFacts - before.replicaFacts }
-      const verdict = currentRelayVerdict({ relayLogCounts: counts })
+      const after = await readSentMethodCounts(electronApp)
+      // Why: only the requests this compare added count toward the control.
+      const verdict = currentRelayVerdict({
+        relayLogCounts: { ...after, replicaFacts: (after.replicaFacts ?? 0) - (before.replicaFacts ?? 0) }
+      })
       logLeg('HWF74_CURRENT_RELAY', verdict)
       requirePass('current relay: sync.replicaFacts is sent', verdict)
     } finally {
