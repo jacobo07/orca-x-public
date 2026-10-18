@@ -48,11 +48,27 @@ Evidence dir `C:\Users\User\Apps\rbl\d4-ev-r59rf-20261018-151125`, root
 `HWF_AGENT_A_LAUNCH=observed` had printed:
 `bash: /tmp/orca-hwf-p15-20261018T131126Z/bin/hwf-agent-stub: No such file or directory`. The provisioner
 writes that file only through its `install-stub` verb, which the driver did not run. The driver now has
-`-InstallStub`. Tests 5 and 6 did not run because they follow test 4. The second rerun was not done: free RAM
+`-InstallStub`. Tests 5 and 6 did not run because they follow test 4. The next rerun was not done: free RAM
 was 5.1 GB, under the 6 GB one-Electron gate.
+
+## Rerun with the stub installed: 6 passed
+
+Command: `d4-live.ps1 -Phase 15 -SeedVerb none -PathEnv none -PreSpecVerb nonce-from-create -InstallStub` on
+`tests/e2e/hwf-two-host-remote-first.spec.ts`. A first attempt (`d4-ev-r59rf2-20261018-154312`, `INSTALLSTUB_EXIT=0`)
+passed legs 1 and 2, then the Playwright process ended with `PLAYWRIGHT_EXIT=-1` inside leg 3 and no assertion
+failure; it is a harness failure and is not counted. The repeat is `d4-ev-r59rf3-20261018-155950`:
+
+```
+INSTALLSTUB_EXIT=0
+PLAYWRIGHT_EXIT=0
+WITNESS_UNCHANGED=True
+  6 passed (10.3m)
+```
+
+Legs: connect and terminal (4.5m), probe (34.3s), fs/git/terminal from both clients (1.2m), agent launch and hook
+status (50.9s), reconnect keeps the shell (1.4m), reconnect keeps the agent and the outage hook (1.7m).
 
 ## Not covered
 
-- The six-leg rerun on this tree is not 6/6. The 2026-10-15 6/6 (`live-2026-10-15-row-59-remote-first-evidence.md`)
-  was measured before the optional-parameter helper changes in this wave.
+- Leg 1 took 9.0m in the failed attempt and 4.5m in the passing one; the difference is the disk-wide absence sweep.
 - The model turn ran one provider (Claude) on one host; Codex is not exercised.

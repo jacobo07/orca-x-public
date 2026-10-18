@@ -1931,10 +1931,10 @@
       "row": "HF Remote-first continuity",
       "owner": "providers routed by connectionId/runtime owner",
       "done": "a second client opens a host-only project; fs/git/pty/agents act on the owning host; reconnect keeps work",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
       "measuredIn": "dwsrb live queue (desktop PC -> GEX44)",
-      "measuredAt": "2026-10-15",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         15
@@ -2059,7 +2059,7 @@
         {
           "kind": "file",
           "path": "docs/dws/live-2026-10-18-row-59-model-turn-evidence.md",
-          "note": "real Claude model turn on the owning host as orca-svc in Manual mode, plus the 3/6 rerun and its stub gap."
+          "note": "real Claude model turn on the owning host as orca-svc in Manual mode, plus the six-leg rerun (3/6 stub gap, then 6/6 with the stub installed)."
         },
         {
           "kind": "file",
@@ -2067,7 +2067,7 @@
           "note": "opt-in REAL-TWO-HOST model-turn spec; classifier in helpers/hwf-two-host-claude-screen.ts."
         }
       ],
-      "reason": "Model turn MEASURED 2026-10-18 (docs/dws/live-2026-10-18-row-59-model-turn-evidence.md): a real Claude turn answered on GEX44 as orca-svc in Manual mode, cwd the host repo, no Bypass flag in any argv, answer found in a host transcript, service-account home restored. Still PARTIAL: the six-leg rerun on this tree gave 3 passed, 1 failed (supplementary stub missing from the root, harness gap), 2 not run. Earlier record — dwsrb live queue (2026-10-15, desktop PC -> GEX44, REAL-TWO-HOST): tests/e2e/hwf-two-host-remote-first.spec.ts passed 6 of 6 against /tmp/orca-hwf-p15-20261015T161556Z. A fresh-profile app connected with the pinned fingerprint and ran a terminal on the owning host (relay fence match); Client A and the paired web Client B both ran a terminal, fs create/write/rename/copy/delete and a git commit on the owning host (client sha equals remote sha for both), with the absence scan PASS (no seed content on this PC); a real claude process launched from the new-tab menu ran in the host repo and hook status reached both clients. Reconnect: relay pid and shell pid unchanged, one shell before and after, both clients backfilled the 13 outage ticks (so the web terminal.subscribe path does replay the reconnect window to an already-subscribed client), the hook posted during the outage was delivered (204) to both stores, and the agent kept its pid with its status row and no relaunch. Remaining then: a model turn, now measured (above). Known debt: a retained stale row for a dead agent after reconnect (not exercised); one delivered outage hook does not settle the earlier 2-in-5 loss. The app ran with --lang=en-US because of the tab-bar \"+\" layout defect (docs/dws/live-2026-10-15-row-59-remote-first-evidence.md)."
+      "reason": "Model turn MEASURED 2026-10-18 (docs/dws/live-2026-10-18-row-59-model-turn-evidence.md): a real Claude turn answered on GEX44 as orca-svc in Manual mode, cwd the host repo, no Bypass flag in any argv, answer found in a host transcript, service-account home restored. Six-leg rerun on this tree 2026-10-18 (d4-ev-r59rf3-20261018-155950, root /tmp/orca-hwf-p15-*): 6 passed (10.3m) with the stub installed; two earlier reruns were harness failures (stub not installed: 3/6; Playwright process ended -1 mid-leg 3 with no assertion failure). Not covered: Codex model turn, one host. Earlier record — dwsrb live queue (2026-10-15, desktop PC -> GEX44, REAL-TWO-HOST): tests/e2e/hwf-two-host-remote-first.spec.ts passed 6 of 6 against /tmp/orca-hwf-p15-20261015T161556Z. A fresh-profile app connected with the pinned fingerprint and ran a terminal on the owning host (relay fence match); Client A and the paired web Client B both ran a terminal, fs create/write/rename/copy/delete and a git commit on the owning host (client sha equals remote sha for both), with the absence scan PASS (no seed content on this PC); a real claude process launched from the new-tab menu ran in the host repo and hook status reached both clients. Reconnect: relay pid and shell pid unchanged, one shell before and after, both clients backfilled the 13 outage ticks (so the web terminal.subscribe path does replay the reconnect window to an already-subscribed client), the hook posted during the outage was delivered (204) to both stores, and the agent kept its pid with its status row and no relaunch. Remaining then: a model turn, now measured (above). Known debt: a retained stale row for a dead agent after reconnect (not exercised); one delivered outage hook does not settle the earlier 2-in-5 loss. The app ran with --lang=en-US because of the tab-bar \"+\" layout defect (docs/dws/live-2026-10-15-row-59-remote-first-evidence.md)."
     },
     {
       "id": 60,
