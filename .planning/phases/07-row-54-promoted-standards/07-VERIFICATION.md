@@ -8,7 +8,7 @@ covered_files:
   - .planning/phases/07-row-54-promoted-standards/07-01-SUMMARY.md
   - config/dws-completion-matrix.jsonc
   - docs/dws/live-2026-10-18-row-54-baseline-ratchet-promotion.md
-covered_digest: "v1:sha256:c5915cd966e967e5b2b9cb0997e2e289a8d75a49fde9cf80b1b0398a0e066415"
+covered_digest: "v1:sha256:d73a8cce20277f20dc43c24ef6d50c81cff35187c30dc0802c52e7aa088181ac"
 behavior_unverified: 0
 ---
 # Phase 7 Verification

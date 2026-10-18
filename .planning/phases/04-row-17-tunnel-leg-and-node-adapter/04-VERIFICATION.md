@@ -6,7 +6,7 @@ covered_files:
   - .planning/phases/04-row-17-tunnel-leg-and-node-adapter/04-01-PLAN.md
   - .planning/phases/04-row-17-tunnel-leg-and-node-adapter/04-01-SUMMARY.md
   - config/dws-completion-matrix.jsonc
-covered_digest: "v1:sha256:21ab97c77a5b5753130e27a304fb1a5902ee36cb4c883211e8b439651de2e8b5"
+covered_digest: "v1:sha256:263d7d186775f801580173393e76a1c3e43e81838ac65bec41688c95b3fe531b"
 behavior_unverified: 1
 ---
 # Phase 4 Verification

@@ -8,7 +8,7 @@ covered_files:
   - .planning/phases/06-rows-52-53-vault-records-and-ukdl-rules/06-01-SUMMARY.md
   - config/dws-completion-matrix.jsonc
   - docs/dws/live-2026-10-18-rows-52-53-vault-and-ukdl.md
-covered_digest: "v1:sha256:9a73ea6a5ed6c88beeaf32dd17275a0737737f9508d4b5c536715e574d95cd7f"
+covered_digest: "v1:sha256:e9b527ae50d67ac5a09d91a67fe752f4793c0b2beaf3b997256ae691e38a1315"
 behavior_unverified: 0
 ---
 # Phase 6 Verification
