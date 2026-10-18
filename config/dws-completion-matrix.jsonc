@@ -1666,7 +1666,7 @@
         "Phases 2-11"
       ],
       "evidence": [],
-      "reason": "Stage Zero: PARTIAL — node offline / client dies drills not yet evidenced"
+      "reason": "phase 11 re-measure 2026-10-18: client-dies half has a spec (tests/e2e/dws-remote-continuity.spec.ts, remote workload keeps its serve MainPID); host loss and reconnect has tests/e2e/hwf-two-host-host-loss.spec.ts (row 73). Residual: no node-offline drill for the paired GEX44 runtime was run this pass."
     },
     {
       "id": 48,
@@ -1683,7 +1683,7 @@
         "Phases 2-11"
       ],
       "evidence": [],
-      "reason": "Stage Zero: PARTIAL — mixed-version matrix for new verbs not yet evidenced"
+      "reason": "phase 11 re-measure 2026-10-18: an old-host fake answering method-not-found now has a test for orchestration.missionPlace and orchestration.missionResults (src/cli/handlers/orchestration-mission-place-cli.test.ts, 15/15; a mutant that swallows the refusal goes red). Residual: the other new verbs have no old-host test, so the matrix is partial."
     },
     {
       "id": 49,
@@ -1734,7 +1734,7 @@
           "note": "02-06: reattach latency MEASURED, medianMs=6762.5 (n=6), plus firstAttachLatencyMs=13479 recorded separately"
         }
       ],
-      "reason": "measured 2026-09-28: stream and reattach latency numbers are both MEASURED with a named instrument and N>=5; hydration latency (a distinct number from reattach) is unmeasured this phase and Phase 12 owns the remaining performance surface (mixed-version matrices, broader latency budget work) -- PARTIAL is the honest state, not PASS"
+      "reason": "phase 11 re-measure 2026-10-18: hydration latency still has no instrument (no code path times a project becoming ready on a node); it needs a GEX44 live leg with N>=5, not run this pass. Residual: build the hydration timer and measure. Prior: measured 2026-09-28: stream and reattach latency numbers are both MEASURED with a named instrument and N>=5; hydration latency (a distinct number from reattach) is unmeasured this phase and Phase 12 owns the remaining performance surface (mixed-version matrices, broader latency budget work) -- PARTIAL is the honest state, not PASS"
     },
     {
       "id": 51,
@@ -3477,7 +3477,7 @@
           "note": "Run 3 evidence and the verdict table"
         }
       ],
-      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. Phase 16 (Run 6, root /tmp/orca-hwf-p16-20261001T165645Z, REAL-TWO-HOST, guard widened to p1[56]) then exercised rows 60 and 61 through the same harness (both PARTIAL, one passing spec, witnesses equal, zero root processes after teardown). Phase 20 (roots /tmp/orca-hwf-p20-20261001T231448Z..T234707Z, REAL-TWO-HOST, guard widened to /tmp/orca-hwf-p1[56]-* and /tmp/orca-hwf-p20-*) then exercised rows 68 and 69 through the same harness: row 68 PASS (SSH and runtime legs observed), row 69 legs L1-L5 observed and L6 RED on product behaviour (an unreachable SSH host reads contract-unreadable), row 69 left unedited; witnesses equal and zero root processes after teardown. PARTIAL, never PASS: the harness exercises rows 59, 60, 61, 68 and 69 so far; owed rows 62, 63, 64, 65, 66, 67, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH, and row 69 owes its L6 leg."
+      "reason": "measured 2026-10-01 (phase 15, REAL-SSH for the provisioner, REAL-TWO-HOST for the spec). The harness is committed and ran three times against a GEX44 disposable root with witnesses equal before and after and zero root processes after teardown: Run 1 tracer (REAL-TWO-HOST: pin equals ssh-keygen, terminal on the owning host, laptop absence scan), Run 2 (REAL-TWO-HOST: fs, git, terminal and agent legs from both clients), Run 3 (REAL-TWO-HOST: carrier-drop reconnect). Rows exercised through it: row 59 (PARTIAL) and row 56's host-key pin as a precondition. Phase 16 (Run 6, root /tmp/orca-hwf-p16-20261001T165645Z, REAL-TWO-HOST, guard widened to p1[56]) then exercised rows 60 and 61 through the same harness (both PARTIAL, one passing spec, witnesses equal, zero root processes after teardown). Phase 20 (roots /tmp/orca-hwf-p20-20261001T231448Z..T234707Z, REAL-TWO-HOST, guard widened to /tmp/orca-hwf-p1[56]-* and /tmp/orca-hwf-p20-*) then exercised rows 68 and 69 through the same harness: row 68 PASS (SSH and runtime legs observed), row 69 legs L1-L5 observed and L6 RED on product behaviour (an unreachable SSH host reads contract-unreadable), row 69 left unedited; witnesses equal and zero root processes after teardown. PARTIAL, never PASS: the harness exercises rows 59, 60, 61, 68 and 69 so far; owed rows 62, 63, 64, 65, 66, 67, 70, 71, 72, 73, 74 still need their cross-host properties exercised Windows<->GEX44 over real SSH, and row 69 owes its L6 leg. Phase 11 re-measure 2026-10-18 (docs/dws/remeasure-2026-10-18-hf-cross-host-enumeration.md): that owed list is stale; every HF row 59-74 now has a two-host spec and is PASS, but rows 64 and 66 are exercised live only in part (creation leg; primitive), so this row stays PARTIAL."
     },
     {
       "id": 76,

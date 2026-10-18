@@ -84,3 +84,5 @@ Rows 25 and 26 PASS (checker 45/76, exit 1, vitest 30/30). Row 25: rejecting aut
 ## Phase 10 done (2026-10-18)
 Rows 6 40 41 43 restated with measured reasons and named residuals; states unchanged (large gaps, row 6 waits on UWCP). Checker 45/76, vitest 30/30. Decision: no tracer wiring or meter built, per milestone rule (one small change only).
 
+
+- 2026-10-18 phase 11 done: rows 47 48 50 75 restated; old-host test for mission verbs (mutant red). Row 50 hydration latency and row 47 node-offline drill remain residual (no live leg). Matrix 45/76.

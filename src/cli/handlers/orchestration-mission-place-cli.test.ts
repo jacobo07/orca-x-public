@@ -355,3 +355,38 @@ describe('cross-host dispatch spec usage lines', () => {
     expect(() => validateUsage(`${USAGE_PREFIX} --task <a> --task <b>`)).toThrow()
   })
 })
+// Why: a host that predates a verb answers method-not-found; the CLI must surface it, not invent a plan.
+describe('old host without the mission verbs', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    vi.mocked(printResult).mockClear()
+    process.exitCode = undefined
+  })
+
+  it('mission-place surfaces the host refusal and prints no placement', async () => {
+    callMock.mockRejectedValue(new Error('method_not_found: orchestration.missionPlace'))
+    await expect(
+      runMissionPlace(['orchestration', 'mission-place', '--tasks', 't1', '--from', 'term_coord'])
+    ).rejects.toThrow('method_not_found')
+    expect(printResult).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('mission-results surfaces the host refusal and prints no results', async () => {
+    callMock.mockRejectedValue(new Error('method_not_found: orchestration.missionResults'))
+    const parsed = normalizeCommandPositionals(
+      COMMAND_SPECS,
+      parseArgs(['orchestration', 'mission-results', '--run', 'run_1'], COMMAND_PATHS)
+    )
+    validateCommandAndFlags(COMMAND_SPECS, parsed)
+    await expect(
+      ORCHESTRATION_HANDLERS['orchestration mission-results']({
+        flags: parsed.flags,
+        client: { call: callMock },
+        cwd: '/tmp/repo',
+        json: false
+      } as never)
+    ).rejects.toThrow('method_not_found')
+    expect(printResult).not.toHaveBeenCalled()
+  })
+})

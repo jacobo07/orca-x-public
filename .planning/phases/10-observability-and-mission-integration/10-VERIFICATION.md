@@ -6,7 +6,7 @@ covered_files:
   - .planning/phases/10-observability-and-mission-integration/10-01-PLAN.md
   - .planning/phases/10-observability-and-mission-integration/10-01-SUMMARY.md
   - config/dws-completion-matrix.jsonc
-covered_digest: "v1:sha256:7b6cc15fa055424d3c926dfeb4e74f0de77b8074c65f6d46f821abc891d05e81"
+covered_digest: "v1:sha256:0139c8fe7b9aa60d0559095a838048e62c728b57e678f236f4b3795b157820a1"
 ---
 # Phase 10 Verification
 
