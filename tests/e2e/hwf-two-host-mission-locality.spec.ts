@@ -230,6 +230,43 @@ test('hydrated host is preferred and independent tasks spread across two hosts',
     console.log(
       `HWF24_HYDRATED_PREFERRED ${lowAddress} over ${highAddress}; HWF34_SPREAD a=${addressOf(a)} b=${addressOf(b)}`
     )
+
+    // Row 24, remote-prepared: the project is ready on the paired host alone, imported over the pairing.
+    if (highAddress === runtimeAddress) {
+      const identity = { provider: 'github' as const, owner: 'p24', repo: 'remote-prepared' }
+      const remoteProjectId = getProjectIdForProviderIdentity(identity)
+      await client.call('projectHostSetup.setupExistingFolder', {
+        projectId: remoteProjectId,
+        projectProviderIdentity: identity,
+        hostId: runtimeAddress,
+        path: '/tmp',
+        kind: 'folder',
+        displayName: 'p24 remote-prepared',
+        setupMethod: 'imported-existing-folder'
+      })
+      const remoteClaims = (await listSetups())
+        .filter((s) => s.projectId === remoteProjectId && s.setupState === 'ready')
+        .map((s) => s.hostId)
+      console.log(`HWF24_REMOTE_READY_SETUPS=${JSON.stringify(remoteClaims)}`)
+      expect(remoteClaims).toEqual([runtimeAddress])
+      // Why: the planner places by ascending task id and counts this call's unrelated jobs as load, so the
+      // first job loads the roomier paired host and load alone would send the second to local (the a/b spread).
+      const [first, second] = [
+        await createTask('p24 remote load'),
+        await createTask('p24 remote hydrated')
+      ].sort()
+      setSubject(first, 'p24-project-without-setup')
+      setSubject(second, remoteProjectId)
+      const remotePlan = (await place([first, second], 'remote')).result
+      console.log(`HWF24_REMOTE=${JSON.stringify(remotePlan)}`)
+      const remoteRows = db.prepare('SELECT * FROM task_placements').all() as Placement[]
+      const remoteAddressOf = (id: string) => remoteRows.find((r) => r.task_id === id)?.address
+      expect(remoteAddressOf(first)).toBe(runtimeAddress)
+      expect(remoteAddressOf(second)).toBe(runtimeAddress)
+      expect(remotePlan.locality.find((l) => l.taskId === second)?.hydrated).toBe(true)
+      expect(remotePlan.locality.find((l) => l.taskId === first)?.hydrated).toBe(false)
+      console.log(`HWF24_REMOTE_PREPARED_PREFERRED ${runtimeAddress} at load 1 over idle local`)
+    }
   } finally {
     db.close()
   }
