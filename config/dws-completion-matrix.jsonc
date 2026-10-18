@@ -1742,7 +1742,7 @@
       "row": "Constitutive Baseline Ratchet",
       "owner": "CPP baseline compiler",
       "done": "promoted standards",
-      "state": "ABSENT",
+      "state": "PASS",
       "stateSource": "measured",
       "required": true,
       "phases": [
@@ -1756,11 +1756,21 @@
           "kind": "commit",
           "sha": "a3e7239a51db",
           "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-18-row-54-baseline-ratchet-promotion.md",
+          "note": "B1 read back, chain verified, donegate 8/8 on this repo, demotion refused on a copy"
+        },
+        {
+          "kind": "commit",
+          "sha": "52c7ab29",
+          "note": "claude-power-pack branch dws/pp-rows (LOCAL, not pushed)"
         }
       ],
-      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): the Constitutive Baseline Ratchet is CPP-only (modules/tower/ratchet.py and baselines.py, tools/family_baseline.py, vault/tower/baselines/, wiki/components/constitutive-baseline-ratchet.md status LIVE at 30fdbf0fc73a) so promoted standards are written there; this repo's own ratchets (config/scripts/check-max-lines-ratchet.mjs, 17 config/*baseline*.txt) are not the CBR and do not satisfy the row.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i -E 'ratchet|baseline' | head -20`. Prior (stage-zero-seed): program",
-      "measuredIn": "dwsrb phase 1",
-      "measuredAt": "2026-10-15"
+      "reason": "PASS 2026-10-18: two standards from rows 59 and 70 promoted into multi_host_fabric B1 through modules.tower.ratchet.promote, then read back from disk; test_tower_mhf_promotion 9/9 incl. an unrecorded demotion read WEAKENED on a copy while the real chain stays clean; PP commit 52c7ab29 is local, push is Owner-gated; the Ink CSI C trap was not promoted because its fix lives outside this repo. The earlier BLOCKED_EXTERNAL state is superseded by the dws/pp-rows write grant. Prior: BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): the Constitutive Baseline Ratchet is CPP-only (modules/tower/ratchet.py and baselines.py, tools/family_baseline.py, vault/tower/baselines/, wiki/components/constitutive-baseline-ratchet.md status LIVE at 30fdbf0fc73a) so promoted standards are written there; this repo's own ratchets (config/scripts/check-max-lines-ratchet.mjs, 17 config/*baseline*.txt) are not the CBR and do not satisfy the row.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i -E 'ratchet|baseline' | head -20`. Prior (stage-zero-seed): program",
+      "measuredIn": "rb-live phase 7 (PP worktree dws/pp-rows)",
+      "measuredAt": "2026-10-18"
     },
     {
       "id": 55,
