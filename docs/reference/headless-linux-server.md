@@ -73,19 +73,27 @@ LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve \
   --pairing-address 100.64.1.20
 ```
 
-`--pairing-address` is only the address advertised to clients. It does not
-change the listener bind address. Orca binds its WebSocket listener, then
-combines the actual bound port with the advertised host when the address omits
-a port. Use a reachable LAN/Tailscale hostname or IP, or a complete reverse
-proxy URL such as `https://orca.example.com/runtime` (`http(s)` is normalized
-to `ws(s)`). Wildcard addresses such as `*`, `0.0.0.0`, and `::` cannot be
-advertised.
+`--pairing-address` is the address advertised to clients. Orca combines the
+actual bound port with the advertised host when the address omits a port. Use
+a reachable LAN/Tailscale hostname or IP, or a complete reverse proxy URL such
+as `https://orca.example.com/runtime` (`http(s)` is normalized to `ws(s)`).
+Wildcard addresses such as `*`, `0.0.0.0`, and `::` cannot be advertised.
 
-`--bind-host <address>` is what pins the listener itself — an IP literal (IPv4
-or IPv6) or `localhost`. It outranks `orca serve`'s all-interfaces default and
-makes any later pairing-time widen (the LAN/QR opt-in above) a permanent no-op,
-and it is orthogonal to `--pairing-address`: one controls what the listener
-binds to, the other controls what address is advertised in the pairing offer.
+Without `--bind-host`, `orca serve` binds only what it advertises:
+
+| `--pairing-address` | Listener binds |
+| --- | --- |
+| absent (the offer advertises `127.0.0.1`) | `127.0.0.1`, or every interface once a device has connected from the network |
+| an IP that one of this host's interfaces holds, or `localhost` | exactly that address |
+| an IP no interface holds (NAT, port forward) | every interface |
+| a hostname or URL | every interface |
+
+`--bind-host <address>` pins the listener itself — an IP literal (IPv4 or IPv6)
+or `localhost`. It outranks the table above and makes any later pairing-time
+widen (the LAN/QR opt-in above) a permanent no-op. A pin must serve the
+advertised address: pinning `127.0.0.1` while advertising `100.64.1.20` makes
+the pairing offer unavailable (`network_exposure_pinned`), so pin the advertised
+address itself, as the service examples below do.
 A loopback-bound serve (`--bind-host 127.0.0.1`) is reached from another
 machine through an SSH forward, e.g.
 `ssh -N -L 127.0.0.1:6768:127.0.0.1:6768 <host>`, paired with
@@ -173,7 +181,7 @@ Type=simple
 User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20 --bind-host 127.0.0.1
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20 --bind-host 100.64.1.20
 StandardOutput=journal
 StandardError=journal
 KillMode=mixed
@@ -268,7 +276,7 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20 --bind-host 127.0.0.1
+ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20 --bind-host 100.64.1.20
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5

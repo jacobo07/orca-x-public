@@ -10,6 +10,7 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { WebSocketTransport } from './rpc/ws-transport'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+import { readLocalInterfaceAddresses, resolveServeBindPolicy } from '../startup/serve-bind-policy'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -613,6 +614,55 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       }
     }
   )
+
+  it('keeps `orca serve` on the advertised address through a later pairing offer (D1)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: the policy's pin is what stops the pairing-time widen; a bind hint alone would reach 0.0.0.0 here.
+    const policy = resolveServeBindPolicy({
+      bindHost: null,
+      pairingAddress: '127.0.0.1',
+      localAddresses: readLocalInterfaceAddresses()
+    })
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      ...policy
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      const offer = await server.createMobilePairingOffer({
+        address: '127.0.0.1',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds `orca serve` with no advertised address to loopback (D1)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      ...resolveServeBindPolicy({ bindHost: null, pairingAddress: null, localAddresses: [] })
+    })
+
+    await server.start()
+    try {
+      // Why: before D1 serve passed exposeNetworkByDefault unconditionally and bound 0.0.0.0 here.
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
 
   it('refuses to widen a pairing offer that arrives after the server has stopped', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

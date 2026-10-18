@@ -172,6 +172,7 @@ import {
   normalizeServeModeArgv,
   readServeBindHostArg
 } from './startup/serve-mode-argv'
+import { readLocalInterfaceAddresses, resolveServeBindPolicy } from './startup/serve-bind-policy'
 import { ensureVirtualDisplayForHeadlessServe } from './startup/ensure-virtual-display'
 import {
   readActiveGpuFallbackMarker,
@@ -3298,8 +3299,14 @@ void app.whenReady().then(async () => {
     userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
     // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
-    // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
-    exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
+    // E2E keeps the wide bind its harness connects over. `orca serve` binds what it advertises (D1).
+    ...(serveOptions
+      ? resolveServeBindPolicy({
+          bindHost: serveOptions.bindHost,
+          pairingAddress: serveOptions.pairingAddress,
+          localAddresses: readLocalInterfaceAddresses()
+        })
+      : { exposeNetworkByDefault: isE2E }),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined
@@ -3309,8 +3316,6 @@ void app.whenReady().then(async () => {
           preferPinnedWsPort: true
         }
       : {}),
-    // Why: DWS-P2 (CTX-EXP-1) — an explicit --bind-host pins the listener even under exposeNetworkByDefault.
-    ...(serveOptions?.bindHost ? { pinnedBindHost: serveOptions.bindHost } : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   registerMobileHandlers(runtimeRpc, {

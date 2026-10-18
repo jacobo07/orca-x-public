@@ -12,7 +12,7 @@ credentials in isolated homes).
 
 | id | class | control | enforced by | named debt |
 |---|---|---|---|---|
-| T1 | Unauthenticated remote control of a host | `runtime-rpc.ts:1733-1754` every WS request needs a device token still authorized; `cli/handlers/core.ts:64-73,110-121` bind-host and `--no-pairing` argument refusals; desktop binds loopback unless a network device has connected (`runtime-rpc.ts:1342-1346`) | `runtime-rpc-request-authorization.test.ts` (wrong token, unpaired create), `serve-mode-argv.test.ts` | D1: `orca serve` binds all interfaces by default (`exposeNetworkByDefault`, `runtime-rpc.ts:1339`); a host without a firewall exposes the port. Transport is device token + E2EE, not TLS. |
+| T1 | Unauthenticated remote control of a host | `runtime-rpc.ts:1733-1754` every WS request needs a device token still authorized; `cli/handlers/core.ts:64-73,110-121` bind-host and `--no-pairing` argument refusals; desktop binds loopback unless a network device has connected (`runtime-rpc.ts:1342-1346`) | `runtime-rpc-request-authorization.test.ts` (wrong token, unpaired create), `serve-mode-argv.test.ts` | D1 (narrowed 2026-10-19, `docs/dws/d1-serve-bind-default-spec.md`): `orca serve` binds only what it advertises (`startup/serve-bind-policy.ts`): loopback with no address, a pin on a held IP or `localhost`; still every interface for a hostname, URL or NAT address. Transport is device token + E2EE, not TLS. |
 | T2 | Pairing token leak or replay | 24-byte random token (`device-registry.ts:135`); revocation terminates connections and re-authorizes per frame (`runtime-rpc.ts:687-716`, `:1108-1110`); registry written through the secure durable writer | `runtime-rpc-revoked-device-effect.characterization.test.ts`, token-mismatch test | D2 (narrowed 2026-10-19, `docs/dws/d2-device-token-hashing-spec.md`): a paired device rests as its sha256 digest only (`device-registry-token-at-rest.test.ts`, 5 mutants killed); the one never-scanned pending token stays raw so its QR survives a restart; raw tokens stay in process memory. D3: request-token comparison is not constant-time (`runtime-rpc.ts:1737`), behind an already-authenticated E2EE channel. No log-leak sweep for tokens exists. |
 | T3 | Mixed-version peer bypassing a newer gate | protocol floor `protocol-version.ts:33-35` (min compatible 2); `docs/reference/remote-wire-compatibility.md` rules 1-2 | min-version tests in `websocket-transport.test.ts`, `runtime-rpc-client.test.ts` | D4: the capability-negotiation rule for new opcodes/fields is advisory; no check enforces it, and no test pins a refusal code that old clients fail closed on. |
 | T4 | Forged agent consent / permission bypass | `workspace-execution-consent.ts:117,145` single consent authority; `check-workspace-trust-authority.mjs` requires every trust-artifact writer to import it | `pnpm check:workspace-trust-authority` (pr.yml:117); trust-preset and consent characterization tests | D5: the check script has no drill test of its own. |
@@ -31,8 +31,8 @@ credentials in isolated homes).
 
 1. **D6 (T5)**: narrowed 2026-10-18 by `check:tracked-secrets` on PRs; history, unknown formats and
    out-of-tree artifacts remain.
-2. **D1 (T1)**: `orca serve` exposes all interfaces by default. That plus a firewall-less host is exactly the
-   2026-10-14 GEX44 incident.
+2. **D1 (T1)**: narrowed 2026-10-19; serve stays wide only for a hostname, URL or NAT address. The
+   2026-10-14 GEX44 incident (no address, no firewall) now binds loopback.
 3. **D2 (T2)**: narrowed 2026-10-19; only the pending QR token rests raw.
 
 These are named debts, not fixes. Each one is a separate decision for the Owner.
