@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # GEX44 provisioner for the phase-15/16/17/20/22/23 two-host rungs; verbs: create status witness procs teardown install-stub
 # seed-p16 seed-p17 seed-p17-capsule verify-p17 seed-p19 git-compat-p16 seed-p20 edit-prepare-p20 stat-shim-p20 serve-p20 serve-query-p20 serve-p22 pairing-p22
-# serve-stop-p22 old-relay-p23. Never deletes anything.
+# serve-stop-p22 old-relay-p23, and for phase 70 create-svc seed-svc svc-backup svc-state svc-restore svc-teardown.
+# Never deletes anything, except svc-teardown, which removes only what a phase-70 leg created in the
+# service account's home (its transfer project dir, and a relay install that was absent before), by exact path.
 set -eu
 
 VERB="${1:-}"
@@ -25,8 +27,17 @@ case "$ROOT" in
   /tmp/orca-hwf-p23-) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p23-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
   /tmp/orca-hwf-p23-*) ;;
+  /tmp/orca-hwf-p70-) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p70-*[!0-9A-Za-z]*) echo "REFUSED root=$ROOT"; exit 2 ;;
+  /tmp/orca-hwf-p70-*) ;;
   *) echo "REFUSED root=$ROOT"; exit 2 ;;
 esac
+
+# Phase 70 logs in as the service account with its REAL home (the only home holding a provider login).
+SVC_USER=orca-svc
+SVC_HOME=/home/orca-svc
+LOGIN_USER=$(id -un)
+case "$ROOT" in /tmp/orca-hwf-p70-*) LOGIN_USER=$SVC_USER ;; esac
 
 # One flag set for every seed init/add/commit so both hosts mint the same first commit (W10).
 G="git -c core.autocrlf=false -c core.safecrlf=false -c commit.gpgsign=false -c core.hooksPath= -c init.defaultBranch=main -c user.name=hwf16 -c user.email=hwf16@example.invalid"
@@ -81,12 +92,43 @@ PY
 }
 
 sshd_pid() {
-  if [ -f "$ROOT/sshd.pid" ]; then cat "$ROOT/sshd.pid"; else echo 0; fi
+  if [ -f "$ROOT/svc/sshd.pid" ]; then cat "$ROOT/svc/sshd.pid"
+  elif [ -f "$ROOT/sshd.pid" ]; then cat "$ROOT/sshd.pid"; else echo 0; fi
 }
 
 via_private_sshd() {
   ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile="$ROOT/kh_probe" \
-    -o IdentitiesOnly=yes -i "$ROOT/client_key" -p "$(cat "$ROOT/port")" "$USER_NAME@127.0.0.1" "$1"
+    -o IdentitiesOnly=yes -i "$ROOT/client_key" -p "$(cat "$ROOT/port")" "$LOGIN_USER@127.0.0.1" "$1"
+}
+
+# Processes of the service account outside the serve's tree that were not there at create-svc.
+svc_new_pids() {
+  SERVE=$(systemctl show orca-dws-serve -p MainPID --value)
+  TREE=" $SERVE "
+  FRONT="$SERVE"
+  while [ -n "$FRONT" ]; do
+    NEXT=""
+    for P in $FRONT; do
+      for C in $(ps -o pid= --ppid "$P" 2>/dev/null); do TREE="$TREE$C "; NEXT="$NEXT $C"; done
+    done
+    FRONT="$NEXT"
+  done
+  for P in $(ps -u "$SVC_USER" -o pid=); do
+    case "$TREE" in *" $P "*) continue ;; esac
+    grep -qx "$P" "$ROOT/svc-pids-before" && continue
+    echo "$P"
+  done
+}
+
+svc_state() {
+  sudo -n bash -s -- "$SVC_HOME" <<'STATE'
+H="$1"
+echo "SETTINGS_SHA=$(sha256sum "$H/.claude/settings.json" 2>/dev/null | cut -c1-64 || echo absent)"
+echo "AGENT_HOOKS_SHA=$(cd "$H/.orca/agent-hooks" 2>/dev/null && find . -type f -exec sha256sum {} + | sort | sha256sum | cut -c1-64 || echo absent)"
+if [ -d "$H/.orca-remote" ]; then echo "ORCA_REMOTE=present"; else echo "ORCA_REMOTE=absent"; fi
+echo "CLAUDE_JSON_SHA=$(sha256sum "$H/.claude.json" 2>/dev/null | cut -c1-64 || echo absent)"
+echo "SERVE_PID=$(systemctl show orca-dws-serve -p MainPID --value)"
+STATE
 }
 
 case "$VERB" in
@@ -603,6 +645,168 @@ PY
     mkdir -p "$ROOT/relay-old"
     printf '0.0.0\n' > "$ROOT/relay-old/.version"
     echo "P23_OLD_RELAY version=$(tr -d '\n' < "$ROOT/relay-old/.version") dir=$ROOT/relay-old"
+    ;;
+  create-svc)
+    # Phase 70: a private sshd run AS the service account, so a login reaches its real home. Writes
+    # only under $ROOT; the home is changed later by the client under test, and svc-restore undoes it.
+    case "$ROOT" in /tmp/orca-hwf-p70-*) ;; *) echo "REFUSED svc-root=$ROOT"; exit 2 ;; esac
+    if [ -e "$ROOT" ]; then echo "REFUSED exists root=$ROOT"; exit 3; fi
+    sudo -n -u "$SVC_USER" true 2>/dev/null || { echo "REFUSED no-sudo-svc"; exit 3; }
+    mkdir -p "$ROOT"
+    ps -u "$SVC_USER" -o pid= | tr -d ' ' | sort -n > "$ROOT/svc-pids-before"
+    ssh-keygen -q -t ed25519 -N '' -C hwf-host -f "$ROOT/hostkey"
+    ssh-keygen -q -t ed25519 -N '' -C hwf-client -f "$ROOT/client_key"
+    chmod 600 "$ROOT/hostkey" "$ROOT/client_key"
+    PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
+    echo "$PORT" > "$ROOT/port"
+    sudo -n install -d -o "$SVC_USER" -m 755 "$ROOT/svc" "$ROOT/svc/repos"
+    sudo -n install -o "$SVC_USER" -m 600 "$ROOT/hostkey" "$ROOT/svc/hostkey"
+    sudo -n install -o "$SVC_USER" -m 644 "$ROOT/client_key.pub" "$ROOT/svc/authorized_keys"
+    cat > "$ROOT/sshd_config.svc" <<CFG
+ListenAddress 127.0.0.1
+Port $PORT
+HostKey $ROOT/svc/hostkey
+AuthorizedKeysFile $ROOT/svc/authorized_keys
+PidFile $ROOT/svc/sshd.pid
+UsePAM no
+StrictModes no
+PasswordAuthentication no
+Subsystem sftp internal-sftp
+CFG
+    sudo -n install -o "$SVC_USER" -m 644 "$ROOT/sshd_config.svc" "$ROOT/svc/sshd_config"
+    # Why: the shared verbs (status, seed guards) recognise a root by this file.
+    cp "$ROOT/sshd_config.svc" "$ROOT/sshd_config"
+    sudo -n -u "$SVC_USER" /usr/sbin/sshd -f "$ROOT/svc/sshd_config" -E "$ROOT/svc/sshd.log" < /dev/null > /dev/null 2>&1
+    sleep 1
+    echo "ROOT=$ROOT"
+    echo "PORT=$PORT"
+    echo "FP=$(ssh-keygen -lf "$ROOT/hostkey.pub" | awk '{print $2}')"
+    echo "HOSTNAME=$(hostname)"
+    echo "USER=$SVC_USER"
+    echo "REPO=$ROOT/svc/repos"
+    echo "SEED_NONCE=$(python3 -c "import secrets;print(secrets.token_hex(8))")"
+    echo "SSHD_PID=$(sshd_pid)"
+    via_private_sshd 'echo HOME_SEEN=$HOME'
+    ;;
+  seed-svc)
+    if [ ! -f "$ROOT/svc/sshd_config" ]; then echo "REFUSED no-svc-root=$ROOT"; exit 3; fi
+    case "$EXTRA" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *) echo "REFUSED nonce=$EXTRA"; exit 2 ;;
+    esac
+    # Same flags and identity as seed-p16, so the laptop replica shares this root commit (W10).
+    sudo -n -u "$SVC_USER" -H bash -s -- "$ROOT/svc/repos/p16-replica" "$EXTRA" "$G" <<'SEED'
+set -eu
+REPLICA="$1"; NONCE="$2"; G="$3"
+if [ -e "$REPLICA" ]; then echo "REFUSED exists=$REPLICA"; exit 3; fi
+mkdir -p "$REPLICA"
+export GIT_AUTHOR_NAME=hwf16 GIT_AUTHOR_EMAIL=hwf16@example.invalid GIT_AUTHOR_DATE='2026-10-01T00:00:00+0000'
+export GIT_COMMITTER_NAME=hwf16 GIT_COMMITTER_EMAIL=hwf16@example.invalid GIT_COMMITTER_DATE='2026-10-01T00:00:00+0000'
+$G -C "$REPLICA" init -q
+printf 'HWF16_%s\n' "$NONCE" > "$REPLICA/seed.txt"
+$G -C "$REPLICA" add seed.txt
+$G -C "$REPLICA" commit -q -m 'hwf p16 seed'
+echo "SEED_ROOT=$(git -C "$REPLICA" rev-parse HEAD)"
+unset GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+printf '%s\n' "$(hostname)" > "$REPLICA/host.txt"
+$G -C "$REPLICA" add host.txt
+$G -C "$REPLICA" commit -q -m 'hwf p16 host commit'
+echo "REPLICA_PATH=$REPLICA"
+echo "REPLICA_HEAD=$(git -C "$REPLICA" rev-parse HEAD)"
+SEED
+    ;;
+  svc-backup)
+    if [ ! -f "$ROOT/svc/sshd_config" ]; then echo "REFUSED no-svc-root=$ROOT"; exit 3; fi
+    if sudo -n test -e "$ROOT/svc/backup"; then echo "REFUSED backup-exists"; exit 3; fi
+    sudo -n -u "$SVC_USER" bash -s -- "$SVC_HOME" "$ROOT/svc/backup" <<'BACKUP'
+set -eu
+H="$1"; B="$2"
+mkdir -m 700 "$B"
+cp -p "$H/.claude/settings.json" "$B/settings.json"
+tar -C "$H/.orca" -cf "$B/agent-hooks.tar" agent-hooks
+if [ -d "$H/.orca-remote" ]; then echo present > "$B/orca-remote-before"; else echo absent > "$B/orca-remote-before"; fi
+BACKUP
+    svc_state
+    ;;
+  svc-state)
+    svc_state
+    ;;
+  svc-restore)
+    if ! sudo -n test -f "$ROOT/svc/backup/settings.json"; then echo "REFUSED no-backup"; exit 3; fi
+    sudo -n -u "$SVC_USER" bash -s -- "$SVC_HOME" "$ROOT/svc/backup" <<'RESTORE'
+set -eu
+H="$1"; B="$2"
+if ! cmp -s "$B/settings.json" "$H/.claude/settings.json"; then
+  cp -p "$B/settings.json" "$H/.claude/settings.json.hwf-restore"
+  mv "$H/.claude/settings.json.hwf-restore" "$H/.claude/settings.json"
+  echo "SETTINGS_RESTORED=yes"
+else
+  echo "SETTINGS_RESTORED=unchanged"
+fi
+mkdir -p -m 700 "$B/hooks-now"
+tar -C "$H/.orca" -cf "$B/hooks-now/agent-hooks.tar" agent-hooks
+if ! cmp -s "$B/agent-hooks.tar" "$B/hooks-now/agent-hooks.tar"; then
+  case "$H/.orca/agent-hooks" in /home/orca-svc/.orca/agent-hooks) find "$H/.orca/agent-hooks" -mindepth 1 -delete ;; esac
+  tar -C "$H/.orca" -xpf "$B/agent-hooks.tar"
+  echo "AGENT_HOOKS_RESTORED=yes"
+else
+  echo "AGENT_HOOKS_RESTORED=unchanged"
+fi
+RESTORE
+    svc_state
+    ;;
+  svc-teardown)
+    if [ ! -f "$ROOT/svc-pids-before" ]; then echo "REFUSED no-svc-root=$ROOT"; exit 3; fi
+    SP=$(sshd_pid)
+    NEW=$(svc_new_pids)
+    echo "SVC_NEW_PIDS=$(echo $NEW)"
+    for P in $NEW $SP; do
+      if [ "$P" != 0 ]; then sudo -n kill "$P" 2>/dev/null || true; fi
+    done
+    I=0
+    while [ "$I" -lt 20 ] && [ -n "$(svc_new_pids)" ]; do sleep 0.5; I=$((I + 1)); done
+    for P in $(svc_new_pids); do sudo -n kill -KILL "$P" 2>/dev/null || true; done
+    sleep 0.5
+    LEFT=$(svc_new_pids | wc -l)
+    # Only what this leg created in the real home: the transfer's project dir and a fresh relay install.
+    ENC=$(printf '%s' "$ROOT/svc/repos/p16-replica" | sed 's/[^A-Za-z0-9]/-/g')
+    sudo -n -u "$SVC_USER" bash -s -- "$SVC_HOME" "$ENC" "$ROOT/svc/backup" <<'CLEAN'
+H="$1"; ENC="$2"; B="$3"
+D="$H/.claude/projects/$ENC"
+case "$D" in /home/orca-svc/.claude/projects/-tmp-orca-hwf-p70-*) [ -d "$D" ] && find "$D" -delete && echo "REMOVED_PROJECT_DIR=$ENC" ;; esac
+if [ "$(cat "$B/orca-remote-before" 2>/dev/null)" = absent ] && [ -d "$H/.orca-remote" ]; then
+  case "$H/.orca-remote" in /home/orca-svc/.orca-remote) find "$H/.orca-remote" -delete && echo "REMOVED_ORCA_REMOTE=yes" ;; esac
+fi
+true
+CLEAN
+    ROOT_PROCS=$(sudo -n env ORCA_HWF_ROOT="$ROOT" python3 - <<'PY'
+import os
+root = os.environ["ORCA_HWF_ROOT"]
+# Why from our own parent: sudo, the command substitution and this script all carry the root in argv.
+skip = {os.getpid()}
+p = os.getppid()
+while p > 1:
+    skip.add(p)
+    try:
+        p = int(open("/proc/%d/stat" % p).read().rsplit(")", 1)[1].split()[1])
+    except Exception:
+        break
+n = 0
+for d in os.listdir("/proc"):
+    if not d.isdigit() or int(d) in skip:
+        continue
+    try:
+        cwd = os.readlink("/proc/%s/cwd" % d)
+        argv = open("/proc/%s/cmdline" % d, "rb").read().replace(b"\0", b" ").decode("utf-8", "replace")
+    except Exception:
+        continue
+    if (root in cwd or root in argv) and "ORCA_HWF_ROOT" not in argv:
+        n += 1
+print(n)
+PY
+)
+    echo "REMAINING=$LEFT"
+    echo "PROC_COUNT=$ROOT_PROCS"
     ;;
   *)
     echo "REFUSED verb=$VERB"; exit 2

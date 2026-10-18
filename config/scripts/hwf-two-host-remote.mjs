@@ -30,11 +30,17 @@ const remoteVerbs = new Set([
   'serve-p22',
   'pairing-p22',
   'serve-stop-p22',
-  'old-relay-p23'
+  'old-relay-p23',
+  'create-svc',
+  'seed-svc',
+  'svc-backup',
+  'svc-state',
+  'svc-restore',
+  'svc-teardown'
 ])
 // These take no root; every other verb's root argument is checked.
 const ROOTLESS_VERBS = new Set(['new-root', 'new-nonce', 'seed-local-p16'])
-const ROOT_SHAPE = /^\/tmp\/orca-hwf-p(?:1[567]|2[023])-[0-9A-Za-z]+$/
+const ROOT_SHAPE = /^\/tmp\/orca-hwf-p(?:1[567]|2[023]|70)-[0-9A-Za-z]+$/
 const NONCE_SHAPE = /^[0-9a-f]{16}$/
 const EXTRA_SHAPE = /^\/[A-Za-z0-9_./-]+$/
 // The serve launch line: words and env assignments only, no quotes or shell metacharacters.
@@ -167,7 +173,7 @@ if (!ROOTLESS_VERBS.has(verb) && root !== undefined && !ROOT_SHAPE.test(root)) {
 
 if (verb === 'new-root') {
   const phase = argValue(process.argv.slice(3), '--phase') ?? '15'
-  if (phase !== '15' && phase !== '16' && phase !== '17' && phase !== '20' && phase !== '22' && phase !== '23') {
+  if (!['15', '16', '17', '20', '22', '23', '70'].includes(phase)) {
     fail(`REFUSED phase=${phase}`)
   }
   console.log(`/tmp/orca-hwf-p${phase}-${utcStamp()}`)
