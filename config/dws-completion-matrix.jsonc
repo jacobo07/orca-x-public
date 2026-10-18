@@ -1690,8 +1690,10 @@
       "row": "Security",
       "owner": "threat model",
       "done": "every class controlled or named debt",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "rb-live row 49 threat model (14 classes located in tree)",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         12
@@ -1699,8 +1701,10 @@
       "dependsOn": [
         "Phases 2-11"
       ],
-      "evidence": [],
-      "reason": "phase 12 re-measure 2026-10-18: LARGE-GAP. No program threat model exists (docs and config search finds only agent-skill-sharing plans); per-class gates exist (check:workspace-trust-authority, check:ipc-message-floor). Residual: write the named threat list, then map each class to a control or a named debt."
+      "evidence": [
+        { "kind": "file", "path": "docs/dws/threat-model-2026-10-18.md", "note": "14 named classes T1-T14, each mapped to a control with file:line and its enforcement, plus 15 named debts D1-D15; T5 (secrets in artifacts) has no repo control and is debt D6" }
+      ],
+      "reason": "2026-10-18: the done criterion is met as a mapping, not as a hardening: every one of 14 named classes has a located control or a named debt. Highest debts, not fixed: D6 no in-repo secret control (the HR-SECRET gate is operator-global, outside CI); D1 orca serve binds all interfaces by default (runtime-rpc.ts:1339), the shape of the 2026-10-14 GEX44 exposure; D2 live device tokens stored in plain text (device-registry.ts:20). Whether pr.yml jobs are required status checks is not visible from the repo."
     },
     {
       "id": 50,
