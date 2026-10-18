@@ -27,7 +27,40 @@ const carriers: HwfCarrier[] = []
 const stubDir = path.join(process.cwd(), 'tests', 'e2e', 'fixtures', 'mission-stub-agent')
 const ledgerDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-p24-stub-'))
 
+const SEEDED_AT = Date.now()
+const STALE_AGE_MS = 8 * 24 * 60 * 60 * 1000
+const seededProject = (id: string) => ({
+  id,
+  displayName: id,
+  badgeColor: '#6366f1',
+  sourceRepoIds: [],
+  createdAt: SEEDED_AT - STALE_AGE_MS,
+  updatedAt: SEEDED_AT - STALE_AGE_MS
+})
+const seededReadyLocalSetup = (projectId: string, updatedAt: number) => ({
+  id: `${projectId}::local`,
+  projectId,
+  hostId: 'local',
+  repoId: '',
+  path: '/tmp',
+  displayName: projectId,
+  kind: 'folder',
+  setupState: 'ready',
+  setupMethod: 'imported-existing-folder',
+  createdAt: SEEDED_AT - STALE_AGE_MS,
+  updatedAt
+})
+
 test.use({
+  // Why: an old ready setup cannot be made through any RPC, so one stale and one fresh ready setup of two
+  // projects are seeded on the laptop with their real persisted shape; the planner reads them like any other.
+  profileOverlay: {
+    projects: [seededProject('p24-stale'), seededProject('p24-fresh')],
+    projectHostSetups: [
+      seededReadyLocalSetup('p24-stale', SEEDED_AT - STALE_AGE_MS),
+      seededReadyLocalSetup('p24-fresh', SEEDED_AT)
+    ]
+  },
   launchEnv: {
     PATH: `${stubDir}${path.delimiter}${process.env.PATH ?? ''}`,
     ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js'),
@@ -125,7 +158,8 @@ test('hydrated host is preferred and independent tasks spread across two hosts',
   const client = new RuntimeClient(userData, 180_000, null, null)
   const projects = (await client.call<{ projects: { id: string }[] }>('project.list', {})).result
     .projects
-  const localProjectId = projects[0]?.id
+  // Why: the seeded stale/fresh projects are not the repo-backed one the laptop leg means.
+  const localProjectId = projects.find((p) => !p.id.startsWith('p24-'))?.id
   expect(localProjectId).toBeTruthy()
   type SetupRow = { id: string; projectId: string; hostId: string; setupState: string }
   const listSetups = async () =>
@@ -266,6 +300,32 @@ test('hydrated host is preferred and independent tasks spread across two hosts',
       expect(remotePlan.locality.find((l) => l.taskId === second)?.hydrated).toBe(true)
       expect(remotePlan.locality.find((l) => l.taskId === first)?.hydrated).toBe(false)
       console.log(`HWF24_REMOTE_PREPARED_PREFERRED ${runtimeAddress} at load 1 over idle local`)
+
+      // Row 24, freshness: both seeded projects are 'ready' on the laptop; only the one updated inside 7 days is hydrated.
+      const seeded = (await listSetups()).filter((s) => s.projectId.startsWith('p24-'))
+      console.log(`HWF24_SEEDED_SETUPS=${JSON.stringify(seeded)}`)
+      expect(seeded.map((s) => `${s.projectId}:${s.hostId}:${s.setupState}`).sort()).toEqual([
+        'p24-fresh:local:ready',
+        'p24-stale:local:ready'
+      ])
+      const stale = await createTask('p24 stale')
+      setSubject(stale, 'p24-stale')
+      const stalePlan = (await place([stale], 'stale')).result
+      console.log(`HWF24_STALE=${JSON.stringify(stalePlan)}`)
+      const fresh = await createTask('p24 fresh')
+      setSubject(fresh, 'p24-fresh')
+      const freshPlan = (await place([fresh], 'fresh')).result
+      console.log(`HWF24_FRESH=${JSON.stringify(freshPlan)}`)
+      const freshRows = db.prepare('SELECT * FROM task_placements').all() as Placement[]
+      const freshAddressOf = (id: string) => freshRows.find((r) => r.task_id === id)?.address
+      // Stale is unhydrated (ranked by memory to the roomier host) and still placed, never refused.
+      expect(stalePlan.locality[0].hydrated).toBe(false)
+      expect(freshAddressOf(stale)).toBe(runtimeAddress)
+      expect(freshPlan.locality[0].hydrated).toBe(true)
+      expect(freshAddressOf(fresh)).toBe('local')
+      console.log(
+        `HWF24_FRESHNESS_WINDOW stale(8d)->${freshAddressOf(stale)} fresh->${freshAddressOf(fresh)}`
+      )
     }
   } finally {
     db.close()
