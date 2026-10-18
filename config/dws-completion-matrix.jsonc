@@ -1863,8 +1863,10 @@
       "row": "Inheritance verification",
       "owner": "gates/tests",
       "done": "planted regression red",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "PP tools/test_tower_mhf_inheritance_drill.py (dws/pp-rows d653fd44)",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         13
@@ -1872,8 +1874,11 @@
       "dependsOn": [
         "Phase 12"
       ],
-      "evidence": [],
-      "reason": "phase 12 re-measure 2026-10-18: no gate is named for inheritance. The durability and workspace-surface-claims gate suites pass (68 tests, with mutant-aware cases), but the mobile capability aperture gate is red at HEAD (6 host RPC methods unbaselined, 2 allowlisted methods unsurfaced), a real catch not a planted regression. Later 2026-10-18: those 8 methods were classified (1 host-only by design, 5 gaps, 2 unsurfaced) and baselined with arguments, so the aperture gate is green again; dropping one baseline entry turns it red. Residual: pick the inheritance check, plant one regression on a copy, run a clean control."
+      "evidence": [
+        { "kind": "file", "path": "docs/dws/live-2026-10-18-row-55-inheritance-drill.md", "note": "inherited multi_host_fabric B1: clean copy 8/8 APPLIED_VERIFIED, two plants each turn exactly their entry VIOLATED, judge mutant red" },
+        { "kind": "file", "path": "config/mobile-capability-aperture-baseline.txt", "note": "a real catch beside the planted ones: 8 undecided methods, now classified, dropped-entry control red" }
+      ],
+      "reason": "PASS 2026-10-18: the inheritance channel is the PP tower family multi_host_fabric that this repo inherits (B1, row 54). PP drill d653fd44 copies exactly the files B1's checks read: the clean copy is judged like the real repo (8/8 APPLIED_VERIFIED), dropping the XFER_BYTES read-back turns only the transfer entry VIOLATED, deleting workspace-execution-consent.ts turns only the consent entry VIOLATED, both would_block; with the judge mutated to accept failures both plant gates go red. Not covered: the done-gate is report-only by design, blocking enforcement is an Owner decision. Prior: phase 12 re-measure 2026-10-18: no gate is named for inheritance. The durability and workspace-surface-claims gate suites pass (68 tests, with mutant-aware cases), but the mobile capability aperture gate is red at HEAD (6 host RPC methods unbaselined, 2 allowlisted methods unsurfaced), a real catch not a planted regression. Later 2026-10-18: those 8 methods were classified (1 host-only by design, 5 gaps, 2 unsurfaced) and baselined with arguments, so the aperture gate is green again; dropping one baseline entry turns it red. Residual: pick the inheritance check, plant one regression on a copy, run a clean control."
     },
     {
       "id": 56,
