@@ -15,7 +15,7 @@ covered_files:
   - tests/e2e/helpers/hwf-two-host-claude-screen.ts
   - tests/e2e/helpers/hwf-two-host-claude-screen.unit.test.ts
   - tests/e2e/hwf-two-host-model-turn.spec.ts
-covered_digest: "v1:sha256:bf1653642aa86d7276d67c58cb8946b4f1f1e653d429f2706b7c4dc13aafa374"
+covered_digest: "v1:sha256:3da430f07a6e3b019e47c8d472daaecf909f7542fdc8539fa9ecdcea64b1e903"
 behavior_unverified: 0
 ---
 

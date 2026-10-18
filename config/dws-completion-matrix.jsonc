@@ -1038,8 +1038,10 @@
       "row": "Provider quota",
       "owner": "provider-quota-observations",
       "done": "quota read on the routing path",
-      "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-8",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         9
@@ -1048,8 +1050,19 @@
         "Phase 6",
         "Phase 8"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — quota read on the routing path not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-conversation-turn.test.ts",
+          "note": "routing reads the provider quota report: a provider whose report says exhausted is skipped until its window resets, and a warning is not exhaustion (control); run 2026-10-18, 10 tests passed."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/provider-routing-composition.ts",
+          "note": "production composition records quota observations from the claude driver; residual: no codex quota is recorded, so codex is always unobserved (fail-open by design)."
+        }
+      ],
+      "reason": "phase 8 re-measure 2026-10-18: the routing path reads the quota report and the tests show exhaustion skips a provider and a warning does not. Residual: only the claude driver records quota observations."
     },
     {
       "id": 31,
@@ -1092,8 +1105,10 @@
       "row": "Model switching",
       "owner": "routed-conversation-turn",
       "done": "same agent, provider X then Y, coherent",
-      "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-8",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         8
@@ -1103,8 +1118,14 @@
         "Phase 6",
         "federation P8 model client"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — same agent, provider X then Y, coherent not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-agent-provider-switch.test.ts",
+          "note": "one agent runs a codex turn then a claude turn: same AgentId, continuous history, a routing reason per turn; a mutant that mints a new AgentId on provider change goes red (run 2026-10-18, 2 tests passed)."
+        }
+      ],
+      "reason": "phase 8 re-measure 2026-10-18: same agent across provider X then Y is evidenced by a test that ran and carries its own mutant. Shares its claim with row 28, which stays PARTIAL because its done cites P3 gates that resolve to no artifact here."
     },
     {
       "id": 33,

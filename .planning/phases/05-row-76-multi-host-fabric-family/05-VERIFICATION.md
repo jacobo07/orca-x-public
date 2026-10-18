@@ -8,7 +8,7 @@ covered_files:
   - .planning/phases/05-row-76-multi-host-fabric-family/05-01-SUMMARY.md
   - config/dws-completion-matrix.jsonc
   - docs/dws/live-2026-10-18-row-76-multi-host-fabric-family.md
-covered_digest: "v1:sha256:20f50af99d0f83a5ceccd0b8274e9049536929ac7ea182a6d7faf211ba423e57"
+covered_digest: "v1:sha256:dbeaf0212ff8f1c12058b6f3d05128d8be664a12e0f391f9578b3056385e3d55"
 behavior_unverified: 0
 ---
 # Phase 5 Verification

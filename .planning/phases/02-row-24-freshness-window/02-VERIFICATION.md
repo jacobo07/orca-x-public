@@ -11,7 +11,7 @@ covered_files:
   - src/shared/mission-job-locality.test.ts
   - src/shared/mission-job-locality.ts
   - tests/e2e/hwf-two-host-mission-locality.spec.ts
-covered_digest: "v1:sha256:409714ff12b65f3d40997eda7ace093bf920d15fbac5a2720d023162e271d1e2"
+covered_digest: "v1:sha256:e8560eef9457c697bb0d5774a90d6f80a5c80afb853cd4ee6942df758ed89d7d"
 ---
 # 02 Verification
 

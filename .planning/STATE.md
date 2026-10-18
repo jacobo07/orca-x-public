@@ -72,3 +72,7 @@ Then continue with the next phase in the same session. Never end a turn saying t
 
 ## D1 resolved (Owner 2026-10-18, worker epoch 2)
 - RAM boundary resolved by the Owner pane: row 24 r24f PASS, row 17 r17t2 4/4 MATCH, S4-22 done in PP 465c6126, row 17 PASS at e3d4f35e8d. The earlier OWNER DECISION NEEDED (push dws/pp-rows) and the row 17 NOT_RUN note are superseded. Phases 1-7 VERIFICATION digests re-stamped. Do not re-run the row 17 or 24 legs. Continuing with milestone 2 from phase 8.
+
+## Phase 8 done (2026-10-18)
+- Ledger docs/dws/remeasure-2026-10-18-ledger.md: rows 30 and 32 PASS from tests that ran (matrix 43/76); classes: MET 30 32; MEASURABLE 26 47 51 75; SMALL-GAP 25 48 50 55; LARGE-GAP 28 31 40 41 43 49; OUT-OF-PROGRAM 6 16 37(judge) 39. Agent subagent cap (30 calls) cut the first sweep; the rest was done inline.
+- Next: phase 9 (rows 25 26 28 30 31 32); rows 30 and 32 already done, 28 and 31 are LARGE-GAP.
