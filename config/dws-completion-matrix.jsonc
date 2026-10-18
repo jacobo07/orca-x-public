@@ -942,8 +942,10 @@
       "row": "Local inference",
       "owner": "GEX44 runtime",
       "done": "re-measured + bake-off",
-      "state": "UNKNOWN",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "dwsrb live queue (GEX44 llama-server :8081)",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         8
@@ -953,8 +955,19 @@
         "Phase 6",
         "federation P8 model client"
       ],
-      "evidence": [],
-      "reason": "conflicting records"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-18-row-27-local-inference-bakeoff.md",
+          "note": "qwen3-coder-30b resident, ~49 tok/s; 12-task bake-off 12/12 local vs 12/12 Claude; scorer control fails 12/12 stubs; Claude ran as kobii not orca-svc"
+        },
+        {
+          "kind": "file",
+          "path": "config/scripts/dws-inference-bakeoff.py",
+          "note": "fixed prompt set, scorer, measure/control/bakeoff modes"
+        }
+      ],
+      "reason": "measured 2026-10-18; the set is at the ceiling for both sides, so it does not rank them"
     },
     {
       "id": 28,
