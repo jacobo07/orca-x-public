@@ -127,6 +127,7 @@ echo "SETTINGS_SHA=$(sha256sum "$H/.claude/settings.json" 2>/dev/null | cut -c1-
 echo "AGENT_HOOKS_SHA=$(cd "$H/.orca/agent-hooks" 2>/dev/null && find . -type f -exec sha256sum {} + | sort | sha256sum | cut -c1-64 || echo absent)"
 if [ -d "$H/.orca-remote" ]; then echo "ORCA_REMOTE=present"; else echo "ORCA_REMOTE=absent"; fi
 echo "CLAUDE_JSON_SHA=$(sha256sum "$H/.claude.json" 2>/dev/null | cut -c1-64 || echo absent)"
+echo "HWF_CLAUDE_PROJECTS=$(python3 -c 'import json,sys; print(sum(k.startswith("/tmp/orca-hwf-") for k in json.load(open(sys.argv[1])).get("projects", {})))' "$H/.claude.json" 2>/dev/null || echo unknown)"
 echo "SERVE_PID=$(systemctl show orca-dws-serve -p MainPID --value)"
 STATE
 }
@@ -733,9 +734,27 @@ BACKUP
     ;;
   svc-restore)
     if ! sudo -n test -f "$ROOT/svc/backup/settings.json"; then echo "REFUSED no-backup"; exit 3; fi
-    sudo -n -u "$SVC_USER" bash -s -- "$SVC_HOME" "$ROOT/svc/backup" <<'RESTORE'
+    sudo -n -u "$SVC_USER" bash -s -- "$SVC_HOME" "$ROOT/svc/backup" "$ROOT" <<'RESTORE'
 set -eu
-H="$1"; B="$2"
+H="$1"; B="$2"; R="$3"
+# Why not a byte restore: the serve runs Claude as this user and holds its login in the same file.
+python3 - "$H/.claude.json" "$R" <<'PY'
+import json, os, sys
+path, root = sys.argv[1], sys.argv[2].rstrip('/')
+with open(path) as f:
+    data = json.load(f)
+projects = data.get('projects', {})
+mine = [k for k in projects if k == root or k.startswith(root + '/')]
+for k in mine:
+    del projects[k]
+if mine:
+    tmp = path + '.hwf-restore'
+    with open(tmp, 'w') as f:
+        json.dump(data, f, indent=2)
+    os.chmod(tmp, os.stat(path).st_mode & 0o777)
+    os.replace(tmp, path)
+print('CLAUDE_JSON_LEG_PROJECTS_REMOVED=%d' % len(mine))
+PY
 if ! cmp -s "$B/settings.json" "$H/.claude/settings.json"; then
   cp -p "$B/settings.json" "$H/.claude/settings.json.hwf-restore"
   mv "$H/.claude/settings.json.hwf-restore" "$H/.claude/settings.json"

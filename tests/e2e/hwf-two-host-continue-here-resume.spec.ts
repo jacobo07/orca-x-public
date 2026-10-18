@@ -4,11 +4,11 @@ import { existsSync, readdirSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
+import { stripAnsiEscapeSequences } from '../../src/shared/ansi-escape-sequences'
 import { test, expect } from './helpers/orca-app'
 import { startHwfCarrier } from './helpers/hwf-two-host-carrier'
 import {
   addLocalReplica,
-  asReplicaRun,
   waitForRootGrouping,
   waitForSshConnected
 } from './helpers/hwf-two-host-replica-legs'
@@ -18,7 +18,8 @@ import {
   execOnOwningHost,
   hydrateHwfRemoteRepo,
   readHwfLocalPort,
-  readHwfRunFile
+  readHwfRunFile,
+  type HwfRun
 } from './helpers/hwf-two-host-ssh-target'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -43,6 +44,19 @@ test.skip(
 )
 
 test.use({ orcaAppExtraEnv: { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') } })
+
+type ResumeRun = HwfRun & { seedRoot: string; replicaPath: string; localReplicaPath: string }
+
+// Why not asReplicaRun: seed-svc seeds only the replica, never the fork/shallow/unborn/late repos.
+function asResumeRun(run: HwfRun): ResumeRun {
+  const r = run as Partial<ResumeRun>
+  for (const key of ['seedRoot', 'replicaPath', 'localReplicaPath'] as const) {
+    if (!r[key]) {
+      throw new Error(`ORCA_HWF_RUN_FILE is missing ${key} (run-file --seed --local-seed)`)
+    }
+  }
+  return run as ResumeRun
+}
 
 function claudeProjectDir(cwd: string): string {
   return cwd.replace(/[^A-Za-z0-9]/g, '-')
@@ -88,7 +102,7 @@ test('Continue here copies a laptop Claude session to GEX44 and Open resumes it 
   orcaPage: page
 }) => {
   test.setTimeout(900_000)
-  const run = asReplicaRun(readHwfRunFile())
+  const run = asResumeRun(readHwfRunFile())
   const localPort = readHwfLocalPort()
   const word = `PELICAN${randomBytes(2).toString('hex').toUpperCase()}`
   // Why lowercase: the resumed screen shows the old prompt, so the answer must be a string it never held.
@@ -98,6 +112,14 @@ test('Continue here copies a laptop Claude session to GEX44 and Open resumes it 
 
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
+  // Why Manual: Yolo launches with --dangerously-skip-permissions, whose consent on the service
+  // account belongs to the Owner, not to a test; recalling a word needs no tool (r70r4).
+  await page.evaluate(async () => {
+    const s = window.__store!.getState()
+    await s.updateSettingsOrThrow({
+      agentDefaultArgs: { ...s.settings?.agentDefaultArgs, claude: '' }
+    })
+  })
   const carrier = await startHwfCarrier(run, localPort)
   let targetId: string | null = null
   try {
@@ -218,28 +240,47 @@ test('Continue here copies a laptop Claude session to GEX44 and Open resumes it 
     await page
       .locator(`[data-dormant-terminal-tab-id="${tabId}"] [data-testid="dormant-terminal-open"]`)
       .click({ timeout: 30_000 })
-    const ptyId = await waitForActivePanePtyId(page, 60_000)
-    let asked = false
-    let trusted = false
+    let askedAt = 0
+    let last = ''
     await expect
       .poll(
         async () => {
-          const screen = await getTerminalContent(page, 12_000)
+          // Why per poll: a stale id would turn every write into a silent no-op.
+          const ptyId = await waitForActivePanePtyId(page, 60_000)
+          const raw = await getTerminalContent(page, 12_000)
+          // Why: the serialized buffer of an Ink TUI writes gaps as cursor moves, not spaces (r70r3).
+          const screen = stripAnsiEscapeSequences(
+            // oxlint-disable-next-line no-control-regex -- cursor-forward is the gap between words
+            raw.replace(/\u001b\[\d*C/g, ' ')
+          ).replace(/[ \t]+/g, ' ')
+          const trustShown = /trust (the files in )?this folder/i.test(screen)
+          const state = `pty=${ptyId} trust=${trustShown} word=${screen.includes(word)} asked=${askedAt > 0}`
+          if (state !== last) {
+            last = state
+            console.log(`HWF70R_POLL ${state} tail=${JSON.stringify(raw.slice(-400))}`)
+          }
           if (/No conversation found/i.test(screen)) {
             return 'no-conversation'
           }
-          if (!trusted && /trust (the files in )?this folder/i.test(screen)) {
-            trusted = true
+          // Why never answered here: accepting it is the Owner's consent, not the test's.
+          if (/Bypass Permissions mode/i.test(screen)) {
+            return 'bypass-consent-asked'
+          }
+          if (!screen.includes(word) && trustShown) {
             await sendToTerminal(page, ptyId, '\r')
             return 'trust-answered'
           }
-          if (!asked && screen.includes(word)) {
-            asked = true
+          if (askedAt > 0 && screen.includes(answer)) {
+            return 'answered'
+          }
+          // Why re-ask after 45 s: input sent before the TUI takes it is dropped.
+          if (screen.includes(word) && (askedAt === 0 || Date.now() - askedAt > 45_000)) {
+            askedAt = Date.now()
             await sendToTerminal(page, ptyId, 'Reply with the secret word in lowercase, only that.')
             await sendToTerminal(page, ptyId, '\r')
             return 'asked'
           }
-          return asked && screen.includes(answer) ? 'answered' : 'waiting'
+          return 'waiting'
         },
         { timeout: 240_000, intervals: [2_000] }
       )
