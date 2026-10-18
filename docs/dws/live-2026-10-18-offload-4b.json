@@ -1,0 +1,142 @@
+{
+    "runId":  "offload-4b",
+    "measuredAt":  "2026-10-18T10:14:17Z/10:14:34Z",
+    "laptopHead":  "b978e15d82 + uncommitted grep marker fix (this commit)",
+    "svcSha":  "3266e1a41790ab356def108aca96895e1e921279",
+    "servePid":  3357463,
+    "servePidVerdict":  "STABLE",
+    "nonce":  "f16347be",
+    "desktopRootPid":  39000,
+    "desktopSubtreeSize":  39,
+    "legs":  [
+                 {
+                     "leg":  "test",
+                     "startUtc":  "2026-10-18T10:14:17.182Z",
+                     "childPid":  "3555197",
+                     "exit":  "0",
+                     "ms":  "6029",
+                     "endUtc":  "2026-10-18T10:14:23.209Z",
+                     "verdict":  "OK"
+                 },
+                 {
+                     "leg":  "build",
+                     "startUtc":  "2026-10-18T10:14:27.703Z",
+                     "childPid":  "3555525",
+                     "exit":  "0",
+                     "ms":  "958",
+                     "endUtc":  "2026-10-18T10:14:28.659Z",
+                     "verdict":  "OK"
+                 },
+                 {
+                     "leg":  "agent",
+                     "startUtc":  "2026-10-18T10:14:30.246Z",
+                     "childPid":  "3555988",
+                     "exit":  "0",
+                     "ms":  "4235",
+                     "endUtc":  "2026-10-18T10:14:34.478Z",
+                     "agentReply":  "matched",
+                     "verdict":  "OK"
+                 }
+             ],
+    "remoteProof":  {
+                        "value":  [
+                                      {
+                                          "leg":  "test",
+                                          "verdict":  "PASS",
+                                          "firstSeenUtc":  "2026-10-18T10:14:17Z",
+                                          "lastSeenUtc":  "2026-10-18T10:14:23Z",
+                                          "peakRssMb":  603.6015625
+                                      },
+                                      {
+                                          "leg":  "build",
+                                          "verdict":  "PASS",
+                                          "firstSeenUtc":  "2026-10-18T10:14:27Z",
+                                          "lastSeenUtc":  "2026-10-18T10:14:28Z",
+                                          "peakRssMb":  797.37109375
+                                      },
+                                      {
+                                          "leg":  "agent",
+                                          "verdict":  "PASS",
+                                          "firstSeenUtc":  "2026-10-18T10:14:30Z",
+                                          "lastSeenUtc":  "2026-10-18T10:14:34Z",
+                                          "peakRssMb":  322.55859375
+                                      }
+                                  ],
+                        "Count":  3
+                    },
+    "laptopPerFamily":  {
+                            "vitest":  {
+                                           "maxCount":  0,
+                                           "peakMb":  0
+                                       },
+                            "tsc":  {
+                                        "maxCount":  0,
+                                        "peakMb":  0
+                                    },
+                            "esbuild":  {
+                                            "maxCount":  0,
+                                            "peakMb":  0
+                                        },
+                            "claude":  {
+                                           "maxCount":  0,
+                                           "peakMb":  0
+                                       },
+                            "codex":  {
+                                          "maxCount":  1,
+                                          "peakMb":  35.289
+                                      },
+                            "indexer":  {
+                                            "maxCount":  0,
+                                            "peakMb":  0
+                                        },
+                            "workload-wrapper":  {
+                                                     "maxCount":  0,
+                                                     "peakMb":  0
+                                                 },
+                            "orca-cli":  {
+                                             "maxCount":  0,
+                                             "peakMb":  0
+                                         },
+                            "nonce":  {
+                                          "maxCount":  0,
+                                          "peakMb":  0
+                                      },
+                            "control-surface":  {
+                                                    "maxCount":  17,
+                                                    "peakMb":  891.2740000000001
+                                                }
+                        },
+    "laptopFreeMb":  {
+                         "before":  9270.93,
+                         "after":  8909.66,
+                         "min":  8246.18
+                     },
+    "observation":  {
+                        "samples":  61,
+                        "sawStart":  true,
+                        "sawStop":  true,
+                        "spanMs":  60449,
+                        "desktopRootPidValid":  true,
+                        "legWindowCovered":  true,
+                        "failedLegs":  [
+
+                                       ]
+                    },
+    "comparability":  {
+                          "verdict":  "UNJUDGED",
+                          "reason":  "no baseline manifest",
+                          "checkedPaths":  [
+
+                                           ],
+                          "mismatched":  [
+
+                                         ],
+                          "wrapperMatchesBaseline":  null,
+                          "transitiveInputs":  {
+                                                   "verdict":  "NOT_COMPARED",
+                                                   "reason":  "checkoutSha missing on baseline or current; transitive src inputs not compared"
+                                               }
+                      },
+    "codexSighting":  "pid 27512 codex.exe, child of the Orca desktop under test (electron pid 39344), created 10:13:52Z, before the first LEG-START (10:14:17Z), 35.289 MB, one sample of 61: desktop agent discovery at startup, not the agent leg (kind claude)",
+    "runExit":  "RUN=offload-4b PLAYWRIGHT_EXIT=0 RUN_EXIT=0 REASON=ok"
+}

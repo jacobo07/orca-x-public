@@ -336,7 +336,8 @@ test.describe('DWS-P2 offload workload harness', () => {
           commandParts.push('--agent-bin', agentBin)
         }
       }
-      const command = commandParts.join(' ')
+      // Why grep: the preview is a tail; vitest's output pushed LEG-START out of it (3d, 4a).
+      const command = `${commandParts.join(' ')} 2>&1 | grep --line-buffered DWS-P2-LEG`
       rpc.orcaJsonSync(
         ['terminal', 'create', '--worktree', `path:${checkout}`, '--title', title, '--command', command],
         { timeoutMs: 30_000 }
