@@ -490,10 +490,10 @@
       "row": "GEX44 Node Manifest",
       "owner": "fleet obs + UWCP node adapter",
       "done": "real measurement, freshness-bound",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 1",
-      "measuredAt": "2026-10-15",
+      "measuredIn": "laptop ssh -L tunnel leg r17t2 + PP UWCP S4-22",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         5
@@ -502,6 +502,8 @@
         "Phase 2"
       ],
       "evidence": [
+        { "kind": "file", "path": "docs/dws/live-2026-10-18-row-17-tunnel-evidence.md", "note": "laptop tunnel leg 4/4 MATCH (rung fan-out, no deploy) + UWCP S4-22 consumer DONE in the PP" },
+        { "kind": "file", "path": "docs/dws/live-2026-10-18-row-17-tunnel-fanout.json", "note": "run 2 evidence record: MEASURED at rung fan-out, 4/4 MATCH vs ssh control, teardown clean" },
         { "kind": "file", "path": "config/schemas/orca-node-manifest-1.schema.json", "note": "the versioned manifest contract handed to UWCP" },
         { "kind": "file", "path": "src/shared/node-manifest-schema.contract.test.ts", "note": "real-producer manifests validate against the schema" },
         { "kind": "file", "path": "src/shared/node-manifest-eligibility.test.ts", "note": "freshness and eligibility with drills M1-M5" },
@@ -523,7 +525,7 @@
           "note": "dws/rebaseline head re-measured by dwsrb phase 1"
         }
       ],
-      "reason": "2026-10-18: consume half now exists as a PP adapter (modules/gsd_x/goal/node.py, tools/test_gsd_x_goal_node.py 15/15 against a real producer manifest, 3 mutants red; PP branch dws/pp-rows 8b776241, local, unpushed). UWCP S4-22 is defined nowhere in the Orca repo or that PP worktree, so whether goal/node.py is what S4-22 asks for is unconfirmed. The laptop-to-GEX44 tunnel leg is still NOT_RUN (Electron, laptop free RAM 4.4 GB < 6 GB gate). Still PARTIAL. Prior: BLOCKED_EXTERNAL: UWCP-S4-22 — re-measured 2026-10-15 on dws/rebaseline @a77926158316 (dwsrb phase 1): sweep tips=83 commonDirs=47 hits=0 controlHits=73 (content sweep hits=0 controlHits=73); Orca-side manifest producer matched at 3266e1a (prior reason), consume half has no UWCP node adapter; +LIVE:laptop-tunnel-leg (queued in Live-leg queue); measured=`node .planning/workstreams/dwsrb/phases/01-reality-re-scan-and-blocker-ledger/01-uwcp-ref-sweep.mjs --path-re '^modules/gsd_x/goal/node\\.py$|node_adapter' --control-path-re '^modules/gsd_x/goal/workspace\\.py$'`. Prior (2026-10-14): measured 2026-10-14 against orca-dws-serve at 3266e1a (artifact sha256 8ef4ce12 both ends): rung gex44-local-caller 4/4 MATCH, then rung fan-out-gex44 4/4 MATCH (a second isolated Orca on GEX44, src equal to the deployed sha, paired to the serve; the serve member came through callEnvironment; control stable, serve MainPID unchanged). This re-reads the product at the fixed commit, which the 2026-10-10 re-check could not, so resident_model qwen3-coder-30b is now judged MATCH. Not proven: the laptop-to-GEX44 tunnel leg (laptop had 1.37 GB free). Still PARTIAL: the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
+      "reason": "PASS 2026-10-18: both owed items measured. (1) Laptop-to-GEX44 transport: an isolated laptop Orca (worktree at 79f54d64af, src == deployed 3266e1a, no deploy) paired over the ssh -L tunnel and answered fleet manifest; run 2 4/4 MATCH vs the ssh control (memory, vram, disk drift 12 MB, resident_model qwen3-coder-30b), runtimeIdMatchesServe true, MainPID 3357463 unchanged, teardown 0/0/0; run 1 disk was UNJUDGED (GEX44 disk moved 3.1 GB during it). (2) UWCP S4-22: spec vault/specs/uwcp-s4-22-node-adapter.md in the PP (dws/pp-rows 5c57f4a4, pushed) defines acceptance; modules/gsd_x/goal/node.py meets AC-1..6 (465c6126, GSDX_NODE 23/23, known_heads per this schema, mutants red); Owner: orca.node-manifest/1 supersedes KSR capabilities.json. Not proven: the user's own desktop profile, non-loopback pairing, Orca-emitted known_heads. Prior (phase 4): consume half now exists as a PP adapter (modules/gsd_x/goal/node.py, tools/test_gsd_x_goal_node.py 15/15 against a real producer manifest, 3 mutants red; PP branch dws/pp-rows 8b776241, local, unpushed). UWCP S4-22 is defined nowhere in the Orca repo or that PP worktree, so whether goal/node.py is what S4-22 asks for is unconfirmed. The laptop-to-GEX44 tunnel leg is still NOT_RUN (Electron, laptop free RAM 4.4 GB < 6 GB gate). Still PARTIAL. Prior: BLOCKED_EXTERNAL: UWCP-S4-22 — re-measured 2026-10-15 on dws/rebaseline @a77926158316 (dwsrb phase 1): sweep tips=83 commonDirs=47 hits=0 controlHits=73 (content sweep hits=0 controlHits=73); Orca-side manifest producer matched at 3266e1a (prior reason), consume half has no UWCP node adapter; +LIVE:laptop-tunnel-leg (queued in Live-leg queue); measured=`node .planning/workstreams/dwsrb/phases/01-reality-re-scan-and-blocker-ledger/01-uwcp-ref-sweep.mjs --path-re '^modules/gsd_x/goal/node\\.py$|node_adapter' --control-path-re '^modules/gsd_x/goal/workspace\\.py$'`. Prior (2026-10-14): measured 2026-10-14 against orca-dws-serve at 3266e1a (artifact sha256 8ef4ce12 both ends): rung gex44-local-caller 4/4 MATCH, then rung fan-out-gex44 4/4 MATCH (a second isolated Orca on GEX44, src equal to the deployed sha, paired to the serve; the serve member came through callEnvironment; control stable, serve MainPID unchanged). This re-reads the product at the fixed commit, which the 2026-10-10 re-check could not, so resident_model qwen3-coder-30b is now judged MATCH. Not proven: the laptop-to-GEX44 tunnel leg (laptop had 1.37 GB free). Still PARTIAL: the UWCP adapter consuming the manifest (goal/node.py) is BLOCKED on UWCP S4-22"
     },
     {
       "id": 18,
