@@ -2567,10 +2567,10 @@
       "row": "HF One-way safe sync",
       "owner": "sync pipeline",
       "done": "fast-forward of a proven descendant, capsule first, generation-fenced; disk-full/disconnect/stale stay failures",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 2",
-      "measuredAt": "2026-10-15",
+      "measuredIn": "rb-live phase 3 (r65b) + dwsrb phase 2",
+      "measuredAt": "2026-10-17",
       "required": true,
       "phases": [
         18
@@ -2612,7 +2612,12 @@
         {
           "kind": "file",
           "path": "tests/e2e/hwf-two-host-replica-pair.spec.ts",
-          "note": "live disk-full-and-disconnect leg; skipped without ORCA_HWF_* (NOT RUN: needs two hosts and a small filesystem)."
+          "note": "opt-in REAL-SSH disk-full-and-disconnect leg; passed live 2026-10-17 (r65b), skipped without ORCA_HWF_* and a small filesystem."
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-17-row-65-evidence.md",
+          "note": "live evidence: normal, disk-full and connection-lost arms, teardown."
         },
         {
           "kind": "commit",
@@ -2630,7 +2635,7 @@
           "note": "projectReplica.sync, preserveDivergence, reconcile for local callers"
         }
       ],
-      "reason": "READY_FOR_LIVE: disk-full-and-disconnect — dwsrb phase 2 (2026-10-15): one-way sync is a pair-service operation with distinct failure arms (disk-full cause classifier, stale generation, disconnect), reachable through projectReplica.sync and orca project replica-sync; hermetic suites are green. The live fast-forward leg RAN and PASSED 2026-10-14 (X11) on the earlier primitive; the disk-full and disconnect legs have NOT RUN. Command: `npx playwright test tests/e2e/hwf-two-host-replica-pair.spec.ts --config tests/playwright.config.ts --project=electron-headless -g disk-full-and-disconnect` with ORCA_HWF_TWO_HOST=1, ORCA_HWF_RUN_FILE, ORCA_HWF_P17_PATH, ORCA_HWF_LOCAL_PORT and ORCA_HWF_SMALL_FS_ROOT (a dedicated filesystem of at most 1 GiB, not the root device). Expected: a normal clone prints \"synced a..b\" and HEAD equals the remote tip; on a full filesystem \"sync failed: the local disk is full; HEAD was not moved\" exit 1, HEAD unchanged; after the carrier drops \"sync failed: the connection to the host was lost ...; HEAD was not moved\" exit 1, HEAD unchanged."
+      "reason": "PASS: the disk-full-and-disconnect leg was measured live 2026-10-17 (r65b, laptop -> GEX44 disposable p17 root behind an ssh -L carrier) through the real orca project replica-sync CLI. Control: a clone at the shared seed on a normal filesystem printed \"synced e1c174e..553346e\" exit 0 and HEAD reached the remote tip. On a dedicated small filesystem filled to 0 free bytes it printed \"sync failed: the local disk is full; HEAD was not moved\" exit 1, HEAD unchanged. After the carrier was killed (ssh state reconnecting) it printed \"sync failed: the connection to the host was lost or its relay is unavailable; HEAD was not moved\" exit 1, HEAD unchanged. r65a was red on an instrument bug (clones carried a laptop-only seed commit); clones are now reset to the shared seed. Not covered: stale-generation refusal and capsule-first ordering are hermetic only. Teardown REMAINING=0 PROC_COUNT=0, witness unchanged. Evidence: docs/dws/live-2026-10-17-row-65-evidence.md."
     },
     {
       "id": 66,

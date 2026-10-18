@@ -99,10 +99,12 @@ function assertInside(root: string, target: string): void {
   }
 }
 
-function cloneBehind(source: string, parent: string, name: string): string {
+function cloneBehind(source: string, parent: string, name: string, base: string): string {
   const dest = path.join(parent, name)
   assertInside(parent, dest)
   git(['clone', '-q', '--no-hardlinks', source, dest])
+  // Why: seed-local-p16 adds a host commit the remote lacks; only the shared seed is an ancestor of p17.
+  git(['reset', '-q', '--hard', base], dest)
   return dest
 }
 
@@ -338,14 +340,16 @@ test.describe('disk-full-and-disconnect', () => {
     try {
       const remoteTip = execOnOwningHost(run, `git -C ${p17} rev-parse HEAD`).out.trim()
       expect(remoteTip).toMatch(/^[0-9a-f]{40}$/)
-      const normal = cloneBehind(run.localReplicaPath, scratch, 'normal')
+      const normal = cloneBehind(run.localReplicaPath, scratch, 'normal', run.seedRoot)
       smallClone = cloneBehind(
         run.localReplicaPath,
         SMALL_FS_ROOT,
-        `orca-hwf-small-${path.basename(scratch)}`
+        `orca-hwf-small-${path.basename(scratch)}`,
+        run.seedRoot
       )
-      const drop = cloneBehind(run.localReplicaPath, scratch, 'drop')
+      const drop = cloneBehind(run.localReplicaPath, scratch, 'drop', run.seedRoot)
       for (const clone of [normal, smallClone, drop]) {
+        expect(git(['rev-parse', 'HEAD'], clone)).toBe(run.seedRoot)
         expect(git(['rev-parse', 'HEAD'], clone)).not.toBe(remoteTip)
       }
 
