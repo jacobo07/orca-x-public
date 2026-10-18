@@ -30,7 +30,7 @@ export type HwfSession = {
 export async function bootHwfSession(
   orcaPage: Page,
   electronApp: ElectronApplication,
-  options: { web: boolean }
+  options: { web: boolean; repoPath?: string }
 ): Promise<HwfSession> {
   const run = readHwfRunFile()
   const localPort = readHwfLocalPort()
@@ -49,7 +49,8 @@ export async function bootHwfSession(
     const connected = await connectHwfTargetWithTrust(orcaPage, run, localPort)
     targetId = connected.targetId
     expect(connected.pin).toBe(run.fingerprint)
-    const hydrated = await hydrateHwfRemoteRepo(orcaPage, connected, run.repo)
+    // Why repoPath: an orca-svc run keeps its git repo at replicaPath; run.repo is a plain directory.
+    const hydrated = await hydrateHwfRemoteRepo(orcaPage, connected, options.repoPath ?? run.repo)
     await waitForActiveTerminalManager(orcaPage, 45_000)
     await waitForActivePanePtyId(orcaPage, 45_000)
     const executionHostId = `ssh:${encodeURIComponent(connected.targetId)}` as const

@@ -2,7 +2,7 @@ import path from 'node:path'
 
 import { expect, type Page } from '@stablyai/playwright-test'
 
-import { listRootProcs, snapshotRootPids, type RootProc } from './hwf-two-host-root-procs'
+import { listRootProcs, type RootProc } from './hwf-two-host-root-procs'
 import type { HwfRun } from './hwf-two-host-ssh-target'
 import { execInTerminal, waitForTerminalOutput } from './terminal'
 
@@ -81,15 +81,18 @@ export type HwfProviderPaths = { codex: string; claude: string }
 
 export { listRootProcs, type RootProc }
 
+export type RootProcLister = (run: HwfRun) => RootProc[]
+
 async function waitForRootProc(
   run: HwfRun,
   pattern: RegExp,
   timeoutMs: number,
-  knownPids: ReadonlySet<number> = new Set()
+  knownPids: ReadonlySet<number> = new Set(),
+  listProcs: RootProcLister = listRootProcs
 ): Promise<RootProc | null> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const found = listRootProcs(run).find(
+    const found = listProcs(run).find(
       (proc) => pattern.test(proc.argv) && proc.cwd === run.repo && !knownPids.has(proc.pid)
     )
     if (found) {
@@ -114,7 +117,9 @@ export async function launchProviderOnOwningHost(
   page: Page,
   run: HwfRun,
   probe: HwfClientProbe,
-  providers: HwfProviderPaths
+  providers: HwfProviderPaths,
+  // Why injectable: the default scan runs unprivileged and cannot read another account's /proc/<pid>/cwd.
+  listProcs: RootProcLister = listRootProcs
 ): Promise<number | null> {
   const anyProvider = providers.codex.startsWith('/') || providers.claude.startsWith('/')
   if (!anyProvider) {
@@ -134,7 +139,11 @@ export async function launchProviderOnOwningHost(
     await window.__store?.getState().updateSettings({ defaultTuiAgent: agent })
   }, launchAs)
   const providerRe = new RegExp(`(^|[/\\s])${launchAs}(\\s|$)`)
-  const knownPids = snapshotRootPids(run, providerRe)
+  const knownPids = new Set(
+    listProcs(run)
+      .filter((proc) => providerRe.test(proc.argv))
+      .map((proc) => proc.pid)
+  )
   const tabsBefore = await countActiveWorktreeTabs(page)
   await launchFromNewTab(page, launchAs)
   // The click must have produced a tab; otherwise any process found below was not launched by it.
@@ -144,7 +153,7 @@ export async function launchProviderOnOwningHost(
       message: 'no new tab after launch'
     })
     .toBeGreaterThan(tabsBefore)
-  const proc = await waitForRootProc(run, providerRe, 60_000, knownPids)
+  const proc = await waitForRootProc(run, providerRe, 60_000, knownPids, listProcs)
   if (!proc) {
     console.log(
       `HWF_AGENT_A_LAUNCH=NOT_OBSERVED provider=${launchAs} reason=no-new-process-with-cwd-repo preexisting=${knownPids.size}`
@@ -152,7 +161,7 @@ export async function launchProviderOnOwningHost(
     throw new Error(`no new ${launchAs} process with cwd ${run.repo} under the root`)
   }
   await new Promise((resolve) => setTimeout(resolve, 10_000))
-  const stillAlive = listRootProcs(run).some((candidate) => candidate.pid === proc.pid)
+  const stillAlive = listProcs(run).some((candidate) => candidate.pid === proc.pid)
   expect(stillAlive).toBe(true)
   console.log(
     `HWF_AGENT_A_LAUNCH=observed provider=${launchAs} pid=${proc.pid} cwd=${proc.cwd} new_tab=yes preexisting=${knownPids.size}`
