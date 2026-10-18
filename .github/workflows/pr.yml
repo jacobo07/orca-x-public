@@ -103,6 +103,10 @@ jobs:
       - name: Check status semantics
         run: pnpm run check:status-semantics
 
+      # The operator's secret hook runs on one machine; this is the only control CI sees (threat model D6).
+      - name: Check tracked files for credentials
+        run: pnpm run check:tracked-secrets
+
       # Four gates the two merged programs each chained only into `lint`, which no workflow runs.
       - name: Check dispatch admission
         run: pnpm run check:dispatch-admission
