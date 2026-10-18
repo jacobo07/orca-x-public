@@ -21,7 +21,12 @@ import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
 import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
-import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
+import {
+  DeviceRegistry,
+  type DeviceEntry,
+  type DeviceScope,
+  type PendingDeviceEntry
+} from './device-registry'
 import {
   assertDeviceStillAuthorized,
   deviceRefusalDetail,
@@ -777,7 +782,7 @@ export class OrcaRuntimeRpcServer {
     const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
-    let device: DeviceEntry
+    let device: PendingDeviceEntry
     try {
       const reach = args.reach ?? 'network'
       device = args.rotate
@@ -970,7 +975,10 @@ export class OrcaRuntimeRpcServer {
     if (
       generation !== this.mobilePairingOfferGeneration ||
       relayProvider !== this.mobileRelayPairingProvider ||
-      currentDevice?.token !== device.token ||
+      currentDevice?.tokenHash !== device.tokenHash ||
+      // Why: `device` was read while pending, so it carries its raw token; this narrows it for the offer below
+      // and refuses rather than advertise `undefined` if that ever stops holding.
+      device.token === undefined ||
       this.deviceRegistry?.getMobilePairingConnectionMode(device.deviceId) !== 'automatic'
     ) {
       this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)

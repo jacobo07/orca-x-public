@@ -50,7 +50,7 @@
     },
     {
       "id": "runtime.device-registry",
-      "state": "<userData>/orca-devices.json — every paired device token, scope, reach, relay binding. A bare JSON array, so an older build still reads it.",
+      "state": "<userData>/orca-devices.json — every device's sha256 token digest, scope, reach, relay binding; the raw token only for the one never-scanned pending entry (D2). A bare JSON array, so an older build still reads it and refuses a digest-only device.",
       "writer": "src/main/runtime/device-registry.ts",
       "tier": "crash-durable",
       "lostIf": "Every pairing at once: the file was published by a rename with no fsync, so a power loss could leave it empty or torn, and the loader then treated an unreadable file as no devices. The writer now fsyncs before the rename, and an unparseable file is preserved as orca-devices.json.corrupt-<ms> while the registry fails closed; an I/O read failure leaves the file in place and the registry unavailable.",

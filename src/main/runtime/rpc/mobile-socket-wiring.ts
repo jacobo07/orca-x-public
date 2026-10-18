@@ -58,10 +58,14 @@ type MobileSocketWiringOptions = {
   onUnpairedDeviceAuthFailure?: (metadata: MobileSocketTransportMetadata) => void
 }
 
-function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
+// Why: the token the client just proved, not the stored one: at rest a paired device keeps only its digest.
+function toAuthenticatedDevice(
+  device: DeviceEntry,
+  presentedToken: string
+): E2EEAuthenticatedDevice {
   return {
     deviceId: device.deviceId,
-    deviceToken: device.token,
+    deviceToken: presentedToken,
     scope: device.scope
   }
 }
@@ -160,7 +164,7 @@ export class MobileSocketWiring {
           if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {
             return null
           }
-          return toAuthenticatedDevice(device)
+          return toAuthenticatedDevice(device, token)
         },
         onReady: (channel, device) => {
           const socket = {

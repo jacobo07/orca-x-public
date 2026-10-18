@@ -50,7 +50,9 @@ export function revokeDeviceAndTerminateConnections(
   try {
     return registry.removeDevice(device.deviceId)
   } finally {
-    if (registry.getDevice(device.deviceId) === null) {
+    // Why: sockets are keyed by the raw token, which is known only once the device authenticated this run;
+    // a device that never did has no sockets (D2 keeps only its digest at rest).
+    if (registry.getDevice(device.deviceId) === null && device.token !== undefined) {
       terminateConnections(device.token)
     }
   }

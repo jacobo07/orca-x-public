@@ -38,7 +38,9 @@ vi.mock('../git/worktree', () => {
 const STREAM_ID = 31
 
 // Why: the shared reader decrypts every frame as text, and an open stream also delivers binary output frames.
-function createTextResponseReader(session: Awaited<ReturnType<typeof authenticateMobileWsSession>>): {
+function createTextResponseReader(
+  session: Awaited<ReturnType<typeof authenticateMobileWsSession>>
+): {
   next: (
     id: string,
     predicate?: (response: Record<string, unknown>) => boolean
@@ -158,6 +160,9 @@ async function openRevokedRuntimeSession(): Promise<{
   // Why: D-18 — the live-connection kill can miss (relay-bound socket, failed close); correctness must not need it.
   vi.spyOn(server['mobileSocketWiring']!, 'terminateDeviceConnections').mockReturnValue(0)
   const deviceToken = server.getDeviceRegistry()!.getDevice(offer.deviceId)!.token
+  if (deviceToken === undefined) {
+    throw new Error('an authenticated device must carry its token in memory')
+  }
   return { server, session, responses, writes, deviceToken, deviceId: offer.deviceId }
 }
 
@@ -244,7 +249,10 @@ describe('revoked device whose socket survived the kill (row 58; characterizatio
       sendInputFrame(session, 'still authorized\r')
       await vi.waitFor(
         () =>
-          expect(writes).toContainEqual({ terminal: 'revoked-effect-pty', text: 'still authorized\r' }),
+          expect(writes).toContainEqual({
+            terminal: 'revoked-effect-pty',
+            text: 'still authorized\r'
+          }),
         { timeout: 60_000, interval: 25 }
       )
     } finally {
