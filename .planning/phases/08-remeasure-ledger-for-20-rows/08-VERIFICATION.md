@@ -7,7 +7,7 @@ covered_files:
   - .planning/phases/08-remeasure-ledger-for-20-rows/08-01-SUMMARY.md
   - config/dws-completion-matrix.jsonc
   - docs/dws/remeasure-2026-10-18-ledger.md
-covered_digest: "v1:sha256:a4d573f7f3e4e5eea4de2de462bfa8539c11386f8fb8d46180ffb2c8690c5ddf"
+covered_digest: "v1:sha256:d7cb30f93eec8104fd523f0d22d947002287271ef303fbb9ee8ea789ca8e8038"
 ---
 # Phase 8 Verification
 

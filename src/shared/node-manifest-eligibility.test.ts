@@ -194,4 +194,40 @@ describe('judgeNodeEligibility', () => {
     expect(r.verdict).toBe('ineligible')
     expect(JSON.stringify(r)).toContain('model-not-resident')
   })
+
+  // GEX44 on 2026-10-18: two gguf files on disk, one loaded behind :8081 (docs/dws/remeasure-2026-10-18-model-residency-drill.md).
+  describe('available is not resident', () => {
+    const residentOnly = (unanswered: number[] = []): Partial<Measurements> => ({
+      resident_model: {
+        status: 'measured',
+        value: {
+          endpoints: [{ port: 8081, model_ids: ['qwen3-coder-30b'] }],
+          unanswered_ports: unanswered
+        },
+        measured_at: T0,
+        max_age_ms: MAX,
+        source: 'test'
+      } as Measurements['resident_model']
+    })
+
+    it('a model on disk but not loaded is ineligible, the loaded one is eligible', () => {
+      const m = manifestAt(T0, residentOnly())
+      expect(
+        judgeNodeEligibility(m, { residentModel: { modelId: 'qwen3-coder-30b' } }, T0).verdict
+      ).toBe('eligible')
+      const r = judgeNodeEligibility(m, { residentModel: { modelId: 'qwen3-coder-next' } }, T0)
+      expect(r.verdict).toBe('ineligible')
+      expect(JSON.stringify(r)).toContain('model-not-resident')
+    })
+
+    it('absence is not definite while a probed port did not answer: unknown, never ineligible', () => {
+      const r = judgeNodeEligibility(
+        manifestAt(T0, residentOnly([8082])),
+        { residentModel: { modelId: 'qwen3-coder-next' } },
+        T0
+      )
+      expect(r.verdict).toBe('unknown')
+      expect(JSON.stringify(r)).toContain('unmeasured')
+    })
+  })
 })

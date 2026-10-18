@@ -911,8 +911,10 @@
       "row": "Model availability",
       "owner": "provider/routing",
       "done": "availability states fail closed",
-      "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-9",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         8
@@ -922,16 +924,29 @@
         "Phase 6",
         "federation P8 model client"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: PARTIAL — availability states fail closed not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/main/conversation/conversation-provider-routing.ts",
+          "note": "an auth check that rejects is treated as unavailable with the reason 'auth check failed: ...' instead of propagating; red-first test, and a mutant removing the catch goes red."
+        },
+        {
+          "kind": "file",
+          "path": "src/main/conversation/routed-conversation-turn.test.ts",
+          "note": "unavailable (signed out, quota exhausted, auth check rejected, excluded, no tools) is skipped with a reason and never routed; with none left the answer is a refusal naming every reason; run 2026-10-18."
+        }
+      ],
+      "reason": "phase 9 re-measure 2026-10-18: every unavailable state fails closed with a reason. Residual: an unobserved quota is fail-open by design and only the claude driver records quota."
     },
     {
       "id": 26,
       "row": "Model residency",
       "owner": "Resource Elasticity",
       "done": "AVAILABLE != RESIDENT drill",
-      "state": "ABSENT",
-      "stateSource": "stage-zero-seed",
+      "state": "PASS",
+      "stateSource": "measured",
+      "measuredIn": "phase-9",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         8
@@ -941,8 +956,19 @@
         "Phase 6",
         "federation P8 model client"
       ],
-      "evidence": [],
-      "reason": "Stage Zero: ABSENT — AVAILABLE != RESIDENT drill not yet evidenced"
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "docs/dws/remeasure-2026-10-18-model-residency-drill.md",
+          "note": "live read-only GEX44 reading: two gguf on disk, one resident behind :8081; the judging replay and two red mutants."
+        },
+        {
+          "kind": "file",
+          "path": "src/shared/node-manifest-eligibility.test.ts",
+          "note": "available is not resident: the on-disk model is ineligible (model-not-resident), the loaded one eligible, and absence with an unanswered probe is unknown; 14/14, mutants red."
+        }
+      ],
+      "reason": "phase 9 re-measure 2026-10-18: the drill shows an available-but-not-loaded model is not eligible. Residual: the judge is not wired to a live placement decision on the paired host."
     },
     {
       "id": 27,

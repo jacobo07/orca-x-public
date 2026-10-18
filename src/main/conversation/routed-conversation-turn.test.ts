@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
 import { ConversationService } from './conversation-service'
-import { routeConversationTurn, type ConversationProviderEntry } from './conversation-provider-routing'
+import {
+  routeConversationTurn,
+  type ConversationProviderEntry
+} from './conversation-provider-routing'
 import type { ProviderTurnRequest } from './conversation-turn-runner'
 import { ProviderQuotaObservations } from './provider-quota-observations'
 import { runRoutedConversationTurn } from './routed-conversation-turn'
@@ -39,6 +42,10 @@ function entry(
   }
 }
 
+async function rejectingAuth(): Promise<Auth> {
+  throw new Error('keychain locked')
+}
+
 const SIGNED_OUT: Auth = { ready: false, detail: 'codex credential is no-credential' }
 
 describe('routeConversationTurn', () => {
@@ -56,6 +63,37 @@ describe('routeConversationTurn', () => {
       outcome: 'routed',
       entry: { provider: 'claude' },
       skipped: [{ provider: 'codex', reason: 'codex credential is no-credential' }]
+    })
+  })
+
+  it('treats a provider whose auth check rejects as unavailable, with the reason, and tries the next', async () => {
+    const broken = { ...entry('codex'), checkAuth: rejectingAuth }
+    const route = await routeConversationTurn({
+      entries: [broken, entry('claude')],
+      requirement: {},
+      quota: new ProviderQuotaObservations(),
+      now
+    })
+
+    expect(route).toMatchObject({
+      outcome: 'routed',
+      entry: { provider: 'claude' },
+      skipped: [{ provider: 'codex', reason: 'auth check failed: keychain locked' }]
+    })
+  })
+
+  it('refuses, naming the failed auth check, when the only provider cannot be checked', async () => {
+    const broken = { ...entry('codex'), checkAuth: rejectingAuth }
+    const route = await routeConversationTurn({
+      entries: [broken],
+      requirement: {},
+      quota: new ProviderQuotaObservations(),
+      now
+    })
+
+    expect(route).toEqual({
+      outcome: 'refused',
+      skipped: [{ provider: 'codex', reason: 'auth check failed: keychain locked' }]
     })
   })
 
@@ -87,7 +125,12 @@ describe('routeConversationTurn', () => {
     const entries = [entry('claude'), entry('codex')]
 
     const during = await routeConversationTurn({ entries, requirement: {}, quota, now })
-    const after = await routeConversationTurn({ entries, requirement: {}, quota, now: now + 60_001 })
+    const after = await routeConversationTurn({
+      entries,
+      requirement: {},
+      quota,
+      now: now + 60_001
+    })
 
     expect(during).toMatchObject({ outcome: 'routed', entry: { provider: 'codex' } })
     expect(during.skipped[0]).toMatchObject({ provider: 'claude' })
@@ -97,9 +140,18 @@ describe('routeConversationTurn', () => {
 
   it('still routes to a provider on a warning, which is not exhaustion', async () => {
     const quota = new ProviderQuotaObservations()
-    quota.record('claude', { status: 'allowed_warning', utilization: 0.99, resetsAtMs: now + 60_000 }, now)
+    quota.record(
+      'claude',
+      { status: 'allowed_warning', utilization: 0.99, resetsAtMs: now + 60_000 },
+      now
+    )
 
-    const route = await routeConversationTurn({ entries: [entry('claude')], requirement: {}, quota, now })
+    const route = await routeConversationTurn({
+      entries: [entry('claude')],
+      requirement: {},
+      quota,
+      now
+    })
 
     expect(route).toMatchObject({ outcome: 'routed', entry: { provider: 'claude' } })
   })
@@ -108,7 +160,12 @@ describe('routeConversationTurn', () => {
     const entries = [entry('claude'), entry('codex')]
     const quota = new ProviderQuotaObservations()
 
-    const preferred = await routeConversationTurn({ entries, requirement: { prefersTools: true }, quota, now })
+    const preferred = await routeConversationTurn({
+      entries,
+      requirement: { prefersTools: true },
+      quota,
+      now
+    })
     const needed = await routeConversationTurn({
       entries: [entry('claude'), entry('codex', { auth: SIGNED_OUT })],
       requirement: { needsTools: true },
@@ -208,7 +265,11 @@ describe('runRoutedConversationTurn', () => {
     const providers = [entry('codex', { calls: codexCalls }), entry('claude')]
     const signedOutFirst = [entry('codex', { auth: SIGNED_OUT }), entry('claude')]
 
-    await runRoutedConversationTurn(deps(signedOutFirst), { conversationId: conversation.id, text: 'one', cwd: null })
+    await runRoutedConversationTurn(deps(signedOutFirst), {
+      conversationId: conversation.id,
+      text: 'one',
+      cwd: null
+    })
     const second = await runRoutedConversationTurn(deps(providers), {
       conversationId: conversation.id,
       text: 'two',

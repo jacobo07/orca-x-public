@@ -76,3 +76,7 @@ Then continue with the next phase in the same session. Never end a turn saying t
 ## Phase 8 done (2026-10-18)
 - Ledger docs/dws/remeasure-2026-10-18-ledger.md: rows 30 and 32 PASS from tests that ran (matrix 43/76); classes: MET 30 32; MEASURABLE 26 47 51 75; SMALL-GAP 25 48 50 55; LARGE-GAP 28 31 40 41 43 49; OUT-OF-PROGRAM 6 16 37(judge) 39. Agent subagent cap (30 calls) cut the first sweep; the rest was done inline.
 - Next: phase 9 (rows 25 26 28 30 31 32); rows 30 and 32 already done, 28 and 31 are LARGE-GAP.
+
+## Phase 9 done (2026-10-18)
+Rows 25 and 26 PASS (checker 45/76, exit 1, vitest 30/30). Row 25: rejecting auth check now skips the provider with a reason (red-first, mutant red). Row 26: available-is-not-resident tests plus GEX44 reading. Rows 28 and 31 stay PARTIAL (P3 gates unresolvable; no live two-machine evidence). Decision: rows 28/31 restated, not built, as LARGE-GAP.
+
