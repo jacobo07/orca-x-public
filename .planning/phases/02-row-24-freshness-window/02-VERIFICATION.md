@@ -10,8 +10,8 @@ covered_files:
   - src/main/runtime/rpc/methods/orchestration-mission.ts
   - src/shared/mission-job-locality.test.ts
   - src/shared/mission-job-locality.ts
-covered_digest: "v1:sha256:f0264422ffd371e7ae5dbd111017e219754db7050a472ecb16bf0b0c49c4884e"
-behavior_unverified: 0
+  - tests/e2e/hwf-two-host-mission-locality.spec.ts
+covered_digest: "v1:sha256:409714ff12b65f3d40997eda7ace093bf920d15fbac5a2720d023162e271d1e2"
 ---
 # 02 Verification
 
@@ -21,3 +21,4 @@ behavior_unverified: 0
 
 ## Not covered
 The stale setup is seeded with an old updatedAt, not aged by real elapsed time.
+- 2026-10-18 Owner pane: live leg ran -- r24f PASS: C:\Users\User\Apps\rbl\d4-ev-r24f-20261018-175542 (1 passed, HWF24_FRESHNESS_WINDOW, teardown REMAINING=0, witness unchanged). Status human_needed -> passed.

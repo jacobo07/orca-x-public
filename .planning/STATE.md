@@ -1,11 +1,11 @@
-# STATE: DWS rows 59, 24, 27, 17, 76, 52, 53, 54
+# STATE: DWS rows 59, 24, 27, 17, 76, 52, 53, 54 (milestone 1, done) + milestone 2: re-measure 20 open rows
 
 ## Current Position
-Phase: 2 of 7 (Row 24 freshness window)
-Status: Ready to plan (phase 1 complete: row 59 PASS, a98f54a5e3 + 36876b70e7 pushed, matrix 34/76)
-Last activity: 2026-10-18 16:55 phase 1 verified; mission m-b8541432cbf9 HALTED no_progress because its worker declared "the milestone's only phase" done without writing SUMMARY/VERIFICATION
+Phase: 8 of 12 (Re-measure ledger for all 20 rows) -- milestone 2 starts here
+Status: Ready to plan. Milestone 1 phases 1-7 done: rows 59 24 27 17 76 52 53 54 PASS, matrix 41/76 at rb-live e3d4f35e8d (pushed).
+Last activity: 2026-10-18 ~19:10 Owner pane: rows 24 and 17 live legs ran (RAM gate satisfied), S4-22 done in PP 465c6126, row 17 stamped; Owner "dale" added milestone 2 (phases 8-12) to ROADMAP.md. Phase 2/4 VERIFICATION files still say human_needed and their covered_digest is stale after the matrix edit: re-stamp them (status passed, the live legs ran: r24f d4-ev-r24f-20261018-175542, r17t2 d4-ev-r17t2-20261018-1828) before planning phase 8.
 
-## THIS MILESTONE HAS 7 PHASES
+## MILESTONE 2 HAS 5 PHASES (8-12); THE ROADMAP HAS 12
 A phase is complete only when every plan has its `NN-MM-SUMMARY.md` and the phase has `NN-VERIFICATION.md`
 (status passed, `covered_digest` from `gsd-tools query verification.fingerprint <phase dir> <files...>`).
 Then continue with the next phase in the same session. Never end a turn saying the work is finished while
@@ -54,3 +54,21 @@ Then continue with the next phase in the same session. Never end a turn saying t
 - Row 54 promoted two standards (bypass consent never answered, transfer read back on the target) into multi_host_fabric B1 through ratchet.promote. The Ink CSI C trap was not promoted: its fix is in the live-leg harness outside this repo, so no check here can witness it.
 - PP commits 8b776241, 18bc67aa, a1f5f45b, 52c7ab29 on branch dws/pp-rows in pp-dws-rows-wt are LOCAL and unpushed. OWNER DECISION NEEDED: push dws/pp-rows to the PP remote (outward-facing). My pick: push after reviewing; nothing in this repo depends on the push.
 - Phase digests were re-stamped after the last matrix edit; any further matrix edit makes them stale again.
+## 2026-10-18 ~18:30 row 17 laptop ssh -L tunnel leg MEASURED (run from the Owner's pane, not by this worker)
+- Worktree C:\Users\User\Apps\orca-p5-ft2-wt, detached 79f54d64af (src + lockfile == deployed 3266e1a), OWN node_modules (pnpm install; windows-native-registry native.node copied from orca-d4-x13r-wt, no VS). Runner config\scripts\dws-node-manifest-run.ps1 -FanOut, Git on PATH. No deploy.
+- Run 1: memory/vram/resident_model MATCH, disk UNJUDGED control-unstable (GEX44 disk moved 3.1 GB during the run). Evidence C:\Users\User\Apps\rbl\d4-ev-r17t1-20261018-1825.
+- Run 2: 4/4 MATCH (disk drift 12 MB < 1 GB), runtimeIdMatchesServe true, MainPID 3357463 unchanged, tunnelProcs 0, listeners 0, e2eElectron 0, serve active. Evidence C:\Users\User\Apps\rbl\d4-ev-r17t2-20261018-1828 (phase-5-node-manifest.json sha256 CD75A84A764B2B9C..), no pairing secret in it.
+- Row 17 now owes ONLY UWCP S4-22: spec PP 5c57f4a4 (dws/pp-rows) vault/specs/uwcp-s4-22-node-adapter.md; AC-4 known_heads not met. Matrix row 17 NOT edited by the Owner pane: stamp it from this evidence.
+
+## 2026-10-18 ~18:45 UWCP S4-22 DONE (Owner 'rec both')
+- PP dws/pp-rows 465c6126 (on 5c57f4a4, both LOCAL, unpushed): node.py exposes known_heads per orca-node-manifest-1.schema.json (absent=None, non-empty list of non-empty strings, duplicates allowed). GSDX_NODE 23/23; mutants red (8b776241 code 8 gates, no validation 5, empty accepted 1).
+- uwcp.md line 74: orca.node-manifest/1 supersedes KSR capabilities.json. Spec vault/specs/uwcp-s4-22-node-adapter.md status DONE, AC-1..6 MET.
+- Row 17: both owed items now done (tunnel leg 4/4 MATCH + S4-22). Matrix row 17 still to be stamped PASS from this evidence.
+
+## 2026-10-18 ~19:00 ROW 17 PASS pushed (Owner 'y')
+- orca-x/dws-rebaseline-live d2d306d431..e3d4f35e8d (ls-remote verified): matrix row 17 PASS + docs/dws/live-2026-10-18-row-17-tunnel-{evidence.md,fanout.json}. Matrix 41/76 PASS; checker test 30/30.
+- PP dws/pp-rows pushed 52c7ab29..465c6126 (S4-22 spec + known_heads).
+- The matrix edit makes phase digests (04-VERIFICATION covered_digest) stale: re-stamp before trusting GSD phase status. Mission m-ba51631958f0's OWNER_BOUNDARY (free 6 GB for row 17) is now satisfied: nothing left for it on rows 17/24.
+
+## D1 resolved (Owner 2026-10-18, worker epoch 2)
+- RAM boundary resolved by the Owner pane: row 24 r24f PASS, row 17 r17t2 4/4 MATCH, S4-22 done in PP 465c6126, row 17 PASS at e3d4f35e8d. The earlier OWNER DECISION NEEDED (push dws/pp-rows) and the row 17 NOT_RUN note are superseded. Phases 1-7 VERIFICATION digests re-stamped. Do not re-run the row 17 or 24 legs. Continuing with milestone 2 from phase 8.

@@ -11,7 +11,7 @@ covered_files:
   - docs/dws/bk-bakeoff.json
   - docs/dws/bk-measure.json
   - docs/dws/live-2026-10-18-row-27-local-inference-bakeoff.md
-covered_digest: "v1:sha256:9604f3e326400f6d7c823dd9e1d5e8a147d3acac91a723d741055219dc7fe171"
+covered_digest: "v1:sha256:1482a3f0497b4d8dc6ab0f6e4ed78a856dba45071826e7572d25b9806c1dd94e"
 behavior_unverified: 0
 ---
 # Phase 3 Verification
