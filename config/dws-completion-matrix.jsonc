@@ -1742,7 +1742,9 @@
       "owner": "goldens",
       "done": "each golden PASS",
       "state": "PARTIAL",
-      "stateSource": "stage-zero-seed",
+      "stateSource": "measured",
+      "measuredIn": "rb-live row 51 golden classification",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         12
@@ -1751,7 +1753,7 @@
         "Phases 2-11"
       ],
       "evidence": [],
-      "reason": "phase 12 re-measure 2026-10-18 on the Windows laptop (RAM 6.1 GB, one Electron, teardown 0 electron processes): with --lang=en-US golden-file-open-edit-save PASSES; golden-agent-tui-launch, golden-core-flows (existing-user) and golden-fresh-profile-terminal FAIL because the Codex preset and Add Project controls are not found on this host, unclassified as product or environment; golden-core-flows new-user did not run. Without --lang the four fail on Spanish labels. Residual: one passing golden of four."
+      "reason": "2026-10-18 re-measure on the Windows laptop with --lang=en-US (one worker, teardown 0 electron processes). Phase 12's three failures were classified as STALE SPECS against deliberate fork changes and fixed in the specs: the codex agent is labelled ChatGPT (fe30a7426d); the file panel docks left and the project sidebar yields to it (fbc3e6caa9, 4e31989ce3), so Add Project is hidden until the panel closes; an expanded terminal rail replaces strip tabs; git reports forward-slash repo paths on Windows; a forced New tab click during titlebar settle hit the app menu (agent-tui failed 2 of 4 runs before the fix, 3 of 3 after). Now PASS: golden-file-open-edit-save, golden-fresh-profile-terminal, golden-agent-tui-launch, golden-core-flows existing-user. FAIL, PRODUCT GAP (not fixed): golden-core-flows new-user stops at the workspace tour's last step 'Start another task in parallel', whose target workspace-create-control lives in SidebarHeader, which is not rendered while the left-docked panel holds the region, so a new user on the default layout never sees that step. Residual: that tour step needs a product decision (reveal the project sidebar for the step, or retarget it). Logs: Apps\\rbl\\r51-final-en.log, r51-tui-x3.log."
     },
     {
       "id": 52,

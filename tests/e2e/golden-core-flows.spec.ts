@@ -13,6 +13,7 @@ import {
   waitForPaneCount,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
+import { showTerminalTabStrip } from './helpers/terminal-tab-strip'
 
 const tempRoots: string[] = []
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
@@ -51,7 +52,11 @@ async function createGitRepo(prefix: string, name: string): Promise<string> {
   execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
   execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
   execFileSync('git', ['branch', '-M', 'main'], { cwd: repoPath, stdio: 'pipe' })
-  return repoPath
+  // Why: the store holds the path git reports, which uses forward slashes on Windows.
+  return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: repoPath,
+    encoding: 'utf8'
+  }).trim()
 }
 
 async function chooseFolderInNativeDialog(
@@ -94,7 +99,8 @@ async function continueOnboarding(page: Page): Promise<void> {
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
-  const codexButton = page.getByRole('button', { name: /^Codex\s/ })
+  // Why: the codex agent is offered as ChatGPT, a brand label that is never translated.
+  const codexButton = page.getByRole('button', { name: /^ChatGPT\s/ })
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -211,6 +217,14 @@ async function addProjectFromSidebar(
   repoPath: string
 ): Promise<void> {
   await chooseFolderInNativeDialog(electronApp, repoPath)
+  // Why: the file panel docks left by default and the project sidebar yields to it while it is open.
+  const panelHoldsLeftRegion = await page.evaluate(() => {
+    const state = window.__store?.getState()
+    return state?.sidePanelDock === 'left' && state.rightSidebarOpen
+  })
+  if (panelHoldsLeftRegion) {
+    await page.getByRole('button', { name: 'Toggle right sidebar', exact: true }).first().click()
+  }
   await page
     .getByRole('button', { name: /Add Project/i })
     .first()
@@ -310,6 +324,7 @@ async function waitForTerminalPaneManager(page: Page): Promise<void> {
 }
 
 async function createTerminalTabThroughMenu(page: Page): Promise<void> {
+  await showTerminalTabStrip(page)
   const tabIdsBefore = await renderedTabIds(page)
   await page.getByRole('button', { name: 'New tab' }).click({ force: true })
   const newTerminalMenuItem = page.getByRole('menuitem', { name: /New Terminal/i }).first()
