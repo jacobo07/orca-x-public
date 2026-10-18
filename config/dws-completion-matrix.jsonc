@@ -491,7 +491,7 @@
         "UWCP S2 gate (other pane)"
       ],
       "evidence": [],
-      "reason": "untested"
+      "reason": "phase 12 re-measure 2026-10-18: OUT-OF-PROGRAM. The capsule gate is UWCP S2 (workspace.py) in the CPP repo; Orca owns no artifact to test. Unchanged PARTIAL."
     },
     {
       "id": 17,
@@ -1405,7 +1405,7 @@
         "Phases 2-11"
       ],
       "evidence": [],
-      "reason": "Orca"
+      "reason": "phase 12 re-measure 2026-10-18: OUT-OF-PROGRAM. Stale-write refusal rests on UWCP log ordering plus the control verbs, which Orca cannot supply (see rows 1 2 4). Unchanged ABSENT."
     },
     {
       "id": 40,
@@ -1700,7 +1700,7 @@
         "Phases 2-11"
       ],
       "evidence": [],
-      "reason": "program"
+      "reason": "phase 12 re-measure 2026-10-18: LARGE-GAP. No program threat model exists (docs and config search finds only agent-skill-sharing plans); per-class gates exist (check:workspace-trust-authority, check:ipc-message-floor). Residual: write the named threat list, then map each class to a control or a named debt."
     },
     {
       "id": 50,
@@ -1741,7 +1741,7 @@
       "row": "Product Reality",
       "owner": "goldens",
       "done": "each golden PASS",
-      "state": "ABSENT",
+      "state": "PARTIAL",
       "stateSource": "stage-zero-seed",
       "required": true,
       "phases": [
@@ -1751,7 +1751,7 @@
         "Phases 2-11"
       ],
       "evidence": [],
-      "reason": "Stage Zero: ABSENT — each golden PASS not yet evidenced"
+      "reason": "phase 12 re-measure 2026-10-18 on the Windows laptop (RAM 6.1 GB, one Electron, teardown 0 electron processes): with --lang=en-US golden-file-open-edit-save PASSES; golden-agent-tui-launch, golden-core-flows (existing-user) and golden-fresh-profile-terminal FAIL because the Codex preset and Add Project controls are not found on this host, unclassified as product or environment; golden-core-flows new-user did not run. Without --lang the four fail on Spanish labels. Residual: one passing golden of four."
     },
     {
       "id": 52,
@@ -1873,7 +1873,7 @@
         "Phase 12"
       ],
       "evidence": [],
-      "reason": "Stage Zero: ABSENT — planted regression red not yet evidenced"
+      "reason": "phase 12 re-measure 2026-10-18: no gate is named for inheritance. The durability and workspace-surface-claims gate suites pass (68 tests, with mutant-aware cases), but the mobile capability aperture gate is red at HEAD (6 host RPC methods unbaselined, 2 allowlisted methods unsurfaced), a real catch not a planted regression. Residual: pick the inheritance check, plant one regression on a copy, run a clean control."
     },
     {
       "id": 56,

@@ -10,7 +10,7 @@ covered_files:
   - src/main/conversation/conversation-provider-routing.ts
   - src/main/conversation/routed-conversation-turn.test.ts
   - src/shared/node-manifest-eligibility.test.ts
-covered_digest: "v1:sha256:6d859b84b4b040c0ae019b119e7e97d49469e00da6581edf25c295fedf5e523c"
+covered_digest: "v1:sha256:a423960c0150fd9406f6f8214c7cf3bcebbabcea007e7ceb45b72adcd3edd8ac"
 ---
 # Phase 9 Verification
 

@@ -86,3 +86,5 @@ Rows 6 40 41 43 restated with measured reasons and named residuals; states uncha
 
 
 - 2026-10-18 phase 11 done: rows 47 48 50 75 restated; old-host test for mission verbs (mutant red). Row 50 hydration latency and row 47 node-offline drill remain residual (no live leg). Matrix 45/76.
+
+- 2026-10-18 phase 12 done: rows 16 39 (out of program) 49 (large gap) 55 restated; row 51 ABSENT to PARTIAL (1 of 4 goldens PASS with --lang=en-US). Finding: mobile capability aperture gate is red at HEAD (6 host RPC methods unbaselined). Matrix 45/76.

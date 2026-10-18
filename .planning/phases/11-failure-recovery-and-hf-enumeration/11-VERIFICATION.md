@@ -8,7 +8,7 @@ covered_files:
   - config/dws-completion-matrix.jsonc
   - docs/dws/remeasure-2026-10-18-hf-cross-host-enumeration.md
   - src/cli/handlers/orchestration-mission-place-cli.test.ts
-covered_digest: "v1:sha256:eab8e2f2948cac6831af8613928f7c04222c26356170a10b9686c9add6fad564"
+covered_digest: "v1:sha256:342d4ea5092fbd238bc68bbebefdfbeefbc86d4de6692521ea330fe421debfeb"
 ---
 # Phase 11 Verification
 

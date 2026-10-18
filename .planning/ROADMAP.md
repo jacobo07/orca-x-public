@@ -24,7 +24,7 @@ Owner decisions 2026-10-18 are in STATE.md and are binding.
 - [x] **Phase 9: Models and routing (rows 25 26 28 30 31 32)** - availability, residency, cognitive routing, quota, identity portability, model switching
 - [x] **Phase 10: Observability and mission integration (rows 6 40 41 43)** - explain query, one trace, economics per execution, Workstream subject on tasks
 - [ ] **Phase 11: Robustness legs (rows 47 48 50 75)** - node offline / client dies drills, mixed-version matrix, hydration latency, two-host production reality
-- [ ] **Phase 12: Remaining rows (16 37 39 49 51 55)** - workspace capsule, verification policy, multi-client consistency, security, product reality, inheritance
+- [x] **Phase 12: Remaining rows (16 37 39 49 51 55)** - workspace capsule, verification policy, multi-client consistency, security, product reality, inheritance
 
 ## Phase Details
 
