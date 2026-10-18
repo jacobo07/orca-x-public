@@ -101,7 +101,16 @@ export const ORCHESTRATION_MISSION_METHODS: RpcMethod[] = [
         tasks.flatMap((taskId) => {
           const subject = parseDelegationSubject(db.getTask(taskId)?.subject ?? null)
           return subject.kind === 'subject'
-            ? [[taskId, hydratedAddressesForProject(subject.subject.projectId, setups)]]
+            ? [
+                [
+                  taskId,
+                  hydratedAddressesForProject(
+                    subject.subject.projectId,
+                    setups,
+                    observation.completedAt
+                  )
+                ]
+              ]
             : []
         })
       )

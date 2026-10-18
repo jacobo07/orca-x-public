@@ -1,16 +1,21 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  HYDRATED_SETUP_MAX_AGE_MS,
   hydratedAddressesForProject,
   taskDependencies,
   type ProjectSetupClaim
 } from './mission-job-locality'
 
+const DAY = 24 * 60 * 60 * 1000
+const NOW = 1_800_000_000_000
+
 function claim(
   projectId: string,
   hostId: ProjectSetupClaim['hostId'],
-  setupState: ProjectSetupClaim['setupState']
+  setupState: ProjectSetupClaim['setupState'],
+  updatedAt = NOW
 ): ProjectSetupClaim {
-  return { projectId, hostId, setupState }
+  return { projectId, hostId, setupState, updatedAt }
 }
 
 describe('hydratedAddressesForProject', () => {
@@ -20,39 +25,72 @@ describe('hydratedAddressesForProject', () => {
       claim('Q', 'runtime:a', 'ready'),
       claim('P', 'local', 'ready')
     ]
-    expect(hydratedAddressesForProject('P', setups).sort()).toEqual(['local', 'runtime:b'])
-    expect(hydratedAddressesForProject('Q', setups)).toEqual(['runtime:a'])
+    expect(hydratedAddressesForProject('P', setups, NOW).sort()).toEqual(['local', 'runtime:b'])
+    expect(hydratedAddressesForProject('Q', setups, NOW)).toEqual(['runtime:a'])
   })
 
   it('is empty for an empty registry and for a project nobody holds', () => {
-    expect(hydratedAddressesForProject('P', [])).toEqual([])
-    expect(hydratedAddressesForProject('Z', [claim('P', 'local', 'ready')])).toEqual([])
+    expect(hydratedAddressesForProject('P', [], NOW)).toEqual([])
+    expect(hydratedAddressesForProject('Z', [claim('P', 'local', 'ready')], NOW)).toEqual([])
   })
 
   it('counts a setup in any state other than ready as not hydrated', () => {
     for (const state of ['not-set-up', 'setting-up', 'error', 'unsupported'] as const) {
-      expect(hydratedAddressesForProject('P', [claim('P', 'runtime:b', state)])).toEqual([])
+      expect(hydratedAddressesForProject('P', [claim('P', 'runtime:b', state)], NOW)).toEqual([])
     }
-    expect(hydratedAddressesForProject('P', [claim('P', 'runtime:b', 'ready')])).toEqual([
+    expect(hydratedAddressesForProject('P', [claim('P', 'runtime:b', 'ready')], NOW)).toEqual([
       'runtime:b'
     ])
   })
 
   it('lists a host once however many ready setups name it', () => {
     const setups = [claim('P', 'runtime:b', 'ready'), claim('P', 'runtime:b', 'ready')]
-    expect(hydratedAddressesForProject('P', setups)).toEqual(['runtime:b'])
+    expect(hydratedAddressesForProject('P', setups, NOW)).toEqual(['runtime:b'])
   })
 
-  it('does not read the setup update time: a full setup record gives the same answer at any updatedAt', () => {
-    const base = { projectId: 'P', hostId: 'runtime:b' as const, setupState: 'ready' as const }
-    for (const updatedAt of [0, 1, Date.now()]) {
-      const full = { ...base, updatedAt }
-      expect(hydratedAddressesForProject('P', [full])).toEqual(['runtime:b'])
+  it('keeps the window at 7 days', () => {
+    expect(HYDRATED_SETUP_MAX_AGE_MS).toBe(7 * 24 * 60 * 60 * 1000)
+  })
+
+  it('counts a ready setup inside the window as hydrated and an older one as not', () => {
+    const fresh = claim('P', 'runtime:a', 'ready', NOW - DAY)
+    const stale = claim('P', 'runtime:b', 'ready', NOW - 8 * DAY)
+    expect(hydratedAddressesForProject('P', [fresh, stale], NOW)).toEqual(['runtime:a'])
+  })
+
+  it('treats exactly 7 days as fresh and one millisecond more as stale', () => {
+    const edge = HYDRATED_SETUP_MAX_AGE_MS
+    expect(
+      hydratedAddressesForProject('P', [claim('P', 'local', 'ready', NOW - edge)], NOW)
+    ).toEqual(['local'])
+    expect(
+      hydratedAddressesForProject('P', [claim('P', 'local', 'ready', NOW - edge - 1)], NOW)
+    ).toEqual([])
+  })
+
+  it('treats a missing or non-finite update time as not hydrated', () => {
+    for (const updatedAt of [undefined, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const setup = { ...claim('P', 'runtime:b', 'ready'), updatedAt } as ProjectSetupClaim
+      expect(hydratedAddressesForProject('P', [setup], NOW)).toEqual([])
     }
   })
 
-  it('has no field for a setup time in its input type', () => {
-    expectTypeOf<keyof ProjectSetupClaim>().toEqualTypeOf<'projectId' | 'hostId' | 'setupState'>()
+  it('treats an update time in the future (clock skew) as fresh', () => {
+    expect(
+      hydratedAddressesForProject('P', [claim('P', 'runtime:b', 'ready', NOW + DAY)], NOW)
+    ).toEqual(['runtime:b'])
+  })
+
+  it('reads the injected clock, not the wall clock', () => {
+    const setup = claim('P', 'runtime:b', 'ready', 1_000)
+    expect(hydratedAddressesForProject('P', [setup], 1_000 + DAY)).toEqual(['runtime:b'])
+    expect(hydratedAddressesForProject('P', [setup], 1_000 + 30 * DAY)).toEqual([])
+  })
+
+  it('carries the setup time in its input type', () => {
+    expectTypeOf<keyof ProjectSetupClaim>().toEqualTypeOf<
+      'projectId' | 'hostId' | 'setupState' | 'updatedAt'
+    >()
   })
 })
 

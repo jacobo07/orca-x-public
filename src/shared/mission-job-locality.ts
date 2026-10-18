@@ -1,15 +1,31 @@
 import type { ProjectHostSetup } from './project-types'
 
-// Registry claim read at call time, not a probe of the host; updatedAt is not a measurement time and is deliberately not read.
-export type ProjectSetupClaim = Pick<ProjectHostSetup, 'projectId' | 'hostId' | 'setupState'>
+// Registry claim read at call time, not a probe of the host; updatedAt is only a staleness bound, not a measurement time.
+export type ProjectSetupClaim = Pick<
+  ProjectHostSetup,
+  'projectId' | 'hostId' | 'setupState' | 'updatedAt'
+>
 
-/** Host ids holding a ready setup of the project; any other state, or no setup, is not hydrated. */
+/** A ready setup older than this is unhydrated for placement; it stays eligible, it just ranks later. */
+export const HYDRATED_SETUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Host ids holding a fresh ready setup of the project; any other state, a stale or unreadable
+ * update time, or no setup, is not hydrated. A future update time (clock skew) counts as fresh.
+ */
 export function hydratedAddressesForProject(
   projectId: string,
-  setups: readonly ProjectSetupClaim[]
+  setups: readonly ProjectSetupClaim[],
+  now: number
 ): ProjectSetupClaim['hostId'][] {
   const hosts = setups
-    .filter((setup) => setup.projectId === projectId && setup.setupState === 'ready')
+    .filter(
+      (setup) =>
+        setup.projectId === projectId &&
+        setup.setupState === 'ready' &&
+        Number.isFinite(setup.updatedAt) &&
+        now - setup.updatedAt <= HYDRATED_SETUP_MAX_AGE_MS
+    )
     .map((setup) => setup.hostId)
   return [...new Set(hosts)]
 }
