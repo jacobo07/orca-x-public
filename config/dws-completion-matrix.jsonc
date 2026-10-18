@@ -1672,7 +1672,7 @@
       "row": "Knowledge Vault",
       "owner": "vault",
       "done": "records written",
-      "state": "ABSENT",
+      "state": "PASS",
       "stateSource": "measured",
       "required": true,
       "phases": [
@@ -1686,18 +1686,28 @@
           "kind": "commit",
           "sha": "a3e7239a51db",
           "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-18-rows-52-53-vault-and-ukdl.md",
+          "note": "the four records, the four UKDL entries, the search for duplicates, the validator result"
+        },
+        {
+          "kind": "commit",
+          "sha": "a1f5f45b",
+          "note": "claude-power-pack branch dws/pp-rows (LOCAL, not pushed)"
         }
       ],
-      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): the Knowledge Vault is the PP vault (vault/lessons holds 46 tracked files at CPP 30fdbf0fc73a, none names dws) and docs/orca-cognitive-workspace-spec.md:184 states \"no second Knowledge Vault\" while this repo documents no vault location (git ls-files docs | grep -i -E 'vault|knowledge' finds only docs/ai-vault-process-isolation-plan.md, the session AI-vault feature); ROADMAP Phase 10 SC1 expects \"this repo's documented locations\", so +OWNER:name-vault-record-location-or-authorize-cpp-write; staging records here (docs/dws) would not be the vault.; measured=`ls /home/kobii/.claude/skills/claude-power-pack/vault | head -30`. Prior (stage-zero-seed): program",
-      "measuredIn": "dwsrb phase 1",
-      "measuredAt": "2026-10-15"
+      "reason": "PASS 2026-10-18: four records in the PP vault/lessons (Ink CSI C, service-home restore, bypass consent, transfer read-back), each citing an Orca evidence file and a commit, in the format of the existing lesson files; PP commit a1f5f45b is local, push is Owner-gated. The earlier BLOCKED_EXTERNAL state is superseded by the dws/pp-rows write grant. Prior: BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): the Knowledge Vault is the PP vault (vault/lessons holds 46 tracked files at CPP 30fdbf0fc73a, none names dws) and docs/orca-cognitive-workspace-spec.md:184 states \"no second Knowledge Vault\" while this repo documents no vault location (git ls-files docs | grep -i -E 'vault|knowledge' finds only docs/ai-vault-process-isolation-plan.md, the session AI-vault feature); ROADMAP Phase 10 SC1 expects \"this repo's documented locations\", so +OWNER:name-vault-record-location-or-authorize-cpp-write; staging records here (docs/dws) would not be the vault.; measured=`ls /home/kobii/.claude/skills/claude-power-pack/vault | head -30`. Prior (stage-zero-seed): program",
+      "measuredIn": "rb-live phase 6 (PP worktree dws/pp-rows)",
+      "measuredAt": "2026-10-18"
     },
     {
       "id": 53,
       "row": "UKDL",
       "owner": "ukdl",
       "done": "evidence-backed rules",
-      "state": "ABSENT",
+      "state": "PASS",
       "stateSource": "measured",
       "required": true,
       "phases": [
@@ -1711,11 +1721,21 @@
           "kind": "commit",
           "sha": "a3e7239a51db",
           "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-18-rows-52-53-vault-and-ukdl.md",
+          "note": "the four records, the four UKDL entries, the search for duplicates, the validator result"
+        },
+        {
+          "kind": "commit",
+          "sha": "a1f5f45b",
+          "note": "claude-power-pack branch dws/pp-rows (LOCAL, not pushed)"
         }
       ],
-      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): UKDL lives in the PP repo (vault/knowledge_base/ukdl-universal.md and per-topic UKDL_CANDIDATES_*.md at 30fdbf0fc73a) and a project hard rule is one entry in that project's UKDL section, while this repo tracks no UKDL file (git ls-files | grep -i ukdl is empty, only the ukdl/1.0 wire envelope is named in docs/reference/autonomous-engineering-os.md:37); done cannot be met in this repo, +OWNER:name-vault-record-location-or-authorize-cpp-write as for row 52.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i ukdl | head`. Prior (stage-zero-seed): program",
-      "measuredIn": "dwsrb phase 1",
-      "measuredAt": "2026-10-15"
+      "reason": "PASS 2026-10-18: four T-* entries with Fix and Evidence appended to the PP ukdl-universal.md after a search that found no duplicate; PP commit a1f5f45b is local, push is Owner-gated. The earlier BLOCKED_EXTERNAL state is superseded by the dws/pp-rows write grant. Prior: BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): UKDL lives in the PP repo (vault/knowledge_base/ukdl-universal.md and per-topic UKDL_CANDIDATES_*.md at 30fdbf0fc73a) and a project hard rule is one entry in that project's UKDL section, while this repo tracks no UKDL file (git ls-files | grep -i ukdl is empty, only the ukdl/1.0 wire envelope is named in docs/reference/autonomous-engineering-os.md:37); done cannot be met in this repo, +OWNER:name-vault-record-location-or-authorize-cpp-write as for row 52.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i ukdl | head`. Prior (stage-zero-seed): program",
+      "measuredIn": "rb-live phase 6 (PP worktree dws/pp-rows)",
+      "measuredAt": "2026-10-18"
     },
     {
       "id": 54,
