@@ -136,6 +136,9 @@ emulator.shutdown
 emulator.tap
 emulator.type
 emulator.unregisterActive
+# Added 2026-10-18, a mobile gap, not by design: host environment preparation (DWS-20). The handlers accept remote callers and runPrepareStep already requires the approved content hash and host key, so a phone could request it behind that approval; no mobile surface yet. Audit: environment.*, measured-open.
+environment.measureRequirements
+environment.runPrepareStep
 files.commitUpload
 files.copy
 files.createDir
@@ -237,8 +240,15 @@ orchestration.gateCreate
 orchestration.gateList
 orchestration.gateResolve
 orchestration.inbox
+# Added 2026-10-18, host-only by design: placement has this host observe its own paired runtimes, so the handler refuses every remote caller (remote_caller_refused).
+orchestration.missionPlace
+# Added 2026-10-18, a mobile gap, not by design: same family as orchestration.* (measured-open P1 in the audit). The handlers accept remote callers; mobile has no surface to read mission placements or to request and inspect reviews.
+orchestration.missionResults
 orchestration.reply
 orchestration.reset
+# Added 2026-10-18, a mobile gap, not by design: same family as orchestration.* (measured-open P1 in the audit). The handlers accept remote callers; mobile has no surface to read mission placements or to request and inspect reviews.
+orchestration.reviewRequest
+orchestration.reviewShow
 orchestration.run
 orchestration.runCreate
 orchestration.runCurrent

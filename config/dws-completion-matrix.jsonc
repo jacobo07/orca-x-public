@@ -1873,7 +1873,7 @@
         "Phase 12"
       ],
       "evidence": [],
-      "reason": "phase 12 re-measure 2026-10-18: no gate is named for inheritance. The durability and workspace-surface-claims gate suites pass (68 tests, with mutant-aware cases), but the mobile capability aperture gate is red at HEAD (6 host RPC methods unbaselined, 2 allowlisted methods unsurfaced), a real catch not a planted regression. Residual: pick the inheritance check, plant one regression on a copy, run a clean control."
+      "reason": "phase 12 re-measure 2026-10-18: no gate is named for inheritance. The durability and workspace-surface-claims gate suites pass (68 tests, with mutant-aware cases), but the mobile capability aperture gate is red at HEAD (6 host RPC methods unbaselined, 2 allowlisted methods unsurfaced), a real catch not a planted regression. Later 2026-10-18: those 8 methods were classified (1 host-only by design, 5 gaps, 2 unsurfaced) and baselined with arguments, so the aperture gate is green again; dropping one baseline entry turns it red. Residual: pick the inheritance check, plant one regression on a copy, run a clean control."
     },
     {
       "id": 56,

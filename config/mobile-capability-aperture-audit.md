@@ -253,6 +253,28 @@ A settings write mobile cannot perform; mobile reads settings but cannot set thi
 
 `settings.updatePRBotAuthorOverride`
 
+## Added after the first audit
+
+### 2026-10-18 — six host-only methods and two unsurfaced ones that landed without a decision
+
+The gate was red on `orca-x/dws-rebaseline-live`: DWS and federation work added these between
+2026-09-24 and 2026-10-14 and none recorded a disposition. Each is classified from its handler,
+and each baseline line carries the argument. No new `measured-open` registry row was filed (the
+registry ratchet forbids new debt there); the gaps join families this audit already classifies.
+
+- `orchestration.missionPlace` — host-only **by design**: placement has this host observe its own
+  paired runtimes, so the handler refuses every remote caller (`remote_caller_refused`).
+- `orchestration.missionResults`, `orchestration.reviewRequest`, `orchestration.reviewShow` —
+  **gaps** in the `orchestration.*` family (measured-open, P1): the handlers accept remote callers;
+  mobile has no surface to read mission placements or to request and inspect reviews.
+- `environment.measureRequirements`, `environment.runPrepareStep` — **gaps**, a new
+  `environment.*` family (measured-open, P2): host environment preparation (DWS-20). The handlers
+  accept remote callers and `runPrepareStep` already requires the approved content hash and host
+  key, so a phone could request it behind that approval.
+- `conversations.subscribe`, `conversations.unsubscribe` — allowlisted (reach) by 04690f984b,
+  capability-gated, but named by no client: the serving half exists, a mobile conversation screen
+  does not. Baselined in `config/mobile-rpc-unsurfaced-baseline.txt`.
+
 ## Keeping this honest
 
 `pnpm check:mobile-aperture` re-derives these numbers and fails when a NEW host-only method

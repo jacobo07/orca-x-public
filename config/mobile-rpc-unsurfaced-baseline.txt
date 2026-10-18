@@ -12,6 +12,9 @@ agentTeams.prepareLaunch
 agentTeams.tmuxCompat
 aiVault.resolveSessionTitles
 browser.viewport
+# Added 2026-10-18: allowlisted for paired clients by 04690f984b (capability-gated); no client names them yet. The serving half exists, a mobile conversation screen does not.
+conversations.subscribe
+conversations.unsubscribe
 diagnostics.memory
 files.browseServerDir
 files.readChunk
