@@ -27,13 +27,11 @@ const REFUSAL_REASONS = Object.keys(REFUSALS) as HostTranslationRefusal[]
 const TARGET_UNAVAILABLE_REASONS = ['target-workspace-missing', 'source-setup-missing'] as const
 
 const DISPOSITIONS: Record<ContinuePaneDisposition, true> = {
-  reattach: true,
   resume: true,
   restart: true,
   unavailable: true
 }
 const PANE_REASONS: Record<ContinuePaneReason, true> = {
-  'live-on-target': true,
   'provider-session-present': true,
   relaunchable: true,
   'host-unavailable': true,
@@ -166,11 +164,11 @@ describe('continueResultView', () => {
     const panes = ALL_DISPOSITIONS.map((disposition, i) =>
       pane(i + 1, disposition, ALL_PANE_REASONS[i])
     )
-    const view = continueResultView({ status: 'restored', rows: 4, panes })
+    const view = continueResultView({ status: 'restored', rows: panes.length, panes })
     expect(view.panes.map(({ disposition, reason }) => ({ disposition, reason }))).toEqual(
       panes.map(({ disposition, reason }) => ({ disposition, reason }))
     )
-    expect(view.panes.map((row) => row.key)).toEqual(['t1:l1', 't2:l2', 't3:l3', 't4:l4'])
+    expect(view.panes.map((row) => row.key)).toEqual(['t1:l1', 't2:l2', 't3:l3'])
     expect(view.panes.map((row) => row.label)).toHaveLength(
       new Set(view.panes.map((row) => row.label)).size
     )

@@ -169,7 +169,7 @@ describe('WorkingSetContinueAction', () => {
   it('lists every pane with the planner disposition and reason unchanged', async () => {
     const user = userEvent.setup()
     const panes = [
-      paneOf(1, 'reattach', 'live-on-target'),
+      paneOf(1, 'unavailable', 'live-elsewhere'),
       paneOf(2, 'resume', 'provider-session-present'),
       paneOf(3, 'restart', 'relaunchable'),
       paneOf(4, 'unavailable', 'host-unverified')

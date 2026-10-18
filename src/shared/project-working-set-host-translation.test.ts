@@ -61,7 +61,13 @@ function evidence(
 
 function planInputs(
   manifest: ProjectWorkingSetManifest,
-  over: { transcript?: 'present' | 'absent' | 'unknown'; availability?: 'available' | 'unavailable' | 'unknown'; presence?: Record<string, never> | Record<string, 'live-here' | 'live-elsewhere' | 'no-live-owner'> } = {}
+  over: {
+    transcript?: 'present' | 'absent' | 'unknown'
+    availability?: 'available' | 'unavailable' | 'unknown'
+    presence?:
+      | Record<string, never>
+      | Record<string, 'live-here' | 'live-elsewhere' | 'no-live-owner'>
+  } = {}
 ) {
   let n = 0
   return {
@@ -98,7 +104,11 @@ describe('translateWorkingSetToHost', () => {
   it('translates back to a Windows path with its separators', () => {
     const manifest = representativeManifest()
     manifest.scope.executionHostId = 'ssh:gex44'
-    manifest.scope.location = { kind: 'repo-worktree', repoId: 'repo-9', worktreePath: '/srv/orca/wt/a' }
+    manifest.scope.location = {
+      kind: 'repo-worktree',
+      repoId: 'repo-9',
+      worktreePath: '/srv/orca/wt/a'
+    }
     for (const e of manifest.entries) {
       e.startupCwd = null
     }
@@ -141,7 +151,11 @@ describe('translateWorkingSetToHost', () => {
       reason: 'startup-cwd-outside-source-setup'
     })
     const folder = representativeManifest()
-    folder.scope.location = { kind: 'folder-workspace', folderWorkspaceId: 'f', folderPath: 'C:/work/orca' }
+    folder.scope.location = {
+      kind: 'folder-workspace',
+      folderWorkspaceId: 'f',
+      folderPath: 'C:/work/orca'
+    }
     expect(translateWorkingSetToHost(folder, request())).toEqual({
       kind: 'refused',
       reason: 'location-kind-unsupported'
@@ -166,24 +180,28 @@ describe('planContinueOnHost', () => {
 
   it('restarts when the transcript is absent on the target host', () => {
     const m = representativeManifest()
-    const d = dispositions(planContinueOnHost(m, request(), planInputs(m, { transcript: 'absent' })))
+    const d = dispositions(
+      planContinueOnHost(m, request(), planInputs(m, { transcript: 'absent' }))
+    )
     expect(d).toContain('tab-a:restart:relaunchable')
   })
 
   it('does not promise an unconfirmed transcript', () => {
     const m = representativeManifest()
-    const d = dispositions(planContinueOnHost(m, request(), planInputs(m, { transcript: 'unknown' })))
+    const d = dispositions(
+      planContinueOnHost(m, request(), planInputs(m, { transcript: 'unknown' }))
+    )
     expect(d).toContain('tab-a:unavailable:not-confirmed')
   })
 
-  it('reattaches a pane already live on the target host', () => {
+  it('does not resume a pane whose session answered live-here (a restored pane is new)', () => {
     const m = representativeManifest()
     const r = planContinueOnHost(
       m,
       request(),
       planInputs(m, { presence: { [`tab-a:${leafId(1)}`]: 'live-here' } })
     )
-    expect(dispositions(r)).toContain('tab-a:reattach:live-on-target')
+    expect(dispositions(r)).toContain('tab-a:unavailable:not-confirmed')
   })
 
   it('marks a pane live on another host unavailable', () => {
@@ -199,7 +217,9 @@ describe('planContinueOnHost', () => {
   it('makes every pane unavailable with host-unavailable when the target host is down', () => {
     const m = representativeManifest()
     const down = planContinueOnHost(m, request(), planInputs(m, { availability: 'unavailable' }))
-    expect(down.kind === 'planned' && down.panes.every((p) => p.reason === 'host-unavailable')).toBe(true)
+    expect(
+      down.kind === 'planned' && down.panes.every((p) => p.reason === 'host-unavailable')
+    ).toBe(true)
     expect(down.kind === 'planned' && down.plan.blockers).toContain('host-unavailable')
   })
 
@@ -213,20 +233,27 @@ describe('planContinueOnHost', () => {
     ).toBe(true)
   })
 
-  it('computes all four dispositions when the host is available (control for the unknown case)', () => {
+  it('computes all three dispositions when the host is available (control for the unknown case)', () => {
     const m = representativeManifest()
     const r = planContinueOnHost(
       m,
       request(),
       planInputs(m, {
-        presence: { [`tab-a:${leafId(1)}`]: 'live-here', [`tab-b:${leafId(2)}`]: 'live-elsewhere' }
+        presence: {
+          [`tab-a:${leafId(1)}`]: 'no-live-owner',
+          [`tab-b:${leafId(2)}`]: 'live-elsewhere'
+        }
       })
     )
     const d = r.kind === 'planned' ? new Set(r.panes.map((p) => p.disposition)) : new Set()
-    expect([...d].sort()).toEqual(['reattach', 'restart', 'unavailable'])
+    expect([...d].sort()).toEqual(['restart', 'resume', 'unavailable'])
     const resumed = planContinueOnHost(m, request(), planInputs(m))
-    expect(resumed.kind === 'planned' && resumed.panes.some((p) => p.disposition === 'resume')).toBe(true)
-    expect(resumed.kind === 'planned' && resumed.panes.some((p) => p.reason === 'host-unverified')).toBe(false)
+    expect(
+      resumed.kind === 'planned' && resumed.panes.some((p) => p.disposition === 'resume')
+    ).toBe(true)
+    expect(
+      resumed.kind === 'planned' && resumed.panes.some((p) => p.reason === 'host-unverified')
+    ).toBe(false)
   })
 
   it('passes a refusal through untouched', () => {

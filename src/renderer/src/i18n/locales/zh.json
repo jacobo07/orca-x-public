@@ -40,13 +40,11 @@
       "pane": {
         "label": "终端 {{number}}",
         "disposition": {
-          "reattach": "重新连接到正在运行的终端",
           "resume": "恢复智能体会话",
           "restart": "在其文件夹中启动新终端",
           "unavailable": "无法在那里打开"
         },
         "reason": {
-          "liveOnTarget": "已在那里运行。",
           "providerSessionPresent": "其智能体会话在该主机上。",
           "relaunchable": "可以按已保存的启动方式重新启动。",
           "hostUnavailable": "该主机不可用。",

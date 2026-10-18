@@ -2918,7 +2918,7 @@
       "id": 70,
       "row": "HF Continue here across hosts",
       "owner": "working-set restore planner",
-      "done": "a working set translates through projectId to another host; each pane reattach/resume/restart/unavailable",
+      "done": "a working set translates through projectId to another host; each pane resume/restart/unavailable",
       "state": "PARTIAL",
       "stateSource": "measured",
       "measuredIn": "rb-live phase 3 (r70b)",
@@ -3030,7 +3030,7 @@
           "note": "r70b result, r70a red, dispositions observed, reattach/resume not covered."
         }
       ],
-      "reason": "REAL-SSH leg PASSED 2026-10-17 (r70b, laptop -> GEX44): tests/e2e/hwf-two-host-continue-here-ssh.spec.ts 1 passed. The laptop and GEX44 replicas (one root commit) became one git-root project without any store write; a really disconnected target refused Continue here and applied nothing; reconnected, the same click restored 3 dormant rows with no process; Open on the restart row started a shell on kobicraft-gex44 in the remote replica; teardown REMAINING=0 PROC_COUNT=0, witness unchanged. Dispositions observed: restart/relaunchable x1, unavailable/nothing-runnable x2. NOT OBSERVED: reattach (needs the pane's agent session live-here on the target; no leg has an agent pane yet) and resume (needs an exact-resume provider session from a real model turn on GEX44, OWNER OD-1). Evidence docs/dws/live-2026-10-17-row-70-evidence.md."
+      "reason": "REAL-SSH leg PASSED 2026-10-17 (r70b, laptop -> GEX44): tests/e2e/hwf-two-host-continue-here-ssh.spec.ts 1 passed. The laptop and GEX44 replicas (one root commit) became one git-root project without any store write; a really disconnected target refused Continue here and applied nothing; reconnected, the same click restored 3 dormant rows with no process; Open on the restart row started a shell on kobicraft-gex44 in the remote replica; teardown REMAINING=0 PROC_COUNT=0, witness unchanged. Dispositions observed: restart/relaunchable x1, unavailable/nothing-runnable x2. Reattach was removed from the done criterion 2026-10-18 (Owner decision): restore only fills an empty workspace (blocker current-work-present), so no pane there can already hold the session; a session live in another workspace or client is correctly unavailable/live-elsewhere; and adopting a surviving relay PTY would reach only another client's terminals (the relay admits one consumer and evicts the older client) or crash leftovers whose hooks name a dead pane. NOT OBSERVED: resume (needs an exact-resume provider session from a real model turn on GEX44, OWNER OD-1). Evidence docs/dws/live-2026-10-17-row-70-evidence.md."
     },
     {
       "id": 71,

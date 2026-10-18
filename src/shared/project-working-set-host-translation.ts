@@ -150,10 +150,10 @@ export function translateWorkingSetToHost(
   }
 }
 
-export type ContinuePaneDisposition = 'reattach' | 'resume' | 'restart' | 'unavailable'
+// Why no reattach: restore only fills an empty workspace, so no pane there already holds the session.
+export type ContinuePaneDisposition = 'resume' | 'restart' | 'unavailable'
 
 export type ContinuePaneReason =
-  | 'live-on-target'
   | 'provider-session-present'
   | 'relaunchable'
   | 'host-unavailable'
@@ -206,7 +206,11 @@ export function planContinueOnHost(
   const { hostAvailability } = inputs.target
   const panes: ContinuePane[] = plan.entries.flatMap((entry) =>
     entry.panes.map((pane): ContinuePane => {
-      const base = { sourceTabId: entry.sourceTabId, targetTabId: entry.targetTabId, leafId: pane.leafId }
+      const base = {
+        sourceTabId: entry.sourceTabId,
+        targetTabId: entry.targetTabId,
+        leafId: pane.leafId
+      }
       const cap = pane.restoreTime.capability
       if (hostAvailability !== 'available') {
         return {
@@ -214,9 +218,6 @@ export function planContinueOnHost(
           disposition: 'unavailable',
           reason: hostAvailability === 'unavailable' ? 'host-unavailable' : 'host-unverified'
         }
-      }
-      if (pane.presence === 'live-here') {
-        return { ...base, disposition: 'reattach', reason: 'live-on-target' }
       }
       if (pane.blockers.includes('live-elsewhere')) {
         return { ...base, disposition: 'unavailable', reason: 'live-elsewhere' }

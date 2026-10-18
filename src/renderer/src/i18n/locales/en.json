@@ -69,13 +69,11 @@
       "pane": {
         "label": "Terminal {{number}}",
         "disposition": {
-          "reattach": "Reconnects to the running terminal",
           "resume": "Resumes the agent session",
           "restart": "Starts a new terminal in its folder",
           "unavailable": "Can't be opened there"
         },
         "reason": {
-          "liveOnTarget": "It's already running there.",
           "providerSessionPresent": "Its agent session is on that host.",
           "relaunchable": "It can be started again from its saved launch.",
           "hostUnavailable": "That host isn't available.",

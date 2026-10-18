@@ -89,11 +89,6 @@ function refusalText(reason: HostTranslationRefusal): string {
 
 function dispositionText(disposition: ContinuePaneDisposition): string {
   switch (disposition) {
-    case 'reattach':
-      return translate(
-        'workingSet.continue.pane.disposition.reattach',
-        'Reconnects to the running terminal'
-      )
     case 'resume':
       return translate('workingSet.continue.pane.disposition.resume', 'Resumes the agent session')
     case 'restart':
@@ -112,11 +107,6 @@ function dispositionText(disposition: ContinuePaneDisposition): string {
 
 function paneReasonText(reason: ContinuePaneReason): string {
   switch (reason) {
-    case 'live-on-target':
-      return translate(
-        'workingSet.continue.pane.reason.liveOnTarget',
-        "It's already running there."
-      )
     case 'provider-session-present':
       return translate(
         'workingSet.continue.pane.reason.providerSessionPresent',

@@ -40,13 +40,11 @@
       "pane": {
         "label": "ターミナル {{number}}",
         "disposition": {
-          "reattach": "実行中のターミナルに再接続します",
           "resume": "エージェントのセッションを再開します",
           "restart": "そのフォルダーで新しいターミナルを起動します",
           "unavailable": "そこでは開けません"
         },
         "reason": {
-          "liveOnTarget": "すでにそこで実行中です。",
           "providerSessionPresent": "エージェントのセッションがそのホストにあります。",
           "relaunchable": "保存された起動設定からもう一度起動できます。",
           "hostUnavailable": "そのホストを利用できません。",

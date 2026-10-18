@@ -40,13 +40,11 @@
       "pane": {
         "label": "Terminal {{number}}",
         "disposition": {
-          "reattach": "Se reconecta a la terminal en ejecución",
           "resume": "Reanuda la sesión del agente",
           "restart": "Inicia una terminal nueva en su carpeta",
           "unavailable": "No se puede abrir allí"
         },
         "reason": {
-          "liveOnTarget": "Ya se está ejecutando allí.",
           "providerSessionPresent": "Su sesión del agente está en ese host.",
           "relaunchable": "Se puede volver a iniciar desde su lanzamiento guardado.",
           "hostUnavailable": "Ese host no está disponible.",
