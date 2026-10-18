@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { AppState } from '@/store/types'
 import type { WorkingSetRestoreEvidence } from '../../../shared/project-working-set-store-types'
-import { representativeManifest } from '../../../shared/project-working-set-test-fixtures'
+import { leafId, representativeManifest } from '../../../shared/project-working-set-test-fixtures'
 import type { ProjectWorkingSetManifest } from '../../../shared/project-working-set-types'
 import type { HostTranslationRequest } from '../../../shared/project-working-set-host-translation'
 import type { ProjectHostSetup } from '../../../shared/project-types'
@@ -240,9 +240,57 @@ describe('restoreWorkingSet with continueOn', () => {
     if (outcome.status !== 'planned' || !('panes' in outcome)) {
       throw new Error('expected a continue outcome with a pane table')
     }
-    expect(outcome.panes.map((pane) => `${pane.sourceTabId}:${pane.disposition}`)).toContain(
-      'tab-a:resume'
-    )
+    // Why not resume: the transcript was only seen on the source; nothing copied it to the target.
+    expect(
+      outcome.panes.map((pane) => `${pane.sourceTabId}:${pane.disposition}:${pane.reason}`)
+    ).toContain('tab-a:unavailable:not-confirmed')
+  })
+
+  it('copies each provider pane to the SSH target and resumes only what was read back there', async () => {
+    const { deps, request, bridge } = setupContinue({ hostAvailability: () => 'available' })
+    const transfer = vi.fn(async () => ({
+      status: 'transferred',
+      panes: {
+        [`tab-a:${leafId(1)}`]: { transcript: 'present', reason: 'copied' },
+        [`tab-b:${leafId(2)}`]: { transcript: 'unknown', reason: 'target-conflict' }
+      }
+    }))
+    bridge.transferContinueSessions = transfer
+    const outcome = await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)
+    expect(transfer).toHaveBeenCalledExactlyOnceWith({
+      scope,
+      workingSetId: request.workingSetId,
+      connectionId: 'gex44',
+      cwdByPaneKey: { [`tab-a:${leafId(1)}`]: '/srv/orca', [`tab-b:${leafId(2)}`]: '/srv/orca' }
+    })
+    if (outcome.status !== 'planned' || !('panes' in outcome)) {
+      throw new Error('expected a continue outcome with a pane table')
+    }
+    const table = outcome.panes.map((p) => `${p.sourceTabId}:${p.disposition}:${p.reason}`)
+    expect(table).toContain('tab-a:resume:provider-session-present')
+    expect(table).toContain('tab-b:unavailable:not-confirmed')
+  })
+
+  it('copies nothing when the continue would be refused', async () => {
+    const { store, deps, request, bridge } = setupContinue({ hostAvailability: () => 'available' })
+    store.setState({
+      tabsByWorktree: { [TARGET_OWNER]: [makeTab({ id: 'busy', worktreeId: TARGET_OWNER })] }
+    })
+    const transfer = vi.fn()
+    bridge.transferContinueSessions = transfer
+    const outcome = await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)
+    expect(outcome).toMatchObject({
+      applied: { status: 'refused', blockers: ['current-work-present'] }
+    })
+    expect(transfer).not.toHaveBeenCalled()
+  })
+
+  it('copies nothing onto a host that is not known available', async () => {
+    const { deps, request, bridge } = setupContinue({ hostAvailability: () => 'unknown' })
+    const transfer = vi.fn()
+    bridge.transferContinueSessions = transfer
+    await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)
+    expect(transfer).not.toHaveBeenCalled()
   })
 
   it('leaves every dependency call exactly as before when continueOn is absent', async () => {
@@ -348,6 +396,7 @@ describe('restoreWorkingSet with continueOn', () => {
       }
     })
     await restoreWorkingSet({ ...request, continueOn: continueOn() }, deps)
-    expect(asked).toEqual(['setup-gex'])
+    // Why twice: availability is read again after the session copy, the await it may drop during.
+    expect(asked).toEqual(['setup-gex', 'setup-gex'])
   })
 })

@@ -320,7 +320,19 @@ const PLANNED_BASE = { plan: { entries: [] } as never, panes: [] }
 
 describe('continueWorkingSetFromProduct', () => {
   it('continues onto the target workspace, returns the pane table and opens nothing', async () => {
-    const { store, deps } = setupContinue()
+    const { store, deps, bridge } = setupContinue()
+    // Why a copy: resume on another host is planned only for a session read back there.
+    Object.assign(bridge, {
+      transferContinueSessions: vi.fn(async (args: { cwdByPaneKey: object }) => ({
+        status: 'transferred',
+        panes: Object.fromEntries(
+          Object.keys(args.cwdByPaneKey).map((key) => [
+            key,
+            { transcript: 'present', reason: 'copied' }
+          ])
+        )
+      }))
+    })
     const result = await continueWorkingSetFromProduct(continueRequest(), deps)
     expect(result).toMatchObject({ status: 'restored', rows: 5 })
     expect(result.status === 'restored' && result.panes?.map((p) => p.disposition)).toContain(

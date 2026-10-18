@@ -6,6 +6,10 @@ import type {
   WorkingSetScopeKey
 } from '../../../shared/project-working-set-store-types'
 import type { ProjectWorkingSetManifest } from '../../../shared/project-working-set-types'
+import type {
+  WorkingSetSessionTransferRequest,
+  WorkingSetSessionTransferResult
+} from '../../../shared/project-working-set-session-transfer-types'
 
 /**
  * The renderer's only door to the sealed working-set store.
@@ -23,6 +27,8 @@ export type WorkingSetStoreBridge = {
     scope: WorkingSetScopeKey
     workingSetId: string
   }) => Promise<unknown>
+  /** Absent on a bridge that predates session transfer: no copy, so no resume is promised. */
+  transferContinueSessions?: (args: WorkingSetSessionTransferRequest) => Promise<unknown>
 }
 
 const READ_STATUSES = new Set([
@@ -119,5 +125,27 @@ export function probeWorkingSetRestoreEvidence(
       (typeof answer.evidence === 'object' &&
         answer.evidence !== null &&
         typeof answer.evidence.panes === 'object')
+  )
+}
+
+const TRANSFER_STATUSES = new Set(
+  [...READ_STATUSES]
+    .filter((s) => s !== 'valid')
+    .concat('transferred', 'target-unavailable', 'invalid-transfer-request')
+)
+
+export async function transferContinueSessions(
+  request: WorkingSetSessionTransferRequest,
+  bridge: WorkingSetStoreBridge = defaultBridge()
+): Promise<WorkingSetSessionTransferResult> {
+  const call = bridge.transferContinueSessions
+  if (!call) {
+    return UNAVAILABLE
+  }
+  return ask<WorkingSetSessionTransferResult>(
+    () => call(request),
+    TRANSFER_STATUSES,
+    (answer) =>
+      answer.status !== 'transferred' || (typeof answer.panes === 'object' && answer.panes !== null)
   )
 }

@@ -8,6 +8,12 @@ import type {
   WorkingSetScopeKey
 } from '../../shared/project-working-set-store-types'
 import { gatherWorkingSetRestoreEvidence } from '../project-working-set/working-set-restore-evidence'
+import {
+  defaultLocalTransferDeps,
+  transferContinueSessions
+} from '../project-working-set/working-set-session-transfer'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import type { WorkingSetSessionTransferResult } from '../../shared/project-working-set-session-transfer-types'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getDataFile } from '../persistence/loading-store/user-data-path'
 import { getProfileTerminalScrollbackSnapshotRoot } from '../terminal-scrollback-snapshots'
@@ -91,6 +97,43 @@ export function registerProjectWorkingSetHandlers(): void {
         status: 'probed',
         workingSetId: manifest.workingSetId,
         evidence: await gatherWorkingSetRestoreEvidence(root, manifest)
+      }
+    }
+  )
+
+  // Why main reads the manifest: the source transcript path comes from the sealed set, never the renderer.
+  ipcMain.handle(
+    'workingSet:transferContinueSessions',
+    async (_event, args: unknown): Promise<WorkingSetSessionTransferResult> => {
+      const { connectionId, cwdByPaneKey } = (args ?? {}) as Record<string, unknown>
+      if (typeof connectionId !== 'string' || !connectionId) {
+        return { status: 'invalid-transfer-request', field: 'connectionId' }
+      }
+      if (typeof cwdByPaneKey !== 'object' || cwdByPaneKey === null) {
+        return { status: 'invalid-transfer-request', field: 'cwdByPaneKey' }
+      }
+      const artifact = await readRequested(args)
+      if (artifact.status !== 'valid') {
+        return artifact
+      }
+      if (parseExecutionHostId(artifact.manifest.scope.executionHostId)?.kind !== 'local') {
+        return { status: 'target-unavailable' }
+      }
+      const target = getSshFilesystemProvider(connectionId)
+      if (!target) {
+        return { status: 'target-unavailable' }
+      }
+      const cwds = Object.fromEntries(
+        Object.entries(cwdByPaneKey).filter(
+          (pair): pair is [string, string] => typeof pair[1] === 'string'
+        )
+      )
+      return {
+        status: 'transferred',
+        panes: await transferContinueSessions(artifact.manifest, cwds, {
+          ...defaultLocalTransferDeps,
+          target
+        })
       }
     }
   )

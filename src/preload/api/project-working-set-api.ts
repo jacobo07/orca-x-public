@@ -5,6 +5,10 @@ import type {
   WorkingSetSaveResult,
   WorkingSetScopeKey
 } from '../../shared/project-working-set-store-types'
+import type {
+  WorkingSetSessionTransferRequest,
+  WorkingSetSessionTransferResult
+} from '../../shared/project-working-set-session-transfer-types'
 
 type WorkingSetRef = { scope: WorkingSetScopeKey; workingSetId: string }
 
@@ -20,5 +24,9 @@ export type ProjectWorkingSetApi = {
     read: (args: WorkingSetRef) => Promise<WorkingSetReadResult>
     /** Filesystem and provider facts a restore depends on, for a working set main reads itself. */
     probeRestoreEvidence: (args: WorkingSetRef) => Promise<WorkingSetRestoreEvidenceResult>
+    /** Copies each Claude pane's transcript onto the SSH target a continue moves to, then reads it back. */
+    transferContinueSessions: (
+      args: WorkingSetSessionTransferRequest
+    ) => Promise<WorkingSetSessionTransferResult>
   }
 }

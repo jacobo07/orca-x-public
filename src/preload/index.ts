@@ -3190,7 +3190,9 @@ const api = {
     save: (candidate) => ipcRenderer.invoke('workingSet:save', candidate),
     list: (scope) => ipcRenderer.invoke('workingSet:list', scope),
     read: (args) => ipcRenderer.invoke('workingSet:read', args),
-    probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args)
+    probeRestoreEvidence: (args) => ipcRenderer.invoke('workingSet:probeRestoreEvidence', args),
+    transferContinueSessions: (args) =>
+      ipcRenderer.invoke('workingSet:transferContinueSessions', args)
   } satisfies PreloadApi['workingSet'],
   durableExit: {
     park: (request) => ipcRenderer.invoke('durableExit:park', request),

@@ -33,8 +33,13 @@ import {
   type WorkingSetApplyResult
 } from './project-working-set-apply'
 import {
+  continueCwdByPaneKey,
+  continueEvidenceOnTarget
+} from '../../../shared/project-working-set-continue-evidence'
+import {
   probeWorkingSetRestoreEvidence,
   readWorkingSet,
+  transferContinueSessions,
   type WorkingSetStoreBridge
 } from './project-working-set-client'
 
@@ -238,19 +243,56 @@ export async function restoreWorkingSet(
     translated?.manifest ?? read.manifest,
     deps
   )
-  // No await from here: the plan's view of the workspace is the one the replace acts on.
   if (continueOn) {
-    const hostAvailability = continueOn.targetSetup
-      ? (deps.hostAvailability?.(continueOn.targetSetup) ?? 'unknown')
-      : 'unknown'
-    const continued = planContinueNow(
+    const availabilityNow = (): RestorePlanTarget['hostAvailability'] =>
+      continueOn.targetSetup
+        ? (deps.hostAvailability?.(continueOn.targetSetup) ?? 'unknown')
+        : 'unknown'
+    const onTarget = (transferred: Parameters<typeof continueEvidenceOnTarget>[1]) => ({
+      ...facts,
+      evidence: continueEvidenceOnTarget(facts.evidence, transferred)
+    })
+    // Why a plan before the copy: a continue that would be refused copies nothing.
+    let hostAvailability = availabilityNow()
+    let continued = planContinueNow(
       facts.manifest,
       continueOn,
       hostAvailability,
-      facts,
+      onTarget(null),
       request,
       deps
     )
+    const sshTarget = parseExecutionHostId(continueOn.targetSetup?.hostId)
+    if (
+      continued.kind === 'planned' &&
+      hostAvailability === 'available' &&
+      continued.plan.blockers.length === 0 &&
+      sshTarget?.kind === 'ssh' &&
+      translated?.kind === 'translated'
+    ) {
+      const cwdByPaneKey = continueCwdByPaneKey(translated.manifest)
+      if (Object.keys(cwdByPaneKey).length > 0) {
+        const transfer = await transferContinueSessions(
+          {
+            scope: request.scope,
+            workingSetId: request.workingSetId,
+            connectionId: sshTarget.targetId,
+            cwdByPaneKey
+          },
+          deps.bridge
+        )
+        hostAvailability = availabilityNow()
+        continued = planContinueNow(
+          facts.manifest,
+          continueOn,
+          hostAvailability,
+          onTarget(transfer.status === 'transferred' ? transfer.panes : null),
+          request,
+          deps
+        )
+      }
+    }
+    // No await from here: the plan's view of the workspace is the one the replace acts on.
     if (continued.kind === 'refused') {
       return { status: 'continue-refused', reason: continued.reason }
     }

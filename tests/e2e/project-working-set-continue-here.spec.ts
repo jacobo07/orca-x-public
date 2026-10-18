@@ -36,6 +36,7 @@ import {
   planContinueOnHost,
   type ContinuePane
 } from '../../src/shared/project-working-set-host-translation'
+import { continueEvidenceOnTarget } from '../../src/shared/project-working-set-continue-evidence'
 import type { ProjectWorkingSetManifest } from '../../src/shared/project-working-set-types'
 import type { ProjectHostSetup } from '../../src/shared/project-types'
 
@@ -246,7 +247,11 @@ async function plannerPanes(
       targetOwnerKey: args.targetWorktree.worktreeId
     },
     {
-      evidence: facts.probed.status === 'probed' ? (facts.probed.evidence as never) : null,
+      // Why null: the seeded SSH target has no filesystem, so no session copy is read back there.
+      evidence: continueEvidenceOnTarget(
+        facts.probed.status === 'probed' ? (facts.probed.evidence as never) : null,
+        null
+      ),
       launchProfiles: [{ id: HOST_PROFILE_ID }],
       presence: {},
       target: PLANNER_TARGET_STATE,
