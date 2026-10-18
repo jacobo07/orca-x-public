@@ -154,7 +154,8 @@ test.describe('DWS-P2 offload workload harness', () => {
     const harnessRootPids = [process.pid, process.ppid].filter(
       (pid): pid is number => typeof pid === 'number'
     )
-    const nonce = randomUUID().replace(/-/g, '').slice(0, 16)
+    // Why 8: the agent leg asks the model to reverse it; 16 hex reversed wrong 2/4, 8 hex 4/4 (10-18).
+    const nonce = randomUUID().replace(/-/g, '').slice(0, 8)
 
     const createOrcaRpc = await loadCreateOrcaRpc()
     const rpc = createOrcaRpc({
@@ -305,7 +306,8 @@ test.describe('DWS-P2 offload workload harness', () => {
     const harnessRootPids = [process.pid, process.ppid].filter(
       (pid): pid is number => typeof pid === 'number'
     )
-    const nonce = randomUUID().replace(/-/g, '').slice(0, 16)
+    // Why 8: the agent leg asks the model to reverse it; 16 hex reversed wrong 2/4, 8 hex 4/4 (10-18).
+    const nonce = randomUUID().replace(/-/g, '').slice(0, 8)
 
     const createOrcaRpc = await loadCreateOrcaRpc()
     const rpc = createOrcaRpc({
