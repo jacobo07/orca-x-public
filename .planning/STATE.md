@@ -80,3 +80,7 @@ Then continue with the next phase in the same session. Never end a turn saying t
 ## Phase 9 done (2026-10-18)
 Rows 25 and 26 PASS (checker 45/76, exit 1, vitest 30/30). Row 25: rejecting auth check now skips the provider with a reason (red-first, mutant red). Row 26: available-is-not-resident tests plus GEX44 reading. Rows 28 and 31 stay PARTIAL (P3 gates unresolvable; no live two-machine evidence). Decision: rows 28/31 restated, not built, as LARGE-GAP.
 
+
+## Phase 10 done (2026-10-18)
+Rows 6 40 41 43 restated with measured reasons and named residuals; states unchanged (large gaps, row 6 waits on UWCP). Checker 45/76, vitest 30/30. Decision: no tracer wiring or meter built, per milestone rule (one small change only).
+

@@ -8,7 +8,7 @@ covered_files:
   - config/dws-completion-matrix.jsonc
   - docs/dws/live-2026-10-18-row-17-tunnel-evidence.md
   - docs/dws/live-2026-10-18-row-17-tunnel-fanout.json
-covered_digest: "v1:sha256:f33bd742a3b5b23426cc94fd1ed146d049901df30f2cab7570ae13143ae693ab"
+covered_digest: "v1:sha256:ce77d694554fbb96128456bdae198c9a1cd8450066a009a77aaa31c59f0b0a5f"
 ---
 # Phase 4 Verification
 
