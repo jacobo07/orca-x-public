@@ -3368,10 +3368,10 @@
       "row": "HF Multi-host baseline family",
       "owner": "CPP modules/tower",
       "done": "family multi_host_fabric B0 built from verified origins; a synthetic future violation goes red",
-      "state": "ABSENT",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "dwsrb phase 1",
-      "measuredAt": "2026-10-15",
+      "measuredIn": "rb-live phase 5 (PP worktree dws/pp-rows)",
+      "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
         24
@@ -3382,9 +3382,19 @@
           "kind": "commit",
           "sha": "a3e7239a51db",
           "note": "dws/rebaseline head re-measured by dwsrb phase 1"
+        },
+        {
+          "kind": "file",
+          "path": "docs/dws/live-2026-10-18-row-76-multi-host-fabric-family.md",
+          "note": "test output, green and red legs, controls"
+        },
+        {
+          "kind": "commit",
+          "sha": "18bc67aa",
+          "note": "claude-power-pack branch dws/pp-rows (LOCAL, not pushed): vault/tower/families/multi_host_fabric.json, vault/tower/baselines/multi_host_fabric/B0.json (6 verified origins), tools/test_tower_multi_host_fabric.py 12/12"
         }
       ],
-      "reason": "BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): CPP 30fdbf0fc73a has 4 families (vault/tower/families/{kobiicraft_mode,persistent_state,web_surface,wii_homebrew}.json) and git grep multi_host_fabric over the whole CPP tree finds 0 hits (control: persistent_state hits in modules/tower), so the reason holds with no STALE-REASON; the family JSON, its vault/tower/baselines/multi_host_fabric/B0.json and the red-on-violation test (tools/test_tower_*.py style) all live in the PP repo, and the checkout being group-writable by this user (mode 775) is not write authority since STATE Authority grants none.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i -E 'tower|famil' | head -30`. Prior (2026-09-27): Measured 2026-09-27: tower has 4 families, none multi-host"
+      "reason": "PASS 2026-10-18: the family exists in the PP worktree C:\\Users\\User\\Apps\\pp-dws-rows-wt (commit 18bc67aa, local only, push is Owner-gated); B0 holds 6 entries whose quoted lines were re-read, each with a runnable check; the real Orca repo judges 6/6 APPLIED_VERIFIED, a copy whose evidence says SVC_HOME_RESTORED=False turns exactly that entry VIOLATED, a copy missing the wire-compatibility note turns exactly that entry VIOLATED, and unknown-family/classifier controls prove the family file is the thing read. The earlier BLOCKED_EXTERNAL state is superseded: PP write authority was granted for dws/pp-rows. Prior: BLOCKED_EXTERNAL: CPP-repo-write-authority — re-measured 2026-10-15 on dws/rebaseline @a3e7239a51db (dwsrb phase 1): CPP 30fdbf0fc73a has 4 families (vault/tower/families/{kobiicraft_mode,persistent_state,web_surface,wii_homebrew}.json) and git grep multi_host_fabric over the whole CPP tree finds 0 hits (control: persistent_state hits in modules/tower), so the reason holds with no STALE-REASON; the family JSON, its vault/tower/baselines/multi_host_fabric/B0.json and the red-on-violation test (tools/test_tower_*.py style) all live in the PP repo, and the checkout being group-writable by this user (mode 775) is not write authority since STATE Authority grants none.; measured=`GIT_OPTIONAL_LOCKS=0 git -C /home/kobii/.claude/skills/claude-power-pack ls-tree -r --name-only HEAD | grep -i -E 'tower|famil' | head -30`. Prior (2026-09-27): Measured 2026-09-27: tower has 4 families, none multi-host"
     }
   ],
   "namedDebt": [
