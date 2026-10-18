@@ -1745,9 +1745,9 @@
       "row": "Product Reality",
       "owner": "goldens",
       "done": "each golden PASS",
-      "state": "PARTIAL",
+      "state": "PASS",
       "stateSource": "measured",
-      "measuredIn": "rb-live row 51 golden classification",
+      "measuredIn": "rb-live row 51 goldens + tour reveal fix",
       "measuredAt": "2026-10-18",
       "required": true,
       "phases": [
@@ -1756,8 +1756,11 @@
       "dependsOn": [
         "Phases 2-11"
       ],
-      "evidence": [],
-      "reason": "2026-10-18 re-measure on the Windows laptop with --lang=en-US (one worker, teardown 0 electron processes). Phase 12's three failures were classified as STALE SPECS against deliberate fork changes and fixed in the specs: the codex agent is labelled ChatGPT (fe30a7426d); the file panel docks left and the project sidebar yields to it (fbc3e6caa9, 4e31989ce3), so Add Project is hidden until the panel closes; an expanded terminal rail replaces strip tabs; git reports forward-slash repo paths on Windows; a forced New tab click during titlebar settle hit the app menu (agent-tui failed 2 of 4 runs before the fix, 3 of 3 after). Now PASS: golden-file-open-edit-save, golden-fresh-profile-terminal, golden-agent-tui-launch, golden-core-flows existing-user. FAIL, PRODUCT GAP (not fixed): golden-core-flows new-user stops at the workspace tour's last step 'Start another task in parallel', whose target workspace-create-control lives in SidebarHeader, which is not rendered while the left-docked panel holds the region, so a new user on the default layout never sees that step. Residual: that tour step needs a product decision (reveal the project sidebar for the step, or retarget it). Logs: Apps\\rbl\\r51-final-en.log, r51-tui-x3.log."
+      "evidence": [
+        { "kind": "file", "path": "src/renderer/src/store/slices/ui-contextual-tours.test.ts", "note": "left-docked split advances the tour and closes the panel; red on the pre-fix ui.ts" },
+        { "kind": "file", "path": "tests/e2e/golden-core-flows.spec.ts", "note": "new-user leg red on a build with the pre-fix ui.ts (tour completed at the split), green on the fixed build" }
+      ],
+      "reason": "UPDATE 2026-10-18 later: PASS. All five golden legs pass on one e2e build with --lang=en-US (core-flows existing-user and new-user, agent-tui-launch, fresh-profile-terminal, file-open-edit-save). The new-user product gap below was FIXED (Owner 'rec'): the tour's split step treated an open-but-yielded sidebar as shown and completed the tour; it now reveals the project sidebar (closing a left-docked panel) and advances; the tour's show-worktrees/create-worktree actions use the same reveal. Without --lang the goldens assert English on a Spanish host (environment, not product). Debt: 12 other setSidebarOpen(true) callers that mean 'reveal' still leave the sidebar yielded behind a left-docked panel. Earlier entry: 2026-10-18 re-measure on the Windows laptop with --lang=en-US (one worker, teardown 0 electron processes). Phase 12's three failures were classified as STALE SPECS against deliberate fork changes and fixed in the specs: the codex agent is labelled ChatGPT (fe30a7426d); the file panel docks left and the project sidebar yields to it (fbc3e6caa9, 4e31989ce3), so Add Project is hidden until the panel closes; an expanded terminal rail replaces strip tabs; git reports forward-slash repo paths on Windows; a forced New tab click during titlebar settle hit the app menu (agent-tui failed 2 of 4 runs before the fix, 3 of 3 after). Now PASS: golden-file-open-edit-save, golden-fresh-profile-terminal, golden-agent-tui-launch, golden-core-flows existing-user. FAIL, PRODUCT GAP (not fixed): golden-core-flows new-user stops at the workspace tour's last step 'Start another task in parallel', whose target workspace-create-control lives in SidebarHeader, which is not rendered while the left-docked panel holds the region, so a new user on the default layout never sees that step. Residual: that tour step needs a product decision (reveal the project sidebar for the step, or retarget it). Logs: Apps\\rbl\\r51-final-en.log, r51-tui-x3.log."
     },
     {
       "id": 52,

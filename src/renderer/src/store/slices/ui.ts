@@ -249,7 +249,8 @@ function getContextualTourProgressionForFeatureInteraction(
     state.activeContextualTourId === 'workspace-agent-sessions' &&
     state.activeContextualTourStepIndex === 0 &&
     id === 'terminal-pane-split' &&
-    !state.sidebarOpen
+    // Why: docked left, an open sidebar still yields to an open panel, so it is not shown either.
+    (!state.sidebarOpen || (state.sidePanelDock === 'left' && state.rightSidebarOpen))
   ) {
     return 'reveal-sidebar-and-advance'
   }
@@ -1707,6 +1708,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         return {
           featureInteractions: next,
           sidebarOpen: true,
+          ...(s.sidePanelDock === 'left' ? { rightSidebarOpen: false } : {}),
           activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
         }
       }

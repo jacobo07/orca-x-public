@@ -33,6 +33,27 @@ export function projectSidebarYieldsToPanel({
   )
 }
 
+type ProjectSidebarRevealState = {
+  sidebarOpen: boolean
+  sidePanelDock: SidePanelDock
+  rightSidebarOpen: boolean
+  setSidebarOpen: (open: boolean) => void
+  toggleRightSidebar: () => void
+}
+
+/** Shows the project sidebar; returns whether anything changed. Docked left, opening it is not enough while the panel holds the region. */
+export function revealProjectSidebar(state: ProjectSidebarRevealState): boolean {
+  const panelHoldsRegion = state.sidePanelDock === 'left' && state.rightSidebarOpen
+  if (state.sidebarOpen && !panelHoldsRegion) {
+    return false
+  }
+  state.setSidebarOpen(true)
+  if (panelHoldsRegion) {
+    state.toggleRightSidebar()
+  }
+  return true
+}
+
 export function resolveEffectiveSidebarOpen({
   sidebarOpen,
   sidePanelDock,
