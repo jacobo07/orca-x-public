@@ -28,6 +28,8 @@ type Props = {
   readonly onAddShortcut: () => void
   readonly onDeleteCustomKey: (key: CustomKey) => void
   readonly onClose: () => void
+  /** Runs after a plain close (no follow-up action), so the caller can bring back the keyboard the modal took. */
+  readonly onClosedWithoutAction?: () => void
 }
 
 /** Everything the reference row leaves out. Keys stay open for repeated taps; actions that open another sheet close this one first. */
@@ -46,7 +48,8 @@ export function MobileTerminalShortcutSheet({
   onPaste,
   onAddShortcut,
   onDeleteCustomKey,
-  onClose
+  onClose,
+  onClosedWithoutAction
 }: Props) {
   // Why: a second modal opened while this drawer is still animating out stacks badly on iOS.
   const afterCloseRef = useRef<(() => void) | null>(null)
@@ -62,7 +65,11 @@ export function MobileTerminalShortcutSheet({
       onAfterClose={() => {
         const action = afterCloseRef.current
         afterCloseRef.current = null
-        action?.()
+        if (action) {
+          action()
+        } else {
+          onClosedWithoutAction?.()
+        }
       }}
     >
       <View style={dock.sheet}>

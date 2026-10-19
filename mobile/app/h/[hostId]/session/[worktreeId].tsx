@@ -3417,6 +3417,7 @@ export default function SessionScreen() {
   )
   const [ctrlState, setCtrlState] = useState<StickyCtrlState>('off')
   const [showShortcutSheet, setShowShortcutSheet] = useState(false)
+  const refocusAfterShortcutSheetRef = useRef(false)
   const [showExpandedComposer, setShowExpandedComposer] = useState(false)
   useEffect(() => {
     setCtrlState((state) => stickyCtrlForSendability(state, canSend))
@@ -4895,7 +4896,13 @@ export default function SessionScreen() {
                   showKeyboardDismiss={keyboardLift > 0}
                   handlers={accessoryKeyHandlers}
                   onCtrlTap={() => setCtrlState(tapStickyCtrl)}
-                  onOpenMore={() => setShowShortcutSheet(true)}
+                  onOpenMore={() => {
+                    // Why: the sheet is a modal, which takes the keyboard on Android; give it back on close.
+                    refocusAfterShortcutSheetRef.current = Boolean(
+                      liveInputRef.current?.isFocused() || commandInputRef.current?.isFocused()
+                    )
+                    setShowShortcutSheet(true)
+                  }}
                   onTextSizeStep={() =>
                     applyTerminalTextScale(nextTerminalTextScale(terminalTextScale))
                   }
@@ -5186,6 +5193,12 @@ export default function SessionScreen() {
         onAddShortcut={() => setShowCustomKeyModal(true)}
         onDeleteCustomKey={setDeleteKeyTarget}
         onClose={() => setShowShortcutSheet(false)}
+        onClosedWithoutAction={() => {
+          if (refocusAfterShortcutSheetRef.current) {
+            refocusAfterShortcutSheetRef.current = false
+            ;(liveInputEnabled ? liveInputRef : commandInputRef).current?.focus()
+          }
+        }}
       />
       <MobileTerminalExpandedComposer
         visible={showExpandedComposer}
