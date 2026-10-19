@@ -11,6 +11,33 @@ export const headerStyles = StyleSheet.create({
   iconButtonDisabled: {
     opacity: 0.4
   },
+  pickerRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.xs
+  },
+  pickerButton: {
+    flex: 1,
+    minWidth: 0,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.button,
+    backgroundColor: colors.bgPanel
+  },
+  pickerButtonPressed: {
+    backgroundColor: colors.bgRaised
+  },
+  pickerLabel: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.bodySize
+  },
   identityLine: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -77,6 +77,12 @@ import { isFloatingWorkspaceWorktreeId } from '../../../../src/session/floating-
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
 import { MobileSessionHeader } from '../../../../src/session/MobileSessionHeader'
 import { MobileSessionIdentityLine } from '../../../../src/session/MobileSessionIdentityLine'
+import { MobileSessionPickerRow } from '../../../../src/session/MobileSessionPickerRow'
+import { MobileSessionHostPicker } from '../../../../src/session/MobileSessionHostPicker'
+import {
+  buildMobileSessionRuntimeActions,
+  resolveActiveTabRuntime
+} from '../../../../src/session/mobile-session-runtime-actions'
 import { buildMobileSessionIdentity } from '../../../../src/session/mobile-session-identity-line'
 import { useMobileTerminalSearch } from '../../../../src/session/use-mobile-terminal-search'
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
@@ -87,7 +93,12 @@ import {
   type MobileQuickCommandLaunch
 } from '../../../../src/terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../../../../src/agent-history/agent-history-capability'
-import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
+import type {
+  ConnectionState,
+  HostProfile,
+  RpcFailure,
+  RpcSuccess
+} from '../../../../src/transport/types'
 import { headlessActivationNeedsHostRenderer } from '../../../../src/worktree/worktree-activation-result'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
@@ -869,6 +880,9 @@ export default function SessionScreen() {
   )
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
+  const [showHostPicker, setShowHostPicker] = useState(false)
+  const [showRuntimes, setShowRuntimes] = useState(false)
+  const [pairedHosts, setPairedHosts] = useState<readonly HostProfile[]>([])
   const [hostName, setHostName] = useState<string | null>(null)
   // Why: mirrors terminalCwdRef so the identity line re-renders when the active shell moves.
   const [terminalCwds, setTerminalCwds] = useState<ReadonlyMap<string, string>>(() => new Map())
@@ -2413,6 +2427,7 @@ export default function SessionScreen() {
       if (stale) {
         return
       }
+      setPairedHosts(hosts)
       const host = hosts.find((h) => h.id === hostId)
       if (host) {
         deviceTokenRef.current = host.deviceToken
@@ -4314,6 +4329,7 @@ export default function SessionScreen() {
             if (agent) {
               return {
                 label: option.label,
+                runtimeAgentId: agent,
                 renderIcon: () => <MobileAgentIcon agentId={agent} size={16} />,
                 onPress: () => {
                   setShowCreateTabDrawer(false)
@@ -4469,6 +4485,12 @@ export default function SessionScreen() {
               activePanel === 'files' || activePanel === 'sourceControl' || activePanel === 'pr'
             }
             onOpenMore={() => setShowHeaderMoreActions(true)}
+          />
+          <MobileSessionPickerRow
+            canSwitchHost={pairedHosts.length > 1}
+            canPickRuntime={connState === 'connected'}
+            onOpenHostPicker={() => setShowHostPicker(true)}
+            onOpenRuntimes={() => setShowRuntimes(true)}
           />
           <MobileSessionIdentityLine
             connState={connState}
@@ -4995,6 +5017,29 @@ export default function SessionScreen() {
               ])
         ]}
         onClose={() => setShowCreateTabDrawer(false)}
+      />
+
+      <MobileSessionHostPicker
+        visible={showHostPicker}
+        hosts={pairedHosts}
+        currentHostId={hostId ?? ''}
+        onClose={() => setShowHostPicker(false)}
+        onSwitchHost={(nextHostId) => router.push(`/h/${nextHostId}`)}
+      />
+
+      <ActionSheetModal
+        visible={showRuntimes}
+        title="Runtimes"
+        actions={buildMobileSessionRuntimeActions(
+          createTabAgentActions,
+          {
+            label: 'Terminal',
+            icon: SquareTerminal,
+            onPress: () => void handleCreateTerminal()
+          },
+          resolveActiveTabRuntime(activeSessionTab)
+        )}
+        onClose={() => setShowRuntimes(false)}
       />
 
       <ActionSheetModal
