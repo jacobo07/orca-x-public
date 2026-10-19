@@ -104,11 +104,19 @@ describe('session route offline-compose wiring', () => {
   })
 
   it('keeps the live/buffered mode toggle reachable offline', () => {
-    const modeToggle = routeSlice(
-      'liveInputEnabled && styles.accessoryKeyActive',
-      'onPress={toggleLiveInput}'
+    // The toggle lives in the "…" sheet; the route must hand it the compose gate, not the send gate.
+    const sheetSource = readFileSync(
+      new URL('../session/MobileTerminalShortcutSheet.tsx', import.meta.url),
+      'utf8'
     )
-    expect(modeToggle).toContain('disabled={!canCompose}')
+    const toggleStart = sheetSource.indexOf('liveInputEnabled && dock.keyActive')
+    const toggleEnd = sheetSource.indexOf('onPress={onToggleLiveInput}', toggleStart)
+    expect(toggleStart).toBeGreaterThanOrEqual(0)
+    expect(toggleEnd).toBeGreaterThan(toggleStart)
+    expect(sheetSource.slice(toggleStart, toggleEnd)).toContain('disabled={!canCompose}')
+    const sheetProps = routeSlice('<MobileTerminalShortcutSheet', '/>')
+    expect(sheetProps).toContain('canCompose={canCompose}')
+    expect(sheetProps).toContain('onToggleLiveInput={toggleLiveInput}')
   })
 
   it('tells the live-input commit hook about connection loss so stale mirror state resets', () => {

@@ -13,10 +13,25 @@ const sessionRouteSource = readFileSync(
 // apply dash normalization only on the send/mirror path. See stablyai/orca#7925.
 describe('terminal iOS dictation write-back', () => {
   it('does not write normalized text back into the buffered command input value', () => {
-    expect(sessionRouteSource).toContain('onChangeText={setInput}')
+    expect(sessionRouteSource).toContain('onChangeText={handleCommandInputChange}')
+    const handler = sessionRouteSource.slice(
+      sessionRouteSource.indexOf('const handleCommandInputChange'),
+      sessionRouteSource.indexOf('const handleLiveInputChangeWithCtrl')
+    )
+    // Raw text, or nothing: a character claimed by sticky Ctrl is not written back at all.
+    expect(handler).toContain('setInput(text)')
+    expect(handler).not.toContain('normalizeTerminalTextInput')
     expect(sessionRouteSource).not.toContain(
       'setInput((previousText) => normalizeTerminalTextInput'
     )
+  })
+
+  it('gives the expanded editor the same raw setter', () => {
+    const editor = sessionRouteSource.slice(
+      sessionRouteSource.indexOf('<MobileTerminalExpandedComposer'),
+      sessionRouteSource.indexOf('<CustomKeyModal')
+    )
+    expect(editor).toContain('onChangeText={setInput}')
   })
 
   it('still normalizes the buffered command text at send time', () => {
