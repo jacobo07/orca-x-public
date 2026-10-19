@@ -38,7 +38,7 @@
     "fileNamePattern": "^([a-z0-9-]+)\\.([a-z0-9-]+)\\.([a-z]+)\\.([a-z0-9-]+)\\.r([0-9]{2})\\.png$",
     // Raised as waves land. A floor is what tells a sweep that found nothing apart from an
     // estate that has nothing.
-    "minimumAssets": 2
+    "minimumAssets": 3
   },
   "assets": [
     {
@@ -95,6 +95,31 @@
       "sha256": "99160c1c211bc339f82e2b5e03595a46ff17d97430d165b19a55a947f6beec73",
       "date": "2026-09-21",
       "notes": "Rendered from docs/visual/producers/shell.global.desktop.at-rest.html at 1440x900 CSS, 2x (2880x1800). Corrects r01's two blocking deltas: the selected row is an accent surface plus data-current rather than a saturated fill, and the Spanish is right. All five status marks are the W1 tokens, UNKNOWN hollow among filled."
+    },
+    {
+      "assetId": "terminal.session.mobile.at-rest.r01",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "at-rest",
+      "revision": 1,
+      "class": "north-star",
+      "truth": "target",
+      "targetLabel": true,
+      "producer": "generated",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.at-rest.r01.png",
+      "sha256": "a286bb5589cf33cdf37e5fc9ed873a31e3c581b6248b7ecb91599be4657fcd28",
+      "date": "2026-10-19",
+      // Owner-supplied ChatGPT image; the conversation id was not recorded, so the file id stands in for it.
+      "provenance": {
+        "tool": "ChatGPT image generation (Owner-supplied, 2026-10-09)",
+        "thread": "chatgpt-file-00000000a8908210921bd42a5272e9e0 (conversation not recorded)",
+        "sourcePath": "C:/Users/User/Downloads/file_00000000a8908210921bd42a5272e9e0.png",
+        "actualSize": "941x1672"
+      },
+      // Composition reference only: the body text carries generated-text typos ("gecribi", "SUWARKY"), so it is not a copy reference.
+      "notes": "Owner's mobile terminal target: header (menu, logo, Cambiar host, Runtimes, search, overflow), host/path identity line, monospace agent output with a fold caret, composer (+, expand, send) and an accessory key row. Deltas against the shipped screen: docs/visual/sheets/terminal-mobile-reference-delta.md."
     }
   ]
 }
