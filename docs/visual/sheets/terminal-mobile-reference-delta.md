@@ -15,16 +15,17 @@ Shipped screen: `mobile/app/h/[hostId]/session/[worktreeId].tsx` (read 2026-10-1
 | 2 | Header, centre | **Cambiar host** and **Runtimes** pickers | none in the session | new capability |
 | 3 | Header, right | search + ⋮ | files, source control, ⋯ (`:4386-4409`) | layout |
 | 4 | Identity line | ● `C1 · GEX44 ~/claude-power-pack` above the output | host/state in the header meta row, no cwd | layout + data (cwd) |
-| 5 | Output | rounded card, monospace, fold caret ˅ on an agent block | full-bleed xterm | open question, see below |
+| 5 | Output | the real terminal in a rounded card | full-bleed xterm | framing (inset, radius, border) |
 | 6 | Composer | **+** left, field, expand ⤢, send ↑ | field, attach/dictation, send ↑ (`:4959-5013`) | layout |
 | 7 | Field hint text | "Escribe un comando…" | literal "Type a command…" (`:4974`) | copy/locale |
 | 8 | Key row | Ctrl · Esc · Tab · … ‖ A · ← ↓ ↑ → | configurable accessory row (`terminal-accessory-keys.ts:202`, user layout in `terminal-accessory-layout.ts`) | default order + styling |
 
-## Open question (decides slice 4)
+## Row 5 is the real terminal (Owner, 2026-10-19)
 
-Row 5: the fold caret and the bullet formatting are a rendered agent transcript, not terminal
-cells. Either the card restyles the xterm (cheap), or it is a structured agent view beside the
-terminal (a different surface, near native chat). It is not decided here.
+The fold caret and bullets are the agent CLI's own output inside the terminal, not app chrome, so
+the slice only frames the xterm. The structured agent chat is a separate surface with its own
+references: `cognitive-workspace.*` in the registry. Framing must not cost columns silently: the
+inset changes the PTY width, so the fitted column count is measured before and after.
 
 ## Proposed slices, in order
 
