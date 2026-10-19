@@ -138,6 +138,39 @@
       "date": "2026-10-19",
       "notes": "adb screencap, 1080x2340, Android 14 emulator (sdk_gphone64_x86_64), dev build of 8789398f47 paired to the mobile mock server (worktree narwhal-2, Live input off). Slice 1 dock: + / 'Type a command…' with mic and expand / send above Ctrl Esc Tab … | A and four arrows (docs/mobile-terminal-shortcut-bar.md). Header and output are unchanged (slices 2-4). The clipped terminal glyphs are the emulator's xterm render, not part of this slice."
     },
+    {
+      "assetId": "terminal.session.mobile.at-rest.r03",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "at-rest",
+      "revision": 3,
+      "class": "north-star",
+      // Observed: the shipped header after slice 2. r01 stays the target for slices 3-4.
+      "truth": "current",
+      "producer": "capture",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.at-rest.r03.png",
+      "sha256": "80875954726088d485ddf4fd617d90f01c28387367703e750e44cc0586dd8aeb",
+      "date": "2026-10-19",
+      "notes": "adb screencap, 1080x2340, Android 14 emulator (sdk_gphone64_x86_64), dev build at e886e14608 paired to the mobile mock server (worktree narwhal-2). Slice 2 header (docs/mobile-terminal-header-search.md): back + Orca mark, search, more; identity line 'zsh · Host 1' with no path tail because the mock reports neither a shell cwd nor a worktree path (the segment is omitted, never stood in for). Tab strip and slice-1 dock unchanged. The clipped terminal glyphs are the emulator's xterm render."
+    },
+    {
+      "assetId": "terminal.session.mobile.searching.r01",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "searching",
+      "revision": 1,
+      "class": "north-star",
+      "truth": "current",
+      "producer": "capture",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.searching.r01.png",
+      "sha256": "42abec7f4f962964b5d62b33d27b3fd2f78c7f50659cea8c55bcc010a8bfc407",
+      "date": "2026-10-19",
+      "notes": "Same device and build as at-rest.r03. Query 'auth' in the search bar that replaces the header row: count 1/7, seven matches highlighted, the active one in the accent; IME open. Recorded round-trip on device: next 2/7..7/7 then wraps to 1/7, previous 7/7 then 6/7, Enter steps next, close (‹) clears the count and every highlight. The mock saw only terminal.list/worktree.show reads during the search: no PTY write, no resize."
+    },
     // Cognitive Workspace family: six Owner-supplied ChatGPT mockups, dropped 2026-10-19 in
     // "Downloads/! Orca X Visual Refs". The agent chat is a separate surface from the terminal
     // (Owner, 2026-10-19). Sample data (agents, threads, task lists) is invented, so none of
