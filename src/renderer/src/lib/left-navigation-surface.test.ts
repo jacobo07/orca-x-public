@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SidePanelDock } from '../../../shared/ui-chrome-types'
+import type { SidePanelDock, TopLevelView } from '../../../shared/ui-chrome-types'
 import { revealProjectSidebar } from './left-navigation-surface'
 
 function makeState(args: {
   sidebarOpen: boolean
   sidePanelDock: SidePanelDock
   rightSidebarOpen: boolean
+  activeView?: TopLevelView
 }) {
-  return { ...args, setSidebarOpen: vi.fn(), toggleRightSidebar: vi.fn() }
+  return {
+    activeView: 'terminal' as TopLevelView,
+    activeWorktreeId: 'wt-1',
+    ...args,
+    setSidebarOpen: vi.fn(),
+    toggleRightSidebar: vi.fn()
+  }
 }
 
 describe('revealProjectSidebar', () => {
@@ -28,6 +35,20 @@ describe('revealProjectSidebar', () => {
 
     expect(changed).toBe(true)
     expect(state.setSidebarOpen).toHaveBeenCalledWith(true)
+    expect(state.toggleRightSidebar).not.toHaveBeenCalled()
+  })
+
+  it('keeps the panel preference on a view that does not mount the panel', () => {
+    const state = makeState({
+      sidebarOpen: true,
+      sidePanelDock: 'left',
+      rightSidebarOpen: true,
+      activeView: 'workspace'
+    })
+
+    const changed = revealProjectSidebar(state)
+
+    expect(changed).toBe(false)
     expect(state.toggleRightSidebar).not.toHaveBeenCalled()
   })
 
