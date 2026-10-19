@@ -51,8 +51,9 @@ function settle(ms = 20): Promise<void> {
 }
 
 function highlightedCells(terminal: Terminal): number {
-  const service = (terminal as never as { _core: { _decorationService: DecorationServiceInternals } })
-    ._core._decorationService
+  const service = (
+    terminal as never as { _core: { _decorationService: DecorationServiceInternals } }
+  )._core._decorationService
   let count = 0
   for (let line = 0; line < 30; line++) {
     for (let x = 0; x < 80; x++) {

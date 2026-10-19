@@ -21,7 +21,9 @@ export function MobileSessionIdentityLine({ connState, identity, showRetry, onRe
       onPress={onRetry}
       accessibilityRole={showRetry ? 'button' : undefined}
       accessibilityLabel={
-        showRetry ? `Reconnect to desktop. ${identity.accessibilityLabel}` : identity.accessibilityLabel
+        showRetry
+          ? `Reconnect to desktop. ${identity.accessibilityLabel}`
+          : identity.accessibilityLabel
       }
     >
       <StatusDot state={connState} />

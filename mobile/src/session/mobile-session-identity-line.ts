@@ -34,7 +34,9 @@ function present(value: string | null): string | null {
   return trimmed ? trimmed : null
 }
 
-export function buildMobileSessionIdentity(input: MobileSessionIdentityInput): MobileSessionIdentity {
+export function buildMobileSessionIdentity(
+  input: MobileSessionIdentityInput
+): MobileSessionIdentity {
   const tabTitle = present(input.tabTitle)
   const lead = input.showStatusText || !tabTitle ? input.statusText : tabTitle
   const hostName = present(input.hostName)
@@ -42,8 +44,11 @@ export function buildMobileSessionIdentity(input: MobileSessionIdentityInput): M
   const pathTail = path ? formatWorktreePathTail(path) : null
   const segments = [lead, hostName, pathTail].filter((part): part is string => part !== null)
 
-  const tabCount =
-    input.showStatusText ? null : input.tabCount === 1 ? '1 tab' : `${input.tabCount} tabs`
+  const tabCount = input.showStatusText
+    ? null
+    : input.tabCount === 1
+      ? '1 tab'
+      : `${input.tabCount} tabs`
   const accessibilityLabel = [
     present(input.worktreeName),
     lead,

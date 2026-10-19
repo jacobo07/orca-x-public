@@ -4378,21 +4378,21 @@ export default function SessionScreen() {
           ? createTabAgentOptions
               .filter((option) => option.agent)
               .map((option) => ({
-              label: option.label,
-              hint: 'New agent session',
-              icon: Bot,
-              onPress: () => {
-                const delivery = pendingDiffNotesDelivery
-                setPendingDiffNotesDelivery(null)
-                if (!delivery) {
-                  return
+                label: option.label,
+                hint: 'New agent session',
+                icon: Bot,
+                onPress: () => {
+                  const delivery = pendingDiffNotesDelivery
+                  setPendingDiffNotesDelivery(null)
+                  if (!delivery) {
+                    return
+                  }
+                  void handleCreateTerminal(option.agent, {
+                    initialPrompt: delivery.prompt,
+                    onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
+                  })
                 }
-                void handleCreateTerminal(option.agent, {
-                  initialPrompt: delivery.prompt,
-                  onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
-                })
-              }
-            }))
+              }))
           : createTabAgentLoadState === 'loaded'
             ? [
                 {
