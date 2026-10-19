@@ -220,6 +220,23 @@
       "date": "2026-10-19",
       "notes": "Same device and build as at-rest.r04. Runtimes open: ChatGPT, Claude, Gemini (from settings.get + preflight.detectAgents), then Terminal with the hint 'Active tab' because the active tab is a plain zsh. Choosing Claude sent exactly one session.tabs.createTerminal to Host 2's mock, the same single request New Tab → Claude sends; the mock has no handler for it, so no tab opened on either path."
     },
+    {
+      "assetId": "terminal.session.mobile.at-rest.r05",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "at-rest",
+      "revision": 5,
+      "class": "north-star",
+      // Observed: the shipped output card after slice 4, the last of the r01 delta's four slices.
+      "truth": "current",
+      "producer": "capture",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.at-rest.r05.png",
+      "sha256": "5896feaf74b749bf7ac16e1d0a14daa11d4e9f5f47381ae7b74181cd423809a7",
+      "date": "2026-10-19",
+      "notes": "adb screencap, 1080x2340, Android 14 emulator (sdk_gphone64_x86_64), dev build at 330b969419 paired to the mobile mock (Host 1 :6768), session manta-1. Slice 4 (docs/mobile-terminal-output-card.md): the xterm in a card with an 8 dp side margin, 1 dp border, 14 dp radius. Measured viewport: 54x40 full-bleed at 6ad995924e, 51x40 in the card (logcat viewportCols/viewportRows). Column 0's '$' sits against the top-left arc unclipped. The mock's output fills ~20 of 40 rows, so the last row's visibility is not shown here."
+    },
     // Cognitive Workspace family: six Owner-supplied ChatGPT mockups, dropped 2026-10-19 in
     // "Downloads/! Orca X Visual Refs". The agent chat is a separate surface from the terminal
     // (Owner, 2026-10-19). Sample data (agents, threads, task lists) is invented, so none of
