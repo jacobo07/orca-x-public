@@ -121,6 +121,23 @@
       // Composition reference only: the body text carries generated-text typos ("gecribi", "SUWARKY"), so it is not a copy reference.
       "notes": "Owner's mobile terminal target: header (menu, logo, Cambiar host, Runtimes, search, overflow), host/path identity line, the real terminal's output in a card (the fold caret is the agent CLI's own output, not app chrome), composer (+, expand, send) and an accessory key row. Deltas against the shipped screen: docs/visual/sheets/terminal-mobile-reference-delta.md."
     },
+    {
+      "assetId": "terminal.session.mobile.at-rest.r02",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "at-rest",
+      "revision": 2,
+      "class": "north-star",
+      // Observed, not designed: the shipped dock after slice 1, beside r01's target. r01 stays the target for slices 2-4.
+      "truth": "current",
+      "producer": "capture",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.at-rest.r02.png",
+      "sha256": "1fb3b8a7cb6d69ac20b155eaa3e0f5c772711969fa45a4ad20a26dc3079254c0",
+      "date": "2026-10-19",
+      "notes": "adb screencap, 1080x2340, Android 14 emulator (sdk_gphone64_x86_64), dev build of 8789398f47 paired to the mobile mock server (worktree narwhal-2, Live input off). Slice 1 dock: + / 'Type a command…' with mic and expand / send above Ctrl Esc Tab … | A and four arrows (docs/mobile-terminal-shortcut-bar.md). Header and output are unchanged (slices 2-4). The clipped terminal glyphs are the emulator's xterm render, not part of this slice."
+    },
     // Cognitive Workspace family: six Owner-supplied ChatGPT mockups, dropped 2026-10-19 in
     // "Downloads/! Orca X Visual Refs". The agent chat is a separate surface from the terminal
     // (Owner, 2026-10-19). Sample data (agents, threads, task lists) is invented, so none of
