@@ -3726,7 +3726,8 @@ export default function SessionScreen() {
   }, [selectModeActive])
 
   useEffect(() => {
-    const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
+    const shouldLoadAgentOptions =
+      showCreateTabDrawer || showRuntimes || pendingDiffNotesDelivery !== null
     if (!shouldLoadAgentOptions) {
       setCreateTabAgentLoadState('idle')
       setCreateTabAgentOptions([])
@@ -3762,7 +3763,7 @@ export default function SessionScreen() {
     return () => {
       stale = true
     }
-  }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
+  }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, showRuntimes, worktreeId])
 
   async function handleCreateTerminal(
     agent?: MobileLaunchProfileOption['agent'],
