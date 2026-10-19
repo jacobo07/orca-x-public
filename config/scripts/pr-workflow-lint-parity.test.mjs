@@ -93,21 +93,21 @@ describe('what may credit a lint step', () => {
   })
 })
 
-// The integration contract for a gate arriving from another branch. orca-x/cognitive-workspace
-// wires check:workspace-trust-authority -- the gate over the workspace execution trust boundary --
-// into `lint`, and no workflow runs `pnpm lint`. This pins that both owners refuse it on merge,
-// so the security gate cannot land without an executor.
+// The integration contract for a gate arriving from another branch: chained into `lint` with no
+// pull-request step, it is refused on merge. Uses a synthetic name, because a real gate once wired
+// (check:workspace-trust-authority, pr.yml) turns this into a test of nothing.
 describe('a gate arriving from another branch needs an executor here', () => {
   it('refuses a lint-chained gate that no pull-request workflow runs', () => {
     const { scripts } = JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'))
+    expect(scripts).not.toHaveProperty('check:arriving-unwired-gate')
     const merged = {
       ...scripts,
-      'check:workspace-trust-authority': 'node config/scripts/check-workspace-trust-authority.mjs',
-      lint: `${scripts.lint} && pnpm run check:workspace-trust-authority`
+      'check:arriving-unwired-gate': 'node config/scripts/check-arriving-unwired-gate.mjs',
+      lint: `${scripts.lint} && pnpm run check:arriving-unwired-gate`
     }
 
     expect(findMissingLintSteps({ scripts: merged, workflows: readWorkflows(REPO_ROOT) })).toEqual([
-      'config/scripts/check-workspace-trust-authority.mjs'
+      'config/scripts/check-arriving-unwired-gate.mjs'
     ])
     // Paired control: with a pr.yml-style step the same gate is accepted, so the case above is
     // about the missing executor rather than about the gate's name.
@@ -118,7 +118,7 @@ describe('a gate arriving from another branch needs an executor here', () => {
           ...readWorkflows(REPO_ROOT),
           {
             on: { pull_request: null },
-            jobs: { j: { steps: [{ run: 'pnpm run check:workspace-trust-authority' }] } }
+            jobs: { j: { steps: [{ run: 'pnpm run check:arriving-unwired-gate' }] } }
           }
         ]
       })
