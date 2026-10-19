@@ -171,6 +171,55 @@
       "date": "2026-10-19",
       "notes": "Same device and build as at-rest.r03. Query 'auth' in the search bar that replaces the header row: count 1/7, seven matches highlighted, the active one in the accent; IME open. Recorded round-trip on device: next 2/7..7/7 then wraps to 1/7, previous 7/7 then 6/7, Enter steps next, close (‹) clears the count and every highlight. The mock saw only terminal.list/worktree.show reads during the search: no PTY write, no resize."
     },
+    {
+      "assetId": "terminal.session.mobile.at-rest.r04",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "at-rest",
+      "revision": 4,
+      "class": "north-star",
+      // Observed: the shipped picker row after slice 3. r01 stays the target for slice 4.
+      "truth": "current",
+      "producer": "capture",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.at-rest.r04.png",
+      "sha256": "d37cbd1a302b025a8d522592e7cd41861bf3e7c483721f65657ba0d3273f7964",
+      "date": "2026-10-19",
+      "notes": "adb screencap, 1080x2340, Android 14 emulator (sdk_gphone64_x86_64), dev build at 6e4a36d744 paired to two mobile mock servers (Host 1 :6768, Host 2 :6769), session manta-1 on Host 2. Slice 3 (docs/mobile-terminal-host-runtime-pickers.md): a second row under the unchanged header with Switch host and Runtimes; identity line 'zsh · Host 2'. The clipped terminal glyphs are the emulator's xterm render."
+    },
+    {
+      "assetId": "terminal.session.mobile.host-picker.r01",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "host-picker",
+      "revision": 1,
+      "class": "north-star",
+      "truth": "current",
+      "producer": "capture",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.host-picker.r01.png",
+      "sha256": "c76621ea217c9b49d16e4364b967989eadadc529d0578b176dc798956e11f2d7",
+      "date": "2026-10-19",
+      "notes": "Same device as at-rest.r04, build 04349118c3 (the host picker is unchanged by 6e4a36d744). Switch host open: Host 2 'Connected · 10.0.2.2:6769' selected, Host 1 'Not connected · 10.0.2.2:6768'. Mock A logged nothing while the picker was open: listing a host did not connect it. Round-trip on device: choosing Host 1 opened its worktree list, Back returned to the Host 2 session."
+    },
+    {
+      "assetId": "terminal.session.mobile.runtimes.r01",
+      "surface": "terminal",
+      "subsurface": "session",
+      "device": "mobile",
+      "state": "runtimes",
+      "revision": 1,
+      "class": "north-star",
+      "truth": "current",
+      "producer": "capture",
+      "status": "candidate",
+      "file": "terminal/terminal.session.mobile.runtimes.r01.png",
+      "sha256": "f0329a32e5593588772c1859e9795a5986e3dc6d33511d0bb562d985114f2240",
+      "date": "2026-10-19",
+      "notes": "Same device and build as at-rest.r04. Runtimes open: ChatGPT, Claude, Gemini (from settings.get + preflight.detectAgents), then Terminal with the hint 'Active tab' because the active tab is a plain zsh. Choosing Claude sent exactly one session.tabs.createTerminal to Host 2's mock, the same single request New Tab → Claude sends; the mock has no handler for it, so no tab opened on either path."
+    },
     // Cognitive Workspace family: six Owner-supplied ChatGPT mockups, dropped 2026-10-19 in
     // "Downloads/! Orca X Visual Refs". The agent chat is a separate surface from the terminal
     // (Owner, 2026-10-19). Sample data (agents, threads, task lists) is invented, so none of
