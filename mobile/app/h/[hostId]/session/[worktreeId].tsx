@@ -4729,62 +4729,66 @@ export default function SessionScreen() {
                 </Text>
               </View>
             ) : (
-              <View
-                style={styles.terminalFrame}
-                onLayout={(e) => {
-                  terminalFrameHeightRef.current = e.nativeEvent.layout.height
-                  // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
-                  const nextWidth = Math.round(e.nativeEvent.layout.width)
-                  const nextHeight = Math.round(e.nativeEvent.layout.height)
-                  setTerminalFrameWidth((prev) => (prev === nextWidth ? prev : nextWidth))
-                  notifyTerminalFrameHeight(nextHeight)
-                }}
-              >
-                {terminals.map((terminal) => (
-                  <TerminalPaneView
-                    key={terminal.handle}
-                    handle={terminal.handle}
-                    active={terminal.handle === activeHandle}
-                    keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
-                    terminalTheme={terminal.terminalTheme}
-                    textScale={terminalTextScale}
-                    // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
-                    onTextScaleChange={applyTerminalTextScale}
-                    onSearchResults={terminalSearch.handleSearchResults}
-                    onRef={setTerminalWebViewRef}
-                    onWebReady={handleTerminalWebReady}
-                    onSelectionMode={handleSelectionMode}
-                    onSelectionCopy={handleSelectionCopy}
-                    onSelectionEvicted={handleSelectionEvicted}
-                    onModesChanged={handleModesChanged}
-                    onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
-                    onHaptic={handleHaptic}
-                    onTerminalInput={handleTerminalInput}
-                    onTerminalQueryReply={handleTerminalQueryReply}
-                    onTerminalTap={handleTerminalTap}
-                    onFileTap={handleFileTap}
-                    onOpenUrl={handleTerminalOpenUrl}
+              <View style={styles.terminalCard}>
+                <View
+                  style={styles.terminalFrame}
+                  onLayout={(e) => {
+                    terminalFrameHeightRef.current = e.nativeEvent.layout.height
+                    // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
+                    const nextWidth = Math.round(e.nativeEvent.layout.width)
+                    const nextHeight = Math.round(e.nativeEvent.layout.height)
+                    setTerminalFrameWidth((prev) => (prev === nextWidth ? prev : nextWidth))
+                    notifyTerminalFrameHeight(nextHeight)
+                  }}
+                >
+                  {terminals.map((terminal) => (
+                    <TerminalPaneView
+                      key={terminal.handle}
+                      handle={terminal.handle}
+                      active={terminal.handle === activeHandle}
+                      keyboardLift={
+                        terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0
+                      }
+                      terminalTheme={terminal.terminalTheme}
+                      textScale={terminalTextScale}
+                      // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
+                      onTextScaleChange={applyTerminalTextScale}
+                      onSearchResults={terminalSearch.handleSearchResults}
+                      onRef={setTerminalWebViewRef}
+                      onWebReady={handleTerminalWebReady}
+                      onSelectionMode={handleSelectionMode}
+                      onSelectionCopy={handleSelectionCopy}
+                      onSelectionEvicted={handleSelectionEvicted}
+                      onModesChanged={handleModesChanged}
+                      onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
+                      onHaptic={handleHaptic}
+                      onTerminalInput={handleTerminalInput}
+                      onTerminalQueryReply={handleTerminalQueryReply}
+                      onTerminalTap={handleTerminalTap}
+                      onFileTap={handleFileTap}
+                      onOpenUrl={handleTerminalOpenUrl}
+                    />
+                  ))}
+                  <MobileNativeChatOverlay
+                    controller={nativeChatController}
+                    onOpenFile={handleNativeChatFileTap}
+                    images={nativeChatImages}
+                    onMicPress={handleDictationToggle}
+                    micActive={dictation.isRecording}
+                    dictationMode={dictationMode}
+                    onMicPressIn={handleDictationPressIn}
+                    onMicPressOut={handleDictationPressOut}
+                    inputLockReason={nativeChatInputLockReason}
+                    sendErrorMessage={nativeChatSendError.message}
+                    onClearSendError={nativeChatSendError.clear}
+                    keyboardInset={keyboardLift}
                   />
-                ))}
-                <MobileNativeChatOverlay
-                  controller={nativeChatController}
-                  onOpenFile={handleNativeChatFileTap}
-                  images={nativeChatImages}
-                  onMicPress={handleDictationToggle}
-                  micActive={dictation.isRecording}
-                  dictationMode={dictationMode}
-                  onMicPressIn={handleDictationPressIn}
-                  onMicPressOut={handleDictationPressOut}
-                  inputLockReason={nativeChatInputLockReason}
-                  sendErrorMessage={nativeChatSendError.message}
-                  onClearSendError={nativeChatSendError.clear}
-                  keyboardInset={keyboardLift}
-                />
-                {toastMessage && (
-                  <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-                    <Text style={styles.toastText}>{toastMessage}</Text>
-                  </Animated.View>
-                )}
+                  {toastMessage && (
+                    <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
+                      <Text style={styles.toastText}>{toastMessage}</Text>
+                    </Animated.View>
+                  )}
+                </View>
               </View>
             )}
 

@@ -142,6 +142,17 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     height: 18,
     backgroundColor: colors.borderSubtle
   },
+  // Why: the card owns the border; terminalFrame inside it stays the fit-measured box.
+  terminalCard: {
+    flex: 1,
+    minHeight: 0,
+    marginHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.card,
+    backgroundColor: colors.terminalBg,
+    overflow: 'hidden'
+  },
   terminalFrame: {
     flex: 1,
     minHeight: 0,
