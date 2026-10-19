@@ -9,7 +9,12 @@ const mobileRoot = path.resolve(scriptDir, '..')
 const outputPath = path.join(mobileRoot, 'src', 'terminal', 'terminal-webview-engine.generated.ts')
 const target = 'chrome74'
 
-const packages = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
+const packages = [
+  '@xterm/xterm',
+  '@xterm/addon-unicode11',
+  '@xterm/addon-webgl',
+  '@xterm/addon-search'
+]
 
 async function readPackageVersion(packageName) {
   // Why: a package.json module specifier must use '/' — path.join emits '\' on
@@ -30,6 +35,7 @@ async function buildEngineJs() {
         import { Terminal } from '@xterm/xterm'
         import { Unicode11Addon } from '@xterm/addon-unicode11'
         import { WebglAddon } from '@xterm/addon-webgl'
+        import { SearchAddon } from '@xterm/addon-search'
 
         // Why: xterm reaches for these runtime APIs on the terminal-bringup path,
         // and esbuild lowers syntax but not runtime APIs. Guarded shims let the
@@ -62,6 +68,7 @@ async function buildEngineJs() {
         window.Terminal = Terminal
         window.Unicode11Addon = { Unicode11Addon }
         window.WebglAddon = { WebglAddon }
+        window.SearchAddon = { SearchAddon }
       `,
       resolveDir: mobileRoot,
       sourcefile: 'terminal-webview-engine-entry.js'

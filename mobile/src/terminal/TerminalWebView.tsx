@@ -38,7 +38,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onTerminalTap,
     onFileTap,
     onOpenUrl,
-    onTextScaleChange
+    onTextScaleChange,
+    onSearchResults
   },
   ref
 ) {
@@ -171,7 +172,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           onTerminalTap,
           onFileTap,
           onOpenUrl,
-          onTextScaleChange
+          onTextScaleChange,
+          onSearchResults
         })
       }
     },
@@ -189,7 +191,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onTerminalTap,
       onFileTap,
       onOpenUrl,
-      onTextScaleChange
+      onTextScaleChange,
+      onSearchResults
     ]
   )
 
@@ -335,6 +338,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       },
       doSelectAll() {
         postMessage({ type: 'do-select-all' })
+      },
+      search(query: string, direction: 'next' | 'previous') {
+        // Why: matches must include every chunk already received.
+        writeCoalescer.flushNow()
+        postMessage({ type: 'search', query, direction })
+      },
+      clearSearch() {
+        postMessage({ type: 'search-clear' })
       },
       async awaitReady(): Promise<void> {
         // Why: returns the in-flight ready promise (set by init); resolves

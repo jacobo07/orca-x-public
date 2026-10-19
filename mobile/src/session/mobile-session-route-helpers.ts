@@ -58,17 +58,20 @@ export function getActiveTabIdForHandle(
   )
 }
 
+/** Applies a stream event's cwd to the map; true when the handle's cwd changed. */
 export function updateTerminalCwdFromStreamEvent(
   handle: string,
   data: Readonly<Record<string, unknown>>,
   terminalCwd: Map<string, string>
-): void {
+): boolean {
   if (!('cwd' in data)) {
-    return
+    return false
   }
+  const before = terminalCwd.get(handle)
   if (typeof data.cwd === 'string' && data.cwd.trim().length > 0) {
     terminalCwd.set(handle, data.cwd)
-    return
+    return before !== data.cwd
   }
   terminalCwd.delete(handle)
+  return before !== undefined
 }

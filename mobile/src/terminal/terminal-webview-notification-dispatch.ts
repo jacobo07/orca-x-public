@@ -77,6 +77,13 @@ export function dispatchTerminalWebViewNotification(
     if (scale > 0) {
       handlers.onTextScaleChange?.(scale)
     }
+  } else if (msg.type === 'search-results') {
+    const count = typeof msg.resultCount === 'number' && msg.resultCount > 0 ? msg.resultCount : 0
+    const index = typeof msg.resultIndex === 'number' ? msg.resultIndex : -1
+    handlers.onSearchResults?.({
+      resultCount: count,
+      resultIndex: count > 0 && index >= 0 && index < count ? index : -1
+    })
   } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
     // eslint-disable-next-line no-console
     console.warn('[mobile-clip] selection cancelled by pinch')

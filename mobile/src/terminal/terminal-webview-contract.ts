@@ -61,7 +61,11 @@ export type TerminalSelectionEvents = {
   // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
   // here so the app persists it and keeps Settings + other panes in sync.
   onTextScaleChange?: (scale: number) => void
+  // resultIndex is -1 when nothing is active (no query or no match).
+  onSearchResults?: (results: TerminalSearchResults) => void
 }
+
+export type TerminalSearchResults = { resultIndex: number; resultCount: number }
 
 export type TerminalWebViewProps = {
   style?: StyleProp<ViewStyle>
@@ -95,6 +99,9 @@ export type TerminalWebViewHandle = {
   resetZoom: () => void
   cancelSelect: () => void
   doSelectAll: () => void
+  // Find-in-scrollback; results arrive through onSearchResults.
+  search: (query: string, direction: 'next' | 'previous') => void
+  clearSearch: () => void
   // Why: lets callers await the WebView-side `init` rAF chain (term.open
   // → renderService population → first paint) so a follow-up measure
   // doesn't race ahead and find term=null or cellWidth=0. Resolves on

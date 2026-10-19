@@ -25,6 +25,8 @@ export type LiveWorktreeName = {
   /** What the host last proved about this worktree still existing — see the bounce in
    *  use-missing-worktree-bounce.ts. */
   resolution: WorktreeShowResolution
+  /** The worktree root the host reported, or null before a read or when it sends none. */
+  path: string | null
 }
 
 export function useLiveWorktreeName({
@@ -50,6 +52,9 @@ export function useLiveWorktreeName({
   // answers selector_not_found for a live worktree — one miss is suspicion, not proof.
   // The fallback poll guarantees a confirming read (a failed show never stops it).
   const missingStreakRef = useRef({ worktreeId, count: 0 })
+  const [worktreePath, setWorktreePath] = useState<{ worktreeId: string; path: string | null }>(
+    () => ({ worktreeId, path: null })
+  )
 
   useEffect(() => {
     setWorktreeName((current) =>
@@ -114,7 +119,7 @@ export function useLiveWorktreeName({
             return
           }
           const result = (response as RpcSuccess).result as {
-            worktree?: WorktreeDisplayNameSource
+            worktree?: WorktreeDisplayNameSource & { path?: unknown }
           }
           const liveName = result.worktree
             ? getLiveWorktreeDisplayName([result.worktree], worktreeId)
@@ -126,6 +131,13 @@ export function useLiveWorktreeName({
                 : { worktreeId, name: liveName }
             )
           }
+          const rawPath = result.worktree?.path
+          const livePath = typeof rawPath === 'string' && rawPath.trim() ? rawPath : null
+          setWorktreePath((current) =>
+            current.worktreeId === worktreeId && current.path === livePath
+              ? current
+              : { worktreeId, path: livePath }
+          )
           hasSuccessfulRefresh = true
           if (eventStreamReady) {
             stopFallbackPoll()
@@ -199,10 +211,11 @@ export function useLiveWorktreeName({
 
   if (isFloatingWorkspace) {
     // The sentinel has no worktree record to resolve, so nothing is ever proven about it.
-    return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown' }
+    return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown', path: null }
   }
   return {
     name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
-    resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
+    resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown',
+    path: worktreePath.worktreeId === worktreeId ? worktreePath.path : null
   }
 }

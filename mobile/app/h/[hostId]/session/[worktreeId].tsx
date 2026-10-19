@@ -27,17 +27,13 @@ import {
   AlertTriangle,
   ArrowUp,
   Bot,
-  ChevronLeft,
   Copy,
-  Folder,
   File,
   FileText,
-  GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
   Maximize2,
   MessageSquare,
-  MoreHorizontal,
   Plus,
   RefreshCw,
   Send,
@@ -79,7 +75,10 @@ import {
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
 import { isFloatingWorkspaceWorktreeId } from '../../../../src/session/floating-workspace'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
-import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
+import { MobileSessionHeader } from '../../../../src/session/MobileSessionHeader'
+import { MobileSessionIdentityLine } from '../../../../src/session/MobileSessionIdentityLine'
+import { buildMobileSessionIdentity } from '../../../../src/session/mobile-session-identity-line'
+import { useMobileTerminalSearch } from '../../../../src/session/use-mobile-terminal-search'
 import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from '../../../../src/session/QuickCommandsSheet'
 import {
@@ -149,7 +148,6 @@ import {
 } from '../../../../src/terminal/terminal-foreground-recovery'
 import { MobileBrowserPane } from '../../../../src/browser/MobileBrowserPane'
 import { normalizeBrowserUrl } from '../../../../src/browser/browser-url'
-import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
 import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
@@ -758,7 +756,11 @@ export default function SessionScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
-  const { name: worktreeName, resolution: worktreeResolution } = useLiveWorktreeName({
+  const {
+    name: worktreeName,
+    resolution: worktreeResolution,
+    path: worktreePath
+  } = useLiveWorktreeName({
     client,
     connState,
     routeName: routeWorktreeName,
@@ -867,6 +869,9 @@ export default function SessionScreen() {
   )
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
+  const [hostName, setHostName] = useState<string | null>(null)
+  // Why: mirrors terminalCwdRef so the identity line re-renders when the active shell moves.
+  const [terminalCwds, setTerminalCwds] = useState<ReadonlyMap<string, string>>(() => new Map())
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
     MobileSessionTab,
@@ -1252,6 +1257,15 @@ export default function SessionScreen() {
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
   }, [])
+  const activeTerminalHandle =
+    activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal === 'string'
+      ? activeHandle
+      : null
+  const terminalSearch = useMobileTerminalSearch({
+    activeHandle: activeTerminalHandle,
+    canSearch: activeTerminalHandle !== null,
+    getTerminalRef
+  })
 
   const unsubscribeTerminal = useCallback(
     (handle: string) => {
@@ -1299,6 +1313,7 @@ export default function SessionScreen() {
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
     terminalCwdRef.current.clear()
+    setTerminalCwds(new Map())
     setTerminalKeyboardMetrics(new Map())
     for (const term of terminalRefs.current.values()) {
       term.clear()
@@ -1428,7 +1443,9 @@ export default function SessionScreen() {
             if (initializedHandlesRef.current.has(handle)) {
               return
             }
-            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
+            if (updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)) {
+              setTerminalCwds(new Map(terminalCwdRef.current))
+            }
             const { hostCols, hostRows } = readTerminalViewportDims(data)
             // Why: absent host dims must not be coerced into a comparable size — 80x24
             // never equals a phone viewport and armed a zero-delay resubscribe loop (STA-3337).
@@ -1483,9 +1500,13 @@ export default function SessionScreen() {
               showToast
             })
           } else if (data.type === 'metadata') {
-            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
+            if (updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)) {
+              setTerminalCwds(new Map(terminalCwdRef.current))
+            }
           } else if (data.type === 'data') {
-            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
+            if (updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)) {
+              setTerminalCwds(new Map(terminalCwdRef.current))
+            }
             // Why: missing ref is the likely cause of "blank but input works" — writes dropped after mid-flight unmount or scrollback never landed.
             const dataRef = getTerminalRef(handle)
             if (!dataRef) {
@@ -1504,7 +1525,9 @@ export default function SessionScreen() {
             }
             dataRef.write(data.chunk as string)
           } else if (data.type === 'resized') {
-            updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)
+            if (updateTerminalCwdFromStreamEvent(handle, data, terminalCwdRef.current)) {
+              setTerminalCwds(new Map(terminalCwdRef.current))
+            }
             // Server resize: reinit xterm on a full-buffer snapshot (width reflow rewraps scrollback), else just resize geometry.
             const viewport = viewportMeasuredRef.current ? viewportRef.current : null
             const [cols, rows] = viewportResubscribeBudgetRef.current.observeResize(
@@ -2394,6 +2417,7 @@ export default function SessionScreen() {
       if (host) {
         deviceTokenRef.current = host.deviceToken
         setHostEndpoint(host.endpoint)
+        setHostName(host.name)
       }
     })
     return () => {
@@ -4246,6 +4270,16 @@ export default function SessionScreen() {
       : showConnectionRetry
         ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
         : MOBILE_SESSION_STATUS_LABELS[connState]
+  const sessionIdentity = buildMobileSessionIdentity({
+    statusText: terminalSummary,
+    showStatusText: connState !== 'connected' || showLoadingState,
+    tabTitle: activeSessionTab ? getMobileSessionTabTitle(activeSessionTab) : null,
+    hostName,
+    // The live shell cwd when the host reports one, else the worktree root.
+    worktreePath: (activeTerminalHandle && terminalCwds.get(activeTerminalHandle)) || worktreePath,
+    worktreeName: worktreeName || null,
+    tabCount: visibleTabs.length
+  })
 
   // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
   const keyboardLift =
@@ -4418,69 +4452,34 @@ export default function SessionScreen() {
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
-  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
+  const showHeaderMoreButton =
+    !isFloatingWorkspaceRoute || showAgentSessionHistoryAction || showChecksAction
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
 
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
         <SafeAreaView style={styles.sessionChrome} edges={['top']}>
-          <View style={styles.sessionTopBar}>
-            <Pressable
-              style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-              onPress={requestLeaveSession}
-              hitSlop={8}
-              accessibilityLabel="Back to worktrees"
-            >
-              <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-            </Pressable>
-
-            <View style={styles.sessionTitleBlock}>
-              <Text style={styles.sessionTitle} numberOfLines={1}>
-                {worktreeName || 'Terminal'}
-              </Text>
-              <Pressable
-                style={styles.sessionMetaRow}
-                disabled={!showConnectionRetry}
-                onPress={() => {
-                  if (hostId) {
-                    void forceReconnectHost(hostId)
-                  }
-                }}
-                accessibilityRole={showConnectionRetry ? 'button' : undefined}
-                accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
-              >
-                <StatusDot state={connState} />
-                <Text style={styles.sessionMetaText} numberOfLines={1}>
-                  {terminalSummary}
-                </Text>
-              </Pressable>
-            </View>
-            {!isFloatingWorkspaceRoute && (
-              <MobileSessionHeaderIconButton
-                active={activePanel === 'files'}
-                accessibilityLabel="Open file explorer"
-                icon={Folder}
-                onPress={() => handlePanelTap('files')}
-              />
-            )}
-            {!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && (
-              <MobileSessionHeaderIconButton
-                active={activePanel === 'sourceControl'}
-                accessibilityLabel="Open source control"
-                icon={GitBranch}
-                onPress={() => handlePanelTap('sourceControl')}
-              />
-            )}
-            {showHeaderMoreButton ? (
-              <MobileSessionHeaderIconButton
-                active={activePanel === 'pr'}
-                accessibilityLabel="More session actions"
-                icon={MoreHorizontal}
-                onPress={() => setShowHeaderMoreActions(true)}
-              />
-            ) : null}
-          </View>
+          <MobileSessionHeader
+            onBack={requestLeaveSession}
+            search={terminalSearch}
+            canSearch={activeTerminalHandle !== null}
+            showMore={showHeaderMoreButton}
+            moreActive={
+              activePanel === 'files' || activePanel === 'sourceControl' || activePanel === 'pr'
+            }
+            onOpenMore={() => setShowHeaderMoreActions(true)}
+          />
+          <MobileSessionIdentityLine
+            connState={connState}
+            identity={sessionIdentity}
+            showRetry={showConnectionRetry}
+            onRetry={() => {
+              if (hostId) {
+                void forceReconnectHost(hostId)
+              }
+            }}
+          />
 
           {visibleTabs.length > 0 && (
             <View style={styles.tabBar}>
@@ -4728,6 +4727,7 @@ export default function SessionScreen() {
                     textScale={terminalTextScale}
                     // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
                     onTextScaleChange={applyTerminalTextScale}
+                    onSearchResults={terminalSearch.handleSearchResults}
                     onRef={setTerminalWebViewRef}
                     onWebReady={handleTerminalWebReady}
                     onSelectionMode={handleSelectionMode}
@@ -4929,6 +4929,10 @@ export default function SessionScreen() {
 
       <MobileSessionHeaderMoreActionsSheet
         visible={showHeaderMoreActions}
+        showFiles={!isFloatingWorkspaceRoute}
+        showSourceControl={!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute}
+        onOpenFiles={() => handlePanelTap('files')}
+        onOpenSourceControl={() => handlePanelTap('sourceControl')}
         showAgentSessionHistory={showAgentSessionHistoryAction}
         showChecks={showChecksAction}
         onOpenAgentSessionHistory={openAgentSessionHistory}
