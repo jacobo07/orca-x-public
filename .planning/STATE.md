@@ -12,7 +12,7 @@ Last activity: 2026-10-26 (late) -- worker epoch 2: phases 1-4, 6, 8 complete (1
 - Phase 4 (2/2): mobile/src/worktree/host-switch-row-isolation.test.ts; GEX44 34/34, P4-M1..M3 CAUGHT, root torn down.
 - Phase 5 (1/2, human_needed): mobile/src/session/use-mobile-terminal-paste.test.ts; GEX44 44/44; P5-M1b, M2, M3 CAUGHT; tokens from mobile-theme.ts with positive control. Captures NOT done.
 - Phase 6 (2/2): measured, no code; provider leg EXTERNAL_BLOCKED.
-- Phase 7 (0/2, human_needed): tests/e2e/headless-paired-mobile-terminal-fresh-output.spec.ts + tests/e2e/helpers/mobile-protocol-client.ts; GEX44 built app --serve under xvfb: 1 passed, P7-M1 CAUGHT by the oracle. Headless Linux + scripted phone protocol only.
+- Phase 7 (1/2, human_needed): live Windows leg on the Owner's installed Orca X with a SCRIPTED CLIENT (src/main/runtime/mobile-live-windows-leg.live.test.ts, phone + witness legs passed 2026-10-26 18:19): FRESH, reconnect identity, foreign refused, revoked device gets no reply and cannot re-auth, witness ABSENT for the revoked nonce + FRESH control. Phone UI leg still owed. Headless Linux spec: tests/e2e/headless-paired-mobile-terminal-fresh-output.spec.ts (GEX44, P7-M1 CAUGHT).
 - Phase 8 (2/2): scope test extended (stale desktop+mobile writes refused, phone floor accepted, desktop refused); relay tally + gate 13/13; placement 69/69; P8-M1..M6 CAUGHT. X units: X05/X16/X18 code on branch, PARTIAL pending two-host runs; X06/X19 NOT on this branch (need a port from GEX44 ~/missions/dws-exec). DWS matrix unchanged.
 - Phase 9 (1/2, human_needed): Continue here refuses a dirty or unreadable source before restore (project-working-set-continue-source-state.ts); 86/86; P9-M1..M3 CAUGHT. Row 75/70 two-host leg not run. Workstream identity not carried (UWCP absent).
 - Phase 10 (2/2): verifier re-run at f77a64ff8 = 48/76 PASS (ABSENT 10, PARTIAL 18), CONTRACT INVALID, unchanged; fresh read-only agent answered 7/7 questions from durable state with citations (gaps it found fixed here).
@@ -25,8 +25,9 @@ Last activity: 2026-10-26 (late) -- worker epoch 2: phases 1-4, 6, 8 complete (1
 | 7 | verification_deferred_human | /gsd-verify-work 7 (Windows app + paired phone or labelled emulator; run the headless spec on Windows; live revoke from Settings) |
 | 9 | verification_deferred_human | /gsd-verify-work 9 (row 75/70 on Windows + GEX44 with a mobile controller; needs the OWNER DECISION below or a phone) |
 
-## OWNER DECISION NEEDED
-- Q (2026-10-26, phase 7): may a worker pair a scripted phone-protocol client to the Owner's running Windows Orca X (adds an authorized device; revoked at the end of the run) to get the Windows leg and a live Settings revoke without a physical phone? Options: (a) yes, scripted client on Windows, labelled scripted; (b) no, wait for a physical phone or the emulator machine; (c) skip the Windows leg. Worker pick: (a), because it is reversible by revocation and keeps the phone itself as the only Owner step left. Not acted on: it changes the security posture of the Owner's live install.
+## Owner decisions
+- 2026-10-26 18:00 (phase 7): Owner chose (a). A scripted phone-protocol client may pair to the Owner's running Windows Orca X. Evidence is labelled SCRIPTED CLIENT, never physical or emulator; the device is revoked at the end and the revoke is proven by a refused mutation; no extra paired device is left; the Owner's windows and sessions are never restarted or closed. Runner: src/main/runtime/mobile-live-windows-leg.live.test.ts (ORCA_LIVE_LEG=phone, then witness).
+- Harness gap found 2026-10-26: gsd_mission directives reach only a FRESH worker's card; a turn-continued worker never saw this answer, and the mission HALTED no_progress at 17:51 waiting for it.
 
 ## Blocked (resource)
 - Phase 5 captures: no emulator here (laptop law) and GEX44 cannot run one (/dev/kvm root:kvm, kobii not in kvm, no Android SDK; joining kvm needs root on a shared host).
