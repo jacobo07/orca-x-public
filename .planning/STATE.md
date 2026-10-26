@@ -1,9 +1,9 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 10 of 10 -- Ready. Phases 5, 7 and 9 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
+Phase: 10 of 10 -- complete (2/2). Milestone NOT closable: phases 5, 7 and 9 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
-Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4, 6, 8 complete (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, phase 8 commit follows); phase 5 behavioural half (f80287311); phase 7 headless leg (27ee95e2a). Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
+Last activity: 2026-10-26 (late) -- worker epoch 2: phases 1-4, 6, 8 complete (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2); phase 9 Continue-here gate (f77a64ff8); phase 10 close (commit after f77a64ff8); phase 5 behavioural half (f80287311); phase 7 headless leg (27ee95e2a). Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
 
 ## Completed phases (evidence in .planning/phases/NN-*/)
 - Phase 1 (3/3): row reasons and owner map in 01-OWNERS.md; RED oracle test.
@@ -15,7 +15,8 @@ Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4, 6, 8 complete (1e
 - Phase 7 (0/2, human_needed): tests/e2e/headless-paired-mobile-terminal-fresh-output.spec.ts + tests/e2e/helpers/mobile-protocol-client.ts; GEX44 built app --serve under xvfb: 1 passed, P7-M1 CAUGHT by the oracle. Headless Linux + scripted phone protocol only.
 - Phase 8 (2/2): scope test extended (stale desktop+mobile writes refused, phone floor accepted, desktop refused); relay tally + gate 13/13; placement 69/69; P8-M1..M6 CAUGHT. X units: X05/X16/X18 code on branch, PARTIAL pending two-host runs; X06/X19 NOT on this branch (need a port from GEX44 ~/missions/dws-exec). DWS matrix unchanged.
 - Phase 9 (1/2, human_needed): Continue here refuses a dirty or unreadable source before restore (project-working-set-continue-source-state.ts); 86/86; P9-M1..M3 CAUGHT. Row 75/70 two-host leg not run. Workstream identity not carried (UWCP absent).
-- tsc: web project (config/tsconfig.tc.web.json) exit 0 on the laptop 2026-10-26; node project still owed.
+- Phase 10 (2/2): verifier re-run at f77a64ff8 = 48/76 PASS (ABSENT 10, PARTIAL 18), CONTRACT INVALID, unchanged; fresh read-only agent answered 7/7 questions from durable state with citations (gaps it found fixed here).
+- tsc --noEmit: config/tsconfig.tc.web.json exit 0 and config/tsconfig.node.json exit 0, both on the laptop 2026-10-26 (no longer owed).
 
 ## Deferred Verification
 | Phase | State | Resume |
@@ -38,6 +39,7 @@ git bundle HEAD -> scp to /tmp/orca-phone-pN-<ts>; PATH from ~/orca-env/env.sh (
 - 2026-10-26 Phase 2 adds no wire field for host scope; per-host connection + runtime-local handle map already fences it. Safe: no wire change, proven by mutants.
 - 2026-10-26 Phase 4 runs mobile tests on GEX44 rather than installing mobile deps on the laptop (RAM law). Safe: disposable root, torn down.
 - 2026-10-26 Phase 9 criterion 2: "not offered" implemented as a refusal at the effect on a dirty or unreadable source (fail closed); Workstream identity left unclaimed because UWCP is absent. Safe: reversible, internal, no wire change.
+- 2026-10-26 Milestone audit/complete/cleanup NOT run: three phases are human_needed, so completing would archive unverified legs as done. Safe: nothing archived, nothing lost.
 - 2026-10-26 Removed a stale worktree index.lock (no live git process, 262 s old; backup in job tmp). Safe: scratch file, backed up.
 
 ## Laws (binding)
@@ -53,7 +55,7 @@ git bundle HEAD -> scp to /tmp/orca-phone-pN-<ts>; PATH from ~/orca-env/env.sh (
 - Use git through PowerShell. No Bash for git on this host.
 
 ## Facts measured 2026-10-26 on this laptop (re-verify before relying)
-- DWS verifier (node config/scripts/check-dws-completeness.mjs) at f758bd57f: 48 of 76 PASS, ABSENT 10, PARTIAL 18, verdict CONTRACT INVALID. Rows 59, 70, 73 PASS. Rows 12, 33 PARTIAL (blocked on UWCP control verbs, CPP stages after S4-22). Row 75 PARTIAL (rows 64, 66 live legs partial). Row 39 ABSENT, OUT-OF-PROGRAM since 2026-10-18 (stale-write refusal rests on UWCP log ordering).
+- DWS verifier (node config/scripts/check-dws-completeness.mjs) at f758bd57f and again at f77a64ff8: 48 of 76 PASS, ABSENT 10, PARTIAL 18, verdict CONTRACT INVALID. Rows 59, 70, 73 PASS. Rows 12, 33 PARTIAL (blocked on UWCP control verbs, CPP stages after S4-22). Row 75 PARTIAL (rows 64, 66 live legs partial). Row 39 ABSENT, OUT-OF-PROGRAM since 2026-10-18 (stale-write refusal rests on UWCP log ordering).
 - Old GEX44 tree dws/rebaseline ca3a66869 gives 22 of 76; it is stale. No GEX44 ~/orca-* tree is on this branch.
 - Mobile terminal slices 1-4 (composer and key row, header and search, host and runtime pickers, output card) are on this branch; device-gated.
 - Host RPC: terminal.list/read/send/subscribe/multiplex/create/stop in src/main/runtime/rpc/methods/terminal.ts; agent-session.ts for Agent turns. terminal.send scopes by terminal handle (stale -> terminal_handle_stale) and a per-client input lock; host scope is the per-host connection.
