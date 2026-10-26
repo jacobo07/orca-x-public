@@ -255,6 +255,22 @@ export function continueResultView(result: ProductContinueResult): ContinueResul
               "This workspace's own setup couldn't be found, so it can't continue elsewhere."
             )
           )
+    case 'continue-source-not-clean':
+      return result.reason === 'uncommitted-changes'
+        ? view(
+            'neutral',
+            translate(
+              'workingSet.continue.source.uncommittedChanges',
+              "This workspace has uncommitted changes, and they wouldn't come along. Commit or stash them first. Nothing was changed."
+            )
+          )
+        : view(
+            'problem',
+            translate(
+              'workingSet.continue.source.statusUnknown',
+              "Couldn't check this workspace for uncommitted changes, so nothing was continued. Try again."
+            )
+          )
     default: {
       const unreachable: never = result
       return unreachable

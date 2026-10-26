@@ -1,7 +1,7 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 9 of 10 -- Ready to plan. Phases 5 and 7 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
+Phase: 10 of 10 -- Ready. Phases 5, 7 and 9 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
 Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4, 6, 8 complete (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, phase 8 commit follows); phase 5 behavioural half (f80287311); phase 7 headless leg (27ee95e2a). Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
 
@@ -14,13 +14,15 @@ Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4, 6, 8 complete (1e
 - Phase 6 (2/2): measured, no code; provider leg EXTERNAL_BLOCKED.
 - Phase 7 (0/2, human_needed): tests/e2e/headless-paired-mobile-terminal-fresh-output.spec.ts + tests/e2e/helpers/mobile-protocol-client.ts; GEX44 built app --serve under xvfb: 1 passed, P7-M1 CAUGHT by the oracle. Headless Linux + scripted phone protocol only.
 - Phase 8 (2/2): scope test extended (stale desktop+mobile writes refused, phone floor accepted, desktop refused); relay tally + gate 13/13; placement 69/69; P8-M1..M6 CAUGHT. X units: X05/X16/X18 code on branch, PARTIAL pending two-host runs; X06/X19 NOT on this branch (need a port from GEX44 ~/missions/dws-exec). DWS matrix unchanged.
-- Owed across phases: tsc not run (laptop RAM law); run on GEX44 before any done claim.
+- Phase 9 (1/2, human_needed): Continue here refuses a dirty or unreadable source before restore (project-working-set-continue-source-state.ts); 86/86; P9-M1..M3 CAUGHT. Row 75/70 two-host leg not run. Workstream identity not carried (UWCP absent).
+- tsc: web project (config/tsconfig.tc.web.json) exit 0 on the laptop 2026-10-26; node project still owed.
 
 ## Deferred Verification
 | Phase | State | Resume |
 |-------|-------|--------|
 | 5 | verification_deferred_human | /gsd-verify-work 5 (captures: keyboard open/closed, selector open, long names, many runtimes; Android 14 emulator on C:\Users\User or a paired phone) |
 | 7 | verification_deferred_human | /gsd-verify-work 7 (Windows app + paired phone or labelled emulator; run the headless spec on Windows; live revoke from Settings) |
+| 9 | verification_deferred_human | /gsd-verify-work 9 (row 75/70 on Windows + GEX44 with a mobile controller; needs the OWNER DECISION below or a phone) |
 
 ## OWNER DECISION NEEDED
 - Q (2026-10-26, phase 7): may a worker pair a scripted phone-protocol client to the Owner's running Windows Orca X (adds an authorized device; revoked at the end of the run) to get the Windows leg and a live Settings revoke without a physical phone? Options: (a) yes, scripted client on Windows, labelled scripted; (b) no, wait for a physical phone or the emulator machine; (c) skip the Windows leg. Worker pick: (a), because it is reversible by revocation and keeps the phone itself as the only Owner step left. Not acted on: it changes the security posture of the Owner's live install.
@@ -35,6 +37,7 @@ git bundle HEAD -> scp to /tmp/orca-phone-pN-<ts>; PATH from ~/orca-env/env.sh (
 - 2026-10-26 Phase 1 RED is a unit test, not e2e: the laptop cannot build for the headless paired harness. Safe: reversible, internal.
 - 2026-10-26 Phase 2 adds no wire field for host scope; per-host connection + runtime-local handle map already fences it. Safe: no wire change, proven by mutants.
 - 2026-10-26 Phase 4 runs mobile tests on GEX44 rather than installing mobile deps on the laptop (RAM law). Safe: disposable root, torn down.
+- 2026-10-26 Phase 9 criterion 2: "not offered" implemented as a refusal at the effect on a dirty or unreadable source (fail closed); Workstream identity left unclaimed because UWCP is absent. Safe: reversible, internal, no wire change.
 - 2026-10-26 Removed a stale worktree index.lock (no live git process, 262 s old; backup in job tmp). Safe: scratch file, backed up.
 
 ## Laws (binding)

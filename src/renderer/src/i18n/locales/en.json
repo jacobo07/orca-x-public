@@ -44,6 +44,10 @@
       "running": "Continuing…",
       "targetLabel": "Continue on",
       "targetPlaceholder": "Choose a host",
+      "source": {
+        "uncommittedChanges": "This workspace has uncommitted changes, and they wouldn't come along. Commit or stash them first. Nothing was changed.",
+        "statusUnknown": "Couldn't check this workspace for uncommitted changes, so nothing was continued. Try again."
+      },
       "result": {
         "restored": "Restored on the other host. Nothing has started; each tab starts only when you open it.",
         "restoredEmpty": "Restored, but this snapshot has no terminals to open.",

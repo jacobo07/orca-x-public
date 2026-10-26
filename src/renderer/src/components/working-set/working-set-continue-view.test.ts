@@ -97,9 +97,28 @@ function oneOfEach(): { name: string; result: ProductContinueResult }[] {
     ...TARGET_UNAVAILABLE_REASONS.map((reason) => ({
       name: `continue-target-unavailable-${reason}`,
       result: { status: 'continue-target-unavailable', reason } as ProductContinueResult
+    })),
+    ...(['uncommitted-changes', 'unknown'] as const).map((reason) => ({
+      name: `continue-source-not-clean-${reason}`,
+      result: { status: 'continue-source-not-clean', reason } as ProductContinueResult
     }))
   ]
 }
+
+describe('continueResultView for a source that is not proven clean', () => {
+  it('tells uncommitted changes apart from a status nobody could read', () => {
+    const dirty = continueResultView({
+      status: 'continue-source-not-clean',
+      reason: 'uncommitted-changes'
+    })
+    const unknown = continueResultView({ status: 'continue-source-not-clean', reason: 'unknown' })
+    expect(dirty.tone).toBe('neutral')
+    expect(dirty.sentence).toContain('uncommitted changes')
+    expect(unknown.tone).toBe('problem')
+    expect(unknown.sentence).not.toBe(dirty.sentence)
+    expect(dirty.panes).toEqual([])
+  })
+})
 
 describe('continueResultView', () => {
   it('gives every arm and every translation refusal its own sentence', () => {

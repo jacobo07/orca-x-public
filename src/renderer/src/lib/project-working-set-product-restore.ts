@@ -14,6 +14,10 @@ import {
   type ContinueTargetInput
 } from './project-working-set-continue-target'
 import {
+  readContinueSourceState,
+  type ContinueSourceState
+} from './project-working-set-continue-source-state'
+import {
   restoreWorkingSet,
   type ContinueRestoreOutcome,
   type WorkingSetContinueRequest,
@@ -126,15 +130,20 @@ export type ProductContinueResult =
       status: 'continue-target-unavailable'
       reason: 'target-workspace-missing' | 'source-setup-missing'
     }
+  /** Uncommitted work would stay behind, or it could not be checked; nothing was restored. */
+  | { status: 'continue-source-not-clean'; reason: Exclude<ContinueSourceState, 'clean'> }
 
 export type ProductContinueDeps = {
   restore: (request: WorkingSetContinueRequest) => Promise<ContinueRestoreOutcome>
   worktrees: () => readonly Worktree[]
+  /** Read fresh at the effect; required so no caller can skip it. */
+  sourceState: (sourceWorktreeId: string) => Promise<ContinueSourceState>
 }
 
 const defaultContinueDeps: ProductContinueDeps = {
   restore: (request) => restoreWorkingSet(request),
-  worktrees: () => Object.values(useAppStore.getState().worktreesByRepo).flat()
+  worktrees: () => Object.values(useAppStore.getState().worktreesByRepo).flat(),
+  sourceState: (sourceWorktreeId) => readContinueSourceState(sourceWorktreeId)
 }
 
 /**
@@ -163,6 +172,10 @@ export async function continueWorkingSetFromProduct(
   }
   inFlightOwnerKeys.add(targetOwnerKey)
   try {
+    const sourceState = await deps.sourceState(request.scope.ownerKey)
+    if (sourceState !== 'clean') {
+      return { status: 'continue-source-not-clean', reason: sourceState }
+    }
     const outcome = await deps.restore({
       scope: request.scope,
       workingSetId: request.workingSetId,

@@ -15,6 +15,10 @@
       "running": "正在继续…",
       "targetLabel": "继续到",
       "targetPlaceholder": "选择主机",
+      "source": {
+        "uncommittedChanges": "此工作区有未提交的更改，这些更改不会随之迁移。请先提交或 stash。未更改任何内容。",
+        "statusUnknown": "无法检查此工作区是否有未提交的更改，因此未继续任何内容。请重试。"
+      },
       "result": {
         "restored": "已在另一台主机上恢复。尚未启动任何内容；标签页只有在打开时才会启动。",
         "restoredEmpty": "已恢复，但此快照没有可打开的终端。",

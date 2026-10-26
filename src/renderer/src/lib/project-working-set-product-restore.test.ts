@@ -308,13 +308,48 @@ function setupContinue() {
       newId: () => `00000000-0000-4000-8000-${String(++next).padStart(12, '0')}`,
       hostAvailability: () => 'available'
     })
-  const deps: ProductContinueDeps = { restore, worktrees: () => targetWorktrees().slice(0, 1) }
+  const deps: ProductContinueDeps = {
+    restore,
+    worktrees: () => targetWorktrees().slice(0, 1),
+    sourceState: async () => 'clean'
+  }
   return { store, deps, bridge }
 }
 
 function fake(outcome: ContinueRestoreOutcome): ProductContinueDeps {
-  return { restore: async () => outcome, worktrees: () => targetWorktrees() }
+  return {
+    restore: async () => outcome,
+    worktrees: () => targetWorktrees(),
+    sourceState: async () => 'clean'
+  }
 }
+
+describe('continueWorkingSetFromProduct on a source that is not proven clean', () => {
+  it('refuses before any restore when the source has uncommitted changes, and when it cannot tell', async () => {
+    for (const state of ['uncommitted-changes', 'unknown'] as const) {
+      const restore = vi.fn()
+      const asked: string[] = []
+      const result = await continueWorkingSetFromProduct(continueRequest(), {
+        restore,
+        worktrees: () => targetWorktrees(),
+        sourceState: async (id) => {
+          asked.push(id)
+          return state
+        }
+      })
+      expect(result).toEqual({ status: 'continue-source-not-clean', reason: state })
+      expect(restore).not.toHaveBeenCalled()
+      // The read is about the workspace being continued, never the target.
+      expect(asked).toEqual([OWNER])
+    }
+  })
+
+  it('control: a clean source continues', async () => {
+    const { deps } = setupContinue()
+    const result = await continueWorkingSetFromProduct(continueRequest(), deps)
+    expect(result.status).toBe('restored')
+  })
+})
 
 const PLANNED_BASE = { plan: { entries: [] } as never, panes: [] }
 
@@ -516,6 +551,7 @@ describe('continueWorkingSetFromProduct', () => {
       const calls: string[] = []
       const deps: ProductContinueDeps = {
         worktrees: () => targetWorktrees(),
+        sourceState: async () => 'clean',
         restore: async (request) => {
           calls.push(request.continueOn.targetOwnerKey)
           await gate
@@ -585,6 +621,7 @@ describe('continueWorkingSetFromProduct', () => {
     it('releases the flight when a dependency throws', async () => {
       const throwing: ProductContinueDeps = {
         worktrees: () => targetWorktrees(),
+        sourceState: async () => 'clean',
         restore: async () => {
           throw new Error('boom')
         }

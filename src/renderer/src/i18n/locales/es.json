@@ -15,6 +15,10 @@
       "running": "Continuando…",
       "targetLabel": "Continuar en",
       "targetPlaceholder": "Elige un host",
+      "source": {
+        "uncommittedChanges": "Este espacio de trabajo tiene cambios sin confirmar y no se llevarían. Haz commit o stash primero. No se cambió nada.",
+        "statusUnknown": "No se pudo comprobar si este espacio de trabajo tiene cambios sin confirmar, así que no se continuó nada. Inténtalo de nuevo."
+      },
       "result": {
         "restored": "Restaurado en el otro host. No se ha iniciado nada; cada pestaña se inicia solo cuando la abres.",
         "restoredEmpty": "Restaurado, pero esta snapshot no tiene terminales que abrir.",
