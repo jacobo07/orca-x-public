@@ -51,7 +51,10 @@ export function judgeFreshTerminalOutput(
   if (after.truncated) {
     return { verdict: 'UNKNOWN', reason: 'post-send read is truncated' }
   }
-  return after.tail.some((line) => line.trim() === expected)
+  // Why: Windows ConPTY repaints with cursor moves, so a line-split tail can glue the output onto the
+  // full echo; the echo alone cannot contain `expected`, so echo-then-expected still proves execution.
+  const glued = `${sentText}${expected}`
+  return after.tail.some((line) => line.trim() === expected || line.trimEnd().endsWith(glued))
     ? { verdict: 'FRESH' }
     : { verdict: 'ABSENT', reason: `no output line equals "${expected}"` }
 }

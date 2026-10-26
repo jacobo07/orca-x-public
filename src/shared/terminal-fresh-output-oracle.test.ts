@@ -38,6 +38,20 @@ describe('judgeFreshTerminalOutput', () => {
     expect(judge(before, after)).toEqual({ verdict: 'FRESH' })
   })
 
+  it('passes when a ConPTY repaint glues the output onto the full echo of the sent text', () => {
+    const before = read([], { latestCursor: '0' })
+    const after = read([`PS C:\\proj>${SENT}${MARKER} ${NONCE}`, 'PS C:\\proj>'])
+    expect(judge(before, after)).toEqual({ verdict: 'FRESH' })
+  })
+
+  it('refuses the expected text glued onto anything but the full echo', () => {
+    const before = read([], { latestCursor: '0' })
+    expect(
+      judge(before, read([`PS C:\\proj>${SENT.slice(0, -2)}${MARKER} ${NONCE}`])).verdict
+    ).toBe('ABSENT')
+    expect(judge(before, read([`noise${MARKER} ${NONCE}`])).verdict).toBe('ABSENT')
+  })
+
   it('refuses history: a nonce already present before the send never satisfies the oracle', () => {
     const before = read([`${MARKER} ${NONCE}`], { latestCursor: '1' })
     const after = read([`${MARKER} ${NONCE}`])
