@@ -1,11 +1,6 @@
 import WebSocket from 'ws'
-import { parsePairingCode } from '../../../src/shared/pairing'
-import {
-  decrypt,
-  deriveSharedKey,
-  encrypt,
-  generateKeyPair
-} from '../../../src/main/runtime/rpc/e2ee-crypto'
+import { parsePairingCode } from '../../shared/pairing'
+import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 
 /** A scripted phone: the mobile app's E2EE handshake and encrypted JSON-RPC, nothing else. */
 export type MobileProtocolClient = {

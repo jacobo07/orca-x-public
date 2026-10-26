@@ -9,7 +9,7 @@ import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runti
 import {
   connectMobileProtocolClient,
   type MobileProtocolClient
-} from './helpers/mobile-protocol-client'
+} from '../../src/main/runtime/mobile-protocol-test-client'
 
 // Plane: the built app in --serve mode with an isolated profile and a real PTY, driven by a scripted
 // client speaking the phone's protocol. Not a phone, not an emulator, not the Owner's desktop app.

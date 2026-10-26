@@ -101,7 +101,17 @@ describe('a revocation the desktop names', () => {
     expect(client.getState()).toBe('connected')
 
     const pending = client.sendRequest('terminal.send', { terminal: 'term_1', text: 'x' })
-    const request = JSON.parse(socket.sent.at(-1)!.replace(/^encrypted:/, '')) as { id: string }
+    const outcome = pending.then(
+      () => 'resolved',
+      (error: Error) => error.message
+    )
+    // Why: the client writes the request after a microtask.
+    await Promise.resolve()
+    const request = JSON.parse(socket.sent.at(-1)!.replace(/^encrypted:/, '')) as {
+      id: string
+      method: string
+    }
+    expect(request.method).toBe('terminal.send')
     socket.receive(
       `encrypted:${JSON.stringify({
         id: request.id,
@@ -114,7 +124,8 @@ describe('a revocation the desktop names', () => {
       })}`
     )
 
-    await expect(pending).rejects.toThrow(/revoked/i)
+    // Why: the old message "pairing may be revoked" must not satisfy this.
+    expect(await outcome).toContain('Device access revoked')
     expect(client.getState()).toBe('auth-failed')
     await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(mockSockets).toHaveLength(1)

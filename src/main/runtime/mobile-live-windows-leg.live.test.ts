@@ -6,7 +6,7 @@ import { judgeFreshTerminalOutput } from '../../shared/terminal-fresh-output-ora
 import {
   connectMobileProtocolClient,
   type MobileProtocolClient
-} from '../../../tests/e2e/helpers/mobile-protocol-client'
+} from './mobile-protocol-test-client'
 
 // Plane: the Owner's installed, running Windows Orca X, paired from its own Mobile screen, driven by a
 // scripted client speaking the phone protocol. SCRIPTED CLIENT evidence: not a phone, not an emulator.
