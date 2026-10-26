@@ -1,7 +1,12 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 2 of 10 -- Ready to plan. Phase 1 complete 2026-10-26 (verification passed 3/3; artifacts in .planning/phases/01-reality-close-and-red/; RED test src/shared/terminal-fresh-output-oracle.test.ts fails on the missing oracle module).
+Phase: 3 of 10 -- Ready to plan. Phase 1 complete 2026-10-26 (3/3). Phase 2 complete 2026-10-26 (2/2): oracle src/shared/terminal-fresh-output-oracle.ts, scope proof src/main/runtime/rpc/terminal-send-mobile-scope.test.ts, mutants M1-M3 CAUGHT. Owed: tsc not run on the laptop.
+Phase 3 lead (read-only, 2026-10-26): revocation-at-effect already exists (src/main/runtime/device-authorization.ts assertDeviceStillAuthorized; runtime-rpc.ts:1118 binary frames, :1756 RPC) and is characterized in src/main/runtime/runtime-rpc-revoked-device-effect.characterization.test.ts (row 58). Phase 3 work = reconnect identity (same session id, no PTY growth) plus a terminal.send-specific revoked leg.
+
+## Decisions (unattended)
+- 2026-10-26 Phase 1 RED is a unit test, not e2e: the laptop cannot build for the headless paired harness. Safe: reversible, internal.
+- 2026-10-26 Phase 2 adds no wire field for host scope; per-host connection + runtime-local handle map already fences it. Safe: no wire change, proven by mutants.
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
 Last activity: 2026-10-26 16:00 -- mission ownership moved to the C:\Users\Jacobo laptop (Owner: "go here"). The arming pane on the C:\Users\User machine (worktree orca-phone-wt) stays idle and is NOT a writer. The previous DWS milestone (phases 1-12) is archived in rb-live history c1f33f4d4e.
 
