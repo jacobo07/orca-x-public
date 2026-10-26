@@ -16,7 +16,7 @@ human_verification:
 
 ## Live Windows leg (SCRIPTED CLIENT, Owner decision (a))
 
-Plane: `C:\Users\Jacobo\AppData\Local\Programs\orca\Orca X.exe`, running, paired from its own Mobile screen ("Copy pairing code"). Client: `src/main/runtime/mobile-live-windows-leg.live.test.ts` speaking the phone's E2EE protocol (`tests/e2e/helpers/mobile-protocol-client.ts`). Not a phone, not an emulator.
+Plane: `C:\Users\Jacobo\AppData\Local\Programs\orca\Orca X.exe`, running, paired from its own Mobile screen ("Copy pairing code"). Client: `src/main/runtime/mobile-live-windows-leg.live.test.ts` speaking the phone's E2EE protocol (`src/main/runtime/mobile-protocol-test-client.ts`, moved from `tests/e2e/helpers/mobile-protocol-client.ts`). Not a phone, not an emulator.
 
 Phone leg (`ORCA_LIVE_LEG=phone`, 279 s, passed):
 - `repo.list` from the paired device returned the Owner's 3 projects; a dedicated terminal was created in `C:/Users/Jacobo/Desktop/Cursor Projects/Orca X` (handle `term_e9fdb0e1-…`, ptyId `99e39e04-…@@bcc0fc09`). The Owner's existing terminals were never written to.
