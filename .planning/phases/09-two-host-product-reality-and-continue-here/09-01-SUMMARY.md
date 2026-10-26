@@ -18,5 +18,5 @@
 ## Not done
 - Row 75 and row 70 two-host re-measure with a mobile controller: not run. Residual: needs the built
   Windows app with a paired controller (Owner decision open in STATE) and a GEX44 host; laptop cannot build.
-- `readContinueSourceState` itself (store lookup + runtime read + catch) has no unit test; its mapping half
-  does. A thrown read is wired to `unknown` by inspection only.
+- (closed in a follow-up commit) `readContinueSourceState` now has direct tests: missing workspace -> unknown
+  without a read, thrown read -> unknown, clean control; 7/7; P9-M4 (throw read as clean) CAUGHT, RESTORE_VERIFIED.
