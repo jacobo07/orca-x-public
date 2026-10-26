@@ -29,6 +29,7 @@ const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 export type E2EEChannelOptions = {
   serverSecretKey: Uint8Array
   resolveAuthenticatedDevice: (token: string) => E2EEAuthenticatedDevice | null
+  isRevokedToken?: (token: string) => boolean
   onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
   onError: (code: number, reason: string) => void
   transportContext?: DesktopMobileE2EEV2Context
@@ -42,6 +43,8 @@ export type E2EEAuthenticatedDevice = {
   scope: 'mobile' | 'runtime'
 }
 
+type ChannelIdentity = Pick<E2EEChannelOptions, 'resolveAuthenticatedDevice' | 'isRevokedToken'>
+
 export class E2EEChannel {
   private state: 'awaiting_hello' | 'awaiting_auth' | 'ready' = 'awaiting_hello'
   private sharedKey: Uint8Array | null = null
@@ -49,7 +52,7 @@ export class E2EEChannel {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
   private readonly ws: WebSocket
   private readonly serverSecretKey: Uint8Array
-  private readonly resolveAuthenticatedDevice: (token: string) => E2EEAuthenticatedDevice | null
+  private readonly identity: ChannelIdentity
   private readonly onReady: (channel: E2EEChannel, device: E2EEAuthenticatedDevice) => void
   private readonly onError: (code: number, reason: string) => void
   private readonly transportContext: DesktopMobileE2EEV2Context
@@ -73,7 +76,7 @@ export class E2EEChannel {
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
     this.serverSecretKey = options.serverSecretKey
-    this.resolveAuthenticatedDevice = options.resolveAuthenticatedDevice
+    this.identity = options
     this.onReady = options.onReady
     this.onError = options.onError
     this.transportContext = options.transportContext ?? { transport: 'direct' }
@@ -244,10 +247,11 @@ export class E2EEChannel {
     const authentication = authenticateMobileE2EE({
       plaintext,
       v2Session: this.v2Session,
-      resolveDevice: this.resolveAuthenticatedDevice
+      resolveDevice: this.identity.resolveAuthenticatedDevice,
+      isRevokedToken: this.identity.isRevokedToken
     })
     if (!authentication.ok) {
-      this.sendEncryptedControl({ type: 'e2ee_error', error: { code: authentication.code } })
+      this.sendEncryptedControl({ type: 'e2ee_error', error: authentication.error })
       this.onError(4001, authentication.code === 'bad_auth' ? 'Invalid e2ee_auth' : 'Unauthorized')
       return
     }

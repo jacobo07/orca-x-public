@@ -153,6 +153,7 @@ export class MobileSocketWiring {
             : { transport: 'direct' },
         requireV2: metadata.transport === 'relay',
         outboundMemoryBudget: this.outboundMemoryBudget,
+        isRevokedToken: (token) => this.deviceRegistry.isRevokedToken(token),
         resolveAuthenticatedDevice: (token) => {
           const authorization = assertDeviceStillAuthorized(this.deviceRegistry, token)
           if (!authorization.ok) {

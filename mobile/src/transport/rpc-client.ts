@@ -6,6 +6,7 @@ import type {
   ConnectionLogSink,
   ForegroundNudgeReason
 } from './types'
+import { DEVICE_REVOKED_MESSAGE, namesDeviceRevocation } from './device-revocation-refusal'
 import {
   generateKeyPair,
   deriveSharedKey,
@@ -465,7 +466,12 @@ export function connect(
           } else if (msg.type === 'e2ee_error' || (!msg.ok && msg.error?.code === 'unauthorized')) {
             console.log('[net] e2ee auth FAILED', { msgType: msg.type, error: msg.error })
             clearHandshakeTimer()
-            handleAuthRejection('Unauthorized — pairing may be revoked')
+            const revoked = namesDeviceRevocation(msg.error)
+            handleAuthRejection(
+              revoked ? DEVICE_REVOKED_MESSAGE : 'Unauthorized — pairing may be revoked',
+              false,
+              revoked
+            )
           }
         } catch {
           // Not JSON — ignore during handshake.
@@ -519,7 +525,12 @@ export function connect(
       }
       // Why: a mid-session unauthorized may be transient (issue #5200) — handleAuthRejection retries before latching auth-failed.
       if (!response.ok && response.error.code === 'unauthorized') {
-        handleAuthRejection('Unauthorized — pairing may be revoked')
+        const revoked = namesDeviceRevocation(response.error)
+        handleAuthRejection(
+          revoked ? DEVICE_REVOKED_MESSAGE : 'Unauthorized — pairing may be revoked',
+          false,
+          revoked
+        )
         return
       }
 
@@ -698,12 +709,13 @@ export function connect(
   }
 
   // Why: an auth rejection may be transient (issue #5200) — retry up to AUTH_RETRY_BUDGET times before latching auth-failed.
-  function handleAuthRejection(reason: string, preserveRecovery = false): void {
+  // A refusal the desktop names as a revocation is definitive: latch without spending retries.
+  function handleAuthRejection(reason: string, preserveRecovery = false, definitive = false): void {
     if (livenessIdentity) {
       livenessWatchdog.stop(livenessIdentity)
       livenessIdentity = null
     }
-    authRejectionCount++
+    authRejectionCount = definitive ? AUTH_RETRY_BUDGET : authRejectionCount + 1
     if (authRejectionCount < AUTH_RETRY_BUDGET) {
       console.log('[net] auth rejected — retrying handshake', {
         attempt: authRejectionCount,
