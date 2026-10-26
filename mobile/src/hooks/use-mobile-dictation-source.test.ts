@@ -188,7 +188,10 @@ describe('useMobileDictation source invariants', () => {
 
     const cleanupSlices = [
       sliceBetween('const failActiveDictation = useCallback(', 'useEffect(() => {'),
-      sliceBetween('const cancel = useCallback(async () => {', 'useEffect(() => {\n    const sub'),
+      sliceBetween(
+        'const cancel = useCallback(async () => {',
+        'useMobileDictationForegroundKeepAwake('
+      ),
       sliceBetween('return () => {\n      const dictationId = activeIdRef.current', '  return {')
     ]
 
