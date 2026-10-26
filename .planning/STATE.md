@@ -1,6 +1,7 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
+P0 (2026-10-27, Owner mission "crash-proof mobile remote session entry"): phase 11 in .planning/phases/11-mobile-session-entry-crash/11-VERIFICATION.md. Root cause PROVEN on the Owner's S25 Ultra: the sideloaded APK 0.0.43 (2026-09-14) lacks the ExpoTwoWayAudio native module its JS imports, so opening any session threw at route load and Android finished the activity. Fixed 328971c74, contained a8d7bfca2, build gate 2a4f2ef6d. Fixed APK built (sha256 ca68faa3…21df) and staged at /sdcard/Download/OrcaX-0.0.43-crashfix-a8d7bfca2.apk; NOT installed (adb install held by the lock screen, cancelled). Resume: Owner installs it from Files (same key, keeps hosts) → adb over Wi-Fi (Developer options > Wireless debugging, adb pair) → open Orca X host > Orca X session, read logcat, then the failure matrix, fresh-output send, reconnect, foreground, revocation; then Mobile Workstation. adb lives in the session scratchpad (gone after reboot): fetch platform-tools again from dl.google.com.
 Phase: 10 of 10 -- complete (2/2). Milestone NOT closable: phases 5, 7 and 9 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
 Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
@@ -26,6 +27,8 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 | 9 | verification_deferred_human | /gsd-verify-work 9 (host side done with a SCRIPTED CLIENT; owed: a phone or labelled emulator switching hosts in the host picker) |
 
 ## Owner decisions
+- 2026-10-27 ~00:30: "cuando termines pushea instala y apaga el pc de forma autonoma". Push of mobile/phone-control authorized for this run (never main); install attempted and staged (lock screen needs the Owner); laptop shut down at the end.
+- 2026-10-27 00:13: Owner paired a PHYSICAL phone (S25 Ultra) to the installed Orca X and enabled Wireless debugging; adb pairing code was used once and not recorded.
 - 2026-10-26 18:00 (phase 7): Owner chose (a). A scripted phone-protocol client may pair to the Owner's running Windows Orca X. Evidence is labelled SCRIPTED CLIENT, never physical or emulator; the device is revoked at the end and the revoke is proven by a refused mutation; no extra paired device is left; the Owner's windows and sessions are never restarted or closed. Runner: src/main/runtime/mobile-live-windows-leg.live.test.ts (ORCA_LIVE_LEG=phone, then witness).
 - 2026-10-26 20:10 (phase 9): Owner said "hazlo tu unattended". Host A became a disposable Windows serve host on this laptop (worktree Electron, GEX44-built out/ of the same HEAD, E2E disposable home, loopback), so no Owner click and no Owner profile were needed.
 - Harness gap found 2026-10-26: gsd_mission directives reach only a FRESH worker's card; a turn-continued worker never saw this answer, and the mission HALTED no_progress at 17:51 waiting for it.
@@ -70,7 +73,7 @@ Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electr
 - GEX44 DWS units X05, X06, X16, X18, X19 sit at OWNER_BOUNDARY (AMR cap); classify, do not blindly relaunch.
 
 ## Owner-only
-Physical phone pairing; interactive provider login and real quota spend; push or merge.
+Install the staged crash-fix APK on the S25 Ultra (unlock needed); re-enable Wireless debugging for the next device leg; interactive provider login and real quota spend; merge (and any push beyond the 2026-10-27 authorization).
 
 ## Token budget
 Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product Reality 2.3M, handoff reserve 1.3M.
