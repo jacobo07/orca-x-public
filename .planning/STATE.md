@@ -1,9 +1,9 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 7 of 10 -- In progress (headless leg on GEX44). Phase 5 is PARTIAL (human_needed): behaviour proven, captures blocked on a device or emulator. Phase 6 complete 2026-10-26 (2/2): ownership suites 19/19, P6-M1..M3 CAUGHT; live provider leg EXTERNAL_BLOCKED (Owner-only quota spend and login).
+Phase: 8 of 10 -- Ready to plan. Phases 5 and 7 are PARTIAL (human_needed, see Deferred Verification); phase 8 depends on 7 by roadmap, but its Orca-side legs are runnable and proceed under the unattended rule (record and move to the next runnable work).
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
-Last activity: 2026-10-26 17:00 -- worker epoch 2 completed phases 1-4 (commits 1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18) and the behavioural half of phase 5. Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
+Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4 and 6 complete (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a); phase 5 behavioural half (f80287311); phase 7 headless leg (commit follows). Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
 
 ## Completed phases (evidence in .planning/phases/NN-*/)
 - Phase 1 (3/3): row reasons and owner map in 01-OWNERS.md; RED oracle test.
@@ -11,12 +11,18 @@ Last activity: 2026-10-26 17:00 -- worker epoch 2 completed phases 1-4 (commits 
 - Phase 3 (2/2): src/main/runtime/runtime-rpc-mobile-reconnect-revocation.test.ts; M4, M5, M6b, M7 CAUGHT; M6 equivalent (handles retained per PTY incarnation). Revocation authority: device-authorization.ts assertDeviceStillAuthorized (runtime-rpc.ts:1118 frames, :1756 RPC).
 - Phase 4 (2/2): mobile/src/worktree/host-switch-row-isolation.test.ts; GEX44 34/34, P4-M1..M3 CAUGHT, root torn down.
 - Phase 5 (1/2, human_needed): mobile/src/session/use-mobile-terminal-paste.test.ts; GEX44 44/44; P5-M1b, M2, M3 CAUGHT; tokens from mobile-theme.ts with positive control. Captures NOT done.
+- Phase 6 (2/2): measured, no code; provider leg EXTERNAL_BLOCKED.
+- Phase 7 (0/2, human_needed): tests/e2e/headless-paired-mobile-terminal-fresh-output.spec.ts + tests/e2e/helpers/mobile-protocol-client.ts; GEX44 built app --serve under xvfb: 1 passed, P7-M1 CAUGHT by the oracle. Headless Linux + scripted phone protocol only.
 - Owed across phases: tsc not run (laptop RAM law); run on GEX44 before any done claim.
 
 ## Deferred Verification
 | Phase | State | Resume |
 |-------|-------|--------|
 | 5 | verification_deferred_human | /gsd-verify-work 5 (captures: keyboard open/closed, selector open, long names, many runtimes; Android 14 emulator on C:\Users\User or a paired phone) |
+| 7 | verification_deferred_human | /gsd-verify-work 7 (Windows app + paired phone or labelled emulator; run the headless spec on Windows; live revoke from Settings) |
+
+## OWNER DECISION NEEDED
+- Q (2026-10-26, phase 7): may a worker pair a scripted phone-protocol client to the Owner's running Windows Orca X (adds an authorized device; revoked at the end of the run) to get the Windows leg and a live Settings revoke without a physical phone? Options: (a) yes, scripted client on Windows, labelled scripted; (b) no, wait for a physical phone or the emulator machine; (c) skip the Windows leg. Worker pick: (a), because it is reversible by revocation and keeps the phone itself as the only Owner step left. Not acted on: it changes the security posture of the Owner's live install.
 
 ## Blocked (resource)
 - Phase 5 captures: no emulator here (laptop law) and GEX44 cannot run one (/dev/kvm root:kvm, kobii not in kvm, no Android SDK; joining kvm needs root on a shared host).
