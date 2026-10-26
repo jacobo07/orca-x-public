@@ -6,7 +6,7 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 ## Phases
 - [x] **Phase 1: Reality close and RED** - Re-read the full reasons of DWS rows 12, 33, 39, 75; confirm mobile slices 1-4 are intact on this tree; map the canonical owners; write the RED test for a fresh-output oracle (nonce after a marker, never history).
 - [x] **Phase 2: Scoped terminal input and fresh-output oracle** - Mobile input is scoped by host and by runtime; newest-terminal targeting, wrong host, wrong runtime and stale generation are refused; the oracle rejects historical text.
-- [ ] **Phase 3: Reconnect and revocation** - Disconnect does not kill the remote PTY; reconnect restores the same session identity without a duplicate; a revoked device with a live socket is refused at the next mutation.
+- [x] **Phase 3: Reconnect and revocation** - Disconnect does not kill the remote PTY; reconnect restores the same session identity without a duplicate; a revoked device with a live socket is refused at the next mutation.
 - [ ] **Phase 4: Host and runtime selector truth** - Hosts and runtimes come from real producers only; switching host changes scope and leaks nothing; unknown stays UNKNOWN; no background streams for unselected hosts.
 - [ ] **Phase 5: Composer, copy and paste, visual Product Reality** - One bottom command textbox, Copy and Paste through canonical permissions, no duplicate prompt line or Terminal header; captures at target sizes in dark mode with long names and many runtimes.
 - [ ] **Phase 6: Agent prompt path** - Mobile sends a turn through the canonical conversation owner into the Agent's own project; provider-independent layers proven; a quota or login block is classified EXTERNAL_BLOCKED, never PASS.

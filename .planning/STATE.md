@@ -1,7 +1,8 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 3 of 10 -- Ready to plan. Phase 1 complete 2026-10-26 (3/3). Phase 2 complete 2026-10-26 (2/2): oracle src/shared/terminal-fresh-output-oracle.ts, scope proof src/main/runtime/rpc/terminal-send-mobile-scope.test.ts, mutants M1-M3 CAUGHT. Owed: tsc not run on the laptop.
+Phase: 4 of 10 -- Ready to plan. Phase 3 complete 2026-10-26 (2/2): src/main/runtime/runtime-rpc-mobile-reconnect-revocation.test.ts, mutants M4, M5, M6b, M7 CAUGHT, M6 equivalent (handles retained per PTY incarnation).
+Earlier: Phase 1 complete 2026-10-26 (3/3). Phase 2 complete 2026-10-26 (2/2): oracle src/shared/terminal-fresh-output-oracle.ts, scope proof src/main/runtime/rpc/terminal-send-mobile-scope.test.ts, mutants M1-M3 CAUGHT. Owed: tsc not run on the laptop.
 Phase 3 lead (read-only, 2026-10-26): revocation-at-effect already exists (src/main/runtime/device-authorization.ts assertDeviceStillAuthorized; runtime-rpc.ts:1118 binary frames, :1756 RPC) and is characterized in src/main/runtime/runtime-rpc-revoked-device-effect.characterization.test.ts (row 58). Phase 3 work = reconnect identity (same session id, no PTY growth) plus a terminal.send-specific revoked leg.
 
 ## Decisions (unattended)
