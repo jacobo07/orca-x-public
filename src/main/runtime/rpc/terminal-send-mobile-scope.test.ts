@@ -257,3 +257,89 @@ describe('mobile terminal.send scope, proven by fresh output', () => {
     expect(host.written.size).toBe(0)
   })
 })
+
+function bumpGeneration(host: ReturnType<typeof createHost>, ptyId: string): void {
+  const internals = host.runtime as unknown as {
+    leaves: Map<string, { ptyId: string | null; ptyGeneration?: number }>
+  }
+  for (const leaf of internals.leaves.values()) {
+    if (leaf.ptyId === ptyId) {
+      leaf.ptyGeneration = (leaf.ptyGeneration ?? 0) + 1
+    }
+  }
+}
+
+const PHONE = { id: 'phone-1', type: 'mobile' as const }
+const DESK = { id: 'desk-1', type: 'desktop' as const }
+
+describe('stale writes and the current controller across client classes (DWS rows 33/39, Orca half)', () => {
+  it('refuses a stale desktop write exactly as it refuses a stale mobile write', async () => {
+    const host = createHost()
+    const older = await host.handleFor(OLDER_PTY)
+    bumpGeneration(host, OLDER_PTY)
+
+    const desktop = await host.call('terminal.send', {
+      terminal: older,
+      text: `echo ${MARKER}' 'desk-stale`,
+      enter: true,
+      client: DESK
+    })
+    const mobile = await host.call('terminal.send', {
+      terminal: older,
+      text: `echo ${MARKER}' 'phone-stale`,
+      enter: true,
+      client: PHONE
+    })
+
+    for (const response of [desktop, mobile]) {
+      expect(response.ok).toBe(false)
+      if (response.ok) {
+        throw new Error('expected refusal')
+      }
+      expect(response.error.message).toContain('terminal_handle_stale')
+    }
+    expect(host.written.size).toBe(0)
+  })
+
+  it('accepts the controlling phone and refuses the desktop while the phone holds the floor', async () => {
+    const host = createHost()
+    const older = await host.handleFor(OLDER_PTY)
+    // No viewport: registers the subscriber without a resize (returns false by design).
+    await host.runtime.handleMobileSubscribe(OLDER_PTY, PHONE.id)
+
+    const phoneText = `echo ${MARKER}' 'phone-first`
+    const before = await host.read(older)
+    const phone = await host.call('terminal.send', {
+      terminal: older,
+      text: phoneText,
+      enter: true,
+      client: PHONE
+    })
+    await new Promise((settle) => setTimeout(settle, 0))
+    expect(phone).toMatchObject({ ok: true, result: { send: { accepted: true } } })
+    expect(
+      judgeFreshTerminalOutput({
+        handle: older,
+        marker: MARKER,
+        nonce: 'phone-first',
+        sentText: phoneText,
+        before,
+        after: await host.read(older, before.latestCursor)
+      })
+    ).toEqual({ verdict: 'FRESH' })
+    expect(host.runtime.getDriver(OLDER_PTY)).toMatchObject({ kind: 'mobile', clientId: PHONE.id })
+
+    const bytesBeforeDesktop = host.written.get(OLDER_PTY)
+    const desktop = await host.call('terminal.send', {
+      terminal: older,
+      text: `echo ${MARKER}' 'desk-intrudes`,
+      enter: true,
+      client: DESK
+    })
+    expect(desktop).toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
+    expect(host.written.get(OLDER_PTY)).toBe(bytesBeforeDesktop)
+  })
+})

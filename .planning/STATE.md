@@ -1,9 +1,9 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 8 of 10 -- Ready to plan. Phases 5 and 7 are PARTIAL (human_needed, see Deferred Verification); phase 8 depends on 7 by roadmap, but its Orca-side legs are runnable and proceed under the unattended rule (record and move to the next runnable work).
+Phase: 9 of 10 -- Ready to plan. Phases 5 and 7 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
-Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4 and 6 complete (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a); phase 5 behavioural half (f80287311); phase 7 headless leg (commit follows). Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
+Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4, 6, 8 complete (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, phase 8 commit follows); phase 5 behavioural half (f80287311); phase 7 headless leg (27ee95e2a). Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
 
 ## Completed phases (evidence in .planning/phases/NN-*/)
 - Phase 1 (3/3): row reasons and owner map in 01-OWNERS.md; RED oracle test.
@@ -13,6 +13,7 @@ Last activity: 2026-10-26 17:15 -- worker epoch 2: phases 1-4 and 6 complete (1e
 - Phase 5 (1/2, human_needed): mobile/src/session/use-mobile-terminal-paste.test.ts; GEX44 44/44; P5-M1b, M2, M3 CAUGHT; tokens from mobile-theme.ts with positive control. Captures NOT done.
 - Phase 6 (2/2): measured, no code; provider leg EXTERNAL_BLOCKED.
 - Phase 7 (0/2, human_needed): tests/e2e/headless-paired-mobile-terminal-fresh-output.spec.ts + tests/e2e/helpers/mobile-protocol-client.ts; GEX44 built app --serve under xvfb: 1 passed, P7-M1 CAUGHT by the oracle. Headless Linux + scripted phone protocol only.
+- Phase 8 (2/2): scope test extended (stale desktop+mobile writes refused, phone floor accepted, desktop refused); relay tally + gate 13/13; placement 69/69; P8-M1..M6 CAUGHT. X units: X05/X16/X18 code on branch, PARTIAL pending two-host runs; X06/X19 NOT on this branch (need a port from GEX44 ~/missions/dws-exec). DWS matrix unchanged.
 - Owed across phases: tsc not run (laptop RAM law); run on GEX44 before any done claim.
 
 ## Deferred Verification
