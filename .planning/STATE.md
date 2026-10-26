@@ -1,7 +1,7 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 6 of 10 -- Ready to plan. Phase 5 is PARTIAL (human_needed): behaviour proven, captures blocked on a device or emulator.
+Phase: 7 of 10 -- In progress (headless leg on GEX44). Phase 5 is PARTIAL (human_needed): behaviour proven, captures blocked on a device or emulator. Phase 6 complete 2026-10-26 (2/2): ownership suites 19/19, P6-M1..M3 CAUGHT; live provider leg EXTERNAL_BLOCKED (Owner-only quota spend and login).
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
 Last activity: 2026-10-26 17:00 -- worker epoch 2 completed phases 1-4 (commits 1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18) and the behavioural half of phase 5. Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
 
