@@ -31,6 +31,6 @@ Witness leg (`ORCA_LIVE_LEG=witness`, second pairing, 2.5 s, passed):
 - The dedicated terminal was closed by the witness.
 
 ## Findings
-- Revocation on a surviving socket is silent: the host does not answer a revoked device's read or send, instead of returning a typed refusal. Safe (nothing executes, proven by the witness), but a phone sees a timeout, not "not authorized". Candidate fix: typed refusal before the socket drop.
+- RETRACTED (same day): "revocation is silent" was an artifact of the scripted client, whose `call()` never settles when its socket closes. Code reading: revoke terminates the device's sockets (`ws.terminate()`, so the phone sees 1006) and every later request gets a typed `unauthorized` / `device_revoked` (device-authorization.ts). The real defect was one layer up: the reconnect handshake refused a revoked token with a plain `unauthorized`, which the phone retries 3 times as maybe-transient (#5200). Fixed in 6fac32885 + 1175cda5d (handshake names `reason: device_revoked`; the phone latches at once). The live run's "NO_REPLY" lines should read "socket terminated".
 - The bundled CLI shim `resources\bin\orca.exe` fails on this install: "Unable to locate Orca.exe next to …resources" (the executable is `Orca X.exe`).
 - `repo.list` returns mixed path separators (one `C:\…`, two `C:/…`); a client matching on a native Windows path misses a registered project.

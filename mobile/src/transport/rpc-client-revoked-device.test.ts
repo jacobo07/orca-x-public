@@ -38,7 +38,8 @@ class MockWebSocket {
       return
     }
     this.readyState = MockWebSocket.CLOSED
-    this.onclose?.()
+    // Why: a real WebSocket fires close asynchronously; a synchronous one lets the close handler reject pending requests before the latch names the reason.
+    void Promise.resolve().then(() => this.onclose?.())
   })
 
   constructor(readonly endpoint: string) {
