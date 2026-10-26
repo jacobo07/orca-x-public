@@ -66,11 +66,11 @@ Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electr
 - Mobile caller of terminal.send: mobile/app/h/[hostId]/session/[worktreeId].tsx. Headless paired harness: tests/e2e/helpers/headless-paired-runtime-host.ts.
 - Live two-host harness: src/main/runtime/mobile-live-two-host-leg.live.test.ts with steps in mobile-live-leg-steps.ts (skipped unless its ORCA_LIVE_* env is set).
 - Orca X desktop is running on this laptop (the Windows host for Phases 2-7).
-- Owner's Orca X still lists one paired device, "Mobile 26/10/2026" paired ~18:19 (the phase 7 witness), not revoked (read-only check 20:28).
+- Owner's Orca X has no paired device: the Owner revoked the phase 7 witness; orca-devices.json is `[]` (read-only check 2026-10-26 23:40).
 - GEX44 DWS units X05, X06, X16, X18, X19 sit at OWNER_BOUNDARY (AMR cap); classify, do not blindly relaunch.
 
 ## Owner-only
-Revoke the phase 7 witness device (Orca X > Mobile > "Mobile 26/10/2026"); physical phone pairing; interactive provider login and real quota spend; push or merge.
+Physical phone pairing; interactive provider login and real quota spend; push or merge.
 
 ## Token budget
 Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product Reality 2.3M, handoff reserve 1.3M.

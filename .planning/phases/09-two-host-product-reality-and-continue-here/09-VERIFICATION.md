@@ -5,7 +5,6 @@ verified: 2026-10-26
 score: 1/2
 human_verification:
   - "Physical phone (or labelled emulator) switching hosts in the app's host picker. The run below is SCRIPTED CLIENT: it proves the host side of two-host scoping, not the phone UI."
-  - "Revoke the witness device left from phase 7 (Owner's Orca X > Mobile, 'Mobile 26/10/2026', paired ~18:19). Revocation is renderer-only; no host-local RPC exists."
 ---
 
 # Phase 9 Verification
@@ -37,7 +36,7 @@ Instrument check: the first attempt read ABSENT on host A while the command had 
 ## Findings
 - Windows ConPTY `terminal.read` lines are not screen lines. ConPTY repaints with cursor moves, and the tail is the ANSI-stripped stream split on `\n`, so PSReadLine's redraws pile up on one line and the command's output is glued to the end of the echo (`…process.platform)"ORCA-2H-… nonce-…`). The line-equality oracle reported ABSENT for a command that ran. Oracle extended narrowly: a line ending in the exact sent text followed by the expected line is FRESH (the echo alone cannot contain it); control tests refuse a partial echo and arbitrary prefixes. The product defect (agents and the Agent prompt read this tail on Windows hosts) is not fixed here.
 - `--serve-project-root` only feeds `--serve-recipe-json`; it does not register the project, so a fresh serve host lists no repos until `repo.add`.
-- The phase 7 witness device was never revoked (Owner's device list, read-only, 2026-10-26 20:28: one device, no revokedAt). Owner action above.
+- The phase 7 witness device was left paired (read-only, 20:28); the Owner revoked it, and the registry read empty at 23:40.
 
 ## Teardown
 Host A process tree killed (pid verified by command line), port 47392 closed, disposable profile deleted; GEX44 serve killed (7 pids, 0 left), port 47391 closed, `/tmp/orca-phone-p*` count 0; pairing codes and bundles deleted locally; no ssh tunnel left.
