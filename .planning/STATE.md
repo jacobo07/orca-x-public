@@ -1,15 +1,25 @@
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
-Phase: 4 of 10 -- Ready to plan. Phase 3 complete 2026-10-26 (2/2): src/main/runtime/runtime-rpc-mobile-reconnect-revocation.test.ts, mutants M4, M5, M6b, M7 CAUGHT, M6 equivalent (handles retained per PTY incarnation).
-Earlier: Phase 1 complete 2026-10-26 (3/3). Phase 2 complete 2026-10-26 (2/2): oracle src/shared/terminal-fresh-output-oracle.ts, scope proof src/main/runtime/rpc/terminal-send-mobile-scope.test.ts, mutants M1-M3 CAUGHT. Owed: tsc not run on the laptop.
-Phase 3 lead (read-only, 2026-10-26): revocation-at-effect already exists (src/main/runtime/device-authorization.ts assertDeviceStillAuthorized; runtime-rpc.ts:1118 binary frames, :1756 RPC) and is characterized in src/main/runtime/runtime-rpc-revoked-device-effect.characterization.test.ts (row 58). Phase 3 work = reconnect identity (same session id, no PTY growth) plus a terminal.send-specific revoked leg.
+Phase: 5 of 10 -- Ready to plan.
+Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
+Last activity: 2026-10-26 16:50 -- worker epoch 2 completed phases 1-4 (commits 1e828f057, 0a9b58881, 8e6e78c7b, Phase 4 commit follows). Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
+
+## Completed phases (evidence in .planning/phases/NN-*/)
+- Phase 1 (3/3): row reasons and owner map in 01-OWNERS.md; RED oracle test.
+- Phase 2 (2/2): oracle src/shared/terminal-fresh-output-oracle.ts; scope proof src/main/runtime/rpc/terminal-send-mobile-scope.test.ts; M1-M3 CAUGHT.
+- Phase 3 (2/2): src/main/runtime/runtime-rpc-mobile-reconnect-revocation.test.ts; M4, M5, M6b, M7 CAUGHT; M6 equivalent (handles retained per PTY incarnation). Revocation authority: device-authorization.ts assertDeviceStillAuthorized (runtime-rpc.ts:1118 frames, :1756 RPC).
+- Phase 4 (2/2): mobile/src/worktree/host-switch-row-isolation.test.ts; GEX44 34/34, P4-M1..M3 CAUGHT, root torn down.
+- Owed across phases: tsc not run (laptop RAM law); run on GEX44 before any done claim.
+
+## GEX44 mobile test recipe
+git bundle HEAD -> scp to /tmp/orca-phone-pN-<ts>; PATH from ~/orca-env/env.sh (node24 v24.21.0, pnpm 10.24.0); `pnpm install --frozen-lockfile --ignore-scripts` in mobile/; script refuses any root outside /tmp/orca-phone-p*; tear down after. Ship scripts as no-BOM LF files via `ssh gex44 bash -s < file`.
 
 ## Decisions (unattended)
 - 2026-10-26 Phase 1 RED is a unit test, not e2e: the laptop cannot build for the headless paired harness. Safe: reversible, internal.
 - 2026-10-26 Phase 2 adds no wire field for host scope; per-host connection + runtime-local handle map already fences it. Safe: no wire change, proven by mutants.
-Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
-Last activity: 2026-10-26 16:00 -- mission ownership moved to the C:\Users\Jacobo laptop (Owner: "go here"). The arming pane on the C:\Users\User machine (worktree orca-phone-wt) stays idle and is NOT a writer. The previous DWS milestone (phases 1-12) is archived in rb-live history c1f33f4d4e.
+- 2026-10-26 Phase 4 runs mobile tests on GEX44 rather than installing mobile deps on the laptop (RAM law). Safe: disposable root, torn down.
+- 2026-10-26 Removed a stale worktree index.lock (no live git process, 262 s old; backup in job tmp). Safe: scratch file, backed up.
 
 ## Laws (binding)
 - You are already in the work tree. Do not call EnterWorktree or ExitWorktree.
