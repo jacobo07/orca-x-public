@@ -4,7 +4,7 @@
 Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh output, reconnect, revocation) before any DWS work, then extend it with host and runtime scoping, the Agent prompt path, and DWS semantics (rows 33, 39, 70, 75). DWS extends the mobile owner; it never duplicates it. Remote-control Product Reality and cross-host-continuation Product Reality are separate gates.
 
 ## Phases
-- [ ] **Phase 1: Reality close and RED** - Re-read the full reasons of DWS rows 12, 33, 39, 75; confirm mobile slices 1-4 are intact on this tree; map the canonical owners; write the RED test for a fresh-output oracle (nonce after a marker, never history).
+- [x] **Phase 1: Reality close and RED** - Re-read the full reasons of DWS rows 12, 33, 39, 75; confirm mobile slices 1-4 are intact on this tree; map the canonical owners; write the RED test for a fresh-output oracle (nonce after a marker, never history).
 - [ ] **Phase 2: Scoped terminal input and fresh-output oracle** - Mobile input is scoped by host and by runtime; newest-terminal targeting, wrong host, wrong runtime and stale generation are refused; the oracle rejects historical text.
 - [ ] **Phase 3: Reconnect and revocation** - Disconnect does not kill the remote PTY; reconnect restores the same session identity without a duplicate; a revoked device with a live socket is refused at the next mutation.
 - [ ] **Phase 4: Host and runtime selector truth** - Hosts and runtimes come from real producers only; switching host changes scope and leaks nothing; unknown stays UNKNOWN; no background streams for unselected hosts.
