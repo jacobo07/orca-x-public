@@ -34,6 +34,9 @@ import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 const INPUT_LOCK_SETTLE_MS = 600
+// Why: off the live edge the 40-row window trims from the top and "load earlier" prepends;
+// anchoring the first visible row keeps the reader's text still (owner-phone repro 2026-10-27).
+const READER_ANCHOR = { minIndexForVisible: 0 }
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -292,6 +295,7 @@ export function MobileNativeChatView({
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
               scrollEventThrottle={32}
+              maintainVisibleContentPosition={atBottom ? undefined : READER_ANCHOR}
               onContentSizeChange={() => {
                 if (data.length > 0 && atBottom) {
                   listRef.current?.scrollToEnd({ animated: false })

@@ -241,4 +241,50 @@ describe('MobileNativeChatView', () => {
       vi.useRealTimers()
     }
   })
+
+  // Owner phone, 2026-10-27: scrolled back while the agent streamed, the text slid up one row per
+  // new message (window head trim) and jumped on auto "load earlier" (prepend).
+  describe('viewport ownership', () => {
+    function list(): ReactTestInstance {
+      return renderer!.root.find((node) => node.type === 'FlatList')
+    }
+
+    async function scrollTo(distanceFromBottom: number): Promise<void> {
+      const height = 500
+      const contentHeight = 4000
+      await act(async () => {
+        list().props.onScroll({
+          nativeEvent: {
+            contentOffset: { y: contentHeight - height - distanceFromBottom },
+            contentSize: { height: contentHeight },
+            layoutMeasurement: { height }
+          }
+        })
+      })
+    }
+
+    const folded = [assistantTurn('a1', 'first'), assistantTurn('a2', 'second')]
+
+    it('follows the live edge without anchoring while the reader is at the bottom', async () => {
+      await render({ folded })
+      expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    })
+
+    it('anchors the first visible row once the reader scrolls away from live', async () => {
+      await render({ folded })
+      await scrollTo(600)
+      expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
+
+      // A streamed row arriving must not take ownership back.
+      await update({ folded: [...folded, assistantTurn('a3', 'third')] })
+      expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
+    })
+
+    it('releases the anchor when the reader returns to the live edge', async () => {
+      await render({ folded })
+      await scrollTo(600)
+      await scrollTo(20)
+      expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    })
+  })
 })
