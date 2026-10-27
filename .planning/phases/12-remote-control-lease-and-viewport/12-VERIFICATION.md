@@ -50,5 +50,13 @@ Not yet done on the input side:
   - **Chat viewport: COMPLETE AND PROVEN** for streamed appends and window trimming.
   - Keyboard open/close and foreground/reconnect on the chat surface were not exercised.
 
+## APK native-module gate in CI (2026-10-27)
+- `mobile-android-release.yml` audits every built APK before upload and release, so an APK whose JS requires a native module its dex lacks is never published.
+- **Defect found while wiring it:** on Node 18 the CLI printed nothing and exited 0, because `import.meta.filename` was undefined and the entry check was false. It now refuses below Node 20.11 (the repo floor is 24).
+- **Evidence on GEX44:**
+  - On the real release APK (`b0419ff7`, the one on the Owner's phone): 41 native modules, 0 missing, exit 0.
+  - On a fake APK: exit 1. On Node 18: refuses with exit 1.
+  - The CLI test, added to the 5 tests: P12-G1 CAUGHT, RESTORE_VERIFIED.
+
 ## Evidence location
 Frames are in the session scratchpad `p12-frames/` (`A`, `B`, `C`, `N` sheets). Owner screenshots containing private content were deleted.
