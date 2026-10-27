@@ -4,6 +4,8 @@ import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  resolveLockHeldExitCode,
+  SERVE_AUTOSTART_FLAG,
   shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock,
@@ -11,6 +13,7 @@ import {
   SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE,
   SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE
 } from './single-instance-lock'
+import { normalizeServeModeArgv } from './serve-mode-argv'
 
 type Listener = (...args: unknown[]) => void
 
@@ -182,5 +185,43 @@ describe('logSingleInstanceLockBypass', () => {
 
     expect(write).toHaveBeenCalledWith(2, `${SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE}\n`)
     expect(write.mock.calls[0]?.[1]).toContain('bypassing the packaged macOS single-instance lock')
+  })
+})
+
+describe('resolveLockHeldExitCode', () => {
+  it('treats a held lock as success only for an autostart serve launch (D-07)', () => {
+    expect(SERVE_AUTOSTART_FLAG).toBe('--serve-autostart')
+    expect(resolveLockHeldExitCode(['/Orca.exe', '--serve', '--serve-autostart'])).toBe(0)
+  })
+
+  it.each([
+    ['manual serve (D-11)', ['/Orca.exe', '--serve']],
+    ['desktop', ['/Orca.exe']],
+    ['flag without serve', ['/Orca.exe', '--serve-autostart']],
+    ['CLI-form serve from the systemd unit', ['/AppRun', 'serve', '--port', '6768']]
+  ])('keeps exit code 3 for %s', (_label, argv) => {
+    expect(resolveLockHeldExitCode(argv)).toBe(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
+    expect(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE).toBe(3)
+  })
+
+  it('survives the serve argv normalization the main process applies first', () => {
+    const argv = normalizeServeModeArgv([
+      '/Orca.exe',
+      '--serve',
+      '--serve-autostart',
+      '--serve-no-pairing'
+    ])
+    expect(resolveLockHeldExitCode(argv)).toBe(0)
+  })
+
+  it('never activates a desktop window for an autostart second instance', () => {
+    expect(
+      shouldActivateDesktopForSecondInstance([
+        '/Orca.exe',
+        '--serve',
+        '--serve-autostart',
+        '--serve-no-pairing'
+      ])
+    ).toBe(false)
   })
 })

@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  SERVE_AUTOSTART_FLAG as MAIN_SERVE_AUTOSTART_FLAG,
+  resolveLockHeldExitCode
+} from '../../main/startup/single-instance-lock'
+import {
   SERVE_AUTOSTART_FLAG,
   SERVE_AUTOSTART_SERVE_ARGS,
   buildServeAutostartTaskXml,
   joinWindowsCommandLineArgs,
   type ServeAutostartTaskXmlInput
 } from './serve-autostart-task-xml'
+
+// Why: the CLI build cannot import src/main, so the builder duplicates the flag; this pins the two literals together.
+describe('autostart flag parity with the main-process lock exit', () => {
+  it('writes the exact flag the lock-held exit reads', () => {
+    expect(SERVE_AUTOSTART_FLAG).toBe(MAIN_SERVE_AUTOSTART_FLAG)
+    expect(resolveLockHeldExitCode(['C:\\Orca\\Orca.exe', ...SERVE_AUTOSTART_SERVE_ARGS])).toBe(0)
+  })
+})
 
 const INPUT: ServeAutostartTaskXmlInput = {
   userId: 'DOM\\jacobo',
