@@ -45,6 +45,7 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 | 5 | verification_deferred_human | /gsd-verify-work 5 (captures: keyboard open/closed, selector open, long names, many runtimes; Android 14 emulator on C:\Users\User or a paired phone) |
 | 7 | verification_deferred_human | /gsd-verify-work 7 (Windows app + paired phone or labelled emulator; run the headless spec on Windows; live revoke from Settings) |
 | 9 | verification_deferred_human | /gsd-verify-work 9 (host side done with a SCRIPTED CLIENT; owed: a phone or labelled emulator switching hosts in the host picker) |
+| 18 | verification_deferred_human | /gsd-verify-work 18 (model, producer, card and check:host-card-claims PASS with 5 mutants CAUGHT, f9204b5ad; owed: the card on a real phone or labelled emulator, and a live status.get hostAvailability read from a disposable serve host after an out/ rebuild on GEX44) |
 | 17 | verification_deferred_human | /gsd-verify-work 17 (SC1, SC2a, SC2b, SC3a PASS on a disposable serve host, SCRIPTED CLIENT, a0ea321d0; owed: Owner go for the disposable Task Scheduler leg incl. RestartOnFailure, then rows O1-O6 in 17-VERIFICATION.md on the Owner's PC) |
 
 ## Owner decisions
