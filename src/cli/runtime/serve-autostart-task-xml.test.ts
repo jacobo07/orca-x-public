@@ -129,6 +129,29 @@ describe('buildServeAutostartTaskXml', () => {
     expect(element(block(expiring, 'Settings'), 'DeleteExpiredTaskAfter')).toEqual(['PT0S'])
   })
 
+  it('keeps the logon trigger by default and omits it for a run-only task', () => {
+    expect(buildServeAutostartTaskXml({ ...INPUT, trigger: 'logon' })).toBe(xml)
+    const runOnly = buildServeAutostartTaskXml({ ...INPUT, trigger: 'none' })
+    expect(runOnly).not.toContain('LogonTrigger')
+    expect(runOnly).not.toContain('<Triggers>')
+    expect(element(block(runOnly, 'Settings'), 'MultipleInstancesPolicy')).toEqual(['IgnoreNew'])
+    expect(block(runOnly, 'Settings')).toContain('<RestartOnFailure>')
+  })
+
+  it('carries a run-only end boundary on a disabled time trigger that can never fire', () => {
+    const expiring = buildServeAutostartTaskXml({
+      ...INPUT,
+      trigger: 'none',
+      endBoundary: '2026-10-28T00:00:00'
+    })
+    expect(expiring).not.toContain('LogonTrigger')
+    const time = block(expiring, 'TimeTrigger')
+    expect(element(time, 'StartBoundary')).toEqual(['2026-10-28T00:00:00'])
+    expect(element(time, 'EndBoundary')).toEqual(['2026-10-28T00:00:00'])
+    expect(element(time, 'Enabled')).toEqual(['false'])
+    expect(element(block(expiring, 'Settings'), 'DeleteExpiredTaskAfter')).toEqual(['PT0S'])
+  })
+
   it('defaults the serve args to the no-pairing autostart serve', () => {
     expect(SERVE_AUTOSTART_SERVE_ARGS).toEqual([
       '--serve',
