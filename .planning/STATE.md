@@ -3,15 +3,15 @@ gsd_state_version: "1.0"
 current_phase: 10
 current_phase_name: 2/2
 status: unknown
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-10-27T15:49:41.645Z"
+stopped_at: "Completed 17-03-PLAN.md (checkpoint: Owner rows O1-O6 OWNER_BOUND)"
+last_updated: "2026-10-27T16:11:54.166Z"
 last_activity: "2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: \"go here\"); the arming pane on C:\\Users\\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e."
-state_head: 4f07a11fd1dd42b17607ea35e48d34027fa93672
+state_head: fd16aa0ac2ff915fd0023f7b6ad1bbfd3714fd0a
 progress:
   total_phases: 14
   completed_phases: 7
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 50
 ---
 
@@ -112,15 +112,18 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 |------|----------|-------|-------|
 | Phase 17 P01 | 45min | 3 tasks | 8 files |
 | Phase 17 P02 | 60 min | 3 tasks | 15 files |
+| Phase 17 P03 | 25 min | 3 tasks | 8 files |
 
 ## Decisions
 
 - [Phase 10]: 17-01: serve and desktop start the relay through one memoized createHostRelayOwner(); readiness status is null until the broker emits
 - [Phase 10]: 17-02: SERVE_AUTOSTART_FLAG lives in src/shared so the CLI task builder and main lock-held exit share one literal
 - [Phase 10]: 17-02: autostart status treats only ObjectNotFound as absent; any other lookup error is autostart_status_unreadable
+- [Phase 10]: 17-03: Task Scheduler leg OWNER_BOUND, restart-on-failure UNMEASURED (no Owner go)
+- [Phase 10]: 17-03: GEX44 recipe needs pnpm rebuild node-pty after --ignore-scripts install for build:electron-vite
 
 ## Session
 
-**Last session:** 2026-10-27T15:49:39.683Z
-**Stopped at:** Completed 17-02-PLAN.md
+**Last session:** 2026-10-27T16:11:52.032Z
+**Stopped at:** Completed 17-03-PLAN.md (checkpoint: Owner rows O1-O6 OWNER_BOUND)
 **Resume file:** None

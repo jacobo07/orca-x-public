@@ -1,0 +1,113 @@
+{
+  "label": "SCRIPTED CLIENT",
+  "plane": "disposable windowless serve host on JACOBO-PC (win32), scratch profile, scripted phone-protocol client",
+  "startedAt": "2026-10-27T15:59:21.476Z",
+  "electron": "C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe",
+  "appRoot": "C:\\owx-haf",
+  "ownerDevicesPath": "C:\\Users\\Jacobo\\AppData\\Roaming\\orca\\orca-devices.json",
+  "ownerDevicesHashBefore": "39759f41605f2b5e3e3fde1f3fa7c71c14bbf5d6ab06a35ceea5fcfaa3e6aa7b",
+  "baselineServeMainCount": 0,
+  "baselineScratchFamilyCount": 0,
+  "startupMs": 18192,
+  "readiness1a": {
+    "appVersion": "1.4.178-rc.2",
+    "relay": {
+      "state": "unavailable",
+      "reason": "cloud_auth_not_configured"
+    },
+    "runtimeId": "9b9441a0-7f8c-429b-aafd-1a0b15025cc7",
+    "pairingAvailable": true
+  },
+  "idleSettleMs": 60000,
+  "workingSetBytes": 346181632,
+  "privateBytes": 277692416,
+  "cpuPercentOneCore": 0,
+  "cpuPercentAllCores": 0,
+  "logicalCores": 12,
+  "cpuWindowMs": 30000,
+  "processCount": 4,
+  "processesSampled": [
+    {
+      "pid": 3372,
+      "ws": 196804608,
+      "cmd": "C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe C:\\owx-haf --serve --serve-json --serve-port 0 --serve-bind-host 127.0.0.1 --serve-pairing-address 127.0.0.1 "
+    },
+    {
+      "pid": 15284,
+      "ws": 37044224,
+      "cmd": "C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe --type=crashpad-handler --user-data-dir=C:\\Users\\Jacobo\\AppData\\Local\\Temp\\orca-hs-p17-20261027165917\\userDat"
+    },
+    {
+      "pid": 12100,
+      "ws": 65273856,
+      "cmd": "\"C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe\" --type=gpu-process --user-data-dir=\"C:\\Users\\Jacobo\\AppData\\Local\\Temp\\orca-hs-p17-20261027165917\\userData\""
+    },
+    {
+      "pid": 10560,
+      "ws": 47058944,
+      "cmd": "\"C:\\owx-haf\\node_modules\\electron\\dist\\electron.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=es --service-sandbox-type=none --user"
+    }
+  ],
+  "repoRegistration": "runtime pipe repo.add (mobile repo.add refused)",
+  "fresh1": {
+    "verdict": "FRESH",
+    "marker": "ORCA-HS17-2f927e86",
+    "nonce": "nonce-433c391a",
+    "host": "HOST JACOBO-PC win32"
+  },
+  "duplicateExitCode": 3,
+  "autostartDuplicateExitCode": 0,
+  "serveMainProcessCount": 1,
+  "runtimeIdUnchanged": true,
+  "fresh2": {
+    "verdict": "FRESH",
+    "nonce": "nonce-d521120e",
+    "host": "HOST JACOBO-PC win32"
+  },
+  "leg1bNoNetworkCitation": "src/main/runtime/relay/relay-auth-context.ts:10-13 (no active.profile.cloud -> return null before readFreshOrcaCloudSession); src/main/runtime/relay/relay-auth-coordinator.ts:134-141 (null context -> no openBroker / RelaySessionBroker.connect)",
+  "readiness1b": {
+    "relay": {
+      "state": "started",
+      "status": null
+    },
+    "appVersion": "1.4.178-rc.2"
+  },
+  "spawnedPidsReaped": true,
+  "serveMainCountAfterTeardown": 0,
+  "scratchFamilyCountAfterTeardown": 0,
+  "scratchAbsentAfterTeardown": true,
+  "ownerDevicesHashAfter": "39759f41605f2b5e3e3fde1f3fa7c71c14bbf5d6ab06a35ceea5fcfaa3e6aa7b",
+  "ownerDevicesUnchanged": true,
+  "finishedAt": "2026-10-27T16:01:32.357Z",
+  "cpuInstrumentNote": "cpuPercentOneCore 0 is the measured tick delta (Win32_Process KernelModeTime+UserModeTime, 100 ns units) over 30 s for the 4-process idle tree. It is below instrument resolution, not proof of zero: Windows charges CPU in clock-tick quanta (15.625 ms), so sub-quantum wakeups can go uncharged.",
+  "cpuInstrumentPositiveControl": {
+    "method": "same CIM fields, 5 s window, on two node processes spawned for the control and reaped after",
+    "busyLoopPercentOneCore": 100.625,
+    "tickerPercentOneCore": 1.25,
+    "controlProcessesAliveAfter": false
+  },
+  "gex44Build": {
+    "label": "GEX44 disposable build",
+    "root": "/tmp/orca-phone-p17-20261027165305",
+    "head": "1ec6a6bd8932768b0869ca435bcb6bbe10a194c7",
+    "firstAttempt": "BUILD_FAIL: plain-node-entry-guard could not load node-pty pty.node (install used --ignore-scripts)",
+    "fix": "pnpm rebuild node-pty in the disposable root, then build:electron-vite passed",
+    "outTgzSha256": "082d41eaa58b24ae7b732fc77b46b1931c30a5d261d6e6c49ecca23b748ea330",
+    "pulledShaMatches": true,
+    "rootAbsentAfter": "ls /tmp | grep orca-phone-p17 -> NONE_P17",
+    "typecheckRoot": "/tmp/orca-phone-p17-20261027170753 at fd16aa0ac: typecheck:node rc=0, typecheck:cli rc=0; root absent after (NONE_P17)"
+  },
+  "taskSchedulerLeg": {
+    "state": "OWNER_BOUND",
+    "reason": "OWNER GATE: no explicit Owner go recorded in STATE.md this session; real schtasks /Create, /Run, /Delete were not called.",
+    "xmlAccepted": "UNMEASURED",
+    "positiveControlInstalled": "UNMEASURED",
+    "launched": "UNMEASURED",
+    "restartedOnNonZeroExit": "UNMEASURED",
+    "restartLatencyMs": "UNMEASURED",
+    "ignoreNewHeld": "UNMEASURED",
+    "removed": "UNMEASURED",
+    "taskAbsentAfterTeardown": "UNMEASURED (no task was created)",
+    "liveLegFile": "src/cli/runtime/serve-autostart-task.live.test.ts (skipped unless ORCA_LIVE_SCHTASKS=1)"
+  }
+}
