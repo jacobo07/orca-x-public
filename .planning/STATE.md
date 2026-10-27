@@ -3,15 +3,15 @@ gsd_state_version: "1.0"
 current_phase: 10
 current_phase_name: 2/2
 status: unknown
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-10-27T15:25:34.605Z"
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-10-27T15:49:41.645Z"
 last_activity: "2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: \"go here\"); the arming pane on C:\\Users\\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e."
-state_head: 4d172ea77d10fc437596b529caa9528ff06be5cd
+state_head: 4f07a11fd1dd42b17607ea35e48d34027fa93672
 progress:
   total_phases: 14
   completed_phases: 7
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 50
 ---
 
@@ -111,13 +111,16 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 17 P01 | 45min | 3 tasks | 8 files |
+| Phase 17 P02 | 60 min | 3 tasks | 15 files |
 
 ## Decisions
 
 - [Phase 10]: 17-01: serve and desktop start the relay through one memoized createHostRelayOwner(); readiness status is null until the broker emits
+- [Phase 10]: 17-02: SERVE_AUTOSTART_FLAG lives in src/shared so the CLI task builder and main lock-held exit share one literal
+- [Phase 10]: 17-02: autostart status treats only ObjectNotFound as absent; any other lookup error is autostart_status_unreadable
 
 ## Session
 
-**Last session:** 2026-10-27T15:25:32.451Z
-**Stopped at:** Completed 17-01-PLAN.md
+**Last session:** 2026-10-27T15:49:39.683Z
+**Stopped at:** Completed 17-02-PLAN.md
 **Resume file:** None
