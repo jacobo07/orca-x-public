@@ -22,6 +22,35 @@ export type ServeAutostartTaskXmlInput = {
   description: string
   // Why: lets the 17-03 live leg register a task that Task Scheduler deletes on its own.
   endBoundary?: string
+  // Why 'none': a disposable live-leg task must start only by /Run, never at the Owner's logon.
+  trigger?: 'logon' | 'none'
+}
+
+function triggerLines(input: ServeAutostartTaskXmlInput, endBoundary: string[]): string[] {
+  if (input.trigger === 'none') {
+    // Why a disabled TimeTrigger: expiry (DeleteExpiredTaskAfter) is measured against trigger end boundaries.
+    return input.endBoundary
+      ? [
+          '  <Triggers>',
+          '    <TimeTrigger>',
+          `      ${tag('StartBoundary', input.endBoundary)}`,
+          ...endBoundary,
+          '      <Enabled>false</Enabled>',
+          '    </TimeTrigger>',
+          '  </Triggers>'
+        ]
+      : []
+  }
+  return [
+    '  <Triggers>',
+    '    <LogonTrigger>',
+    ...endBoundary,
+    '      <Enabled>true</Enabled>',
+    `      ${tag('UserId', input.userId)}`,
+    `      <Delay>${LOGON_DELAY}</Delay>`,
+    '    </LogonTrigger>',
+    '  </Triggers>'
+  ]
 }
 
 export function escapeXml(value: string): string {
@@ -75,14 +104,7 @@ export function buildServeAutostartTaskXml(input: ServeAutostartTaskXmlInput): s
     '  <RegistrationInfo>',
     `    ${tag('Description', input.description)}`,
     '  </RegistrationInfo>',
-    '  <Triggers>',
-    '    <LogonTrigger>',
-    ...endBoundary,
-    '      <Enabled>true</Enabled>',
-    `      ${tag('UserId', input.userId)}`,
-    `      <Delay>${LOGON_DELAY}</Delay>`,
-    '    </LogonTrigger>',
-    '  </Triggers>',
+    ...triggerLines(input, endBoundary),
     '  <Principals>',
     '    <Principal id="Author">',
     `      ${tag('UserId', input.userId)}`,

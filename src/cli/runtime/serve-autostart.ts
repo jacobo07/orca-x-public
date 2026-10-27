@@ -189,6 +189,7 @@ export type ServeAutostartInstallOptions = {
   // Why: overrides exist only for the 17-03 live leg (disposable task name, expiring definition).
   launchTarget?: ServeAutostartLaunchTarget
   endBoundary?: string
+  trigger?: 'logon' | 'none'
 }
 
 export type ServeAutostartInstallResult = {
@@ -248,7 +249,8 @@ export async function installServeAutostart(
     workingDirectory: target.workingDirectory,
     description:
       'Starts the Orca Host Service (orca serve) at logon. Managed by `orca serve autostart`.',
-    endBoundary: options.endBoundary
+    endBoundary: options.endBoundary,
+    trigger: options.trigger
   })
   // Why: a fresh per-call directory keeps another process from pre-placing the file schtasks reads (T-17-10).
   const dir = mkdtempSync(join(tmpdir(), 'orca-autostart-'))

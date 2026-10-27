@@ -267,6 +267,14 @@ describe('installServeAutostart', () => {
     expect(xml).toContain('<DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter>')
   })
 
+  it('passes a run-only trigger through so the disposable task never fires at logon', async () => {
+    const { deps, created } = schtasksDeps()
+    await installServeAutostart({ taskName: 'Orca X', launchTarget: TARGET, trigger: 'none' }, deps)
+    const xml = created[0].bytes.subarray(2).toString('utf16le')
+    expect(xml).not.toContain('LogonTrigger')
+    expect(xml).toContain('<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>')
+  })
+
   it('fails with unsupported_platform off Windows without exec', async () => {
     const { deps, calls } = fakeDeps('linux', { code: 0, stdout: '', stderr: '' })
     await expect(installServeAutostart({ launchTarget: TARGET }, deps)).rejects.toMatchObject({
