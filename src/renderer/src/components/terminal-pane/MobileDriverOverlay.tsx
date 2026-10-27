@@ -15,18 +15,21 @@ type Props = {
   hasFitOverride: boolean
   onAction: () => void | Promise<void>
   onAllAction?: () => void | Promise<void>
+  /** Desktop keystrokes the presence lock has dropped for this PTY. */
+  desktopInputRefusals?: number
   /** Identifier class on the rendered root, used by e2e selectors. */
   rootClassName?: string
 }
 
-// Why: see docs/mobile-presence-lock.md. Driving state preserves output streaming
-// so the chip mode lets users keep watching; held-fit state has no live output to
-// preserve, so it stays loud until Restore.
+// Why: see docs/mobile-presence-lock.md. Driving is normal remote use, so it starts as
+// the chip and expands only when a desktop keystroke is dropped; held-fit state has no
+// live output to preserve, so it stays loud until Restore.
 export function MobileDriverOverlay({
   driver,
   hasFitOverride,
   onAction,
   onAllAction,
+  desktopInputRefusals = 0,
   rootClassName
 }: Props): ReactElement | null {
   const isMobileDriving = driver.kind === 'mobile'
@@ -34,7 +37,7 @@ export function MobileDriverOverlay({
   const driverClientId = driver.kind === 'mobile' ? driver.clientId : null
 
   const [collapseState, setCollapseState] = useState(() =>
-    createMobileDriverOverlayCollapseState(driverClientId)
+    createMobileDriverOverlayCollapseState(driverClientId, desktopInputRefusals)
   )
   const [actionPending, setActionPending] = useState(false)
   const [allActionPending, setAllActionPending] = useState(false)
@@ -50,8 +53,11 @@ export function MobileDriverOverlay({
     }
   }, [])
 
-  const currentCollapseState = getMobileDriverOverlayCollapseState(collapseState, driverClientId)
-  // Why: a new mobile actor must be loud even if the prior driver was collapsed.
+  const currentCollapseState = getMobileDriverOverlayCollapseState(
+    collapseState,
+    driverClientId,
+    desktopInputRefusals
+  )
   if (currentCollapseState !== collapseState) {
     setCollapseState(currentCollapseState)
   }
@@ -128,7 +134,9 @@ export function MobileDriverOverlay({
       <LockChip
         actionPending={actionPending}
         onAction={handleAction}
-        onExpand={() => setCollapseState(createMobileDriverOverlayCollapseState(driverClientId))}
+        onExpand={() =>
+          setCollapseState({ driverClientId, collapsed: false, refusals: desktopInputRefusals })
+        }
         rootRef={setOverlayRootRef}
         rootClassName={rootClassName}
       />
@@ -161,7 +169,9 @@ export function MobileDriverOverlay({
       allActionPending={allActionPending}
       onAction={handleAction}
       onAllAction={onAllAction ? handleAllAction : undefined}
-      onCollapse={() => setCollapseState({ driverClientId, collapsed: true })}
+      onCollapse={() =>
+        setCollapseState({ driverClientId, collapsed: true, refusals: desktopInputRefusals })
+      }
       tone="driving"
       rootRef={setOverlayRootRef}
       rootClassName={rootClassName}
@@ -218,10 +228,10 @@ function LoudOverlay({
   // the next Space/Enter into Take back / Restore. See PR #1899 follow-up.
   useEffect(() => {
     const paneScope = rootRef.current?.parentElement
-    if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
+    if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope, tone)) {
       actionRef.current?.focus()
     }
-  }, [])
+  }, [tone])
   // Why: terminal output is still useful status while mobile owns input, so the
   // lock UI must not add a pane-wide scrim or blur over the live stream.
   return (

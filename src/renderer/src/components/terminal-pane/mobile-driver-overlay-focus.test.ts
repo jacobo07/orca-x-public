@@ -75,4 +75,13 @@ describe('shouldFocusMobileDriverAction', () => {
   it('preserves browser guest focus represented by Electron webviews', () => {
     expect(shouldFocusMobileDriverAction(focusLike({ tagName: 'WEBVIEW' }))).toBe(false)
   })
+
+  it('never moves focus for the phone-driving explanation, even from this pane', () => {
+    const xterm = focusLike({ tagName: 'TEXTAREA', xterm: true })
+
+    expect(shouldFocusMobileDriverAction(xterm, undefined, scopeContaining(xterm), 'driving')).toBe(
+      false
+    )
+    expect(shouldFocusMobileDriverAction(undefined, undefined, undefined, 'driving')).toBe(false)
+  })
 })

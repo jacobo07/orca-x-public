@@ -601,14 +601,19 @@ describe('connectPanePty', () => {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
+      const { getDesktopInputRefusals } = await import('@/lib/pane-manager/mobile-driver-state')
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
       ;(onDataHandler as unknown as (data: string) => void)('x')
+      // Focus reports while the window changes focus are not desktop typing.
+      ;(onDataHandler as unknown as (data: string) => void)('\x1b[I')
+      ;(onDataHandler as unknown as (data: string) => void)('\x1b[O')
       vi.advanceTimersByTime(500)
 
       expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+      expect(getDesktopInputRefusals(ptyId)).toBe(2)
     } finally {
       setDriverForPty(ptyId, { kind: 'idle' })
     }

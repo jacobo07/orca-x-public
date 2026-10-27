@@ -76,7 +76,7 @@ import {
   getFitOverrideForPty,
   onOverrideChange
 } from '@/lib/pane-manager/mobile-fit-overrides'
-import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import { isPtyLocked, noteDesktopInputRefused } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
 import { shouldClaimRemoteDesktopViewport } from './remote-desktop-viewport-claim'
 import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
@@ -4152,6 +4152,10 @@ export function connectPanePty(
     // explicit Take back action owns restoring desktop input and dimensions.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
       clearPendingTerminalInputIntent()
+      // Focus reports are not the user typing; they must not raise the explanation.
+      if (data !== TERMINAL_FOCUS_IN_SEQUENCE && data !== TERMINAL_FOCUS_OUT_SEQUENCE) {
+        noteDesktopInputRefused(currentPtyId)
+      }
       return
     }
     if (

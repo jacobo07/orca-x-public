@@ -59,7 +59,8 @@ vi.mock('react', async () => {
 
 function renderOverlay(
   onAction: () => void | Promise<void>,
-  onAllAction?: () => void | Promise<void>
+  onAllAction?: () => void | Promise<void>,
+  desktopInputRefusals = 0
 ): OverlayElement {
   hookRuntime.stateIndex = 0
   hookRuntime.refIndex = 0
@@ -67,7 +68,8 @@ function renderOverlay(
     driver: { kind: 'mobile', clientId: 'phone-1' } as never,
     hasFitOverride: false,
     onAction,
-    onAllAction
+    onAllAction,
+    desktopInputRefusals
   }) as OverlayElement
 }
 
@@ -117,11 +119,20 @@ describe('MobileDriverOverlay', () => {
     expect(overlay.props.allActionLabel).toBe('Restore all terminals')
   })
 
-  it('exposes an all-terminals restore action when provided', async () => {
+  it('shows the quiet chip, not the explanation, when a phone takes control', () => {
+    const overlay = renderOverlay(vi.fn(), vi.fn())
+
+    expect(overlay.props.actionLabel).toBeUndefined()
+    expect(overlay.props.onAction).toEqual(expect.any(Function))
+  })
+
+  it('exposes an all-terminals restore action once a desktop keystroke is dropped', async () => {
     const onAction = vi.fn()
     const onAllAction = vi.fn()
 
-    const overlay = renderOverlay(onAction, onAllAction)
+    renderOverlay(onAction, onAllAction, 0)
+    renderOverlay(onAction, onAllAction, 1)
+    const overlay = renderOverlay(onAction, onAllAction, 1)
 
     expect(overlay.props.actionLabel).toBe('Take back this terminal')
     expect(overlay.props.allActionLabel).toBe('Take back all terminals')

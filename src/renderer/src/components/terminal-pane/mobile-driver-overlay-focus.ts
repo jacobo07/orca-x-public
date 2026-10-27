@@ -13,8 +13,14 @@ function isFocusLike(value: unknown): value is FocusLike {
 export function shouldFocusMobileDriverAction(
   active: unknown,
   body?: unknown,
-  focusScope?: unknown
+  focusScope?: unknown,
+  tone: 'driving' | 'held' = 'held'
 ): boolean {
+  // Why: the driving explanation opens because a desktop keystroke was dropped; focusing
+  // Take back there would let the user's next keystroke reclaim the terminal by accident.
+  if (tone === 'driving') {
+    return false
+  }
   if (!isFocusLike(active) || active === body) {
     return true
   }

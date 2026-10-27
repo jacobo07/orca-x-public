@@ -118,7 +118,12 @@ import {
   getFitOverrideForPty
 } from '@/lib/pane-manager/mobile-fit-overrides'
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
-import { getAllDrivers, getDriverForPty, isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import {
+  getAllDrivers,
+  getDesktopInputRefusals,
+  getDriverForPty,
+  isPtyLocked
+} from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import {
@@ -3406,6 +3411,7 @@ function TerminalPane(
             key={`mobile-driver-${pane.id}-${ptyId}`}
             driver={driver}
             hasFitOverride={hasFitOverride}
+            desktopInputRefusals={getDesktopInputRefusals(ptyId)}
             rootClassName="mobile-driver-banner"
             onAction={() => restorePaneTerminalFit(pane, ptyId)}
             onAllAction={() => restoreAllTerminalFits(pane)}

@@ -153,11 +153,16 @@ In the symmetric direction, mobile reclaim:
 
 ## End-user UX
 
-| Driver      | Overlay (desktop)                                                                                 | Desktop input                         | Desktop resize                                                |
-| ----------- | ------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------- |
-| `idle`      | hidden                                                                                            | allowed                               | allowed                                                       |
-| `mobile{*}` | loud lock overlay with **Take back** and **Collapse**; collapsed chip keeps **Take back** visible | blocked at xterm.onData (silent drop) | blocked in renderer + dropped in `pty:resize` IPC server-side |
-| `desktop`   | hidden                                                                                            | allowed                               | allowed                                                       |
+| Driver      | Overlay (desktop)                                                                                                                           | Desktop input                                                           | Desktop resize                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `idle`      | hidden                                                                                                                                      | allowed                                                                 | allowed                                                       |
+| `mobile{*}` | quiet corner chip (**Phone driving** · **Take back**); expands to the explanation when a desktop keystroke is dropped, without moving focus | blocked at xterm.onData; each drop is counted and opens the explanation | blocked in renderer + dropped in `pty:resize` IPC server-side |
+| `desktop`   | hidden                                                                                                                                      | allowed                                                                 | allowed                                                       |
+
+Taking control never needs the desktop: a paired phone becomes the driver by subscribing or sending
+input. The chip is the normal state because remote control is the product, not an exception; the
+explanation opens at the moment it matters (a desktop keystroke went nowhere) and does not take
+focus, so the next desktop keystroke cannot reclaim the terminal by accident (2026-10-27).
 
 Walkthroughs:
 
