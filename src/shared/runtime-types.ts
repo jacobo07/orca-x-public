@@ -39,6 +39,7 @@ import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { RasterImageDimensions } from './raster-image-dimensions'
+import type { HostAvailabilityAnnouncement } from './host-availability'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -90,6 +91,8 @@ export type RuntimeStatus = {
   // Why: mobile gates its Floating Workspace entry on this; absent on older
   // hosts, false when the user disabled the feature in desktop settings.
   floatingWorkspaceEnabled?: boolean
+  // Why: optional, so old hosts and new clients (and the reverse) interoperate (D-07).
+  hostAvailability?: HostAvailabilityAnnouncement
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number

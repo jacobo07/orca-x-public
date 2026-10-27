@@ -146,6 +146,8 @@ export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-source-defaults.v1' as const
 // Why: a host that publishes git-root project ids is a content change old clients misread.
 export const PROJECT_ROOT_IDENTITY_RUNTIME_CAPABILITY = 'projects.root-identity.v1' as const
+// Why: old hosts omit it, so the phone renders their capabilities as unknown (D-05).
+export const HOST_AVAILABILITY_RUNTIME_CAPABILITY = 'host.availability.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -188,6 +190,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   PROJECT_ROOT_IDENTITY_RUNTIME_CAPABILITY,
+  HOST_AVAILABILITY_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
