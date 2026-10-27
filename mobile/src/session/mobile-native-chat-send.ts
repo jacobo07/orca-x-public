@@ -126,6 +126,11 @@ export async function sendMobileNativeChatMessageWithOutcome(
  *  desktop's Windows agent-prompt settle in src/shared/agent-prompt-injection.ts. */
 export const MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS = 1_500
 
+/** Extra Enters after the submit. Claude Code (2.1.312, ConPTY) turns an Enter it reads in one batch with the
+ *  paste into a newline; the next Enter is ignored and the one after submits. Spare Enters on an empty prompt
+ *  add no turn (SEND-P0b phase 19, 19-VERIFICATION.md "Trigger"). */
+export const MOBILE_NATIVE_CHAT_SUBMIT_REPEATS = 2
+
 // Why a paste: typed through an Orca host, a long multi-paragraph body lost its beginning before the
 // agent saw it; the same body as one bracketed paste arrived whole (SEND-P0b, 17-VERIFICATION.md).
 // Every shipped host writes terminal.send text verbatim, so this needs no host change.
@@ -157,7 +162,22 @@ async function sendMobileNativeChatAgentPrompt(
     ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {})
   })
   // A failed Enter leaves the body on the agent's input line: never 'rejected', or a retry pastes it twice.
-  return submitted === 'accepted' ? 'accepted' : 'unknown'
+  if (submitted !== 'accepted') {
+    return 'unknown'
+  }
+  for (let repeat = 0; repeat < MOBILE_NATIVE_CHAT_SUBMIT_REPEATS; repeat++) {
+    await new Promise((resolve) => setTimeout(resolve, MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS))
+    const repeated = await sendMobileNativeChatMessageWithOutcome({
+      ...target,
+      text: AGENT_PROMPT_SUBMIT,
+      deadline: Math.max(deadline, Date.now() + MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS)
+    })
+    // Why stop, not fail: the first Enter was accepted; a repeat only rescues a swallowed one.
+    if (repeated !== 'accepted') {
+      break
+    }
+  }
+  return 'accepted'
 }
 
 export async function sendMobileNativeChatMessage(
