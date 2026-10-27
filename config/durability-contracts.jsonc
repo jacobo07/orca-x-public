@@ -100,6 +100,23 @@
       ]
     },
     {
+      "id": "runtime.wake-broker-state",
+      "state": "<userData>/orca-wake-broker.json — LAN wake targets (MAC, broadcast, port, label) and REMOTE_WAKE grants (device, target)",
+      "writer": "src/main/runtime/wake-broker-store.ts",
+      "tier": "crash-durable",
+      "lostIf": "Lost targets cost the Owner re-registering every wake target on the broker. A lost grant removal would resurrect wake access for a device the Owner had cut off, which is the security case: that is why removals swap memory first, and why the effect re-derives authority from the device registry so a grant counts only while its device still authorizes. The publish goes through writeDurableSecureJsonFile (src/shared/secure-file.ts:95), whose durable path fsyncs the staged file before the rename (secure-file.ts:117-122) and ACL-hardens it, because a MAC is LAN topology.",
+      "onFailure": "Additions (target, grant) publish before the memory swap, so a failed write throws the storage error and the addition is not visible afterwards. Removals (grant, target with its grants, every grant of a revoked device, pruning of vanished devices) swap memory first and then publish, propagating the error, so a failed write can never leave a removed grant valid in this process. An unparseable or wrong-schema file is preserved as orca-wake-broker.json.corrupt-<ms> and the load returns wake_broker_state_unreadable, so the broker fails closed with wake_broker_unavailable and nothing is published over the bytes; an I/O read failure returns wake_broker_state_io_failed and leaves the file in place. Never read as empty.",
+      "provenBy": [
+        "src/main/runtime/wake-broker-store.test.ts",
+        "src/main/runtime/device-registry-durability.test.ts"
+      ],
+      "knownGaps": [
+        "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts), so on Windows the proven claim is that the contents reached disk before the rename, not that the rename itself survives a power loss.",
+        "The state file is not in the userData migration list, so a userData move leaves targets and grants behind.",
+        "A failed removal publish leaves the grant on disk until the next successful save; a restart in that window reloads it, and only the effect-time device check (a revoked device no longer authorizes) keeps it inert."
+      ]
+    },
+    {
       "id": "speech.openai-api-key",
       "state": "~/.orca/openai-speech-token.enc — the safeStorage-encrypted OpenAI speech key",
       "writer": "src/main/speech/openai-api-key-store.ts",
