@@ -97,6 +97,10 @@ jobs:
       - name: Check mobile capability aperture
         run: pnpm run check:mobile-aperture
 
+      # A phone row standing in for a remote send says what is known, never "sent" on a write receipt (SEND-P0).
+      - name: Check mobile remote-effect bubbles
+        run: pnpm run check:mobile-remote-effect-bubbles
+
       - name: Check visual asset registry
         run: pnpm run check:visual-assets
 
