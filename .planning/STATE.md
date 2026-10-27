@@ -62,6 +62,7 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 ## GEX44 mobile test recipe
 
 git bundle HEAD -> scp to /tmp/orca-phone-pN-<ts>; PATH from ~/orca-env/env.sh (node24 v24.21.0, pnpm 10.24.0); `pnpm install --frozen-lockfile --ignore-scripts` in mobile/; script refuses any root outside /tmp/orca-phone-p*; tear down after. Ship scripts as no-BOM LF files via `ssh gex44 bash -s < file`.
+Build needs native modules: after the `--ignore-scripts` install run `pnpm rebuild node-pty` before `build:electron-vite`, else the plain-node-entry guard fails to load pty.node (measured phase 17, 2026-10-27).
 Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electron <repo> --serve --serve-json --serve-port P --serve-bind-host 127.0.0.1 --serve-pairing-address 127.0.0.1 --serve-mobile-pairing`; register the project with repo.add over the runtime pipe/socket from orca-runtime.json (--serve-project-root does not register it). A Windows serve host runs the same out/ with the worktree's electron.exe and ORCA_E2E_USER_DATA_DIR + ORCA_E2E_HOME_DIR = USERPROFILE so no real-home hook or trust file is written.
 
 ## Decisions (unattended)
