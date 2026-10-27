@@ -211,15 +211,32 @@ describe('sendMobileNativeChatMessage', () => {
       _meta: { runtimeId: 'runtime' }
     })
 
+    const onRefused = vi.fn()
     await expect(
       sendMobileNativeChatMessageWithOutcome({
         client,
         terminal: 'term',
         text: 'hello',
-        clearInputFirst: true
+        clearInputFirst: true,
+        onRefused
       })
     ).resolves.toBe('rejected')
     expect(vi.mocked(client.sendRequest).mock.calls).toHaveLength(1)
+    expect(onRefused).toHaveBeenCalledWith('mobile_input_floor_unavailable')
+  })
+
+  it('reports the host refusal code of a rejected body write', async () => {
+    const client = clientWithResponse({
+      id: 'request',
+      ok: false,
+      error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' },
+      _meta: { runtimeId: 'runtime' }
+    })
+    const onRefused = vi.fn()
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hi', onRefused })
+    ).resolves.toBe('rejected')
+    expect(onRefused).toHaveBeenCalledWith('terminal_handle_stale')
   })
 
   it('sends the text verbatim when clearInputFirst is not set', async () => {

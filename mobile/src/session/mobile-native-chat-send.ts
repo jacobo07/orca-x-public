@@ -2,6 +2,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { readTerminalSendRefusal, SEND_BUDGET_EXHAUSTED } from './mobile-native-chat-send-refusal'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
 
 type MobileTerminalClient = {
@@ -31,6 +32,8 @@ type MobileNativeChatSendArgs = {
   /** Shared budget for a whole user action (heal → paste → text, or one selector's
    *  keystroke sequence). Omit to give this write its own full budget. */
   deadline?: number
+  /** Told the refusal code when the outcome is 'rejected' (see mobile-native-chat-send-refusal.ts). */
+  onRefused?: (refusal: string) => void
 }
 
 /** 'unknown' = the RPC failed without proof the request never reached the
@@ -58,6 +61,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
   // Starting an underfunded final write risks delivery followed by a false timeout.
   if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
+    args.onRefused?.(SEND_BUDGET_EXHAUSTED)
     return 'rejected'
   }
   if (args.clearInputFirst) {
@@ -69,6 +73,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
       terminal: args.terminal,
       clearInput: CLEAR_UNSUBMITTED_INPUT,
       ...(args.mobileClient ? { mobileClient: args.mobileClient } : {}),
+      ...(args.onRefused ? { onRefused: args.onRefused } : {}),
       deadline
     })
     if (!cleared) {
@@ -91,7 +96,11 @@ export async function sendMobileNativeChatMessageWithOutcome(
       // pins the composer for twice as long.
       { timeoutMs, budgetSpansConnect: true }
     )
-    return isTerminalSendRpcAccepted(response) ? 'accepted' : 'rejected'
+    if (isTerminalSendRpcAccepted(response)) {
+      return 'accepted'
+    }
+    args.onRefused?.(readTerminalSendRefusal(response))
+    return 'rejected'
   } catch (error) {
     // Why: a logical relay↔direct cutover rejects the in-flight send without
     // knowing whether its frame reached the wire (the desktop may have delivered
@@ -154,10 +163,12 @@ export async function clearMobileNativeChatInput(args: {
   clearInput: string
   mobileClient?: MobileTerminalClient
   deadline?: number
+  onRefused?: (refusal: string) => void
 }): Promise<boolean> {
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
   if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
+    args.onRefused?.(SEND_BUDGET_EXHAUSTED)
     return false
   }
   try {
@@ -171,7 +182,11 @@ export async function clearMobileNativeChatInput(args: {
       },
       { timeoutMs, budgetSpansConnect: true }
     )
-    return isTerminalSendRpcAccepted(response)
+    if (isTerminalSendRpcAccepted(response)) {
+      return true
+    }
+    args.onRefused?.(readTerminalSendRefusal(response))
+    return false
   } catch {
     // A failed clear must not send the body on top of an uncleared line.
     return false
