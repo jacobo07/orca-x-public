@@ -28,6 +28,13 @@ const TargetAddParams = z.object({
     .optional()
 })
 
+const TargetIdParams = z.object({ targetId: z.string().min(1).max(64) })
+
+const GrantParams = z.object({
+  deviceId: z.string().min(1).max(128),
+  targetId: z.string().min(1).max(64)
+})
+
 function remoteCallerRefused(): Error {
   return Object.assign(new Error('Wake administration is local-only on the broker host.'), {
     code: 'remote_caller_refused'
@@ -79,5 +86,47 @@ export const HOST_WAKE_ADMIN_METHODS: RpcMethod[] = [
     name: 'host.wake.admin.targetList',
     params: null,
     handler: async (_params, ctx) => ({ targets: adminStore(ctx).targets() })
+  }),
+  defineMethod({
+    name: 'host.wake.admin.targetRemove',
+    params: TargetIdParams,
+    handler: async (params, ctx) => {
+      if (!adminStore(ctx).removeTarget(params.targetId)) {
+        throw hostWakeRefusal('wake_target_unknown', 'That wake target is not registered.')
+      }
+      return { removed: true, targetId: params.targetId }
+    }
+  }),
+  defineMethod({
+    name: 'host.wake.admin.grantAdd',
+    params: GrantParams,
+    handler: async (params, ctx) => {
+      const store = adminStore(ctx)
+      const authority = wakeBrokerHost.authority()
+      if (!authority) {
+        throw hostWakeRefusal(
+          'wake_broker_unavailable',
+          'The wake broker cannot judge devices yet.',
+          { brokerState: 'device_authority_missing' }
+        )
+      }
+      // Why at grant time too: an unknown or revoked device must not be planted ahead of the effect check (T-19-21).
+      if (!authority.deviceExists(params.deviceId)) {
+        throw hostWakeRefusal('wake_device_unknown', 'That device is not paired with this host.')
+      }
+      return { grant: store.addGrant(params.deviceId, params.targetId) }
+    }
+  }),
+  defineMethod({
+    name: 'host.wake.admin.grantRemove',
+    params: GrantParams,
+    handler: async (params, ctx) => ({
+      removed: adminStore(ctx).removeGrant(params.deviceId, params.targetId)
+    })
+  }),
+  defineMethod({
+    name: 'host.wake.admin.grantList',
+    params: null,
+    handler: async (_params, ctx) => ({ grants: adminStore(ctx).grants() })
   })
 ]

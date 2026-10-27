@@ -9,6 +9,8 @@ import {
 import { isWakeTargetLabel, normalizeMac } from '../../shared/host-wake'
 
 const START_BROKER_FIX = 'Start the broker on this host first: orca serve --wake-broker'
+const DEVICE_ID_SOURCES =
+  'Device ids are listed in the desktop Settings paired-device list, or as pairedDeviceId in the status.get answer of that device itself.'
 
 type WakeTargetRow = {
   targetId: string
@@ -18,6 +20,8 @@ type WakeTargetRow = {
   label: string
   createdAt: number
 }
+
+type WakeGrantRow = { deviceId: string; targetId: string; grantedAt: number }
 
 function invalid(message: string): RuntimeClientError {
   return new RuntimeClientError('invalid_argument', message)
@@ -30,6 +34,14 @@ function stringFlag(ctx: HandlerContext, name: string): string | null {
   const value = ctx.flags.get(name)
   if (typeof value !== 'string' || value.length === 0) {
     throw invalid(`Missing value for --${name}.`)
+  }
+  return value
+}
+
+function requiredFlag(ctx: HandlerContext, name: string, usage: string): string {
+  const value = stringFlag(ctx, name)
+  if (value === null) {
+    throw invalid(`Missing --${name}. Usage: ${usage}`)
   }
   return value
 }
@@ -66,10 +78,21 @@ function targetAddParams(ctx: HandlerContext): Record<string, string | number> {
   return params
 }
 
+function grantParams(ctx: HandlerContext, verb: 'add' | 'remove'): Record<string, string> {
+  const usage = `orca wake grant ${verb} --device <deviceId> --target <targetId>`
+  return {
+    deviceId: requiredFlag(ctx, 'device', usage),
+    targetId: requiredFlag(ctx, 'target', usage)
+  }
+}
+
 // Why: the generic recovery says "orca open", but only a serve broker holds wake state.
-function withBrokerFix(error: unknown): unknown {
+function withRecovery(error: unknown): unknown {
   if (error instanceof RuntimeRpcFailureError && error.code === 'wake_broker_disabled') {
     return new RuntimeClientError(error.code, `${error.message}\n${START_BROKER_FIX}`, error.data)
+  }
+  if (error instanceof RuntimeRpcFailureError && error.code === 'wake_device_unknown') {
+    return new RuntimeClientError(error.code, `${error.message}\n${DEVICE_ID_SOURCES}`, error.data)
   }
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
     return new RuntimeClientError(
@@ -88,7 +111,7 @@ async function adminCall<TResult>(
   try {
     return await ctx.client.call<TResult>(method, params)
   } catch (error) {
-    throw withBrokerFix(error)
+    throw withRecovery(error)
   }
 }
 
@@ -102,6 +125,17 @@ function formatTargetList(result: { targets: WakeTargetRow[] }): string {
     return 'No wake targets registered. Add one with `orca wake target add --mac <mac>`.'
   }
   return result.targets.map(formatTarget).join('\n')
+}
+
+function formatGrant(grant: WakeGrantRow): string {
+  return `device ${grant.deviceId} -> target ${grant.targetId} (granted ${new Date(grant.grantedAt).toISOString()})`
+}
+
+function formatGrantList(result: { grants: WakeGrantRow[] }): string {
+  if (result.grants.length === 0) {
+    return 'No REMOTE_WAKE grants. Add one with `orca wake grant add --device <id> --target <id>`.'
+  }
+  return result.grants.map(formatGrant).join('\n')
 }
 
 export const WAKE_HANDLERS: Record<string, CommandHandler> = {
@@ -131,5 +165,47 @@ export const WAKE_HANDLERS: Record<string, CommandHandler> = {
       null
     )
     printResult(response, ctx.json, formatTargetList)
+  },
+  'wake target remove': async (ctx) => {
+    const targetId = requiredFlag(ctx, 'target', 'orca wake target remove <targetId>')
+    const response = await adminCall<{ removed: true; targetId: string }>(
+      ctx,
+      'host.wake.admin.targetRemove',
+      { targetId }
+    )
+    printResult(
+      response,
+      ctx.json,
+      (result) => `Wake target ${result.targetId} removed, with every grant for it.`
+    )
+  },
+  'wake grant add': async (ctx) => {
+    const response = await adminCall<{ grant: WakeGrantRow }>(
+      ctx,
+      'host.wake.admin.grantAdd',
+      grantParams(ctx, 'add')
+    )
+    printResult(response, ctx.json, (result) => `REMOTE_WAKE granted: ${formatGrant(result.grant)}`)
+  },
+  'wake grant remove': async (ctx) => {
+    const params = grantParams(ctx, 'remove')
+    const response = await adminCall<{ removed: boolean }>(
+      ctx,
+      'host.wake.admin.grantRemove',
+      params
+    )
+    printResult(response, ctx.json, (result) =>
+      result.removed
+        ? `REMOTE_WAKE grant removed: device ${params.deviceId} -> target ${params.targetId}`
+        : `Nothing to remove: device ${params.deviceId} holds no grant for target ${params.targetId}`
+    )
+  },
+  'wake grant list': async (ctx) => {
+    const response = await adminCall<{ grants: WakeGrantRow[] }>(
+      ctx,
+      'host.wake.admin.grantList',
+      null
+    )
+    printResult(response, ctx.json, formatGrantList)
   }
 }

@@ -24,7 +24,14 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'wake',
-    keys: ['wake target add', 'wake target list'],
+    keys: [
+      'wake target add',
+      'wake target list',
+      'wake target remove',
+      'wake grant add',
+      'wake grant remove',
+      'wake grant list'
+    ],
     load: async () => (await import('./handlers/wake.js')).WAKE_HANDLERS
   },
   {
