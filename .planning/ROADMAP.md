@@ -149,7 +149,7 @@ Plans:
 Plans:
 
 - [x] 19-01-PLAN.md — read-only WOL probe + verdict tables, can-wake-lan from the probe at both start paths, claims evidence (wave 1)
-- [ ] 19-02-PLAN.md — broker core: authority at the effect, dedupe/adopt, stages, dgram magic packet, crash-durable targets/grants, phone RPCs + passthrough codes (wave 1)
+- [x] 19-02-PLAN.md — broker core: authority at the effect, dedupe/adopt, stages, dgram magic packet, crash-durable targets/grants, phone RPCs + passthrough codes (wave 1)
 - [ ] 19-03-PLAN.md — `orca serve --wake-broker` flag chain, serve-only enable, host.wake-broker.v1 in getStatus, device authority + revoke purge + mobile allowlist (wave 2)
 - [ ] 19-04-PLAN.md — `orca wake target|grant` CLI over local-only host.wake.admin.* methods, SSH-relay refusal (wave 2)
 - [ ] 19-05-PLAN.md — SCRIPTED CLIENT live leg with UDP positive control, WOL probe measured, mutants M1-M5, 19-VERIFICATION.md (LAN Product Reality OWNER_BOUND a, b, c; Wake control deferred per D-13) (wave 3)
