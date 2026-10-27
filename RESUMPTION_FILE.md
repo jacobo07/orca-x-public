@@ -28,6 +28,9 @@ Phases 5, 7 and 9 are deferred-human (do not rework them).
 - Never push: STATE.md laws make pushing Owner-only. Heavy tests run on GEX44 in `/tmp/orca-phone-p*`, torn down afterwards.
 
 ## 4. Next three actions
+Update (phases 17 and 18 sealed, HEAD ae84e3d1b): APK 97b783068 (sha256 93782b3e…afe3) is INSTALLED on the S25 Ultra and replaces the APK
+named in item 2. The device leg is still OWNER_BOUND: in a live Claude tab on Host 1, (a) a long multi-paragraph message must arrive whole;
+(b) a repeated `hola?` must not get a false "Agent has not shown this message". See STATE.md Current Position, "OWNER DECISION NEEDED".
 1. (Done: fresh-agent test PASS.) Nothing deterministic remains in phase 16; do not invent work.
 2. Device legs, OWNER_BOUND: the APK is BUILT and staged at `C:\Users\Jacobo\Downloads\orca-x-send-p0-854f34c01.apk`
    (sha256 cc738f6b…262c, 16-STATUS row 1). The Owner moves it to the S25 Ultra and installs it, then run the >=94-char Agent send with a nonce, terminal send fresh output, send+scroll, send+lease.
