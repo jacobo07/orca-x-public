@@ -1,5 +1,13 @@
 import { execFile } from 'node:child_process'
-import { userInfo } from 'node:os'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir, userInfo } from 'node:os'
+import { join } from 'node:path'
+import { resolveServeLaunchTarget } from './launch'
+import {
+  SERVE_AUTOSTART_SERVE_ARGS,
+  buildServeAutostartTaskXml,
+  joinWindowsCommandLineArgs
+} from './serve-autostart-task-xml'
 import { RuntimeClientError } from './types'
 
 export const SERVE_AUTOSTART_LINUX_DOC = 'docs/reference/headless-linux-server.md'
@@ -168,6 +176,128 @@ function parseInstalledStatus(taskName: string, stdout: string): ServeAutostartS
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+export type ServeAutostartLaunchTarget = {
+  command: string
+  args: readonly string[]
+  workingDirectory: string | null
+}
+
+export type ServeAutostartInstallOptions = {
+  taskName?: string
+  // Why: overrides exist only for the 17-03 live leg (disposable task name, expiring definition).
+  launchTarget?: ServeAutostartLaunchTarget
+  endBoundary?: string
+}
+
+export type ServeAutostartInstallResult = {
+  installed: true
+  taskName: string
+  command: string
+  arguments: string
+}
+
+export type ServeAutostartRemoveResult =
+  | { removed: true; taskName: string }
+  | { removed: false; taskName: string; reason: 'not_installed' }
+
+// Why: the SSH relay bridge runs this CLI on the host; a remote shell must not plant a persistent host logon effect.
+function assertLocalInvocation(env: NodeJS.ProcessEnv): void {
+  const remoteCwd = env.ORCA_CLI_CWD
+  if (typeof remoteCwd === 'string' && remoteCwd.length > 0) {
+    throw new RuntimeClientError(
+      'remote_invocation_refused',
+      'orca serve autostart install/remove must run in a shell on the Orca host itself, not through a remote SSH session.'
+    )
+  }
+}
+
+function defaultLaunchTarget(env: NodeJS.ProcessEnv): ServeAutostartLaunchTarget {
+  const target = resolveServeLaunchTarget(env)
+  return {
+    command: target.executable,
+    args: [...target.appArgs, ...SERVE_AUTOSTART_SERVE_ARGS],
+    workingDirectory: target.workingDirectory
+  }
+}
+
+function principalUserId(env: NodeJS.ProcessEnv): string {
+  return env.USERDOMAIN && env.USERNAME ? `${env.USERDOMAIN}\\${env.USERNAME}` : userInfo().username
+}
+
+export async function installServeAutostart(
+  options: ServeAutostartInstallOptions = {},
+  deps: ServeAutostartDeps = defaultServeAutostartDeps()
+): Promise<ServeAutostartInstallResult> {
+  assertServeAutostartSupported(deps.platform)
+  assertLocalInvocation(deps.env)
+  const taskName = options.taskName ?? defaultServeAutostartTaskName()
+  const target = options.launchTarget ?? defaultLaunchTarget(deps.env)
+  if (/\.(?:cmd|bat)$/i.test(target.command)) {
+    // Why: a batch launcher opens a console window at every logon; the task needs the app executable.
+    throw new RuntimeClientError(
+      'autostart_requires_app_executable',
+      `Autostart needs the Orca app executable, not the batch launcher ${target.command}. Set ORCA_APP_EXECUTABLE to Orca.exe.`
+    )
+  }
+  const xml = buildServeAutostartTaskXml({
+    userId: principalUserId(deps.env),
+    command: target.command,
+    args: target.args,
+    workingDirectory: target.workingDirectory,
+    description:
+      'Starts the Orca Host Service (orca serve) at logon. Managed by `orca serve autostart`.',
+    endBoundary: options.endBoundary
+  })
+  // Why: a fresh per-call directory keeps another process from pre-placing the file schtasks reads (T-17-10).
+  const dir = mkdtempSync(join(tmpdir(), 'orca-autostart-'))
+  let result: ServeAutostartExecResult
+  try {
+    const xmlPath = join(dir, 'task.xml')
+    // Why: the XML declares UTF-16, and schtasks reads it by the UTF-16LE byte-order mark.
+    writeFileSync(xmlPath, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]))
+    result = await deps.exec('schtasks.exe', ['/Create', '/XML', xmlPath, '/TN', taskName, '/F'], {
+      env: deps.env
+    })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+  if (result.code !== 0) {
+    throw new RuntimeClientError(
+      'autostart_install_failed',
+      `schtasks could not register "${taskName}" (exit ${result.code}): ${result.stderr.trim()}`
+    )
+  }
+  return {
+    installed: true,
+    taskName,
+    command: target.command,
+    arguments: joinWindowsCommandLineArgs(target.args)
+  }
+}
+
+export async function removeServeAutostart(
+  options: { taskName?: string } = {},
+  deps: ServeAutostartDeps = defaultServeAutostartDeps()
+): Promise<ServeAutostartRemoveResult> {
+  assertServeAutostartSupported(deps.platform)
+  assertLocalInvocation(deps.env)
+  const taskName = options.taskName ?? defaultServeAutostartTaskName()
+  const status = await getServeAutostartStatus({ taskName }, deps)
+  if (!status.installed) {
+    return { removed: false, taskName, reason: 'not_installed' }
+  }
+  const result = await deps.exec('schtasks.exe', ['/Delete', '/TN', taskName, '/F'], {
+    env: deps.env
+  })
+  if (result.code !== 0) {
+    throw new RuntimeClientError(
+      'autostart_remove_failed',
+      `schtasks could not delete "${taskName}" (exit ${result.code}): ${result.stderr.trim()}`
+    )
+  }
+  return { removed: true, taskName }
 }
 
 function unreadable(taskName: string, detail: string): RuntimeClientError {

@@ -49,5 +49,25 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Reads Task Scheduler state, last result and action; the output does not depend on the Windows display language.'
     ],
     examples: ['orca serve autostart status', 'orca serve autostart status --json']
+  },
+  {
+    path: ['serve', 'autostart', 'install'],
+    summary: 'Start the Orca Host Service at Windows logon',
+    usage: 'orca serve autostart install [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [...SERVE_AUTOSTART_NOTES, 'Running it again replaces the existing task definition.'],
+    examples: ['orca serve autostart install', 'orca serve autostart install --json']
+  },
+  {
+    path: ['serve', 'autostart', 'remove'],
+    aliases: [['serve', 'autostart', 'rm']],
+    summary: 'Stop starting the Orca Host Service at Windows logon',
+    usage: 'orca serve autostart remove [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      ...SERVE_AUTOSTART_NOTES,
+      'Reports that nothing was removed when the task is not installed.'
+    ],
+    examples: ['orca serve autostart remove']
   }
 ]

@@ -19,7 +19,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'serve-autostart',
-    keys: ['serve autostart status'],
+    keys: ['serve autostart install', 'serve autostart remove', 'serve autostart status'],
     load: async () => (await import('./handlers/serve-autostart.js')).SERVE_AUTOSTART_HANDLERS
   },
   {
