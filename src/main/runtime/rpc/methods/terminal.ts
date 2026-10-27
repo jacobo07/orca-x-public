@@ -1354,7 +1354,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
-      const beforeWrite = assertSendPreconditions
+      // Why: a phone can take the floor between chunks of a long desktop send, so the lock is
+      // rechecked before every chunk, not only before the first.
+      const assertInputUnlocked = async (ptyId: string): Promise<void> => {
+        if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+          throw new Error('terminal_guard_not_writable')
+        }
+      }
+      const beforeWrite = assertSendPreconditions ?? assertInputUnlocked
       const useSettledAgentPrompt =
         params.agentPrompt === true &&
         hasText &&

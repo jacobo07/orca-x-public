@@ -181,6 +181,36 @@ describe('terminal send RPC', () => {
     expect(sendTerminal).toHaveBeenCalled()
   })
 
+  it('stops a long desktop send at the next chunk once a phone takes the floor', async () => {
+    let driver: { kind: 'desktop' } | { kind: 'mobile'; clientId: string } = { kind: 'desktop' }
+    const write = vi.fn((_ptyId: string, _chunk: string) => {
+      driver = { kind: 'mobile', clientId: 'mobile-1' }
+    })
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn(() => driver),
+      sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
+        for (const chunk of ['chunk-1', 'chunk-2', 'chunk-3']) {
+          await options.beforeWrite?.('pty-1')
+          write('pty-1', chunk)
+        }
+        return { handle: 'terminal-1', accepted: true, bytesWritten: 21 }
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        text: 'a long paste',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { send: { accepted: false } } })
+    expect(write.mock.calls.map(([, chunk]) => chunk)).toEqual(['chunk-1'])
+  })
+
   it('accepts legacy clientless mobile input when the current driver is mobile', async () => {
     const write = vi.fn()
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {
@@ -232,7 +262,7 @@ describe('terminal send RPC', () => {
         interrupt: false
       },
       {
-        beforeWrite: undefined,
+        beforeWrite: expect.any(Function),
         reserveWrite: expect.any(Function),
         afterWrite: expect.any(Function)
       }
@@ -370,7 +400,7 @@ describe('terminal send RPC', () => {
     expect(runtime.sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: '\x1b[3;4R', enter: false, interrupt: false },
-      { beforeWrite: undefined }
+      { beforeWrite: expect.any(Function) }
     )
     expect(runtime.mobileTookFloor).not.toHaveBeenCalled()
   })
@@ -570,7 +600,7 @@ describe('terminal send RPC', () => {
         enter: false,
         interrupt: false
       },
-      { beforeWrite: undefined }
+      { beforeWrite: expect.any(Function) }
     )
   })
 
