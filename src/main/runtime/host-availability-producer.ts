@@ -10,6 +10,7 @@ export type HostAvailabilitySources = {
   relayReadiness: () => HostRelayReadiness
   webSocketEndpoint: () => string | null
   autostart: { read: () => HostCapability }
+  wakeOnLan: { read: () => HostCapability }
 }
 
 function unknownCapability(reason: string): HostCapability {
@@ -100,12 +101,8 @@ export function createHostAvailabilityProducer(options: { now?: () => number } =
         capabilities: {
           'can-start-orca':
             sources?.autostart.read() ?? unknownCapability('autostart_reader_unregistered'),
-          // Why: no wake broker exists yet; phases 19 and 20 own that effect (D-05).
-          'can-wake-lan': {
-            value: 'not-configured',
-            reason: 'no_wake_broker',
-            evidence: announced
-          },
+          // Why: can-wake-lan is measured by the WOL probe (D-01); remote wake is still phase 20.
+          'can-wake-lan': sources?.wakeOnLan.read() ?? unknownCapability('wol_reader_unregistered'),
           'can-wake-remote': {
             value: 'not-configured',
             reason: 'no_wake_broker',
