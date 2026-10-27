@@ -66,4 +66,17 @@ describe('pending chat delivery evidence', () => {
     expect(written).toMatch(/waiting for the agent/)
     expect(unconfirmed).toMatch(/before resending/)
   })
+
+  it('does not blame the agent for a missing echo while the chat has no transcript feed', () => {
+    // Phase 19: a delivered turn sat under "Agent has not shown this message" while the phone
+    // had no session id, so it could not have seen the echo.
+    const blind = mobileNativeChatDeliveryCaption('unconfirmed', false)
+    expect(blind).not.toMatch(/Agent has not shown/)
+    expect(blind).toMatch(/can't read the agent's chat/)
+    expect(blind).toMatch(/before resending/)
+    expect(mobileNativeChatDeliveryCaption('unconfirmed', true)).toMatch(/Agent has not shown/)
+    expect(mobileNativeChatDeliveryCaption('written', false)).toBe(
+      mobileNativeChatDeliveryCaption('written', true)
+    )
+  })
 })

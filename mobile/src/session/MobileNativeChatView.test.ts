@@ -217,6 +217,16 @@ describe('MobileNativeChatView', () => {
     expect(renderedRow('a1').props.delivery).toBeUndefined()
   })
 
+  it('tells a pending bubble when the chat has no transcript feed', async () => {
+    const pending = [{ id: 'pending-1', delivery: 'unconfirmed' as const, text: 'ping' }]
+    await render({ status: 'ready', pending })
+    expect(renderedRow('pending-1').props.transcriptReadable).toBe(true)
+
+    await update({ status: 'waiting-session', pending })
+
+    expect(renderedRow('pending-1').props.transcriptReadable).toBe(false)
+  })
+
   it('keeps a visible lock through a subscribed-end lease blip', async () => {
     vi.useFakeTimers()
     try {

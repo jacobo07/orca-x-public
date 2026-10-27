@@ -281,6 +281,7 @@ function AgentControls({
 function MobileNativeChatMessageImpl({
   message,
   delivery,
+  transcriptReadable = true,
   toolsExpanded = false,
   fontScale = 1,
   messageIndex,
@@ -290,6 +291,8 @@ function MobileNativeChatMessageImpl({
   message: NativeChatMessage
   /** Set only on a pending echo: what is known before the transcript shows the turn. */
   delivery?: MobileNativeChatPendingDelivery
+  /** False while the chat has no transcript feed, so a missing echo is the phone's blind spot. */
+  transcriptReadable?: boolean
   toolsExpanded?: boolean
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
@@ -385,7 +388,7 @@ function MobileNativeChatMessageImpl({
             delivery === 'unconfirmed' && styles.deliveryCaptionUnconfirmed
           ]}
         >
-          {mobileNativeChatDeliveryCaption(delivery)}
+          {mobileNativeChatDeliveryCaption(delivery, transcriptReadable)}
         </Text>
       ) : null}
     </View>

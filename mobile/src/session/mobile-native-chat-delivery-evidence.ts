@@ -8,8 +8,16 @@ export type MobileNativeChatPendingDelivery = 'written' | 'unconfirmed'
  *  ack-lost hold, so both kinds of uncertainty surface on the same clock. */
 export const MOBILE_NATIVE_CHAT_ADMISSION_BOUND_MS = 20_000
 
-export function mobileNativeChatDeliveryCaption(delivery: MobileNativeChatPendingDelivery): string {
-  return delivery === 'written'
-    ? 'Sent to the terminal · waiting for the agent'
-    : 'Agent has not shown this message · check the desktop before resending'
+/** `transcriptReadable` is false while the chat has no transcript feed (no session id yet, or a
+ *  read error): then the missing echo says nothing about the agent, only that the phone cannot see. */
+export function mobileNativeChatDeliveryCaption(
+  delivery: MobileNativeChatPendingDelivery,
+  transcriptReadable = true
+): string {
+  if (delivery === 'written') {
+    return 'Sent to the terminal · waiting for the agent'
+  }
+  return transcriptReadable
+    ? 'Agent has not shown this message · check the desktop before resending'
+    : "This phone can't read the agent's chat yet · check the desktop before resending"
 }

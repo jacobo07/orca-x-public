@@ -25,7 +25,7 @@ import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { useMobileNativeChatRowRenderer } from './use-mobile-native-chat-row-renderer'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
@@ -248,25 +248,14 @@ export function MobileNativeChatView({
     [hasMore, loadingEarlier, onLoadEarlier]
   )
 
-  // Align a single message's top to the top of the viewport.
-  const onScrollToMessage = useCallback((index: number) => {
-    listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
-  }, [])
-
-  const renderItem = useCallback(
-    ({ item, index }: { item: NativeChatMessage; index: number }) => (
-      <MobileNativeChatMessage
-        message={item}
-        delivery={deliveryByMessageId[item.id]}
-        toolsExpanded={toolsExpanded}
-        fontScale={fontScale}
-        messageIndex={index}
-        onScrollToMessage={onScrollToMessage}
-        onOpenFile={onOpenFile}
-      />
-    ),
-    [deliveryByMessageId, toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
-  )
+  const renderItem = useMobileNativeChatRowRenderer({
+    listRef,
+    deliveryByMessageId,
+    status,
+    toolsExpanded,
+    fontScale,
+    onOpenFile
+  })
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0

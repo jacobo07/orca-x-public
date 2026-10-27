@@ -21,6 +21,7 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 - [x] **Phase 17: SEND-P0b long multi-paragraph phone message arrives whole** (complete 2026-10-27: composer chat turns go out as one bracketed paste + settled Enter, phone-only; see 17-VERIFICATION.md) - On the device the beginning of a long multi-paragraph phone message was lost (Claude got only the tail). Reproduce with a synthetic body, find the owner, and deliver the whole body as one prompt (e.g. the host's settled agent-prompt path for mobile, capability-gated for older hosts). Evidence: .planning/SEND-P0B-DEVICE-EVIDENCE.md.
 - [ ] **Phase 19: SEND-P0b the phone chat shows the host's turns for a session started from the phone** - Device leg 2 (SEND-P0B-DEVICE-EVIDENCE.md): Claude on Host 1 answered the phone's message, but the phone chat showed neither the turn nor the reply, so "not shown" stayed up on a delivered message. Find where the transcript feed stops (session discovery, path or host version), fix it, and prove it on the device.
 - [x] **Phase 18: SEND-P0b the delivered-turn echo is not missed** (complete 2026-10-27: echo matched after the send's own tail, not over the sliding window; see 18-VERIFICATION.md) - The phone said "Agent has not shown this message" for `hola?`, which was a real turn on Host 1. Find why the transcript-echo matcher missed it and fix it without ever marking an unproven message delivered.
+- [x] **Phase 20: SEND-P0b a blind phone chat does not blame the agent** (complete 2026-10-27: an unconfirmed bubble says the phone cannot read the chat while there is no transcript feed; see 20-VERIFICATION.md) - Phase 19 residual: with no session id the phone cannot see any echo, yet the bubble said "Agent has not shown this message".
 
 ## Phase Details
 ### Phase 1: Reality close and RED
@@ -132,3 +133,10 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 1. The first owner on the path (provider session reaches the tab's agentStatus, mobile subscribes, host resolves and tails the transcript, frames reach the view) where the feed stops is named with file:line evidence, or a host-version boundary is recorded that this branch cannot reproduce.
 2. A deterministic test goes RED at that owner for a phone-started tab, and GREEN after the fix; a control (pre-existing tab) still streams; a mutant restoring the defect is CAUGHT.
 3. No wire break for older hosts or clients (docs/reference/remote-wire-compatibility.md); the device proof is OWNER_BOUND with the exact step.
+
+### Phase 20: SEND-P0b a blind phone chat does not blame the agent
+**Goal**: While the phone chat has no transcript feed, an unconfirmed bubble says the phone cannot see, not that the agent did not show it. **Depends on**: Phase 19 (residual)
+**Success Criteria** (what must be TRUE):
+1. With status other than `ready`, an unconfirmed bubble's caption does not say "Agent has not shown this message" and still warns before resending; with `ready`, it does.
+2. No message is ever marked delivered by this change; no wire, host or state change.
+3. Mutants (view always readable; caption ignores the flag) are CAUGHT; mobile session suite and tsc show no regression.
