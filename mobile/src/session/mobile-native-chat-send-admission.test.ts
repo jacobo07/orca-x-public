@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS,
+  MOBILE_NATIVE_CHAT_SUBMIT_REPEATS,
   sendMobileNativeChatMessageWithOutcome
 } from './mobile-native-chat-send'
 
@@ -92,7 +93,9 @@ async function sendChatTurn(
       asAgentPrompt: true,
       ...extra
     })
-    await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS)
+    await vi.advanceTimersByTimeAsync(
+      MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS * (1 + MOBILE_NATIVE_CHAT_SUBMIT_REPEATS)
+    )
     return await outcome
   } finally {
     vi.useRealTimers()
@@ -101,23 +104,65 @@ async function sendChatTurn(
 
 describe('a composer chat turn', () => {
   it('pastes the whole body as ONE bracketed paste, then submits with Enter as its own write', async () => {
-    const client = clientAnswering(true, true, true)
+    const client = clientAnswering(true, true, true, true, true)
     expect(await sendChatTurn(client)).toBe('accepted')
     expect(writes(client).map((w) => [w.text, w.enter])).toEqual([
       ['\x15', false],
       [`\x1b[200~${MULTI_PARAGRAPH}\x1b[201~`, false],
+      ['\r', false],
+      ['\r', false],
       ['\r', false]
     ])
   })
 
-  it('resolves the launch draft only on the submitting write', async () => {
-    const client = clientAnswering(true, true, true)
+  // SEND-P0b phase 19, measured on Claude Code 2.1.312 under ConPTY (19-VERIFICATION.md "Trigger"): an Enter read
+  // in one batch with the paste becomes a newline and the body stays unsubmitted; one more Enter does nothing, a
+  // second submits it. Spare Enters on an empty prompt add no turn.
+  it('presses Enter twice more, a settle apart, so an Enter swallowed with the paste cannot park the body', async () => {
+    const client = clientAnswering(true, true, true, true, true)
+    vi.useFakeTimers()
+    try {
+      const outcome = sendMobileNativeChatMessageWithOutcome({
+        client,
+        terminal: 'term',
+        text: MULTI_PARAGRAPH,
+        clearInputFirst: true,
+        asAgentPrompt: true
+      })
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS)
+      expect(writes(client)).toHaveLength(3)
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS - 1)
+      expect(writes(client)).toHaveLength(3)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(writes(client)).toHaveLength(4)
+      await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS)
+      expect(writes(client)).toHaveLength(5)
+      expect(await outcome).toBe('accepted')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the turn accepted when a repeat Enter is refused, and stops repeating', async () => {
+    const client = clientAnswering(true, true, true, false, true)
+    expect(await sendChatTurn(client)).toBe('accepted')
+    expect(writes(client)).toHaveLength(4)
+  })
+
+  it('resolves the launch draft only on the first submitting write', async () => {
+    const client = clientAnswering(true, true, true, true, true)
     const draft = { text: 'parked', createdAt: 1 }
     await sendChatTurn(client, { resolvedLaunchDraft: draft })
     const sent = vi
       .mocked(client.sendRequest)
       .mock.calls.map((c) => c[1] as Record<string, unknown>)
-    expect(sent.map((p) => p.resolvedLaunchDraft)).toEqual([undefined, undefined, draft])
+    expect(sent.map((p) => p.resolvedLaunchDraft)).toEqual([
+      undefined,
+      undefined,
+      draft,
+      undefined,
+      undefined
+    ])
   })
 
   it('a refused paste is a refusal and never sends Enter', async () => {
