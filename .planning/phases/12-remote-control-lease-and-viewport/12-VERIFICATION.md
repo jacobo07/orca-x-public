@@ -32,8 +32,18 @@ The real defects, all fixed:
   - A JSON `terminal.subscribe` from a mobile client is refused (`binary_terminal_stream_required`).
   - Mobile input without a stream subscriber is refused (`mobile_input_floor_unavailable`), so the scripted client cannot send as the phone. The real-phone send was proven separately.
 
+**Lease expiry for an observe-only phone: BUILT, not yet proven on the device.** Owner-approved 2026-10-27; spec `12-LEASE-SPEC.md`.
+- **Behaviour:** after 2 minutes with no phone action, the next desktop keystroke takes the terminal back. The host decides; it is reached by IPC locally and by RPC on remote hosts.
+- **Tests:** all 7 spec acceptance items are covered across:
+  - `src/shared/mobile-driver-lease.test.ts`
+  - `src/main/runtime/mobile-driver-lease.test.ts`, which drives the real state machine
+  - `phone-lease-reclaim.test.ts`
+  - the input-gating test
+- **Mutants:** P12-L1..L7 all CAUGHT, with byte-exact restore and the suite green afterwards.
+- **Gates:** tsc node and web pass; the aperture, variant-parity, recurring-work and max-lines ratchets all pass.
+- **Device proof pending:** the scripted client takes control without a stream subscriber, which is exactly the case the lease leaves to Take back. Proving it therefore needs the real phone: subscribe, watch for more than 2 minutes, then type on the desktop.
+
 Not yet done on the input side:
-- Lease expiry for an observe-only phone. A live subscription still holds the driver indefinitely; this is by design today and not changed.
 - CONTESTED modelling for unsent desktop input.
 
 ## P0-B: streaming viewport
