@@ -20,6 +20,10 @@ import { selectConnectableHostProfiles } from '../src/transport/host-catalog-sel
 import { useOpenMobileHostEdit } from '../src/transport/use-open-mobile-host-edit'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { fetchHomeHostWorktreeInfo } from '../src/worktree/home-host-worktree-fetch'
+import {
+  fetchHomeHostStatus,
+  type HomeHostStatusSnapshot
+} from '../src/transport/home-host-status-fetch'
 import { totalHomeStats, type HomeStatsSummary } from '../src/stats/home-stats-total'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from '../src/worktree/home-worktree-info'
 import type { RpcClient } from '../src/transport/rpc-client'
@@ -234,6 +238,9 @@ export default function HomeScreen() {
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
   const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
+  const [hostStatusSnapshots, setHostStatusSnapshots] = useState<
+    Record<string, HomeHostStatusSnapshot>
+  >({})
   const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsSummary>>({})
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
@@ -347,6 +354,7 @@ export default function HomeScreen() {
         if (entry.client.getState() === 'connected') {
           fetchStats(entry.client, entry.hostId, setStatsByHost, () => stale)
           void fetchHomeHostWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
+          void fetchHomeHostStatus(entry.client, entry.hostId, setHostStatusSnapshots, () => stale)
           fetchAccountsSnapshot(entry.client, entry.hostId, setAccountsByHost, () => stale)
           fetchTaskProviders(entry.client, entry.hostId, setTaskProvidersByHost, () => stale)
         }
@@ -477,6 +485,7 @@ export default function HomeScreen() {
         if (reconnected) {
           fetchStats(entry.client, entry.hostId, setStatsByHost, () => false)
           void fetchHomeHostWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => false)
+          void fetchHomeHostStatus(entry.client, entry.hostId, setHostStatusSnapshots, () => false)
           fetchTaskProviders(entry.client, entry.hostId, setTaskProvidersByHost, () => false)
         }
       } else {
@@ -775,6 +784,8 @@ export default function HomeScreen() {
                 verdict={verdict}
                 path={hostPaths[item.id] ?? 'lan'}
                 worktreeInfo={worktreeInfo[item.id]}
+                lastConnectedAt={lastConnectedAt}
+                statusSnapshot={hostStatusSnapshots[item.id]}
                 onPress={() => {
                   if (item.credentialStatus === 'missing') {
                     router.push('/pair-scan')

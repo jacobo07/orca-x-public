@@ -1,7 +1,27 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MIN_COMPATIBLE_DESKTOP_VERSION } from '../transport/protocol-version'
 import { MobileHostCard } from './MobileHostCard'
+
+const serveStatusResult = {
+  protocolVersion: MIN_COMPATIBLE_DESKTOP_VERSION,
+  graphStatus: 'ready',
+  desktopWindowStatus: 'openable',
+  capabilities: ['host.availability.v1'],
+  hostAvailability: {
+    schema: 1,
+    processKind: 'serve',
+    observedAt: 1500,
+    capabilities: {
+      'can-relay': {
+        value: 'supported',
+        reason: 'relay_paired',
+        evidence: { kind: 'relay-reported', observedAt: 1500 }
+      }
+    }
+  }
+}
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -66,7 +86,13 @@ describe('MobileHostCard', () => {
     const buttons = renderer.root.findAllByType('Pressable')
     expect(buttons).toHaveLength(2)
     expect(buttons[0].props.accessibilityRole).toBe('button')
-    expect(buttons[0].props.accessibilityLabel).toBe('Open Desk, Disconnected')
+    expect(buttons[0].props.accessibilityLabel).toBe(
+      'Open Desk, Disconnected, Power unknown, Orca unknown, Capabilities unknown'
+    )
+    expect(buttons.map((button) => button.props.testID)).toEqual([
+      'host-card-open',
+      'host-card-actions'
+    ])
     expect(buttons[1].props.accessibilityRole).toBe('button')
     expect(buttons[1].props.accessibilityLabel).toBe('Actions for Desk')
     expect(buttons[1].props.hitSlop).toBe(8)
@@ -117,7 +143,7 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      'Open Desk, Connected, Direct via Tailscale, 3 worktrees, 2 active'
+      'Open Desk, Connected, Direct via Tailscale, 3 worktrees, 2 active, Power unknown, Orca unknown, Capabilities unknown'
     )
   })
 
@@ -154,7 +180,7 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      'Open Desk, Connected, Orca Relay, Worktree list unavailable'
+      'Open Desk, Connected, Orca Relay, Worktree list unavailable, Power unknown, Orca unknown, Capabilities unknown'
     )
     expect(
       renderer.root
@@ -193,7 +219,43 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      "Open Desk, Can't reach desktop, Update desktop Orca X and sign in to connect from anywhere"
+      "Open Desk, Can't reach desktop, Power unknown, Orca unknown, Capabilities unknown, Update desktop Orca X and sign in to connect from anywhere"
     )
+  })
+
+  it('projects a current serve-host status answer onto the availability and capability lines', async () => {
+    const consoleError = suppressRendererDeprecation()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileHostCard, {
+          host: {
+            id: 'desk',
+            name: 'Desk',
+            endpoint: 'ws://192.168.1.2:6768',
+            deviceToken: 'token',
+            publicKeyB64: 'key',
+            lastConnected: 1
+          },
+          state: 'connected',
+          verdict: { kind: 'normal', label: 'Connected' },
+          path: 'lan',
+          lastConnectedAt: 1000,
+          statusSnapshot: { observedAt: 2000, result: serveStatusResult },
+          onPress: vi.fn(),
+          onLongPress: vi.fn(),
+          onOpenActions: vi.fn()
+        })
+      )
+    })
+    consoleError.mockRestore()
+
+    const root = renderer!.root
+    expect(root.findByProps({ testID: 'host-card-availability' }).children).toEqual([
+      'Awake · Host Service running'
+    ])
+    const capabilityLine = root.findByProps({ testID: 'host-card-capabilities' }).children
+    expect(capabilityLine).toHaveLength(1)
+    expect(String(capabilityLine[0])).toContain('Relay: yes')
+    expect(root.findAllByType('Pressable')).toHaveLength(2)
   })
 })

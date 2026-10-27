@@ -5,9 +5,17 @@ import { verdictDisplayLabel } from '../transport/connection-health'
 import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
+import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { homeHostWorktreeSummary, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+import { presentHostCardAvailability, type HostCardTone } from './host-availability-presentation'
 import { StatusDot } from './StatusDot'
+
+const AVAILABILITY_TONE_COLOR: Record<HostCardTone, string> = {
+  normal: colors.textSecondary,
+  muted: colors.textMuted,
+  warning: colors.statusAmber
+}
 
 export function MobileHostCard(props: {
   host: HostProfile | HostCatalogEntry
@@ -18,6 +26,8 @@ export function MobileHostCard(props: {
   // Why: the card owns the fresh/stale/unavailable wording so no caller can re-gate the counts
   // away (STA-3123 shipped that bug once already).
   worktreeInfo?: HostWorktreeInfo
+  lastConnectedAt?: number | null
+  statusSnapshot?: HomeHostStatusSnapshot
   onPress: () => void
   onLongPress: () => void
   onOpenActions: () => void
@@ -56,11 +66,19 @@ export function MobileHostCard(props: {
     : credentialUnavailable
       ? 'Unlock your phone, then tap to retry'
       : null
+  const availability = presentHostCardAvailability({
+    connected,
+    verdictKind: props.verdict.kind,
+    lastConnectedAt: props.lastConnectedAt ?? null,
+    snapshot: props.statusSnapshot,
+    nowMs: Date.now()
+  })
   const accessibilityLabel = [
     `Open ${props.host.name}`,
     statusLabel,
     connectionPathLabel?.replace(' · ', ' via '),
     connected ? worktreeSummary?.replace(' · ', ', ') : null,
+    availability.accessibilityText,
     discoveryHint,
     credentialHint
   ]
@@ -69,6 +87,7 @@ export function MobileHostCard(props: {
   return (
     <View style={styles.card}>
       <Pressable
+        testID="host-card-open"
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
@@ -105,6 +124,16 @@ export function MobileHostCard(props: {
               {worktreeSummary}
             </Text>
           ) : null}
+          <Text
+            testID="host-card-availability"
+            style={[styles.worktreeMetaText, { color: AVAILABILITY_TONE_COLOR[availability.tone] }]}
+            numberOfLines={1}
+          >
+            {availability.availabilityText}
+          </Text>
+          <Text testID="host-card-capabilities" style={styles.worktreeMetaText} numberOfLines={2}>
+            {availability.capabilityText}
+          </Text>
           {discoveryHint ? (
             <Text style={styles.discoveryHint} numberOfLines={2}>
               {discoveryHint}
@@ -118,6 +147,7 @@ export function MobileHostCard(props: {
         </View>
       </Pressable>
       <Pressable
+        testID="host-card-actions"
         accessibilityRole="button"
         accessibilityLabel={`Actions for ${props.host.name}`}
         hitSlop={8}
