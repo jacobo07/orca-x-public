@@ -635,6 +635,7 @@ import {
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
+import { wakeBrokerRuntimeCapabilities } from './wake-broker-host'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions
@@ -5998,6 +5999,8 @@ export class OrcaRuntimeService {
     if (this.conversationHost !== null) {
       capabilities.push(CONVERSATIONS_RUNTIME_CAPABILITY)
     }
+    // Why: advertised only while this process is a broker (D-12).
+    capabilities.push(...wakeBrokerRuntimeCapabilities())
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend
     // can host a page so remote clients can surface Proceed Anyway (Unsafe).

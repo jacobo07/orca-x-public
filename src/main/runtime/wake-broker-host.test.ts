@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { isStreamingMethod, type RpcContext } from './rpc/core'
 import { mapRuntimeError } from './rpc/errors'
@@ -145,5 +145,22 @@ describe('startWakeBroker', () => {
           .map((g) => g.deviceId)
           .sort()
     ).toEqual(['dev-a', 'dev-gone'])
+  })
+
+  it('still enables, without the pruned grant, when the prune cannot be persisted', () => {
+    const targetId = seedStore(['dev-a', 'dev-gone'])
+    wakeBrokerHost.attachDeviceAuthority(authority({ 'tok-a': 'dev-a' }))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const result = startWakeBroker(dir, {
+      sendMagicPacket: recordSend,
+      publish: () => {
+        throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+      }
+    })
+    expect(result).toEqual({ state: 'enabled', targetCount: 1 })
+    expect(errors).toHaveBeenCalledWith('[wake-broker] grant prune not persisted: ENOSPC')
+    errors.mockRestore()
+    expect(wakeBrokerHost.current()?.store.hasGrant('dev-gone', targetId)).toBe(false)
+    expect(wakeBrokerHost.current()?.store.hasGrant('dev-a', targetId)).toBe(true)
   })
 })

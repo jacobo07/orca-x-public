@@ -128,6 +128,7 @@ import {
   defaultHostAutostartProbeDeps
 } from './runtime/host-autostart-probe'
 import { createHostWolProbe, defaultHostWolProbeDeps } from './runtime/host-wol-probe'
+import { startWakeBroker } from './runtime/wake-broker-host'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -2025,6 +2026,7 @@ type ServeOptions = {
   projectRoot: string | null
   // DWS-P2 (CTX-EXP-1): pins the WS listener host, outranking exposeNetworkByDefault.
   bindHost: string | null
+  wakeBroker: boolean
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -2053,7 +2055,8 @@ function getServeOptions(argv = process.argv): ServeOptions {
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root'),
-    bindHost: readServeBindHostArg(argv)
+    bindHost: readServeBindHostArg(argv),
+    wakeBroker: argv.includes('--serve-wake-broker')
   }
 }
 
@@ -3414,6 +3417,20 @@ void app.whenReady().then(async () => {
     hostAutostartProbe.read()
     // Why: start the first adapter read before a phone asks (D-03).
     hostWolProbe.read()
+    // Why: the wake broker is an explicit role, never a default (D-04).
+    if (serveOptions.wakeBroker) {
+      const wakeBroker = startWakeBroker(getCanonicalUserDataPath())
+      const wakeBrokerLine =
+        wakeBroker.state === 'enabled'
+          ? `[serve] wake broker: enabled (${wakeBroker.targetCount} targets)`
+          : `[serve] wake broker: unavailable (${wakeBroker.reason})`
+      // Why stderr in machine modes: --serve-json and recipe output on stdout must stay unchanged.
+      if (serveOptions.json || serveOptions.recipeJson) {
+        console.error(wakeBrokerLine)
+      } else {
+        console.log(wakeBrokerLine)
+      }
+    }
     // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
     if (process.platform === 'darwin' || process.platform === 'linux') {
       try {
