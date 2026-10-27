@@ -58,6 +58,25 @@ describe('host availability wiring', () => {
     expect(text).toContain('hostAutostartProbe')
   })
 
+  // Why: the first adapter read must start at host start, not on the first phone request (D-03).
+  function primedAfter(registration: string): string {
+    const end = source.indexOf(registration) + registration.length
+    return source.slice(end).split('\n').slice(0, 6).join('\n')
+  }
+
+  it('creates one WOL probe and passes it to both registrations, primed after each', () => {
+    expect(countOccurrences(source, 'createHostWolProbe(')).toBe(1)
+    expect(source).toContain('const hostWolProbe = createHostWolProbe(defaultHostWolProbeDeps())')
+    for (const anchor of [
+      'const serveHostRelay = hostRelayOwner.start(',
+      'const hostRelay = hostRelayOwner.start('
+    ]) {
+      const registration = registrationAfter(anchor)
+      expect(registration, anchor).toContain('wakeOnLan: hostWolProbe')
+      expect(primedAfter(registration), anchor).toContain('hostWolProbe.read()')
+    }
+  })
+
   it('never registers or deletes a scheduled task from the main process', () => {
     expect(source).not.toMatch(/schtasks/i)
   })
