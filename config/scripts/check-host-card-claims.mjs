@@ -5,7 +5,12 @@ import { pathToFileURL } from 'node:url'
 
 import { parse } from 'jsonc-parser'
 
-import { importsOf, jsxOpeningTags, resolveSpecifier } from './check-workspace-surface-claims.mjs'
+import {
+  importsOf,
+  jsxOpeningTags,
+  resolveSpecifier,
+  stringLiterals
+} from './check-workspace-surface-claims.mjs'
 
 /**
  * The phone's host card says only what a producer can prove (D-10).
@@ -182,7 +187,147 @@ function checkCoverage({ config, table, card, cardSource, presenter, exists, voc
   }
 }
 
-function checkControls({ config, card, cardSource, failures }) {
+const EXPORT_OF = (symbol) =>
+  new RegExp(
+    `export\\s+(?:async\\s+)?(?:function|const|let|type|interface|class|enum)\\s+${symbol}\\b`
+  )
+const CLAIM_FAMILIES = new Set(['power', 'orca', 'capability-value'])
+const NAME_FAMILIES = new Set(['capability', 'capabilities'])
+const POWER_LOSS_KEYS = Object.freeze(['power.sleeping', 'power.hibernating', 'power.powered-off'])
+
+/** Comments blanked to spaces, so indices and lines still match the original source. */
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(/^[ \t]*\/\/.*$/gm, (line) => ' '.repeat(line.length))
+}
+
+/** String literals and JSX text outside `block` (the label table), with their lines. */
+function copyOutside(source, block) {
+  const inside = (index) => block !== null && index > block.start && index < block.end
+  const copy = stringLiterals(source).filter((literal) => !inside(literal.index))
+  for (const match of source.matchAll(/>([^<>{}]+)</g)) {
+    const text = match[1].trim()
+    // Why: `=>` is an arrow, not the end of a JSX tag.
+    if (text && source[match.index - 1] !== '=' && !inside(match.index)) {
+      copy.push({ text, index: match.index, line: lineOf(source, match.index) })
+    }
+  }
+  return copy
+}
+
+function checkModuleExport(label, role, reference, read, failures) {
+  const [module, symbol] = String(reference).split('#')
+  const source = read(module)
+  if (source === null) {
+    failures.push(`label "${label}": ${role} module ${module} does not exist`)
+    return null
+  }
+  if (!symbol || !EXPORT_OF(symbol).test(source)) {
+    failures.push(`label "${label}": ${role} ${module} does not export ${symbol}`)
+    return null
+  }
+  return module
+}
+
+function checkProducers({ labels, presenter, presenterSource, read, exists, failures }) {
+  const imported = new Set(
+    importsOf(presenterSource)
+      .map((entry) => resolveSpecifier(presenter, entry.specifier, exists))
+      .filter(Boolean)
+  )
+  for (const [key, entry] of Object.entries(labels)) {
+    if (typeof entry?.producer !== 'string' || !entry.producer.includes('#')) {
+      failures.push(`label "${key}" has no producer "path#export"`)
+    } else {
+      const module = checkModuleExport(key, 'producer', entry.producer, read, failures)
+      if (module !== null && !imported.has(module)) {
+        failures.push(`label "${key}": producer ${module} is not imported by the presenter`)
+      }
+    }
+    if (entry?.hostProducer !== undefined) {
+      checkModuleExport(key, 'hostProducer', entry.hostProducer, read, failures)
+    }
+  }
+}
+
+function checkEvidence({ labels, rows, kinds, failures }) {
+  for (const [key, entry] of Object.entries(labels)) {
+    const evidence = entry?.evidence
+    if (!Array.isArray(evidence)) {
+      failures.push(`label "${key}": evidence must be a list of HOST_EVIDENCE_KINDS`)
+      continue
+    }
+    for (const kind of Array.isArray(kinds) ? evidence : []) {
+      if (!kinds.includes(kind)) {
+        failures.push(`label "${key}": evidence "${kind}" is not in HOST_EVIDENCE_KINDS`)
+      }
+    }
+    const family = key.split('.')[0]
+    const suffix = key.slice(family.length + 1)
+    if (NAME_FAMILIES.has(family)) {
+      if (evidence.length > 0) {
+        failures.push(`label "${key}" is a name and carries no evidence by itself; remove it`)
+      }
+    } else if (CLAIM_FAMILIES.has(family) && suffix === 'unknown') {
+      if (evidence.length > 0) {
+        failures.push(`label "${key}" is unknown and must carry no evidence`)
+      }
+      const text = rows.get(key)?.text
+      if (text !== undefined && !/unknown/i.test(text)) {
+        failures.push(`label "${key}" must say unknown, but reads "${text}"`)
+      }
+    } else if (CLAIM_FAMILIES.has(family) && evidence.length === 0) {
+      failures.push(`label "${key}" claims a state but names no evidence`)
+    }
+  }
+}
+
+function checkPowerLoss({ labels, table, presenter, failures }) {
+  for (const row of table) {
+    const isLossKey = POWER_LOSS_KEYS.includes(row.key)
+    if (!isLossKey && POWER_LOSS.test(row.text)) {
+      failures.push(
+        `${presenter}:${row.line} power-loss text "${row.text}" on "${row.key}" — only ${POWER_LOSS_KEYS.join(', ')} may say it`
+      )
+      continue
+    }
+    if (!isLossKey) {
+      continue
+    }
+    const entry = labels[row.key]
+    if (!entry?.producer) {
+      failures.push(
+        `power-loss label "${row.key}" has no producer — unreachable is not powered off`
+      )
+    }
+    if (!Array.isArray(entry?.evidence) || entry.evidence.length === 0) {
+      failures.push(
+        `power-loss label "${row.key}" has no evidence — unreachable is not powered off`
+      )
+    }
+  }
+}
+
+function checkAction({ card, tag, testID, action, rpcMethods, failures }) {
+  if (action.kind === 'navigation') {
+    if (EFFECT_VERB.test(tag.attributes)) {
+      failures.push(
+        `${card}:${tag.line} navigation control "${testID}" uses effect wording — a button promising what it does not do`
+      )
+    }
+  } else if (action.kind === 'effect') {
+    if (typeof action.rpc !== 'string' || !rpcMethods.has(action.rpc)) {
+      failures.push(
+        `action "${testID}": rpc "${action.rpc}" is not a host RPC method — an effect with no backend`
+      )
+    }
+  } else {
+    failures.push(`action "${testID}": kind "${action.kind}" is neither navigation nor effect`)
+  }
+}
+
+function checkControls({ config, card, cardSource, rpcMethods, failures }) {
   const actions = config.actions ?? {}
   const seen = new Set()
   let count = 0
@@ -199,7 +344,9 @@ function checkControls({ config, card, cardSource, failures }) {
       seen.add(testID)
       if (!actions[testID]) {
         failures.push(`${card}:${tag.line} control "${testID}" is not classified in ${CONFIG_PATH}`)
+        continue
       }
+      checkAction({ card, tag, testID, action: actions[testID], rpcMethods, failures })
     }
   }
   for (const [testID, action] of Object.entries(actions)) {
@@ -251,7 +398,42 @@ export function evaluateHostCardClaims({ config, files, read, rpcMethods, vocab 
     vocab: vocab ?? {},
     failures
   })
-  const actionCount = checkControls({ config, card, cardSource, failures })
+  const labels = config.labels ?? {}
+  const rows = new Map(table.map((row) => [row.key, row]))
+  checkProducers({ labels, presenter, presenterSource, read, exists, failures })
+  checkEvidence({ labels, rows, kinds: vocab?.HOST_EVIDENCE_KINDS, failures })
+  checkPowerLoss({ labels, table, presenter, failures })
+  const strippedCard = stripComments(cardSource)
+  const actionCount = checkControls({
+    config,
+    card,
+    cardSource: strippedCard,
+    rpcMethods,
+    failures
+  })
+  const block = labelBlock(presenterSource)
+  const presenterCopy = copyOutside(stripComments(presenterSource), block)
+  const cardCopy = copyOutside(strippedCard, null)
+  for (const [file, copy] of [
+    [card, cardCopy],
+    [presenter, presenterCopy]
+  ]) {
+    for (const item of copy.filter((entry) => POWER_LOSS.test(entry.text))) {
+      failures.push(
+        `${file}:${item.line} power-loss copy "${item.text}" outside HOST_CARD_LABELS — a power state with no producer`
+      )
+    }
+  }
+  const effectBacked = Object.values(config.actions ?? {}).some(
+    (action) => action?.kind === 'effect' && rpcMethods.has(action.rpc)
+  )
+  if (!effectBacked) {
+    for (const item of cardCopy.filter((entry) => EFFECT_VERB.test(entry.text))) {
+      failures.push(
+        `${card}:${item.line} effect wording "${item.text}" but no effect control classified to a host RPC method`
+      )
+    }
+  }
   if (rpcMethods.size < MIN_RPC_METHODS) {
     failures.push(
       `found ${rpcMethods.size} host RPC method names, expected at least ${MIN_RPC_METHODS}; the sweep may have stopped seeing ${config.rpcMethodsDir}`

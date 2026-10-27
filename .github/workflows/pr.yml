@@ -126,6 +126,11 @@ jobs:
       - name: Check Workspace surface claims
         run: pnpm run check:workspace-surface-claims
 
+      # The phone's host card: no power-loss state without a producer and evidence, and no control
+      # without a backend effect (unreachable is not powered off).
+      - name: Check host card claims
+        run: pnpm run check:host-card-claims
+
       # The program matrix's integrity, never its completion: the done-gate
       # (`check:cognitive-workspace-completeness`) is red by construction until the program ends.
       - name: Check cognitive workspace completeness matrix
