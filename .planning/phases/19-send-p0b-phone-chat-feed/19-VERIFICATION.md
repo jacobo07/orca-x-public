@@ -55,5 +55,35 @@ OWNER DECISION NEEDED: the live repro on this laptop's installed Orca X would pa
 
 Pick: (a), because it is read-only.
 
+## Trigger (2026-10-27 ~22:00, /gsd-autonomous): an Enter swallowed with the paste parks the body
+The fourth device leg narrowed it to the phase-17 paste shape. Measured here with a real claude.exe 2.1.312 under
+ConPTY and a fake API (evidence/19-paste-enter-harness.cjs; synthetic 4-paragraph 785-char body):
+- Hypothesis (a) is refuted. The transcript user line equals the sent text byte for byte (a string, not "[Pasted
+  text]"), and the host decoder (`transcript-line-decoders-claude.ts`) takes it as is.
+- With the shipped spacing (paste, 1500 ms, Enter) every run submitted. With the Enter in the same batch as the
+  paste (0 ms), 5 of 6 runs left the whole body on the input line and the Enter became a trailing newline. That is
+  exactly Host 1: "not shown" and no reply. A slow or busy host (Claude still rendering the previous reply, or Stop
+  hooks running) reads both writes in one batch even though the phone waited 1500 ms.
+- In that state ONE more Enter does nothing (single Enter at +5 s and +8 s: 3 of 4 still parked); a SECOND submits.
+  Two more Enters 1.5 s apart: 3 of 3 submitted. At 3 s apart: 3 of 3. The recovered transcript text equals the sent
+  text, so the phone's echo matcher retires the bubble.
+- Spare Enters on an empty prompt after a normal submit added no user turn (2 of 2).
+
+Not proven: that Host 1's own run hit this race (no screen of Host 1 was captured). It is the only mechanism found
+that yields "not shown" plus no reply with working hooks and a working feed.
+
+Fix 0b6cb979a (RED 6f4679f53): after an accepted Enter, `sendMobileNativeChatAgentPrompt` presses Enter
+`MOBILE_NATIVE_CHAT_SUBMIT_REPEATS` (2) more times, each `MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS` apart. A refused repeat
+stops the repeats and the turn stays accepted. Phone-only, no wire or host change. Cost: the composer's sending
+window grows by 3 s.
+
+Gates (GEX44 /tmp/orca-phone-p19-20261027220020, torn down):
+- admission file 8/8 GREEN; mobile `src/session` 149 files / 1295 tests pass.
+- Mutant REPEATS=0: 4 FAIL (write count 3, expected 5) = CAUGHT. Mutant drop `break`: 1 FAIL = CAUGHT. Restore diff 0.
+- mobile tsc: the same 3 pre-existing errors, 0 new.
+
+Owed (OWNER_BOUND): an APK from >= 0b6cb979a on the S25 Ultra, then the same long 4-paragraph message in a phone
+tab on Host 1 must become a turn with a reply.
+
 ## Residual (not this phase)
 While the phone has no session id, its pending bubble warns "Agent has not shown this message". The agent did show it; the phone could not read it. A `waiting-session` view could say that instead.
