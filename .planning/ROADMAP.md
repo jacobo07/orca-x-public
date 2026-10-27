@@ -125,3 +125,10 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 **Success Criteria** (what must be TRUE):
 1. A deterministic test reproduces the false "Agent has not shown this message" for a short message like `hola?` that is a real transcript turn.
 2. The matcher fix makes it delivered; a control where no turn exists stays unconfirmed.
+
+### Phase 19: SEND-P0b the phone chat shows the host's turns for a session started from the phone
+**Goal**: For a Claude tab the phone started, the phone's native chat shows the delivered user turn and the assistant reply. **Depends on**: Phase 18
+**Success Criteria** (what must be TRUE):
+1. The first owner on the path (provider session reaches the tab's agentStatus, mobile subscribes, host resolves and tails the transcript, frames reach the view) where the feed stops is named with file:line evidence, or a host-version boundary is recorded that this branch cannot reproduce.
+2. A deterministic test goes RED at that owner for a phone-started tab, and GREEN after the fix; a control (pre-existing tab) still streams; a mutant restoring the defect is CAUGHT.
+3. No wire break for older hosts or clients (docs/reference/remote-wire-compatibility.md); the device proof is OWNER_BOUND with the exact step.
