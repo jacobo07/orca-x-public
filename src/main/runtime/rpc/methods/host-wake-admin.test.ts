@@ -7,7 +7,7 @@ import { isStreamingMethod, type RpcContext, type RpcFailure } from '../core'
 import { mapRuntimeError } from '../errors'
 import { startWakeBroker, wakeBrokerHost } from '../../wake-broker-host'
 import { loadWakeBrokerStore } from '../../wake-broker-store'
-import type { WakeDeviceAuthority } from '../../wake-broker'
+import { wakeDeviceState, type WakeDeviceAuthority } from '../../wake-broker'
 import { HOST_WAKE_ADMIN_METHODS } from './host-wake-admin'
 import { HOST_WAKE_METHODS } from './host-wake'
 
@@ -233,6 +233,40 @@ describe('host.wake.admin grants and target removal', () => {
     ).toBe('wake_device_unknown')
     const listed = await call('host.wake.admin.grantList', null)
     expect(listed.ok && listed.result).toEqual({ grants: [] })
+  })
+
+  it('refuses a grant with wake_broker_unavailable while the device registry is unreadable and writes nothing to disk', async () => {
+    const targetId = await addTarget('desk')
+    wakeBrokerHost.attachDeviceAuthority({
+      authorize: () => ({ ok: false, reason: 'registry_unavailable' }),
+      deviceState: (deviceId) => wakeDeviceState(null, deviceId)
+    })
+    const refused = await call('host.wake.admin.grantAdd', { deviceId: 'dev-a', targetId })
+    expect(refusalCode(refused)).toBe('wake_broker_unavailable')
+    expect(JSON.stringify(refused)).toContain('device_registry_unavailable')
+    const listed = await call('host.wake.admin.grantList', null)
+    expect(listed.ok && listed.result).toEqual({ grants: [] })
+    const reloaded = loadWakeBrokerStore(userData)
+    expect(reloaded.ok && reloaded.store.grants()).toEqual([])
+  })
+
+  it('persists a grant for a device the readable registry reports present', async () => {
+    const targetId = await addTarget('desk')
+    wakeBrokerHost.attachDeviceAuthority({
+      authorize: () => ({ ok: false, reason: 'unknown_token' }),
+      deviceState: (deviceId) =>
+        wakeDeviceState(
+          {
+            getAvailability: () => ({ available: true }),
+            getDevice: (id) => (id === 'dev-a' ? { deviceId: id } : null)
+          },
+          deviceId
+        )
+    })
+    const added = await call('host.wake.admin.grantAdd', { deviceId: 'dev-a', targetId })
+    expect(added.ok).toBe(true)
+    const reloaded = loadWakeBrokerStore(userData)
+    expect(reloaded.ok && reloaded.store.grants().map((grant) => grant.deviceId)).toEqual(['dev-a'])
   })
 
   it('refuses a grant for an unregistered target with wake_target_unknown', async () => {

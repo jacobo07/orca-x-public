@@ -6,7 +6,11 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import { isStreamingMethod, type RpcContext } from './rpc/core'
 import { mapRuntimeError } from './rpc/errors'
 import { HOST_WAKE_METHODS } from './rpc/methods/host-wake'
-import type { WakeDeviceAuthority } from './wake-broker'
+import {
+  wakeDeviceState,
+  type WakeDeviceAuthority,
+  type WakeDeviceRegistryView
+} from './wake-broker'
 import {
   dropWakeGrantsAfterRevoke,
   startWakeBroker,
@@ -32,6 +36,28 @@ function authority(devices: Record<string, string>): WakeDeviceAuthority {
     deviceExists: (deviceId) => Object.values(devices).includes(deviceId)
   }
 }
+
+const UNREADABLE_REGISTRY: WakeDeviceRegistryView = {
+  getAvailability: () => ({ available: false }),
+  getDevice: () => null
+}
+
+describe('wakeDeviceState', () => {
+  const readable: WakeDeviceRegistryView = {
+    getAvailability: () => ({ available: true }),
+    getDevice: (deviceId) => (deviceId === 'dev-a' ? { deviceId } : null)
+  }
+
+  it('answers unknown, never absent, when there is no registry or it is unreadable', () => {
+    expect(wakeDeviceState(null, 'dev-a')).toBe('unknown')
+    expect(wakeDeviceState(UNREADABLE_REGISTRY, 'dev-a')).toBe('unknown')
+  })
+
+  it('answers present or absent from a readable registry', () => {
+    expect(wakeDeviceState(readable, 'dev-a')).toBe('present')
+    expect(wakeDeviceState(readable, 'dev-gone')).toBe('absent')
+  })
+})
 
 function seedStore(grantDevices: string[]): string {
   const loaded = loadWakeBrokerStore(dir)
@@ -142,6 +168,29 @@ describe('startWakeBroker', () => {
   it('keeps every grant when no authority is attached at start', () => {
     seedStore(['dev-a', 'dev-gone'])
     startWakeBroker(dir, { sendMagicPacket: recordSend })
+    const reloaded = loadWakeBrokerStore(dir)
+    expect(
+      reloaded.ok &&
+        reloaded.store
+          .grants()
+          .map((g) => g.deviceId)
+          .sort()
+    ).toEqual(['dev-a', 'dev-gone'])
+  })
+
+  it('keeps every grant, without a prune error, when the attached authority cannot read the registry', () => {
+    seedStore(['dev-a', 'dev-gone'])
+    wakeBrokerHost.attachDeviceAuthority({
+      authorize: () => ({ ok: false, reason: 'registry_unavailable' }),
+      deviceState: (deviceId) => wakeDeviceState(UNREADABLE_REGISTRY, deviceId)
+    })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(startWakeBroker(dir, { sendMagicPacket: recordSend })).toEqual({
+      state: 'enabled',
+      targetCount: 1
+    })
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
     const reloaded = loadWakeBrokerStore(dir)
     expect(
       reloaded.ok &&
