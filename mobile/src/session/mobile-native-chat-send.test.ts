@@ -225,6 +225,20 @@ describe('sendMobileNativeChatMessage', () => {
     expect(onRefused).toHaveBeenCalledWith('mobile_input_floor_unavailable')
   })
 
+  it('never treats an older host without terminal.send as a delivered send', async () => {
+    const client = clientWithResponse({
+      id: 'request',
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method: terminal.send' },
+      _meta: { runtimeId: 'runtime' }
+    })
+    const onRefused = vi.fn()
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({ client, terminal: 'term', text: 'hi', onRefused })
+    ).resolves.toBe('rejected')
+    expect(onRefused).toHaveBeenCalledWith('method_not_found')
+  })
+
   it('reports the host refusal code of a rejected body write', async () => {
     const client = clientWithResponse({
       id: 'request',
