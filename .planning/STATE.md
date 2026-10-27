@@ -3,15 +3,15 @@ gsd_state_version: "1.0"
 current_phase: 10
 current_phase_name: 2/2
 status: unknown
-stopped_at: Completed 18-01-PLAN.md
-last_updated: "2026-10-27T17:01:07.126Z"
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-10-27T17:20:56.978Z"
 last_activity: "2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: \"go here\"); the arming pane on C:\\Users\\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e."
-state_head: b2ae2fa062fd6cfcfc975b67d1e1813723a5bd39
+state_head: ec259f255dd8be671bf35f009ac0d2eda6d36ff6
 progress:
   total_phases: 14
   completed_phases: 7
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 50
 ---
 
@@ -116,6 +116,7 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 | Phase 17 P02 | 60 min | 3 tasks | 15 files |
 | Phase 17 P03 | 25 min | 3 tasks | 8 files |
 | Phase 18 P01 | 18min | 3 tasks | 14 files |
+| Phase 18 P02 | 17m | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -124,9 +125,11 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 - [Phase 10]: 17-02: autostart status treats only ObjectNotFound as absent; any other lookup error is autostart_status_unreadable
 - [Phase 10]: 17-03: Task Scheduler leg OWNER_BOUND, restart-on-failure UNMEASURED (no Owner go)
 - [Phase 10]: 17-03: GEX44 recipe needs pnpm rebuild node-pty after --ignore-scripts install for build:electron-vite
+- [Phase 10]: 18-02: an ok status.get whose result is not an object reads as no answer (power/orca unknown), not version mismatch
+- [Phase 10]: 18-02: GEX44 pnpm is 12.15.0 via corepack (mobile packageManager), not 10.24.0
 
 ## Session
 
-**Last session:** 2026-10-27T17:01:05.217Z
-**Stopped at:** Completed 18-01-PLAN.md
+**Last session:** 2026-10-27T17:20:54.979Z
+**Stopped at:** Completed 18-02-PLAN.md
 **Resume file:** None
