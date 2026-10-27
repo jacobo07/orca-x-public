@@ -46,8 +46,8 @@ const BASE_LABELS = [
 ]
 
 // Floor rows `power.awake-<n>` keep keys unique; FLOOR_VOCAB admits their suffixes.
-function presenterSource({ extraLabels = '', dropFloor = false, body = '' } = {}) {
-  const rows = BASE_LABELS.map(([key, text]) => `  '${key}': '${text}',`)
+function presenterSource({ extraLabels = '', dropFloor = false, body = '', texts = {} } = {}) {
+  const rows = BASE_LABELS.map(([key, text]) => `  '${key}': '${texts[key] ?? text}',`)
   if (!dropFloor) {
     for (let i = rows.length; i < MIN_LABELS; i++) {
       rows.push(`  'power.awake-${i}': 'Awake',`)
@@ -121,7 +121,7 @@ function evaluate({
   labels,
   actions,
   rpcMethods = rpcSet(),
-  vocab = VOCAB,
+  vocab = FLOOR_VOCAB,
   repo = {}
 } = {}) {
   const files = new Map([
@@ -297,5 +297,237 @@ describe('check-host-card-claims: scanners', () => {
     )
     expect(vocab.HOST_EVIDENCE_KINDS).toEqual(['live-response', 'os-probe'])
     expect(vocab.HOST_POWER_STATES).toBeUndefined()
+  })
+})
+
+function withLabel(presenter, key, patch) {
+  const labels = labelsConfig(presenter)
+  labels[key] = { ...labels[key], ...patch }
+  return labels
+}
+
+const POWERED_OFF = `  'power.powered-off': 'Powered off',`
+
+describe('check-host-card-claims: producers (G2)', () => {
+  it('fails when the producer module is missing, passes when it exists', () => {
+    const labels = withLabel(presenterSource(), 'power.awake', {
+      producer: 'shared/missing.ts#compose'
+    })
+    expect(
+      failuresMatching(evaluate({ labels }), /producer module shared\/missing\.ts does not exist/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /producer/)).toEqual([])
+  })
+
+  it('fails when the module lacks the export, passes when it exports it', () => {
+    const labels = withLabel(presenterSource(), 'power.awake', { producer: `${MODEL}#composeGone` })
+    expect(
+      failuresMatching(evaluate({ labels }), /shared\/model\.ts does not export composeGone/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /does not export/)).toEqual([])
+  })
+
+  it('fails when the presenter does not import the producer module, passes when it does', () => {
+    const repo = { 'shared/other.ts': 'export function compose() {}\n' }
+    const labels = withLabel(presenterSource(), 'power.awake', {
+      producer: 'shared/other.ts#compose'
+    })
+    expect(
+      failuresMatching(
+        evaluate({ labels, repo }),
+        /shared\/other\.ts is not imported by the presenter/
+      )
+    ).toHaveLength(1)
+    const presenter = presenterSource({ body: "import { compose as c2 } from '../shared/other'" })
+    const twin = withLabel(presenter, 'power.awake', { producer: 'shared/other.ts#compose' })
+    expect(failuresMatching(evaluate({ presenter, labels: twin, repo }), /not imported/)).toEqual(
+      []
+    )
+  })
+
+  it('fails on a hostProducer without its export, passes with it', () => {
+    const presenter = presenterSource()
+    const red = withLabel(presenter, 'capability-value.supported', {
+      hostProducer: `${HOST}#gone`
+    })
+    expect(
+      failuresMatching(
+        evaluate({ labels: red }),
+        /hostProducer host\/producer\.ts does not export gone/
+      )
+    ).toHaveLength(1)
+    const green = withLabel(presenter, 'capability-value.supported', {
+      hostProducer: `${HOST}#createProducer`
+    })
+    expect(failuresMatching(evaluate({ labels: green }), /hostProducer/)).toEqual([])
+  })
+})
+
+describe('check-host-card-claims: evidence (G3)', () => {
+  it('fails on an evidence kind outside the vocabulary, passes inside it', () => {
+    const labels = withLabel(presenterSource(), 'power.awake', { evidence: ['guess'] })
+    expect(
+      failuresMatching(evaluate({ labels }), /evidence "guess" is not in HOST_EVIDENCE_KINDS/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /HOST_EVIDENCE_KINDS/)).toEqual([])
+  })
+
+  it('fails on an unknown claim carrying evidence, passes with none', () => {
+    const labels = withLabel(presenterSource(), 'power.unknown', { evidence: ['live-response'] })
+    expect(
+      failuresMatching(
+        evaluate({ labels }),
+        /"power\.unknown" is unknown and must carry no evidence/
+      )
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /must carry no evidence/)).toEqual([])
+  })
+
+  it('fails on an unknown text that does not say unknown (P18-M1a shape), passes when it does', () => {
+    const presenter = presenterSource({ texts: { 'power.unknown': 'No answer' } })
+    expect(
+      failuresMatching(evaluate({ presenter }), /"power\.unknown" must say unknown/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /must say unknown/)).toEqual([])
+  })
+
+  it('fails on a state claim with empty evidence, passes with evidence', () => {
+    const labels = withLabel(presenterSource(), 'orca.ui-open', { evidence: [] })
+    expect(
+      failuresMatching(evaluate({ labels }), /"orca\.ui-open" claims a state but names no evidence/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /names no evidence/)).toEqual([])
+  })
+
+  it('fails on a capability name carrying evidence, passes with none', () => {
+    const labels = withLabel(presenterSource(), 'capability.can-relay', {
+      evidence: ['host-announced']
+    })
+    expect(
+      failuresMatching(
+        evaluate({ labels }),
+        /"capability\.can-relay" is a name and carries no evidence/
+      )
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /is a name/)).toEqual([])
+  })
+
+  it('fails loudly when the model lacks a vocabulary array, never as an empty vocabulary', () => {
+    const partial = modelVocabulary(`export const HOST_POWER_STATES = ['awake'] as const`)
+    expect(
+      failuresMatching(evaluate({ vocab: partial }), /vocabulary HOST_EVIDENCE_KINDS not found/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /vocabulary .* not found/)).toEqual([])
+  })
+})
+
+describe('check-host-card-claims: power-loss (G4)', () => {
+  it('fails on power-loss text on power.unknown (P18-M1a), passes on the unknown text', () => {
+    const presenter = presenterSource({ texts: { 'power.unknown': 'Powered off' } })
+    expect(
+      failuresMatching(evaluate({ presenter }), /power-loss text "Powered off" on "power\.unknown"/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /power-loss/)).toEqual([])
+  })
+
+  it('fails on power.powered-off with no evidence (P18-M1b), passes with host-announced', () => {
+    const presenter = presenterSource({ extraLabels: POWERED_OFF })
+    const red = withLabel(presenter, 'power.powered-off', { evidence: [] })
+    expect(
+      failuresMatching(
+        evaluate({ presenter, labels: red }),
+        /power-loss label "power\.powered-off" has no evidence/
+      )
+    ).toHaveLength(1)
+    const green = withLabel(presenter, 'power.powered-off', { evidence: ['host-announced'] })
+    expect(evaluate({ presenter, labels: green }).failures).toEqual([])
+  })
+
+  it('fails on power.powered-off with a null producer, passes with a producer', () => {
+    const presenter = presenterSource({ extraLabels: POWERED_OFF })
+    const red = withLabel(presenter, 'power.powered-off', {
+      producer: null,
+      evidence: ['host-announced']
+    })
+    expect(
+      failuresMatching(
+        evaluate({ presenter, labels: red }),
+        /power-loss label "power\.powered-off" has no producer/
+      )
+    ).toHaveLength(1)
+    const green = withLabel(presenter, 'power.powered-off', { evidence: ['host-announced'] })
+    expect(failuresMatching(evaluate({ presenter, labels: green }), /no producer/)).toEqual([])
+  })
+
+  it('fails on a power-loss literal in the card outside the table, passes inside comments', () => {
+    const red = cardSource({ extraJsx: `{connected ? null : <Text>{'Host offline'}</Text>}` })
+    expect(
+      failuresMatching(
+        evaluate({ card: red }),
+        /power-loss copy "Host offline" outside HOST_CARD_LABELS/
+      )
+    ).toHaveLength(1)
+    const green = cardSource({ extraJsx: `{/* Host offline */}\n  // 'Host offline'` })
+    expect(failuresMatching(evaluate({ card: green }), /power-loss/)).toEqual([])
+  })
+
+  it('fails on power-loss JSX text in the card, passes in a full-line comment', () => {
+    const red = cardSource({ extraJsx: `<Text>Sleeping</Text>` })
+    expect(failuresMatching(evaluate({ card: red }), /power-loss copy "Sleeping"/)).toHaveLength(1)
+    const green = cardSource({ extraJsx: `  // <Text>Sleeping</Text>` })
+    expect(failuresMatching(evaluate({ card: green }), /power-loss/)).toEqual([])
+  })
+
+  it('fails on a power-loss literal in the presenter outside the table, passes without it', () => {
+    const presenter = presenterSource({ body: "const fallback = 'asleep'" })
+    expect(
+      failuresMatching(evaluate({ presenter }), /power-loss copy "asleep" outside HOST_CARD_LABELS/)
+    ).toHaveLength(1)
+    const twin = presenterSource({ body: "// const fallback = 'asleep'" })
+    expect(failuresMatching(evaluate({ presenter: twin }), /power-loss/)).toEqual([])
+  })
+})
+
+describe('check-host-card-claims: effects (G5)', () => {
+  const wake = `<Pressable testID="host-card-wake" accessibilityRole="button" accessibilityLabel="Wake host" onPress={props.onOpenActions} />`
+  const wakeActions = (rpc) => ({
+    ...config({ presenter: presenterSource() }).actions,
+    'host-card-wake': { kind: 'effect', rpc, why: 'sends a wake request to the host' }
+  })
+
+  it('fails on an effect whose rpc is not a host method (P18-M2a), passes when it is', () => {
+    const card = cardSource({ extraJsx: wake })
+    const red = evaluate({ card, actions: wakeActions('host.wake') })
+    expect(failuresMatching(red, /rpc "host\.wake" is not a host RPC method/)).toHaveLength(1)
+    const green = evaluate({
+      card,
+      actions: wakeActions('host.wake'),
+      rpcMethods: rpcSet(['host.wake'])
+    })
+    expect(green.failures).toEqual([])
+  })
+
+  it('fails on a navigation control whose label says Wake, passes with a neutral label', () => {
+    const controls = `<Pressable testID="host-card-open" onPress={props.onPress} />
+<Pressable testID="host-card-actions" accessibilityLabel="Wake host" onPress={props.onOpenActions} />`
+    const red = evaluate({ card: cardSource({ controls }) })
+    expect(
+      failuresMatching(red, /navigation control "host-card-actions" uses effect wording/)
+    ).toHaveLength(1)
+    expect(failuresMatching(evaluate(), /effect wording/)).toEqual([])
+  })
+
+  it('fails on Power on copy with no effect control, passes with one classified to a real rpc', () => {
+    const red = evaluate({ card: cardSource({ extraJsx: `<Text>Power on</Text>` }) })
+    expect(failuresMatching(red, /effect wording "Power on" but no effect control/)).toHaveLength(1)
+    const card = cardSource({
+      extraJsx: `<Pressable testID="host-card-wake" onPress={props.onWake}><Text>Power on</Text></Pressable>`
+    })
+    const green = evaluate({
+      card,
+      actions: wakeActions('host.powerOn'),
+      rpcMethods: rpcSet(['host.powerOn'])
+    })
+    expect(green.failures).toEqual([])
   })
 })
