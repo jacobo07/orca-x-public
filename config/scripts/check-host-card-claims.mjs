@@ -1,0 +1,319 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import process from 'node:process'
+import { pathToFileURL } from 'node:url'
+
+import { parse } from 'jsonc-parser'
+
+import { importsOf, jsxOpeningTags, resolveSpecifier } from './check-workspace-surface-claims.mjs'
+
+/**
+ * The phone's host card says only what a producer can prove (D-10).
+ *
+ * Two laws, enforced by what the card and its presenter DO, against config/host-card-claims.jsonc:
+ *   - unreachable is not powered off: a power-loss word renders only from a power-loss state key
+ *     with a producer and evidence; silence composes to unknown (D-02);
+ *   - no button without a backend effect: every control carries a literal testID, is classified,
+ *     and an effect control names a host RPC method that exists.
+ *
+ *   G1 coverage   every HOST_CARD_LABELS key is classified, in its family's model vocabulary
+ *   G2 producer   path#export exists, is exported and is imported by the presenter
+ *   G3 evidence   kinds from HOST_EVIDENCE_KINDS; unknown carries none, a claim carries some
+ *   G4 power-loss power-loss copy only on an evidenced power-loss key, never outside the table
+ *   G5 controls   literal testID, classified, navigation without effect words, effect with an RPC
+ *
+ * Floors on labels, controls and RPC method names stop a scanner that matched nothing from
+ * reporting a clean bill; a classification whose subject is gone is stale and fails.
+ */
+
+export const CONFIG_PATH = 'config/host-card-claims.jsonc'
+export const MIN_LABELS = 20
+export const MIN_PRESSABLES = 2
+export const MIN_RPC_METHODS = 20
+export const POWER_LOSS =
+  /powered[\s-]?off|switched[\s-]?off|shut[\s-]?down|asleep|sleeping|hibernat|\boffline\b/i
+export const EFFECT_VERB = /\b(?:wake|power[\s-]?on|turn\s+on|boot|start\s+orca)\b/i
+
+export const VOCABULARY_NAMES = Object.freeze([
+  'HOST_EVIDENCE_KINDS',
+  'HOST_POWER_STATES',
+  'HOST_ORCA_STATES',
+  'HOST_CAPABILITY_IDS',
+  'HOST_CAPABILITY_VALUES'
+])
+const FAMILY_VOCABULARY = Object.freeze({
+  power: 'HOST_POWER_STATES',
+  orca: 'HOST_ORCA_STATES',
+  capability: 'HOST_CAPABILITY_IDS',
+  'capability-value': 'HOST_CAPABILITY_VALUES',
+  capabilities: null
+})
+const CONTROL_TAGS = Object.freeze([
+  'Pressable',
+  'TouchableOpacity',
+  'TouchableHighlight',
+  'Button'
+])
+const LABEL_BLOCK_OPENER = /export\s+const\s+HOST_CARD_LABELS\s*=\s*\{/
+
+function lineOf(source, index) {
+  return source.slice(0, index).split('\n').length
+}
+
+/** Extent of the HOST_CARD_LABELS object literal, braces balanced, or null. */
+function labelBlock(source) {
+  const match = LABEL_BLOCK_OPENER.exec(source)
+  if (!match) {
+    return null
+  }
+  const start = match.index + match[0].length - 1
+  let depth = 0
+  for (let i = start; i < source.length; i++) {
+    if (source[i] === '{') {
+      depth++
+    } else if (source[i] === '}' && --depth === 0) {
+      return { start, end: i }
+    }
+  }
+  return null
+}
+
+export function labelTable(presenterSource) {
+  const block = labelBlock(presenterSource)
+  if (!block) {
+    return []
+  }
+  const body = presenterSource.slice(block.start, block.end)
+  const rows = []
+  for (const match of body.matchAll(/['"]([\w.-]+)['"]\s*:\s*(['"])((?:\\.|(?!\2)[^\\\n])*)\2/g)) {
+    const key = match[1]
+    const dot = key.indexOf('.')
+    rows.push({
+      key,
+      family: dot === -1 ? key : key.slice(0, dot),
+      suffix: dot === -1 ? '' : key.slice(dot + 1),
+      text: match[3],
+      line: lineOf(presenterSource, block.start + match.index)
+    })
+  }
+  return rows
+}
+
+/** `name: '...'` of every defineMethod in non-test method files. */
+export function rpcMethodNames(sourcesByPath) {
+  const names = new Set()
+  for (const [file, source] of Object.entries(sourcesByPath)) {
+    if (/\.(test|spec)\.tsx?$/.test(file)) {
+      continue
+    }
+    for (const match of source.matchAll(/define\w*Method\(\s*\{\s*name:\s*['"]([^'"]+)['"]/g)) {
+      names.add(match[1])
+    }
+  }
+  return names
+}
+
+/** The `export const NAME = [ ... ] as const` arrays of the model; an absent one is left out. */
+export function modelVocabulary(modelSource) {
+  const vocab = {}
+  for (const name of VOCABULARY_NAMES) {
+    const match = new RegExp(
+      `export\\s+const\\s+${name}\\s*=\\s*\\[([^\\]]*)\\]\\s*as\\s+const`
+    ).exec(modelSource)
+    if (match) {
+      vocab[name] = [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((item) => item[1])
+    }
+  }
+  return vocab
+}
+
+function literalTestID(attributes) {
+  const match = /\btestID\s*=\s*(?:"([^"]*)"|'([^']*)'|\{\s*['"]([^'"]*)['"]\s*\})/.exec(attributes)
+  return match ? (match[1] ?? match[2] ?? match[3]) : null
+}
+
+function needsWhy(entry) {
+  return typeof entry?.why !== 'string' || entry.why.trim().length < 12
+}
+
+function checkCoverage({ config, table, card, cardSource, presenter, exists, vocab, failures }) {
+  const labels = config.labels ?? {}
+  const keys = new Set(table.map((row) => row.key))
+  for (const row of table) {
+    if (!labels[row.key]) {
+      failures.push(
+        `${presenter}:${row.line} label "${row.key}" is not classified in ${CONFIG_PATH}`
+      )
+    }
+    if (!Object.hasOwn(FAMILY_VOCABULARY, row.family)) {
+      failures.push(`label "${row.key}": family "${row.family}" is not a host card family`)
+      continue
+    }
+    const vocabName = FAMILY_VOCABULARY[row.family]
+    const allowed = vocabName === null ? ['unknown'] : vocab[vocabName]
+    if (allowed && !allowed.includes(row.suffix)) {
+      failures.push(
+        `label "${row.key}": "${row.suffix}" is not in ${vocabName ?? 'the capabilities family (unknown only)'}`
+      )
+    }
+  }
+  for (const [key, entry] of Object.entries(labels)) {
+    if (!keys.has(key)) {
+      failures.push(
+        `label "${key}" is classified but HOST_CARD_LABELS has no such key — stale entry`
+      )
+    }
+    if (needsWhy(entry)) {
+      failures.push(`label "${key}" needs a "why" someone can disagree with`)
+    }
+  }
+  if (table.length < MIN_LABELS) {
+    failures.push(
+      `found ${table.length} host card labels, expected at least ${MIN_LABELS}; the sweep may have stopped seeing HOST_CARD_LABELS`
+    )
+  }
+  const importsPresenter = importsOf(cardSource).some(
+    (entry) =>
+      entry.name === 'presentHostCardAvailability' &&
+      resolveSpecifier(card, entry.specifier, exists) === presenter
+  )
+  if (!importsPresenter) {
+    failures.push(`${card} does not import presentHostCardAvailability from ${presenter}`)
+  }
+}
+
+function checkControls({ config, card, cardSource, failures }) {
+  const actions = config.actions ?? {}
+  const seen = new Set()
+  let count = 0
+  for (const name of CONTROL_TAGS) {
+    for (const tag of jsxOpeningTags(cardSource, name)) {
+      count++
+      const testID = literalTestID(tag.attributes)
+      if (testID === null) {
+        failures.push(
+          `${card}:${tag.line} ${name} has no literal testID — a control nobody can classify`
+        )
+        continue
+      }
+      seen.add(testID)
+      if (!actions[testID]) {
+        failures.push(`${card}:${tag.line} control "${testID}" is not classified in ${CONFIG_PATH}`)
+      }
+    }
+  }
+  for (const [testID, action] of Object.entries(actions)) {
+    if (!seen.has(testID)) {
+      failures.push(
+        `action "${testID}" is classified but the card renders no such control — stale entry`
+      )
+    }
+    if (needsWhy(action)) {
+      failures.push(`action "${testID}" needs a "why" someone can disagree with`)
+    }
+  }
+  if (count < MIN_PRESSABLES) {
+    failures.push(
+      `found ${count} card controls, expected at least ${MIN_PRESSABLES}; the sweep may have stopped seeing the card`
+    )
+  }
+  return count
+}
+
+/**
+ * The whole judgement, pure: `files` maps the card and presenter paths to source, `read` returns any
+ * repo file's source or null, `rpcMethods` is the scanned method-name set, `vocab` the model arrays.
+ */
+export function evaluateHostCardClaims({ config, files, read, rpcMethods, vocab }) {
+  const failures = []
+  const exists = (p) => read(p) !== null
+  for (const name of VOCABULARY_NAMES) {
+    if (!Array.isArray(vocab?.[name])) {
+      failures.push(`vocabulary ${name} not found in ${config.model}`)
+    }
+  }
+  const card = config.card
+  const presenter = config.presenter
+  const cardSource = files.get(card) ?? null
+  const presenterSource = files.get(presenter) ?? null
+  if (cardSource === null || presenterSource === null) {
+    failures.push(`card ${card} or presenter ${presenter} does not exist`)
+    return { failures, labelCount: 0, actionCount: 0, rpcCount: rpcMethods.size }
+  }
+  const table = labelTable(presenterSource)
+  checkCoverage({
+    config,
+    table,
+    card,
+    cardSource,
+    presenter,
+    exists,
+    vocab: vocab ?? {},
+    failures
+  })
+  const actionCount = checkControls({ config, card, cardSource, failures })
+  if (rpcMethods.size < MIN_RPC_METHODS) {
+    failures.push(
+      `found ${rpcMethods.size} host RPC method names, expected at least ${MIN_RPC_METHODS}; the sweep may have stopped seeing ${config.rpcMethodsDir}`
+    )
+  }
+  return { failures, labelCount: table.length, actionCount, rpcCount: rpcMethods.size }
+}
+
+function readRepoFile(root, relative) {
+  try {
+    return fs.readFileSync(path.join(root, relative), 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function methodSources(root, dir) {
+  const out = {}
+  let entries = []
+  try {
+    entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true })
+  } catch {
+    return out
+  }
+  for (const entry of entries) {
+    const relative = `${dir}/${entry.name}`
+    if (entry.isDirectory()) {
+      Object.assign(out, methodSources(root, relative))
+    } else if (entry.name.endsWith('.ts') && !/\.(test|spec)\.ts$/.test(entry.name)) {
+      out[relative] = readRepoFile(root, relative)
+    }
+  }
+  return out
+}
+
+export async function main(root = process.cwd()) {
+  const configText = readRepoFile(root, CONFIG_PATH)
+  if (configText === null) {
+    console.error(`check-host-card-claims: ${CONFIG_PATH} is missing`)
+    return 1
+  }
+  const config = parse(configText)
+  const files = new Map(
+    [config.card, config.presenter].map((file) => [file, readRepoFile(root, file)])
+  )
+  const read = (relative) => files.get(relative) ?? readRepoFile(root, relative)
+  const rpcMethods = rpcMethodNames(methodSources(root, config.rpcMethodsDir))
+  const vocab = modelVocabulary(readRepoFile(root, config.model) ?? '')
+  const result = evaluateHostCardClaims({ config, files, read, rpcMethods, vocab })
+  if (result.failures.length > 0) {
+    console.error(`check-host-card-claims: ${result.failures.length} problem(s)`)
+    for (const failure of result.failures) {
+      console.error(`  - ${failure}`)
+    }
+    return 1
+  }
+  console.log(
+    `check-host-card-claims: ${result.labelCount} labels classified, ${result.actionCount} controls classified, ${result.rpcCount} host RPC methods known, no unevidenced power-loss state, no control without an effect.`
+  )
+  return 0
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  process.exitCode = await main()
+}

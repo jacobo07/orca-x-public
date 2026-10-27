@@ -1,0 +1,149 @@
+// Everything the phone's host card SAYS about a host's power, its Orca and its capabilities, and
+// every control it draws. Checked by config/scripts/check-host-card-claims.mjs (pnpm
+// check:host-card-claims).
+//
+// A label is one key of HOST_CARD_LABELS in the presenter, "<family>.<suffix>", where the suffix is
+// a state of the model (src/shared/host-availability.ts). Each is classified here with:
+//   producer      "path#export" that decides the state, imported by the presenter;
+//   hostProducer  optional "path#export" on the host that announces it;
+//   evidence      the HOST_EVIDENCE_KINDS that can back the state — [] for an unknown, which must
+//                 SAY unknown, and [] for a name (a capability's title proves nothing by itself);
+//   why           one sentence someone can disagree with.
+// A control is a pressable in the card, identified by its literal testID, classified with:
+//   kind          "navigation" (phone-local, no effect wording) or "effect" (names `rpc`, a host RPC
+//                 method that exists);
+//   why           as above.
+//
+// Unreachable is not powered off, and no button exists without a backend effect (D-10).
+{
+  "card": "mobile/src/components/MobileHostCard.tsx",
+  "presenter": "mobile/src/components/host-availability-presentation.ts",
+  "model": "src/shared/host-availability.ts",
+  "rpcMethodsDir": "src/main/runtime/rpc/methods",
+  "labels": {
+    "power.awake": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "Awake only when the host answered status.get on the current connection; an answer is the proof the machine is running"
+    },
+    "power.unknown": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": [],
+      "why": "No live response is unknown, and unreachable is not powered off (D-02): silence never names a power state"
+    },
+    "orca.service-ready": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "A serve host with a ready graph has no window to open, so ready is the whole service (D-03)"
+    },
+    "orca.runtime-ready": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "A ready graph from a desktop host that reported no window status: the runtime is proven, the window is not"
+    },
+    "orca.ui-open": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "The host itself reported its window available in the live answer"
+    },
+    "orca.ui-closed": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "A ready graph with a recognized closed window status; the runtime runs without a visible window"
+    },
+    "orca.starting": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "The host answered that its graph is reloading, which is starting, not ready and not down"
+    },
+    "orca.version-mismatch": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "The live answer's protocol versions fail the phone's compat rule, so nothing else in it is trusted"
+    },
+    "orca.unavailable": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": ["live-response"],
+      "why": "The host answered and said its graph is unavailable; that is the host's own report, not a guess"
+    },
+    "orca.unknown": {
+      "producer": "src/shared/host-availability.ts#composeHostAvailability",
+      "evidence": [],
+      "why": "No live response or an unrecognized graph status is unknown; the card never infers Orca is down"
+    },
+    "capability.can-start-orca": {
+      "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
+      "evidence": [],
+      "why": "A capability title is a name; its value line carries the claim and the evidence"
+    },
+    "capability.can-wake-lan": {
+      "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
+      "evidence": [],
+      "why": "Naming LAN wake is not offering it: the card has no wake control, only the announced value"
+    },
+    "capability.can-wake-remote": {
+      "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
+      "evidence": [],
+      "why": "Naming remote wake is not offering it: the card has no wake control, only the announced value"
+    },
+    "capability.can-power-on-oob": {
+      "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
+      "evidence": [],
+      "why": "Naming out-of-band power-on is not offering it; no producer can prove it yet, so it reads unknown"
+    },
+    "capability.can-relay": {
+      "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
+      "evidence": [],
+      "why": "A capability title is a name; its value line carries the claim and the evidence"
+    },
+    "capability.can-direct": {
+      "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
+      "evidence": [],
+      "why": "A capability title is a name; its value line carries the claim and the evidence"
+    },
+    "capability-value.supported": {
+      "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
+      "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
+      "evidence": ["host-announced", "relay-reported", "os-probe"],
+      "why": "Supported only when the host announced it with evidence; the parser degrades an unevidenced entry to unknown"
+    },
+    "capability-value.not-supported": {
+      "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
+      "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
+      "evidence": ["host-announced"],
+      "why": "Not possible is the host's own statement about its build or platform, never the phone's guess"
+    },
+    "capability-value.not-configured": {
+      "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
+      "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
+      "evidence": ["host-announced", "os-probe"],
+      "why": "Not set up comes from the host's announcement or its OS probe (the logon autostart entry)"
+    },
+    "capability-value.needs-owner-setup": {
+      "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
+      "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
+      "evidence": ["host-announced"],
+      "why": "Needs setup is announced by the host when only the Owner can complete the step"
+    },
+    "capability-value.unknown": {
+      "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
+      "evidence": [],
+      "why": "An old host, a malformed entry or a missing evidence object all read as unknown (D-05)"
+    },
+    "capabilities.unknown": {
+      "producer": "src/shared/host-availability.ts#unknownHostCapabilities",
+      "evidence": [],
+      "why": "With no status this session, or every capability unknown, one line says so instead of six guesses"
+    }
+  },
+  "actions": {
+    "host-card-open": {
+      "kind": "navigation",
+      "why": "Opens the host screen on the phone and sends no host effect"
+    },
+    "host-card-actions": {
+      "kind": "navigation",
+      "why": "Opens the phone-side sheet, whose reconnect, edit and remove are phone-local"
+    }
+  }
+}
