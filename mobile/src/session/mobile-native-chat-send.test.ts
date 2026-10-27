@@ -176,7 +176,7 @@ describe('sendMobileNativeChatMessage', () => {
     ).resolves.toBe('rejected')
   })
 
-  it('prepends the input-line clear byte when clearInputFirst is set', async () => {
+  it('clears the input line as its own write before the body when clearInputFirst is set', async () => {
     const client = clientWithResponse({
       id: 'request',
       ok: true,
@@ -190,15 +190,36 @@ describe('sendMobileNativeChatMessage', () => {
       text: 'hello',
       clearInputFirst: true
     })
-    expect(client.sendRequest).toHaveBeenCalledWith(
-      'terminal.send',
-      {
+    const calls = vi.mocked(client.sendRequest).mock.calls
+    expect(calls.map((call) => call[1])).toEqual([
+      { terminal: 'term', text: '\x15', enter: false },
+      { terminal: 'term', text: 'hello', enter: true }
+    ])
+    // One budget spans both writes, so the composer's sending window stays bounded.
+    for (const call of calls) {
+      const options = call[2] as { timeoutMs: number; budgetSpansConnect: boolean }
+      expect(options.budgetSpansConnect).toBe(true)
+      expect(options.timeoutMs).toBeLessThanOrEqual(MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
+    }
+  })
+
+  it('never sends the body when the clear write is refused', async () => {
+    const client = clientWithResponse({
+      id: 'request',
+      ok: false,
+      error: { message: 'mobile_input_floor_unavailable' },
+      _meta: { runtimeId: 'runtime' }
+    })
+
+    await expect(
+      sendMobileNativeChatMessageWithOutcome({
+        client,
         terminal: 'term',
-        text: '\x15hello',
-        enter: true
-      },
-      { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
-    )
+        text: 'hello',
+        clearInputFirst: true
+      })
+    ).resolves.toBe('rejected')
+    expect(vi.mocked(client.sendRequest).mock.calls).toHaveLength(1)
   })
 
   it('sends the text verbatim when clearInputFirst is not set', async () => {
@@ -409,7 +430,7 @@ describe('the body write never carries a multi-line burst', () => {
   const sentText = (client: RpcClient): string =>
     (vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string }).text
 
-  it('still prefixes only a single Ctrl+U when asked to clear first', async () => {
+  it('clears with a single Ctrl+U and leaves the body write without it', async () => {
     const client = clientWithResponse(accepted)
     await sendMobileNativeChatMessage({
       client,
@@ -417,7 +438,10 @@ describe('the body write never carries a multi-line burst', () => {
       text: 'hello',
       clearInputFirst: true
     })
-    expect(sentText(client)).toBe('\x15hello')
+    const texts = vi
+      .mocked(client.sendRequest)
+      .mock.calls.map((call) => (call[1] as { text: string }).text)
+    expect(texts).toEqual(['\x15', 'hello'])
   })
 
   it('never prefixes a clear when the caller already pasted (image sends)', async () => {

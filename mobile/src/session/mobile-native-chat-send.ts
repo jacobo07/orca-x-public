@@ -13,7 +13,7 @@ type MobileTerminalClient = {
 // same byte before its body), so a launch-context prefill parked there cannot
 // concatenate with a mobile chat message. The host writes text bytes verbatim.
 //
-// One Ctrl+U clears ONE logical line, which is all this prefix can do. A parked
+// One Ctrl+U clears ONE logical line, which is all this clear can do. A parked
 // launch draft is routinely multi-line (every Linear block is); callers that know
 // one is parked must call clearMobileNativeChatInput FIRST — see
 // src/shared/agent-tui-input-clear.ts for the measured 2N-1 law.
@@ -60,12 +60,28 @@ export async function sendMobileNativeChatMessageWithOutcome(
   if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
     return 'rejected'
   }
+  if (args.clearInputFirst) {
+    // Why its own write: Claude Code on ConPTY takes `\x15`+a paste-sized body (>=94 chars) as a paste and
+    // never submits on the later Enter; the split shape is admitted (SEND-P0 13-VERIFICATION.md).
+    const deadline = Date.now() + timeoutMs
+    const cleared = await clearMobileNativeChatInput({
+      client: args.client,
+      terminal: args.terminal,
+      clearInput: CLEAR_UNSUBMITTED_INPUT,
+      ...(args.mobileClient ? { mobileClient: args.mobileClient } : {}),
+      deadline
+    })
+    if (!cleared) {
+      return 'rejected'
+    }
+    return sendMobileNativeChatMessageWithOutcome({ ...args, clearInputFirst: false, deadline })
+  }
   try {
     const response = await args.client.sendRequest(
       'terminal.send',
       {
         terminal: args.terminal,
-        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${args.text}` : args.text,
+        text: args.text,
         enter: args.enter ?? true,
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
         ...(args.mobileClient ? { client: args.mobileClient } : {})
