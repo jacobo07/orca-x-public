@@ -1,9 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import {
-  SERVE_AUTOSTART_FLAG as MAIN_SERVE_AUTOSTART_FLAG,
-  resolveLockHeldExitCode
-} from '../../main/startup/single-instance-lock'
+import { SERVE_AUTOSTART_FLAG as SHARED_SERVE_AUTOSTART_FLAG } from '../../shared/serve-autostart-flag'
 import {
   SERVE_AUTOSTART_FLAG,
   SERVE_AUTOSTART_SERVE_ARGS,
@@ -12,11 +11,20 @@ import {
   type ServeAutostartTaskXmlInput
 } from './serve-autostart-task-xml'
 
-// Why: the CLI build cannot import src/main, so the builder duplicates the flag; this pins the two literals together.
+// Why: the CLI typecheck cannot import src/main, so main's side is pinned by source; single-instance-lock.test.ts runs the argv.
 describe('autostart flag parity with the main-process lock exit', () => {
-  it('writes the exact flag the lock-held exit reads', () => {
-    expect(SERVE_AUTOSTART_FLAG).toBe(MAIN_SERVE_AUTOSTART_FLAG)
-    expect(resolveLockHeldExitCode(['C:\\Orca\\Orca.exe', ...SERVE_AUTOSTART_SERVE_ARGS])).toBe(0)
+  it('writes the one shared flag that the lock-held exit reads', () => {
+    expect(SERVE_AUTOSTART_FLAG).toBe(SHARED_SERVE_AUTOSTART_FLAG)
+    expect(SERVE_AUTOSTART_SERVE_ARGS).toContain(SHARED_SERVE_AUTOSTART_FLAG)
+    const mainSource = readFileSync(
+      join(process.cwd(), 'src/main/startup/single-instance-lock.ts'),
+      'utf8'
+    )
+    expect(mainSource).toContain(
+      "import { SERVE_AUTOSTART_FLAG } from '../../shared/serve-autostart-flag'"
+    )
+    expect(mainSource).toContain('argv.includes(SERVE_AUTOSTART_FLAG)')
+    expect(mainSource).not.toMatch(/const SERVE_AUTOSTART_FLAG\s*=/)
   })
 })
 

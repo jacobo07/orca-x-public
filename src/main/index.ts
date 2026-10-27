@@ -212,10 +212,10 @@ import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
+  resolveLockHeldExitCode,
   shouldActivateDesktopForSecondInstance,
   shouldBypassSingleInstanceLock,
-  shouldSkipSingleInstanceLock,
-  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
+  shouldSkipSingleInstanceLock
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
@@ -888,7 +888,7 @@ if (!hasSingleInstanceLock) {
   // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
   logSingleInstanceLockFailure()
   // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
-  app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
+  app.exit(resolveLockHeldExitCode(process.argv))
 }
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.

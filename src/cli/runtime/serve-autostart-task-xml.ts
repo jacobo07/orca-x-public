@@ -1,5 +1,6 @@
-// Why: the CLI build cannot import src/main; serve-autostart-task-xml.test.ts pins equality with single-instance-lock.ts.
-export const SERVE_AUTOSTART_FLAG = '--serve-autostart'
+import { SERVE_AUTOSTART_FLAG } from '../../shared/serve-autostart-flag'
+
+export { SERVE_AUTOSTART_FLAG }
 
 // Why --serve-no-pairing: a logon launch has no stdout reader, so a printed pairing offer would be an unseen credential.
 export const SERVE_AUTOSTART_SERVE_ARGS: readonly string[] = [
