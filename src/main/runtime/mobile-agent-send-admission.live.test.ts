@@ -141,13 +141,12 @@ describe.skipIf(!PAIRING || !REPO_PATH || !FAKE_API_PORT)(
           return evidence
         }
 
-        const control = await trace('B-split')
-        const phoneToday = await trace('A-bundled')
-        expect(
-          control.providerRequestsWithNonce,
-          'control: the split shape is admitted'
-        ).toBeGreaterThan(0)
-        expect(phoneToday.providerRequestsWithNonce, 'the agent turn exists').toBeGreaterThan(0)
+        // B-split is what the phone writes since SEND-P0 phase 14 (pinned by
+        // mobile/src/session/mobile-native-chat-send-admission.test.ts). A-bundled, the pre-fix shape, is
+        // traced for the record only: Claude Code's paste detection is not ours to pin.
+        const phoneShape = await trace('B-split')
+        await trace('A-bundled')
+        expect(phoneShape.providerRequestsWithNonce, 'the agent turn exists').toBeGreaterThan(0)
       } finally {
         if (handle) {
           await call(phone, 'terminal.close', { terminal: handle })
