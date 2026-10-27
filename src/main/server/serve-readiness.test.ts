@@ -10,6 +10,8 @@ const ready: ServeReadiness = {
   boundEndpoint: 'ws://0.0.0.0:6768',
   advertisedEndpoint: 'wss://orca.example.test/runtime',
   managedWslCliReconciliation: 'settled',
+  appVersion: '1.4.178',
+  relay: { state: 'started', status: 'registered' },
   pairing: {
     available: true,
     url: 'orca://pair?code=secret',
@@ -48,6 +50,8 @@ describe('ServeReadinessPublisher', () => {
       boundEndpoint: 'ws://0.0.0.0:6768',
       advertisedEndpoint: 'wss://orca.example.test/runtime',
       managedWslCliReconciliation: 'settled',
+      appVersion: '1.4.178',
+      relay: { state: 'started', status: 'registered' },
       pairing: ready.pairing
     })
   })
@@ -119,5 +123,56 @@ describe('ServeReadinessPublisher', () => {
     await expect(publisher.publish(ready, { mode: 'human' })).rejects.toThrow(
       'publication already failed'
     )
+  })
+})
+
+describe('serve readiness relay and version', () => {
+  const relayUnavailable: ServeReadiness = {
+    ...ready,
+    relay: { state: 'unavailable', reason: 'cloud_auth_not_configured' }
+  }
+  const relayNotReported: ServeReadiness = { ...ready, relay: { state: 'started', status: null } }
+
+  it('reports an unavailable relay in json with a reason and no status', () => {
+    const json = JSON.parse(renderServeReadiness(relayUnavailable, { mode: 'json' }))
+    expect(json.type).toBe('orca_server_ready')
+    expect(json.schemaVersion).toBe(1)
+    expect(json.appVersion).toBe('1.4.178')
+    expect(json.relay).toEqual({ state: 'unavailable', reason: 'cloud_auth_not_configured' })
+    expect(json.relay).not.toHaveProperty('status')
+  })
+
+  it('limits the json relay object to state, status and reason', () => {
+    for (const readiness of [ready, relayUnavailable, relayNotReported]) {
+      const json = JSON.parse(renderServeReadiness(readiness, { mode: 'json' }))
+      for (const key of Object.keys(json.relay)) {
+        expect(['state', 'status', 'reason']).toContain(key)
+      }
+    }
+  })
+
+  it('renders version and each relay state for operators', () => {
+    expect(
+      renderServeReadiness(ready, { mode: 'human' }).startsWith(
+        'Orca server ready\nVersion: 1.4.178\n'
+      )
+    ).toBe(true)
+    expect(renderServeReadiness(ready, { mode: 'human' })).toContain('Relay: started (registered)')
+    expect(renderServeReadiness(relayNotReported, { mode: 'human' })).toContain(
+      'Relay: started (status not reported yet)'
+    )
+    expect(renderServeReadiness(relayUnavailable, { mode: 'human' })).toContain(
+      'Relay unavailable: cloud_auth_not_configured'
+    )
+  })
+
+  it('keeps recipe JSON byte-identical in both relay states', () => {
+    const preChange =
+      '{"schemaVersion":1,"pairingCode":"orca://pair?code=secret","projectRoot":"/workspace"}'
+    for (const readiness of [ready, relayUnavailable]) {
+      expect(
+        renderServeReadiness(readiness, { mode: 'recipe-json', projectRoot: '/workspace' })
+      ).toBe(preChange)
+    }
   })
 })
