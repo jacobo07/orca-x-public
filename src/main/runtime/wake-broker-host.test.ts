@@ -7,7 +7,12 @@ import { isStreamingMethod, type RpcContext } from './rpc/core'
 import { mapRuntimeError } from './rpc/errors'
 import { HOST_WAKE_METHODS } from './rpc/methods/host-wake'
 import type { WakeDeviceAuthority } from './wake-broker'
-import { startWakeBroker, wakeBrokerHost, wakeBrokerRuntimeCapabilities } from './wake-broker-host'
+import {
+  dropWakeGrantsAfterRevoke,
+  startWakeBroker,
+  wakeBrokerHost,
+  wakeBrokerRuntimeCapabilities
+} from './wake-broker-host'
 import { loadWakeBrokerStore, WAKE_BROKER_STATE_FILENAME } from './wake-broker-store'
 
 type Sent = { frame: Buffer; address: string; port: number }
@@ -162,5 +167,51 @@ describe('startWakeBroker', () => {
     errors.mockRestore()
     expect(wakeBrokerHost.current()?.store.hasGrant('dev-gone', targetId)).toBe(false)
     expect(wakeBrokerHost.current()?.store.hasGrant('dev-a', targetId)).toBe(true)
+  })
+})
+
+describe('dropWakeGrantsAfterRevoke', () => {
+  it("removes only that device's grants from the enabled broker's store, on disk", () => {
+    const targetId = seedStore(['dev-a', 'dev-b'])
+    startWakeBroker(dir, { sendMagicPacket: recordSend })
+    dropWakeGrantsAfterRevoke('dev-a')
+    expect(wakeBrokerHost.current()?.store.hasGrant('dev-a', targetId)).toBe(false)
+    const reloaded = loadWakeBrokerStore(dir)
+    expect(reloaded.ok && reloaded.store.grants().map((g) => g.deviceId)).toEqual(['dev-b'])
+  })
+
+  it('is a no-op when no broker is enabled', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(() => dropWakeGrantsAfterRevoke('dev-a')).not.toThrow()
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
+  })
+
+  it('logs a failed purge without throwing, and the revoked device is still refused at the effect', async () => {
+    const targetId = seedStore(['dev-a'])
+    startWakeBroker(dir, {
+      sendMagicPacket: recordSend,
+      publish: () => {
+        throw Object.assign(new Error('read-only volume'), { code: 'EROFS' })
+      }
+    })
+    let revoked = false
+    wakeBrokerHost.attachDeviceAuthority({
+      authorize: (token) =>
+        token === 'tok-a' && !revoked
+          ? { ok: true, deviceId: 'dev-a' }
+          : { ok: false, reason: revoked ? 'device_revoked' : 'unknown_token' },
+      deviceExists: () => !revoked
+    })
+    revoked = true
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(() => dropWakeGrantsAfterRevoke('dev-a')).not.toThrow()
+    expect(errors).toHaveBeenCalledTimes(1)
+    expect(String(errors.mock.calls[0]![0])).toContain('dev-a')
+    expect(String(errors.mock.calls[0]![0])).toContain('EROFS')
+    errors.mockRestore()
+    const outcome = await wakeRequest(targetId, deviceCtx('tok-a', 'dev-a'))
+    expect(outcome).toEqual({ ok: false, code: 'wake_device_revoked' })
+    expect(sent).toHaveLength(0)
   })
 })

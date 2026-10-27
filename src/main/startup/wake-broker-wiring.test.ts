@@ -65,3 +65,56 @@ describe('wake broker wiring (serve only)', () => {
     )
   })
 })
+
+describe('wake broker wiring (runtime-rpc.ts device authority and purge)', () => {
+  const rpc = readSource('src/main/runtime/runtime-rpc.ts')
+  const ATTACH = 'wakeBrokerHost.attachDeviceAuthority('
+  const DROP = 'dropWakeGrantsAfterRevoke('
+
+  it('attaches the device authority once, after the registry exists, through assertDeviceStillAuthorized', () => {
+    expect(countOccurrences(rpc, ATTACH)).toBe(1)
+    const registry = rpc.indexOf('new DeviceRegistry(')
+    const attach = rpc.indexOf(ATTACH)
+    expect(registry).toBeGreaterThanOrEqual(0)
+    expect(attach).toBeGreaterThan(registry)
+    const call = rpc.slice(attach, rpc.indexOf('\n        })', attach))
+    expect(call).toContain('assertDeviceStillAuthorized(')
+    expect(call).toContain('deviceExists')
+  })
+
+  it('drops grants in revokeAndTerminate only when the revoke succeeded', () => {
+    const body = methodBody(rpc, '  private revokeAndTerminate(device: DeviceEntry): boolean {')
+    expect(countOccurrences(body, DROP)).toBe(1)
+    const guard = body.indexOf('if (revoked) {')
+    expect(guard).toBeGreaterThanOrEqual(0)
+    expect(body.indexOf(DROP)).toBeGreaterThan(guard)
+    expect(body).toContain(`${DROP}device.deviceId)`)
+  })
+
+  it('drops grants when a pending pairing device is discarded, after the removal succeeded', () => {
+    const body = methodBody(
+      rpc,
+      '  private discardPendingMobilePairingDevice(deviceId: string): void {'
+    )
+    expect(countOccurrences(body, DROP)).toBe(1)
+    const removal = body.indexOf('if (this.deviceRegistry?.removeDevice(deviceId)) {')
+    expect(removal).toBeGreaterThanOrEqual(0)
+    expect(body.indexOf(DROP)).toBeGreaterThan(removal)
+    expect(body).toContain(`${DROP}deviceId)`)
+  })
+
+  it('calls the purge from exactly those two device-removal paths', () => {
+    expect(countOccurrences(rpc, DROP)).toBe(2)
+  })
+
+  it('lists the three phone methods on the mobile allowlist and no admin name', () => {
+    const allowlist = rpc.slice(
+      rpc.indexOf('const MOBILE_RPC_METHOD_ALLOWLIST = new Set(['),
+      rpc.indexOf('])', rpc.indexOf('const MOBILE_RPC_METHOD_ALLOWLIST = new Set(['))
+    )
+    for (const method of ['host.wake.targets', 'host.wake.request', 'host.wake.status']) {
+      expect(allowlist).toContain(`'${method}'`)
+    }
+    expect(allowlist).not.toContain('host.wake.admin')
+  })
+})
