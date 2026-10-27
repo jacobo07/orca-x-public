@@ -423,4 +423,29 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
     releaseMobileNativeChatTerminalWrite('term')
   })
+
+  // SEND-P0b phase 17: a typed long multi-paragraph body lost its beginning; a paste arrives whole.
+  const asAgentPrompt = (): unknown =>
+    (sendWithOutcome.mock.calls[0]![0] as { asAgentPrompt?: boolean }).asAgentPrompt
+
+  it('sends a composer chat turn as an agent prompt (one paste)', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('Paragraph one.\n\nParagraph two.')
+    })
+    expect(asAgentPrompt()).toBe(true)
+  })
+
+  it('keeps question answers and slash commands as typed keys', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.answerQuestion('1')
+    })
+    expect(asAgentPrompt()).toBe(false)
+    sendWithOutcome.mockClear()
+    await act(async () => {
+      await api!.send('/model sonnet')
+    })
+    expect(asAgentPrompt()).toBe(false)
+  })
 })
