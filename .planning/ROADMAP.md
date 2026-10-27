@@ -145,6 +145,15 @@ Plans:
 2. The broker role issues the magic packet only for an authorized, unrevoked device with a REMOTE_WAKE grant; duplicate requests are idempotent; a packet sent is never reported as a host woken.
 3. LAN Product Reality (host sleeping, wake, Host Service reconnects, terminal works) is PASS, or OWNER_BOUND naming the exact admin or BIOS step still missing.
 
+**Plans:** 5 plans
+Plans:
+
+- [ ] 19-01-PLAN.md — read-only WOL probe + verdict tables, can-wake-lan from the probe at both start paths, claims evidence (wave 1)
+- [ ] 19-02-PLAN.md — broker core: authority at the effect, dedupe/adopt, stages, dgram magic packet, crash-durable targets/grants, phone RPCs + passthrough codes (wave 1)
+- [ ] 19-03-PLAN.md — `orca serve --wake-broker` flag chain, serve-only enable, host.wake-broker.v1 in getStatus, device authority + revoke purge + mobile allowlist (wave 2)
+- [ ] 19-04-PLAN.md — `orca wake target|grant` CLI over local-only host.wake.admin.* methods, SSH-relay refusal (wave 2)
+- [ ] 19-05-PLAN.md — SCRIPTED CLIENT live leg with UDP positive control, WOL probe measured, mutants M1-M5, 19-VERIFICATION.md (LAN Product Reality OWNER_BOUND a, b, c; Wake control deferred per D-13) (wave 3)
+
 ### Phase 20: Off-LAN wake, OOB boundary and institutional close (M3, M4)
 
 **Goal**: Wake from 5G through an authorized broker, and an honest powered-off story. **Depends on**: Phase 19
