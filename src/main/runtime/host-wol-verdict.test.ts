@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HOST_CAPABILITY_VALUES } from '../../shared/host-availability'
 import {
+  WOL_ADAPTER_UNREADABLE,
   darwinWolVerdict,
   linuxWolVerdict,
   parseWakeArmedDevices,
@@ -105,6 +106,26 @@ const TABLE: { name: string; verdict: () => WolVerdict; expected: Expected }[] =
         [REALTEK]
       ),
     expected: NOT_SUPPORTED
+  },
+  {
+    name: 'win: Ethernet setting unreadable is not a negative',
+    verdict: () => win([nic({ wakeOnMagicPacket: WOL_ADAPTER_UNREADABLE })], [REALTEK]),
+    expected: { value: 'unknown', reason: 'wol_adapter_unreadable' }
+  },
+  {
+    name: 'win: Wi-Fi setting unreadable does not hide a missing Ethernet',
+    verdict: () =>
+      win([nic({ mediaType: 'Native 802.11', wakeOnMagicPacket: WOL_ADAPTER_UNREADABLE })], []),
+    expected: NOT_SUPPORTED
+  },
+  {
+    name: 'win: one unreadable Ethernet and one enabled unarmed Ethernet',
+    verdict: () =>
+      win(
+        [nic({ name: 'Ethernet 2', wakeOnMagicPacket: WOL_ADAPTER_UNREADABLE }), nic()],
+        ['HID Keyboard Device']
+      ),
+    expected: NOT_ARMED
   },
   {
     name: 'linux: no physical NIC (WSL, container)',

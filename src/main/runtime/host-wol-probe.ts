@@ -1,10 +1,15 @@
 import { execFile } from 'node:child_process'
+import { readFile, readdir, stat } from 'node:fs/promises'
+import path from 'node:path'
 import type { HostCapability } from '../../shared/host-availability'
 import {
   WINDOWS_WOL_ADAPTER_SCRIPT,
+  darwinWolVerdict,
+  linuxWolVerdict,
   parseWakeArmedDevices,
   parseWindowsWolAdapters,
-  windowsWolVerdict
+  windowsWolVerdict,
+  type LinuxWolRow
 } from './host-wol-verdict'
 
 export const WOL_STATUS_MAX_AGE_MS = 600_000
@@ -51,13 +56,46 @@ function runWolCommand(file: string, args: readonly string[]): Promise<HostWolEx
   })
 }
 
+const SYS_CLASS_NET = '/sys/class/net'
+// Why: the name is argv to ethtool, so a leading '-' would be read as an option.
+const SAFE_INTERFACE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.@-]{0,14}$/
+
+// Why a device link: WSL, container and virtual NICs have none, so only real hardware is listed.
+async function listDeviceBackedInterfaces(): Promise<string[]> {
+  let names: string[]
+  try {
+    names = await readdir(SYS_CLASS_NET)
+  } catch (error) {
+    console.debug('[host-availability] network interface list unreadable:', String(error))
+    return []
+  }
+  const backed = await Promise.all(
+    names
+      .filter((name) => name !== 'lo')
+      .map((name) =>
+        stat(path.posix.join(SYS_CLASS_NET, name, 'device')).then(
+          () => name,
+          () => null
+        )
+      )
+  )
+  return backed.filter((name): name is string => name !== null)
+}
+
+function readTextOrNull(filePath: string): Promise<string | null> {
+  return readFile(filePath, 'utf8').then(
+    (text) => text,
+    () => null
+  )
+}
+
 export function defaultHostWolProbeDeps(): HostWolProbeDeps {
   return {
     platform: process.platform,
     now: Date.now,
     exec: runWolCommand,
-    listPhysicalInterfaces: () => Promise.resolve([]),
-    readText: () => Promise.resolve(null)
+    listPhysicalInterfaces: listDeviceBackedInterfaces,
+    readText: readTextOrNull
   }
 }
 
@@ -85,11 +123,45 @@ async function readWindows(deps: HostWolProbeDeps): Promise<HostCapability> {
   })
 }
 
+async function readLinuxRow(deps: HostWolProbeDeps, name: string): Promise<LinuxWolRow> {
+  const result = await deps.exec('ethtool', [name])
+  const ethtool = result.code === 0 ? result.stdout : null
+  // Why: ethtool may be absent or need CAP_NET_ADMIN; sysfs still says whether wake is armed.
+  const needsSysfs = ethtool === null || !ethtool.includes('Supports Wake-on:')
+  const sysfsWakeup = needsSysfs
+    ? await deps.readText(path.posix.join(SYS_CLASS_NET, name, 'device', 'power', 'wakeup'))
+    : null
+  return { name, ethtool, sysfsWakeup }
+}
+
+async function readLinux(deps: HostWolProbeDeps): Promise<HostCapability> {
+  const names = (await deps.listPhysicalInterfaces()).filter((name) =>
+    SAFE_INTERFACE_NAME.test(name)
+  )
+  const rows = await Promise.all(names.map((name) => readLinuxRow(deps, name)))
+  return linuxWolVerdict(rows, deps.now())
+}
+
+async function readDarwin(deps: HostWolProbeDeps): Promise<HostCapability> {
+  const result = await deps.exec('pmset', ['-g'])
+  return result.code === 0 ? darwinWolVerdict(result.stdout, deps.now()) : UNREADABLE
+}
+
 function readPlatform(deps: HostWolProbeDeps): Promise<HostCapability> {
-  if (deps.platform === 'win32') {
-    return readWindows(deps)
+  switch (deps.platform) {
+    case 'win32':
+      return readWindows(deps)
+    case 'linux':
+      return readLinux(deps)
+    case 'darwin':
+      return readDarwin(deps)
+    default:
+      return Promise.resolve({
+        value: 'unknown',
+        reason: 'wol_not_observable_on_platform',
+        evidence: null
+      })
   }
-  return Promise.resolve({ value: 'unknown', reason: 'wol_platform_pending', evidence: null })
 }
 
 // Why no timer: reads are request-driven and bounded to one OS read per max age per process (R4, D-03).
