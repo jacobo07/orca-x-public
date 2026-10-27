@@ -7,11 +7,12 @@ import { basename, join, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { composeWakeProgress, type HostWakeRequestResult } from '../../shared/host-wake'
+import { encodePairingOffer, parsePairingCode } from '../../shared/pairing'
 import {
   connectMobileProtocolClient,
   type MobileProtocolClient
 } from './mobile-protocol-test-client'
-import { call, ok } from './mobile-live-leg-steps'
+import { call, ok, NO_REPLY, type LiveReply } from './mobile-live-leg-steps'
 
 // Plane: a disposable windowless serve host on this Windows machine running as a LAN Wake Broker,
 // driven by a SCRIPTED CLIENT (the phone protocol, not a phone). The target's broadcast is a loopback
@@ -29,11 +30,15 @@ const OWNER_DEVICES =
 const LABEL = 'SCRIPTED CLIENT'
 const CAPABILITY = 'host.wake-broker.v1'
 const TARGET_MAC = '02:00:5e:19:00:01'
+const UNREGISTERED_TARGET = 'wt_000000000000'
+const MAC_SHAPED = /[0-9a-f]{2}([:-][0-9a-f]{2}){5}/i
 const FRAME_WAIT_MS = 3000
+const ADOPT_WINDOW_MS = 10_000
 
 type Proc = { ProcessId: number; ParentProcessId: number; CommandLine: string | null }
 type Readiness = { pairing: { available: boolean; url?: string; deviceId?: string } }
 type Host = { child: ChildProcess; ready: Readiness; log: string[] }
+type Status = { capabilities: string[]; pairedDeviceId: string }
 
 function snapshot(): Proc[] {
   const out = execFileSync(
@@ -196,6 +201,16 @@ function localOk<T>(response: Record<string, unknown>, what: string): T {
   return response.result as T
 }
 
+function refusalCode(response: LiveReply | Record<string, unknown>): string {
+  if (response === NO_REPLY) {
+    return 'NO_REPLY'
+  }
+  if (response.ok !== false) {
+    return 'ACCEPTED'
+  }
+  return String((response.error as { code?: unknown } | undefined)?.code ?? 'no_code')
+}
+
 async function bindListener(frames: Buffer[]): Promise<Socket> {
   const socket = createSocket({ type: 'udp4' })
   socket.on('message', (frame) => frames.push(Buffer.from(frame)))
@@ -231,17 +246,43 @@ function stageNames(stages: { stage: string }[]): string[] {
   return stages.map((s) => s.stage)
 }
 
+/** The same device credential, addressed at a relaunched host's new listener. */
+function sameDeviceAt(pairingUrl: string, freshOfferUrl: string): string {
+  const device = parsePairingCode(pairingUrl)
+  const fresh = parsePairingCode(freshOfferUrl)
+  if (!device || !fresh) {
+    throw new Error('pairing URL did not parse')
+  }
+  return encodePairingOffer({ ...device, endpoint: fresh.endpoint })
+}
+
+/** Every phone-method reply of the run, kept so the no-MAC claim covers all of them. */
+function phoneLedger() {
+  const replies: { method: string; reply: unknown }[] = []
+  return {
+    replies,
+    async call(phone: MobileProtocolClient, method: string, params: unknown) {
+      const reply = await call(phone, method, params)
+      replies.push({ method, reply: reply === NO_REPLY ? 'NO_REPLY' : reply })
+      return reply
+    }
+  }
+}
+
 describe.runIf(process.platform === 'win32' && LEG)(
   'live LAN Wake Broker leg: disposable serve host, SCRIPTED CLIENT',
   () => {
-    it('sends one exact magic packet for one granted request, ending at packet-sent', async () => {
+    it('grants, refusals, idempotency, adoption and the no-broker host, each counted at a loopback listener', async () => {
       expect(ELECTRON && APP_ROOT && SCRATCH && EVIDENCE, 'ORCA_LIVE_WAKE_* env').toBeTruthy()
       const scratch = resolve(SCRATCH)
       expect(scratch.startsWith(resolve(tmpdir()) + sep), 'scratch inside os.tmpdir()').toBe(true)
       expect(basename(scratch)).toContain('orca-wake-p19')
       const brokerDir = join(scratch, 'broker')
-      for (const sub of ['userData', 'home']) {
-        mkdirSync(join(brokerDir, sub), { recursive: true })
+      const plainDir = join(scratch, 'nobroker')
+      for (const dir of [brokerDir, plainDir]) {
+        for (const sub of ['userData', 'home']) {
+          mkdirSync(join(dir, sub), { recursive: true })
+        }
       }
       const head = execFileSync('git', ['-C', APP_ROOT, 'rev-parse', 'HEAD'], {
         encoding: 'utf8',
@@ -265,15 +306,46 @@ describe.runIf(process.platform === 'win32' && LEG)(
       const spawnedPids = new Set<number>()
       const hosts: Host[] = []
       const phones: MobileProtocolClient[] = []
+      const ledger = phoneLedger()
+      const steps: Record<string, unknown>[] = []
+      const acceptedWakeIds = new Set<string>()
+      const connect = async (url: string) => {
+        const phone = await connectMobileProtocolClient(url)
+        phones.push(phone)
+        return phone
+      }
+      const stop = async (host: Host) => {
+        const pids = new Set(tree(host.child.pid!, snapshot()).map((p) => p.ProcessId))
+        pids.add(host.child.pid!)
+        pids.forEach((pid) => spawnedPids.add(pid))
+        killTree(host.child.pid!)
+        return reaped(pids)
+      }
+      const step = async (name: string, reply: LiveReply, expectFrames: number) => {
+        const count = await framesSettle(frames, expectFrames)
+        const result = reply !== NO_REPLY && reply.ok === true ? reply.result : null
+        const wake = result as Partial<HostWakeRequestResult> | null
+        steps.push({
+          step: name,
+          code: refusalCode(reply),
+          listenerCountAfter: count,
+          ...(wake?.wakeId
+            ? { wakeId: wake.wakeId, replayed: wake.replayed, adopted: wake.adopted }
+            : {}),
+          ...(wake?.stages ? { stages: stageNames(wake.stages) } : {})
+        })
+        if (wake?.wakeId) {
+          acceptedWakeIds.add(wake.wakeId)
+        }
+        return { count, wake }
+      }
       try {
+        // Tracer: broker host, device A granted, one wake.
         const host = await launch(brokerDir, true)
         hosts.push(host)
-        const phoneA = await connectMobileProtocolClient(host.ready.pairing.url!)
-        phones.push(phoneA)
-        const statusA = ok<{ capabilities: string[]; pairedDeviceId: string }>(
-          await call(phoneA, 'status.get', {}),
-          'status.get'
-        )
+        const urlA = host.ready.pairing.url!
+        const phoneA = await connect(urlA)
+        const statusA = ok<Status>(await ledger.call(phoneA, 'status.get', {}), 'status.get')
         evidence.capabilitiesHaveWakeBroker = statusA.capabilities.includes(CAPABILITY)
         evidence.brokerServeLine = host.log.join('').match(/\[serve\] wake broker: [^\n]*/)?.[0]
         expect(statusA.capabilities).toContain(CAPABILITY)
@@ -281,16 +353,14 @@ describe.runIf(process.platform === 'win32' && LEG)(
         expect(deviceA, 'A reads its own pairedDeviceId').toBe(host.ready.pairing.deviceId)
 
         const userData = join(brokerDir, 'userData')
-        const added = localOk<{ target: { targetId: string; mac: string } }>(
-          await localRuntimeCall(userData, 'host.wake.admin.targetAdd', {
-            mac: TARGET_MAC,
-            broadcast: '127.0.0.1',
-            port: listenerPort,
-            label: 'p19'
-          }),
-          'targetAdd'
-        )
-        const targetId = added.target.targetId
+        const addReply = await localRuntimeCall(userData, 'host.wake.admin.targetAdd', {
+          mac: TARGET_MAC,
+          broadcast: '127.0.0.1',
+          port: listenerPort,
+          label: 'p19'
+        })
+        const targetId = localOk<{ target: { targetId: string } }>(addReply, 'targetAdd').target
+          .targetId
         localOk(
           await localRuntimeCall(userData, 'host.wake.admin.grantAdd', {
             deviceId: deviceA,
@@ -299,14 +369,17 @@ describe.runIf(process.platform === 'win32' && LEG)(
           'grantAdd'
         )
         evidence.admin = { transport: 'runtime named pipe (local caller)', targetId }
+        // Positive control for the no-MAC sweep: the local admin reply does carry the MAC.
+        evidence.macDetectorPositiveControl = MAC_SHAPED.test(JSON.stringify(addReply))
 
-        const sent = ok<HostWakeRequestResult>(
-          await call(phoneA, 'host.wake.request', { targetId, requestId: `p19-${randomUUID()}` }),
-          'host.wake.request'
-        )
-        const count = await framesSettle(frames, 1)
+        const tracerReply = await ledger.call(phoneA, 'host.wake.request', {
+          targetId,
+          requestId: `p19-${randomUUID()}`
+        })
+        const sent = ok<HostWakeRequestResult>(tracerReply, 'host.wake.request')
+        const { count } = await step('A granted wake (tracer)', tracerReply, 1)
         const status = ok<{ stages: { stage: string }[] }>(
-          await call(phoneA, 'host.wake.status', { wakeId: sent.wakeId }),
+          await ledger.call(phoneA, 'host.wake.status', { wakeId: sent.wakeId }),
           'host.wake.status'
         )
         // Why null: the fictitious target never answers status.get, so nothing may claim it woke.
@@ -318,18 +391,177 @@ describe.runIf(process.platform === 'win32' && LEG)(
           replayed: sent.replayed,
           adopted: sent.adopted
         }
-        evidence.listenerCount = count
         evidence.frameLength = frames[0]?.length ?? null
         evidence.frameHexPrefix = frames[0]?.subarray(0, 12).toString('hex') ?? null
-        evidence.frameIsMagicPacketForTarget = frames[0]
-          ? isMagicPacketFor(frames[0], TARGET_MAC)
-          : false
         expect(stageNames(sent.stages)).toEqual(['requested', 'authorized', 'packet-sent'])
         expect(count).toBe(1)
         expect(frames[0]!.length).toBe(102)
         expect(isMagicPacketFor(frames[0]!, TARGET_MAC)).toBe(true)
         expect(composed).toEqual(['requested', 'authorized', 'packet-sent'])
+
+        // Relaunch on the same profile: a paired A leaves the next offer free for a new device B.
+        await phoneA.close()
+        evidence.brokerHostRelaunchReaped = await stop(host)
+        expect(evidence.brokerHostRelaunchReaped).toBe(true)
+        const relaunched = await launch(brokerDir, true)
+        hosts.push(relaunched)
+        evidence.relaunchServeLine = relaunched.log
+          .join('')
+          .match(/\[serve\] wake broker: [^\n]*/)?.[0]
+        const urlB = relaunched.ready.pairing.url!
+        const phoneB = await connect(urlB)
+        const deviceB = ok<Status>(
+          await ledger.call(phoneB, 'status.get', {}),
+          'status.get'
+        ).pairedDeviceId
+        expect(deviceB).not.toBe(deviceA)
+        const phoneA2 = await connect(sameDeviceAt(urlA, urlB))
+        expect(
+          ok<Status>(await ledger.call(phoneA2, 'status.get', {}), 'status.get').pairedDeviceId
+        ).toBe(deviceA)
+
+        const bTargets = await ledger.call(phoneB, 'host.wake.targets', {})
+        evidence.deviceBTargets = ok<{ targets: unknown[] }>(bTargets, 'targets B').targets
+        expect(evidence.deviceBTargets).toEqual([])
+        const aTargets = ok<{ targets: { targetId: string }[] }>(
+          await ledger.call(phoneA2, 'host.wake.targets', {}),
+          'targets A'
+        ).targets
+        expect(aTargets.map((t) => t.targetId)).toEqual([targetId])
+
+        const before = frames.length
+        const bWake = await step(
+          'B (no grant) requests the registered target',
+          await ledger.call(phoneB, 'host.wake.request', {
+            targetId,
+            requestId: `p19-${randomUUID()}`
+          }),
+          before + 1
+        )
+        const bUnknown = await step(
+          'B requests an unregistered target id',
+          await ledger.call(phoneB, 'host.wake.request', {
+            targetId: UNREGISTERED_TARGET,
+            requestId: `p19-${randomUUID()}`
+          }),
+          before + 1
+        )
+        expect(steps.at(-2)!.code).toBe('wake_grant_missing')
+        expect(steps.at(-1)!.code).toBe('wake_grant_missing')
+        expect(bWake.count).toBe(before)
+        expect(bUnknown.count).toBe(before)
+
+        const requestId = `p19-${randomUUID()}`
+        const firstAt = Date.now()
+        const first = await step(
+          'A sends requestId R (first)',
+          await ledger.call(phoneA2, 'host.wake.request', { targetId, requestId }),
+          before + 1
+        )
+        const second = await step(
+          'A sends the same requestId R again',
+          await ledger.call(phoneA2, 'host.wake.request', { targetId, requestId }),
+          before + 2
+        )
+        expect(first.wake?.replayed).toBe(false)
+        expect(second.wake?.replayed).toBe(true)
+        expect(second.wake?.wakeId).toBe(first.wake?.wakeId)
+        expect(first.count).toBe(before + 1)
+        expect(second.count).toBe(before + 1)
+        const bStatus = await ledger.call(phoneB, 'host.wake.status', {
+          wakeId: first.wake!.wakeId!
+        })
+        evidence.deviceBStatusOfAWake = refusalCode(bStatus)
+        expect(evidence.deviceBStatusOfAWake).toBe('wake_unknown')
+
+        const adoptSentAfterMs = Date.now() - firstAt
+        const framesBeforeAdopt = frames.length
+        let adopt = await step(
+          'A sends a new requestId inside the adoption window',
+          await ledger.call(phoneA2, 'host.wake.request', {
+            targetId,
+            requestId: `p19-${randomUUID()}`
+          }),
+          framesBeforeAdopt + 1
+        )
+        evidence.adoptionTiming = {
+          msSinceFirstWakeRequested: adoptSentAfterMs,
+          windowMs: ADOPT_WINDOW_MS,
+          fallbackUsed: false
+        }
+        if (!adopt.wake?.adopted && adoptSentAfterMs >= ADOPT_WINDOW_MS) {
+          // Why: the window had passed, so that step started its own wake; adopt it back to back.
+          evidence.adoptionTiming = { ...(evidence.adoptionTiming as object), fallbackUsed: true }
+          const startedWake = adopt.wake?.wakeId
+          const framesBeforeFallback = frames.length
+          adopt = await step(
+            'A sends another new requestId back to back (window had passed)',
+            await ledger.call(phoneA2, 'host.wake.request', {
+              targetId,
+              requestId: `p19-${randomUUID()}`
+            }),
+            framesBeforeFallback + 1
+          )
+          expect(adopt.wake?.wakeId).toBe(startedWake)
+          expect(adopt.count).toBe(framesBeforeFallback)
+        } else {
+          expect(adopt.wake?.wakeId).toBe(first.wake?.wakeId)
+          expect(adopt.count).toBe(framesBeforeAdopt)
+        }
+        expect(adopt.wake?.adopted).toBe(true)
+
+        const leaked = ledger.replies.filter((r) => MAC_SHAPED.test(JSON.stringify(r.reply)))
+        evidence.phoneRepliesChecked = ledger.replies.length
+        evidence.phoneRepliesWithMacShape = leaked.map((r) => r.method)
+        expect(evidence.macDetectorPositiveControl).toBe(true)
+        expect(leaked).toEqual([])
+
+        // Negative half: the same out/ without --serve-wake-broker.
+        evidence.brokerHostStopReaped = await stop(relaunched)
+        expect(evidence.brokerHostStopReaped).toBe(true)
+        const plain = await launch(plainDir, false)
+        hosts.push(plain)
+        const phoneC = await connect(plain.ready.pairing.url!)
+        const statusC = ok<Status>(await ledger.call(phoneC, 'status.get', {}), 'status.get')
+        const beforePlain = frames.length
+        const plainWake = await step(
+          'paired device on a host without --serve-wake-broker requests a wake',
+          await ledger.call(phoneC, 'host.wake.request', {
+            targetId,
+            requestId: `p19-${randomUUID()}`
+          }),
+          beforePlain + 1
+        )
+        const plainTargets = await ledger.call(phoneC, 'host.wake.targets', {})
+        const plainAdmin = await localRuntimeCall(
+          join(plainDir, 'userData'),
+          'host.wake.admin.targetList',
+          null
+        )
+        evidence.noBrokerHost = {
+          capabilitiesHaveWakeBroker: statusC.capabilities.includes(CAPABILITY),
+          positiveControlCapabilityCount: statusC.capabilities.length,
+          requestCode: steps.at(-1)!.code,
+          targetsCode: refusalCode(plainTargets),
+          localAdminTargetListCode: refusalCode(plainAdmin),
+          serveWakeLine: plain.log.join('').match(/\[serve\] wake broker: [^\n]*/)?.[0] ?? 'absent'
+        }
+        expect(statusC.capabilities.length).toBeGreaterThan(0)
+        expect(statusC.capabilities).not.toContain(CAPABILITY)
+        expect(steps.at(-1)!.code).toBe('wake_broker_disabled')
+        expect(refusalCode(plainTargets)).toBe('wake_broker_disabled')
+        expect(refusalCode(plainAdmin)).toBe('wake_broker_disabled')
+        expect(plainWake.count).toBe(beforePlain)
+
+        evidence.distinctAcceptedWakes = acceptedWakeIds.size
+        evidence.listenerCount = frames.length
+        evidence.everyFrameIsMagicPacketForTarget = frames.every((f) =>
+          isMagicPacketFor(f, TARGET_MAC)
+        )
+        expect(frames.length).toBe(acceptedWakeIds.size)
+        expect(evidence.everyFrameIsMagicPacketForTarget).toBe(true)
       } finally {
+        evidence.steps = steps
         await Promise.all(phones.map((phone) => phone.close()))
         for (const h of hosts) {
           if (h.child.pid) {
@@ -339,6 +571,7 @@ describe.runIf(process.platform === 'win32' && LEG)(
           }
         }
         await new Promise<void>((r) => listener.close(() => r()))
+        evidence.listenerCountFinal = frames.length
         evidence.spawnedPidsReaped = await reaped(spawnedPids)
         evidence.scratchFamilyCountAfterTeardown = scratchFamily(snapshot()).length
         writeFileSync(
@@ -346,7 +579,11 @@ describe.runIf(process.platform === 'win32' && LEG)(
           hosts.map((h) => h.log.join('\n')).join('\n---\n')
         )
         rmSync(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 })
-        evidence.scratchAbsentAfterTeardown = !existsSync(scratch)
+        evidence.scratchDirsAbsentAfterTeardown = {
+          broker: !existsSync(brokerDir),
+          nobroker: !existsSync(plainDir),
+          parent: !existsSync(scratch)
+        }
         const ownerHashAfter = hashOwnerDevices()
         evidence.ownerDevicesHashAfter = ownerHashAfter ?? 'ABSENT'
         evidence.ownerDevicesUnchanged =
@@ -356,10 +593,14 @@ describe.runIf(process.platform === 'win32' && LEG)(
       }
       expect(evidence.spawnedPidsReaped).toBe(true)
       expect(evidence.scratchFamilyCountAfterTeardown).toBe(evidence.baselineScratchFamilyCount)
-      expect(evidence.scratchAbsentAfterTeardown).toBe(true)
+      expect(evidence.scratchDirsAbsentAfterTeardown).toEqual({
+        broker: true,
+        nobroker: true,
+        parent: true
+      })
       if (ownerHashBefore !== null) {
         expect(evidence.ownerDevicesUnchanged).toBe(true)
       }
-    }, 300_000)
+    }, 420_000)
   }
 )
