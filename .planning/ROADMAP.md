@@ -129,10 +129,10 @@ Plans:
 2. Capabilities (can-start-orca, can-wake-lan, can-wake-remote, can-power-on-oob) are separate from state and from grants; the Node Manifest change is additive and coordinated with the C:\ox DWS lane.
 3. A gate fails when the host card can render powered-off without evidence or an action without a backend effect; mutants for both are CAUGHT.
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 
-- [ ] 18-01-PLAN.md — shared availability model + composer, capability set, status.get producer behind host.availability.v1, autostart probe, index.ts wiring (wave 1)
+- [x] 18-01-PLAN.md — shared availability model + composer, capability set, status.get producer behind host.availability.v1, autostart probe, index.ts wiring (wave 1)
 - [ ] 18-02-PLAN.md — home status fetch, pure presenter + label table, MobileHostCard projection, GEX44 disposable mobile runs (wave 2)
 - [ ] 18-03-PLAN.md — `check:host-card-claims` gate + CI, mutant drills, 18-VERIFICATION.md, Node Manifest proposal (wave 3)
 
