@@ -167,7 +167,7 @@ describe('host.wake.admin grants and target removal', () => {
         token === 'tok-a' && knownDevices.has('dev-a')
           ? { ok: true, deviceId: 'dev-a' }
           : { ok: false, reason: 'unknown_token' },
-      deviceExists: (deviceId) => knownDevices.has(deviceId)
+      deviceState: (deviceId) => (knownDevices.has(deviceId) ? 'present' : 'absent')
     }
   }
 

@@ -34,6 +34,7 @@ import {
   DEVICE_UNAUTHORIZED_CLOSE_CODE,
   DEVICE_UNAUTHORIZED_CLOSE_REASON
 } from './device-authorization'
+import { wakeDeviceState } from './wake-broker'
 import { dropWakeGrantsAfterRevoke, wakeBrokerHost } from './wake-broker-host'
 import {
   E2EEKeypairUnreadableError,
@@ -1309,15 +1310,7 @@ export class OrcaRuntimeRpcServer {
               ? { ok: true, deviceId: verdict.device.deviceId }
               : { ok: false, reason: verdict?.reason ?? 'registry_unavailable' }
           },
-          // Why unknown keeps the grant: an unreadable registry is no evidence the device is gone.
-          deviceExists: (deviceId) => {
-            const registry = this.deviceRegistry
-            return (
-              !registry ||
-              !registry.getAvailability().available ||
-              registry.getDevice(deviceId) !== null
-            )
-          }
+          deviceState: (deviceId) => wakeDeviceState(this.deviceRegistry, deviceId)
         })
         try {
           const host = this.resolveInitialWebSocketBindHost()

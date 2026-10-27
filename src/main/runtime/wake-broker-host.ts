@@ -99,7 +99,8 @@ export function startWakeBroker(
   if (authority) {
     // Why once at start: grants of devices removed while the broker was off must not linger on disk.
     try {
-      store.pruneGrants((deviceId) => authority.deviceExists(deviceId))
+      // Why only absent prunes: an unreadable registry is no evidence the device is gone.
+      store.pruneGrants((deviceId) => authority.deviceState(deviceId) !== 'absent')
     } catch (error) {
       // Why fail-open: removals apply in memory before the write, and the effect re-judges the device anyway.
       console.error(`[wake-broker] grant prune not persisted: ${errorCode(error)}`)

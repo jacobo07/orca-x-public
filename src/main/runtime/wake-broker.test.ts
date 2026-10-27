@@ -74,7 +74,7 @@ function harness(
           ? { ok: true, deviceId: tokens[token] }
           : { ok: false, reason: 'unknown_token' }
       }),
-    deviceExists: (deviceId) => Object.values(tokens).includes(deviceId)
+    deviceState: (deviceId) => (Object.values(tokens).includes(deviceId) ? 'present' : 'absent')
   }
   const broker = createWakeBroker({
     now: () => now,

@@ -25,7 +25,7 @@ export type WakeBrokerStore = WakeBrokerStoreView & {
   addGrant(deviceId: string, targetId: string): WakeGrant
   removeGrant(deviceId: string, targetId: string): boolean
   dropGrantsForDevice(deviceId: string): number
-  pruneGrants(deviceExists: (deviceId: string) => boolean): number
+  pruneGrants(keepDevice: (deviceId: string) => boolean): number
 }
 
 export type WakeBrokerStoreLoad =
@@ -210,7 +210,7 @@ function createStore(
     removeGrant: (deviceId, targetId) =>
       keepGrants((grant) => grant.deviceId !== deviceId || grant.targetId !== targetId) > 0,
     dropGrantsForDevice: (deviceId) => keepGrants((grant) => grant.deviceId !== deviceId),
-    pruneGrants: (deviceExists) => keepGrants((grant) => deviceExists(grant.deviceId))
+    pruneGrants: (keepDevice) => keepGrants((grant) => keepDevice(grant.deviceId))
   }
 }
 

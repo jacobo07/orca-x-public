@@ -61,7 +61,7 @@ function fakeAuthority(): WakeDeviceAuthority {
       const deviceId = tokens[token]
       return deviceId ? { ok: true, deviceId } : { ok: false, reason: 'unknown_token' }
     },
-    deviceExists: (deviceId) => Object.values(tokens).includes(deviceId)
+    deviceState: (deviceId) => (Object.values(tokens).includes(deviceId) ? 'present' : 'absent')
   }
 }
 

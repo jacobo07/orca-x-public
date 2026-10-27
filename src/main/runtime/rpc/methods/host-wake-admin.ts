@@ -111,7 +111,15 @@ export const HOST_WAKE_ADMIN_METHODS: RpcMethod[] = [
         )
       }
       // Why at grant time too: an unknown or revoked device must not be planted ahead of the effect check (T-19-21).
-      if (!authority.deviceExists(params.deviceId)) {
+      const deviceState = authority.deviceState(params.deviceId)
+      if (deviceState === 'unknown') {
+        throw hostWakeRefusal(
+          'wake_broker_unavailable',
+          'The device registry is unreadable; no grant was written.',
+          { brokerState: 'device_registry_unavailable' }
+        )
+      }
+      if (deviceState === 'absent') {
         throw hostWakeRefusal('wake_device_unknown', 'That device is not paired with this host.')
       }
       return { grant: store.addGrant(params.deviceId, params.targetId) }

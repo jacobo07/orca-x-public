@@ -33,9 +33,27 @@ export type WakeBrokerStoreView = {
 
 export type WakeDeviceAuthorization = { ok: true; deviceId: string } | { ok: false; reason: string }
 
+export type WakeDeviceState = 'present' | 'absent' | 'unknown'
+
 export type WakeDeviceAuthority = {
   authorize(token: string): WakeDeviceAuthorization
-  deviceExists(deviceId: string): boolean
+  deviceState(deviceId: string): WakeDeviceState
+}
+
+export type WakeDeviceRegistryView = {
+  getAvailability(): { available: boolean }
+  getDevice(deviceId: string): unknown
+}
+
+// Why tri-state: granting must refuse on an unreadable registry while start-up pruning must keep (WR-01).
+export function wakeDeviceState(
+  registry: WakeDeviceRegistryView | null,
+  deviceId: string
+): WakeDeviceState {
+  if (!registry || !registry.getAvailability().available) {
+    return 'unknown'
+  }
+  return registry.getDevice(deviceId) !== null ? 'present' : 'absent'
 }
 
 export type WakeBrokerDeps = {

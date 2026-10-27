@@ -79,7 +79,7 @@ describe('wake broker wiring (runtime-rpc.ts device authority and purge)', () =>
     expect(attach).toBeGreaterThan(registry)
     const call = rpc.slice(attach, rpc.indexOf('\n        })', attach))
     expect(call).toContain('assertDeviceStillAuthorized(')
-    expect(call).toContain('deviceExists')
+    expect(call).toContain('wakeDeviceState(this.deviceRegistry')
   })
 
   it('drops grants in revokeAndTerminate only when the revoke succeeded', () => {

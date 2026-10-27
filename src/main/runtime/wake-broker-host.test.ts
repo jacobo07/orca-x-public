@@ -33,7 +33,7 @@ function authority(devices: Record<string, string>): WakeDeviceAuthority {
       const deviceId = devices[token]
       return deviceId ? { ok: true, deviceId } : { ok: false, reason: 'unknown_token' }
     },
-    deviceExists: (deviceId) => Object.values(devices).includes(deviceId)
+    deviceState: (deviceId) => (Object.values(devices).includes(deviceId) ? 'present' : 'absent')
   }
 }
 
@@ -250,7 +250,7 @@ describe('dropWakeGrantsAfterRevoke', () => {
         token === 'tok-a' && !revoked
           ? { ok: true, deviceId: 'dev-a' }
           : { ok: false, reason: revoked ? 'device_revoked' : 'unknown_token' },
-      deviceExists: () => !revoked
+      deviceState: () => (revoked ? 'absent' : 'present')
     })
     revoked = true
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
