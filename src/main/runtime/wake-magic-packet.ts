@@ -1,16 +1,12 @@
 import { createSocket } from 'node:dgram'
 
+export { normalizeMac } from '../../shared/host-wake'
+
 const MAC_OCTETS = 6
 const MAC_REPETITIONS = 16
-const MAC_FORM = /^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$/i
 
 // Standard frame (D-06): 6 x 0xFF, then the MAC 16 times.
 export const MAGIC_PACKET_BYTES = MAC_OCTETS + MAC_REPETITIONS * MAC_OCTETS
-
-export function normalizeMac(input: string): string | null {
-  const trimmed = input.trim()
-  return MAC_FORM.test(trimmed) ? trimmed.toLowerCase().replace(/-/g, ':') : null
-}
 
 export function buildMagicPacket(mac: string): Buffer {
   const macBytes = Buffer.from(mac.replace(/[:-]/g, ''), 'hex')

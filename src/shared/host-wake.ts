@@ -51,6 +51,25 @@ export type HostWakeStatusResult = {
 
 export type HostWakeTargetSummary = { targetId: string; label: string }
 
+export const WAKE_DEFAULT_BROADCAST = '255.255.255.255'
+export const WAKE_DEFAULT_PORT = 9
+export const WAKE_TARGET_LABEL_MAX = 64
+
+const MAC_FORM = /^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$/i
+const CONTROL_CHARACTER = /\p{Cc}/u
+
+// Why shared: the CLI fails fast with the same rule the broker enforces at the method and the store.
+export function normalizeMac(input: string): string | null {
+  const trimmed = input.trim()
+  return MAC_FORM.test(trimmed) ? trimmed.toLowerCase().replace(/-/g, ':') : null
+}
+
+export function isWakeTargetLabel(label: string): boolean {
+  return (
+    label.length >= 1 && label.length <= WAKE_TARGET_LABEL_MAX && !CONTROL_CHARACTER.test(label)
+  )
+}
+
 export class HostWakeRefusal extends Error {
   readonly code: HostWakeRefusalCode
   readonly data?: Record<string, unknown>

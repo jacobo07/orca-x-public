@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch'
-import type { RuntimeClient } from '../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { WAKE_HANDLERS } from './wake'
 
 const TARGET = {
@@ -123,7 +123,6 @@ describe('orca wake target add and list', () => {
   })
 
   it('names the fix when no runtime is reachable', async () => {
-    const { RuntimeClientError } = await import('../runtime-client')
     callMock.mockRejectedValue(new RuntimeClientError('runtime_unavailable', 'no runtime'))
     await expect(WAKE_HANDLERS['wake target list'](context([]))).rejects.toThrow(
       'orca serve --wake-broker'
