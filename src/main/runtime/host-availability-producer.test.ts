@@ -5,8 +5,10 @@ import {
   describeDirectCapability,
   describeRelayCapability
 } from './host-availability-producer'
+import { createHostWolProbe } from './host-wol-probe'
 
 const T = 1_760_000_000_000
+const NIC_DESCRIPTION = 'Intel(R) Ethernet Connection I219-LM'
 const RELAY_STATUSES: MobileRelayStatus[] = [
   'connecting',
   'registered',
@@ -134,7 +136,8 @@ describe('createHostAvailabilityProducer', () => {
       processKind: 'serve',
       relayReadiness: () => ({ state: 'started', status: null }),
       webSocketEndpoint: () => 'ws://10.9.8.7:6768',
-      autostart: { read: () => ({ value: 'unknown', reason: 'first', evidence: null }) }
+      autostart: { read: () => ({ value: 'unknown', reason: 'first', evidence: null }) },
+      wakeOnLan: { read: () => ({ value: 'unknown', reason: 'first', evidence: null }) }
     })
     producer.register({
       processKind: 'desktop',
@@ -146,15 +149,55 @@ describe('createHostAvailabilityProducer', () => {
           reason: 'logon_task_absent',
           evidence: { kind: 'os-probe', observedAt: T }
         })
-      }
+      },
+      wakeOnLan: { read: () => ({ value: 'unknown', reason: 'wol_probe_pending', evidence: null }) }
     })
     const announcement = producer.describe()
     expect(announcement.processKind).toBe('desktop')
     expect(announcement.capabilities['can-relay'].reason).toBe('relay_standby')
     expect(announcement.capabilities['can-start-orca'].reason).toBe('logon_task_absent')
+    expect(announcement.capabilities['can-wake-lan'].reason).toBe('wol_probe_pending')
     const serialized = JSON.stringify(announcement)
     expect(serialized).not.toContain('192.168.7.11')
     expect(serialized).not.toContain('10.9.8.7')
     expect(serialized).not.toContain('ws://')
+  })
+
+  it('announces the WOL reader verdict and never serializes adapter identity', async () => {
+    const probe = createHostWolProbe({
+      platform: 'win32',
+      now: () => T,
+      exec: (file) =>
+        Promise.resolve({
+          code: 0,
+          stdout:
+            file === 'powershell.exe'
+              ? `[{"Name":"Ethernet 7","InterfaceDescription":"${NIC_DESCRIPTION}","MediaType":"802.3","WakeOnMagicPacket":"Enabled"}]`
+              : `${NIC_DESCRIPTION}\r\n`,
+          stderr: ''
+        }),
+      listPhysicalInterfaces: () => Promise.resolve([]),
+      readText: () => Promise.resolve(null)
+    })
+    probe.read()
+    await probe.settled()
+    const producer = createHostAvailabilityProducer({ now: () => T })
+    producer.register({
+      processKind: 'serve',
+      relayReadiness: () => ({ state: 'started', status: null }),
+      webSocketEndpoint: () => null,
+      autostart: { read: () => ({ value: 'unknown', reason: 'first', evidence: null }) },
+      wakeOnLan: probe
+    })
+    const announcement = producer.describe()
+    expect(announcement.capabilities['can-wake-lan']).toEqual(probe.read())
+    expect(announcement.capabilities['can-wake-lan']).toEqual({
+      value: 'unknown',
+      reason: 'firmware_unverified',
+      evidence: null
+    })
+    const serialized = JSON.stringify(announcement)
+    expect(serialized).not.toContain('Ethernet 7')
+    expect(serialized).not.toContain(NIC_DESCRIPTION)
   })
 })
