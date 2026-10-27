@@ -29,8 +29,8 @@ Phases 5, 7 and 9 are deferred-human (do not rework them).
 
 ## 4. Next three actions
 1. (Done: fresh-agent test PASS.) Nothing deterministic remains in phase 16; do not invent work.
-2. Device legs, OWNER_BOUND: build an APK from this branch (>= 49038b8db) on GEX44, the Owner installs it on the
-   S25 Ultra, then run the >=94-char Agent send with a nonce, terminal send fresh output, send+scroll, send+lease.
+2. Device legs, OWNER_BOUND: the APK is BUILT and staged at `C:\Users\Jacobo\Downloads\orca-x-send-p0-854f34c01.apk`
+   (sha256 cc738f6b…262c, 16-STATUS row 1). The Owner moves it to the S25 Ultra and installs it, then run the >=94-char Agent send with a nonce, terminal send fresh output, send+scroll, send+lease.
 3. After the device leg passes: promote the UKDL candidates from the KV note and close phase 16 (VERIFICATION.md).
 
 ## 5. Start
