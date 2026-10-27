@@ -24,7 +24,14 @@ export function describeRelayCapability(
     return unknownCapability('relay_readiness_unregistered')
   }
   if (readiness.state === 'unavailable') {
-    return unknownCapability(readiness.reason)
+    // Why: missing cloud auth is a setup step the Owner can take; the other reasons are faults with no known fix.
+    return readiness.reason === 'cloud_auth_not_configured'
+      ? {
+          value: 'needs-owner-setup',
+          reason: readiness.reason,
+          evidence: { kind: 'host-announced', observedAt: nowMs }
+        }
+      : unknownCapability(readiness.reason)
   }
   if (readiness.status === null) {
     return unknownCapability('relay_status_pending')
@@ -51,11 +58,26 @@ export function describeDirectCapability(
       evidence: { kind: 'host-announced', observedAt: nowMs }
     }
   }
-  return {
-    value: 'supported',
-    reason: 'websocket_listener_bound',
-    evidence: { kind: 'host-announced', observedAt: nowMs }
+  let hostname: string
+  try {
+    hostname = new URL(endpoint).hostname
+  } catch {
+    return unknownCapability('websocket_endpoint_unparseable')
   }
+  const evidence = { kind: 'host-announced', observedAt: nowMs } as const
+  // Why: a loopback listener is unreachable from any phone, so direct is not configured.
+  return isLoopbackHostname(hostname)
+    ? { value: 'not-configured', reason: 'bound_to_loopback', evidence }
+    : { value: 'supported', reason: 'websocket_listener_bound', evidence }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '::1' ||
+    hostname === '[::1]' ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  )
 }
 
 export function createHostAvailabilityProducer(options: { now?: () => number } = {}): {
