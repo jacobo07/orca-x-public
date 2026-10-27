@@ -18,6 +18,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
   },
   {
+    name: 'serve-autostart',
+    keys: ['serve autostart status'],
+    load: async () => (await import('./handlers/serve-autostart.js')).SERVE_AUTOSTART_HANDLERS
+  },
+  {
     name: 'account',
     keys: ['account add', 'account list'],
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS

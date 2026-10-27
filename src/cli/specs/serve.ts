@@ -1,6 +1,12 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 
+const SERVE_AUTOSTART_NOTES = [
+  'Windows only. On Linux, run the Host Service as a systemd user unit: see docs/reference/headless-linux-server.md.',
+  'The logon task runs `<Orca executable> --serve --serve-autostart --serve-no-pairing` for the current user, without elevation.',
+  'Refused when invoked from a remote shell through the SSH relay: autostart is set up on the Orca host itself.'
+]
+
 export const SERVE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['serve'],
@@ -32,5 +38,16 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'orca serve --port 6768 --pairing-address 100.64.1.20',
       'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
     ]
+  },
+  {
+    path: ['serve', 'autostart', 'status'],
+    summary: 'Show whether the Orca Host Service logon task is installed and its state',
+    usage: 'orca serve autostart status [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      ...SERVE_AUTOSTART_NOTES,
+      'Reads Task Scheduler state, last result and action; the output does not depend on the Windows display language.'
+    ],
+    examples: ['orca serve autostart status', 'orca serve autostart status --json']
   }
 ]
