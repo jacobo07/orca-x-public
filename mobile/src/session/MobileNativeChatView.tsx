@@ -60,6 +60,8 @@ type Props = {
   hasMore?: boolean
   loadingEarlier?: boolean
   onLoadEarlier?: () => void
+  /** Told whenever the reader leaves or returns to the live edge. */
+  onReaderInHistoryChange?: (inHistory: boolean) => void
   onSend: (text: string) => Promise<boolean>
   /** Accepted user echoes awaiting transcript replacement, including image previews. */
   pending: MobileNativeChatPendingItem[]
@@ -128,6 +130,7 @@ export function MobileNativeChatView({
   hasMore,
   loadingEarlier,
   onLoadEarlier,
+  onReaderInHistoryChange,
   onSend,
   pending,
   imagePreviewsByMessageId,
@@ -203,6 +206,11 @@ export function MobileNativeChatView({
     const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60)
     return () => clearTimeout(t)
   }, [data.length, atBottom, keyboardInset])
+
+  useEffect(() => {
+    onReaderInHistoryChange?.(!atBottom)
+    return () => onReaderInHistoryChange?.(false)
+  }, [atBottom, onReaderInHistoryChange])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {

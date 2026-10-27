@@ -72,6 +72,7 @@ type Overrides = {
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
+  onReaderInHistoryChange?: (inHistory: boolean) => void
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -285,6 +286,18 @@ describe('MobileNativeChatView', () => {
       await scrollTo(600)
       await scrollTo(20)
       expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    })
+
+    it('tells the session to hold history while the reader is away from live', async () => {
+      const onReaderInHistoryChange = vi.fn()
+      await render({ folded, onReaderInHistoryChange })
+      expect(onReaderInHistoryChange).toHaveBeenLastCalledWith(false)
+
+      await scrollTo(600)
+      expect(onReaderInHistoryChange).toHaveBeenLastCalledWith(true)
+
+      await scrollTo(20)
+      expect(onReaderInHistoryChange).toHaveBeenLastCalledWith(false)
     })
   })
 })
