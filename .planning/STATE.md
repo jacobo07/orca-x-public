@@ -3,21 +3,23 @@ gsd_state_version: "1.0"
 current_phase: 10
 current_phase_name: 2/2
 status: unknown
-stopped_at: Completed 18-03-PLAN.md
-last_updated: "2026-10-27T17:42:39.373Z"
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-10-27T18:49:18.876Z"
 last_activity: "2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: \"go here\"); the arming pane on C:\\Users\\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e."
-state_head: 70dc19bf6b7d326a9c7f2d35ffe16b64c9828e6d
+state_head: d47194143371044f55af5af60ab9e8023e0b6d10
 progress:
   total_phases: 14
   completed_phases: 7
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 20
+  completed_plans: 16
   percent: 50
 ---
 
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
+
+Phase 19 (Wake-on-LAN capability and the LAN Wake Broker), branch mobile/host-availability, worktree C:\owx-haf: plan 1 of 5 complete (19-01, eca5f1923 + summary d47194143). can-wake-lan is now measured by a read-only WOL probe at both start paths; this laptop reads unknown/firmware_unverified. Next: 19-02 (wake broker core).
 
 P0 (2026-10-27, Owner mission "crash-proof mobile remote session entry"): phase 11 in .planning/phases/11-mobile-session-entry-crash/11-VERIFICATION.md. Root cause PROVEN on the Owner's S25 Ultra: the sideloaded APK 0.0.43 (2026-09-14) lacks the ExpoTwoWayAudio native module its JS imports, so opening any session threw at route load and Android finished the activity. Fixed 328971c74, contained a8d7bfca2, build gate 2a4f2ef6d. Fixed APK built (sha256 ca68faa3…21df), staged on the phone, and installed by the Owner as an update; P0 done-gate MET 2026-10-27 ~10:40 (PHYSICAL DEVICE, OWNER-OBSERVED: host > Orca X session opened, Owner typed into this pane from the phone; host saw the device at 09:40:31Z; no logcat). Resume: adb over Wi-Fi (Developer options > Wireless debugging, adb pair) → instrumented failure matrix, fresh-output send, reconnect, foreground, revocation; then Mobile Workstation. adb lives in the session scratchpad (gone after reboot): fetch platform-tools again from dl.google.com.
 Phase: 10 of 10 -- complete (2/2). Milestone NOT closable: phases 5, 7 and 9 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
@@ -118,6 +120,7 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 | Phase 17 P03 | 25 min | 3 tasks | 8 files |
 | Phase 18 P01 | 18min | 3 tasks | 14 files |
 | Phase 18 P02 | 17m | 3 tasks | 9 files |
+| Phase 19 P01 | 17min | 3 tasks | 11 files |
 
 ## Decisions
 
@@ -128,9 +131,11 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 - [Phase 10]: 17-03: GEX44 recipe needs pnpm rebuild node-pty after --ignore-scripts install for build:electron-vite
 - [Phase 10]: 18-02: an ok status.get whose result is not an object reads as no answer (power/orca unknown), not version mismatch
 - [Phase 10]: 18-02: GEX44 pnpm is 12.15.0 via corepack (mobile packageManager), not 10.24.0
+- [Phase 10]: 19-01: unelevated Get-NetAdapterPowerManagement fails (system error 31) on the Realtek NIC; probe falls back to *WakeOnMagicPacket and an unreadable Ethernet reads unknown/wol_adapter_unreadable
+- [Phase 10]: 19-01: this laptop measures can-wake-lan unknown/firmware_unverified (Realtek Enabled and wake_armed)
 
 ## Session
 
-**Last session:** 2026-10-27T17:42:37.117Z
-**Stopped at:** Completed 18-03-PLAN.md
+**Last session:** 2026-10-27T18:49:16.427Z
+**Stopped at:** Completed 19-01-PLAN.md
 **Resume file:** None
