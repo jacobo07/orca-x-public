@@ -118,7 +118,7 @@ import {
   showRuntimeRpcStartupFailureDialog
 } from './runtime/runtime-rpc-startup-failure'
 import { resolveAdvertisedPairingEndpoint } from './runtime/pairing-endpoint'
-import { ServeReadinessPublisher } from './server/serve-readiness'
+import { ServeReadinessPublisher, type ServeRelayReadiness } from './server/serve-readiness'
 import { reserveServeStdoutForReadiness } from './server/serve-stdout-boundary'
 import type { DesktopRelayService } from './runtime/relay/desktop-relay-service'
 import { createHostRelayOwner, type HostRelayStartDeps } from './runtime/relay/host-relay-startup'
@@ -2089,7 +2089,7 @@ function hostRelayStartDeps(): HostRelayStartDeps {
   }
 }
 
-async function printServeReady(options: ServeOptions): Promise<void> {
+async function printServeReady(options: ServeOptions, relay: ServeRelayReadiness): Promise<void> {
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
   }
@@ -2131,6 +2131,8 @@ async function printServeReady(options: ServeOptions): Promise<void> {
       advertisedEndpoint: advertised?.ok ? advertised.endpoint : null,
       // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
       managedWslCliReconciliation: managedWslCliReconciliationStatus,
+      appVersion: app.getVersion(),
+      relay,
       pairing: pairing.available
         ? {
             available: true,
@@ -3432,7 +3434,7 @@ void app.whenReady().then(async () => {
     // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
     // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
     scheduleAllPendingHistoryTreeRemovals()
-    await printServeReady(serveOptions)
+    await printServeReady(serveOptions, serveHostRelay.getReadiness())
     return
   }
 
