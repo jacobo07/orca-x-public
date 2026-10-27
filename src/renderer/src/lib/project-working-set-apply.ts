@@ -9,10 +9,11 @@ import type {
 } from '../../../shared/project-working-set-restore-plan'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab
+import {
+  terminalTabDormancy,
+  type TerminalLayoutSnapshot,
+  type TerminalPaneLayoutNode,
+  type TerminalTab
 } from '../../../shared/terminal-tab-types'
 import {
   resolveTuiAgentLaunchArgs,
@@ -194,10 +195,10 @@ function buildPayload(
     ...(entry.wake === 'automatic'
       ? {}
       : {
-          dormancy: {
-            reason: 'working-set-restore' as const,
-            resumeContinuity: resolveDormantResumeContinuity(entry.panes)
-          }
+          dormancy: terminalTabDormancy(
+            'working-set-restore',
+            resolveDormantResumeContinuity(entry.panes)
+          )
         })
   }))
   const groups: TabGroup[] = plan.railGroups.map((tabOrder) => {

@@ -230,7 +230,10 @@ describe('tab strip presentation residency', () => {
     // took the strip from 21 subscribers per tab to 10, this test passed without noticing either the
     // old figure or the new one. Linearity says the shape is right; only a pinned value says the
     // size is. The rail's twin has carried one since it was written.
-    expect({ domPerTab, listenersPerTab }).toEqual({ domPerTab: 13, listenersPerTab: 10 })
+    // 10 -> 11: the Resume control beside the agent logo holds one subscription per tab. It answers
+    // from an index keyed on the sleeping-records map, so a write that leaves that map alone costs two
+    // lookups; folding it into tab-agent-projection would widen that projection's inputs instead.
+    expect({ domPerTab, listenersPerTab }).toEqual({ domPerTab: 13, listenersPerTab: 11 })
 
     const report = { domPerTab, listenersPerTab, points }
     if (process.env.STRIP_RESIDENCY_REPORT) {

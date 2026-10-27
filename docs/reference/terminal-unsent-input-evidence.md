@@ -32,11 +32,23 @@ Measured in the real app by `tests/e2e/shell-unsent-input-support-matrix.spec.ts
 | shell | `promptState` | after typing a line | draft protected after a reload |
 | --- | --- | --- | --- |
 | the preferred shell (pwsh on this host) | `prompt` | `typed` | **yes** |
-| `cmd.exe` | `unsupported` | `undefined` | **no** — renderer witness only |
+| `cmd.exe` | `prompt` | `typed` | **yes** |
 | Git Bash (`Git\bin\bash.exe`) | `unsupported` | `undefined` | **no** — renderer witness only |
 
-An embedded startup command is in the same class and is not measured here: the command rides in the
-shell's launch arguments and runs before the first prompt, so it emits no markers at all.
+`cmd.exe` speaks only through `PROMPT` (`src/main/providers/cmd-osc133-prompt.ts`): a tagged 133;A
+on every prompt, and a 133;D once no Orca startup command is pending. A pane with no startup command
+reports a D on every prompt, so an agent the user types there is seen exiting; a pane whose startup
+command is still to be typed draws an A-only first prompt, and a D only after that command returns.
+It has no pre-exec hook, so it never emits 133;C. What stands in for it:
+
+- a line the user submits stays `typed` until the prompt returns, so every reader that refuses on
+  `typed` treats a running cmd command as unsafe to destroy;
+- a startup line the host typed itself is held `running` until its bracketing 133;D, and cmd's first
+  prompt (an A with no D) cannot end it;
+- a startup command embedded in `/K` runs before any marker, so the host reads `unknown` until it
+  returns.
+
+A nested `cmd` inherits the tagged `PROMPT`, so an idle nested cmd reads as an idle prompt.
 
 ## The open decision
 
@@ -49,7 +61,7 @@ and a destructive release proceeds. That is a fail-open by construction, and it 
   older host from ever sleeping a pane.
 
 Making a no-marker shell refuse instead would protect those drafts and would keep panes awake on
-every `cmd.exe` terminal the user ever typed into. That trade has not been taken; it needs a product
+every Git Bash terminal the user ever typed into. That trade has not been taken; it needs a product
 decision, not a code change.
 
 ## Readers

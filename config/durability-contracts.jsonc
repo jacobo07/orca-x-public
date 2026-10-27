@@ -28,6 +28,11 @@
     // Why proof is required only at the top tier: an ordering claim is the one property that cannot
     // be read off the implementation, because an fsync moved after the rename still fsyncs a file.
     "proofRequiredForTiers": ["crash-durable"],
+    // Why a second clause at the same tier: the barrier question ("did the bytes reach disk") and
+    // the failure question ("what is the caller told when they did not") are independent, and a
+    // contract can satisfy the first while its caller turns ENOSPC into null, false or a success.
+    // Ratcheted through config/durability-failure-semantics-baseline.txt, which may only shrink.
+    "failureSemanticsRequiredForTiers": ["crash-durable"],
     "durablePrimitive": "src/main/durable-file-write.ts",
     // Ratcheted, not reported: config/durability-unclassified-baseline.txt grandfathers the
     // publishers that predate this gate and may only shrink, so legacy debt stays visible while a
@@ -42,10 +47,30 @@
       "writer": "src/main/runtime/e2ee-keypair.ts",
       "tier": "crash-durable",
       "lostIf": "Every paired device at once. The key was published by a rename with no fsync, so a power loss could leave a zero-length file; the loader then caught the parse failure and minted a fresh keypair, which changes the fingerprint. Each paired device holds a shared secret derived from the old public key and a device registry keyed to a host that no longer exists, so pairing fails with nothing to explain it. The loader now refuses a file it cannot use instead of replacing it, and discarding the identity is an explicit act (forgetHostIdentity).",
+      "onFailure": "Three answers, and none replaces the key. A mint whose durable write fails throws the storage error (code intact); no in-memory key is returned, so a failed write cannot become an unpersisted identity, and pairing reports e2ee_key_unavailable with the check-writability guidance. A file that parses as invalid throws E2EEKeypairUnusableError (damaged: re-pair is the explicit recovery). A file that could not be READ — a lock, a permission, an I/O error — throws E2EEKeypairUnreadableError with its code, and the guidance says nothing was replaced; it used to collapse into 'damaged', whose advice to re-pair would have replaced a key that may have been fine. Proven by src/main/runtime/e2ee-keypair.test.ts (injected ENOSPC with firing proof; real EISDIR read fault).",
       "provenBy": ["src/main/runtime/e2ee-keypair.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see the comment in shared/secure-file.ts), so on Windows the barrier proves the file's contents reached disk before the rename, not that the rename itself survives a power loss.",
-        "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind."
+        "Nothing yet clears the matching device-registry entries when an identity is deliberately forgotten, so a re-pair leaves stale rows behind.",
+        "The side-effect-free observer readE2EEPublicKey still answers null for both 'invalid' and 'could not be read'; only the loader, which decides guidance and replacement, keeps them apart."
+      ]
+    },
+    {
+      "id": "mobile.user-drafts",
+      "state": "AsyncStorage keys orca:user-draft:v1:<sha256(surface, host, worktree, subject)> — unsent chat composer text per tab, and recognized dictation that reached no surface (dictation-salvage, per host and worktree)",
+      "writer": "mobile/src/storage/draft-journal.ts",
+      "tier": "atomic-only",
+      "lostIf": "The user's own unsent words. Before this contract they lived only in React state, so the OS killing the app discarded them with no notice, and recognized dictation whose target had gone was dropped outright. A key is replaced whole, so a reader sees the old draft or the new one; the newest edit can be lost inside the 300 ms save debounce. Load keeps 'unreadable' (the corrupt entry is removed and the user told) apart from 'failed' (a storage error removes nothing), and a draft is cleared only after the host confirms the send.",
+      "provenBy": [
+        "mobile/src/storage/draft-journal.test.ts",
+        "mobile/src/session/use-mobile-native-chat-drafts-persistence.test.ts",
+        "mobile/src/dictation/mobile-dictation-transcript-dispatch.test.ts"
+      ],
+      "knownGaps": [
+        "No real process-death run yet: persistence is proven by remounting the hook over the same storage, not by killing the app on an emulator.",
+        "The markdown editor and the file preview editor still hold unsaved edits only in memory (variant-parity drafts.user-invested-input-survives-process-death stays open).",
+        "Salvaged dictation is kept and the user told, but no screen yet lists or re-inserts it.",
+        "Host removal purges drafts outside the per-key mutation queue, so a save in flight at that instant can recreate one entry."
       ]
     },
     {
@@ -54,6 +79,7 @@
       "writer": "src/main/runtime/device-registry.ts",
       "tier": "crash-durable",
       "lostIf": "Every pairing at once: the file was published by a rename with no fsync, so a power loss could leave it empty or torn, and the loader then treated an unreadable file as no devices. The writer now fsyncs before the rename, and an unparseable file is preserved as orca-devices.json.corrupt-<ms> while the registry fails closed; an I/O read failure leaves the file in place and the registry unavailable.",
+      "onFailure": "A failed durable write throws the storage error out of the mutation (pair, revoke, connection mode, first sighting), and memory is swapped only after disk, so the registry keeps exactly what disk holds: a grant whose save threw is not valid afterwards and a revoke whose save threw propagates with the device still refused. The one exception is the deferred lastSeen flush, which logs and continues because a later save rewrites it and only the first sighting, persisted inline, is load-bearing. Proven by V-REV-SAVE-FAILURE and V-REV-GRANT-ORDER in src/main/runtime/device-registry-durability.test.ts (injected publish failure).",
       "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts), so on Windows the proven claim is that the contents reached disk before the rename, not that the rename itself survives a power loss.",
@@ -66,6 +92,7 @@
       "writer": "src/main/runtime/device-registry.ts",
       "tier": "crash-durable",
       "lostIf": "Only the refusal reason: a revoked token reads unknown_token instead of device_revoked, and is still refused because its device row is gone from orca-devices.json. A missing or unreadable file never makes the registry unavailable and never authorizes anyone. Devices are written first, so a failed write here can lose a reason but never resurrect a device.",
+      "onFailure": "Written in the same save as the devices file and after it, so a failed write throws the storage error out of that mutation with the devices already durable; the tombstones stay marked dirty in memory and are written again on the next save. Nothing is reported as stored that is not.",
       "provenBy": ["src/main/runtime/device-registry-durability.test.ts"],
       "knownGaps": [
         "The directory fsync after the rename is a no-op on Windows (see shared/secure-file.ts).",
@@ -121,6 +148,7 @@
       "writer": "src/main/daemon/terminal-history-session-writer.ts",
       "tier": "crash-durable",
       "lostIf": "The checkpoint is the sole copy once the log is reset. An unsynced publish can expose a zero-length checkpoint whose increments were already discarded, losing the session's scrollback across a crash the daemon was built to survive.",
+      "onFailure": "HistoryManager.checkpoint returns 'failed' when the durable write throws, distinct from 'unavailable' (no writer, or a disabled session). The adapter's five flag-clearing sites ask checkpointDidNotLand(), so a failed checkpoint keeps the session dirty and answers 'deferred' instead of 'done'. The OS error reaches the onWriteError channel with its code intact. Proven by src/main/daemon/history-checkpoint-storage-failure.test.ts.",
       "provenBy": ["src/main/daemon/terminal-history-checkpoint-durability.test.ts"],
       "knownGaps": [
         "The log reset is ordered after the checkpoint fsync, but the reset itself is not fsynced; a loss there costs the reset, not the checkpoint."
@@ -132,6 +160,7 @@
       "writer": "src/main/terminal-scrollback-snapshots.ts",
       "tier": "crash-durable",
       "lostIf": "The referencing profile file is fsynced and the blob was not, so a durable pointer can outlive its referent. The reader returns an empty string for a zero-length snapshot, so the loss surfaces as empty scrollback rather than as a failure.",
+      "onFailure": "The writers return a closed outcome — stored | nothing-to-store | not-stored{failure, code, stage} — so a full disk (storage-full, ENOSPC) is distinguishable from an empty buffer and from an unreachable snapshot root. Both migration paths keep the buffer inline on any non-stored outcome, so a storage failure costs the blob, never the scrollback. Proven by src/main/terminal-scrollback-snapshot-enospc.test.ts.",
       "provenBy": ["src/main/terminal-scrollback-snapshot-durability.test.ts"],
       "knownGaps": [
         "The reader still cannot distinguish a missing snapshot from a genuinely empty one; see shared/terminal-snapshot-unavailability.ts for the vocabulary the live wire path already uses."
@@ -144,6 +173,7 @@
       "tier": "crash-durable",
       "lostIf": "This is the only copy. The provider transcript is evidence, not a substitute: it belongs to the provider, it rotates, the provider may delete it, and it carries no Orca conversation identity — so a lost record cannot be reconstructed from it, only guessed at. Losing one costs the conversation as a product entity: its id, anything later bound to that id, and the ability to reopen it at all.",
       "provenBy": ["src/main/conversation/conversation-store-syscall-proof.test.ts"],
+      "onFailure": "Never reported as success. conversation-store does not catch writeFileDurable, so ENOSPC/EACCES reject: conversations:create and createForAgent reject to the renderer with the OS error message; during a turn, conversation-turn-runner catches it and returns outcome 'failed' with that message as the reason, after trying to mark unsettled turns failed (if that second write also fails, the IPC call rejects instead). The prior record is kept, because the temp file is renamed over it only after its fsync. Weakness: the user sees the raw OS message, not product copy.",
       "knownGaps": [
         "Reachable since W3: src/main/ipc/conversations.ts calls the service and src/preload/index.ts exposes conversations:create, so a user with the Conversations surface enabled writes real records. This contract now describes state users have, not a capability. The surface is still opt-in (showConversationsButton), so the population is small rather than absent.",
         "No backup ring. Unlike the profile file there is no .bak behind a conversation, so a record that fails to parse is refused rather than recovered; the bytes are preserved on disk for a later repair, but nothing rotates a known-good copy forward.",
@@ -266,6 +296,7 @@
       "writer": "src/main/project-working-set/working-set-store.ts",
       "tier": "crash-durable",
       "lostIf": "It is the only record of a rail the user asked to keep, and later waves may release processes on the strength of it. A save reports success only after the published file is read back through readWorkingSetArtifact and matches what was submitted, so 'saved' names bytes on disk, not an attempted write.",
+      "onFailure": "publishFailure() maps DurablePublishError.stage onto the save outcome and keeps the OS code: write-failed, durability-failed, publish-failed, or identity-collision for EEXIST. A full disk surfaces as write-failed with code ENOSPC rather than as a generic failure, and the scrollback staged for the set is discarded so no manifest points at a half-sealed copy. This is the pattern the rest of the estate is being brought up to.",
       "provenBy": [
         "src/main/durable-file-write-exclusive.test.ts",
         "src/main/project-working-set/working-set-store.test.ts"

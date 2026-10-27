@@ -302,6 +302,36 @@ describe('runConversationTurn — refusals, in the order that protects the user'
     expect(record.turns[0].state).toBe('interrupted')
   })
 
+  // Found by the real-ssh rung: a usage-limited turn settled, answered nothing, and was reported
+  // to the user as `completed`.
+  it('reports a turn the provider ended in failure as failed, in the provider’s words', async () => {
+    const created = await service.create({})
+    const outcome = await runConversationTurn(
+      deps({
+        driver: {
+          provider: 'codex' as const,
+          runTurn: async (request) => {
+            request.onEvent({ kind: 'turn-started', turnId: request.turnId })
+            request.onEvent({
+              kind: 'turn-ended',
+              turnId: request.turnId,
+              state: 'failed',
+              reason: 'You’ve hit your usage limit.'
+            })
+            return { providerSessionId: 'thread-limited' }
+          }
+        }
+      }),
+      { conversationId: created.id, text: 'hi', cwd: root }
+    )
+
+    expect(outcome).toMatchObject({ outcome: 'failed', reason: 'You’ve hit your usage limit.' })
+    const record = await flush(created.id)
+    expect(record.turns[0].state).toBe('failed')
+    // The thread still exists on the provider, so it stays resumable.
+    expect(record.provenance.at(-1)?.providerSessionId).toBe('thread-limited')
+  })
+
   it('releases the slot after a failure so the conversation is not wedged', async () => {
     const created = await service.create({})
     await runConversationTurn(

@@ -5,7 +5,14 @@ type ActiveView = AppState['activeView']
 
 // Views that own the whole window regardless of project context: the launcher has no project to
 // describe, and Settings/Space are global surfaces rather than places you work on a project from.
-const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>(['workspace', 'settings', 'space'])
+// Workspace draws its own context column; an Explorer beside it was the defect. The shell relocates
+// the activity rail next to these views, so the route out survives the panel.
+const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>([
+  'workspace',
+  'settings',
+  'space',
+  'conversations'
+])
 
 // Application surfaces reached *from* a project-bound window. These used to sit in the set above,
 // which unmounted the panel — and the panel is Explorer, Source Control and Agents, so opening

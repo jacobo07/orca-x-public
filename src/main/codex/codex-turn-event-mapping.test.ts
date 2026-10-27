@@ -63,7 +63,10 @@ describe('mapCodexNotification', () => {
       }
     })
 
-    expect(event).toMatchObject({ role: 'user', blocks: [{ type: 'text', text: 'Run the shell command' }] })
+    expect(event).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Run the shell command' }]
+    })
   })
 
   it('records a declined command as a tool result that is an error', () => {
@@ -87,7 +90,11 @@ describe('mapCodexNotification', () => {
     expect(event).toMatchObject({
       role: 'tool',
       blocks: [
-        { type: 'tool-call', name: 'commandExecution', input: 'powershell -c echo orca-approval-probe' },
+        {
+          type: 'tool-call',
+          name: 'commandExecution',
+          input: 'powershell -c echo orca-approval-probe'
+        },
         { type: 'tool-result', output: '', isError: true }
       ]
     })
@@ -143,5 +150,64 @@ describe('mapCodexNotification', () => {
       kind: 'unmapped',
       method: 'turn/started'
     })
+  })
+})
+
+// Verbatim from codex-cli 0.155.1 on GEX44 (2026-09-24): a turn the provider refused on a usage
+// limit. It sends `error`, then completes the turn with `status: "failed"`. Before this was read, a
+// real-ssh rung reported that turn to the user as `completed`.
+const LIMIT = {
+  message:
+    'You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Sep 27th, 2026 7:54 PM.',
+  codexErrorInfo: 'usageLimitExceeded',
+  additionalDetails: null,
+  misalignment: null
+}
+const TURN = '01a0d3e0-c1f7-72c0-bf7b-a37f5e5f1214'
+
+describe('mapCodexNotification — a turn the provider did not answer', () => {
+  it('ends the turn on a final error, in the provider’s own words', () => {
+    expect(
+      mapCodexNotification({
+        method: 'error',
+        params: { error: LIMIT, willRetry: false, threadId: 'thread-1', turnId: TURN }
+      })
+    ).toEqual({ kind: 'turn-ended', turnId: TURN, state: 'failed', reason: LIMIT.message })
+  })
+
+  it('does not end the turn on an error the provider is retrying', () => {
+    expect(
+      mapCodexNotification({
+        method: 'error',
+        params: { error: LIMIT, willRetry: true, threadId: 'thread-1', turnId: TURN }
+      })
+    ).toEqual({ kind: 'provider-status', status: 'retrying', detail: LIMIT.message })
+  })
+
+  it('reads a completed turn with a failed status as ended, never as answered', () => {
+    expect(
+      mapCodexNotification({
+        method: 'turn/completed',
+        params: {
+          threadId: 'thread-1',
+          turn: { id: TURN, items: [], status: 'failed', error: LIMIT, durationMs: 2519 }
+        }
+      })
+    ).toEqual({ kind: 'turn-ended', turnId: TURN, state: 'failed', reason: LIMIT.message })
+  })
+
+  it('keeps an interrupted turn apart from a failed one, and a completed one as completed', () => {
+    expect(
+      mapCodexNotification({
+        method: 'turn/completed',
+        params: { turn: { id: TURN, status: 'interrupted', error: null } }
+      })
+    ).toMatchObject({ kind: 'turn-ended', state: 'interrupted' })
+    expect(
+      mapCodexNotification({
+        method: 'turn/completed',
+        params: { turn: { id: TURN, status: 'completed', error: null } }
+      })
+    ).toEqual({ kind: 'turn-completed', turnId: TURN })
   })
 })

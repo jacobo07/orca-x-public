@@ -1,4 +1,9 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import {
+  TabSessionResumeControl,
+  useTabSessionResumeTarget
+} from '../tab-bar/TerminalTabSessionResumeButton'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
@@ -25,7 +30,7 @@ export function TerminalRailTabRow({
   onSelect,
   onContextMenu
 }: {
-  tab: Pick<TerminalTab, 'id' | 'title' | 'customTitle' | 'shellOverride'>
+  tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'title' | 'customTitle' | 'shellOverride'>
   agent: TuiAgent | null
   activityStatus: TerminalTabActivityStatus
   paneCount: number
@@ -34,42 +39,65 @@ export function TerminalRailTabRow({
   onSelect: () => void
   onContextMenu: (event: React.MouseEvent<HTMLElement>) => void
 }): React.JSX.Element {
+  const resumeTarget = useTabSessionResumeTarget(tab)
+  const spacerRef = useRef<HTMLSpanElement>(null)
+  const [resumeLeft, setResumeLeft] = useState<number | null>(null)
+  // Why measured: the logo's width moves with its activity dot, and the control sits right after it.
+  useLayoutEffect(() => {
+    setResumeLeft(spacerRef.current ? spacerRef.current.offsetLeft : null)
+  }, [resumeTarget.kind, agent, activityStatus, hasUnreadActivity])
   return (
-    <button
-      type="button"
-      data-terminal-rail-row=""
-      data-terminal-rail-row-kind="tab"
-      data-terminal-rail-tab-id={tab.id}
-      {...(isActive ? { 'data-active': '' } : {})}
-      onClick={onSelect}
-      onContextMenu={onContextMenu}
-      title={tab.customTitle ?? tab.title}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-[6px] px-2 py-1 text-left text-[12px] leading-5',
-        'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-        isActive && 'bg-accent text-foreground'
+    // Why a sibling: the row is itself a button, and a button may not contain another one.
+    <div className="relative">
+      <button
+        type="button"
+        data-terminal-rail-row=""
+        data-terminal-rail-row-kind="tab"
+        data-terminal-rail-tab-id={tab.id}
+        {...(isActive ? { 'data-active': '' } : {})}
+        onClick={onSelect}
+        onContextMenu={onContextMenu}
+        title={tab.customTitle ?? tab.title}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-[6px] px-2 py-1 text-left text-[12px] leading-5',
+          'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+          isActive && 'bg-accent text-foreground'
+        )}
+      >
+        <TerminalTabLeadingIcon
+          agent={agent}
+          activityStatus={activityStatus}
+          shell={tab.shellOverride}
+          showUnreadActivity={hasUnreadActivity}
+          isActive={isActive}
+        />
+        {resumeTarget.kind === 'none' ? null : (
+          <span ref={spacerRef} className="size-4 shrink-0" aria-hidden />
+        )}
+        <span className="min-w-0 flex-1 truncate">{tab.customTitle ?? tab.title}</span>
+        {paneCount > 1 ? (
+          <span
+            className="shrink-0 tabular-nums opacity-60"
+            aria-label={translate(
+              'auto.components.terminal.rail.TerminalRail.paneCount',
+              'Panes in this terminal'
+            )}
+          >
+            {paneCount}
+          </span>
+        ) : null}
+      </button>
+      {resumeTarget.kind === 'none' || resumeLeft === null ? null : (
+        <TabSessionResumeControl
+          target={resumeTarget}
+          tab={tab}
+          isActive={isActive}
+          onActivate={onSelect}
+          className="absolute top-1/2 mr-0 -translate-y-1/2"
+          style={{ left: resumeLeft }}
+        />
       )}
-    >
-      <TerminalTabLeadingIcon
-        agent={agent}
-        activityStatus={activityStatus}
-        shell={tab.shellOverride}
-        showUnreadActivity={hasUnreadActivity}
-        isActive={isActive}
-      />
-      <span className="min-w-0 flex-1 truncate">{tab.customTitle ?? tab.title}</span>
-      {paneCount > 1 ? (
-        <span
-          className="shrink-0 tabular-nums opacity-60"
-          aria-label={translate(
-            'auto.components.terminal.rail.TerminalRail.paneCount',
-            'Panes in this terminal'
-          )}
-        >
-          {paneCount}
-        </span>
-      ) : null}
-    </button>
+    </div>
   )
 }
 

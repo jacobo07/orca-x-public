@@ -59,7 +59,7 @@ export const terminalTabSchema = z.object({
   // inventing one.
   dormancy: z
     .object({
-      reason: z.enum(['working-set-restore', 'workspace-sleep']),
+      reason: z.enum(['working-set-restore', 'workspace-sleep', 'layout-restore']),
       resumeContinuity: z
         .enum(['exact', 'unconfirmed', 'claimed-elsewhere', 'none'])
         .optional()

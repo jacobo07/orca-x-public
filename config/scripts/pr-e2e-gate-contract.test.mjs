@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { loadImpactMap, selectPrE2eSpecs } from './select-pr-e2e-specs.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+const impactMap = loadImpactMap(projectDir)
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 const sshDockerRunner = readFileSync(
@@ -63,7 +65,11 @@ describe('PR E2E gate contract', () => {
 
   it('selects modified Playwright specs without running deleted tests', () => {
     expect(filterStep.run).toContain('--diff-filter=AMCR')
-    expect(filterStep.run).toContain("'^tests/e2e/.*\\.spec\\.ts$'")
+    // Why through the selector: a spec-name filter could not select the specs a src/ change reaches.
+    expect(filterStep.run).toContain('| node config/scripts/select-pr-e2e-specs.mjs')
+    expect(selectPrE2eSpecs(['tests/e2e/some-journey.spec.ts'], impactMap).specs).toEqual([
+      'tests/e2e/some-journey.spec.ts'
+    ])
     expect(filterStep.run).not.toContain('tests/playwright\\.')
   })
 
@@ -129,6 +135,13 @@ describe('PR E2E gate contract', () => {
     expect(rollbackStep.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')
     expect(rollbackStep.run).toContain('src/shared/orca-yaml-hook-types.ts')
-    expect(filterStep.run).toContain('ephemeral-vm-recipes|orca-yaml-hook-types')
+    for (const authority of [
+      'src/shared/ephemeral-vm-recipes.ts',
+      'src/shared/orca-yaml-hook-types.ts'
+    ]) {
+      expect(selectPrE2eSpecs([authority], impactMap).specs).toContain(
+        'tests/e2e/ephemeral-vm-provisioned-root.spec.ts'
+      )
+    }
   })
 })

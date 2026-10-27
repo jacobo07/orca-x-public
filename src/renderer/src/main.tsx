@@ -14,6 +14,7 @@ import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { awaitReloadFreezeFrameDecision } from './startup/reload-freeze-frame-overlay'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
 
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
@@ -57,11 +58,18 @@ function RendererRoot(): React.JSX.Element {
   )
 }
 
-getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
-  <StrictMode>
-    <I18nProvider>
-      <RendererRoot />
-    </I18nProvider>
-  </StrictMode>
-)
-recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
+function mountApp(appRoot: HTMLElement): void {
+  getOrCreateRendererRoot(appRoot, import.meta.hot?.data).render(
+    <StrictMode>
+      <I18nProvider>
+        <RendererRoot />
+      </I18nProvider>
+    </StrictMode>
+  )
+  recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
+}
+
+// Mounted after the freeze-frame decision so a reload's first contentful paint is the frozen frame,
+// never the empty shell. Bounded and never-rejecting, so a cold start waits one IPC round trip.
+const mountIntoRoot = (): void => mountApp(rootElement)
+void awaitReloadFreezeFrameDecision().then(mountIntoRoot, mountIntoRoot)

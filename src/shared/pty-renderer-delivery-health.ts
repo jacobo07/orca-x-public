@@ -25,6 +25,10 @@ export type PtyRendererDeliveryStateReport = {
   /** `ipcRenderer.listenerCount('pty:data')` at heal time — discriminates
    *  "listener detached" from "channel dead" in field logs. */
   rendererPtyDataListenerCount?: number | null
+  /** PTYs whose pane is on screen and expects foreground bytes. Main answers
+   *  their model progress so the renderer can catch a visible pane that stopped
+   *  advancing while the PTY kept producing (gated, lost, or dead pipeline). */
+  onScreenPtyIds?: string[]
 }
 
 export type PtyDeliveryWriteOff = {
@@ -42,4 +46,9 @@ export type PtyRendererDeliveryHealthReply = {
   msSinceLastAck: number | null
   /** Present only on a heal report that actually wrote off lost bytes. */
   writtenOff?: PtyDeliveryWriteOff[]
+  /** Main's model output sequence per requested on-screen PTY. Absent = main
+   *  holds no model for it (unknown, never "idle"). */
+  modelOutputSequenceByPty?: Record<string, number>
+  /** Requested on-screen PTYs main is currently dropping as hidden. */
+  hiddenGatedPtyIds?: string[]
 }

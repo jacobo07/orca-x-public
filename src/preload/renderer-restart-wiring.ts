@@ -4,6 +4,11 @@ import {
   prepareRendererForAppRestart,
   type UpdaterQuitAbortRelay
 } from '../shared/renderer-restart-preparation'
+import type {
+  ReloadPreparationAnswer,
+  ReloadPreparationReply,
+  ReloadPreparationRequest
+} from '../shared/reload-preparation-wire'
 import type { UpdateStatus } from '../shared/update-status-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
@@ -48,6 +53,46 @@ export async function prepareAndInvokeUpdaterInstall(
     relay.abort()
     throw error
   }
+}
+
+/**
+ * Answers main's request to prepare this window for a reload main initiated (the View menu). The
+ * same preparation the renderer's own `app.reload()` does, reported back so main reloads only a
+ * prepared window. Main has the last word: a late or superseded answer stands the bypass down.
+ */
+export function answerReloadPreparationRequests(
+  ipcRenderer: Pick<IpcRenderer, 'on' | 'invoke'>,
+  eventTarget: EventTarget,
+  awaitCheckpoint: () => Promise<void>
+): void {
+  ipcRenderer.on('app:prepareForReload', (_event, request: ReloadPreparationRequest) => {
+    void (async () => {
+      let outcome: ReloadPreparationAnswer['outcome'] = 'prepared'
+      try {
+        await prepareRendererForAppRestart(eventTarget, {
+          startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
+          abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+          awaitCheckpoint
+        })
+      } catch {
+        // prepareRendererForAppRestart already dispatched the abort for its own failure.
+        outcome = 'refused'
+      }
+      let proceed = false
+      try {
+        const reply = (await ipcRenderer.invoke('app:reloadPreparationSettled', {
+          requestId: request.requestId,
+          outcome
+        } satisfies ReloadPreparationAnswer)) as ReloadPreparationReply | undefined
+        proceed = reply?.proceed === true
+      } catch {
+        proceed = false
+      }
+      if (outcome === 'prepared' && !proceed) {
+        eventTarget.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
+      }
+    })()
+  })
 }
 
 export async function prepareAndInvokeAppRestart(

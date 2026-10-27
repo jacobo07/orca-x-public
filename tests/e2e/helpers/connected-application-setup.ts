@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@stablyai/playwright-test'
+import { pickNewAgentProject } from './new-agent-project-picker'
 import { expect } from './orca-app'
 
 /** Creates an agent on the first project, from the default-on Workspace entry, and connects one
@@ -11,7 +12,7 @@ export async function connectApplicationToNewAgent(
   await page.getByTestId('workspace-new-agent').click()
   await page.getByTestId('new-agent-name').fill('App Hand')
   await page.getByTestId('new-agent-role').fill('creative')
-  await page.getByTestId('new-agent-project').selectOption({ index: 0 })
+  await pickNewAgentProject(page, 'first')
   await page.getByTestId('new-agent-submit').click()
   await expect(page.getByTestId('agent-context-apps')).toBeVisible()
 

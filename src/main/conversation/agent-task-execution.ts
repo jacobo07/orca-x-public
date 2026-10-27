@@ -146,6 +146,8 @@ export async function runAgentTask(
       return { outcome: 'refused', reason: 'auth-required', detail: turn.detail }
     case 'no-provider':
       return { outcome: 'refused', reason: 'no-provider', detail: turn.detail }
+    case 'provider-unavailable':
+      return { outcome: 'refused', reason: `provider-${turn.reason}`, detail: turn.detail }
     case 'project-unavailable':
       return { outcome: 'refused', reason: `project-${turn.reason}`, detail: turn.detail }
     case 'agent-unavailable':

@@ -51,6 +51,25 @@ describe('createShellPromptStateTracker', () => {
     tracker.observe(D(1))
     expect(tracker.read()).toBe('prompt')
   })
+
+  it('holds a host-submitted command as running until a D, whichever order the first A lands in', () => {
+    const honoured: string[] = []
+    const early = createShellPromptStateTracker(undefined, (s) => honoured.push(s))
+    early.observe(`${A}C:\\repo>`)
+    early.noteSubmittedCommand()
+    expect(early.read()).toBe('running')
+    expect(honoured).toEqual(['A', 'C'])
+
+    const late = createShellPromptStateTracker()
+    late.noteSubmittedCommand()
+    // cmd draws its first prompt after the queued startup line was accepted.
+    late.observe(`${A}C:\\repo>`)
+    expect(late.read()).toBe('running')
+    late.observe(`${D(0)}${A}C:\\repo>`)
+    expect(late.read()).toBe('prompt')
+    late.observe(`${A}C:\\repo>`)
+    expect(late.read()).toBe('prompt')
+  })
 })
 
 describe('shellPromptMarkerTrust and resolveShellPromptState', () => {
@@ -58,7 +77,7 @@ describe('shellPromptMarkerTrust and resolveShellPromptState', () => {
     ['C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'win32', 'tagged'],
     ['pwsh.exe', 'win32', 'tagged'],
     ['/usr/bin/pwsh', 'linux', 'tagged'],
-    ['C:\\Windows\\System32\\cmd.exe', 'win32', 'none'],
+    ['C:\\Windows\\System32\\cmd.exe', 'win32', 'tagged'],
     ['C:\\Program Files\\Git\\bin\\bash.exe', 'win32', 'none'],
     ['C:\\Windows\\System32\\wsl.exe', 'win32', 'none'],
     ['/bin/zsh', 'darwin', 'any'],
@@ -70,7 +89,7 @@ describe('shellPromptMarkerTrust and resolveShellPromptState', () => {
   })
 
   it('never lets a shell without Orca integration vouch for its prompt', () => {
-    // cmd.exe with the PROMPT Windows Terminal documents: D and A, never C.
+    // Git Bash with a user's own OSC 133 PROMPT: D and A, never C.
     const tracker = createShellPromptStateTracker(() => 'none')
     tracker.observe(`${D(0)}${A}C:\\repo>`)
     expect(resolveShellPromptState(tracker, 'none')).toBe('unsupported')

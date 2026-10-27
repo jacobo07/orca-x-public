@@ -9,6 +9,10 @@ import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-s
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import type {
+  MobileNativeChatDraftPersistenceIssue,
+  MobileNativeChatDraftStore
+} from './use-mobile-native-chat-draft-persistence'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
@@ -42,6 +46,9 @@ export function useMobileNativeChatController(args: {
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
   onSendResolved: () => void
+  /** Durable composer drafts; the route passes the journal-backed store. */
+  draftStore?: MobileNativeChatDraftStore
+  onDraftPersistenceIssue?: (issue: MobileNativeChatDraftPersistenceIssue) => void
 }): MobileNativeChatController {
   const {
     client,
@@ -55,7 +62,9 @@ export function useMobileNativeChatController(args: {
     nativeChatInputLeaseReady,
     connState,
     onSendError,
-    onSendResolved
+    onSendResolved,
+    draftStore,
+    onDraftPersistenceIssue
   } = args
   const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({ hostId, worktreeId })
 
@@ -99,6 +108,7 @@ export function useMobileNativeChatController(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
+    settleSentDraft,
     holdUnconfirmedSend
   } = useMobileNativeChatDrafts({
     hostId,
@@ -112,7 +122,9 @@ export function useMobileNativeChatController(args: {
     // a null is indistinguishable from a host retraction, and peeking at the
     // terminal view would permanently decline the prefill.
     chatActive: showNativeChat,
-    transcriptLoading: nativeChatSession.transcriptLoading
+    transcriptLoading: nativeChatSession.transcriptLoading,
+    draftStore,
+    onDraftPersistenceIssue
   })
 
   const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null
@@ -225,6 +237,7 @@ export function useMobileNativeChatController(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
+    settleSentDraft,
     holdUnconfirmedSend,
     onSendError
   })

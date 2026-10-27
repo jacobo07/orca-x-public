@@ -1,4 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
+import { pickNewAgentProject } from './helpers/new-agent-project-picker'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
@@ -63,7 +64,7 @@ test('a project connects KobiiCraft Studio truthfully, safely, and without losin
     await page.getByTestId('workspace-new-agent').click()
     await page.getByTestId('new-agent-name').fill('Studio Hand')
     await page.getByTestId('new-agent-role').fill('creative')
-    await page.getByTestId('new-agent-project').selectOption({ index: 0 })
+    await pickNewAgentProject(page, 'first')
     await page.getByTestId('new-agent-submit').click()
     await expect(page.getByTestId('agent-context-apps')).toBeVisible()
 

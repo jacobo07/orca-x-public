@@ -75,6 +75,8 @@ import type { PersistedWindowTopologyEntry } from '../../shared/window-topology-
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
+import { requestWindowReload } from './window-reload-transaction'
+import { createRendererReplacer, registerRendererReplacement } from './renderer-replacement'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
@@ -237,6 +239,8 @@ type CreateMainWindowOptions = {
   getIsQuitting?: () => boolean
   /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
   onQuitAborted?: () => void
+  /** The renderer vetoed unload with no close or quit in flight: this window's reload was refused. */
+  onReloadVetoed?: (webContentsId: number) => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
@@ -261,6 +265,10 @@ type CreateMainWindowOptions = {
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   /** Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore re-attaches (#5787). */
   onBeforeRecoveryReload?: (webContentsId: number) => void
+  /** Before a deliberate renderer replacement: mark its teardown as ours and spare live PTYs. */
+  onBeforeRendererReplacement?: (webContentsId: number) => void
+  /** The replaced renderer never exited, so the replacement gave up and recovery owns it again. */
+  onRendererReplacementAbandoned?: (webContentsId: number) => void
   /**
    * A window being reopened from the saved topology: its recorded identity, project and geometry.
    *
@@ -771,6 +779,18 @@ export function createMainWindow(
       loadMainWindow(mainWindow)
     }, 250)
   }
+  const rendererReplacer = createRendererReplacer({
+    webContentsId: rendererWebContentsId,
+    forcefullyCrashRenderer: () => mainWindow.webContents.forcefullyCrashRenderer(),
+    isWindowGone: () => windowClosing || mainWindow.isDestroyed(),
+    load: () => loadMainWindow(mainWindow),
+    onBeforeReplacement: opts?.onBeforeRendererReplacement,
+    onAbandoned: opts?.onRendererReplacementAbandoned
+  })
+  const unregisterRendererReplacement = registerRendererReplacement(
+    rendererWebContentsId,
+    rendererReplacer.replace
+  )
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
     resetMarkdownEditorFocus()
@@ -784,6 +804,10 @@ export function createMainWindow(
     }
     if (!windowClosing) {
       console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    }
+    // A deliberate replacement reloads this window itself; recovery must neither race nor count it.
+    if (rendererReplacer.claimExit()) {
+      return
     }
     scheduleRendererRecovery(details)
   })
@@ -822,8 +846,10 @@ export function createMainWindow(
         mainWindow.webContents.send('ui:openSettings')
         return
       case 'forceReload':
-        opts?.onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
-        mainWindow.webContents.reloadIgnoringCache()
+        void requestWindowReload(mainWindow.webContents, {
+          kind: 'force',
+          ...(opts?.onBeforeReload ? { onBeforeReload: opts.onBeforeReload } : {})
+        })
         return
       case 'toggleLeftSidebar':
         mainWindow.webContents.send('ui:toggleLeftSidebar')
@@ -1194,10 +1220,16 @@ export function createMainWindow(
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
-    // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
-    windowClosing = false
-    clearQuitRendererAckTimer()
-    opts?.onQuitAborted?.()
+    // Why the split: beforeunload also runs for a reload. With no close or quit in flight the veto
+    // belongs to this window's reload, and resetting the app-wide quit latch for it was wrong.
+    if (windowClosing || (opts?.getIsQuitting?.() ?? false)) {
+      // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
+      windowClosing = false
+      clearQuitRendererAckTimer()
+      opts?.onQuitAborted?.()
+    } else {
+      opts?.onReloadVetoed?.(mainWindow.webContents.id)
+    }
     mainWindow.webContents.send('window:unload-prevented')
   })
 
@@ -1289,6 +1321,7 @@ export function createMainWindow(
 
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
   mainWindow.on('closed', () => {
+    unregisterRendererReplacement()
     // Releases this window's workspace claim, so the project it held can open in another window.
     unregisterWorkspaceWindow(workspaceWindow.windowId)
     // Why here and not on 'close': a deliberate close should be forgotten, and the publish gate

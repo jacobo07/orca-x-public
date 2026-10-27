@@ -138,6 +138,7 @@ type MainWindowStub = {
 type RuntimeStub = {
   attachWindow: MockFn
   setNotifier: MockFn
+  noteWindowFocused: MockFn
   markRendererReloading: MockFn
   markRendererReloadCancelled: MockFn
   markGraphReloadFailed: MockFn
@@ -180,6 +181,7 @@ function createRuntime(): RuntimeStub {
   return {
     attachWindow: vi.fn(),
     setNotifier: vi.fn(),
+    noteWindowFocused: vi.fn(),
     markRendererReloading: vi.fn(),
     markRendererReloadCancelled: vi.fn(),
     markGraphReloadFailed: vi.fn(),
@@ -543,7 +545,7 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
   })
 
-  it('stops reloading a closed window while the reload channel survives', () => {
+  it('stops reloading a closed window while the reload channel survives', async () => {
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
     mainWindow.on = mainWindowOnMock
@@ -557,14 +559,15 @@ describe('attachMainWindowServices', () => {
     for (const handler of closedHandlers) {
       handler()
     }
-    reloadHandler?.({ sender: mainWindow.webContents })
+    // Awaited so the absence assertion still covers the async reload path.
+    await reloadHandler?.({ sender: mainWindow.webContents })
 
     expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
     // Removing the channel is what used to unbind whichever window was still open.
     expect(removeHandlerMock).not.toHaveBeenCalledWith('app:reload')
   })
 
-  it('keeps a newer window reloadable when an older window closes late', () => {
+  it('keeps a newer window reloadable when an older window closes late', async () => {
     const oldWindowOnMock = vi.fn()
     const oldWindow = createMainWindow()
     oldWindow.on = oldWindowOnMock
@@ -581,7 +584,8 @@ describe('attachMainWindowServices', () => {
     for (const handler of oldClosedHandlers) {
       handler()
     }
-    reloadHandler?.({ sender: newWindow.webContents })
+    // Awaited: the reload now captures a freeze frame first, so it lands a microtask later.
+    await reloadHandler?.({ sender: newWindow.webContents })
 
     expect(newWindow.webContents.reload).toHaveBeenCalledTimes(1)
   })

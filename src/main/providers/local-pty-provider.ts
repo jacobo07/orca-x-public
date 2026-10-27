@@ -35,6 +35,7 @@ import {
   STARTUP_COMMAND_READY_MAX_WAIT_MS
 } from './local-pty-shell-ready-startup-command'
 import type { ShellReadySignal } from './local-pty-shell-ready-startup-command'
+import { isCmdShellPath, withCmdCommandFinishedPrompt } from './cmd-osc133-prompt'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
@@ -1156,10 +1157,13 @@ export class LocalPtyProvider implements IPtyProvider {
           shellName: spawnedShellName,
           waitsForShellReady: shellReadyLaunch?.supportsReadyMarker === true
         })
+      if (isCmdShellPath(shellPath)) {
+        ptyPromptStates.get(id)?.tracker.noteSubmittedCommand()
+      }
       writeStartupCommandWhenShellReady(
         shellReadyPromise,
         proc,
-        args.command,
+        withCmdCommandFinishedPrompt(args.command, shellPath),
         (cleanup) => {
           startupCommandCleanup = cleanup
         },

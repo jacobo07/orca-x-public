@@ -35,11 +35,13 @@ export function resolveExpectedTeardownScope({
   isQuitting,
   isQuittingForUpdate,
   isExpectedRendererReload,
+  isRendererReplacement = false,
   includeSystemSessionEnd = true
 }: {
   isQuitting: boolean
   isQuittingForUpdate: boolean
   isExpectedRendererReload: boolean
+  isRendererReplacement?: boolean
   includeSystemSessionEnd?: boolean
 }): ExpectedTeardownScope {
   if (
@@ -48,6 +50,9 @@ export function resolveExpectedTeardownScope({
     (includeSystemSessionEnd && isRecentSystemSessionEnd())
   ) {
     return 'app-shutdown'
+  }
+  if (isRendererReplacement) {
+    return 'renderer-replacement'
   }
   return isExpectedRendererReload ? 'renderer-reload' : 'none'
 }

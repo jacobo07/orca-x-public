@@ -50,6 +50,7 @@ import {
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
+import { AgentProcessHandler } from './agent-process-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { AiVaultHandler } from './ai-vault-handler'
 import { createRelayAiVaultService } from './ai-vault-service-factory'
@@ -742,6 +743,8 @@ async function main(): Promise<void> {
   const _agentExecHandler = new AgentExecHandler(dispatcher)
   void _agentExecHandler
 
+  const agentProcessHandler = new AgentProcessHandler(dispatcher)
+
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
 
@@ -1330,6 +1333,8 @@ async function main(): Promise<void> {
             `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
           )
         })
+        // Why: provider processes run in their own process group, so relay exit alone does not reap them.
+        await agentProcessHandler.dispose()
         stopPoolWatch()
         stopPoolActiveWatch()
         dispatcher.dispose()

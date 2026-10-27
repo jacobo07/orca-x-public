@@ -1,0 +1,27 @@
+name: Cognitive Workspace Done Gate
+
+# Why on demand and not in pr.yml: this is the program's completion gate, red by construction until
+# every row of its matrix is complete (2 are blocked on owner-gated legs today). Mounted on
+# pull_request it would fail every PR for a reason no PR can fix. pr.yml runs the matrix's
+# INTEGRITY check (check:cognitive-workspace-matrix) on every change; this runs the COMPLETION check
+# when someone wants the verdict, so it is a real CI gate rather than an exemption.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  completeness:
+    name: cognitive workspace program is complete
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Check cognitive workspace completeness
+        run: pnpm run check:cognitive-workspace-completeness

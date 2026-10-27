@@ -102,6 +102,7 @@ import type {
 } from '../shared/notification-settings-types'
 import type { OnboardingState } from '../shared/onboarding-state-types'
 import type { PersistedUIState } from '../shared/persisted-ui-state-types'
+import type { ReloadFreezeFrame } from '../shared/reload-freeze-frame'
 import type { CustomPet } from '../shared/pet-types'
 import type { MemorySnapshot } from '../shared/process-stats-types'
 import type { NestedRepoScanResult } from '../shared/project-group-types'
@@ -248,6 +249,11 @@ import type {
   LiveSessionMaterializationResponse,
   LiveSessionResumeRefusal
 } from '../shared/live-agent-session-presence-types'
+import {
+  AGENT_TRANSCRIPT_PRESENCE_CHANNEL,
+  type AgentTranscriptPresenceRequest
+} from '../shared/agent-transcript-presence-request'
+import type { WorkingSetFactPresence } from '../shared/project-working-set-store-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
@@ -342,6 +348,7 @@ import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import {
+  answerReloadPreparationRequests,
   prepareAndInvokeAppRestart,
   prepareAndInvokeUpdaterInstall,
   registerRendererRestartIpcRelays
@@ -368,6 +375,7 @@ const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
 )
 
 registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
+answerReloadPreparationRequests(ipcRenderer, window, awaitBeforeUnloadCheckpoint)
 
 function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
   if (process.platform !== 'linux') {
@@ -577,6 +585,8 @@ const api = {
       startupDiagnosticsEnabled
         ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
         : Promise.resolve(),
+    takeReloadFreezeFrame: (): Promise<ReloadFreezeFrame | null> =>
+      ipcRenderer.invoke('app:takeReloadFreezeFrame'),
     // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
@@ -3194,6 +3204,11 @@ const api = {
     transferContinueSessions: (args) =>
       ipcRenderer.invoke('workingSet:transferContinueSessions', args)
   } satisfies PreloadApi['workingSet'],
+  continuity: {
+    readDesk: () => ipcRenderer.invoke('continuity:readDesk'),
+    renderPanePreview: (request) => ipcRenderer.invoke('continuity:renderPanePreview', request),
+    admitWake: (request) => ipcRenderer.invoke('continuity:admitWake', request)
+  } satisfies PreloadApi['continuity'],
   durableExit: {
     park: (request) => ipcRenderer.invoke('durableExit:park', request),
     onParkPhaseRequest: (callback) => {
@@ -5113,6 +5128,10 @@ const api = {
       request: LiveAgentSessionPresenceRequest
     ): Promise<LiveAgentSessionPresenceResponse> =>
       ipcRenderer.invoke('agentSession:readLivePresence', request),
+    readTranscriptPresence: (
+      request: AgentTranscriptPresenceRequest
+    ): Promise<WorkingSetFactPresence> =>
+      ipcRenderer.invoke(AGENT_TRANSCRIPT_PRESENCE_CHANNEL, request),
     reserveMaterialization: (
       request: LiveSessionMaterializationRequest
     ): Promise<LiveSessionMaterializationResponse> =>

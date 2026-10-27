@@ -29,6 +29,8 @@ export type TerminalPaneRecoveryReason =
   | 'input-rejected-by-host'
   // A restore was requested for a certified-dead pipeline (reveal path).
   | 'restore-blocked'
+  // An on-screen pane stopped advancing while main's model of its PTY did.
+  | 'visible-output-stalled'
 
 type RecoveryRequest = {
   tabId: string
@@ -255,8 +257,9 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     // Why: recovery fires from timer and write-callback contexts (stall watch,
     // replay guard, onData) — it is best-effort by contract and must never
     // surface a throw there (partial store surfaces in tests, teardown races).
-    // The breadcrumb is the only trace of a production failure loop here: the
-    // budget was not consumed, so the detector will retry each cooldown.
+    // The breadcrumb is the only trace of a production failure loop here. The
+    // budget was not consumed; write-stall certification is one-shot, so only
+    // the visible-pane liveness check re-asks, and only for on-screen panes.
     // recordRendererCrashBreadcrumb is itself guarded and cannot throw.
     recordRendererCrashBreadcrumb('terminal_pane_recovery_failed', {
       tabId: request.tabId,

@@ -3,7 +3,11 @@ import { closeSync, mkdirSync, openSync, readSync, rmSync, statSync } from 'node
 import { mkdir, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
-import { writeFileDurable, writeFileDurableSync } from './durable-file-write'
+import { DurablePublishError, writeFileDurable, writeFileDurableSync } from './durable-file-write'
+import {
+  classifyScrollbackStoreFailure,
+  type TerminalScrollbackStoreOutcome
+} from './terminal-scrollback-store-outcome'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
@@ -101,15 +105,15 @@ export function writeTerminalScrollbackSnapshotSync(args: {
   leafId: string
   buffer: string
   storage?: TerminalScrollbackSnapshotStorage
-}): string | null {
+}): TerminalScrollbackStoreOutcome {
   if (!args.buffer) {
-    return null
+    return { status: 'nothing-to-store' }
   }
   const ref = makeTerminalScrollbackSnapshotRef(args.tabId, args.leafId)
   const snapshotRoot = getSnapshotRoot(args.storage)
   const path = snapshotPath(ref, snapshotRoot)
   if (!path) {
-    return null
+    return { status: 'nothing-to-store' }
   }
   try {
     mkdirSync(snapshotRoot, { recursive: true, mode: 0o700 })
@@ -126,12 +130,29 @@ export function writeTerminalScrollbackSnapshotSync(args: {
         rmSync(tmpPath, { force: true })
       }
     }
-    return ref
+    return { status: 'stored', ref }
   } catch (err) {
-    console.warn(
-      `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
-    )
-    return null
+    return notStored(err)
+  }
+}
+
+/** The one place a thrown publish becomes an outcome, so both writers cannot classify differently. */
+function notStored(err: unknown): TerminalScrollbackStoreOutcome {
+  const stage = err instanceof DurablePublishError ? err.stage : null
+  const code =
+    err instanceof DurablePublishError
+      ? err.code
+      : ((err as NodeJS.ErrnoException | null)?.code ?? null)
+  console.warn(
+    `[terminal-scrollback] Failed to write snapshot${stage ? ` at ${stage}` : ''} (${code ?? 'no code'}): ${
+      err instanceof Error ? err.message : String(err)
+    }`
+  )
+  return {
+    status: 'not-stored',
+    failure: classifyScrollbackStoreFailure(typeof code === 'string' ? code : null),
+    code: typeof code === 'string' ? code : null,
+    stage
   }
 }
 
@@ -140,15 +161,15 @@ export async function writeTerminalScrollbackSnapshot(args: {
   leafId: string
   buffer: string
   storage?: TerminalScrollbackSnapshotStorage
-}): Promise<string | null> {
+}): Promise<TerminalScrollbackStoreOutcome> {
   if (!args.buffer) {
-    return null
+    return { status: 'nothing-to-store' }
   }
   const ref = makeTerminalScrollbackSnapshotRef(args.tabId, args.leafId)
   const snapshotRoot = getSnapshotRoot(args.storage)
   const path = snapshotPath(ref, snapshotRoot)
   if (!path) {
-    return null
+    return { status: 'nothing-to-store' }
   }
   const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
   let renamed = false
@@ -159,12 +180,9 @@ export async function writeTerminalScrollbackSnapshot(args: {
     // libuv threadpool, so the quit path's no-synchronous-syscall contract is preserved.
     await writeFileDurable(tmpPath, path, bytes, { mode: 0o600 })
     renamed = true
-    return ref
+    return { status: 'stored', ref }
   } catch (err) {
-    console.warn(
-      `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
-    )
-    return null
+    return notStored(err)
   } finally {
     if (!renamed) {
       await rm(tmpPath, { force: true }).catch(() => {})
@@ -232,11 +250,13 @@ export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
     const remainingBuffers: Record<string, string> = {}
     let layoutChanged = false
     for (const [leafId, buffer] of Object.entries(buffers)) {
-      const ref = writeTerminalScrollbackSnapshotSync({ tabId, leafId, buffer, storage })
-      if (ref) {
-        refs[leafId] = ref
+      const outcome = writeTerminalScrollbackSnapshotSync({ tabId, leafId, buffer, storage })
+      if (outcome.status === 'stored') {
+        refs[leafId] = outcome.ref
         layoutChanged = true
       } else {
+        // Same reasoning as the async sibling: the buffer is the only copy, so it stays inline
+        // whether there was nothing to store or the store failed.
         remainingBuffers[leafId] = buffer
         if (refs[leafId]) {
           delete refs[leafId]

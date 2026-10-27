@@ -52,6 +52,24 @@ export function describeTurnLocation(location: AgentGroundingLocation): Groundin
         ),
         tone: 'caution'
       }
+    case 'resolved-remote':
+      return {
+        label: translate('workspace.location.sshHost', 'Remote host'),
+        detail: translate('workspace.location.sshHostDetail', '{{host}} — {{path}}', {
+          host: location.hostId,
+          path: location.path
+        }),
+        tone: 'ready'
+      }
+    case 'ambiguous-host':
+      return {
+        label: translate('workspace.location.ambiguous', 'Several remote hosts'),
+        detail: translate(
+          'workspace.location.ambiguousDetail',
+          'Its project is set up on more than one host. Turns are refused until one is chosen.'
+        ),
+        tone: 'refused'
+      }
     case 'remote-host':
       return {
         label: translate('workspace.location.remote', 'Remote host'),

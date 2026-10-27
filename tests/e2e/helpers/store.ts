@@ -238,6 +238,31 @@ export async function switchToOtherWorktree(
   }, currentWorktreeId)
 }
 
+/** Why: the first worktree scan can be cached from before the fixture exposed the second worktree
+ *  (measured on Windows: a store-only poll stays null for 30 s), so refetch every round. */
+export async function switchToOtherWorktreeAfterRefresh(
+  page: Page,
+  currentWorktreeId: string,
+  timeoutMs = 30_000
+): Promise<string | null> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await page.evaluate(async () => {
+      const state = window.__store?.getState()
+      if (!state) {
+        return
+      }
+      await Promise.all(state.repos.map((repo) => state.fetchWorktrees(repo.id)))
+    })
+    const switched = await switchToOtherWorktree(page, currentWorktreeId)
+    if (switched) {
+      return switched
+    }
+    await page.waitForTimeout(500)
+  }
+  return null
+}
+
 /** Switch to a specific worktree via the store. */
 export async function switchToWorktree(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((id) => {

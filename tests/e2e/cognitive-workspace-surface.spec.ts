@@ -1,4 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
+import { pickNewAgentProject } from './helpers/new-agent-project-picker'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
@@ -26,13 +27,7 @@ async function createAgent(
   await page.getByTestId('workspace-new-agent').click()
   await page.getByTestId('new-agent-name').fill(name)
   await page.getByTestId('new-agent-role').fill('reality probe')
-  const select = page.getByTestId('new-agent-project')
-  if (projectIndex === 'first') {
-    await select.selectOption({ index: 0 })
-    expect(await select.inputValue()).not.toBe('__none__')
-  } else {
-    await select.selectOption('__none__')
-  }
+  await pickNewAgentProject(page, projectIndex)
   await page.getByTestId('new-agent-submit').click()
   await expect(page.getByTestId('new-agent-dialog')).toHaveCount(0)
   // The dialog opens the new agent's chat; the header names who it is.

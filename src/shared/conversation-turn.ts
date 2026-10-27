@@ -23,20 +23,37 @@ export type ConversationTurnOutcome =
   | { outcome: 'busy'; activeTurnId: string }
   | { outcome: 'conversation-absent' }
   | { outcome: 'agent-unavailable'; agentId: string; reason: 'missing' | 'unverifiable' }
-  /** `reason` carries the resolver's own four answers rather than one flattened failure: they need
-   *  four different sentences and have four different fixes. */
+  /** `reason` carries the resolver's own answers rather than one flattened failure: each needs its
+   *  own sentence and has its own fix. `remote-execution-unavailable` is a project located on a
+   *  remote host with no way to run there — refused, never run locally instead. */
   | {
       outcome: 'project-unavailable'
       projectId: string
-      reason: 'unresolved' | 'not-ready' | 'remote-host'
+      reason:
+        | 'unresolved'
+        | 'not-ready'
+        | 'remote-host'
+        | 'ambiguous-host'
+        | 'remote-execution-unavailable'
+        | 'remote-host-unreachable'
+        | 'remote-relay-unsupported'
+        | 'remote-project-missing'
+        | 'location-changed'
       detail: string
     }
   | { outcome: 'auth-required'; detail: string }
   /** No provider could run the turn (signed out, quota exhausted, lacking a required capability).
    *  Refused before anything was committed or sent; `detail` names every provider's reason. */
   | { outcome: 'no-provider'; detail: string }
+  /** The provider cannot run on the host at all: install it, or update it. Not a failed turn. */
+  | {
+      outcome: 'provider-unavailable'
+      reason: 'not-installed' | 'protocol-unsupported'
+      detail: string
+    }
   | { outcome: 'not-durable'; reason: string }
-  | { outcome: 'failed'; turnId: string; reason: string }
+  /** `cause` names a turn cut off from outside the provider: its deadline, or its host going away. */
+  | { outcome: 'failed'; turnId: string; reason: string; cause?: 'timed-out' | 'host-lost' }
 
 /** True when the user's message is in the record even though no answer is. The surface should keep
  *  showing what they typed and explain why it was not answered, rather than clearing the composer
@@ -44,6 +61,7 @@ export type ConversationTurnOutcome =
 export function conversationTurnKeptUserMessage(outcome: ConversationTurnOutcome): boolean {
   return (
     outcome.outcome === 'auth-required' ||
+    outcome.outcome === 'provider-unavailable' ||
     outcome.outcome === 'failed' ||
     outcome.outcome === 'not-durable'
   )

@@ -14,7 +14,7 @@ describe('an unmeasured value does not render as a measured one', () => {
   it('SleepReclaimObservedReclaim: unmeasured and pending no longer share a treatment', () => {
     const { unmount } = render(
       <SleepReclaimObservedReclaim
-        reclaim={{ status: 'unmeasured', reason: 'sweep-failed', sleptPaneCount: 0 }}
+        reclaim={{ status: 'unmeasured', reason: 'sweep-failed', sleptPaneCount: 2 }}
       />
     )
     const unmeasured = screen.getByTestId('sleep-reclaim-observed')

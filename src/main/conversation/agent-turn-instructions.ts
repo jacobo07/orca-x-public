@@ -19,12 +19,16 @@
 // freshness, because this module reads none of those and asserting them would be invention.
 
 import type { Agent } from '../../shared/agent-types'
+import { parseExecutionHostId } from '../../shared/execution-host'
 import type { AgentProjectLocation } from './agent-project-location'
 
 /** The location the turn actually runs in, as resolved for THIS turn. `no-project` is a real state
  *  and is said out loud; the refusing states never reach here, because a turn that cannot reach its
  *  project does not run. */
-type CompilableLocation = Extract<AgentProjectLocation, { outcome: 'resolved' | 'no-project' }>
+type CompilableLocation = Extract<
+  AgentProjectLocation,
+  { outcome: 'resolved' | 'resolved-remote' | 'no-project' }
+>
 
 export function compileAgentTurnInstructions(
   agent: Pick<Agent, 'name' | 'role'>,
@@ -43,6 +47,15 @@ export function compileAgentTurnInstructions(
       '',
       `You belong to the Orca project "${location.displayName}", and this conversation runs in its working directory on this computer: ${location.path}`,
       'Read that directory when you need to know something about the project. It is the project as it stands right now, including any uncommitted changes, so prefer reading it over recalling anything about a project with a similar name.'
+    )
+  } else if (location.outcome === 'resolved-remote') {
+    // The host is named from its id, never from anything the directory might claim about itself.
+    const host = parseExecutionHostId(location.hostId)
+    const hostName = host?.kind === 'ssh' ? host.targetId : location.hostId
+    lines.push(
+      '',
+      `You belong to the Orca project "${location.displayName}", and this conversation runs in its working directory on the remote host "${hostName}": ${location.path}`,
+      'Read that directory when you need to know something about the project. It is the project as it stands right now on that host, including any uncommitted changes, so prefer reading it over recalling anything about a project with a similar name.'
     )
   } else {
     // Said explicitly. An agent left to infer its situation from silence will assume whatever

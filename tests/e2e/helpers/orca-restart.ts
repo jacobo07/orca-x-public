@@ -86,7 +86,9 @@ async function removeProfileDir(userDataDir: string): Promise<void> {
       return
     } catch (error) {
       if (attempt === 4) {
-        throw error
+        // Why not rethrown: a temp profile still locked by a dying helper must not turn a judged run red.
+        console.error(`[orca-restart] left ${userDataDir}: ${String(error)}`)
+        return
       }
       // Why: on Windows, taskkill can return before Electron/PTY handles are
       // fully released, making immediate temp-profile deletion flaky.

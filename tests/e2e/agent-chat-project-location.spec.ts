@@ -1,4 +1,5 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { pickNewAgentProject } from './helpers/new-agent-project-picker'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 
@@ -78,15 +79,10 @@ test('an agent bound to a project reaches the provider, and refuses once that pr
     await first.page.getByTestId('new-agent-name').fill(AGENT_NAME)
     await first.page.getByTestId('new-agent-role').fill(AGENT_ROLE)
 
-    // Bind the agent to a real project — the choice a person makes in this dialog. Projects come
-    // first in the select and "No project" is last, so index 0 is a real one. Asserted, not
-    // assumed: binding to "no project" by accident would make the success half pass for the wrong
-    // reason and the refusal half impossible.
-    const projectSelect = first.page.getByTestId('new-agent-project')
-    await projectSelect.selectOption({ index: 0 })
-    const boundProjectId = await projectSelect.inputValue()
-    expect(boundProjectId).not.toBe('__none__')
-    expect(boundProjectId).not.toBe('')
+    // Bind the agent to a real project — the choice a person makes in this dialog. The helper
+    // asserts a real one was bound: "no project" by accident would make the success half pass for
+    // the wrong reason and the refusal half impossible.
+    await pickNewAgentProject(first.page, 'first')
 
     await first.page.getByTestId('new-agent-submit').click()
     await expect(first.page.getByTestId('new-agent-dialog')).toHaveCount(0)

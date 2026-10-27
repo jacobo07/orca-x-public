@@ -147,8 +147,42 @@ describe('conversation live state — every refusal names what to do', () => {
       kind: 'auth-required',
       kept: true
     },
+    {
+      outcome: { outcome: 'provider-unavailable', reason: 'not-installed', detail: 'on box' },
+      kind: 'provider-not-installed',
+      kept: true
+    },
+    {
+      outcome: {
+        outcome: 'provider-unavailable',
+        reason: 'protocol-unsupported',
+        detail: 'on box'
+      },
+      kind: 'provider-protocol-unsupported',
+      kept: true
+    },
+    {
+      outcome: {
+        outcome: 'project-unavailable',
+        projectId: 'p1',
+        reason: 'remote-project-missing',
+        detail: 'gone'
+      },
+      kind: 'project-remote-missing',
+      kept: false
+    },
     { outcome: { outcome: 'not-durable', reason: 'superseded' }, kind: 'not-durable', kept: true },
     { outcome: { outcome: 'failed', turnId: 't1', reason: 'died' }, kind: 'failed', kept: true },
+    {
+      outcome: { outcome: 'failed', turnId: 't1', reason: 'slow', cause: 'timed-out' },
+      kind: 'failed-timed-out',
+      kept: true
+    },
+    {
+      outcome: { outcome: 'failed', turnId: 't1', reason: 'gone', cause: 'host-lost' },
+      kind: 'failed-host-lost',
+      kept: true
+    },
     { outcome: { outcome: 'conversation-absent' }, kind: 'absent', kept: false }
   ]
 

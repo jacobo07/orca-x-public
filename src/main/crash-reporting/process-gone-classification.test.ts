@@ -324,6 +324,31 @@ describe('shouldRecordProcessGoneCrash', () => {
     ).toBe(false)
   })
 
+  it('does not report a renderer Orca replaced on purpose, whatever reason Chromium gives', () => {
+    const replaced = {
+      source: 'renderer' as const,
+      processType: 'renderer',
+      reason: 'crashed',
+      exitCode: 133
+    }
+    expect(shouldRecordProcessGoneCrash({ ...replaced, expectedTeardown: 'renderer-replacement' })).toBe(
+      false
+    )
+    // Control: the same exit during an ordinary reload is still a real crash.
+    expect(shouldRecordProcessGoneCrash({ ...replaced, expectedTeardown: 'renderer-reload' })).toBe(true)
+    // A child process dying during the replacement is not the replacement.
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'com.orca.unexpected',
+        reason: 'crashed',
+        exitCode: 133,
+        expectedTeardown: 'renderer-replacement'
+      })
+    ).toBe(true)
+  })
+
   it('records non-SIGTERM child-process killed events during renderer-only reloads', () => {
     expect(
       shouldRecordProcessGoneCrash({
@@ -376,6 +401,22 @@ describe('shouldRecoverRendererAfterProcessGone', () => {
     expect(
       shouldRecoverRendererAfterProcessGone({
         reason: 'launch-failed',
+        expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(true)
+  })
+
+  it('leaves a renderer Orca replaced on purpose to the replacement, whatever reason Chromium gives', () => {
+    // Measured on Electron 43.1.0 linux: forcefullyCrashRenderer() reports `crashed` exit 133, never `killed`.
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'crashed',
+        expectedTeardown: 'renderer-replacement'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'crashed',
         expectedTeardown: 'renderer-reload'
       })
     ).toBe(true)

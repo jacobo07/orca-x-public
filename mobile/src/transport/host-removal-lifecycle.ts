@@ -2,6 +2,7 @@ import {
   clearWatermark,
   forgetHostNotificationSession
 } from '../notifications/notification-reconnect-catchup'
+import { purgeHostDrafts } from '../storage/draft-journal'
 import { removeHost } from './host-store'
 
 export async function removeHostAndCloseClient(
@@ -17,4 +18,11 @@ export async function removeHostAndCloseClient(
   // re-pair of the same host would inherit a watermark for a counter it never saw.
   forgetHostNotificationSession(hostId)
   void clearWatermark(hostId)
+  // Why: drafts are keyed by host; a removed host's unsent text must not outlive it
+  // or resurface if the same host id is paired again.
+  void purgeHostDrafts(hostId).then((outcome) => {
+    if (outcome.kind === 'failed') {
+      console.warn('[drafts] could not purge drafts of removed host', outcome.error)
+    }
+  })
 }

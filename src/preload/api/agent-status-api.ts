@@ -5,7 +5,9 @@ import type {
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
+import type { AgentTranscriptPresenceRequest } from '../../shared/agent-transcript-presence-request'
 import type { ComputerAwakeStatus } from '../../shared/computer-awake-mode'
+import type { WorkingSetFactPresence } from '../../shared/project-working-set-store-types'
 import type {
   LiveAgentSessionPresenceRequest,
   LiveAgentSessionPresenceResponse,
@@ -39,6 +41,16 @@ export type AgentStatusApi = {
   readLivePresence: (
     request: LiveAgentSessionPresenceRequest
   ) => Promise<LiveAgentSessionPresenceResponse>
+  /** Whether this session's conversation is still findable on disk. `absent` only when the
+   *  filesystem said so.
+   *
+   *  Optional because a client with no local filesystem — the web client, a paired phone — has
+   *  nothing to stat, and its honest answer is `unknown`. A caller that finds this method missing
+   *  must read that as `unknown` too: "could not ask" and "asked, nothing answered" are the same
+   *  evidence here, and neither may earn a promise. */
+  readTranscriptPresence?: (
+    request: AgentTranscriptPresenceRequest
+  ) => Promise<WorkingSetFactPresence>
   /** Checks presence and, when clear or accepted, reserves the right to materialize. */
   reserveMaterialization: (
     request: LiveSessionMaterializationRequest

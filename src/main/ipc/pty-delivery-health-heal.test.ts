@@ -329,4 +329,35 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
+
+  it('answers model progress and gate state for on-screen PTYs only', async () => {
+    const gate = await import('./pty-hidden-delivery-gate')
+    // Why a proxy: registration wires many runtime hooks; only the sequence read matters here.
+    const getPtyOutputSequence = vi.fn((id: string) => (id === 'pty-live' ? 42 : 0))
+    const runtime = new Proxy(
+      { getPtyOutputSequence },
+      { get: (target, key) => (key in target ? target[key as keyof typeof target] : vi.fn()) }
+    )
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    gate.markHiddenRendererPty('pty-live')
+    try {
+      const health = handlers.get('pty:reportRendererDeliveryState')!(null, {
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        onScreenPtyIds: ['pty-live', 'pty-no-model', 7]
+      }) as Record<string, unknown>
+
+      expect(health.modelOutputSequenceByPty).toEqual({ 'pty-live': 42 })
+      expect(health.hiddenGatedPtyIds).toEqual(['pty-live'])
+
+      const withoutIds = handlers.get('pty:reportRendererDeliveryState')!(null, {
+        receivedCharsByPty: {},
+        processedCharsByPty: {}
+      }) as Record<string, unknown>
+      expect(withoutIds.modelOutputSequenceByPty).toBeUndefined()
+      expect(withoutIds.hiddenGatedPtyIds).toBeUndefined()
+    } finally {
+      gate._resetHiddenRendererPtyDeliveryGateForTest()
+    }
+  })
 })

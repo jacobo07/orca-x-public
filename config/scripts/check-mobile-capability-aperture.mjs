@@ -253,8 +253,14 @@ function main() {
         `${allowlist.size} allowlisted methods unreferenced.`,
       ''
     ]
-    fs.writeFileSync(surfaceBaselinePath, `${header.concat(surface.unreferenced).join('\n')}\n`, 'utf8')
-    console.log(`wrote ${surface.unreferenced.length} entries to ${path.relative(REPO_ROOT, surfaceBaselinePath)}`)
+    fs.writeFileSync(
+      surfaceBaselinePath,
+      `${header.concat(surface.unreferenced).join('\n')}\n`,
+      'utf8'
+    )
+    console.log(
+      `wrote ${surface.unreferenced.length} entries to ${path.relative(REPO_ROOT, surfaceBaselinePath)}`
+    )
     return
   }
   result.failures.push(...surface.failures)

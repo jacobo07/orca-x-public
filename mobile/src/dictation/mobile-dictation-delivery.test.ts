@@ -102,7 +102,9 @@ describe('delivery follows the capture, not what moved during ASR', () => {
   it('WAS RETARGET 1 — a chat opened mid-dictation no longer steals the transcript', () => {
     // Captured on pty-a. The chat overlay has since opened; that fact is not an
     // input to the resolver, so it cannot change the destination.
-    expect(resolveDictationDelivery('run the tests', captureDictationTarget(SPEAKING_INTO_A_TERMINAL))).toEqual({
+    expect(
+      resolveDictationDelivery('run the tests', captureDictationTarget(SPEAKING_INTO_A_TERMINAL))
+    ).toEqual({
       kind: 'terminal-live',
       handle: 'pty-a',
       text: 'run the tests'
@@ -127,7 +129,9 @@ describe('delivery follows the capture, not what moved during ASR', () => {
   it('WAS RETARGET 3 — nothing captured is refused rather than aimed at last-active', () => {
     expect(resolveDictationDelivery('status', null)).toEqual({
       kind: 'refused',
-      reason: 'no-target-captured'
+      reason: 'no-target-captured',
+      // Carried for salvage only (OXI-003); a refusal still names no surface.
+      text: 'status'
     })
   })
 

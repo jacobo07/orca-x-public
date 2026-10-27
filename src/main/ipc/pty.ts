@@ -15,6 +15,7 @@ import {
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
 import { createPtyRendererOwnership } from './pty-renderer-ownership'
 import { shouldSparePtyFromOrphanSweep } from './pty-orphan-sweep-scope'
+import { createRevealConvergenceScheduler } from './pty-reveal-convergence-scheduler'
 import { getPrimaryAppWindowRenderer, isAppWindowRenderer } from './app-window-renderer-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
@@ -309,6 +310,8 @@ export function releasePtyRendererOwnershipForWindow(webContentsId: number): str
 const activeRendererPtys = new Set<string>()
 const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
+/** One convergence check per reveal; module-level so PTY exit can forget a reused id. */
+let revealConvergence: ReturnType<typeof createRevealConvergenceScheduler> | null = null
 // Why a second registry rather than a flag on the sets above: those answer "which pane is showing
 // this PTY", which stays true when the OS minimizes the window around that pane. This one answers
 // "can any window actually present it", which is the question delivery policy needs.
@@ -2138,6 +2141,7 @@ export function clearProviderPtyState(
   // Why here too: PTY ids are reused, and a stale viewer claim would make a fresh PTY inherit the
   // previous one's presentability instead of starting unknown.
   ptyViewerWindows.forgetPty(id)
+  revealConvergence?.forget(id)
   pendingHiddenRendererResizeOutputPtys.delete(id)
   deliveredHiddenRendererResizeOutputPtys.delete(id)
   // Why: every teardown path funnels through here — hidden/interest gate bits must not outlive the PTY or a reused map entry could silently gate a new one.
@@ -2696,6 +2700,8 @@ export function registerPtyHandlers(
   const PTY_DELIVERY_RESYNC_TIMEOUT_MS = 5_000
   // Why: a heal write-off destroys delivery accounting; require this much main-side ACK silence (independent of renderer evidence) before declaring the channel dead.
   const PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS = 10_000
+  // Why: bounds per-report work against a buggy/foreign caller; real windows show a handful of panes.
+  const MAX_ON_SCREEN_PTY_PROGRESS_IDS = 256
   // Why: keep the immediate path to keystroke-sized TUI redraws; large/non-interactive output must use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
@@ -3210,6 +3216,31 @@ export function registerPtyHandlers(
       })
     }
     return writtenOff
+  }
+
+  // Why: the push watchdog only sees ACK-starved in-flight bytes; a gated drop or a dead pane pipeline leaves none, so a visible pane can freeze while the model advances. Report the model's progress for on-screen PTYs and let the renderer compare.
+  function readOnScreenPtyModelProgress(
+    onScreenPtyIds: unknown
+  ): Pick<PtyRendererDeliveryHealthReply, 'modelOutputSequenceByPty' | 'hiddenGatedPtyIds'> {
+    if (!runtime || !Array.isArray(onScreenPtyIds) || onScreenPtyIds.length === 0) {
+      return {}
+    }
+    const modelOutputSequenceByPty: Record<string, number> = {}
+    const hiddenGatedPtyIds: string[] = []
+    const settings = getSettings?.()
+    for (const id of onScreenPtyIds.slice(0, MAX_ON_SCREEN_PTY_PROGRESS_IDS)) {
+      if (typeof id !== 'string' || id.length === 0) {
+        continue
+      }
+      const sequence = runtime.getPtyOutputSequence(id)
+      if (sequence > 0) {
+        modelOutputSequenceByPty[id] = sequence
+      }
+      if (shouldDropHiddenRendererPtyData(id, settings)) {
+        hiddenGatedPtyIds.push(id)
+      }
+    }
+    return { modelOutputSequenceByPty, hiddenGatedPtyIds }
   }
 
   function sendPtyDataToRenderer(
@@ -7667,11 +7698,13 @@ export function registerPtyHandlers(
           inFlightPtyCount++
         }
       }
+      const onScreen = readOnScreenPtyModelProgress(args?.onScreenPtyIds)
       return {
         inFlightTotalChars: rendererInFlightTotalChars,
         inFlightPtyCount,
         msSinceLastAck: lastAckReceivedAtMs === null ? null : Date.now() - lastAckReceivedAtMs,
-        ...(writtenOff.length > 0 ? { writtenOff } : {})
+        ...(writtenOff.length > 0 ? { writtenOff } : {}),
+        ...onScreen
       }
     }
   )
@@ -7711,6 +7744,13 @@ export function registerPtyHandlers(
     invalidatePendingPtyDrainPriority(args.id)
   })
 
+  if (runtime) {
+    revealConvergence = createRevealConvergenceScheduler({
+      probe: (ptyId) => runtime.probeRevealConvergence(ptyId),
+      record: (kind, detail) => mainDeliveryBreadcrumbs.record(kind, detail),
+      redact: redactPtyIdForDiagnostics
+    })
+  }
   ipcMain.removeAllListeners('pty:setRendererPtyVisible')
   ipcMain.on('pty:setRendererPtyVisible', (event, args: { id: string; visible: boolean }) => {
     if (typeof args.id !== 'string' || !args.id) {
@@ -7718,12 +7758,14 @@ export function registerPtyHandlers(
     }
     // Why: data produced while no renderer can see this PTY must keep that origin through batching, even if the user switches back before the flush lands.
     rendererVisibilityKnownPtys.add(args.id)
+    const wasVisible = visibleRendererPtys.has(args.id)
     if (args.visible) {
       visibleRendererPtys.add(args.id)
       closeStartupQueryAuthorityForPty(args.id)
     } else {
       visibleRendererPtys.delete(args.id)
     }
+    revealConvergence?.onVisibility(args.id, args.visible === true, wasVisible)
     // Why the sender matters: this claim is about one window's pane. Dropping it made every
     // window's report indistinguishable, so a second window could not have its own answer — and
     // "is that window on screen" had nowhere to attach.

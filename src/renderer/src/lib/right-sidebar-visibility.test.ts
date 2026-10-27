@@ -39,8 +39,10 @@ const PROJECT_SCOPED_APP_VIEWS = [
 ] as const
 
 describe('right sidebar visibility helpers', () => {
-  it('suppresses right sidebar controls on projectless full-page views', () => {
-    for (const view of ['workspace', 'settings', 'space']) {
+  // Workspace owns its context column; with a project open the panel would sit beside it as a
+  // second, unrelated right-hand surface.
+  it('suppresses right sidebar controls on full-page views, Workspace included', () => {
+    for (const view of ['workspace', 'settings', 'space', 'conversations']) {
       expect(canShowRightSidebarForView(view as AppState['activeView'], true)).toBe(false)
     }
   })
@@ -68,7 +70,7 @@ describe('right sidebar visibility helpers', () => {
   })
 
   it('does not treat the workspace or full-page globals as returnable surfaces', () => {
-    for (const view of ['terminal', 'workspace', 'settings', 'space']) {
+    for (const view of ['terminal', 'workspace', 'settings', 'space', 'conversations']) {
       expect(isProjectScopedApplicationView(view as AppState['activeView'])).toBe(false)
     }
   })

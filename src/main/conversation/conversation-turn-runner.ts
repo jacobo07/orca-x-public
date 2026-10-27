@@ -7,14 +7,33 @@
 import type { Agent } from '../../shared/agent-types'
 import type { ProviderType } from '../../shared/agent-status-types'
 import type { AgentTurnEvent } from '../../shared/agent-turn-event'
-import type { ConversationId, ConversationRecord } from '../../shared/conversation-types'
+import type {
+  ConversationId,
+  ConversationProviderProvenance,
+  ConversationRecord
+} from '../../shared/conversation-types'
 import type { ConversationTurnOutcome } from '../../shared/conversation-turn'
+import { appendProviderProvenance, provenanceHostId } from '../../shared/conversation-identity'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 import type { AgentProjectLocation } from './agent-project-location'
 import { compileAgentTurnInstructions } from './agent-turn-instructions'
 import type { ConversationService } from './conversation-service'
 import { applyAgentTurnEvent, interruptUnsettledTurns } from './conversation-turn-fold'
 import type { ProviderTurnTool } from './provider-turn-tool'
+import {
+  describeUnavailableProject,
+  REMOTE_REFUSAL_DETAIL,
+  type RemoteDriverRefusal
+} from './conversation-turn-refusals'
+import {
+  completeTurnTrace,
+  draftTurnTrace,
+  type ConversationTurnTrace,
+  type ConversationTurnTraceDraft
+} from './conversation-turn-trace'
+import { ProviderUnavailableError } from './provider-unavailable'
+import { TurnInterruptedError } from './turn-interruption'
 
 export type ConversationTurnRequest = {
   conversationId: ConversationId
@@ -35,6 +54,9 @@ export type ConversationTurnRequest = {
 export type ProviderTurnRequest = {
   /** The provider thread to continue, or null to begin one. Continuation material, never identity. */
   resumeSessionId: string | null
+  /** The directory that thread was recorded in. Null or absent is UNKNOWN: the driver must then
+   *  have the provider confirm the thread is in `cwd` before running the turn in it. */
+  resumeCwd?: string | null
   cwd: string
   text: string
   /** What the conversation's agent contributes (agent-turn-instructions.ts), or null for
@@ -58,7 +80,23 @@ export type ConversationTurnDriver = {
   runTurn: (request: ProviderTurnRequest) => Promise<ProviderTurnResult>
 }
 
-export type { ConversationTurnOutcome }
+/** Where a remote project's turn must run: a host, the setup on it, and a path that exists ONLY
+ *  there. Carried apart from `cwd` so a remote path has no route to a local child process. */
+export type RemoteExecutionTarget = {
+  projectId: string
+  hostId: `ssh:${string}`
+  setupId: string
+  path: string
+}
+
+export type AuthCheck = () => Promise<{ ready: true } | { ready: false; detail: string }>
+
+/** A remote host either offers a driver and its own auth check, or says why it cannot. */
+export type RemoteDriverResolution =
+  | { driver: ConversationTurnDriver; checkAuth: AuthCheck; hostAddress?: string | null }
+  | { refusal: RemoteDriverRefusal }
+
+export type { ConversationTurnOutcome, RemoteDriverRefusal }
 
 export type ConversationTurnDeps = {
   service: ConversationService
@@ -73,43 +111,33 @@ export type ConversationTurnDeps = {
   /** Where a turn runs when no project owns the answer. Never `process.cwd()`: on a packaged build
    *  that is Orca's own install directory, and an agent rooted there answers about Orca. */
   fallbackCwd: () => string
+  /** The provider driver that runs ON a remote project's host, with that host's own auth check —
+   *  or a named refusal. Absent means no remote execution exists at all: a refusal, never a local
+   *  run. Asked BEFORE admission, so a refusal commits nothing. */
+  remoteDriverFor?: (target: RemoteExecutionTarget) => Promise<RemoteDriverResolution>
   mintTurnId: () => string
   mintItemId: () => string
   /** Live-only sink: deltas and status reach the surface here and never reach disk. */
   emit: (conversationId: ConversationId, event: AgentTurnEvent) => void
+  /** One record per turn of where and why it ran (conversation-turn-trace.ts); no content. */
+  onTrace?: (trace: ConversationTurnTrace) => void
   now?: () => number
-}
-
-/** Three refusals, three sentences, three different fixes. A caller that only had "project
- *  unavailable" would send someone to look at the wrong thing in two cases out of three. */
-function describeUnavailableProject(
-  location: Extract<AgentProjectLocation, { outcome: 'unresolved' | 'not-ready' | 'remote-host' }>
-): { projectId: string; reason: 'unresolved' | 'not-ready' | 'remote-host'; detail: string } {
-  switch (location.outcome) {
-    case 'unresolved':
-      return {
-        projectId: location.projectId,
-        reason: 'unresolved',
-        detail: 'This agent’s project is not set up on this computer.'
-      }
-    case 'not-ready':
-      return {
-        projectId: location.projectId,
-        reason: 'not-ready',
-        detail: `This agent’s project is ${location.setupState} on this computer.`
-      }
-    case 'remote-host':
-      return {
-        projectId: location.projectId,
-        reason: 'remote-host',
-        detail: 'This agent’s project lives on a remote host, and its chat runs on this computer.'
-      }
-  }
 }
 
 export async function runConversationTurn(
   deps: ConversationTurnDeps,
   request: ConversationTurnRequest
+): Promise<ConversationTurnOutcome> {
+  const trace = draftTurnTrace(request.conversationId)
+  const outcome = await runTracedTurn(deps, request, trace)
+  deps.onTrace?.(completeTurnTrace(trace, outcome))
+  return outcome
+}
+
+async function runTracedTurn(
+  deps: ConversationTurnDeps,
+  request: ConversationTurnRequest,
+  trace: ConversationTurnTraceDraft
 ): Promise<ConversationTurnOutcome> {
   const now = deps.now ?? (() => Date.now())
   const { service } = deps
@@ -126,6 +154,7 @@ export async function runConversationTurn(
   // not run as Brainstorming, and a refused send must not leave the user's message committed.
   const binding = service.agentFor(existing.record)
   if (binding.kind === 'agent-missing' || binding.kind === 'agent-unverifiable') {
+    trace.agentId = binding.agentId
     return {
       outcome: 'agent-unavailable',
       agentId: binding.agentId,
@@ -137,13 +166,77 @@ export async function runConversationTurn(
   // never quietly run somewhere else. This is also the only place the answer is decided, so the
   // window's current focus has no way to reach it.
   const location =
-    binding.kind === 'agent' ? deps.resolveProjectLocation(binding.agent) : { outcome: 'none' as const }
+    binding.kind === 'agent'
+      ? deps.resolveProjectLocation(binding.agent)
+      : { outcome: 'none' as const }
+  trace.agentId = binding.kind === 'agent' ? binding.agent.id : null
+  trace.projectId = 'projectId' in location ? location.projectId : null
   if (
     location.outcome === 'unresolved' ||
     location.outcome === 'not-ready' ||
-    location.outcome === 'remote-host'
+    location.outcome === 'remote-host' ||
+    location.outcome === 'ambiguous-host'
   ) {
-    return { outcome: 'project-unavailable', ...describeUnavailableProject(location) }
+    return describeUnavailableProject(location)
+  }
+
+  // A remote project's turn runs ON its host or not at all. With no driver for that host this is a
+  // refusal before admission — never the local driver, and never a local directory of any name.
+  let driver = deps.driver
+  let checkAuth = deps.checkAuth
+  let hostAddress: string | null = null
+  if (location.outcome === 'resolved-remote') {
+    const target = {
+      projectId: location.projectId,
+      hostId: location.hostId,
+      setupId: location.setupId,
+      path: location.path
+    }
+    // Known before the host is asked, so a refusal still says where it tried.
+    Object.assign(trace, { hostId: target.hostId, setupId: target.setupId, path: target.path })
+    const refuse = (
+      reason: 'remote-execution-unavailable' | RemoteDriverRefusal,
+      detail: string
+    ): ConversationTurnOutcome => ({
+      outcome: 'project-unavailable',
+      projectId: location.projectId,
+      reason,
+      detail
+    })
+    if (!deps.remoteDriverFor) {
+      return refuse(
+        'remote-execution-unavailable',
+        'This agent’s project lives on a remote host, and Orca cannot run its chat there.'
+      )
+    }
+    let resolution: RemoteDriverResolution
+    try {
+      resolution = await deps.remoteDriverFor(target)
+    } catch {
+      // Nothing escapes before admission: a probe that threw is a host we could not reach.
+      resolution = { refusal: 'remote-host-unreachable' }
+    }
+    if ('refusal' in resolution) {
+      return refuse(resolution.refusal, REMOTE_REFUSAL_DETAIL[resolution.refusal])
+    }
+    // The probe awaited; a project that moved meanwhile must not run at the location read before.
+    const again = binding.kind === 'agent' ? deps.resolveProjectLocation(binding.agent) : null
+    if (
+      again?.outcome !== 'resolved-remote' ||
+      again.hostId !== target.hostId ||
+      again.setupId !== target.setupId ||
+      again.path !== target.path
+    ) {
+      return {
+        outcome: 'project-unavailable',
+        projectId: location.projectId,
+        reason: 'location-changed',
+        detail: 'This agent’s project moved while the message was being sent.'
+      }
+    }
+    driver = resolution.driver
+    checkAuth = resolution.checkAuth
+    hostAddress = resolution.hostAddress ?? null
   }
 
   const developerInstructions =
@@ -151,9 +244,21 @@ export async function runConversationTurn(
       ? compileAgentTurnInstructions(binding.agent, location)
       : null
 
-  // An agent's project is the authority and overrides the caller outright. Everything else falls
-  // back to a DECLARED location rather than to whatever directory this process happens to be in.
-  const cwd = location.outcome === 'resolved' ? location.path : (request.cwd ?? deps.fallbackCwd())
+  // An agent's project is the authority and overrides the caller outright; a remote path goes only
+  // to the remote driver chosen above. Everything else falls back to a DECLARED location rather
+  // than to whatever directory this process happens to be in.
+  trace.provider = driver.provider
+  const cwd =
+    location.outcome === 'resolved' || location.outcome === 'resolved-remote'
+      ? location.path
+      : (request.cwd ?? deps.fallbackCwd())
+
+  const executionHostId: string =
+    location.outcome === 'resolved-remote' ? location.hostId : LOCAL_EXECUTION_HOST_ID
+  trace.hostId = executionHostId
+  trace.path = cwd
+  trace.setupId = 'setupId' in location ? location.setupId : null
+  trace.authority = location.outcome === 'resolved-remote' ? 'ssh-relay' : 'local'
 
   const turnId = deps.mintTurnId()
 
@@ -181,12 +286,22 @@ export async function runConversationTurn(
     // Auth is checked AFTER the message is safe and BEFORE any token is spent. The message stays in
     // the conversation and the surface says the provider needs signing in — which is the truth, and
     // is not an empty assistant reply.
-    const auth = await deps.checkAuth()
+    // The auth check of the host the turn runs on. A remote check that could not ask THROWS, and
+    // lands below as `failed` — never as "sign in", which would send someone to fix the wrong thing.
+    const auth = await checkAuth()
     if (!auth.ready) {
       return { outcome: 'auth-required', detail: auth.detail }
     }
 
-    const resumeSessionId = latestSessionId(existing.record, deps.driver.provider)
+    // Only a thread THIS provider issued, recorded on THIS host, can be resumed: another provider's
+    // session id names nothing it can open, and a thread's history exists only where it ran.
+    const resumeFrom = latestResumableProvenance(
+      existing.record,
+      driver.provider,
+      executionHostId,
+      hostAddress
+    )
+    trace.providerSessionId = resumeFrom?.providerSessionId ?? null
     let sawTerminal = false
     // Why kept apart from sawTerminal: a provider that ENDED the turn as failed has settled it, and
     // reporting that as `completed` would hand callers an empty answer instead of the refusal.
@@ -197,8 +312,9 @@ export async function runConversationTurn(
     let durableChain: Promise<void> = Promise.resolve()
     let durableFailure: string | null = null
 
-    const result = await deps.driver.runTurn({
-      resumeSessionId,
+    const result = await driver.runTurn({
+      resumeSessionId: resumeFrom?.providerSessionId ?? null,
+      resumeCwd: resumeFrom?.cwd ?? null,
       cwd,
       text: request.text,
       developerInstructions,
@@ -210,7 +326,7 @@ export async function runConversationTurn(
           sawTerminal = true
         }
         if (event.kind === 'turn-ended') {
-          endedAs = { state: event.state, reason: event.reason }
+          endedAs ??= { state: event.state, reason: event.reason }
         }
         if (isDurableEvent(event)) {
           // Not awaited HERE — blocking the provider's event callback would stall the stream — but
@@ -234,9 +350,20 @@ export async function runConversationTurn(
       return { outcome: 'not-durable', reason: durableFailure }
     }
 
+    trace.providerSessionId = result.providerSessionId ?? trace.providerSessionId
     if (result.providerSessionId !== null) {
       await service.applyEvent(conversationId, (current) =>
-        appendProvenanceOnce(current, deps.driver.provider, result.providerSessionId as string, now())
+        appendProviderProvenance(current, {
+          agent: driver.provider,
+          providerSessionId: result.providerSessionId as string,
+          transcriptPath: null,
+          observedAt: now(),
+          // Omitted for local, so a local turn writes exactly the record shape it always has.
+          ...(executionHostId === LOCAL_EXECUTION_HOST_ID ? {} : { executionHostId }),
+          ...(hostAddress ? { hostAddress } : {}),
+          // The driver runs a turn only in a thread confirmed to be in `cwd`, so this is observed.
+          cwd
+        })
       )
     }
 
@@ -260,7 +387,12 @@ export async function runConversationTurn(
     await service.applyEvent(conversationId, (current) =>
       interruptUnsettledTurns(current, now(), 'failed')
     )
-    return { outcome: 'failed', turnId, reason }
+    if (error instanceof ProviderUnavailableError) {
+      return { outcome: 'provider-unavailable', reason: error.reason, detail: error.message }
+    }
+    return error instanceof TurnInterruptedError
+      ? { outcome: 'failed', turnId, reason, cause: error.cause }
+      : { outcome: 'failed', turnId, reason }
   } finally {
     admission.release()
   }
@@ -281,42 +413,25 @@ function isDurableEvent(event: AgentTurnEvent): boolean {
     return event.role !== 'user'
   }
   return (
-    event.kind === 'turn-started' ||
-    event.kind === 'turn-completed' ||
-    event.kind === 'turn-ended'
+    event.kind === 'turn-started' || event.kind === 'turn-completed' || event.kind === 'turn-ended'
   )
 }
 
-/** A session id belongs to the provider that issued it: resuming another provider's id would
- *  either fail or, worse, attach this turn to an unrelated session of the same shape. */
-function latestSessionId(record: ConversationRecord, provider: ProviderType): string | null {
+/** Federation scoped resume by provider and the Workspace branch by host; either alone is wrong once
+ *  both exist (a Claude turn resuming a Codex id, or a local turn resuming a remote thread). */
+function latestResumableProvenance(
+  record: ConversationRecord,
+  provider: ProviderType,
+  hostId: string,
+  hostAddress: string | null
+): ConversationProviderProvenance | null {
   for (let index = record.provenance.length - 1; index >= 0; index -= 1) {
     const entry = record.provenance[index]
-    if (entry.agent === provider && entry.providerSessionId !== null) {
-      return entry.providerSessionId
+    const onThisHost =
+      provenanceHostId(entry) === hostId || (Boolean(hostAddress) && entry.hostAddress === hostAddress)
+    if (entry.agent === provider && entry.providerSessionId !== null && onThisHost) {
+      return entry
     }
   }
   return null
-}
-
-/** Appends the binding only when it is new, so re-running turns on one thread does not grow the
- *  record with identical lineage entries. */
-function appendProvenanceOnce(
-  record: ConversationRecord,
-  provider: ProviderType,
-  providerSessionId: string,
-  at: number
-): ConversationRecord {
-  const head = record.provenance.at(-1)
-  if (head && head.agent === provider && head.providerSessionId === providerSessionId) {
-    return record
-  }
-  return {
-    ...record,
-    provenance: [
-      ...record.provenance,
-      { agent: provider, providerSessionId, transcriptPath: null, observedAt: at }
-    ],
-    updatedAt: at
-  }
 }

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
 
 vi.mock('@/lib/e2e-config', () => ({ e2eConfig: { exposeStore: false } }))
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({ recordRendererCrashBreadcrumb: vi.fn() }))
 
 const INTERVAL_MS = 15_000
 
@@ -197,5 +198,83 @@ describe('terminal delivery watchdog', () => {
 
     expect(reattachMock).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  // Why: the field freeze had a live preview beside a frozen pane while other
+  // PTYs kept flowing — exactly when the push probe stays silent.
+  async function driveVisiblePane(paneReceivesOutput: boolean): Promise<ReturnType<typeof vi.fn>> {
+    const { recordPtyDataReceived } = await startWatchdog()
+    const liveness = await import('./visible-pane-output-liveness')
+    const pipelineHealth = await import('@/lib/pane-manager/terminal-write-pipeline-health')
+    const terminal = {}
+    const requestRecovery = vi.fn()
+    liveness.registerVisiblePaneLiveness({
+      terminal,
+      getPtyId: () => 'pty-visible',
+      isOnScreen: () => true,
+      requestRecovery
+    })
+    let modelSequence = 1
+    reportMock.mockImplementation(async () => ({
+      ...HEALTHY,
+      modelOutputSequenceByPty: { 'pty-visible': modelSequence },
+      hiddenGatedPtyIds: ['pty-visible']
+    }))
+    for (let tick = 0; tick < 3; tick++) {
+      recordPtyDataReceived('pty-other', 64)
+      if (paneReceivesOutput) {
+        recordPtyDataReceived('pty-visible', 64)
+        pipelineHealth.recordTerminalParseProgress(terminal)
+      }
+      modelSequence += 10
+      await vi.advanceTimersByTimeAsync(INTERVAL_MS)
+    }
+    return requestRecovery
+  }
+
+  it('asks main about on-screen panes even while other PTYs flow, and recovers a frozen one', async () => {
+    const requestRecovery = await driveVisiblePane(false)
+
+    expect(reportMock).toHaveBeenCalledWith(
+      expect.objectContaining({ onScreenPtyIds: ['pty-visible'] })
+    )
+    expect(requestRecovery).toHaveBeenCalledTimes(1)
+    expect(requestRecovery).toHaveBeenCalledWith('output-not-received')
+    expect(reattachMock).not.toHaveBeenCalled()
+  })
+
+  // Why this is asserted and not assumed: the in-renderer ring is DevTools-only, so the remount the
+  // stall triggers destroys the evidence of its own cause. Several field freezes stayed unattributed
+  // for exactly that reason. A mirror nobody drives is a silent producer wearing a green suite.
+  it('mirrors a visible-pane stall out of the renderer, with the cause attached', async () => {
+    await driveVisiblePane(false)
+
+    const { recordRendererCrashBreadcrumb } = await import('@/lib/crash-breadcrumb-recorder')
+    const { TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB } = await import('./terminal-delivery-watchdog')
+
+    expect(recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB,
+      expect.objectContaining({ cause: 'output-not-received' })
+    )
+  })
+
+  // Bracketed rather than asserted as an absolute zero: this mock is not cleared between tests, so
+  // `not.toHaveBeenCalled()` measures the whole file's history and fails against a correct build.
+  // The claim is about THIS window, so the count is what must not move.
+  it('does not mirror anything for a pane that keeps up (negative control)', async () => {
+    const { recordRendererCrashBreadcrumb } = await import('@/lib/crash-breadcrumb-recorder')
+    const mirrored = () => vi.mocked(recordRendererCrashBreadcrumb).mock.calls.length
+    const before = mirrored()
+
+    await driveVisiblePane(true)
+
+    expect(mirrored()).toBe(before)
+  })
+
+  it('leaves an on-screen pane alone while it keeps up with its model', async () => {
+    const requestRecovery = await driveVisiblePane(true)
+
+    expect(reportMock).toHaveBeenCalledTimes(3)
+    expect(requestRecovery).not.toHaveBeenCalled()
   })
 })

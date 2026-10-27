@@ -37,6 +37,16 @@ function messageFor(notice: Notice): string {
         'conversations.noticeNoProvider',
         'No AI provider can run this turn right now, so nothing was sent. The reasons are below.'
       )
+    case 'provider-not-installed':
+      return translate(
+        'conversations.noticeProviderNotInstalled',
+        'Codex is not installed where this agent’s project lives. Install it there, then send again — your message was kept.'
+      )
+    case 'provider-protocol-unsupported':
+      return translate(
+        'conversations.noticeProviderProtocolUnsupported',
+        'Codex where this agent’s project lives is too old to hold a chat. Update it there, then send again — your message was kept.'
+      )
     case 'busy':
       return translate(
         'conversations.noticeBusy',
@@ -48,9 +58,16 @@ function messageFor(notice: Notice): string {
         'The answer arrived but could not be saved, so it is not in your history. Send again rather than relying on it.'
       )
     case 'failed':
+      return translate('conversations.noticeFailed', 'The turn failed. Your message was kept.')
+    case 'failed-timed-out':
       return translate(
-        'conversations.noticeFailed',
-        'The turn failed. Your message was kept.'
+        'conversations.noticeFailedTimedOut',
+        'The agent took too long and the turn was stopped. Your message was kept; send it again.'
+      )
+    case 'failed-host-lost':
+      return translate(
+        'conversations.noticeFailedHostLost',
+        "The connection to this agent's remote host closed during the turn, so it did not finish. Your message was kept; reconnect and send again."
       )
     case 'interrupted':
       return translate(
@@ -90,7 +107,37 @@ function messageFor(notice: Notice): string {
     case 'project-remote-only':
       return translate(
         'conversations.noticeProjectRemoteOnly',
-        "This agent's project only exists on a remote host, and this chat runs on this computer, so nothing was sent."
+        "This agent's project lives on a kind of host a chat cannot run on yet, so nothing was sent."
+      )
+    case 'project-host-ambiguous':
+      return translate(
+        'conversations.noticeProjectHostAmbiguous',
+        "This agent's project is set up on more than one remote host, and Orca will not pick one for it, so nothing was sent. Remove the setups you no longer use."
+      )
+    case 'project-remote-host-unreachable':
+      return translate(
+        'conversations.noticeProjectRemoteHostUnreachable',
+        "This agent's project lives on a remote host that is not connected, so nothing was sent. Connect to the host and try again."
+      )
+    case 'project-remote-relay-unsupported':
+      return translate(
+        'conversations.noticeProjectRemoteRelayUnsupported',
+        "Orca on this agent's remote host is too old to run a chat there, so nothing was sent. Reconnect the host so Orca can update it."
+      )
+    case 'project-remote-missing':
+      return translate(
+        'conversations.noticeProjectRemoteMissing',
+        "This agent's project directory is not on its remote host, so nothing was sent. Set the project up there again, or remove that setup."
+      )
+    case 'project-location-changed':
+      return translate(
+        'conversations.noticeProjectLocationChanged',
+        "This agent's project moved while the message was being sent, so nothing was sent. Send it again."
+      )
+    case 'project-remote-execution-unavailable':
+      return translate(
+        'conversations.noticeProjectRemoteExecutionUnavailable',
+        "This agent's project lives on a remote host, and Orca cannot run its chat there yet, so nothing was sent. It was not run on this computer instead."
       )
   }
 }

@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
-import { isAbsolute } from 'node:path'
 import { parseExecutionHostId } from '../../shared/execution-host'
+import { probeAgentTranscriptPresence } from '../native-chat/agent-transcript-presence'
 import type {
   WorkingSetFactPresence,
   WorkingSetPaneRestoreFacts,
@@ -83,19 +83,23 @@ async function transcriptPresence(
     return null
   }
   const providerPane = pane as ProviderPane
-  const recorded = providerPane.resume.providerSession.transcriptPath
-  // Why only a native absolute path can prove absence: a WSL guest path on Windows goes through
-  // distro probing, where "not found" also covers a stopped distro.
-  const wslGuest = deps.platform === 'win32' && recorded?.startsWith('/')
-  if (recorded && isAbsolute(recorded) && !wslGuest) {
-    return presenceOf(recorded, 'file', deps)
-  }
-  if (recorded) {
-    return (await deps.hostReadableTranscript(recorded)) ? 'present' : 'unknown'
-  }
-  // Why a miss is unknown: the search covers default roots, and a session may live under another
-  // account's config directory.
-  return (await deps.findTranscript(providerPane)) ? 'present' : 'unknown'
+  // One primitive answers this for every transition that asks it. This adapter shapes the subject
+  // and keeps the manifest-shaped deps this probe's own tests inject.
+  return probeAgentTranscriptPresence(
+    {
+      agent: providerPane.resume.agent,
+      sessionId: providerPane.resume.providerSession.id,
+      ...(providerPane.resume.providerSession.transcriptPath
+        ? { transcriptPath: providerPane.resume.providerSession.transcriptPath }
+        : {})
+    },
+    {
+      statPath: deps.statPath,
+      hostReadableTranscript: deps.hostReadableTranscript,
+      findTranscript: () => deps.findTranscript(providerPane),
+      platform: deps.platform
+    }
+  )
 }
 
 export async function gatherWorkingSetRestoreEvidence(

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { NewAgentDialog } from './NewAgentDialog'
 import type { Agent, AgentCreationResult } from '../../../../shared/agent-types'
-import type { Project } from '../../../../shared/project-types'
+import type { AgentProjectChoice } from './agent-project-choices'
 
 /**
  * The dialog is where the user-facing half of the failure model lives, so these drive the refusals
@@ -14,14 +14,14 @@ import type { Project } from '../../../../shared/project-types'
  * the disk refused.
  */
 
-function project(id: string, displayName = id): Project {
+function choice(projectId: string, displayName = projectId): AgentProjectChoice {
   return {
-    id,
+    projectId,
     displayName,
     badgeColor: '#000000',
-    sourceRepoIds: [],
-    createdAt: 0,
-    updatedAt: 0
+    hosts: [{ id: 'local', label: 'This computer', health: 'local', repoId: `repo-${projectId}` }],
+    path: null,
+    sharesName: false
   }
 }
 
@@ -47,12 +47,29 @@ function render(defaultProjectId: string | null = 'p1'): void {
     root.render(
       <NewAgentDialog
         open
-        projects={[project('p1', 'App'), project('p2', 'Site')]}
+        projectChoices={[choice('p1', 'App'), choice('p2', 'Site')]}
         defaultProjectId={defaultProjectId}
         onOpenChange={onOpenChange}
         onCreated={onCreated}
       />
     )
+  })
+}
+
+/** Opens the project picker and chooses a row the way a pointer does. */
+async function pickProject(projectId: string | null): Promise<void> {
+  await act(async () => {
+    field<HTMLButtonElement>('new-agent-project').click()
+  })
+  const option =
+    projectId === null
+      ? field('new-agent-project-none')
+      : document.querySelector<HTMLElement>(`[data-project-id="${projectId}"]`)
+  if (!option) {
+    throw new Error(`project option ${projectId} is not rendered`)
+  }
+  await act(async () => {
+    option.click()
   })
 }
 
@@ -104,9 +121,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  create = vi.fn(
-    async (): Promise<AgentCreationResult> => ({ outcome: 'created', agent: CREATED })
-  )
+  create = vi.fn(async (): Promise<AgentCreationResult> => ({ outcome: 'created', agent: CREATED }))
   onCreated = vi.fn()
   onOpenChange = vi.fn()
   ;(window as unknown as { api: unknown }).api = { agents: { create } }
@@ -133,15 +148,35 @@ describe('NewAgentDialog', () => {
     // project", so the form has to say which of the two it means.
     render()
     type('new-agent-name', 'Ada')
-    const select = field<HTMLSelectElement>('new-agent-project')
-    act(() => {
-      select.value = '__none__'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    await pickProject(null)
 
     await submit()
 
     expect(create).toHaveBeenCalledWith({ name: 'Ada', role: '', projectId: null })
+  })
+
+  it('sends the project picked from the list, not the pre-selected one', async () => {
+    render()
+    type('new-agent-name', 'Ada')
+    await pickProject('p2')
+
+    expect(field('new-agent-project').getAttribute('data-value')).toBe('p2')
+    await submit()
+
+    expect(create).toHaveBeenCalledWith({ name: 'Ada', role: '', projectId: 'p2' })
+  })
+
+  it('shows each project with the hosts it is set up on', async () => {
+    render()
+    await act(async () => {
+      field<HTMLButtonElement>('new-agent-project').click()
+    })
+
+    const row = document.querySelector('[data-project-id="p2"]')
+    expect(row?.textContent).toContain('Site')
+    expect(row?.textContent).toContain('This computer')
+    // A native select is drawn by the platform from color-scheme; that is how the list went white.
+    expect(field('new-agent-dialog').querySelector('select')).toBeNull()
   })
 
   it('pre-selects nothing rather than guessing when no project context exists', async () => {

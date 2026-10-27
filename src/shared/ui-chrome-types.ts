@@ -138,3 +138,5 @@ export type TopLevelView =
    *  'terminal' for a view an older build does not know, so no profile needed migrating — and
    *  'activity', which the rail used to call `agents`, still means the runtime feed it always did. */
   | 'agents'
+  /** The previous desk, reconstructed from durable state (continuity-resume-center.md). */
+  | 'resumeCenter'

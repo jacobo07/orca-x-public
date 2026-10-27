@@ -14,8 +14,15 @@ import type {
   ProviderTurnResult
 } from '../conversation/conversation-turn-runner'
 
-import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
+import { TurnInterruptedError } from '../conversation/turn-interruption'
+
+import {
+  CodexAppServerTimeoutError,
+  runCodexAppServerSession,
+  type CodexAppServerInvocation
+} from './codex-app-server-session'
 import { createCodexServerRequestBridge } from './codex-server-request-bridge'
+import { codexThreadRelocation } from './codex-thread-relocation-capability'
 import { mapCodexNotification } from './codex-turn-event-mapping'
 
 /** Generous, because a real turn on a loaded host measured ~39 s end to end and this deadline
@@ -32,11 +39,31 @@ export type CodexConversationDriverOptions = {
 
 /** Mirrors the peer's own signature: `params` is an OBJECT, never a bare unknown. A no-argument
  *  call with `params` omitted is rejected with -32600, so every call here sends a record. */
-type RpcLike = { request: (method: string, params?: Record<string, unknown>) => Promise<unknown> }
+type RpcLike = {
+  request: (method: string, params?: Record<string, unknown>) => Promise<unknown>
+  initializeResult?: unknown
+}
 
 function threadIdOf(response: unknown): string | null {
   const thread = (response as { thread?: { id?: unknown } } | null)?.thread
   return typeof thread?.id === 'string' && thread.id ? thread.id : null
+}
+
+/** Where the provider says the thread is: `thread.cwd`, or the response's own `cwd`. */
+function threadCwdOf(response: unknown): string | null {
+  const shaped = response as { cwd?: unknown; thread?: { cwd?: unknown } } | null
+  const cwd = shaped?.thread?.cwd ?? shaped?.cwd
+  return typeof cwd === 'string' && cwd ? cwd : null
+}
+
+/** Spelling-insensitive where the filesystem is: separators, a trailing slash, a drive letter's case.
+ *  POSIX paths stay case-sensitive, so two real directories never compare equal. */
+function sameDirectory(a: string, b: string): boolean {
+  const canonical = (value: string): string => {
+    const slashed = value.replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+    return /^[a-zA-Z]:/.test(slashed) ? slashed.toLowerCase() : slashed
+  }
+  return canonical(a) === canonical(b)
 }
 
 export function createCodexConversationDriver(
@@ -105,7 +132,15 @@ export function createCodexConversationDriver(
           },
           onServerRequest: bridge.handle
         }
-      )
+      ).catch((error: unknown) => {
+        // A lapsed deadline is its own state, not a provider failure: named for the runner.
+        throw error instanceof CodexAppServerTimeoutError
+          ? new TurnInterruptedError(
+              'timed-out',
+              `the provider did not finish the turn within ${Math.round(invocation.timeoutMs / 1000)} s`
+            )
+          : error
+      })
 
       if (!settled) {
         // The session ended without the provider settling the turn — a killed child or a closed
@@ -138,33 +173,51 @@ async function startOrResumeThread(
       ? {}
       : { developerInstructions: request.developerInstructions }
 
-  if (request.resumeSessionId !== null) {
+  // A resume RELOCATES the thread when the project moved. Measured on codex-cli 0.153.4 and 0.155.1:
+  // `thread/resume {threadId, cwd: B}` reports the thread in B, and without `cwd` it keeps the
+  // directory it was born in. (This note once said resume could not take `cwd`; that was
+  // unmeasured, and measurement overturned it.)
+  //
+  // The thread may be elsewhere when it moved or where it was is not recorded. Then the peer's
+  // version decides, before anything is sent: a peer not measured to relocate is never sent the
+  // field, and a new thread starts in the right place instead. An unmoved resume stays
+  // byte-identical for every peer. Either way the provider's own answer has the last word: a thread
+  // it does not report in `cwd` is not run in.
+  const relocating =
+    request.resumeSessionId !== null &&
+    (!request.resumeCwd || !sameDirectory(request.resumeCwd, request.cwd))
+  if (relocating && codexThreadRelocation(rpc.initializeResult) !== 'supported') {
+    emit({
+      kind: 'provider-status',
+      status: 'thread-relocation-unsupported',
+      detail: `this Codex is not known to move a thread; starting a new one in ${request.cwd}`
+    })
+  } else if (request.resumeSessionId !== null) {
     try {
-      // NOTE — a resume carries no `cwd`, and that is a MEASURED LIMIT rather than a decision.
-      //
-      // A Codex thread takes its working directory at `thread/start`, so a resumed thread keeps the
-      // one it was born with. That is right while an agent stays in its project, and wrong the
-      // moment its project binding changes: Orca resolves the new directory, the turn request
-      // carries it, and this call silently drops it — so the provider keeps reading the old project
-      // while Orca believes it moved.
-      //
-      // Not fixed here because the fix cannot be chosen without evidence. Whether `thread/resume`
-      // even accepts `cwd` is unrecorded in the spec's measured surface, and this app-server's
-      // schemas are strict, so sending an unknown field would be REJECTED rather than ignored. The
-      // alternative — starting a fresh thread when the location moves — trades the bug for losing
-      // the conversation's provider-side history, which is a product decision, not a repair.
-      // Pinned by `codex-conversation-driver.test.ts` so this cannot drift unnoticed.
-      const resumed = threadIdOf(
-        await rpc.request('thread/resume', { threadId: request.resumeSessionId, ...agentLayer })
-      )
-      if (resumed !== null) {
+      const response = await rpc.request('thread/resume', {
+        threadId: request.resumeSessionId,
+        ...(relocating ? { cwd: request.cwd } : {}),
+        ...agentLayer
+      })
+      const resumed = threadIdOf(response)
+      const reported = threadCwdOf(response)
+      const confirmed = reported === null ? !relocating : sameDirectory(reported, request.cwd)
+      if (resumed !== null && confirmed) {
         return resumed
       }
-      emit({
-        kind: 'provider-status',
-        status: 'thread-resume-empty',
-        detail: 'the provider accepted the resume but reported no thread; starting a new one'
-      })
+      emit(
+        resumed === null
+          ? {
+              kind: 'provider-status',
+              status: 'thread-resume-empty',
+              detail: 'the provider accepted the resume but reported no thread; starting a new one'
+            }
+          : {
+              kind: 'provider-status',
+              status: 'thread-relocation-unconfirmed',
+              detail: `the provider did not confirm the thread in ${request.cwd}; starting a new one`
+            }
+      )
     } catch (error) {
       emit({
         kind: 'provider-status',

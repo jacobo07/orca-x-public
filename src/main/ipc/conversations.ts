@@ -17,6 +17,7 @@ import type { Project } from '../../shared/project-types'
 import { checkCodexAuth } from '../codex/codex-auth-readiness'
 import { createCodexConversationDriver } from '../codex/codex-conversation-driver'
 import { readAgentGrounding } from '../conversation/agent-grounding'
+import { resolveSshCodexDriver } from '../codex/codex-ssh-conversation-driver'
 import {
   resolveAgentProjectLocation,
   type ProjectLocationReader
@@ -34,8 +35,10 @@ import {
   runConversationTurn,
   type ConversationTurnDeps,
   type ConversationTurnOutcome,
-  type ConversationTurnRequest
+  type ConversationTurnRequest,
+  type RemoteExecutionTarget
 } from '../conversation/conversation-turn-runner'
+import type { ConversationTurnTrace } from '../conversation/conversation-turn-trace'
 import type { Agent } from '../../shared/agent-types'
 import { runAgentTask, type AgentTaskExecutionDeps } from '../conversation/agent-task-execution'
 import { ProviderQuotaObservations } from '../conversation/provider-quota-observations'
@@ -44,6 +47,7 @@ import { registerAgentTaskRunner } from '../runtime/orchestration/agent-task-run
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaConversationsDirectory } from '../orca-profiles/profile-storage-paths'
 
+import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
 /** What each provider last said about its own quota. Process-wide: every window's turns share it. */
 const providerQuota = new ProviderQuotaObservations()
 
@@ -245,7 +249,17 @@ export function getConversationHandlers(
     fallbackCwd: () => homedir(),
     mintTurnId: () => `turn_${randomUUID()}`,
     mintItemId: () => `usr_${randomUUID()}`,
-    emit: broadcastTurnEvent
+    emit: broadcastTurnEvent,
+    // A remote project's turn runs on its ssh host through that host's live relay connection.
+    remoteDriverFor: (target: RemoteExecutionTarget) =>
+      resolveSshCodexDriver(target, getActiveMultiplexer, (targetId) => {
+        // The same machine on every device; the target id is minted per device.
+        const ssh = getSshConnectionStore()?.getTarget(targetId)
+        return ssh?.host ? `${ssh.username}@${ssh.host}:${ssh.port}` : null
+      }),
+    // Where and why each turn ran, to the main log. It carries no message text and no credentials.
+    onTrace: (trace: ConversationTurnTrace) =>
+      console.info(`[conversation-turn] ${JSON.stringify(trace)}`)
   }
   // Routed here, in the one handler set, so a paired phone's turn picks its provider exactly as a
   // desktop turn does.

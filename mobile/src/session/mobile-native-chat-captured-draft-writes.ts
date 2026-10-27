@@ -21,9 +21,7 @@ export function clearCapturedDraft(
   draftKey: string,
   text: string
 ): NativeChatDrafts {
-  return (drafts[draftKey] ?? '').trim() === text.trim()
-    ? { ...drafts, [draftKey]: '' }
-    : drafts
+  return (drafts[draftKey] ?? '').trim() === text.trim() ? { ...drafts, [draftKey]: '' } : drafts
 }
 
 /** Put text back after a definite rejection, never clobbering newer typing. */
@@ -48,35 +46,55 @@ export function appendToCapturedDraft(
 
 /** The three writes bound to one drafts setter. Each names its own key, so none
  *  can be re-pointed by a tab switch between capture and settlement. */
-export function useCapturedDraftWrites(setDrafts: Dispatch<SetStateAction<NativeChatDrafts>>): {
+/** Durable-draft hooks: a user edit is persisted; the send-time clear only flushes. */
+export type CapturedDraftPersistence = {
+  readonly markUserEdit: (draftKey: string) => void
+  readonly flushPendingSave: (draftKey: string) => void
+}
+
+const NO_PERSISTENCE: CapturedDraftPersistence = {
+  markUserEdit: () => {},
+  flushPendingSave: () => {}
+}
+
+export function useCapturedDraftWrites(
+  setDrafts: Dispatch<SetStateAction<NativeChatDrafts>>,
+  persistence: CapturedDraftPersistence = NO_PERSISTENCE
+): {
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   appendDictationToDraft: (capturedDraftKey: string, append: (current: string) => string) => void
 } {
+  const { markUserEdit, flushPendingSave } = persistence
   // Why: over relay the send RPC can take seconds (or lose only its ack), and a
   // composer that waits for settlement to empty reads as "my prompt didn't
   // send". Clear at send time; a definite rejection restores the text.
+  // The clear is NOT a user edit: the RPC can still be rejected, so the durable
+  // copy must outlive it until the send is confirmed.
   const clearDraftForSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string) => {
+      flushPendingSave(origin.draftKey)
       setDrafts((previous) => clearCapturedDraft(previous, origin.draftKey, text))
     },
-    [setDrafts]
+    [flushPendingSave, setDrafts]
   )
 
   const restoreRejectedDraft = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string) => {
+      markUserEdit(origin.draftKey)
       setDrafts((previous) => restoreCapturedDraft(previous, origin.draftKey, text))
     },
-    [setDrafts]
+    [markUserEdit, setDrafts]
   )
 
   // Why: dictation captures its composer when recording starts, so the write must
   // name that draft key rather than whichever tab is current when ASR finishes.
   const appendDictationToDraft = useCallback(
     (capturedDraftKey: string, append: (current: string) => string) => {
+      markUserEdit(capturedDraftKey)
       setDrafts((previous) => appendToCapturedDraft(previous, capturedDraftKey, append))
     },
-    [setDrafts]
+    [markUserEdit, setDrafts]
   )
 
   return { clearDraftForSend, restoreRejectedDraft, appendDictationToDraft }

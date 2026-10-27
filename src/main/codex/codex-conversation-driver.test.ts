@@ -14,13 +14,18 @@ type Captured = { calls: Call[]; command: string | null }
 function fakeSession(script: Script, captured: Captured): typeof runCodexAppServerSession {
   return (async (
     invocation: { command: string },
-    body: (rpc: { request: (method: string, params: unknown) => Promise<unknown> }) => Promise<unknown>,
+    body: (rpc: {
+      request: (method: string, params: unknown) => Promise<unknown>
+      initializeResult: unknown
+    }) => Promise<unknown>,
     _spawn: unknown,
     handlers?: { onNotification?: (notification: { method: string; params: unknown }) => void }
   ) => {
     captured.command = invocation.command
     const notify: Notify = (method, params) => handlers?.onNotification?.({ method, params })
     return body({
+      // A peer measured to relocate a thread (codex-thread-relocation-capability.ts).
+      initializeResult: { userAgent: 'orca_desktop/0.155.1 (Ubuntu 24.4.0; x86_64) unknown' },
       request: async (method, params) => {
         captured.calls.push({ method, params })
         return script(method, params, notify)
@@ -31,12 +36,14 @@ function fakeSession(script: Script, captured: Captured): typeof runCodexAppServ
 
 /** Answers like the real peer: thread/* return a thread envelope, and turn/start is acknowledged
  *  while the turn actually advances by notification. */
-const completingScript: Script = async (method, _params, notify) => {
+const completingScript: Script = async (method, params, notify) => {
   if (method === 'thread/start') {
     return { thread: { id: 'thread-new' } }
   }
   if (method === 'thread/resume') {
-    return { thread: { id: 'thread-resumed' } }
+    // As measured on 0.153.4/0.155.1: the thread is reported where `cwd` put it, else where it was born.
+    const cwd = (params as { cwd?: string }).cwd ?? '/tmp/work'
+    return { thread: { id: 'thread-resumed', cwd }, cwd }
   }
   if (method === 'turn/start') {
     notify('turn/started', { turn: { id: 'turn-1' } })
@@ -97,6 +104,7 @@ describe('codex conversation driver — starting and resuming', () => {
 
     const result = await driver.runTurn({
       resumeSessionId: 'thread-old',
+      resumeCwd: '/tmp/work',
       cwd: '/tmp/work',
       text: 'again',
       developerInstructions: null,
@@ -289,13 +297,15 @@ describe('codex conversation driver — an agent’s instructions', () => {
     })
 
     const resume = captured.calls.find((call) => call.method === 'thread/resume')
-    // Exact, not partial, and that makes it the pin for a known limit as well as the role: a resume
-    // sends NO `cwd`. A Codex thread takes its directory at `thread/start` and keeps it, so an agent
-    // whose project binding changes keeps reading the old project on its existing thread while Orca
-    // has resolved a new one. Adding `cwd` here would fail this assertion first, which is the point
-    // — the change needs evidence that `thread/resume` accepts it (these schemas are strict, so an
-    // unknown field is rejected, not ignored). See the note at the resume call site.
-    expect(resume?.params).toEqual({ threadId: 'thread-old', developerInstructions: ROLE })
+    // Exact, not partial, and the pin for location as well as the role. It once pinned a resume
+    // with NO `cwd`, as a known limit awaiting evidence. The evidence came in (resume relocates, on
+    // 0.153.4 and 0.155.1): with no recorded directory the location is unknown, so the resume
+    // carries `cwd` and the provider must confirm it.
+    expect(resume?.params).toEqual({
+      threadId: 'thread-old',
+      cwd: '/tmp/work',
+      developerInstructions: ROLE
+    })
   })
 
   // baseInstructions REPLACES the provider's own. A user-written role must never reach it.

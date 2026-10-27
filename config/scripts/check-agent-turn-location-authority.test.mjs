@@ -1,10 +1,33 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  classifyTurnEntrances,
+  consultsRemoteDriver,
+  findHostBlindResumeSites,
+  findTurnEntrances,
   findInventedLocationSites,
   isTestPath,
+  resumesByHost,
   stripComments
 } from './check-agent-turn-location-authority.mjs'
+
+describe('consultsRemoteDriver', () => {
+  it('accepts a runner that CALLS the remote driver selection, either spelling', () => {
+    expect(consultsRemoteDriver('const remote = deps.remoteDriverFor?.({ hostId })')).toBe(true)
+    expect(consultsRemoteDriver('const remote = deps.remoteDriverFor({ hostId })')).toBe(true)
+  })
+
+  it('refuses a runner that only DECLARES it or mentions it in a comment', () => {
+    // The W-C5 lesson: a positive control matching a bare identifier stayed green after the call
+    // was replaced by a literal. The type declaration and the prose must not satisfy it.
+    const declaredOnly = `
+      type Deps = { remoteDriverFor?: (target: Target) => Driver | null }
+      // remoteDriverFor(target) used to be asked here
+      const remote = null
+    `
+    expect(consultsRemoteDriver(declaredOnly)).toBe(false)
+  })
+})
 
 // The subjects here are SYNTHETIC. A drill pinned to a real offender has an interest in that
 // offender surviving, and stops asserting anything the day it is fixed — which, for this gate, is
@@ -78,6 +101,85 @@ describe('findInventedLocationSites', () => {
       source: 'const here = process.cwd()'
     }
     expect(findInventedLocationSites([windows])).toEqual(['src/main/conversation/win.ts'])
+  })
+})
+
+// ASCENDED baseline: a location is a path AND a host. The violator is FUTURE-LIKE and synthetic —
+// the next cognitive feature to continue a provider thread, written the obvious way.
+const HOST_BLIND = {
+  path: 'src/main/agent-digest/nightly-digest-runner.ts',
+  source: `
+    export async function continueDigest(record, driver) {
+      const binding = latestProviderProvenance(
+        record
+      )
+      return driver.runTurn({ resumeSessionId: binding?.providerSessionId ?? null })
+    }
+  `
+}
+const HOST_SCOPED = {
+  path: 'src/main/agent-digest/nightly-digest-runner.ts',
+  source: 'const binding = latestProviderProvenance(record, location.hostId)'
+}
+
+describe('findHostBlindResumeSites', () => {
+  it('catches a future feature that resumes a thread without naming its host', () => {
+    expect(findHostBlindResumeSites([HOST_BLIND])).toEqual([HOST_BLIND.path])
+  })
+
+  it('passes the same feature once it names the host', () => {
+    expect(findHostBlindResumeSites([HOST_SCOPED])).toEqual([])
+  })
+
+  it('exempts tests and prose', () => {
+    expect(
+      findHostBlindResumeSites([
+        { path: 'src/shared/conversation-identity.test.ts', source: 'latestProviderProvenance(r)' },
+        { path: 'src/main/x.ts', source: '// latestProviderProvenance(record) is host-blind' }
+      ])
+    ).toEqual([])
+  })
+})
+
+describe('resumesByHost', () => {
+  it('holds for a runner that looks its thread up by host, and not for one that dropped it', () => {
+    expect(resumesByHost('latestProviderProvenance(existing.record, executionHostId)')).toBe(true)
+    expect(resumesByHost('latestProviderProvenance(existing.record)')).toBe(false)
+  })
+})
+
+describe('turn entrances (Phase 9)', () => {
+  const RUNTIME_ENTRANCE = {
+    path: 'src/main/runtime/rpc/conversation-methods.ts',
+    source: 'export const sendTurn = (deps, request) => runConversationTurn(deps, request)'
+  }
+  const DEFINITION = {
+    path: 'src/main/conversation/conversation-turn-runner.ts',
+    source: 'export async function runConversationTurn(deps, request) {}'
+  }
+
+  it('flags a new surface that can start a turn and was never classified', () => {
+    const found = findTurnEntrances([RUNTIME_ENTRANCE, DEFINITION])
+    // The definition is not an entrance; a caller is.
+    expect(found).toEqual([RUNTIME_ENTRANCE.path])
+    expect(classifyTurnEntrances(found, {}).unclassified).toEqual([RUNTIME_ENTRANCE.path])
+  })
+
+  it('passes a classified entrance, and flags an inventory entry that no longer exists', () => {
+    const inventory = { [RUNTIME_ENTRANCE.path]: 'reason', 'src/gone.ts': 'reason' }
+    expect(classifyTurnEntrances([RUNTIME_ENTRANCE.path], inventory)).toEqual({
+      unclassified: [],
+      stale: ['src/gone.ts']
+    })
+  })
+
+  it('recognises the channel and the preload call, not only the runner', () => {
+    expect(
+      findTurnEntrances([
+        { path: 'src/preload/x.ts', source: "ipcRenderer.invoke('conversations:sendTurn', a)" },
+        { path: 'mobile/src/y.ts', source: 'await api.conversations.sendTurn({ id })' }
+      ])
+    ).toEqual(['mobile/src/y.ts', 'src/preload/x.ts'])
   })
 })
 

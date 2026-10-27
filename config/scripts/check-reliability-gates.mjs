@@ -5,6 +5,13 @@ import process from 'node:process'
 
 import { parse, printParseErrorCode } from 'jsonc-parser'
 
+import { readOriginUrlFromGit, resolveRepoScope } from './ci-repo-scope.mjs'
+import {
+  ACTIONS_RUN_URL,
+  CI_EVIDENCE_WITHOUT_PROVENANCE,
+  findCiEvidenceAttributionFailures,
+  findStaleProvenanceExemptions
+} from './ci-evidence-provenance.mjs'
 import {
   ASSERTION_BASELINE_PATH,
   createAssertionSourceReader,
@@ -21,30 +28,11 @@ const PROTECTION_LEVELS = new Set(['none', 'partial', 'active'])
 const EVIDENCE_RUN_RESULTS = new Set(['passed', 'failed', 'skipped'])
 const EVIDENCE_RUNNERS = new Set(['local', 'ci', 'soak', 'manual'])
 
-const ACTIONS_RUN_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/
-
-/**
- * `runner: "ci"` claims recorded before provenance was required.
- *
- * This file's header already says evidenceRuns is declared, not verified. For local, soak and
- * manual runs that is unavoidable: nothing outside this repository witnessed them. A CI run is
- * different -- GitHub holds the record, so a run URL turns "a developer says they ran it" into
- * something a reader can open, and it is the only runner value where the claim is checkable at all.
- *
- * Why it matters here specifically: measured 2026-09-21, this repository has not been assigned a
- * GitHub-hosted runner since 2026-09-13 01:51 UTC. Every run created since then finished in
- * seconds with no runner and no steps. In that world a `ci` claim is not merely unverified, it is
- * the one claim that has become impossible to honestly make, and nothing in the schema noticed.
- *
- * These three predate the requirement and are real -- all were recorded well before the runner
- * stopped. The list may only SHRINK: add a runUrl and delete the entry. A new ci claim must carry
- * provenance, and an entry whose run has since gained one is stale and fails the check.
- */
-export const CI_EVIDENCE_WITHOUT_PROVENANCE = new Set([
-  'browser-stream.bounded-reconnect::2026-08-07',
-  'terminal-session.daemon-generation-reconnect-safety::2026-07-27',
-  'terminal-session.windows-main-crash-survival::2026-07-18'
-])
+export {
+  CI_EVIDENCE_WITHOUT_PROVENANCE,
+  findCiEvidenceAttributionFailures,
+  findStaleProvenanceExemptions
+} from './ci-evidence-provenance.mjs'
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -465,7 +453,7 @@ export const VERDICT_CHECKER_INTERNAL_FAILURE = 'CHECKER INTERNAL FAILURE'
  * could not judge that gate — a different fact from the gate being invalid, and separated here so
  * one unanticipated field shape cannot take down the verdict for the whole manifest.
  */
-export async function validateManifest(manifest, root) {
+export async function validateManifest(manifest, root, { resolveSubjectRepo } = {}) {
   const failures = []
   const internalFailures = []
   if (!isRecord(manifest)) {
@@ -525,43 +513,20 @@ export async function validateManifest(manifest, root) {
         'any more; remove the stale entry from CI_EVIDENCE_WITHOUT_PROVENANCE'
     )
   }
-  return { failures, internalFailures }
-}
-
-/**
- * An exemption may not outlive its debt.
- *
- * Without this the frozen list becomes a permanent excuse: a run could gain provenance, or be
- * deleted outright, and the entry would sit there describing nothing while still granting a pass
- * to whatever later occupied that (gate, date) pair.
- */
-export function findStaleProvenanceExemptions(manifest) {
-  const gateIds = new Set()
-  const unproven = new Set()
-  for (const gate of Array.isArray(manifest?.gates) ? manifest.gates : []) {
-    try {
-      if (!isRecord(gate) || !isNonEmptyString(gate.id)) {
-        continue
-      }
-      gateIds.add(gate.id)
-      for (const run of Array.isArray(gate.evidenceRuns) ? gate.evidenceRuns : []) {
-        if (isRecord(run) && run.runner === 'ci' && !ACTIONS_RUN_URL.test(run.runUrl ?? '')) {
-          unproven.add(`${gate.id}::${run.date}`)
-        }
-      }
-    } catch {
-      // A gate whose fields cannot be read is already reported by validateGate as a checker
-      // failure against that gate. Letting it escape here would turn one unreadable gate into a
-      // verdict about the whole manifest, which is the isolation this file exists to keep.
-    }
+  const attribution = findCiEvidenceAttributionFailures(
+    manifest,
+    resolveSubjectRepo ??
+      (() =>
+        resolveRepoScope({
+          argv: process.argv.slice(2),
+          readOriginUrl: () => readOriginUrlFromGit(root)
+        }).repo)
+  )
+  failures.push(...attribution.failures)
+  if (attribution.internalFailure) {
+    internalFailures.push(attribution.internalFailure)
   }
-  // Only judge an exemption against a manifest that actually contains its gate. The frozen list
-  // describes THIS repository's manifest; a synthetic one in a test contains none of those gates,
-  // and reading their absence as "the debt is settled" would fail every fixture that has nothing
-  // to do with provenance. The real manifest is pinned by a test instead.
-  return [...CI_EVIDENCE_WITHOUT_PROVENANCE]
-    .filter((key) => gateIds.has(key.slice(0, key.lastIndexOf('::'))) && !unproven.has(key))
-    .sort()
+  return { failures, internalFailures }
 }
 
 /**
@@ -627,7 +592,8 @@ async function pruneAssertionBaseline(manifest, root) {
   return 0
 }
 
-export async function main(root = process.cwd()) {
+/** `options.resolveSubjectRepo` names the repository ci evidence must be about; tests inject it. */
+export async function main(root = process.cwd(), options = {}) {
   const manifestPath = path.join(root, MANIFEST_PATH)
   let raw
   try {
@@ -654,7 +620,7 @@ export async function main(root = process.cwd()) {
   }
   let result
   try {
-    result = await validateManifest(manifest, root)
+    result = await validateManifest(manifest, root, options)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`The checker failed before it could judge the manifest (${message})`)

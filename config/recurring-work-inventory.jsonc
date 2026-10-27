@@ -2318,7 +2318,7 @@
       "dormant": "n/a",
       "spawns": "none",
       "disposition": "justified",
-      "note": "terminal-delivery-watchdog.ts:175-189 module-singleton interval that heals dead push-delivery listeners across all PTYs at once, serialized via tickInFlight"
+      "note": "terminal-delivery-watchdog.ts scheduleWatchdogTimer: module-singleton interval that heals dead push-delivery listeners across all PTYs at once, serialized via tickInFlight. While any pane is on screen it also sends one pty:reportRendererDeliveryState invoke per tick carrying every on-screen PTY id (one call per window, not per pane) to catch a visible pane frozen while its model advances"
     },
     "src/renderer/src/components/terminal-pane/terminal-pane-recovery.ts#self-rescheduling-timeout#scheduleRecoveryRetry": {
       "responsibility": "terminal-pane-recovery-retry",

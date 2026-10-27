@@ -17,6 +17,7 @@ import {
   timeRendererStartupSyncStep
 } from '../startup/startup-diagnostics'
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
+import { reportAppReadyForFreezeFrame } from '../startup/reload-freeze-frame-overlay'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
 import { applyWindowStartupBinding } from '../startup/window-startup-session-binding'
 import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
@@ -283,6 +284,9 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
+          // The shell is coherent now — tabs, sidebar and terminals are all back — so the reload's
+          // frozen frame can hand the window over without showing a single intermediate state.
+          reportAppReadyForFreezeFrame()
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
@@ -333,6 +337,9 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           reconnectPersistedTerminals: actions.reconnectPersistedTerminals,
           abortSignal: abortController.signal
         })
+        // A degraded app is still the app; uncover it now rather than leaving a still picture of
+        // the old one on screen until the overlay's own cap fires.
+        reportAppReadyForFreezeFrame()
       }
       void actions.initGitHubCache()
     })()

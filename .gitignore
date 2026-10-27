@@ -113,6 +113,7 @@ docs/**
 !docs/reference/orca-yaml-requirements.md
 !docs/reference/presentation-derivation-projection.md
 !docs/reference/relay-grace-time-reconfiguration.md
+!docs/reference/remote-agent-turn-authority.md
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/renderer-agent-status-performance.md
 !docs/reference/windows-setup-shell.md

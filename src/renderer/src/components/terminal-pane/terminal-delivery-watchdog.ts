@@ -14,14 +14,23 @@
  * data hot path (one Map upsert per received chunk; a tick does no IPC while
  * output flows or while no PTY delivery is expected).
  */
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { deliverPulledPtyModelRestoreMarkers } from './pty-model-restore-channel'
 import { getProcessedPtyCharTotals } from './terminal-pty-ack-gate'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
+import { collectOnScreenPtyIds, judgeVisiblePaneLiveness } from './visible-pane-output-liveness'
+
+/** Name under which a visible-pane stall reaches main's crash-breadcrumb ring, where it outlives
+ *  the remount that the stall itself triggers. Exported so a test can assert on it rather than on a
+ *  string literal that a rename would silently orphan. */
+export const TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB = 'terminal-visible-pane-stall'
 
 const WATCHDOG_INTERVAL_MS = 15_000
+// Why 2: one tick can straddle a chunk in transit; two ticks of model progress with a frozen pane cannot.
+const VISIBLE_PANE_STALL_TICKS_TO_RECOVER = 2
 // Why 2 ticks: one silent interval can be a probe racing an in-transit chunk;
 // two full intervals with zero received events while main reports ACK-starved
 // in-flight bytes only occurs in the wedged state.
@@ -95,19 +104,28 @@ async function runWatchdogTick(): Promise<void> {
     stopTerminalDeliveryWatchdog()
     return
   }
-  if (receivedPtyDataEventCount !== eventCountAtLastTick) {
-    eventCountAtLastTick = receivedPtyDataEventCount
+  const pushFlowing = receivedPtyDataEventCount !== eventCountAtLastTick
+  eventCountAtLastTick = receivedPtyDataEventCount
+  const probePush = !pushFlowing && deps.hasAttachedPtys()
+  if (!probePush) {
     stallStreakTicks = 0
-    return
   }
-  if (!deps.hasAttachedPtys()) {
-    stallStreakTicks = 0
+  // Why on-screen panes probe even while push flows: one PTY's flow says nothing about a sibling pane that froze.
+  const onScreenPtyIds = collectOnScreenPtyIds()
+  if (!probePush && onScreenPtyIds.length === 0) {
     return
   }
   const health = await report({
     receivedCharsByPty: Object.fromEntries(receivedPtyCharTotals),
-    processedCharsByPty: getProcessedPtyCharTotals()
+    processedCharsByPty: getProcessedPtyCharTotals(),
+    ...(onScreenPtyIds.length > 0 ? { onScreenPtyIds } : {})
   })
+  if (health && onScreenPtyIds.length > 0) {
+    recoverStalledVisiblePanes(health)
+  }
+  if (!probePush) {
+    return
+  }
   if (!health || !isMainDeliveryStalled(health)) {
     stallStreakTicks = 0
     return
@@ -125,6 +143,35 @@ async function runWatchdogTick(): Promise<void> {
     return
   }
   await healDeadPushDelivery(deps, report, health)
+}
+
+let visiblePaneRecoveryCount = 0
+
+function recoverStalledVisiblePanes(health: PtyRendererDeliveryHealthReply): void {
+  const verdicts = judgeVisiblePaneLiveness({
+    modelOutputSequenceByPty: health.modelOutputSequenceByPty,
+    hiddenGatedPtyIds: health.hiddenGatedPtyIds,
+    getReceivedChars: (ptyId) => receivedPtyCharTotals.get(ptyId) ?? 0,
+    stallTicksToRecover: VISIBLE_PANE_STALL_TICKS_TO_RECOVER
+  })
+  for (const verdict of verdicts) {
+    visiblePaneRecoveryCount += 1
+    const detail = {
+      pty: redactPtyIdForDiagnostics(verdict.ptyId),
+      cause: verdict.cause,
+      hiddenGated: verdict.hiddenGated
+    }
+    // Why the cause travels: which layer lied is the one fact no earlier field report carried.
+    recordTerminalFreezeBreadcrumb('visible-pane-stall', detail)
+    // Why mirrored out of the renderer: the ring above is DevTools-only, so the remount this very
+    // function is about to request — or a reload — destroys the evidence of its own cause. That is
+    // why several field freezes stayed unattributed. Main's crash-breadcrumb ring outlives the
+    // renderer and reaches `crashReports:copyLatestDiagnostics`, which is the same escape hatch the
+    // WebGL crumbs already take for exactly this reason.
+    recordRendererCrashBreadcrumb(TERMINAL_VISIBLE_PANE_STALL_BREADCRUMB, detail)
+    console.warn('[terminal] visible pane stopped advancing while its PTY kept producing', detail)
+    verdict.entry.requestRecovery(verdict.cause)
+  }
 }
 
 async function healDeadPushDelivery(
@@ -221,6 +268,7 @@ export function getTerminalDeliveryWatchdogDiagnostics(): {
   stallStreakTicks: number
   healCount: number
   msSinceLastHeal: number | null
+  visiblePaneRecoveryCount: number
 } {
   const receivedCharsByPty: Record<string, number> = {}
   for (const [id, chars] of receivedPtyCharTotals) {
@@ -232,7 +280,8 @@ export function getTerminalDeliveryWatchdogDiagnostics(): {
     receivedCharsByPty,
     stallStreakTicks,
     healCount,
-    msSinceLastHeal: lastHealAtMs === null ? null : Date.now() - lastHealAtMs
+    msSinceLastHeal: lastHealAtMs === null ? null : Date.now() - lastHealAtMs,
+    visiblePaneRecoveryCount
   }
 }
 
@@ -246,6 +295,7 @@ type E2eTerminalDeliveryWatchdogApi = {
     stallStreakTicks: number
     healCount: number
     blackholed: boolean
+    visiblePaneRecoveryCount: number
   }
 }
 
@@ -272,7 +322,8 @@ function exposeE2eTerminalDeliveryWatchdog(): void {
       receivedPtyDataEventCount,
       stallStreakTicks,
       healCount,
-      blackholed: blackholePtyPushDelivery
+      blackholed: blackholePtyPushDelivery,
+      visiblePaneRecoveryCount
     })
   }
 }

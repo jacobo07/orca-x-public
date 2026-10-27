@@ -2,7 +2,7 @@ import { createOsc133CommandFinishedScanner } from './terminal-osc133-command-fi
 
 /**
  * Where a shell stands by its own OSC 133 markers. `unsupported` is the
- * authority's answer for a shell Orca never injects markers into (cmd.exe).
+ * authority's answer for a shell Orca never injects markers into (Git Bash, WSL).
  */
 export type ShellPromptState = 'prompt' | 'running' | 'unknown' | 'unsupported'
 
@@ -26,6 +26,11 @@ export type ShellPromptMarkerTrust = 'none' | 'any' | 'tagged'
 export type ShellPromptStateTracker = {
   /** Feed every output chunk of one shell process, in order. */
   observe: (data: string) => void
+  /**
+   * The host itself submitted a command line (cmd.exe emits no 133;C). Running until a D: the
+   * shell may draw its first prompt after accepting the queued line, and that A proves nothing.
+   */
+  noteSubmittedCommand: () => void
   read: () => Exclude<ShellPromptState, 'unsupported'>
 }
 
@@ -48,6 +53,7 @@ export function createShellPromptStateTracker(
   onHonouredMarker?: (sequence: string) => void
 ): ShellPromptStateTracker {
   let state: Exclude<ShellPromptState, 'unsupported'> = 'unknown'
+  let awaitingFinish = false
   // Why: any C means work may be running; only a trusted A/D may say it stopped.
   const onMarker = (payload: string): void => {
     const sequence = payload.split(';')[0]
@@ -59,8 +65,12 @@ export function createShellPromptStateTracker(
     if (sequence !== 'A' && sequence !== 'D') {
       return
     }
+    if (sequence === 'A' && awaitingFinish) {
+      return
+    }
     const trust = getTrust()
     if (trust === 'any' || (trust === 'tagged' && isTagged(payload))) {
+      awaitingFinish = false
       state = 'prompt'
       onHonouredMarker?.(sequence)
     }
@@ -68,6 +78,11 @@ export function createShellPromptStateTracker(
   const scanner = createOsc133CommandFinishedScanner(() => {}, undefined, undefined, onMarker)
   return {
     observe: scanner.scan,
+    noteSubmittedCommand: () => {
+      awaitingFinish = true
+      state = 'running'
+      onHonouredMarker?.('C')
+    },
     read: () => state
   }
 }
@@ -77,8 +92,8 @@ function executableName(shellPath: string): string {
 }
 
 /**
- * Whether Orca injects OSC 133 into this shell: the PowerShell bootstrap on Windows,
- * the zsh/bash rcfile wrappers elsewhere (Windows bash is Git Bash, which gets none).
+ * Whether Orca injects OSC 133 into this shell: the PowerShell bootstrap and cmd.exe's PROMPT
+ * on Windows, the zsh/bash rcfile wrappers elsewhere (Windows bash is Git Bash, which gets none).
  */
 export function shellPromptMarkerTrust(
   shellPath: string | null | undefined,
@@ -89,6 +104,11 @@ export function shellPromptMarkerTrust(
   }
   const name = executableName(shellPath).replace(/\.exe$/, '')
   if (name === 'powershell' || name === 'pwsh') {
+    return 'tagged'
+  }
+  // Why tagged: cmd has no pre-exec hook, so only Orca's own PROMPT may vouch; a nested cmd
+  // inherits that PROMPT, which is why busy also rests on the host-held input line.
+  if (platform === 'win32' && name === 'cmd') {
     return 'tagged'
   }
   if (platform === 'win32') {
