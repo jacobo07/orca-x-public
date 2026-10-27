@@ -34,6 +34,7 @@ import {
   DEVICE_UNAUTHORIZED_CLOSE_CODE,
   DEVICE_UNAUTHORIZED_CLOSE_REASON
 } from './device-authorization'
+import { dropWakeGrantsAfterRevoke, wakeBrokerHost } from './wake-broker-host'
 import {
   E2EEKeypairUnreadableError,
   E2EEKeypairUnusableError,
@@ -373,6 +374,9 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'host.gitBash.isAvailable',
   'host.platform',
   'host.pwsh.isAvailable',
+  'host.wake.request',
+  'host.wake.status',
+  'host.wake.targets',
   'host.wsl.isAvailable',
   'host.wsl.listDistros',
   'hostedReview.create',
@@ -717,12 +721,15 @@ export class OrcaRuntimeRpcServer {
   }
 
   private revokeAndTerminate(device: DeviceEntry): boolean {
-    return (
+    const revoked =
       this.deviceRegistry !== null &&
       revokeDeviceAndTerminateConnections(this.deviceRegistry, device, (token) =>
         this.mobileSocketWiring?.terminateDeviceConnections(token)
       )
-    )
+    if (revoked) {
+      dropWakeGrantsAfterRevoke(device.deviceId)
+    }
+    return revoked
   }
 
   revokeRuntimeAccess(deviceId: string): boolean {
@@ -1054,7 +1061,10 @@ export class OrcaRuntimeRpcServer {
       }
     }
     try {
-      this.deviceRegistry?.removeDevice(deviceId)
+      if (this.deviceRegistry?.removeDevice(deviceId)) {
+        // Why: every path that removes a device drops its wake grants, not only revoke (D-10).
+        dropWakeGrantsAfterRevoke(deviceId)
+      }
     } catch (error) {
       console.error('[runtime] Failed to drop an unused mobile pairing credential:', error)
     }
@@ -1289,6 +1299,26 @@ export class OrcaRuntimeRpcServer {
         this.deviceRegistry = pairingIdentity.deviceRegistry
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
+        // Why live: wake requests are judged by the registry this server holds at the effect (D-07, D-08).
+        wakeBrokerHost.attachDeviceAuthority({
+          authorize: (token) => {
+            const verdict = this.deviceRegistry
+              ? assertDeviceStillAuthorized(this.deviceRegistry, token)
+              : null
+            return verdict?.ok
+              ? { ok: true, deviceId: verdict.device.deviceId }
+              : { ok: false, reason: verdict?.reason ?? 'registry_unavailable' }
+          },
+          // Why unknown keeps the grant: an unreadable registry is no evidence the device is gone.
+          deviceExists: (deviceId) => {
+            const registry = this.deviceRegistry
+            return (
+              !registry ||
+              !registry.getAvailability().available ||
+              registry.getDevice(deviceId) !== null
+            )
+          }
+        })
         try {
           const host = this.resolveInitialWebSocketBindHost()
           const { transport, endpoint } = await this.startWebSocketTransport({

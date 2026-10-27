@@ -10,7 +10,11 @@ import {
   type WakeBrokerStoreView,
   type WakeDeviceAuthority
 } from './wake-broker'
-import { loadWakeBrokerStore, type WakeBrokerStoreDeps } from './wake-broker-store'
+import {
+  loadWakeBrokerStore,
+  type WakeBrokerStore,
+  type WakeBrokerStoreDeps
+} from './wake-broker-store'
 import { sendMagicPacketUdp } from './wake-magic-packet'
 
 export type EnabledWakeBroker = { broker: WakeBroker; store: WakeBrokerStoreView }
@@ -102,4 +106,21 @@ export function startWakeBroker(
     }
   }
   return { state: 'enabled', targetCount: store.targets().length }
+}
+
+function isPersistentStore(store: WakeBrokerStoreView): store is WakeBrokerStore {
+  return typeof (store as Partial<WakeBrokerStore>).dropGrantsForDevice === 'function'
+}
+
+export function dropWakeGrantsAfterRevoke(deviceId: string): void {
+  const store = wakeBrokerHost.current()?.store
+  if (!store || !isPersistentStore(store)) {
+    return
+  }
+  try {
+    store.dropGrantsForDevice(deviceId)
+  } catch (error) {
+    // Why fail-open: the revoke already succeeded and the effect re-judges the device, so a lost purge authorizes nothing (D-10).
+    console.error(`[wake-broker] grants of device ${deviceId} not dropped: ${errorCode(error)}`)
+  }
 }
