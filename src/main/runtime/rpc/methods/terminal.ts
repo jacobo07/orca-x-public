@@ -1627,6 +1627,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     }
   }),
   defineMethod({
+    name: 'terminal.reclaimIfPhoneIdle',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => {
+      // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY (#7718).
+      const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+      if (!leaf?.ptyId) {
+        throw new Error('no_connected_pty')
+      }
+      return await runtime.reclaimTerminalForDesktopIfPhoneIdle(leaf.ptyId)
+    }
+  }),
+  defineMethod({
     name: 'terminal.getDisplayMode',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {

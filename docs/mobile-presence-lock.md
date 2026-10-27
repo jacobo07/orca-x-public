@@ -106,6 +106,7 @@ Invariants:
 | `idle`         | mobile subscribes with `displayMode='desktop'` (first client for this ptyId) | `desktop`                   | inner subscriber map populated; **no** banner; PTY stays at desktop dims      |
 | `idle`         | desktop input or first PTY data after no subscribers                         | `idle` (no transition)      | —                                                                             |
 | `mobile{A}`    | desktop clicks **Take back**                                                 | `desktop`                   | banner unmounts; PTY snaps to desktop dims if at phone dims                   |
+| `mobile{A}`    | desktop keystroke after no phone acted for the lease (2 min)                 | `desktop`                   | same as Take back; that keystroke is the gesture and is not delivered         |
 | `mobile{A}`    | mobile A sends input/resize/setDisplayMode                                   | `mobile{A}` (no transition) | —                                                                             |
 | `mobile{A}`    | mobile B sends input                                                         | `mobile{B}`                 | (no banner change; both are "mobile")                                         |
 | `mobile{A}`    | last mobile client unsubscribes                                              | `idle`                      | banner unmounts                                                               |
@@ -173,6 +174,17 @@ unlock and (if needed) restore desktop dims.
 **You click Take back.** Overlay gone. You type freely. Mobile stays
 connected; mobile sees the desktop-sized terminal because PTY snapped back
 (or stayed at desktop dims if mobile was in desktop mode).
+
+**The phone only watches.** Every phone action (subscribe, input, take control, a viewport change
+such as its keyboard opening) renews a 2-minute lease (`MOBILE_DRIVER_LEASE_MS`,
+`src/shared/mobile-driver-lease.ts`). Once no subscribed phone has acted for that long and no phone
+write is in flight, your next keystroke takes the terminal back as Take back would; that keystroke
+is not delivered, the ones after it are. Within the lease the keystroke is dropped and explained as
+before. The host decides (`reclaimTerminalForDesktopIfPhoneIdle`, reached over IPC
+`runtime:reclaimTerminalIfPhoneIdle` or RPC `terminal.reclaimIfPhoneIdle`). There is no timer: the
+renderer asks only when it drops a keystroke, at most one request per PTY in flight, and waits out
+the remaining lease the host reports. A host without the method keeps today's behaviour. A phone
+driver with no subscribed phone (stale lock, held fit) is left to the explicit Take back / Restore.
 
 **Mobile types something while you're reclaimed.** Overlay reappears. Your
 next keystroke is blocked. PTY may snap back to phone dims (if mobile is in

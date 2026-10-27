@@ -333,6 +333,7 @@ skills.share
 skills.uploadChunk
 terminal.getDisplayMode
 terminal.inspectProcess
+terminal.reclaimIfPhoneIdle
 terminal.recoverPane
 terminal.resizeForClient
 terminal.resolveActive

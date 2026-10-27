@@ -602,6 +602,8 @@ describe('connectPanePty', () => {
         throw new Error('expected onData handler to be registered')
       }
       const { getDesktopInputRefusals } = await import('@/lib/pane-manager/mobile-driver-state')
+      const { resetPhoneLeaseReclaimForTests } = await import('./phone-lease-reclaim')
+      resetPhoneLeaseReclaimForTests()
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
       ;(onDataHandler as unknown as (data: string) => void)('x')
@@ -614,6 +616,9 @@ describe('connectPanePty', () => {
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
       expect(getDesktopInputRefusals(ptyId)).toBe(2)
+      // A burst of dropped keystrokes asks the host about the phone's lease once.
+      expect(window.api.runtime.reclaimTerminalIfPhoneIdle).toHaveBeenCalledTimes(1)
+      expect(window.api.runtime.reclaimTerminalIfPhoneIdle).toHaveBeenCalledWith(ptyId)
     } finally {
       setDriverForPty(ptyId, { kind: 'idle' })
     }

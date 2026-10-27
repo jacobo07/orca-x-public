@@ -286,6 +286,12 @@
       "reason": "terminal.split, .resolvePane, .recoverPane, .restoreFit, .resizeForClient, .getDisplayMode, .show and session.tabs.updatePaneLayout all address a pane grid inside a desktop window. Mobile presents one terminal at a time and has no split, no pane identity and no layout to persist, so there is no state these would act on. Note the deliberate boundary: terminal LIFECYCLE on mobile (stop, stopExact, sleep, inspectProcess) is a real gap and is recorded as such in the aperture audit, not here -- only the geometry is inapplicable."
     },
     {
+      "id": "terminal.phone-lease-reclaim",
+      "title": "The desktop takes back a terminal a phone has only watched for the whole lease",
+      "disposition": "desktop-only",
+      "reason": "terminal.reclaimIfPhoneIdle is how a desktop keystroke the presence lock dropped asks a remote host to end an expired phone lease. It reclaims FOR the desktop: a phone calling it would be taking the terminal away from itself, and the phone renews its lease by acting, not by asking. Spec: .planning/phases/12-remote-control-lease-and-viewport/12-LEASE-SPEC.md."
+    },
+    {
       "id": "plugins.panel-surface",
       "title": "A plugin renders and receives actions in a workspace panel",
       "disposition": "not-applicable",

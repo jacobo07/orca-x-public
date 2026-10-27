@@ -11,6 +11,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { judgeMobileDriverLease } from '../../shared/mobile-driver-lease'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import {
@@ -15771,6 +15772,27 @@ export class OrcaRuntimeService {
       return true
     }
     return false
+  }
+
+  // Why: a desktop keystroke the lock dropped asks this; a phone that has only watched for the
+  // whole lease loses the terminal, the same way Take back takes it. See docs/mobile-presence-lock.md.
+  async reclaimTerminalForDesktopIfPhoneIdle(
+    ptyId: string
+  ): Promise<{ reclaimed: boolean; retryAfterMs?: number }> {
+    const inner = this.mobileSubscribers.get(ptyId)
+    const verdict = judgeMobileDriverLease({
+      driverIsMobile: this.getDriver(ptyId).kind === 'mobile',
+      phoneLastActedAts: inner ? Array.from(inner.values(), (sub) => sub.lastActedAt) : [],
+      phoneInputPending: (this.mobileInputFloorClaims.get(ptyId)?.pending.size ?? 0) > 0,
+      now: Date.now()
+    })
+    if (verdict.kind === 'active') {
+      return { reclaimed: false, retryAfterMs: verdict.remainingMs }
+    }
+    if (verdict.kind === 'not-applicable') {
+      return { reclaimed: false }
+    }
+    return { reclaimed: await this.reclaimTerminalForDesktop(ptyId) }
   }
 
   // Why: the shared "banner must be gone now" step for an explicit desktop

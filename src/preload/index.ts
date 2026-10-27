@@ -4567,6 +4567,10 @@ const api = {
     > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
       ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
+    reclaimTerminalIfPhoneIdle: (
+      ptyId: string
+    ): Promise<{ reclaimed: boolean; retryAfterMs?: number }> =>
+      ipcRenderer.invoke('runtime:reclaimTerminalIfPhoneIdle', { ptyId }),
     reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
       ipcRenderer.invoke('runtime:reclaimBrowserForDesktop', { browserPageId }),
     onTerminalFitOverrideChanged: (
