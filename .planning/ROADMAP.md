@@ -87,6 +87,11 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 1. RED first: with the UI closed and serve running, the phone cannot reach the host off-LAN because serve never starts the relay; this is captured as a failing test before the fix.
 2. serve starts the relay when cloud auth exists and reports `relay: unavailable` otherwise; a Windows logon Scheduled Task (restart on failure) starts serve, and repeated starts never create a second runtime (single-instance lock, exit code 3).
 3. Live, on the Owner's PC: UI closed, serve running, a paired client opens a terminal, a unique command returns fresh output, the runtime count stays 1; idle RAM, CPU and startup time of serve are recorded.
+**Plans:** 3 plans
+Plans:
+- [ ] 17-01-PLAN.md — RED wiring test, one relay owner for serve and desktop, appVersion + relay in readiness (wave 1)
+- [ ] 17-02-PLAN.md — `orca serve autostart install|remove|status` (Windows logon task), lock-held exit 0 for autostart (wave 2)
+- [ ] 17-03-PLAN.md — live legs: disposable serve host (SCRIPTED CLIENT) + disposable task, measurements, OWNER_BOUND checkpoint (wave 3)
 
 ### Phase 18: Availability state, capabilities and a truthful host card
 **Goal**: The phone says what Orca knows, what it can do and what it cannot know. **Depends on**: Phase 17
