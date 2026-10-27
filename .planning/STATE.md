@@ -78,6 +78,13 @@ Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electr
 - 2026-10-26 Milestone audit/complete/cleanup NOT run: three phases are human_needed, so completing would archive unverified legs as done. Safe: nothing archived, nothing lost.
 - 2026-10-26 Removed a stale worktree index.lock (no live git process, 262 s old; backup in job tmp). Safe: scratch file, backed up.
 - 2026-10-26 Phase 9 oracle: a line ending in the exact sent text followed by `marker nonce` counts as FRESH (ConPTY glue). Safe: the echo alone cannot contain the expected line; control tests refuse partial echoes and other prefixes; only tests consume the oracle.
+- 2026-10-27 (epoch 2, m-cf9e66a07a6f) Phase 19 researched before planning (WOL probing, dgram broadcast and grants were new). Safe: docs only.
+- 2026-10-27 Phase 19 plan check: revoke row proven in-process (no revoke RPC added), refusal code `wake_device_revoked`, discard purge added. Safe: no new security surface; labels honest.
+- 2026-10-27 Phase 19 plans executed sequentially in this worktree (8 GB laptop, one shared git index). Safe: reversible, internal.
+- 2026-10-27 lint-staged can leave a stale pre-format index after a commit; reset only index entries whose tree equals HEAD. Safe: working tree untouched, HEAD holds tested content.
+- 2026-10-27 `gsd-tools verification.status` reads `stale` for phases 18 and 19 although only `.planning/` changed after VERIFICATION; routed by the VERIFICATION frontmatter (`human_needed`). Safe: no state claimed beyond the file.
+- 2026-10-27 Phase 19 review WR-01 fixed (cab270fb0, b88f111c5): wake device check is present/absent/unknown; grants fail closed on an unreadable registry. IN-01..IN-05 recorded in 19-REVIEW.md, not fixed. Safe: tests RED then GREEN, 83/83.
+- 2026-10-27 Phase 19 human_needed: continued to phase 20 without validation (unattended), deferred row above. Safe: nothing archived; resume command recorded.
 
 ## Laws (binding)
 
