@@ -38,6 +38,20 @@ Driven over adb by the arming session (Owner-authorized, NEW Claude tab on Host 
   phone earlier. Compare the two: a new session vs an existing one, transcript discovery for a tab created from the phone,
   the host path `C:/Users/User/...` vs the account home, and the Host 1 Orca version.
 
+## Third device leg: phase 19 on Host 2 (2026-10-27 21:14, same APK 97b783068, driven over adb, Owner-authorized)
+Host 2 = this laptop (192.168.7.11, installed Orca X c4679d615). Workspace "Cursor Projects Provisional", phone New tab > Claude.
+- The new claude.exe (PID 9760, started 21:14:56 by the phone's tab) carries the full hook env: ORCA_AGENT_HOOK_PORT/TOKEN/ENV/
+  VERSION/ENDPOINT, ORCA_PANE_KEY, ORCA_TAB_ID, ORCA_AGENT_LAUNCH_TOKEN. This was read from the process environment block,
+  names and lengths only. `~/.claude/settings.json` has the Orca Claude hook (`cmd.exe /d /c %USERPROFILE%\.orca\agent-hooks\claude-hook.cmd`).
+- Sent `ORCA-NONCE-19 responde solo OK-19` at 21:16:23. The transcript `~/.claude/projects/C--Users-Jacobo-Desktop-Cursor-Projects-Provisional/9dc15e94-….jsonl`
+  holds the nonce and the reply. **The phone showed the user turn as delivered (no warning) and Claude's reply `OK-19`**, and the
+  tab title updated to "Respuesta OK-19 de ORCA-NONCE-19".
+- **Verdict: phase 19 does NOT reproduce on a c4679d615 host whose Claude hooks are installed.** The failure is specific to Host 1
+  (`C:\Users\User`). Ranked suspects on Host 1: (1) its `C:\Users\User\.claude\settings.json` lacks the Orca Claude hook
+  (Owner's PP config differs there, or Orca's hook install never ran / was overwritten), so no providerSession is ever posted;
+  (2) Host 1 is not actually on c4679d615; (3) a different account home. Each one is checkable on Host 1 only (OWNER_BOUND or ssh).
+- Test leftovers on this laptop: one Claude tab in "Cursor Projects Provisional" (session 9dc15e94) is still open.
+
 ## Constraints
 - Host 1 runs its own installed Orca X version (unknown). Any host-side change (e.g. admitting mobile
   `agentPrompt`) needs a capability check and a fallback for an older host, per docs/reference/remote-wire-compatibility.md.
