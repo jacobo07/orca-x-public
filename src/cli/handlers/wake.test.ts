@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch'
-import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeClient } from '../runtime-client'
 import { WAKE_HANDLERS } from './wake'
 
 const TARGET = {
@@ -127,5 +127,101 @@ describe('orca wake target add and list', () => {
     await expect(WAKE_HANDLERS['wake target list'](context([]))).rejects.toThrow(
       'orca serve --wake-broker'
     )
+  })
+})
+
+describe('orca wake grant and target removal', () => {
+  const GRANT = { deviceId: 'dev-a', targetId: TARGET.targetId, grantedAt: 1 }
+
+  beforeEach(() => {
+    callMock.mockReset()
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    logSpy.mockRestore()
+    errorSpy.mockRestore()
+  })
+
+  it.each([
+    [
+      'wake grant add',
+      [
+        ['device', 'dev-a'],
+        ['target', TARGET.targetId]
+      ] as [string, string][],
+      'host.wake.admin.grantAdd',
+      { deviceId: 'dev-a', targetId: TARGET.targetId },
+      { grant: GRANT }
+    ],
+    [
+      'wake grant remove',
+      [
+        ['device', 'dev-a'],
+        ['target', TARGET.targetId]
+      ] as [string, string][],
+      'host.wake.admin.grantRemove',
+      { deviceId: 'dev-a', targetId: TARGET.targetId },
+      { removed: true }
+    ],
+    [
+      'wake grant list',
+      [] as [string, string][],
+      'host.wake.admin.grantList',
+      null,
+      { grants: [GRANT] }
+    ],
+    [
+      'wake target remove',
+      [['target', TARGET.targetId]] as [string, string][],
+      'host.wake.admin.targetRemove',
+      { targetId: TARGET.targetId },
+      { removed: true, targetId: TARGET.targetId }
+    ]
+  ])('%s makes exactly one matching admin call', async (key, flags, method, params, result) => {
+    callMock.mockResolvedValue(success(result))
+    await WAKE_HANDLERS[key](context(flags, true))
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith(method, params)
+    expect(JSON.parse(printed()).result).toEqual(result)
+  })
+
+  it.each([
+    ['wake grant add', [['device', 'dev-a']] as [string, string][]],
+    ['wake grant add', [['target', TARGET.targetId]] as [string, string][]],
+    ['wake grant remove', [['device', 'dev-a']] as [string, string][]],
+    ['wake target remove', [] as [string, string][]]
+  ])('%s refuses missing ids before any call', async (key, flags) => {
+    await expect(WAKE_HANDLERS[key](context(flags))).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('points at where device ids come from when the broker refuses wake_device_unknown', async () => {
+    callMock.mockRejectedValue(
+      new RuntimeRpcFailureError({
+        id: 'test',
+        ok: false,
+        error: {
+          code: 'wake_device_unknown',
+          message: 'That device is not paired with this host.'
+        },
+        _meta: { runtimeId: 'broker' }
+      })
+    )
+    const error = await WAKE_HANDLERS['wake grant add'](
+      context([
+        ['device', 'dev-gone'],
+        ['target', TARGET.targetId]
+      ])
+    ).catch((thrown: unknown) => thrown)
+    expect(error).toMatchObject({ code: 'wake_device_unknown' })
+    const message = (error as Error).message
+    expect(message).toContain('pairedDeviceId')
+    expect(message).toContain('status.get')
+    expect(message).toContain('Settings')
+    expect(callMock).toHaveBeenCalledTimes(1)
   })
 })
