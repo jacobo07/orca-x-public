@@ -26,6 +26,18 @@ The Owner's message text is personal and is NOT reproduced here.
      baseline/occurrence mismatch.
 4. The terminal search on the phone for "hola" returned 0/0. There was no positive control, so this is INCONCLUSIVE.
 
+## Second device leg (2026-10-27 19:19, APK 97b783068 sha256 93782b3e… installed 18:51, verified on the device)
+Driven over adb by the arming session (Owner-authorized, NEW Claude tab on Host 1, synthetic text):
+- The phone typed a 744-char, 4-paragraph body (blank lines between paragraphs) starting `ORCA-NONCE-7` and ending `FIN-7`, then pressed Send.
+- **Phase 17 PROVEN ON DEVICE.** The Owner pasted the Host 1 terminal: the whole body sits as one `❯` prompt, and Claude replied
+  "Primera palabra: ORCA-NONCE-7 / Última palabra: FIN-7 / Párrafos: 4". Claude Code auto-titled the tab "Prueba sintética de Orca X".
+- **Still broken: the phone never shows the turn.** For about 2 minutes, the phone chat showed only the optimistic bubble with
+  "Agent has not shown this message · check the desktop before resending". It showed no assistant reply and no canonical user turn,
+  even though the tab title did update on the phone. So the false warning is NOT (only) the matcher. The phone's chat
+  transcript feed for this Host 1 session delivers no turns. In the older "Casual greeting" tab, assistant replies DID reach the
+  phone earlier. Compare the two: a new session vs an existing one, transcript discovery for a tab created from the phone,
+  the host path `C:/Users/User/...` vs the account home, and the Host 1 Orca version.
+
 ## Constraints
 - Host 1 runs its own installed Orca X version (unknown). Any host-side change (e.g. admitting mobile
   `agentPrompt`) needs a capability check and a fallback for an older host, per docs/reference/remote-wire-compatibility.md.
