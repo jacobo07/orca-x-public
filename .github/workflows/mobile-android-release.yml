@@ -70,6 +70,14 @@ jobs:
       - name: Build Android release APK
         run: cd android && ./gradlew assembleRelease
 
+      # Why: an APK whose JS requires a native module its dex lacks crashes on the first screen that imports it.
+      - name: Audit APK native modules
+        run: |
+          set -euo pipefail
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            node scripts/audit-apk-native-modules.mjs "$apk"
+          done
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:

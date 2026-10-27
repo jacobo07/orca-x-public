@@ -3,8 +3,13 @@
 // (requireNativeModule) while the APK's dex does not: that binary crashes at import time.
 // Origin: the 0.0.43 APK shipped without ExpoTwoWayAudio and died on every session open.
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
+
+// Why: Node < 20.11 leaves import.meta.filename undefined, so the CLI check below never ran and exited 0.
+if (!import.meta.filename) {
+  throw new Error('audit-apk-native-modules needs Node >= 20.11')
+}
 
 const CALL = /require(Optional)?NativeModule(?:<[^>]*>)?\(\s*['"`]([A-Za-z0-9_]+)['"`]\s*\)/g
 const SOURCE_FILE = /\.(?:[cm]?js|tsx?)$/
@@ -67,7 +72,7 @@ export function readZipEntries(zip, wanted) {
 
 const SKIPPED_DIRS = new Set(['.git', 'android', 'ios'])
 
-// Why: real files and real directories only â€” pnpm's node_modules is mostly symlinks into
+// Why: real files and real directories only: pnpm's node_modules is mostly symlinks into
 // node_modules/.pnpm, which the walk already covers, and some resolve to directories.
 function* sourceFiles(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -123,6 +128,6 @@ function main(apkPath) {
   return crashes === 0 ? 0 : 1
 }
 
-if (process.argv[1] && import.meta.filename === process.argv[1]) {
+if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
   process.exitCode = main(process.argv[2])
 }

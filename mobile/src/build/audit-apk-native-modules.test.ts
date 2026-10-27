@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { deflateRawSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import {
@@ -5,6 +10,8 @@ import {
   collectNativeModuleNames,
   readZipEntries
 } from '../../scripts/audit-apk-native-modules.mjs'
+
+const SCRIPT = fileURLToPath(new URL('../../scripts/audit-apk-native-modules.mjs', import.meta.url))
 
 const SOURCES = [
   "export default requireNativeModule('ExpoTwoWayAudio')",
@@ -57,6 +64,19 @@ describe('audit-apk-native-modules', () => {
     expect(read.get('classes.dex')?.toString()).toBe('dex-bytes')
     expect(read.has('res/other.xml')).toBe(false)
   })
+
+  it('runs as a CLI and fails closed on an unreadable APK', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'apk-audit-'))
+    const fake = join(dir, 'fake.apk')
+    writeFileSync(fake, 'not an apk')
+    try {
+      const run = spawnSync(process.execPath, [SCRIPT, fake], { encoding: 'utf8' })
+      expect(run.status).not.toBe(0)
+      expect(run.stderr).toContain('not a zip archive')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
 })
 
 function buildZip(files: [string, Buffer, 0 | 8][]): Buffer {
