@@ -16,7 +16,8 @@ Phases 13, 14 and 15 are sealed (`.planning/phases/13-*`, `14-*`, `15-*`, each w
 Phase 16 status table: `.planning/phases/16-send-p0-product-reality-and-close/16-STATUS.md`.
 - Done: 13 mutants (16-MUTANTS.md), KV lesson, ratchet gate `pnpm check:mobile-remote-effect-bubbles` (49038b8db).
 - Coherence anchor: `git log --oneline -1` shows 49038b8db or later.
-- Open: the fresh-agent test (3d). OWNER_BOUND: device legs (criterion 1). UKDL stays candidates-only until then.
+- Fresh-agent test (3d) PASS 7/7. Push state: origin/mobile/phone-control = c4679d615; SEND-P0 commits are local only.
+- OWNER_BOUND: device legs (criterion 1). UKDL stays candidates-only until then.
 Phases 5, 7 and 9 are deferred-human (do not rework them).
 
 ## 3. Active decisions
@@ -27,8 +28,7 @@ Phases 5, 7 and 9 are deferred-human (do not rework them).
 - Never push: STATE.md laws make pushing Owner-only. Heavy tests run on GEX44 in `/tmp/orca-phone-p*`, torn down afterwards.
 
 ## 4. Next three actions
-1. If 16-STATUS 3d is still OPEN: run the fresh-agent test (a read-only agent answers from this file, STATE.md and the
-   13-16 artifacts, with citations) and record the result in 16-STATUS.md.
+1. (Done: fresh-agent test PASS.) Nothing deterministic remains in phase 16; do not invent work.
 2. Device legs, OWNER_BOUND: build an APK from this branch (>= 49038b8db) on GEX44, the Owner installs it on the
    S25 Ultra, then run the >=94-char Agent send with a nonce, terminal send fresh output, send+scroll, send+lease.
 3. After the device leg passes: promote the UKDL candidates from the KV note and close phase 16 (VERIFICATION.md).
