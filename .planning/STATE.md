@@ -3,8 +3,8 @@ gsd_state_version: "1.0"
 current_phase: 10
 current_phase_name: 2/2
 status: unknown
-stopped_at: Completed 19-02-PLAN.md
-last_updated: "2026-10-27T19:40:00.000Z"
+stopped_at: Completed 19-03-PLAN.md
+last_updated: "2026-10-27T19:45:00.000Z"
 last_activity: "2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: \"go here\"); the arming pane on C:\\Users\\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e."
 state_head: d47194143371044f55af5af60ab9e8023e0b6d10
 progress:
@@ -19,7 +19,7 @@ progress:
 
 ## Current Position
 
-Phase 19 (Wake-on-LAN capability and the LAN Wake Broker), branch mobile/host-availability, worktree C:\owx-haf: plan 2 of 5 complete (19-01, eca5f1923 + summary d47194143; 19-02, 16f4f8ead). can-wake-lan is measured by a read-only WOL probe at both start paths; this laptop reads unknown/firmware_unverified. The LAN Wake Broker core (host.wake.targets/request/status, wake_* passthrough codes, dedupe/adopt, dgram sender, crash-durable orca-wake-broker.json + contract runtime.wake-broker-state) is built and enabled nowhere yet. Next: 19-03 (--wake-broker flag chain, mobile allowlist, device authority + revoke purge, conditional capability).
+Phase 19 (Wake-on-LAN capability and the LAN Wake Broker), branch mobile/host-availability, worktree C:\owx-haf: plan 3 of 5 complete (19-01, eca5f1923 + summary d47194143; 19-02, 16f4f8ead; 19-03, 9a8b9c4f1). can-wake-lan is measured by a read-only WOL probe at both start paths; this laptop reads unknown/firmware_unverified. The LAN Wake Broker core is built (19-02) and now enabled only by `orca serve --wake-broker` (19-03): status.get advertises host.wake-broker.v1 only while enabled, an unreadable state file fails closed, runtime-rpc attaches a live device authority (assertDeviceStillAuthorized), a successful revoke or a discarded pending pairing drops the device's grants, and the three phone methods are on the mobile allowlist (no admin name, no revoke RPC). In-process proof on a real RuntimeRpcServer: 1 loopback frame before revoke, still 1 after, refusal wake_device_revoked. Next: 19-04 (orca wake target|grant over local-only host.wake.admin.*), then 19-05.
 
 P0 (2026-10-27, Owner mission "crash-proof mobile remote session entry"): phase 11 in .planning/phases/11-mobile-session-entry-crash/11-VERIFICATION.md. Root cause PROVEN on the Owner's S25 Ultra: the sideloaded APK 0.0.43 (2026-09-14) lacks the ExpoTwoWayAudio native module its JS imports, so opening any session threw at route load and Android finished the activity. Fixed 328971c74, contained a8d7bfca2, build gate 2a4f2ef6d. Fixed APK built (sha256 ca68faa3…21df), staged on the phone, and installed by the Owner as an update; P0 done-gate MET 2026-10-27 ~10:40 (PHYSICAL DEVICE, OWNER-OBSERVED: host > Orca X session opened, Owner typed into this pane from the phone; host saw the device at 09:40:31Z; no logcat). Resume: adb over Wi-Fi (Developer options > Wireless debugging, adb pair) → instrumented failure matrix, fresh-output send, reconnect, foreground, revocation; then Mobile Workstation. adb lives in the session scratchpad (gone after reboot): fetch platform-tools again from dl.google.com.
 Phase: 10 of 10 -- complete (2/2). Milestone NOT closable: phases 5, 7 and 9 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
@@ -122,6 +122,7 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 | Phase 18 P02 | 17m | 3 tasks | 9 files |
 | Phase 19 P01 | 17min | 3 tasks | 11 files |
 | Phase 19 P02 | 50min | 3 tasks | 15 files |
+| Phase 19 P03 | 23min | 3 tasks | 13 files |
 
 ## Decisions
 
@@ -138,9 +139,13 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 - [Phase 19]: 19-02: the broker re-runs device, grant and target at the send; a failed wake is neither replayed nor adoptable
 - [Phase 19]: 19-02: host.wake.* carry no launch effect flag (effect-class registry stays at four)
 - [Phase 19]: 19-02: wake state publishes via an explicit writeDurableSecureJsonFile call (fsync before rename at secure-file.ts:117-122); check:durability-contracts finds barriers by call site
+- [Phase 19]: 19-03: the broker starts only behind serveOptions.wakeBroker in the serve branch (never desktop); host.wake-broker.v1 is pushed by getStatus only while enabled
+- [Phase 19]: 19-03: the wake device authority is a live closure over runtime-rpc's current deviceRegistry; an absent or unavailable registry refuses requests and keeps grants (unknown is not absent)
+- [Phase 19]: 19-03: revokeAndTerminate (on success) and discardPendingMobilePairingDevice (after removal) drop wake grants; a failed purge is logged, never thrown, and the effect still refuses wake_device_revoked
+- [Phase 19]: 19-03: serve-electron-flag-parity was red since d9cd43d1f on '--serve-bind-host'; fixed by naming the flag at the getServeOptions call site, test unmodified
 
 ## Session
 
-**Last session:** 2026-10-27T19:40:00.000Z
-**Stopped at:** Completed 19-02-PLAN.md
+**Last session:** 2026-10-27T19:45:00.000Z
+**Stopped at:** Completed 19-03-PLAN.md
 **Resume file:** None
