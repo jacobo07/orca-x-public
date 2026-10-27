@@ -17,8 +17,22 @@ The real defects, all fixed:
 - **Security gap.** An unguarded desktop `terminal.send` checked the lock only before the first chunk.
   - b3eac4866: every chunk rechecks the lock. P12-I1 CAUGHT.
 
+**Desktop product reality: PASSED 2026-10-27 ~12:40.** `src/main/runtime/desktop-phone-chip.live.test.ts` (052ee178c), SCRIPTED CLIENT.
+- **Setup:** the desktop build of d99a86499 ran windowed under xvfb on GEX44 (Linux), with a disposable profile, a completed-onboarding seed, and CDP on loopback.
+- **Phone side:** the paired phone-protocol client took the terminal with `terminal.setDisplayMode auto`.
+- **Results:**
+  - Only the corner chip ("Phone driving · Take back") appeared; `chipIsDialog` was 0.
+  - A desktop keystroke opened the explanation card.
+  - Focus stayed on `xterm-helper-textarea`.
+  - The typed text never reached the PTY.
+  - Take back removed the overlay.
+- Screenshots `2-chip.png` and `3-explained.png` are in the session scratchpad `p12-chip/`.
+- **Why Linux:** a windowed disposable instance on the Owner's laptop exited by itself within seconds, with no error logged. To avoid disturbing the Owner's screen, the leg moved to GEX44.
+- **Findings:**
+  - A JSON `terminal.subscribe` from a mobile client is refused (`binary_terminal_stream_required`).
+  - Mobile input without a stream subscriber is refused (`mobile_input_floor_unavailable`), so the scripted client cannot send as the phone. The real-phone send was proven separately.
+
 Not yet done on the input side:
-- Product reality on the desktop for the chip (renderer change; needs a rebuilt desktop app).
 - Lease expiry for an observe-only phone. A live subscription still holds the driver indefinitely; this is by design today and not changed.
 - CONTESTED modelling for unsent desktop input.
 
