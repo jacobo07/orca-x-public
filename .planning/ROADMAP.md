@@ -111,3 +111,16 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 1. Real phone + real Windows host: an Agent prompt reaches the desktop turn and the result reconciles without duplicates; a terminal command shows fresh output; send+scroll stays anchored; send+lease behaves as specified. Otherwise OWNER_BOUND with the exact missing step.
 2. The 13 SEND-P0 mutants report PLANT_CONFIRMED, a verdict and RESTORE_VERIFIED.
 3. Knowledge Vault incident, UKDL entries, the ratchet gate and a passing fresh-agent test from durable state; two-layer handoff in STATE.md.
+
+### Phase 17: SEND-P0b long multi-paragraph phone message arrives whole
+**Goal**: A long multi-paragraph phone chat message reaches the agent as ONE turn with its beginning intact. **Depends on**: Phase 16 (device leg evidence)
+**Success Criteria** (what must be TRUE):
+1. The phase-13 harness (real claude.exe under ConPTY + fake API) reproduces the lost beginning with a SYNTHETIC multi-paragraph body (head and tail markers), or records why it cannot.
+2. The fixed send shape is admitted with both markers in ONE request; a mutant that restores the old shape is CAUGHT.
+3. An older host without the new path keeps today's behaviour (no refusal, no duplicate turn), per docs/reference/remote-wire-compatibility.md.
+
+### Phase 18: SEND-P0b the delivered-turn echo is not missed
+**Goal**: A message that became a real turn is shown delivered; an unproven one never is. **Depends on**: Phase 17
+**Success Criteria** (what must be TRUE):
+1. A deterministic test reproduces the false "Agent has not shown this message" for a short message like `hola?` that is a real transcript turn.
+2. The matcher fix makes it delivered; a control where no turn exists stays unconfirmed.

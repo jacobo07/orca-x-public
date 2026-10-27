@@ -4,6 +4,10 @@ import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-cli
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { readTerminalSendRefusal, SEND_BUDGET_EXHAUSTED } from './mobile-native-chat-send-refusal'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+import {
+  AGENT_PROMPT_SUBMIT,
+  buildAgentPromptPasteBytes
+} from '../../../src/shared/agent-prompt-paste-bytes'
 
 type MobileTerminalClient = {
   id: string
@@ -34,6 +38,8 @@ type MobileNativeChatSendArgs = {
   deadline?: number
   /** Told the refusal code when the outcome is 'rejected' (see mobile-native-chat-send-refusal.ts). */
   onRefused?: (refusal: string) => void
+  /** Send the body as one bracketed paste, then Enter as its own write (a chat turn). */
+  asAgentPrompt?: boolean
 }
 
 /** 'unknown' = the RPC failed without proof the request never reached the
@@ -81,6 +87,9 @@ export async function sendMobileNativeChatMessageWithOutcome(
     }
     return sendMobileNativeChatMessageWithOutcome({ ...args, clearInputFirst: false, deadline })
   }
+  if (args.asAgentPrompt && args.text.length > 0 && (args.enter ?? true)) {
+    return sendMobileNativeChatAgentPrompt(args, Date.now() + timeoutMs)
+  }
   try {
     const response = await args.client.sendRequest(
       'terminal.send',
@@ -111,6 +120,44 @@ export async function sendMobileNativeChatMessageWithOutcome(
       ? 'unknown'
       : 'rejected'
   }
+}
+
+/** Host-platform worst case (ConPTY): the phone cannot see the host OS. Same value as the
+ *  desktop's Windows agent-prompt settle in src/shared/agent-prompt-injection.ts. */
+export const MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS = 1_500
+
+// Why a paste: typed through an Orca host, a long multi-paragraph body lost its beginning before the
+// agent saw it; the same body as one bracketed paste arrived whole (SEND-P0b, 17-VERIFICATION.md).
+// Every shipped host writes terminal.send text verbatim, so this needs no host change.
+async function sendMobileNativeChatAgentPrompt(
+  args: MobileNativeChatSendArgs,
+  deadline: number
+): Promise<MobileNativeChatSendOutcome> {
+  const target = {
+    client: args.client,
+    terminal: args.terminal,
+    enter: false,
+    ...(args.mobileClient ? { mobileClient: args.mobileClient } : {})
+  }
+  const pasted = await sendMobileNativeChatMessageWithOutcome({
+    ...target,
+    text: buildAgentPromptPasteBytes(args.text),
+    deadline,
+    ...(args.onRefused ? { onRefused: args.onRefused } : {})
+  })
+  if (pasted !== 'accepted') {
+    return pasted
+  }
+  await new Promise((resolve) => setTimeout(resolve, MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS))
+  const submitted = await sendMobileNativeChatMessageWithOutcome({
+    ...target,
+    text: AGENT_PROMPT_SUBMIT,
+    // Why: the paste already sits on the input line, so the submit gets at least its own minimum budget.
+    deadline: Math.max(deadline, Date.now() + MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS),
+    ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {})
+  })
+  // A failed Enter leaves the body on the agent's input line: never 'rejected', or a retry pastes it twice.
+  return submitted === 'accepted' ? 'accepted' : 'unknown'
 }
 
 export async function sendMobileNativeChatMessage(

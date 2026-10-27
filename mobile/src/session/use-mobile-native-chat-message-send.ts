@@ -194,6 +194,8 @@ export function useMobileNativeChatMessageSend(args: {
               // Why: an image send already cleared before its paste; a second
               // clear here would wipe the image before submission.
               clearInputFirst: !images?.length && !seededLaunchDraft,
+              // Why composer chat only: answers and slash commands must still reach the TUI as keys.
+              asAgentPrompt: syncComposer && classification === 'chat',
               ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
               deadline,
               onRefused,

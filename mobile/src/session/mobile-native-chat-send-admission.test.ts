@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import {
+  MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS,
+  sendMobileNativeChatMessageWithOutcome
+} from './mobile-native-chat-send'
 
 // SEND-P0 phase 13. Measured on Claude Code 2.1.311 under ConPTY (.planning/phases/13-*/13-VERIFICATION.md):
 // `\x15`+body in ONE write, then `\r`, is never admitted as a turn once the body is paste-sized (>=94 chars;
@@ -52,5 +55,79 @@ describe('a chat send that clears the input line first', () => {
       ['\x15', false],
       [OWNER_MESSAGE, true]
     ])
+  })
+})
+
+// SEND-P0b phase 17. Through a real Orca host, a typed 6-paragraph 1159-char body reached Claude Code without its
+// beginning (cut mid-word); the same body as one bracketed paste arrived whole (17-VERIFICATION.md). Synthetic text.
+const MULTI_PARAGRAPH = Array.from(
+  { length: 6 },
+  (_, i) => `Paragraph ${i + 1}: the phone asks the desktop agent a longer question 😂.`
+).join('\n\n')
+
+function clientAnswering(...accepted: boolean[]): RpcClient {
+  const sendRequest = vi.fn()
+  for (const ok of accepted) {
+    sendRequest.mockResolvedValueOnce({
+      id: 'request',
+      ok: true,
+      result: { send: ok ? { accepted: true } : { accepted: false, bytesWritten: 0 } },
+      _meta: { runtimeId: 'runtime' }
+    })
+  }
+  return { sendRequest } as unknown as RpcClient
+}
+
+async function sendChatTurn(
+  client: RpcClient,
+  extra: Partial<Parameters<typeof sendMobileNativeChatMessageWithOutcome>[0]> = {}
+) {
+  vi.useFakeTimers()
+  try {
+    const outcome = sendMobileNativeChatMessageWithOutcome({
+      client,
+      terminal: 'term',
+      text: MULTI_PARAGRAPH,
+      clearInputFirst: true,
+      asAgentPrompt: true,
+      ...extra
+    })
+    await vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_PASTE_SETTLE_MS)
+    return await outcome
+  } finally {
+    vi.useRealTimers()
+  }
+}
+
+describe('a composer chat turn', () => {
+  it('pastes the whole body as ONE bracketed paste, then submits with Enter as its own write', async () => {
+    const client = clientAnswering(true, true, true)
+    expect(await sendChatTurn(client)).toBe('accepted')
+    expect(writes(client).map((w) => [w.text, w.enter])).toEqual([
+      ['\x15', false],
+      [`\x1b[200~${MULTI_PARAGRAPH}\x1b[201~`, false],
+      ['\r', false]
+    ])
+  })
+
+  it('resolves the launch draft only on the submitting write', async () => {
+    const client = clientAnswering(true, true, true)
+    const draft = { text: 'parked', createdAt: 1 }
+    await sendChatTurn(client, { resolvedLaunchDraft: draft })
+    const sent = vi
+      .mocked(client.sendRequest)
+      .mock.calls.map((c) => c[1] as Record<string, unknown>)
+    expect(sent.map((p) => p.resolvedLaunchDraft)).toEqual([undefined, undefined, draft])
+  })
+
+  it('a refused paste is a refusal and never sends Enter', async () => {
+    const client = clientAnswering(true, false)
+    expect(await sendChatTurn(client)).toBe('rejected')
+    expect(writes(client)).toHaveLength(2)
+  })
+
+  it('a failed Enter after an accepted paste is unknown, never rejected (a retry would paste twice)', async () => {
+    const client = clientAnswering(true, true, false)
+    expect(await sendChatTurn(client)).toBe('unknown')
   })
 })
