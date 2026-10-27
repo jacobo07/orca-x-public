@@ -19,7 +19,7 @@ import type { DeviceCredentialInstallAuthorization } from './relay-control-reque
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 
-type DesktopRelayServiceOptions = {
+export type DesktopRelayServiceOptions = {
   authConfig: OrcaCloudAuthConfig
   userDataPath: string
   appVersion: string

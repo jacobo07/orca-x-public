@@ -120,7 +120,8 @@ import {
 import { resolveAdvertisedPairingEndpoint } from './runtime/pairing-endpoint'
 import { ServeReadinessPublisher } from './server/serve-readiness'
 import { reserveServeStdoutForReadiness } from './server/serve-stdout-boundary'
-import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
+import type { DesktopRelayService } from './runtime/relay/desktop-relay-service'
+import { createHostRelayOwner, type HostRelayStartDeps } from './runtime/relay/host-relay-startup'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -428,6 +429,8 @@ let runtimeRpc: OrcaRuntimeRpcServer | null = null
 const serveReadinessPublisher = new ServeReadinessPublisher()
 let desktopRelayService: DesktopRelayService | null = null
 let desktopRelayStatus: RelayBrokerStatus = 'offline'
+// Why module scope: serve and desktop must share one memoized relay start per process.
+const hostRelayOwner = createHostRelayOwner()
 let pendingUnpairedDeviceAuthFailure = false
 // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
@@ -2069,6 +2072,23 @@ async function renderTerminalPairingQr(pairingUrl: string): Promise<string | nul
   }
 }
 
+function hostRelayStartDeps(): HostRelayStartDeps {
+  if (!runtimeRpc) {
+    throw new Error('runtime_rpc_unavailable')
+  }
+  return {
+    cloudAuth: getOrcaCloudAuthConfig(),
+    userDataPath: getProfileUserDataPath(),
+    appVersion: app.getVersion(),
+    runtimeRpc,
+    onStatus: (status) => {
+      desktopRelayStatus = status
+      mainWindow?.webContents.send('mobile:relayStatusChanged', status)
+    },
+    onResume: (listener) => powerMonitor.on('resume', listener)
+  }
+}
+
 async function printServeReady(options: ServeOptions): Promise<void> {
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
@@ -2813,9 +2833,9 @@ void app.whenReady().then(async () => {
     getLocalStatus: () => runtimeService.getStatus(),
     collectLocalSnapshot: () => runtimeService.getMemorySnapshot(),
     collectLocalNodeResources: (options) =>
-      readNodeResources({
-        ...(options.modelProbePorts ? { modelProbePorts: [...options.modelProbePorts] } : {})
-      }),
+      readNodeResources(
+        options.modelProbePorts ? { modelProbePorts: [...options.modelProbePorts] } : {}
+      ),
     listEnvironments: () => listEnvironments(app.getPath('userData')),
     listSshHostIdentities,
     listSshTargets: listSshTargetsForFleet,
@@ -2836,7 +2856,9 @@ void app.whenReady().then(async () => {
   })
   // Why: the SSH relay session lives only in this process, so `orca serve` leaves the replica slot empty.
   installReplicaPairService(
-    createReplicaPairService({ listProjectHostSetups: () => runtimeService.listProjectHostSetups() })
+    createReplicaPairService({
+      listProjectHostSetups: () => runtimeService.listProjectHostSetups()
+    })
   )
   // Why: the node's userData is where its work lands, so it is the disk the manifest describes.
   installNodeResourcesMeasurer((params) =>
@@ -3366,6 +3388,9 @@ void app.whenReady().then(async () => {
     })
     settleServeDesktopActivation()
     installServeSignalHandlers()
+    // Why: a headless host with no window is only reachable off-LAN through the relay.
+    const serveHostRelay = hostRelayOwner.start(hostRelayStartDeps())
+    desktopRelayService = serveHostRelay.service
     // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
     if (process.platform === 'darwin' || process.platform === 'linux') {
       try {
@@ -3459,38 +3484,8 @@ void app.whenReady().then(async () => {
     }
   }
 
-  const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
-    try {
-      const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.config,
-        userDataPath: getProfileUserDataPath(),
-        appVersion: app.getVersion(),
-        runtimeRpc,
-        onStatus: (status) => {
-          desktopRelayStatus = status
-          mainWindow?.webContents.send('mobile:relayStatusChanged', status)
-        }
-      })
-      desktopRelayService = relayService
-      runtimeRpc.setMobileRelayPairingProvider({
-        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
-        onDemandStateChanged: () => relayService.demandStateChanged(),
-        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
-        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
-      })
-      relayService.start()
-      // Why: sleeping past relay-token expiry kills the broker with no retry
-      // timer; resume is the moment that state becomes recoverable.
-      powerMonitor.on('resume', () => desktopRelayService?.ensureLive())
-    } catch (error) {
-      console.warn(
-        '[relay] Desktop relay startup unavailable:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
-  }
+  const hostRelay = hostRelayOwner.start(hostRelayStartDeps())
+  desktopRelayService = hostRelay.service
 
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
