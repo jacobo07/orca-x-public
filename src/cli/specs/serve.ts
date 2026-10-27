@@ -21,7 +21,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'mobile-pairing',
       'no-pairing',
       'project-root',
-      'recipe-json'
+      'recipe-json',
+      'wake-broker'
     ],
     notes: [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
