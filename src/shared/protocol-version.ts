@@ -148,6 +148,8 @@ export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
 export const PROJECT_ROOT_IDENTITY_RUNTIME_CAPABILITY = 'projects.root-identity.v1' as const
 // Why: old hosts omit it, so the phone renders their capabilities as unknown (D-05).
 export const HOST_AVAILABILITY_RUNTIME_CAPABILITY = 'host.availability.v1' as const
+// Why not in RUNTIME_CAPABILITIES: advertised only while this host runs as a broker, so a client knows a broker announced it this session (D-12, D-13).
+export const HOST_WAKE_BROKER_RUNTIME_CAPABILITY = 'host.wake-broker.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',

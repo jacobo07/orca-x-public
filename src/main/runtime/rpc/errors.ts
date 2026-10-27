@@ -25,6 +25,7 @@ import {
   CANCEL_WORKSTREAM_REFUSAL_CODES,
   STOP_EXECUTION_REFUSAL_CODES
 } from '../../../shared/execution-effect-refusals'
+import { HOST_WAKE_REFUSAL_CODES } from '../../../shared/host-wake'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -135,7 +136,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
   // Why: thrown with `.code` (not message-keyed) so the authority in `.data` reaches the client.
-  ...CANCEL_WORKSTREAM_REFUSAL_CODES
+  ...CANCEL_WORKSTREAM_REFUSAL_CODES,
+  // Why: wake refusals must stay distinct from runtime_error and from any code a client falls back on (D-08).
+  ...HOST_WAKE_REFUSAL_CODES
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

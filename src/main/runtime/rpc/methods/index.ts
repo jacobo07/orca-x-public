@@ -46,12 +46,14 @@ import { ARTIFACT_METHODS } from './artifacts'
 import { DURABLE_EXIT_METHODS } from './durable-exit'
 import { WORKSTREAM_CANCEL_METHODS } from './workstream-cancel'
 import { ENVIRONMENT_REQUIREMENTS_METHODS } from './environment-requirements'
+import { HOST_WAKE_METHODS } from './host-wake'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
 // auditing the security boundary or wiring new CLI commands.
 export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...STATUS_METHODS,
+  ...HOST_WAKE_METHODS,
   ...DURABLE_EXIT_METHODS,
   ...WORKSTREAM_CANCEL_METHODS,
   ...ENVIRONMENT_REQUIREMENTS_METHODS,
