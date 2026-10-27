@@ -1,12 +1,31 @@
+---
+gsd_state_version: "1.0"
+current_phase: 10
+current_phase_name: 2/2
+status: unknown
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-10-27T15:25:34.605Z"
+last_activity: "2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: \"go here\"); the arming pane on C:\\Users\\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e."
+state_head: 4d172ea77d10fc437596b529caa9528ff06be5cd
+progress:
+  total_phases: 14
+  completed_phases: 7
+  total_plans: 12
+  completed_plans: 10
+  percent: 50
+---
+
 # STATE: Phone control of a live Orca X session, then DWS convergence
 
 ## Current Position
+
 P0 (2026-10-27, Owner mission "crash-proof mobile remote session entry"): phase 11 in .planning/phases/11-mobile-session-entry-crash/11-VERIFICATION.md. Root cause PROVEN on the Owner's S25 Ultra: the sideloaded APK 0.0.43 (2026-09-14) lacks the ExpoTwoWayAudio native module its JS imports, so opening any session threw at route load and Android finished the activity. Fixed 328971c74, contained a8d7bfca2, build gate 2a4f2ef6d. Fixed APK built (sha256 ca68faa3…21df), staged on the phone, and installed by the Owner as an update; P0 done-gate MET 2026-10-27 ~10:40 (PHYSICAL DEVICE, OWNER-OBSERVED: host > Orca X session opened, Owner typed into this pane from the phone; host saw the device at 09:40:31Z; no logcat). Resume: adb over Wi-Fi (Developer options > Wireless debugging, adb pair) → instrumented failure matrix, fresh-output send, reconnect, foreground, revocation; then Mobile Workstation. adb lives in the session scratchpad (gone after reboot): fetch platform-tools again from dl.google.com.
 Phase: 10 of 10 -- complete (2/2). Milestone NOT closable: phases 5, 7 and 9 are PARTIAL (human_needed, see Deferred Verification). Phase 8 ran its Orca-side legs ahead of 7 under the unattended rule.
 Base: rb-live c1f33f4d4e (pushed 2026-10-19), branch mobile/phone-control, worktree C:\owx-pc on the Owner's laptop (C:\Users\Jacobo).
 Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: "go here"); the arming pane on C:\Users\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e.
 
 ## Completed phases (evidence in .planning/phases/NN-*/)
+
 - Phase 1 (3/3): row reasons and owner map in 01-OWNERS.md; RED oracle test.
 - Phase 2 (2/2): oracle src/shared/terminal-fresh-output-oracle.ts; scope proof src/main/runtime/rpc/terminal-send-mobile-scope.test.ts; M1-M3 CAUGHT.
 - Phase 3 (2/2): src/main/runtime/runtime-rpc-mobile-reconnect-revocation.test.ts; M4, M5, M6b, M7 CAUGHT; M6 equivalent (handles retained per PTY incarnation). Revocation authority: device-authorization.ts assertDeviceStillAuthorized (runtime-rpc.ts:1118 frames, :1756 RPC).
@@ -20,6 +39,7 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 - tsc --noEmit: config/tsconfig.tc.web.json exit 0 and config/tsconfig.node.json exit 0, both on the laptop 2026-10-26 (no longer owed).
 
 ## Deferred Verification
+
 | Phase | State | Resume |
 |-------|-------|--------|
 | 5 | verification_deferred_human | /gsd-verify-work 5 (captures: keyboard open/closed, selector open, long names, many runtimes; Android 14 emulator on C:\Users\User or a paired phone) |
@@ -27,6 +47,7 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 | 9 | verification_deferred_human | /gsd-verify-work 9 (host side done with a SCRIPTED CLIENT; owed: a phone or labelled emulator switching hosts in the host picker) |
 
 ## Owner decisions
+
 - 2026-10-27 ~00:30: "cuando termines pushea instala y apaga el pc de forma autonoma". Push of mobile/phone-control authorized for this run (never main); install attempted and staged (lock screen needs the Owner); laptop shut down at the end.
 - 2026-10-27 00:13: Owner paired a PHYSICAL phone (S25 Ultra) to the installed Orca X and enabled Wireless debugging; adb pairing code was used once and not recorded.
 - 2026-10-26 18:00 (phase 7): Owner chose (a). A scripted phone-protocol client may pair to the Owner's running Windows Orca X. Evidence is labelled SCRIPTED CLIENT, never physical or emulator; the device is revoked at the end and the revoke is proven by a refused mutation; no extra paired device is left; the Owner's windows and sessions are never restarted or closed. Runner: src/main/runtime/mobile-live-windows-leg.live.test.ts (ORCA_LIVE_LEG=phone, then witness).
@@ -34,13 +55,16 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 - Harness gap found 2026-10-26: gsd_mission directives reach only a FRESH worker's card; a turn-continued worker never saw this answer, and the mission HALTED no_progress at 17:51 waiting for it.
 
 ## Blocked (resource)
+
 - Phase 5 captures: no emulator here (laptop law) and GEX44 cannot run one (/dev/kvm root:kvm, kobii not in kvm, no Android SDK; joining kvm needs root on a shared host).
 
 ## GEX44 mobile test recipe
+
 git bundle HEAD -> scp to /tmp/orca-phone-pN-<ts>; PATH from ~/orca-env/env.sh (node24 v24.21.0, pnpm 10.24.0); `pnpm install --frozen-lockfile --ignore-scripts` in mobile/; script refuses any root outside /tmp/orca-phone-p*; tear down after. Ship scripts as no-BOM LF files via `ssh gex44 bash -s < file`.
 Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electron <repo> --serve --serve-json --serve-port P --serve-bind-host 127.0.0.1 --serve-pairing-address 127.0.0.1 --serve-mobile-pairing`; register the project with repo.add over the runtime pipe/socket from orca-runtime.json (--serve-project-root does not register it). A Windows serve host runs the same out/ with the worktree's electron.exe and ORCA_E2E_USER_DATA_DIR + ORCA_E2E_HOME_DIR = USERPROFILE so no real-home hook or trust file is written.
 
 ## Decisions (unattended)
+
 - 2026-10-26 Phase 1 RED is a unit test, not e2e: the laptop cannot build for the headless paired harness. Safe: reversible, internal.
 - 2026-10-26 Phase 2 adds no wire field for host scope; per-host connection + runtime-local handle map already fences it. Safe: no wire change, proven by mutants.
 - 2026-10-26 Phase 4 runs mobile tests on GEX44 rather than installing mobile deps on the laptop (RAM law). Safe: disposable root, torn down.
@@ -50,6 +74,7 @@ Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electr
 - 2026-10-26 Phase 9 oracle: a line ending in the exact sent text followed by `marker nonce` counts as FRESH (ConPTY glue). Safe: the echo alone cannot contain the expected line; control tests refuse partial echoes and other prefixes; only tests consume the oracle.
 
 ## Laws (binding)
+
 - You are already in the work tree. Do not call EnterWorktree or ExitWorktree.
 - Never push, never merge to main. Pushing is Owner-only.
 - Do not touch the primary checkout (C:\Users\Jacobo\Desktop\Cursor Projects\Orca X), C:\ox, or any other worktree.
@@ -62,6 +87,7 @@ Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electr
 - Use git through PowerShell. No Bash for git on this host.
 
 ## Facts measured 2026-10-26 on this laptop (re-verify before relying)
+
 - DWS verifier (node config/scripts/check-dws-completeness.mjs) at f758bd57f and again at f77a64ff8: 48 of 76 PASS, ABSENT 10, PARTIAL 18, verdict CONTRACT INVALID. Rows 59, 70, 73 PASS. Rows 12, 33 PARTIAL (blocked on UWCP control verbs, CPP stages after S4-22). Row 75 PARTIAL (rows 64, 66 live legs partial). Row 39 ABSENT, OUT-OF-PROGRAM since 2026-10-18 (stale-write refusal rests on UWCP log ordering).
 - Old GEX44 tree dws/rebaseline ca3a66869 gives 22 of 76; it is stale. No GEX44 ~/orca-* tree is on this branch.
 - Mobile terminal slices 1-4 (composer and key row, header and search, host and runtime pickers, output card) are on this branch; device-gated.
@@ -73,7 +99,25 @@ Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electr
 - GEX44 DWS units X05, X06, X16, X18, X19 sit at OWNER_BOUNDARY (AMR cap); classify, do not blindly relaunch.
 
 ## Owner-only
+
 Install the staged crash-fix APK on the S25 Ultra (unlock needed); re-enable Wireless debugging for the next device leg; interactive provider login and real quota spend; merge (and any push beyond the 2026-10-27 authorization).
 
 ## Token budget
+
 Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product Reality 2.3M, handoff reserve 1.3M.
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 17 P01 | 45min | 3 tasks | 8 files |
+
+## Decisions
+
+- [Phase 10]: 17-01: serve and desktop start the relay through one memoized createHostRelayOwner(); readiness status is null until the broker emits
+
+## Session
+
+**Last session:** 2026-10-27T15:25:32.451Z
+**Stopped at:** Completed 17-01-PLAN.md
+**Resume file:** None
