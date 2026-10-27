@@ -14,6 +14,10 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 - [x] **Phase 8: DWS reconciliation** - Rows 33 and 39 (generation fencing, desktop and mobile stale writes), X16 placement reaches dispatch, X18 relay observation aperture with a positive control, and a verdict on X05, X06, X16, X18 and X19.
 - [ ] **Phase 9 (partial, human_needed): Two-host Product Reality and Continue here** - Extend the Windows and GEX44 harness with the mobile controller; row 75 and row 70 re-measured; mutation drills with PLANT_CONFIRMED, CAUGHT, RESTORE_VERIFIED.
 - [x] **Phase 10: Institutionalize and close** - Knowledge Vault, UKDL rules and traps, the constitutive baseline ratchet, the fresh-agent test, the DWS matrix re-run, and the two-layer handoff.
+- [ ] **Phase 13: SEND-P0 nonce trace and RED** - Follow one unique nonce from the mobile send through the host write, the PTY, the desktop input line and the transcript turn on the Owner's installed Windows Orca X (scripted client); name the first missing receipt; RED at that owner. Brief: .planning/SEND-P0-PLAN.md.
+- [ ] **Phase 14: SEND-P0 owner fix and truthful delivery states** - Fix the failing owner; the mobile bubble shows sending, written, delivered, unconfirmed, refused or failed from evidence; failures are visible with the narrowest recovery; no duplicate rows.
+- [ ] **Phase 15: SEND-P0 terminal send, wrong target, reconnect, revocation, version** - Terminal send proven by fresh output on the exact PTY; wrong host, session or runtime is refused, never retargeted; reconnect is duplicate-safe; a revoked device is refused at the effect; an older host is not success.
+- [ ] **Phase 16: SEND-P0 Product Reality, mutation and institutional close** - Real phone legs for Agent send, terminal send, send+scroll and send+lease; mutants; Knowledge Vault, UKDL, ratchet gate, fresh-agent test, two-layer handoff.
 
 ## Phase Details
 ### Phase 1: Reality close and RED
@@ -76,3 +80,32 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 **Success Criteria** (what must be TRUE):
 1. The verifier is re-run and its counts are recorded.
 2. The fresh-agent test passes from durable state only.
+
+### Phase 13: SEND-P0 nonce trace and RED
+**Goal**: The stage where a mobile message stops being real is named by evidence. **Depends on**: Phase 12
+**Success Criteria** (what must be TRUE):
+1. A scripted-client nonce trace on the installed Windows Orca X records the RPC response, the host write (ptyId, bytes), the PTY output, the desktop input line and the transcript turn, and names the first stage without the nonce. The scripted device is revoked at the end.
+2. Each of the five hypotheses in SEND-P0-PLAN.md is CONFIRMED or REJECTED with evidence.
+3. A deterministic test fails on the real regression at that owner, with the contract "the agent turn exists".
+
+### Phase 14: SEND-P0 owner fix and truthful delivery states
+**Goal**: A mobile Agent message reaches the agent as a turn, and its bubble never outruns its evidence. **Depends on**: Phase 13
+**Success Criteria** (what must be TRUE):
+1. The phase 13 RED is green, the fix is in the owning layer, and Law 2 is preserved (no generic send).
+2. The bubble distinguishes written from delivered (transcript echo), shows unconfirmed after a bound and refused/failed with a reason, and Retry cannot create a duplicate turn.
+3. A host refusal (refusedReason, lease, auth, capability) is never rendered as sent.
+
+### Phase 15: SEND-P0 terminal send, wrong target, reconnect, revocation, version
+**Goal**: Every send binds to its target at admission or is refused. **Depends on**: Phase 14
+**Success Criteria** (what must be TRUE):
+1. A terminal-runtime send is proven by fresh output on the exact PTY, with a second terminal untouched.
+2. A runtime or host switch after typing, a stale session, a deleted session or a stale lease each refuses or binds to the original target; nothing retargets.
+3. Disconnect then Send, and reconnect, produce at most one admitted message; a revoked device's next send is refused with no turn and no input; an older host shows unsupported.
+4. Agent send is not gated by the terminal input lease unless the design says so, and terminal lease semantics are unchanged.
+
+### Phase 16: SEND-P0 Product Reality, mutation and institutional close
+**Goal**: The Owner's phone sends a prompt and a command that both really land. **Depends on**: Phase 15
+**Success Criteria** (what must be TRUE):
+1. Real phone + real Windows host: an Agent prompt reaches the desktop turn and the result reconciles without duplicates; a terminal command shows fresh output; send+scroll stays anchored; send+lease behaves as specified. Otherwise OWNER_BOUND with the exact missing step.
+2. The 13 SEND-P0 mutants report PLANT_CONFIRMED, a verdict and RESTORE_VERIFIED.
+3. Knowledge Vault incident, UKDL entries, the ratchet gate and a passing fresh-agent test from durable state; two-layer handoff in STATE.md.
