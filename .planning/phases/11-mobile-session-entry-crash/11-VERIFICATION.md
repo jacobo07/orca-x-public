@@ -2,10 +2,10 @@
 phase: 11-mobile-session-entry-crash
 status: human_needed
 verified: 2026-10-27
-score: 2/3
+score: 3/3
 human_verification:
-  - "Install /sdcard/Download/OrcaX-0.0.43-crashfix-a8d7bfca2.apk (sha256 ca68faa3ec604dcff8aa83b4f236067b257abdc60f8575fe6638dc1ce15621df) from Files on the S25 Ultra; it signs with the same key, so Android offers Update and keeps paired hosts. adb install over Wi-Fi was held by the lock screen and was cancelled."
-  - "Then open the Orca X host > Orca X session on the phone: it must open (P0 done-gate), then the session-entry failure matrix and a fresh-output send."
+  - "Session-entry failure matrix on the new build (host disconnected, missing session/worktree, old host), instrumented: re-enable Wireless debugging so logcat can be read."
+  - "Fresh-output send from the phone composer, reconnect, background/foreground, revocation, then Mobile Workstation."
 ---
 
 # Phase 11 Verification: mobile app closes when a session is opened
@@ -14,7 +14,7 @@ human_verification:
 |---|---|---|---|
 | 1 | Real-device crash characterized, first bad layer named | logcat on the Owner's phone (below) | MET |
 | 2 | Deterministic RED at the failing owner, fixed, mutants caught | `expo-two-way-audio-native-absence.test.ts`, P11-M1..M4 | MET |
-| 3 | Fixed APK opens a paired-host session on the real phone | APK built and staged on the phone, not installed (lock screen) | NOT MET (Owner install) |
+| 3 | Fixed APK opens a paired-host session on the real phone | Owner, 2026-10-27 ~10:40 (PHYSICAL DEVICE, OWNER-OBSERVED): installed the staged APK as an update, opened host > Orca X session without a close, and typed into this Claude Code pane from it. Host corroboration: the device was last seen 2026-10-27T09:40:31Z on the installed Orca X. No logcat for this run (Wireless debugging was off after the network change). | MET (owner-observed, not instrumented) |
 
 ## Device and binary (REAL DEVICE, Owner's phone)
 - Samsung Galaxy S25 Ultra SM-S938B, Android 16, adb over Wi-Fi (Samsung's ADB USB driver absent on the laptop).
