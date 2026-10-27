@@ -118,6 +118,7 @@ if [ "$MODE" = "full" ]; then
   [ "$FMT_RC" -eq 0 ] || FAIL=1
 
   TOTAL_TSC="$(grep -c 'error TS' "$ROOT/tsc.log" || true)"
+  grep 'error TS' "$ROOT/tsc.log" | head -20 | sed 's/^/TSC /' || true
   TOUCHED_TSC=0
   for f in "${CHECK[@]}"; do
     n="$(grep -F "$f(" "$ROOT/tsc.log" | grep -c 'error TS' || true)"
