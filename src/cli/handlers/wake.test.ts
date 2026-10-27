@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeClient } from '../runtime-client'
-import { WAKE_HANDLERS } from './wake'
+import { WAKE_HANDLERS, createWakeHandlers } from './wake'
 
 const TARGET = {
   targetId: 'wt_0123456789ab',
@@ -222,6 +222,70 @@ describe('orca wake grant and target removal', () => {
     expect(message).toContain('pairedDeviceId')
     expect(message).toContain('status.get')
     expect(message).toContain('Settings')
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('orca wake refuses the SSH relay bridge and remote retargeting', () => {
+  const VALID_FLAGS: Record<string, [string, string][]> = {
+    'wake target add': [['mac', 'aa:bb:cc:dd:ee:ff']],
+    'wake target list': [],
+    'wake target remove': [['target', TARGET.targetId]],
+    'wake grant add': [
+      ['device', 'dev-a'],
+      ['target', TARGET.targetId]
+    ],
+    'wake grant remove': [
+      ['device', 'dev-a'],
+      ['target', TARGET.targetId]
+    ],
+    'wake grant list': []
+  }
+
+  beforeEach(() => {
+    callMock.mockReset().mockResolvedValue(success({}))
+  })
+
+  it('covers every wake handler', () => {
+    expect(Object.keys(createWakeHandlers({})).sort()).toEqual(Object.keys(VALID_FLAGS).sort())
+  })
+
+  it.each(Object.keys(VALID_FLAGS))(
+    '%s throws remote_invocation_refused with ORCA_CLI_CWD set and makes no runtime call',
+    async (key) => {
+      const handlers = createWakeHandlers({ ORCA_CLI_CWD: '/home/owner/repo' })
+      await expect(handlers[key](context(VALID_FLAGS[key]))).rejects.toMatchObject({
+        code: 'remote_invocation_refused'
+      })
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(Object.keys(VALID_FLAGS))(
+    '%s refuses --environment and --pairing-code instead of retargeting',
+    async (key) => {
+      const handlers = createWakeHandlers({})
+      for (const flag of ['environment', 'pairing-code']) {
+        await expect(
+          handlers[key](context([...VALID_FLAGS[key], [flag, 'homelab']]))
+        ).rejects.toMatchObject({ code: 'remote_invocation_refused' })
+      }
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('refuses a runtime client that resolved to a remote pairing', async () => {
+    const remoteClient = { call: callMock, isRemote: true } as unknown as RuntimeClient
+    const handlers = createWakeHandlers({})
+    await expect(
+      handlers['wake grant list']({ ...context([]), client: remoteClient })
+    ).rejects.toMatchObject({ code: 'remote_invocation_refused' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('still reaches the runtime with an empty ORCA_CLI_CWD (positive control)', async () => {
+    callMock.mockResolvedValue(success({ grants: [] }))
+    await createWakeHandlers({ ORCA_CLI_CWD: '' })['wake grant list'](context([]))
     expect(callMock).toHaveBeenCalledTimes(1)
   })
 })
