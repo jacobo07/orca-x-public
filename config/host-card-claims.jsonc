@@ -110,8 +110,8 @@
     "capability-value.not-supported": {
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
       "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
-      "evidence": ["host-announced"],
-      "why": "Not possible is the host's own statement about its build or platform, never the phone's guess"
+      "evidence": ["host-announced", "os-probe"],
+      "why": "Not possible is the host's own statement about its build or platform, never the phone's guess; the WOL probe states it only when it read every Ethernet adapter's magic-packet setting"
     },
     "capability-value.not-configured": {
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
@@ -122,8 +122,8 @@
     "capability-value.needs-owner-setup": {
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
       "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
-      "evidence": ["host-announced"],
-      "why": "Needs setup is announced by the host when only the Owner can complete the step"
+      "evidence": ["host-announced", "os-probe"],
+      "why": "Needs setup is announced by the host when only the Owner can complete the step; the WOL probe reports it when a capable adapter is not armed for wake"
     },
     "capability-value.unknown": {
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",

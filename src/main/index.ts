@@ -127,6 +127,7 @@ import {
   createHostAutostartProbe,
   defaultHostAutostartProbeDeps
 } from './runtime/host-autostart-probe'
+import { createHostWolProbe, defaultHostWolProbeDeps } from './runtime/host-wol-probe'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
@@ -438,6 +439,8 @@ let desktopRelayStatus: RelayBrokerStatus = 'offline'
 const hostRelayOwner = createHostRelayOwner()
 // Why module scope: serve and desktop registrations share one single-flight Task Scheduler read.
 const hostAutostartProbe = createHostAutostartProbe(defaultHostAutostartProbeDeps())
+// Why module scope: serve and desktop registrations share one single-flight adapter read.
+const hostWolProbe = createHostWolProbe(defaultHostWolProbeDeps())
 let pendingUnpairedDeviceAuthFailure = false
 // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
@@ -3404,10 +3407,13 @@ void app.whenReady().then(async () => {
       processKind: 'serve',
       relayReadiness: serveHostRelay.getReadiness,
       webSocketEndpoint: () => runtimeRpc?.getWebSocketEndpoint() ?? null,
-      autostart: hostAutostartProbe
+      autostart: hostAutostartProbe,
+      wakeOnLan: hostWolProbe
     })
     // Why: start the first Task Scheduler read before a phone asks.
     hostAutostartProbe.read()
+    // Why: start the first adapter read before a phone asks (D-03).
+    hostWolProbe.read()
     // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
     if (process.platform === 'darwin' || process.platform === 'linux') {
       try {
@@ -3507,10 +3513,13 @@ void app.whenReady().then(async () => {
     processKind: 'desktop',
     relayReadiness: hostRelay.getReadiness,
     webSocketEndpoint: () => runtimeRpc?.getWebSocketEndpoint() ?? null,
-    autostart: hostAutostartProbe
+    autostart: hostAutostartProbe,
+    wakeOnLan: hostWolProbe
   })
   // Why: start the first Task Scheduler read before a phone asks.
   hostAutostartProbe.read()
+  // Why: start the first adapter read before a phone asks (D-03).
+  hostWolProbe.read()
 
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
