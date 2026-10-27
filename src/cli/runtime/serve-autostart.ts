@@ -13,6 +13,7 @@ import {
   type ServeAutostartTaskState
 } from '../../shared/serve-autostart-status'
 import { resolveServeLaunchTarget } from './launch'
+import { assertLocalInvocation } from './local-invocation'
 import {
   SERVE_AUTOSTART_SERVE_ARGS,
   buildServeAutostartTaskXml,
@@ -141,17 +142,6 @@ export type ServeAutostartInstallResult = {
 export type ServeAutostartRemoveResult =
   | { removed: true; taskName: string }
   | { removed: false; taskName: string; reason: 'not_installed' }
-
-// Why: the SSH relay bridge runs this CLI on the host; a remote shell must not plant a persistent host logon effect.
-function assertLocalInvocation(env: NodeJS.ProcessEnv): void {
-  const remoteCwd = env.ORCA_CLI_CWD
-  if (typeof remoteCwd === 'string' && remoteCwd.length > 0) {
-    throw new RuntimeClientError(
-      'remote_invocation_refused',
-      'orca serve autostart install/remove must run in a shell on the Orca host itself, not through a remote SSH session.'
-    )
-  }
-}
 
 function defaultLaunchTarget(env: NodeJS.ProcessEnv): ServeAutostartLaunchTarget {
   const target = resolveServeLaunchTarget(env)

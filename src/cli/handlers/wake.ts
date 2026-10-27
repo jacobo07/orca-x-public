@@ -6,6 +6,7 @@ import {
   RuntimeRpcFailureError,
   type RuntimeRpcSuccess
 } from '../runtime-client'
+import { assertLocalInvocation } from '../runtime/local-invocation'
 import { isWakeTargetLabel, normalizeMac } from '../../shared/host-wake'
 
 const START_BROKER_FIX = 'Start the broker on this host first: orca serve --wake-broker'
@@ -138,7 +139,41 @@ function formatGrantList(result: { grants: WakeGrantRow[] }): string {
   return result.grants.map(formatGrant).join('\n')
 }
 
-export const WAKE_HANDLERS: Record<string, CommandHandler> = {
+// Why every gate runs before the client is touched: the relay bridge and a remote pairing both reach a
+// runtime as its local caller, so only the CLI can tell that the Owner is not at the broker (T-19-19).
+function assertWakeRunsOnBroker(ctx: HandlerContext, env: NodeJS.ProcessEnv): void {
+  assertLocalInvocation(env, 'orca wake')
+  for (const flag of ['environment', 'pairing-code']) {
+    if (ctx.flags.has(flag)) {
+      throw new RuntimeClientError(
+        'remote_invocation_refused',
+        `--${flag} does not retarget orca wake: run it in a shell on the broker host itself.`
+      )
+    }
+  }
+  if (ctx.client.isRemote) {
+    throw new RuntimeClientError(
+      'remote_invocation_refused',
+      'orca wake resolved to a remote runtime: run it in a shell on the broker host itself.'
+    )
+  }
+}
+
+export function createWakeHandlers(
+  env: NodeJS.ProcessEnv = process.env
+): Record<string, CommandHandler> {
+  return Object.fromEntries(
+    Object.entries(WAKE_HANDLER_BODIES).map(([key, body]): [string, CommandHandler] => [
+      key,
+      async (ctx) => {
+        assertWakeRunsOnBroker(ctx, env)
+        await body(ctx)
+      }
+    ])
+  )
+}
+
+const WAKE_HANDLER_BODIES: Record<string, CommandHandler> = {
   'wake target add': async (ctx) => {
     const params = targetAddParams(ctx)
     const response = await adminCall<{ target: WakeTargetRow }>(
@@ -209,3 +244,5 @@ export const WAKE_HANDLERS: Record<string, CommandHandler> = {
     printResult(response, ctx.json, formatGrantList)
   }
 }
+
+export const WAKE_HANDLERS = createWakeHandlers()
