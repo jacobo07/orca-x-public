@@ -1,0 +1,33 @@
+{
+  "label": "SCRIPTED CLIENT",
+  "plane": "disposable windowless serve host on this Windows laptop, --serve-wake-broker, scratch userData and home, loopback only; scripted phone-protocol client",
+  "head": "1de3a0c85ff3324528451646ce0a4e660b935fef",
+  "outBuiltFrom": "1de3a0c85ff3324528451646ce0a4e660b935fef (GEX44 /tmp/orca-phone-p19-20261027T201804Z, out.tgz sha256 633f3a15...2126)",
+  "startedAt": "2026-10-27T20:20:17.178Z",
+  "targetMac": "02:00:5e:19:00:01 (locally administered, fictitious)",
+  "ownerDevicesHashBefore": "510f9b74b076f86570b3ad39d3c3bdcfe522a8e9f6a43ac218a616f7a889a8ad",
+  "baselineScratchFamilyCount": 0,
+  "capabilitiesHaveWakeBroker": true,
+  "brokerServeLine": "[serve] wake broker: enabled (0 targets)",
+  "admin": {
+    "transport": "runtime named pipe (local caller)",
+    "targetId": "wt_49f71038d165"
+  },
+  "tracer": {
+    "stages": ["requested", "authorized", "packet-sent"],
+    "composed": ["requested", "authorized", "packet-sent"],
+    "wakeId": "wk_8857a229554f9f23",
+    "replayed": false,
+    "adopted": false
+  },
+  "listenerCount": 1,
+  "frameLength": 102,
+  "frameHexPrefix": "ffffffffffff02005e190001",
+  "frameIsMagicPacketForTarget": true,
+  "spawnedPidsReaped": true,
+  "scratchFamilyCountAfterTeardown": 0,
+  "scratchAbsentAfterTeardown": true,
+  "ownerDevicesHashAfter": "510f9b74b076f86570b3ad39d3c3bdcfe522a8e9f6a43ac218a616f7a889a8ad",
+  "ownerDevicesUnchanged": true,
+  "finishedAt": "2026-10-27T20:20:40.567Z"
+}
