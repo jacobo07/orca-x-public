@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { isStreamingMethod } from '../core'
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
@@ -11,9 +11,28 @@ import {
   createHostAvailabilityProducer,
   hostAvailabilityProducer
 } from '../../host-availability-producer'
+import { createHostWolProbe } from '../../host-wol-probe'
 import { STATUS_METHODS } from './status'
 
 const T = 1_760_000_000_000
+
+const wolProbe = createHostWolProbe({
+  platform: 'win32',
+  now: () => T,
+  exec: (file) =>
+    Promise.resolve(
+      file === 'powershell.exe'
+        ? {
+            code: 0,
+            stdout:
+              '[{"Name":"Ethernet","InterfaceDescription":"Realtek PCIe GbE Family Controller","MediaType":"802.3","WakeOnMagicPacket":"Enabled"}]',
+            stderr: ''
+          }
+        : { code: 0, stdout: 'HID Keyboard Device\r\nHID-compliant mouse\r\n', stderr: '' }
+    ),
+  listPhysicalInterfaces: () => Promise.resolve([]),
+  readText: () => Promise.resolve(null)
+})
 
 function fakeRuntime(): OrcaRuntimeService {
   return {
@@ -46,18 +65,25 @@ function registerServeHost(): void {
         reason: 'logon_task_installed',
         evidence: { kind: 'os-probe', observedAt: T }
       })
-    }
+    },
+    wakeOnLan: wolProbe
   })
 }
 
 describe('status.get host availability', () => {
+  beforeAll(async () => {
+    wolProbe.read()
+    await wolProbe.settled()
+  })
+
   afterEach(() => {
     // Why: the module producer is process-wide; reset it so tests do not leak sources.
     hostAvailabilityProducer.register({
       processKind: 'serve',
       relayReadiness: () => ({ state: 'unavailable', reason: 'relay_startup_failed' }),
       webSocketEndpoint: () => null,
-      autostart: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) }
+      autostart: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) },
+      wakeOnLan: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) }
     })
   })
 
@@ -91,10 +117,12 @@ describe('status.get host availability', () => {
       evidence: { kind: 'relay-reported' }
     })
     expect(caps['can-direct'].value).toBe('supported')
-    expect(caps['can-wake-lan']).toMatchObject({
-      value: 'not-configured',
-      reason: 'no_wake_broker'
+    expect(caps['can-wake-lan']).toEqual({
+      value: 'needs-owner-setup',
+      reason: 'os_not_armed',
+      evidence: { kind: 'os-probe', observedAt: T }
     })
+    expect(caps['can-wake-lan']).toEqual(wolProbe.read())
     expect(caps['can-wake-remote']).toMatchObject({
       value: 'not-configured',
       reason: 'no_wake_broker'
@@ -172,5 +200,32 @@ describe('status.get host availability', () => {
     const announcement = createHostAvailabilityProducer({ now: () => T }).describe()
     expect(announcement.processKind).toBeNull()
     expect(announcement.capabilities['can-start-orca'].value).toBe('unknown')
+  })
+
+  it('reads can-wake-lan from the registered WOL reader, and unknown when none is registered', () => {
+    const fresh = createHostAvailabilityProducer({ now: () => T })
+    expect(fresh.describe().capabilities['can-wake-lan']).toEqual({
+      value: 'unknown',
+      reason: 'wol_reader_unregistered',
+      evidence: null
+    })
+    fresh.register({
+      processKind: 'desktop',
+      relayReadiness: () => ({ state: 'started', status: null }),
+      webSocketEndpoint: () => null,
+      autostart: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) },
+      wakeOnLan: { read: () => ({ value: 'unknown', reason: 'wol_probe_pending', evidence: null }) }
+    })
+    const caps = fresh.describe().capabilities
+    expect(caps['can-wake-lan']).toEqual({
+      value: 'unknown',
+      reason: 'wol_probe_pending',
+      evidence: null
+    })
+    expect(caps['can-wake-remote']).toEqual({
+      value: 'not-configured',
+      reason: 'no_wake_broker',
+      evidence: { kind: 'host-announced', observedAt: T }
+    })
   })
 })
