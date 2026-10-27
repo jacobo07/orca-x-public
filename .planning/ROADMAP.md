@@ -14,6 +14,10 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 - [x] **Phase 8: DWS reconciliation** - Rows 33 and 39 (generation fencing, desktop and mobile stale writes), X16 placement reaches dispatch, X18 relay observation aperture with a positive control, and a verdict on X05, X06, X16, X18 and X19.
 - [ ] **Phase 9 (partial, human_needed): Two-host Product Reality and Continue here** - Extend the Windows and GEX44 harness with the mobile controller; row 75 and row 70 re-measured; mutation drills with PLANT_CONFIRMED, CAUGHT, RESTORE_VERIFIED.
 - [x] **Phase 10: Institutionalize and close** - Knowledge Vault, UKDL rules and traps, the constitutive baseline ratchet, the fresh-agent test, the DWS matrix re-run, and the two-layer handoff.
+- [ ] **Phase 17: Host Service and Orca-closed availability (M1)** - `orca serve` becomes the Host Service: it starts the relay, autostarts on Windows logon as a restart-on-failure Scheduled Task, reports version and capabilities, and starts the runtime idempotently; a phone reaches a host whose Electron UI is closed. Brief: .planning/HOST-AVAILABILITY-PLAN.md.
+- [ ] **Phase 18: Availability state, capabilities and a truthful host card** - Three composed dimensions (power, orca, connectivity), capabilities kept apart from state and authority, and a mobile host card that never renders powered-off or Wake without evidence, enforced by a gate.
+- [ ] **Phase 19: Wake-on-LAN capability and the LAN Wake Broker (M2)** - Measured WOL capability, a broker role inside the Host Fabric, a REMOTE_WAKE grant, idempotent requests and evidence-staged readiness transitions; the LAN Product Reality is OWNER_BOUND on the admin and BIOS steps.
+- [ ] **Phase 20: Off-LAN wake, OOB boundary and institutional close (M3, M4)** - Phone on 5G to broker over the outbound relay; the OOB interface with a test-double boundary (no AMT on this hardware: HARDWARE_BOUND); failure injection, mutants, Knowledge Vault, UKDL, baseline ratchet, fresh-agent test and the two-layer handoff.
 
 ## Phase Details
 ### Phase 1: Reality close and RED
@@ -76,3 +80,31 @@ Prove the existing mobile RPC path (paired phone to a live laptop PTY, fresh out
 **Success Criteria** (what must be TRUE):
 1. The verifier is re-run and its counts are recorded.
 2. The fresh-agent test passes from durable state only.
+
+### Phase 17: Host Service and Orca-closed availability (M1)
+**Goal**: A paired phone reaches and uses a host whose Electron UI is closed, with no desktop interaction. **Depends on**: Phase 10
+**Success Criteria** (what must be TRUE):
+1. RED first: with the UI closed and serve running, the phone cannot reach the host off-LAN because serve never starts the relay; this is captured as a failing test before the fix.
+2. serve starts the relay when cloud auth exists and reports `relay: unavailable` otherwise; a Windows logon Scheduled Task (restart on failure) starts serve, and repeated starts never create a second runtime (single-instance lock, exit code 3).
+3. Live, on the Owner's PC: UI closed, serve running, a paired client opens a terminal, a unique command returns fresh output, the runtime count stays 1; idle RAM, CPU and startup time of serve are recorded.
+
+### Phase 18: Availability state, capabilities and a truthful host card
+**Goal**: The phone says what Orca knows, what it can do and what it cannot know. **Depends on**: Phase 17
+**Success Criteria** (what must be TRUE):
+1. Power, orca and connectivity are separate composed fields, and no response renders as unknown, never powered-off.
+2. Capabilities (can-start-orca, can-wake-lan, can-wake-remote, can-power-on-oob) are separate from state and from grants; the Node Manifest change is additive and coordinated with the C:\ox DWS lane.
+3. A gate fails when the host card can render powered-off without evidence or an action without a backend effect; mutants for both are CAUGHT.
+
+### Phase 19: Wake-on-LAN capability and the LAN Wake Broker (M2)
+**Goal**: An authorized wake on the same LAN, proven as separate evidence stages. **Depends on**: Phase 18
+**Success Criteria** (what must be TRUE):
+1. WOL capability is measured (NIC, driver, OS arming, firmware) and reported as supported, not-supported, not-configured, needs-owner-setup or unknown.
+2. The broker role issues the magic packet only for an authorized, unrevoked device with a REMOTE_WAKE grant; duplicate requests are idempotent; a packet sent is never reported as a host woken.
+3. LAN Product Reality (host sleeping, wake, Host Service reconnects, terminal works) is PASS, or OWNER_BOUND naming the exact admin or BIOS step still missing.
+
+### Phase 20: Off-LAN wake, OOB boundary and institutional close (M3, M4)
+**Goal**: Wake from 5G through an authorized broker, and an honest powered-off story. **Depends on**: Phase 19
+**Success Criteria** (what must be TRUE):
+1. Phone on 5G to relay to broker to target, with fresh terminal output and no inbound public port; or OWNER_BOUND when no always-on LAN node exists.
+2. A generic OOB power interface with a test double; real OOB is HARDWARE_BOUND on this AMD host and is never presented as real.
+3. Failure matrix rows K, L, M are proven; mutants report PLANT_CONFIRMED, CAUGHT and RESTORE_VERIFIED; Knowledge Vault, UKDL, the ratchet gate and a fresh-agent test pass from durable state; two-layer handoff in STATE.md.
