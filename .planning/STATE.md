@@ -48,7 +48,7 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 |-------|-------|--------|
 | 5 | verification_deferred_human | /gsd-verify-work 5 (captures: keyboard open/closed, selector open, long names, many runtimes; Android 14 emulator on C:\Users\User or a paired phone) |
 | 7 | verification_deferred_human | /gsd-verify-work 7 (Windows app + paired phone or labelled emulator; run the headless spec on Windows; live revoke from Settings) |
-| 19 | verification_deferred_human | Host 1 Orca X version vs 4f00b2118; if newer, capture the new tab's session.tabs payload (19-VERIFICATION.md) |
+| 19 | verification_deferred_human | APK from >= 0b6cb979a on the S25 Ultra; the long 4-paragraph message in a Host 1 phone tab becomes a turn with a reply (19-VERIFICATION.md "Trigger") |
 | 9 | verification_deferred_human | /gsd-verify-work 9 (host side done with a SCRIPTED CLIENT; owed: a phone or labelled emulator switching hosts in the host picker) |
 
 ## Owner decisions
