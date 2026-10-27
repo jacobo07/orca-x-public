@@ -12,7 +12,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--bind-host <host>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]',
+      'orca serve [--port <port>] [--bind-host <host>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--wake-broker] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
@@ -30,7 +30,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
-      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'
+      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
+      '--wake-broker runs this host as a LAN Wake Broker for targets and grants registered with `orca wake`; off by default.'
     ],
     examples: [
       'orca serve',

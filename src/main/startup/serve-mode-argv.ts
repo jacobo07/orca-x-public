@@ -14,7 +14,8 @@ const CLI_TO_SERVE_FLAG = new Map([
   ['--json', '--serve-json'],
   ['--no-pairing', '--serve-no-pairing'],
   ['--mobile-pairing', '--serve-mobile-pairing'],
-  ['--recipe-json', '--serve-recipe-json']
+  ['--recipe-json', '--serve-recipe-json'],
+  ['--wake-broker', '--serve-wake-broker']
 ])
 
 const CLI_TO_SERVE_VALUE_FLAG = new Map([
@@ -66,8 +67,11 @@ export function parseServeBindHost(raw: string | null): string | null {
  * empty or flag-shaped value throws, never degrades to "no pin" (which binds 0.0.0.0 under
  * `orca serve`). Also reads the `--serve-bind-host=<host>` spelling, which the normalizer passes through.
  */
-export function readServeBindHostArg(argv: readonly string[]): string | null {
-  const flag = '--serve-bind-host'
+export function readServeBindHostArg(
+  argv: readonly string[],
+  // Why a parameter: getServeOptions names every --serve-* switch it reads at its own call site.
+  flag = '--serve-bind-host'
+): string | null {
   const index = argv.findIndex((token) => token === flag || token.startsWith(`${flag}=`))
   if (index === -1) {
     return null

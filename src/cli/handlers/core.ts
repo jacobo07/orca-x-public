@@ -146,7 +146,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       mobilePairing: flags.get('mobile-pairing') === true,
       recipeJson: flags.get('recipe-json') === true,
       projectRoot,
-      bindHost
+      bindHost,
+      wakeBroker: flags.get('wake-broker') === true
     })
     process.exitCode = exitCode
   },

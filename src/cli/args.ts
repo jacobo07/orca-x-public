@@ -57,7 +57,8 @@ export const BOOLEAN_FLAGS = new Set([
   'text-stdin',
   'unread',
   'value-stdin',
-  'wait'
+  'wait',
+  'wake-broker'
 ])
 
 // Why: `tasks` is a switch for `orchestration reset` but takes a list for `mission-place`; the switch reading made `--tasks a,b` parse `a,b` as a command word.

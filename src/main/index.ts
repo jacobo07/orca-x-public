@@ -2055,7 +2055,7 @@ function getServeOptions(argv = process.argv): ServeOptions {
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
     projectRoot: valueAfter('--serve-project-root'),
-    bindHost: readServeBindHostArg(argv),
+    bindHost: readServeBindHostArg(argv, '--serve-bind-host'),
     wakeBroker: argv.includes('--serve-wake-broker')
   }
 }
