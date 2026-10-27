@@ -1,6 +1,10 @@
+import type { MobileNativeChatPendingDelivery } from './mobile-native-chat-delivery-evidence'
+
 export type MobileNativeChatPendingMessage = {
   id: string
   text: string
+  /** Evidence so far: the PTY write was accepted; the transcript echo has not landed. */
+  delivery: MobileNativeChatPendingDelivery
   expectedOccurrence: number
   /** Local preview URIs carried by the send for its optimistic echo. */
   images?: string[]
@@ -51,6 +55,7 @@ export function appendMobileNativeChatPending(
       {
         id,
         text,
+        delivery: 'written',
         expectedOccurrence:
           origin.normalizedText === ''
             ? expectedImageEchoOrdinal
@@ -60,6 +65,24 @@ export function appendMobileNativeChatPending(
       }
     ]
   }
+}
+
+/** The admission bound passed without a transcript echo. Unknown ids leave the map untouched,
+ *  so a bubble its echo already retired is never resurrected. */
+export function markMobileNativeChatPendingUnconfirmed(
+  previous: PendingByKey,
+  id: string
+): PendingByKey {
+  for (const [key, items] of Object.entries(previous)) {
+    const index = items.findIndex((item) => item.id === id && item.delivery !== 'unconfirmed')
+    if (index !== -1) {
+      const next = items.map((item, i) =>
+        i === index ? { ...item, delivery: 'unconfirmed' as const } : item
+      )
+      return { ...previous, [key]: next }
+    }
+  }
+  return previous
 }
 
 export function mergeWaitingSessionPending(

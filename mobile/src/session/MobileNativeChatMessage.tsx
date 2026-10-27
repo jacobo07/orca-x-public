@@ -15,6 +15,10 @@ import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-ty
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
+import {
+  mobileNativeChatDeliveryCaption,
+  type MobileNativeChatPendingDelivery
+} from './mobile-native-chat-delivery-evidence'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
@@ -276,6 +280,7 @@ function AgentControls({
 
 function MobileNativeChatMessageImpl({
   message,
+  delivery,
   toolsExpanded = false,
   fontScale = 1,
   messageIndex,
@@ -283,6 +288,8 @@ function MobileNativeChatMessageImpl({
   onOpenFile
 }: {
   message: NativeChatMessage
+  /** Set only on a pending echo: what is known before the transcript shows the turn. */
+  delivery?: MobileNativeChatPendingDelivery
   toolsExpanded?: boolean
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
@@ -370,6 +377,17 @@ function MobileNativeChatMessageImpl({
           <View style={styles.controlsRow}>{controls}</View>
         ) : null}
       </View>
+      {isUser && delivery ? (
+        <Text
+          testID={`native-chat-delivery-${delivery}`}
+          style={[
+            styles.deliveryCaption,
+            delivery === 'unconfirmed' && styles.deliveryCaptionUnconfirmed
+          ]}
+        >
+          {mobileNativeChatDeliveryCaption(delivery)}
+        </Text>
+      ) : null}
     </View>
   )
 }

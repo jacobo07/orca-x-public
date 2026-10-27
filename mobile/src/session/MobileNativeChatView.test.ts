@@ -198,11 +198,23 @@ describe('MobileNativeChatView', () => {
 
   it('renders an accepted optimistic image send without a queued state', async () => {
     await render({
-      pending: [{ id: 'pending-1', text: 'look', images: ['file:///phone-photo.jpg'] }]
+      pending: [
+        { id: 'pending-1', delivery: 'written', text: 'look', images: ['file:///phone-photo.jpg'] }
+      ]
     })
 
     expect(listIds()).toEqual(['pending-1'])
     expect(renderedRow('pending-1').props).not.toHaveProperty('queued')
+  })
+
+  it('hands each pending bubble its delivery evidence and transcript turns none', async () => {
+    await render({
+      folded: [assistantTurn('a1', 'earlier')],
+      pending: [{ id: 'pending-1', delivery: 'unconfirmed', text: 'ping' }]
+    })
+
+    expect(renderedRow('pending-1').props.delivery).toBe('unconfirmed')
+    expect(renderedRow('a1').props.delivery).toBeUndefined()
   })
 
   it('keeps a visible lock through a subscribed-end lease blip', async () => {

@@ -184,7 +184,7 @@ export function MobileNativeChatView({
   // `data` is the list source: folded transcript + synthetic streaming bubble +
   // route-owned accepted echoes. Memoize on the same deps so the
   // downstream autoscroll effects/`renderItem` keep referential stability.
-  const { data } = useMemo(
+  const { data, deliveryByMessageId } = useMemo(
     () =>
       buildMobileNativeChatTransientData({
         folded,
@@ -257,6 +257,7 @@ export function MobileNativeChatView({
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <MobileNativeChatMessage
         message={item}
+        delivery={deliveryByMessageId[item.id]}
         toolsExpanded={toolsExpanded}
         fontScale={fontScale}
         messageIndex={index}
@@ -264,7 +265,7 @@ export function MobileNativeChatView({
         onOpenFile={onOpenFile}
       />
     ),
-    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
+    [deliveryByMessageId, toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)

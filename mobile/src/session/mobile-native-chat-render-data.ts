@@ -6,6 +6,7 @@ import {
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { MobileNativeChatPendingDelivery } from './mobile-native-chat-delivery-evidence'
 import { normalizeImageTranscriptMessages } from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
@@ -40,6 +41,7 @@ export function mobileNativeChatEmptyState(
 export type MobileNativeChatPendingItem = {
   id: string
   text: string
+  delivery: MobileNativeChatPendingDelivery
   images?: string[]
 }
 
@@ -63,7 +65,17 @@ export function buildMobileNativeChatTransientData({
   streaming: string | null
   pending: MobileNativeChatPendingItem[]
   imagePreviewsByMessageId?: Record<string, string[]>
-}): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
+}): {
+  folded: NativeChatMessage[]
+  streaming: string | null
+  data: NativeChatMessage[]
+  /** Only pending echoes appear here; a transcript message is the delivery proof itself. */
+  deliveryByMessageId: Record<string, MobileNativeChatPendingDelivery>
+} {
+  const deliveryByMessageId: Record<string, MobileNativeChatPendingDelivery> = {}
+  for (const item of pending) {
+    deliveryByMessageId[item.id] = item.delivery
+  }
   const renderedFolded = folded.map((message) => {
     const previews = imagePreviewsByMessageId?.[message.id]
     if (message.role !== 'user' || !previews?.length) {
@@ -110,5 +122,5 @@ export function buildMobileNativeChatTransientData({
       source: 'transcript' as const
     }))
   ]
-  return { folded: renderedFolded, streaming, data }
+  return { folded: renderedFolded, streaming, data, deliveryByMessageId }
 }
