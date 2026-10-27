@@ -30,7 +30,11 @@ Not yet done on the input side:
 - 37b50bce6: `maintainVisibleContentPosition` while off the live edge.
   - Device, APK 94fe1ecf: stable for about 12 s, then a jump once the 40-row window trimmed the anchored row itself.
 - ac525502f: the session holds the window head (up to `MAX_MESSAGES`) while the reader is in history, and releases it on return or unmount. P12-S1..S4 CAUGHT; mobile `src/session` 1253/1253.
-- Device re-test on this build: pending (APK building).
+- **Device, APK b0419ff7 (ac525502f), installed 11:47:10, REAL DEVICE.** Scrolled back in the chat while 10 tool calls (more than 20 raw messages) arrived. All 20 frames were identical across 28.5 s; the previous build jumped at 13.7 s.
+  - "↓" returns to the latest message and the button disappears.
+  - 0 crashes in Android's crash buffer since 11:47.
+  - **Chat viewport: COMPLETE AND PROVEN** for streamed appends and window trimming.
+  - Keyboard open/close and foreground/reconnect on the chat surface were not exercised.
 
 ## Evidence location
 Frames are in the session scratchpad `p12-frames/` (`A`, `B`, `C`, `N` sheets). Owner screenshots containing private content were deleted.
