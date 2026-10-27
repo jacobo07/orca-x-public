@@ -77,6 +77,46 @@ describe('a pending chat bubble never outruns its evidence', () => {
     expect(state?.pending).toEqual([])
   })
 
+  // SEND-P0b phase 18: on the device `hola?` became a real turn, yet the phone said "Agent has not shown this
+  // message". The transcript is a 40-message window whose head live frames trim, so an earlier equal turn counted at
+  // send time can slide out and leave the absolute count one short forever.
+  const assistantTurn = (id: string): NativeChatMessage => ({
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'hi' }],
+    timestamp: null,
+    source: 'transcript'
+  })
+
+  async function showMessages(messages: NativeChatMessage[]): Promise<void> {
+    await act(async () => renderer?.update(createElement(Harness, { messages })))
+  }
+
+  function accept(text: string): void {
+    const origin = state?.captureSendOrigin(text)
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, text)
+      }
+    })
+  }
+
+  it('retires the bubble when its echo lands after an earlier equal turn slid out of the window', async () => {
+    await showMessages([userTurn('m1', 'hola?'), assistantTurn('m2')])
+    accept('hola?')
+    // The head (m1) is trimmed as the new turn and its reply arrive.
+    await showMessages([assistantTurn('m2'), userTurn('m3', 'hola?'), assistantTurn('m4')])
+    expect(state?.pending).toEqual([])
+  })
+
+  it('does not take an earlier equal turn that pagination brings back as the echo', async () => {
+    await showMessages([assistantTurn('m2')])
+    accept('hola?')
+    // Older history is paged in; the only `hola?` sits BEFORE the send's tail.
+    await showMessages([userTurn('m1', 'hola?'), assistantTurn('m2')])
+    expect(state?.pending.map((item) => item.delivery)).toEqual(['written'])
+  })
+
   it('stops its timer when the screen unmounts', () => {
     acceptPing()
     expect(vi.getTimerCount()).toBeGreaterThan(0)

@@ -6,6 +6,8 @@ export type MobileNativeChatPendingMessage = {
   /** Evidence so far: the PTY write was accepted; the transcript echo has not landed. */
   delivery: MobileNativeChatPendingDelivery
   expectedOccurrence: number
+  /** Which equal user turn after `baselineTailMessageId` is this send's echo (1 = the first). */
+  echoOrdinalAfterTail?: number
   /** Local preview URIs carried by the send for its optimistic echo. */
   images?: string[]
   baselineTailMessageId: string | null
@@ -60,6 +62,8 @@ export function appendMobileNativeChatPending(
           origin.normalizedText === ''
             ? expectedImageEchoOrdinal
             : origin.baselineOccurrences + earlierOutstanding + 1,
+        // Why: earlier outstanding equal sends had not echoed when this tail was captured, so theirs land after it too.
+        ...(origin.normalizedText === '' ? {} : { echoOrdinalAfterTail: earlierOutstanding + 1 }),
         baselineTailMessageId: origin.baselineTailMessageId,
         ...(images?.length ? { images } : {})
       }

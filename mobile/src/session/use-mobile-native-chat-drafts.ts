@@ -5,6 +5,7 @@ import {
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
   findLandedUnconfirmedSends,
+  hasPendingTextEchoLanded,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
   normalizeReconcileText,
@@ -308,7 +309,7 @@ export function useMobileNativeChatDrafts(
         return item.text.trim() === ''
           ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) <
               item.expectedOccurrence
-          : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) < item.expectedOccurrence
+          : !hasPendingTextEchoLanded(messages, item, landedCounts)
       })
       if (next.length === current.length) {
         return previous
