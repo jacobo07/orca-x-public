@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import type { HostWakeStageRecord } from '../../shared/host-wake'
+import type { HostWakeRequestResult, HostWakeStageRecord } from '../../shared/host-wake'
 import {
   createWakeBroker,
   WAKE_ADOPT_WINDOW_MS,
@@ -275,7 +275,7 @@ describe('wake broker', () => {
   })
 
   it('caps records at WAKE_RECORD_CAP, evicting the oldest', async () => {
-    const wakes = []
+    const wakes: HostWakeRequestResult[] = []
     for (const [i, t] of BULK.entries()) {
       wakes.push(await h.broker.request({ ...A, targetId: t.targetId, requestId: `req-cap-${i}` }))
     }

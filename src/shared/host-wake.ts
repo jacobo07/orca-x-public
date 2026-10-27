@@ -72,3 +72,57 @@ export function hostWakeRefusal(
 ): HostWakeRefusal {
   return new HostWakeRefusal(code, message, data)
 }
+
+const BROKER_WRITABLE_STAGES: ReadonlySet<string> = new Set([
+  ...HOST_WAKE_BROKER_STAGES,
+  'packet-send-failed'
+])
+
+function brokerRecord(value: unknown): HostWakeStageRecord | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const { stage, observedAt, code } = value as Record<string, unknown>
+  if (typeof stage !== 'string' || !BROKER_WRITABLE_STAGES.has(stage)) {
+    return null
+  }
+  if (typeof observedAt !== 'number' || !Number.isFinite(observedAt)) {
+    return null
+  }
+  return {
+    stage: stage as HostWakeStageRecord['stage'],
+    observedAt,
+    observer: 'broker',
+    ...(typeof code === 'string' ? { code } : {})
+  }
+}
+
+// Why: only the target's own live answer, observed after packet-sent, can say the host woke (D-11).
+export function composeWakeProgress(
+  brokerStages: unknown,
+  targetAnswer: { observedAt: number; graphStatus?: string } | null
+): HostWakeStageRecord[] {
+  if (!Array.isArray(brokerStages)) {
+    return []
+  }
+  const records = brokerStages
+    .map(brokerRecord)
+    .filter((record): record is HostWakeStageRecord => record !== null)
+  const sent = records.find((record) => record.stage === 'packet-sent')
+  if (!sent || !targetAnswer || !(targetAnswer.observedAt > sent.observedAt)) {
+    return records
+  }
+  const announced: HostWakeStageRecord = {
+    stage: 'host-announced',
+    observedAt: targetAnswer.observedAt,
+    observer: 'client'
+  }
+  if (targetAnswer.graphStatus !== 'ready') {
+    return [...records, announced]
+  }
+  return [
+    ...records,
+    announced,
+    { stage: 'runtime-ready', observedAt: targetAnswer.observedAt, observer: 'client' }
+  ]
+}
