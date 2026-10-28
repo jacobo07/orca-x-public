@@ -157,11 +157,52 @@ function openPhonePeer(args: PhonePeerArgs) {
   return { handshake, ready: handshake.then((outcome) => outcome.ready), socket, call }
 }
 
+type TeardownStep = () => unknown
+
+// Why reverse and keep going: one failed step must not strand the resources acquired before it.
+async function unwindTeardown(steps: TeardownStep[]): Promise<unknown[]> {
+  const errors: unknown[] = []
+  // Why splice: a second unwind (close after a failed close) finds nothing left to release twice.
+  const pending = steps.splice(0)
+  for (let index = pending.length - 1; index >= 0; index--) {
+    try {
+      await pending[index]()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors
+}
+
 export async function startRelayWakeHarness(options: {
   port: number
   devices: { name: string; grant: boolean }[]
 }): Promise<RelayWakeHarness> {
+  const teardown: TeardownStep[] = []
+  try {
+    return await acquireRelayWakeHarness(options, teardown)
+  } catch (error) {
+    const errors = await unwindTeardown(teardown)
+    throw errors.length > 0
+      ? new AggregateError(
+          [error, ...errors],
+          'relay harness setup failed and teardown also failed'
+        )
+      : error
+  }
+}
+
+async function acquireRelayWakeHarness(
+  options: { port: number; devices: { name: string; grant: boolean }[] },
+  teardown: TeardownStep[]
+): Promise<RelayWakeHarness> {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-wake-relay-'))
+  teardown.push(() => rmSync(userDataPath, { recursive: true, force: true }))
+  // Why before the server: the broker singleton outlives this harness, so it is reset however setup ends.
+  teardown.push(() => {
+    wakeBrokerHost.disable()
+    wakeBrokerHost.attachDeviceAuthority(null)
+  })
   const runtime = new OrcaRuntimeService(makeStore() as never)
   const server = new OrcaRuntimeRpcServer({
     runtime,
@@ -170,6 +211,7 @@ export async function startRelayWakeHarness(options: {
     wsPort: 0
   })
   await server.start()
+  teardown.push(() => server.stop())
   const registry = server.getDeviceRegistry()
   const keypair = server.getE2EEKeypair()
   const wiring = server.getMobileSocketWiring()
@@ -206,11 +248,19 @@ export async function startRelayWakeHarness(options: {
 
   const relayHostId = deriveRelayHostId(keypair.publicKey)
   const cell = await startLoopbackRelayCell(relayHostId)
+  teardown.push(() => cell.close())
   const transport = new CloudRelayTransport({ cellUrl: cell.origin, relayHostId, generation: 1 })
   wiring.attachTransport(transport, (socket) => transport.metadataFor(socket))
+  // Why before start: a start that rejects partway may still hold a socket to the cell.
+  teardown.push(() => transport.stop())
   await transport.start()
 
   const phoneSockets: WebSocket[] = []
+  teardown.push(() => {
+    for (const socket of phoneSockets) {
+      socket.terminate()
+    }
+  })
   let connSeq = 0
   return {
     server,
@@ -252,15 +302,10 @@ export async function startRelayWakeHarness(options: {
       }
     },
     async close() {
-      for (const socket of phoneSockets) {
-        socket.terminate()
+      const errors = await unwindTeardown(teardown)
+      if (errors.length > 0) {
+        throw new AggregateError(errors, 'relay harness close failed in one or more steps')
       }
-      await transport.stop()
-      await cell.close()
-      await server.stop()
-      wakeBrokerHost.disable()
-      wakeBrokerHost.attachDeviceAuthority(null)
-      rmSync(userDataPath, { recursive: true, force: true })
     }
   }
 }
