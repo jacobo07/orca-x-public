@@ -103,6 +103,8 @@ const BOUND_TARGETS: HomeHostWakeTargetsSnapshot = {
   observedAt: 2_100,
   targets: [{ targetId: TARGET_ID, label: 'desk', hostKey: VECTOR_HOST_KEY }]
 }
+// Why the wire shape: targetsFor answers { targets: [...] }; a bare-array fixture hid CR-01.
+const WIRE_TARGETS_REPLY = { targets: BOUND_TARGETS.targets }
 const UNBOUND_TARGETS: HomeHostWakeTargetsSnapshot = {
   observedAt: 2_100,
   targets: [{ targetId: TARGET_ID, label: 'desk' }]
@@ -202,18 +204,49 @@ describe('which hosts are asked for wake targets', () => {
 })
 
 describe('fetchHomeHostWakeTargets', () => {
-  it('asks host.wake.targets and stamps the raw answer with the phone clock', async () => {
+  it('asks host.wake.targets, unwraps the wire answer and stamps it with the phone clock', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(7_000)
     const store = targetsStore()
     const broker = fakeSession()
 
     const done = fetchHomeHostWakeTargets(broker.client, 'host-a', store.setTargets, notDisposed)
-    broker.settle(okResponse(BOUND_TARGETS.targets))
+    broker.settle(okResponse(WIRE_TARGETS_REPLY))
     await done
 
     expect(broker.calls).toEqual([{ method: 'host.wake.targets', params: undefined }])
     expect(store.current['host-a']).toEqual({ observedAt: 7_000, targets: BOUND_TARGETS.targets })
+  })
+
+  it('a bound card routes from the stored wire answer', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(2_100)
+    const store = targetsStore()
+    const broker = fakeSession()
+
+    const done = fetchHomeHostWakeTargets(broker.client, 'host-a', store.setTargets, notDisposed)
+    broker.settle(okResponse(WIRE_TARGETS_REPLY))
+    await done
+
+    expect(
+      planHostWakePress({
+        targetHostId: 'host-t',
+        hostKey: VECTOR_HOST_KEY,
+        brokers: sessionBrokers(store.current['host-a']),
+        clients: [{ hostId: 'host-a', client: broker.client }]
+      })
+    ).toEqual({ client: broker.client, brokerHostId: 'host-a', targetId: TARGET_ID })
+  })
+
+  it('stores an answer without a targets array as unreadable, never as targets', async () => {
+    const store = targetsStore()
+    const broker = fakeSession()
+
+    const done = fetchHomeHostWakeTargets(broker.client, 'host-a', store.setTargets, notDisposed)
+    broker.settle(okResponse({ targets: 'wt_0123456789ab' }))
+    await done
+
+    expect(store.current['host-a']?.targets).toBeNull()
   })
 
   it('keeps the previous answer by identity on a refusal', async () => {
