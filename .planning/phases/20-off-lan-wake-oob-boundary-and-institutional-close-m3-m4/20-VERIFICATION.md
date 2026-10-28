@@ -192,3 +192,17 @@ M3 procedure starting from a shut-down PC.
 
 Milestone audit, complete and cleanup are not run: phases 5, 7, 9, 17, 18, 19 and 20 are human_needed, and completing
 would archive unverified legs as done (STATE Decisions, 2026-10-26; orchestrator decision 8).
+
+## Fresh-agent test (orchestrator)
+
+Run 2026-10-28 after the 20-05 commits. One read-only agent (Read, Grep, Glob only; no chat context) answered the
+Questions section of `20-FRESH-AGENT-QUESTIONS.md` verbatim from durable files under `C:\owx-haf`, without the rubric,
+in 9 tool calls.
+
+- Score: **8/8**. Every required fact in the Rubric was stated with `file:line` citations; no answer was "not found".
+- Citations: 12 sampled by the orchestrator (STATE.md:22, 48, 63, 66, 92, 139, 147; 20-VERIFICATION.md:3, 49, 109,
+  116; docs/reference/host-wake-broker.md:75) all resolve to a line that contains the fact. Failed: none.
+- Q6 note: the agent named the probe's evidence label MEASURED and HARDWARE_BOUND the M4 verdict label; both hold
+  (this file :24-25 and :116), so it is not a gap.
+- Gap fixed: STATE.md Current Position still said the next step was this test; it now records the result and points
+  at the phase 20 code review.
