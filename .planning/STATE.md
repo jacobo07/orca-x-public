@@ -196,6 +196,7 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 | Phase 20 P02 | 22min | 3 tasks | 13 files |
 | Phase 20 P04 | 17min | 3 tasks | 6 files |
 | Phase 20 P05 | 14min | 3 tasks | 8 files |
+| Phase 21 P06 | 19min | 3 tasks | 6 files |
 
 ## Decisions
 
