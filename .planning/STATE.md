@@ -3,15 +3,15 @@ gsd_state_version: "1.0"
 current_phase: 10
 current_phase_name: 2/2
 status: unknown
-stopped_at: Completed 19-05-PLAN.md (phase 19 human_needed)
-last_updated: "2026-10-27T20:45:00.000Z"
+stopped_at: Completed 20-05-PLAN.md (phase 20 human_needed)
+last_updated: "2026-10-28T11:52:16.893Z"
 last_activity: "2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, SCRIPTED CLIENT) passed 2 of 2; oracle extended for ConPTY-glued output; both hosts torn down. Earlier: revocation reason fix (6fac32885, 1175cda5d, e7fd002fd); phase 7 live Windows leg (4f6f335a3); worker epoch 2 phases 1-4, 6, 8 (1e828f057, 0a9b58881, 8e6e78c7b, 7c268fa18, a8380b51a, e14a776d2), phase 9 Continue-here gate (f77a64ff8), phase 10 close. Mission ownership moved to this laptop 16:00 (Owner: \"go here\"); the arming pane on C:\\Users\\User (worktree orca-phone-wt) stays idle and is NOT a writer. Previous DWS milestone archived in rb-live history c1f33f4d4e."
-state_head: d47194143371044f55af5af60ab9e8023e0b6d10
+state_head: 23b5d786847a497e586ab9fdfcdb306d75448d10
 progress:
   total_phases: 14
   completed_phases: 7
-  total_plans: 20
-  completed_plans: 16
+  total_plans: 25
+  completed_plans: 25
   percent: 50
 ---
 
@@ -35,6 +35,7 @@ Last activity: 2026-10-26 20:30 -- phase 9 two-host live leg (Windows + GEX44, S
 Plain language, for the Owner. Labels say how each thing was proven.
 
 What works now:
+
 - The phone opens a session on this PC without crashing (phase 11 P0 fix): PHYSICAL DEVICE, OWNER-OBSERVED.
 - Orca X can run as a background host service and say whether it is up (phase 17): PASS on a disposable serve host, SCRIPTED CLIENT.
 - Each host reports what it can do (start Orca, relay, direct, wake, power) and never claims what it has not measured (phase 18, plus the phase 20 G6 gate in `pnpm check:host-card-claims`): UNIT + gate + mutants. The card on a real phone is still owed.
@@ -43,6 +44,7 @@ What works now:
 - This PC cannot be powered on out of band: it is AMD and has no AMT (phase 20): MEASURED, read-only.
 
 What needs you, in order:
+
 1. BIOS (step b): turn on "Resume by PCI-E / LAN" and turn off ErP on the desktop PC.
 2. An always-on LAN node (step c) running `orca serve --wake-broker` (the PC that sleeps cannot be its own broker).
 3. Cloud auth for the relay on that node (today the relay reports `cloud_auth_not_configured`).
@@ -55,6 +57,7 @@ What needs you, in order:
 ## Agent resume block
 
 Imperative, for a fresh agent with no chat context:
+
 - Work in worktree C:\owx-haf on branch mobile/host-availability. Read HEAD with `git -C C:\owx-haf log -1 --format=%H` (local only, never pushed). Production code last changed at 90b0c0044 (20-04 close); phase 20 verification is eca2617bb.
 - Obey the Laws (binding) section below. Never push or merge; do not touch the primary checkout; git through PowerShell.
 - Deferred rows and their resume commands (the Deferred Verification table below): 5 `/gsd-verify-work 5`, 7 `/gsd-verify-work 7`, 9 `/gsd-verify-work 9`, 17 `/gsd-verify-work 17`, 18 `/gsd-verify-work 18`, 19 `/gsd-verify-work 19`, 20 `/gsd-verify-work 20`. Every one is human_needed.
@@ -178,6 +181,7 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 | Phase 19 P04 | 55min | 3 tasks | 13 files |
 | Phase 20 P02 | 22min | 3 tasks | 13 files |
 | Phase 20 P04 | 17min | 3 tasks | 6 files |
+| Phase 20 P05 | 14min | 3 tasks | 8 files |
 
 ## Decisions
 
@@ -210,9 +214,12 @@ Mission about 6M: scan 0.4M (0.2M spent), implementation 2M, tests and Product R
 - [Phase 20]: 20-03: OobPowerController is a type alias (oxlint consistent-type-definitions) with no production implementer; the recording double throws when a test outruns its script and only oob-power.test.ts imports it
 - [Phase 20]: 20-04: G6 lives in config/scripts/host-capability-producer-gate.mjs and runs inside check:host-card-claims; an entry without a supported key fails (absent is not null); producer regions are scanned per function, comments stripped
 - [Phase 20]: 20-04: G5 scans the card's control attributes, not the jsonc why; P20-G3 is counted on the MobileHostCard attribute plant
+- [Phase 20]: 20-05: phase 20 VERIFICATION human_needed; SC1 OWNER_BOUND (transport independence UNIT in-process relay, live M3 not run), SC2 PASS with real OOB HARDWARE_BOUND; M4 HARDWARE_BOUND
+- [Phase 20]: 20-05: UKDL entries are a proposal file only (Power Pack UKDL read only, sha256 unchanged); one new Knowledge Vault lesson written locally, uncommitted
+- [Phase 20]: 20-05: milestone audit/complete/cleanup not run while phases 5, 7, 9, 17, 18, 19, 20 are human_needed; fresh-agent test is the orchestrator step
 
 ## Session
 
-**Last session:** 2026-10-28T11:36:00.000Z
-**Stopped at:** Completed 20-04-PLAN.md
+**Last session:** 2026-10-28T11:52:13.902Z
+**Stopped at:** Completed 20-05-PLAN.md (phase 20 human_needed)
 **Resume file:** None
