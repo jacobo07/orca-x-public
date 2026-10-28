@@ -97,7 +97,7 @@
     "capability.can-power-on-oob": {
       "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
       "evidence": [],
-      "why": "Naming out-of-band power-on is not offering it; no producer can prove it yet, so it reads unknown"
+      "why": "Naming out-of-band power-on is not offering it; the OOB probe never reads supported (unknown on Intel and on AMD, since a CPU vendor proves no AMT but not the absence of DASH or a BMC)"
     },
     "capability.can-relay": {
       "producer": "src/shared/host-availability.ts#HOST_CAPABILITY_IDS",
