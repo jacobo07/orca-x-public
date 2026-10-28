@@ -11,10 +11,20 @@ import {
   createHostAvailabilityProducer,
   hostAvailabilityProducer
 } from '../../host-availability-producer'
+import { createHostOobProbe } from '../../host-oob-probe'
 import { createHostWolProbe } from '../../host-wol-probe'
 import { STATUS_METHODS } from './status'
 
 const T = 1_760_000_000_000
+
+const oobProbe = createHostOobProbe({
+  platform: 'win32',
+  now: () => T,
+  exec: () => Promise.resolve({ code: 0, stdout: 'vendor=AuthenticAMD\r\nmei=0\r\n' }),
+  readText: () => Promise.resolve(null),
+  exists: () => Promise.resolve(false),
+  windowsPowerShellPath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+})
 
 const wolProbe = createHostWolProbe({
   platform: 'win32',
@@ -66,14 +76,16 @@ function registerServeHost(): void {
         evidence: { kind: 'os-probe', observedAt: T }
       })
     },
-    wakeOnLan: wolProbe
+    wakeOnLan: wolProbe,
+    oob: oobProbe
   })
 }
 
 describe('status.get host availability', () => {
   beforeAll(async () => {
     wolProbe.read()
-    await wolProbe.settled()
+    oobProbe.read()
+    await Promise.all([wolProbe.settled(), oobProbe.settled()])
   })
 
   afterEach(() => {
@@ -83,7 +95,8 @@ describe('status.get host availability', () => {
       relayReadiness: () => ({ state: 'unavailable', reason: 'relay_startup_failed' }),
       webSocketEndpoint: () => null,
       autostart: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) },
-      wakeOnLan: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) }
+      wakeOnLan: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) },
+      oob: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) }
     })
   })
 
@@ -128,10 +141,11 @@ describe('status.get host availability', () => {
       reason: 'no_wake_broker'
     })
     expect(caps['can-power-on-oob']).toEqual({
-      value: 'unknown',
-      reason: 'oob_not_measured',
-      evidence: null
+      value: 'not-supported',
+      reason: 'hardware_bound_amd_no_amt',
+      evidence: { kind: 'os-probe', observedAt: T }
     })
+    expect(caps['can-power-on-oob']).toEqual(oobProbe.read())
     expect(caps['can-start-orca']).toEqual({
       value: 'supported',
       reason: 'logon_task_installed',
@@ -214,7 +228,10 @@ describe('status.get host availability', () => {
       relayReadiness: () => ({ state: 'started', status: null }),
       webSocketEndpoint: () => null,
       autostart: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) },
-      wakeOnLan: { read: () => ({ value: 'unknown', reason: 'wol_probe_pending', evidence: null }) }
+      wakeOnLan: {
+        read: () => ({ value: 'unknown', reason: 'wol_probe_pending', evidence: null })
+      },
+      oob: { read: () => ({ value: 'unknown', reason: 'test_reset', evidence: null }) }
     })
     const caps = fresh.describe().capabilities
     expect(caps['can-wake-lan']).toEqual({
