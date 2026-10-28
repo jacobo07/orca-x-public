@@ -43,6 +43,7 @@ function baseFixture() {
     section[id] = {
       producer: `${file}#produce`,
       supported: null,
+      emitters: [],
       why: 'a synthetic producer that never claims supported'
     }
   }
@@ -90,7 +91,7 @@ describe('G6 capability producers', () => {
     expect(errors).toEqual([])
     expect(code).toBe(0)
     expect(logged).toEqual([
-      `check-host-card-claims: 22 labels classified, 2 controls classified, ${realRpcCount()} host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified.`
+      `check-host-card-claims: 22 labels classified, 2 controls classified, ${realRpcCount()} host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`
     ])
   })
 
@@ -101,7 +102,7 @@ describe('G6 capability producers', () => {
       'capability can-power-on-oob: host/can-power-on-oob.ts#produce emits supported without an evidence producer'
     ])
     const green = baseFixture()
-    expect(evaluate(green)).toEqual({ failures: [], producerCount: 6 })
+    expect(evaluate(green)).toEqual({ failures: [], producerCount: 6, emitterCount: 0 })
   })
 
   it('fails when the hostCapabilities section is missing, so deleting it cannot disable G6', () => {
@@ -125,7 +126,7 @@ function withProducer(id, body, supported = null) {
   return fixture
 }
 
-const PASS = { failures: [], producerCount: 6 }
+const PASS = { failures: [], producerCount: 6, emitterCount: 0 }
 
 describe('G6 rule table', () => {
   it('R2: fails when an id is missing, passes when it is classified', () => {
@@ -169,7 +170,8 @@ describe('G6 rule table', () => {
     red.section['can-relay'].producer = 'host/missing.ts#produce'
     expect(evaluate(red)).toEqual({
       failures: ['capability can-relay: producer module host/missing.ts does not exist'],
-      producerCount: 5
+      producerCount: 5,
+      emitterCount: 0
     })
   })
 
@@ -285,5 +287,55 @@ describe('G6 rule table', () => {
     expect(evaluate(withProducer('can-power-on-oob', supportedBody('os-probe'))).failures).toEqual([
       'capability can-power-on-oob: host/can-power-on-oob.ts#produce emits supported without an evidence producer'
     ])
+  })
+})
+
+// A probe wrapper constructs values the verdict never sees, so it is scanned like the producer (WR-01).
+function withEmitter(id, body, supported = null) {
+  const fixture = baseFixture()
+  fixture.files['host/probe.ts'] = producerFile('readPlatform', body)
+  fixture.section[id] = { ...fixture.section[id], supported, emitters: ['host/probe.ts'] }
+  return fixture
+}
+
+describe('G6 R7 emitters', () => {
+  it('fails a supported literal planted in a probe module, passes the same probe without it', () => {
+    for (const id of ['can-wake-lan', 'can-wake-remote', 'can-power-on-oob']) {
+      expect(evaluate(withEmitter(id, supportedBody('os-probe'))).failures, id).toEqual([
+        `capability ${id}: emitter host/probe.ts emits supported without an evidence producer`
+      ])
+      expect(evaluate(withEmitter(id, UNKNOWN_BODY)), id).toEqual({ ...PASS, emitterCount: 1 })
+    }
+  })
+
+  it('lets an emitter of an allowed capability quote the allowance evidence, fails one that does not', () => {
+    const producer = supportedBody('os-probe')
+    const green = withEmitter('can-start-orca', producer, allowance(['os-probe']))
+    green.files['host/can-start-orca.ts'] = producerFile('produce', producer)
+    expect(evaluate(green)).toEqual({ ...PASS, emitterCount: 1 })
+    const red = withEmitter(
+      'can-start-orca',
+      supportedBody('host-announced'),
+      allowance(['os-probe'])
+    )
+    red.files['host/can-start-orca.ts'] = producerFile('produce', producer)
+    expect(evaluate(red).failures).toEqual([
+      'capability can-start-orca: supported evidence "os-probe" is never quoted in emitter host/probe.ts'
+    ])
+  })
+
+  it('fails an entry that omits emitters, and an emitter module that does not exist', () => {
+    const absent = baseFixture()
+    delete absent.section['can-power-on-oob'].emitters
+    expect(evaluate(absent).failures).toEqual([
+      'capability can-power-on-oob: emitters must list the "path" or "path#function" modules that construct its value'
+    ])
+    const missing = baseFixture()
+    missing.section['can-power-on-oob'].emitters = ['host/gone.ts']
+    expect(evaluate(missing)).toEqual({
+      failures: ['capability can-power-on-oob: producer module host/gone.ts does not exist'],
+      producerCount: 6,
+      emitterCount: 0
+    })
   })
 })
