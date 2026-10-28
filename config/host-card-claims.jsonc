@@ -18,6 +18,8 @@
 //   producer      "path" (whole file) or "path#function", the host code that decides the value;
 //   supported     null when it must never read supported, or { evidence, why } naming the
 //                 HOST_EVIDENCE_KINDS that producer quotes beside its supported value;
+//   emitters      every other "path" or "path#function" that constructs the value status.get serves
+//                 (a probe wrapper), scanned under the same supported rule; [] when there is none;
 //   why           as above.
 //
 // Unreachable is not powered off, and no button exists without a backend effect (D-10).
@@ -155,6 +157,7 @@
   "hostCapabilities": {
     "can-start-orca": {
       "producer": "src/main/runtime/host-autostart-probe.ts#capabilityFromStatus",
+      "emitters": ["src/main/runtime/host-autostart-probe.ts"],
       "supported": {
         "evidence": ["os-probe"],
         "why": "Supported only from an installed logon task the OS itself reported in a ready, running or queued state"
@@ -163,21 +166,25 @@
     },
     "can-wake-lan": {
       "producer": "src/main/runtime/host-wol-verdict.ts",
+      "emitters": ["src/main/runtime/host-wol-probe.ts"],
       "supported": null,
       "why": "Only an observed wake proves LAN wake and that is OWNER_BOUND, so the WOL verdict has no supported branch"
     },
     "can-wake-remote": {
       "producer": "src/main/runtime/host-availability-producer.ts#describeRemoteWakeCapability",
+      "emitters": [],
       "supported": null,
       "why": "Option B: a broker serves wake targets and is not one; the phone learns acceptance from host.wake-broker.v1 and host.wake.targets"
     },
     "can-power-on-oob": {
       "producer": "src/main/runtime/host-oob-verdict.ts",
+      "emitters": ["src/main/runtime/host-oob-probe.ts"],
       "supported": null,
       "why": "No out-of-band controller is proven here and an AMD board has no AMT, so the OOB verdict never reads supported"
     },
     "can-relay": {
       "producer": "src/main/runtime/host-availability-producer.ts#describeRelayCapability",
+      "emitters": [],
       "supported": {
         "evidence": ["relay-reported"],
         "why": "Supported only once the relay itself reported a status for this host"
@@ -186,6 +193,7 @@
     },
     "can-direct": {
       "producer": "src/main/runtime/host-availability-producer.ts#describeDirectCapability",
+      "emitters": [],
       "supported": {
         "evidence": ["host-announced"],
         "why": "Supported only when the host announces a WebSocket listener bound beyond loopback"

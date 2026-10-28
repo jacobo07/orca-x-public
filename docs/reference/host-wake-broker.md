@@ -107,8 +107,12 @@ the double.
 (`config/scripts/host-capability-producer-gate.mjs`) over the `hostCapabilities` section of
 `config/host-card-claims.jsonc`. Every capability id is classified to a producer. A producer may
 emit `supported` only under an evidence allowance whose kinds it quotes; `can-wake-lan`,
-`can-wake-remote` and `can-power-on-oob` are pinned to `supported: null`. A new capability id, a
-missing section, a vacuous producer or a stale allowance fails the gate. G5 in the same gate refuses
+`can-wake-remote` and `can-power-on-oob` are pinned to `supported: null`. Each entry also lists its
+`emitters`, the probe wrappers that construct the value `status.get` serves (`host-oob-probe.ts`,
+`host-wol-probe.ts`, `host-autostart-probe.ts`), and R7 scans them under the same rule, so a
+`supported` planted in a probe fails too (mutant P20-O3). A new capability id, a missing section or
+`emitters` key, a vacuous producer or a stale allowance fails the gate. The success line ends
+`6 capability producers classified, 3 capability emitters scanned.` G5 in the same gate refuses
 a card control whose wording promises an effect (such as "Wake") without a host RPC behind it.
 
 ## Owner procedure

@@ -496,7 +496,7 @@ export async function main(root = process.cwd()) {
     return 1
   }
   console.log(
-    `check-host-card-claims: ${result.labelCount} labels classified, ${result.actionCount} controls classified, ${result.rpcCount} host RPC methods known, no unevidenced power-loss state, no control without an effect, ${producers.producerCount} capability producers classified.`
+    `check-host-card-claims: ${result.labelCount} labels classified, ${result.actionCount} controls classified, ${result.rpcCount} host RPC methods known, no unevidenced power-loss state, no control without an effect, ${producers.producerCount} capability producers classified, ${producers.emitterCount} capability emitters scanned.`
   )
   return 0
 }

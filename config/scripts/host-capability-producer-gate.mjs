@@ -4,6 +4,7 @@
  * config/host-card-claims.jsonc `hostCapabilities` classifies every HOST_CAPABILITY_IDS member with
  *   producer   "path" (the whole file) or "path#function" (that function's region);
  *   supported  null, or { evidence: [HOST_EVIDENCE_KINDS], why } when the region may emit supported;
+ *   emitters   ["path" | "path#function"], every other module that constructs the value status.get serves;
  *   why        one sentence someone can disagree with.
  *
  *   R1 section    the section exists, so deleting it cannot switch the gate off
@@ -12,6 +13,7 @@
  *   R4 floor      the region returns at least one `value:` literal, so an emptied producer fails
  *   R5 supported  a supported literal needs an allowance whose evidence kinds are quoted in the region
  *   R6 stale      an allowance on a region that never emits supported fails; the ratchet only tightens
+ *   R7 emitters   each emitter is scanned like the producer: supported needs the same allowance and evidence
  *
  * Pure: `read` returns a repo file's source or null, `stripComments` blanks comments in place.
  */
@@ -152,7 +154,45 @@ function checkEntry({ id, entry, read, kinds, stripComments, failures }) {
   return true
 }
 
-/** The whole G6 judgement over `config.hostCapabilities`; `producerCount` counts resolved regions. */
+/** R7: the count of emitter regions that resolved; a probe wrapper may not emit what its verdict cannot. */
+function checkEmitters({ id, entry, read, kinds, stripComments, failures }) {
+  const emitters = entry.emitters
+  const malformed = (emitter) => typeof emitter !== 'string' || emitter === ''
+  if (!Array.isArray(emitters) || emitters.some(malformed)) {
+    failures.push(
+      `capability ${id}: emitters must list the "path" or "path#function" modules that construct its value`
+    )
+    return 0
+  }
+  let scanned = 0
+  for (const emitter of emitters) {
+    const region = resolveRegion({ id, producer: emitter, read, stripComments, failures })
+    if (region === null) {
+      continue
+    }
+    scanned++
+    if (!SUPPORTED_LITERAL.test(region)) {
+      continue
+    }
+    if (entry.supported === null) {
+      failures.push(
+        `capability ${id}: emitter ${emitter} emits supported without an evidence producer`
+      )
+    } else if (isObject(entry.supported) && Array.isArray(entry.supported.evidence)) {
+      for (const kind of entry.supported.evidence) {
+        const known = Array.isArray(kinds) && kinds.includes(kind)
+        if (known && !new RegExp(`['"]${kind}['"]`).test(region)) {
+          failures.push(
+            `capability ${id}: supported evidence "${kind}" is never quoted in emitter ${emitter}`
+          )
+        }
+      }
+    }
+  }
+  return scanned
+}
+
+/** The whole G6 judgement over `config.hostCapabilities`; `producerCount` and `emitterCount` count resolved regions. */
 export function evaluateCapabilityProducers({ config, read, vocab, stripComments }) {
   const failures = []
   const section = config?.[SECTION]
@@ -160,15 +200,19 @@ export function evaluateCapabilityProducers({ config, read, vocab, stripComments
     failures.push(
       `config has no ${SECTION} section; every HOST_CAPABILITY_IDS member must be classified (G6)`
     )
-    return { failures, producerCount: 0 }
+    return { failures, producerCount: 0, emitterCount: 0 }
   }
   checkCoverage(section, vocab?.HOST_CAPABILITY_IDS, failures)
   let producerCount = 0
+  let emitterCount = 0
   for (const [id, entry] of Object.entries(section)) {
     const kinds = vocab?.HOST_EVIDENCE_KINDS
     if (checkEntry({ id, entry, read, kinds, stripComments, failures })) {
       producerCount++
     }
+    if (isObject(entry)) {
+      emitterCount += checkEmitters({ id, entry, read, kinds, stripComments, failures })
+    }
   }
-  return { failures, producerCount }
+  return { failures, producerCount, emitterCount }
 }

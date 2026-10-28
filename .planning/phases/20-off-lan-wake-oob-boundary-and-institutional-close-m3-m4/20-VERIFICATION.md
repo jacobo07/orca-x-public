@@ -151,7 +151,7 @@ M3 procedure starting from a shut-down PC.
 | `pnpm run typecheck:node` | exit 0 |
 | `pnpm exec tsc --noEmit -p config/tsconfig.tc.web.json` | exit 0 |
 | `pnpm run typecheck:cli` | exit 0 |
-| `pnpm run check:host-card-claims` | `check-host-card-claims: 22 labels classified, 2 controls classified, 598 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified.` |
+| `pnpm run check:host-card-claims` | `check-host-card-claims: 22 labels classified, 2 controls classified, 598 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.` (after review fix WR-01: G6 R7 scans the probe emitters; P20-O3 CAUGHT, 20-04-MUTANTS.md) |
 | `pnpm run check:recurring-work` | `Recurring-work inventory OK [total=236 interval=48 watcher=8 self-rescheduling-timeout=102 worker=13 helper=36 self-rescheduling-frame=29] debt=0` |
 | `pnpm run check:durability-contracts` | `Durability contract check passed for 22 contract(s); ... no new ones.` |
 | `pnpm exec oxlint` on the ten phase 20 source modules | exit 0, no diagnostics |

@@ -53,3 +53,12 @@ because Bash expanded `$_` inside an inline PowerShell string. The logs were rea
 
 Exit code of `git diff --quiet -- src config mobile` after the last restore: 0
 Gate summary line after the last restore: `check-host-card-claims: 22 labels classified, 2 controls classified, 598 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified.`
+
+## P20-O3 (review WR-01, run 2026-10-28 after G6 R7 emitters)
+
+The drills above never planted `supported` in a probe wrapper, the module whose value `status.get` actually serves.
+P20-O3 does. Driver `mutant.ps1` in the job tmp directory; same byte-copy restore protocol.
+
+| Mutant | Plant | CAUGHT (command, exit, decisive line) | RESTORE_VERIFIED |
+|---|---|---|---|
+| P20-O3 OOB probe wrapper emits supported, verdict untouched (WR-01) | `src/main/runtime/host-oob-probe.ts` `readDarwin`: `return result.code === 0 ? darwinOobVerdict(result.stdout, deps.now()) : UNREADABLE` (hits 1) -> `return result.code === 0 ? { value: 'supported', reason: 'x', evidence: { kind: 'os-probe', observedAt: deps.now() } } : UNREADABLE` | CAUGHT: `pnpm run check:host-card-claims` exit 1, `check-host-card-claims: 1 problem(s)`, `- capability can-power-on-oob: emitter src/main/runtime/host-oob-probe.ts emits supported without an evidence producer` (G6 R7). Before R7 this plant passed the gate. | RESTORE_VERIFIED: sha256 `403A1DB1CECC36EB9E2E6C7D5364C509578F97C780E8A3EC0E0EA0DF4D152141` before = after; `git status --short -- src/main/runtime/host-oob-probe.ts` empty; gate rerun exit 0, `check-host-card-claims: 22 labels classified, 2 controls classified, 598 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.` |
