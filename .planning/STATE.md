@@ -132,6 +132,9 @@ Serve host: build:electron-vite + ensure:electron-runtime, then `xvfb-run electr
 - 2026-10-28 Phase 20 fresh-agent test run by the orchestrator after 20-05 (question set and rubric in 20-FRESH-AGENT-QUESTIONS.md), not by the plan executor. Safe: read-only agent; gaps are fixed in STATE.md.
 - 2026-10-28 Milestone audit/complete/cleanup NOT run: phases 5, 7, 9, 17, 18, 19 and 20 are human_needed. Safe: nothing archived, nothing lost.
 - 2026-10-28 docs/reference/host-wake-broker.md staged with `git add -f` because .gitignore ignores docs/** (same as the tracked detach-stop-cancel-effects.md and terminal-preview-observers.md); .gitignore unchanged. Safe: one reviewed file, reversible.
+- 2026-10-28 Phase 20 review WR-01..03 + IN-02 fixed (40638e4ef/26ded4032, 570fd0761/1f857dab1, 4f5d15e62/2dac82c2a, 8aeb8140a): G6 also scans the probe emitters (P20-O3 CAUGHT); an AMD CPU reads can-power-on-oob unknown/amd_no_amt_oob_unmeasured, since a vendor proves no AMT, not no DASH/BMC (M4 stays HARDWARE_BOUND as a label on the measured board); the relay harness unwinds on partial setup failure. IN-01, IN-03, IN-04 deferred in 20-REVIEW.md. Safe: RED then GREEN, gate exit 0.
+- 2026-10-28 The vault lesson this mission created was corrected for WR-01/WR-02 (still the only vault file touched). Safe: own file, local.
+- 2026-10-28 Phase 20 human_needed: autonomous run stops here; every remaining leg is Owner-bound or hardware-bound (Deferred Verification). Safe: nothing archived; resume commands recorded.
 
 ## Laws (binding)
 
