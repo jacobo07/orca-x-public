@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { win32 as pathWin32 } from 'node:path'
+import { getWindowsSystemToolPath } from './windows-system-tool-path'
 
 let cachedWindowsUserSid: string | null | undefined
 
@@ -134,11 +134,6 @@ function getCurrentWindowsUserSid(): string | null {
     cachedWindowsUserSid = null
   }
   return cachedWindowsUserSid
-}
-
-function getWindowsSystemToolPath(relativeSystem32Path: string): string {
-  const systemRoot = process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows'
-  return pathWin32.join(systemRoot, 'System32', relativeSystem32Path)
 }
 
 function parseCsvLine(line: string): string[] {

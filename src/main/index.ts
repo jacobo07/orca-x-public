@@ -3421,6 +3421,8 @@ void app.whenReady().then(async () => {
     hostAutostartProbe.read()
     // Why: start the first adapter read before a phone asks (D-03).
     hostWolProbe.read()
+    // Why: start the first CPU and MEI read before a phone asks (D-07).
+    hostOobProbe.read()
     // Why: the wake broker is an explicit role, never a default (D-04).
     if (serveOptions.wakeBroker) {
       const wakeBroker = startWakeBroker(getCanonicalUserDataPath())
@@ -3542,6 +3544,8 @@ void app.whenReady().then(async () => {
   hostAutostartProbe.read()
   // Why: start the first adapter read before a phone asks (D-03).
   hostWolProbe.read()
+  // Why: start the first CPU and MEI read before a phone asks (D-07).
+  hostOobProbe.read()
 
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
