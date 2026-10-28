@@ -11,7 +11,7 @@ import type { HostCardWakeAttempt } from '../components/host-availability-presen
 import { isTargetObservedStage, wakeAttemptFurthestStage } from '../components/host-card-wake-stage'
 import type { HomeHostStatusSnapshot } from './home-host-status-fetch'
 import { sendSingleFlightRequest } from './request-single-flight'
-import type { RpcClient } from './rpc-client'
+import type { RpcClient, SendRequestOptions } from './rpc-client'
 import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 import type { RpcResponse } from './types'
 
@@ -19,6 +19,12 @@ import type { RpcResponse } from './types'
 const CUTOVER_RETRY_LIMIT = 2
 // Why: a refusal without a string code, or a send that never answered, is unknown, never a stage.
 const UNKNOWN_REFUSAL_CODE = 'unknown'
+// Why no connect wait and one budget: a parked press would send a stale wake after a later reconnect (WR-02).
+const HOST_WAKE_RPC_OPTIONS: SendRequestOptions = {
+  timeoutMs: 10_000,
+  budgetSpansConnect: true,
+  failWhenDisconnected: true
+}
 
 export type HomeHostWakeTargetsSnapshot = { observedAt: number; targets: unknown }
 
@@ -136,7 +142,8 @@ export function planHostWakePress(input: {
     return null
   }
   const entry = input.clients.find((candidate) => candidate.hostId === route.brokerHostId)
-  if (!entry) {
+  // Why the live client state: the route was composed from a React snapshot that may already be stale.
+  if (!entry || entry.client.getState() !== 'connected') {
     return null
   }
   return { client: entry.client, brokerHostId: route.brokerHostId, targetId: route.targetId }
@@ -168,12 +175,13 @@ export async function requestHostWake(input: {
   input.onPressed?.(pressed)
   let response: RpcResponse
   try {
-    response = await input.client.sendRequest('host.wake.request', {
-      targetId: input.targetId,
-      requestId: input.requestId
-    })
+    response = await input.client.sendRequest(
+      'host.wake.request',
+      { targetId: input.targetId, requestId: input.requestId },
+      HOST_WAKE_RPC_OPTIONS
+    )
   } catch {
-    // Why unknown: a send the transport dropped may or may not have reached the broker.
+    // Why unknown: a timed-out send may have reached the broker; a refused-while-disconnected one ends busy.
     return { ...pressed, repliedAt: input.now(), refusalCode: UNKNOWN_REFUSAL_CODE }
   }
   const repliedAt = input.now()
@@ -225,7 +233,11 @@ export async function readHostWakeStatus(input: {
   }
   let response: RpcResponse
   try {
-    response = await input.client.sendRequest('host.wake.status', { wakeId: attempt.wakeId })
+    response = await input.client.sendRequest(
+      'host.wake.status',
+      { wakeId: attempt.wakeId },
+      HOST_WAKE_RPC_OPTIONS
+    )
   } catch {
     // Why keep: a read that never answered says nothing about the wake.
     return attempt
