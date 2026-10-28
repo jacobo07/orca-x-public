@@ -17,7 +17,13 @@
 // (config/scripts/host-capability-producer-gate.mjs):
 //   producer      "path" (whole file) or "path#function", the host code that decides the value;
 //   supported     null when it must never read supported, or { evidence, why } naming the
-//                 HOST_EVIDENCE_KINDS that producer quotes beside its supported value;
+//                 HOST_EVIDENCE_KINDS that producer quotes beside its supported value: in the
+//                 `evidence` property of the same object literal, inline or through an identifier
+//                 declared in that module with an object literal quoting the kind. Comments are
+//                 stripped string- and regex-aware; supported is caught as a quoted, template,
+//                 quoted-key, module-constant or shorthand-local value. Known limits (a scan, not a
+//                 parser): a constant imported from another module, a computed or spread value, and
+//                 an evidence identifier reassigned after its declaration are not followed;
 //   emitters      every other "path" or "path#function" that constructs the value status.get serves
 //                 (a probe wrapper), scanned under the same supported rule; [] when there is none;
 //   why           as above.

@@ -10,17 +10,29 @@
  *   R1 section    the section exists, so deleting it cannot switch the gate off
  *   R2 coverage   every id classified, no unknown id, at least MIN_CAPABILITY_PRODUCERS entries
  *   R3 producer   the file exists and, for path#function, the region is found
- *   R4 floor      the region returns at least one `value:` literal, so an emptied producer fails
- *   R5 supported  a supported literal needs an allowance whose evidence kinds are quoted in the region
+ *   R4 floor      the region has a `value:` literal or constructs supported, so an emptied producer fails
+ *   R5 supported  a supported value needs an allowance; every supported value carries an allowed kind beside
+ *                 it, and every allowed kind is beside one (see "beside" below)
  *   R6 stale      an allowance on a region that never emits supported fails; the ratchet only tightens
  *   R7 emitters   each emitter is scanned like the producer: supported needs the same allowance and evidence
+ *
+ * Supported is found as `value:` or a quoted `'value':` key with a quoted or template `supported`, as a
+ * constant declared `= 'supported'` in the module and flowing into `value:`, and as a shorthand `value`
+ * declared so. "Beside" means the `evidence` property of the same object literal: an inline object quoting
+ * the kind, or an identifier (shorthand or `evidence: name`) declared in the module with an object
+ * literal quoting it; the nearest declaration before the value in the region wins, else the module's.
+ * Known limits (a regex scan, not a parser): a constant imported from another module, a computed or
+ * spread value, and an evidence identifier reassigned after its declaration are not followed.
  *
  * Pure: `read` returns a repo file's source or null, `stripComments` blanks comments in place.
  */
 
 export const MIN_CAPABILITY_PRODUCERS = 6
-export const SUPPORTED_LITERAL = /value:\s*['"]supported['"]/
-const VALUE_LITERAL = /\bvalue:\s*['"][\w-]+['"]/
+export const SUPPORTED_LITERAL = /(?:\bvalue|(['"])value\1)\s*:\s*(['"`])supported\2/
+const VALUE_LITERAL = /(?:\bvalue|(['"])value\1)\s*:\s*(['"`])[\w-]+\2/
+const SUPPORTED_DECLARATION =
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*(['"`])supported\2/g
+const STRING_LITERAL = /(['"`])(?:\\.|(?!\1)[^\\\n])*\1/g
 const SECTION = 'hostCapabilities'
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 
@@ -49,6 +61,138 @@ export function producerRegion(source, name) {
   return end === -1 ? null : lines.slice(start, end + 1).join('\n')
 }
 
+/** Indices in `region` where a supported value is constructed, by literal, module constant or shorthand. */
+export function supportedSites(region, source) {
+  const sites = [...region.matchAll(new RegExp(SUPPORTED_LITERAL, 'g'))].map((m) => m.index)
+  for (const [, name] of source.matchAll(SUPPORTED_DECLARATION)) {
+    const use =
+      name === 'value'
+        ? /(?<=[{,]\s*)value(?=\s*[,}])/g
+        : new RegExp(`(?:\\bvalue|(['"])value\\1)\\s*:\\s*${name.replace(/\$/g, '\\$')}\\b`, 'g')
+    sites.push(...[...region.matchAll(use)].map((m) => m.index))
+  }
+  return sites
+}
+
+// Why masked: a brace inside a string must not move the object-literal boundaries.
+function maskStrings(text) {
+  return text.replace(
+    STRING_LITERAL,
+    (literal) => literal[0] + ' '.repeat(literal.length - 2) + literal[0]
+  )
+}
+
+/** Index of the brace closing the one at `open` in masked text, or -1. */
+function closingBrace(masked, open) {
+  let depth = 0
+  for (let i = open; i < masked.length; i++) {
+    if (masked[i] === '{') {
+      depth++
+    } else if (masked[i] === '}' && --depth === 0) {
+      return i
+    }
+  }
+  return -1
+}
+
+function enclosingOpenBrace(masked, index) {
+  let depth = 0
+  for (let i = index - 1; i >= 0; i--) {
+    if (masked[i] === '}') {
+      depth++
+    } else if (masked[i] === '{' && depth-- === 0) {
+      return i
+    }
+  }
+  return -1
+}
+
+/** The top-level `evidence` property of the object at [open, close]: `{ open }` for an inline object, `{ name }`, or null. */
+function evidenceProperty(masked, open, close) {
+  let depth = 0
+  for (let i = open + 1; i < close; i++) {
+    const ch = masked[i]
+    if ('{[('.includes(ch)) {
+      depth++
+    } else if ('}])'.includes(ch)) {
+      depth--
+    } else if (
+      depth === 0 &&
+      masked.startsWith('evidence', i) &&
+      /[{,]\s*$/.test(masked.slice(open, i))
+    ) {
+      const rest = masked.slice(i + 'evidence'.length)
+      const after = /^\s*(?::\s*(\{|[A-Za-z_$][\w$]*))?\s*([,}])?/.exec(rest)
+      if (after[1] === '{') {
+        return { open: i + 'evidence'.length + rest.indexOf('{') }
+      }
+      if (after[1] !== undefined) {
+        return { name: after[1] }
+      }
+      if (after[2] !== undefined) {
+        return { name: 'evidence' }
+      }
+    }
+  }
+  return null
+}
+
+/** Text of the object literal `name` is last declared with in `text` before `limit`, or null. */
+function declaredObject(text, name, limit) {
+  const masked = maskStrings(text)
+  const declaration = new RegExp(
+    `\\b(?:const|let|var)\\s+${name.replace(/\$/g, '\\$')}\\b[^=;\\n]*=\\s*\\{`,
+    'g'
+  )
+  const found = [...masked.slice(0, limit).matchAll(declaration)].pop()
+  if (found === undefined) {
+    return null
+  }
+  const open = found.index + found[0].length - 1
+  const close = closingBrace(masked, open)
+  return close === -1 ? null : text.slice(open, close + 1)
+}
+
+const quotes = (kind, text) => new RegExp(`['"\`]${kind}['"\`]`).test(text)
+
+/** The allowed kinds quoted beside the supported value at `site`. */
+function kindsBeside({ region, source, site, allowed }) {
+  const masked = maskStrings(region)
+  const open = enclosingOpenBrace(masked, site)
+  const close = open === -1 ? -1 : closingBrace(masked, open)
+  const property = close === -1 ? null : evidenceProperty(masked, open, close)
+  let text = null
+  if (property?.open !== undefined) {
+    const end = closingBrace(masked, property.open)
+    text = end === -1 ? null : region.slice(property.open, end + 1)
+  } else if (property?.name !== undefined && property.name !== 'null') {
+    text =
+      declaredObject(region, property.name, site) ??
+      declaredObject(source, property.name, source.length)
+  }
+  return text === null ? [] : allowed.filter((kind) => quotes(kind, text))
+}
+
+/** R5/R7 "beside": each supported value carries an allowed kind, and each allowed kind backs one. */
+function checkBeside({ id, label, region, source, allowed, failures }) {
+  const backed = new Set()
+  let unbacked = false
+  for (const site of supportedSites(region, source)) {
+    const kinds = kindsBeside({ region, source, site, allowed })
+    kinds.forEach((kind) => backed.add(kind))
+    const failure = `capability ${id}: a supported value in ${label} has no "${allowed.join('" or "')}" evidence beside it`
+    if (kinds.length === 0 && !failures.includes(failure)) {
+      failures.push(failure)
+      unbacked = true
+    }
+  }
+  for (const kind of unbacked ? [] : allowed.filter((kind) => !backed.has(kind))) {
+    failures.push(
+      `capability ${id}: supported evidence "${kind}" is never quoted beside a supported value in ${label}`
+    )
+  }
+}
+
 function checkCoverage(section, ids, failures) {
   if (!Array.isArray(ids)) {
     failures.push('vocabulary HOST_CAPABILITY_IDS not found; G6 cannot check capability coverage')
@@ -74,28 +218,29 @@ function checkCoverage(section, ids, failures) {
   }
 }
 
-/** The comment-stripped producer region for `entry.producer`, or null after naming the failure. */
+/** The comment-stripped producer region and its whole module, or null after naming the failure. */
 function resolveRegion({ id, producer, read, stripComments, failures }) {
   const [module, name] = producer.split('#')
-  const source = read(module)
-  if (source === null) {
+  const original = read(module)
+  if (original === null) {
     failures.push(`capability ${id}: producer module ${module} does not exist`)
     return null
   }
-  const stripped = stripComments(source)
+  const source = stripComments(original)
   if (name === undefined) {
-    return stripped
+    return { region: source, source }
   }
-  const region = producerRegion(stripped, name)
+  const region = producerRegion(source, name)
   if (region === null) {
     failures.push(
       `capability ${id}: ${module} has no function ${name} closed by a column-0 "}" line`
     )
+    return null
   }
-  return region
+  return { region, source }
 }
 
-function checkEvidence({ id, producer, region, supported, kinds, failures }) {
+function checkEvidence({ id, producer, resolved, supported, kinds, failures }) {
   const evidence = supported.evidence
   if (!Array.isArray(evidence) || evidence.length === 0) {
     failures.push(
@@ -103,12 +248,12 @@ function checkEvidence({ id, producer, region, supported, kinds, failures }) {
     )
     return
   }
-  for (const kind of evidence) {
-    if (!Array.isArray(kinds) || !kinds.includes(kind)) {
-      failures.push(`capability ${id}: supported evidence "${kind}" is not in HOST_EVIDENCE_KINDS`)
-    } else if (!new RegExp(`['"]${kind}['"]`).test(region)) {
-      failures.push(`capability ${id}: supported evidence "${kind}" is never quoted in ${producer}`)
-    }
+  const allowed = evidence.filter((kind) => Array.isArray(kinds) && kinds.includes(kind))
+  for (const kind of evidence.filter((kind) => !allowed.includes(kind))) {
+    failures.push(`capability ${id}: supported evidence "${kind}" is not in HOST_EVIDENCE_KINDS`)
+  }
+  if (allowed.length > 0) {
+    checkBeside({ id, label: producer, ...resolved, allowed, failures })
   }
   if (needsWhy(supported)) {
     failures.push(
@@ -117,16 +262,16 @@ function checkEvidence({ id, producer, region, supported, kinds, failures }) {
   }
 }
 
-function checkSupported({ id, producer, region, supported, kinds, failures }) {
+function checkSupported({ id, producer, resolved, supported, kinds, failures }) {
   if (supported !== null && !isObject(supported)) {
     failures.push(`capability ${id}: supported must be null or an { evidence, why } allowance`)
     return
   }
-  const emits = SUPPORTED_LITERAL.test(region)
+  const emits = supportedSites(resolved.region, resolved.source).length > 0
   if (emits && supported === null) {
     failures.push(`capability ${id}: ${producer} emits supported without an evidence producer`)
   } else if (emits) {
-    checkEvidence({ id, producer, region, supported, kinds, failures })
+    checkEvidence({ id, producer, resolved, supported, kinds, failures })
   } else if (supported !== null) {
     failures.push(`capability ${id}: stale supported allowance — ${producer} never emits supported`)
   }
@@ -142,15 +287,16 @@ function checkEntry({ id, entry, read, kinds, stripComments, failures }) {
     failures.push(`capability ${id} needs a "why" someone can disagree with`)
   }
   const producer = entry.producer
-  const region = resolveRegion({ id, producer, read, stripComments, failures })
-  if (region === null) {
+  const resolved = resolveRegion({ id, producer, read, stripComments, failures })
+  if (resolved === null) {
     return false
   }
-  if (!VALUE_LITERAL.test(region)) {
+  const constructsSupported = supportedSites(resolved.region, resolved.source).length > 0
+  if (!VALUE_LITERAL.test(resolved.region) && !constructsSupported) {
     failures.push(`capability ${id}: ${producer} returns no value: literal — a vacuous producer`)
   }
   // Why no default: an absent key is not a decision, so it fails like any other malformed allowance.
-  checkSupported({ id, producer, region, supported: entry.supported, kinds, failures })
+  checkSupported({ id, producer, resolved, supported: entry.supported, kinds, failures })
   return true
 }
 
@@ -166,12 +312,12 @@ function checkEmitters({ id, entry, read, kinds, stripComments, failures }) {
   }
   let scanned = 0
   for (const emitter of emitters) {
-    const region = resolveRegion({ id, producer: emitter, read, stripComments, failures })
-    if (region === null) {
+    const resolved = resolveRegion({ id, producer: emitter, read, stripComments, failures })
+    if (resolved === null) {
       continue
     }
     scanned++
-    if (!SUPPORTED_LITERAL.test(region)) {
+    if (supportedSites(resolved.region, resolved.source).length === 0) {
       continue
     }
     if (entry.supported === null) {
@@ -179,13 +325,11 @@ function checkEmitters({ id, entry, read, kinds, stripComments, failures }) {
         `capability ${id}: emitter ${emitter} emits supported without an evidence producer`
       )
     } else if (isObject(entry.supported) && Array.isArray(entry.supported.evidence)) {
-      for (const kind of entry.supported.evidence) {
-        const known = Array.isArray(kinds) && kinds.includes(kind)
-        if (known && !new RegExp(`['"]${kind}['"]`).test(region)) {
-          failures.push(
-            `capability ${id}: supported evidence "${kind}" is never quoted in emitter ${emitter}`
-          )
-        }
+      const allowed = entry.supported.evidence.filter(
+        (kind) => Array.isArray(kinds) && kinds.includes(kind)
+      )
+      if (allowed.length > 0) {
+        checkBeside({ id, label: `emitter ${emitter}`, ...resolved, allowed, failures })
       }
     }
   }

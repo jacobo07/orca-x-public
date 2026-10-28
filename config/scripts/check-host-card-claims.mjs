@@ -198,11 +198,58 @@ const CLAIM_FAMILIES = new Set(['power', 'orca', 'capability-value'])
 const NAME_FAMILIES = new Set(['capability', 'capabilities'])
 const POWER_LOSS_KEYS = Object.freeze(['power.sleeping', 'power.hibernating', 'power.powered-off'])
 
-/** Comments blanked to spaces, so indices and lines still match the original source. */
+// Why: after these a `/` starts a regex literal; `<`, `>` and `}` are left out so JSX `</` and `} />` stay code.
+const REGEX_PRECEDER = /(?:^|[(,=:[!&|?{;+\-*%~^]|\breturn|\btypeof)$/
+
+function startsRegex(out) {
+  let last = out.length - 1
+  while (last >= 0 && /\s/.test(out[last])) {
+    last--
+  }
+  return REGEX_PRECEDER.test(out.slice(Math.max(0, last - 6), last + 1))
+}
+
+/** The index just past a literal starting at `start` (quote or `/`); a newline ends a non-template one. */
+function literalEnd(source, start) {
+  const open = source[start]
+  let inClass = false
+  for (let i = start + 1; i < source.length; i++) {
+    const ch = source[i]
+    if (ch === '\\') {
+      i++
+    } else if (ch === '\n' && open !== '`') {
+      return i
+    } else if (open === '/' && (ch === '[' || ch === ']')) {
+      inClass = ch === '['
+    } else if (ch === open && !inClass) {
+      return i + 1
+    }
+  }
+  return source.length
+}
+
+/** Comments blanked to spaces outside strings and regex literals; indices and lines still match. */
 export function stripComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
-    .replace(/^[ \t]*\/\/.*$/gm, (line) => ' '.repeat(line.length))
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    const ch = source[i]
+    const next = source[i + 1]
+    let end = i + 1
+    if (ch === '/' && (next === '/' || next === '*')) {
+      const close = next === '/' ? source.indexOf('\n', i) : source.indexOf('*/', i + 2)
+      end = close === -1 ? source.length : next === '/' ? close : close + 2
+      out += source.slice(i, end).replace(/[^\n]/g, ' ')
+      i = end
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`' || (ch === '/' && startsRegex(out))) {
+      end = literalEnd(source, i)
+    }
+    out += source.slice(i, end)
+    i = end
+  }
+  return out
 }
 
 /** String literals and JSX text outside `block` (the label table), with their lines. */
