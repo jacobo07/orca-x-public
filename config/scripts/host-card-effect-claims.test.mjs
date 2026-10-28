@@ -24,7 +24,7 @@ const PRESENTER = 'app/host-presentation.ts'
 const MODEL = 'shared/model.ts'
 const WAKE_RPC = 'host.wake.request'
 const SUCCESS_SHAPE =
-  /^check-host-card-claims: \d+ labels classified, \d+ controls classified, \d+ host RPC methods known, no unevidenced power-loss state, no control without an effect, \d+ capability producers classified, \d+ capability emitters scanned\.$/
+  /^check-host-card-claims: \d+ labels classified, \d+ controls classified, \d+ host RPC methods known, no unevidenced power-loss state, no control without an effect, \d+ capability producers classified, \d+ capability emitters scanned, \d+ card copy modules scanned\.$/
 
 const VOCAB = {
   HOST_EVIDENCE_KINDS: ['live-response'],
