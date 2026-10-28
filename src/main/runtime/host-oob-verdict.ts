@@ -43,12 +43,8 @@ export function oobVerdict(input: {
   observedAt: number
 }): HostCapability {
   if (input.vendor === AMD_VENDOR) {
-    // Why not-supported: AMT is Intel-only, so an AMD board has no out-of-band power controller to reach.
-    return {
-      value: 'not-supported',
-      reason: 'hardware_bound_amd_no_amt',
-      evidence: { kind: 'os-probe', observedAt: input.observedAt }
-    }
+    // Why unknown: AMT is Intel-only, but an AMD vendor does not rule out DASH or a BMC, which nothing here reads.
+    return unknownOob('amd_no_amt_oob_unmeasured')
   }
   if (input.vendor === INTEL_VENDOR) {
     // Why unknown with an interface: a present MEI is not a provisioned, reachable AMT.

@@ -4,7 +4,7 @@ status: human_needed
 verified: 2026-10-28
 owed:
   - "M3 off-LAN wake (phone on 5G -> relay -> broker on the LAN -> target wakes -> fresh terminal output), OWNER_BOUND: cloud auth for the relay on the broker host (today `cloud_auth_not_configured`), Owner step (b) BIOS Resume by PCI-E / LAN on and ErP off, Owner step (c) an always-on LAN node running `orca serve --wake-broker`; then the ordered procedure in the M3 section below."
-  - "M4 powered off: HARDWARE_BOUND (AMD, no AMT; can-power-on-oob MEASURED not-supported / hardware_bound_amd_no_amt). WOL from S5 with Fast Startup off is OWNER_BOUND and unmeasured (Fast Startup is on)."
+  - "M4 powered off: HARDWARE_BOUND (measured board: AMD B450M consumer board, no AMT; can-power-on-oob MEASURED unknown / amd_no_amt_oob_unmeasured since review fix WR-02, earlier not-supported / hardware_bound_amd_no_amt). WOL from S5 with Fast Startup off is OWNER_BOUND and unmeasured (Fast Startup is on)."
   - "The mobile Wake control on the host card: DEFERRED (19 D-13). Until it exists, an off-LAN request can only come from a scripted client, labelled SCRIPTED CLIENT, which never counts as the phone leg."
   - "Fresh-agent test (D-12): run by the orchestrator after 20-05; result appended below."
 ---
@@ -36,7 +36,7 @@ administered `02:00:5e:20:00:01`.
 | SC | Criterion | Evidence | Label | Verdict |
 |---|---|---|---|---|
 | SC1 | Off-LAN wake through an authorized broker, no new transport, no inbound port | Transport independence: a `host.wake.request` delivered over the relay reaches the broker effect and sends exactly one 102-byte loopback frame; over the relay the replay keeps its wakeId, an ungranted phone gets `wake_grant_missing`, a foreign wake reads `wake_unknown`, admin gets `forbidden`, a relay leg bound to another device is refused (`e2ee_error`), a revoke in the dispatch window gets `wake_device_revoked` then `unauthorized/device_revoked`. Re-run here: 3 files `Tests 21 passed (21)`. P20-L1, P20-L2 CAUGHT. The live off-LAN leg was not run: section M3 below | UNIT in-process relay + MUTANT; live leg OWNER_BOUND | **OWNER_BOUND** (transport independence PASS at unit level; the live leg is not PASS) |
-| SC2 | Honest powered-off story: generic OOB interface, test-only double, measured `can-power-on-oob` | `oob-power.ts` types only (powerOn capped at `command-accepted`), recording double imported only by `oob-power.test.ts` (whole-src sweep, station control 14355 files, positive control hit); `can-power-on-oob` MEASURED `not-supported / hardware_bound_amd_no_amt / os-probe` on this laptop (live leg below). Real OOB: HARDWARE_BOUND, never presented as real. P20-O1, P20-O2 CAUGHT | UNIT laptop + MEASURED + MUTANT | PASS (interface and measurement); real OOB HARDWARE_BOUND |
+| SC2 | Honest powered-off story: generic OOB interface, test-only double, measured `can-power-on-oob` | `oob-power.ts` types only (powerOn capped at `command-accepted`), recording double imported only by `oob-power.test.ts` (whole-src sweep, station control 14355 files, positive control hit); `can-power-on-oob` MEASURED `unknown / amd_no_amt_oob_unmeasured` (evidence `null`) on this laptop since review fix WR-02 (live leg below; before it, `not-supported / hardware_bound_amd_no_amt / os-probe`). Real OOB: HARDWARE_BOUND, never presented as real. P20-O1, P20-O2 CAUGHT | UNIT laptop + MEASURED + MUTANT | PASS (interface and measurement); real OOB HARDWARE_BOUND |
 | SC3 | Failure matrix, mutants, ratchet, institutional close | Rows K, L, M PASS with positive controls (matrix below); twelve mutants CAUGHT and RESTORE_VERIFIED; G6 PASS (`check:host-card-claims` line below); Knowledge Vault lesson written; UKDL PROPOSAL written, not applied; reference note + AGENTS.md `## Host Wake`; STATE.md two-layer handoff; fresh-agent test: run by the orchestrator after 20-05; result appended below | UNIT laptop + MUTANT + files on disk | PASS (fresh-agent row pending the orchestrator run) |
 
 ## Live read-only OOB leg (MEASURED, this laptop)
@@ -45,14 +45,19 @@ Command at `ac107b5b9`: `$env:ORCA_LIVE_OOB_PROBE='1'`, `$env:ORCA_LIVE_OOB_EVID
 `20-oob-probe-evidence.json`, then `pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/host-oob-probe.live.test.ts`:
 `Test Files  1 passed (1)`, `Tests  1 passed (1)`, exit 0 (passed, not skipped).
 
-Verdict line (from `20-oob-probe-evidence.json`):
+Current verdict line (from `20-oob-probe-evidence.json`, re-run 2026-10-28 after review fix WR-02, same command,
+`Tests  1 passed (1)`, exit 0):
+`{"value":"unknown","reason":"amd_no_amt_oob_unmeasured","evidence":null}`, positive control `"vendor": "AuthenticAMD"`,
+`"meiCount": 0`.
+
+Historical, before WR-02 (the `ac107b5b9` run, superseded in the evidence file):
 `{"value":"not-supported","reason":"hardware_bound_amd_no_amt","evidence":{"kind":"os-probe","observedAt":1793187695765}}`,
 positive control `"vendor": "AuthenticAMD"`, `"meiCount": 0`. A reader that saw nothing has no vendor string and no
 finite count, so it cannot pass.
 
 The 20-02 run (2026-10-28 12:06 local, job tmp file, not durable) read the same:
 `{"verdict":{"value":"not-supported","reason":"hardware_bound_amd_no_amt","evidence":{"kind":"os-probe","observedAt":1793185595560}},"vendor":"AuthenticAMD","meiCount":0,"observedAt":1793185595561}`.
-Both measurements agree.
+Both pre-WR-02 measurements agree; the vendor and MEI count are unchanged in the re-run, only the verdict mapping moved.
 
 ## Failure matrix K, L, M
 
@@ -112,9 +117,11 @@ Until step 6 is observed on a real phone, M3 stays OWNER_BOUND. Unit relay evide
 
 Measured on this laptop (read-only): CPU vendor `AuthenticAMD`, board `B450M MORTAR MAX (MS-7B89)` (20-RESEARCH
 Win32_BaseBoard read, 2026-10-27), Intel management engine PnP count `0` (`20-oob-probe-evidence.json`). AMT is
-Intel-only, so there is no OOB controller to drive: `can-power-on-oob` reads `not-supported` with the lowercase wire
-reason `hardware_bound_amd_no_amt` and evidence `os-probe`. `HARDWARE_BOUND` is the verification label, not the wire
-reason (an uppercase reason would parse to `unspecified`).
+Intel-only, and this is an AMD B450M consumer board with no AMT, so Orca has no OOB path to drive here: M4 stays
+HARDWARE_BOUND as a verification label (measured board: AMD B450M consumer board, no AMT). On the wire `can-power-on-oob` reads `unknown / amd_no_amt_oob_unmeasured` (evidence `null`)
+since review fix WR-02: a CPU vendor proves there is no AMT, not that DASH or a BMC is absent, and the probe reads
+neither. (Before WR-02 it read `not-supported / hardware_bound_amd_no_amt / os-probe`.) `HARDWARE_BOUND` is the
+verification label, not the wire reason (an uppercase reason would parse to `unspecified`).
 
 WOL from S5 (soft off) with Fast Startup off is OWNER_BOUND and never assumed: Fast Startup is measured on, and
 nothing here changed it. If the Owner turns Fast Startup off and does step (b), a wake from S5 can be tried with the
@@ -179,7 +186,7 @@ M3 procedure starting from a shut-down PC.
 | D-04 `can-wake-remote` never supported without evidence (option B) | `describeRemoteWakeCapability` | producer pin rows; P20-W1 CAUGHT; G6 `supported: null` |
 | D-05 `wake-proxy-available` only from this session's broker answers | `src/shared/host-wake-proxy.ts` | 20 rows; P20-K1, K2, M1 CAUGHT; UNIT, WIRED-BUT-UNRENDERED |
 | D-06 generic OOB interface, test-only double, no production implementer | `oob-power.ts`, `oob-power-test-double.ts` | import sweep 8/8; P20-O2 CAUGHT |
-| D-07 `can-power-on-oob` measured read-only, never supported | `host-oob-verdict.ts`, `host-oob-probe.ts` | live leg not-supported/hardware_bound_amd_no_amt; P20-O1 CAUGHT |
+| D-07 `can-power-on-oob` measured read-only, never supported | `host-oob-verdict.ts`, `host-oob-probe.ts` | live leg unknown/amd_no_amt_oob_unmeasured since WR-02 (earlier not-supported/hardware_bound_amd_no_amt); P20-O1 CAUGHT |
 | D-08 M4 HARDWARE_BOUND; WOL from S5 OWNER_BOUND | this file, M4 section | measured AuthenticAMD, MEI 0; Fast Startup on, untouched |
 | D-09 rows K, L, M with positive controls and mutants | matrix above | twelve mutants CAUGHT, RESTORE_VERIFIED |
 | D-10 ratchet extends the existing gate | G6 in `check:host-card-claims` | success line above; P20-G1, G2, G3, M2, O1, W1 caught by the gate |

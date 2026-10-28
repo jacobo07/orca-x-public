@@ -11,7 +11,7 @@ do, and the out-of-band (OOB) power boundary.
 | LAN Wake Broker (`orca serve --wake-broker`) | LIVE, SCRIPTED CLIENT (phase 19) | `src/main/runtime/wake-broker-scripted-client.live.test.ts` |
 | Same broker reached through the relay | UNIT in-process relay (phase 20); never M3 | `src/main/runtime/wake-broker-relay-dispatch.test.ts` |
 | Off-LAN wake from a phone on 5G (M3) | OWNER_BOUND | ordered procedure in `.planning/phases/20-*/20-VERIFICATION.md` |
-| Real OOB power-on (M4) | HARDWARE_BOUND on this AMD host (no AMT) | `src/main/runtime/host-oob-probe.live.test.ts` |
+| Real OOB power-on (M4) | HARDWARE_BOUND on this host (measured board: AMD B450M consumer board, no AMT); the wire reads `unknown` | `src/main/runtime/host-oob-probe.live.test.ts` |
 | Mobile Wake control on the host card | DEFERRED (19 D-13) | `check:host-card-claims` still classifies 2 controls, both navigation |
 
 ## The broker role
@@ -77,8 +77,9 @@ parsed by `src/shared/host-availability.ts`. None of the three wake or power cap
   `host.wake.targets` answer, never from this capability.
 - **can-power-on-oob**: measured read-only from the CPU vendor and the Intel management engine
   (`src/main/runtime/host-oob-verdict.ts`, `src/main/runtime/host-oob-probe.ts`). AMD reads
-  `not-supported / hardware_bound_amd_no_amt` with `os-probe` evidence; Intel and every read failure
-  read `unknown`. No branch yields `supported`.
+  `unknown / amd_no_amt_oob_unmeasured`: AMT is Intel-only, but a CPU vendor does not rule out DASH
+  or a BMC, which the probe never reads. Intel and every read failure also read `unknown`. No branch
+  yields `supported`, and none yields `not-supported`.
 - **wake-proxy-available** (connectivity, phone side): composed in `src/shared/host-wake-proxy.ts`
   only from this session's broker answers (connected, a current `status.get` with
   `host.wake-broker.v1`, a current `host.wake.targets` with a well-formed target). Anything else is
@@ -90,7 +91,7 @@ parsed by `src/shared/host-availability.ts`. None of the three wake or power cap
 A reason on the wire must match `^[a-z0-9_]{1,64}$`; anything else parses to `unspecified`. The
 uppercase words in verification files (`HARDWARE_BOUND`, `OWNER_BOUND`) are labels for people. They
 are never wire reasons: `HARDWARE_BOUND` sent as a reason would reach the phone as `unspecified`.
-The wire carries `hardware_bound_amd_no_amt`.
+The wire carries `amd_no_amt_oob_unmeasured`.
 
 ## OOB power contract
 

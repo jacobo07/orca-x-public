@@ -1,13 +1,10 @@
 {
   "verdict": {
-    "value": "not-supported",
-    "reason": "hardware_bound_amd_no_amt",
-    "evidence": {
-      "kind": "os-probe",
-      "observedAt": 1793187695765
-    }
+    "value": "unknown",
+    "reason": "amd_no_amt_oob_unmeasured",
+    "evidence": null
   },
   "vendor": "AuthenticAMD",
   "meiCount": 0,
-  "observedAt": 1793187695766
+  "observedAt": 1793189230480
 }

@@ -119,7 +119,7 @@
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
       "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
       "evidence": ["host-announced", "os-probe"],
-      "why": "Not possible is the host's own statement about its build or platform, never the phone's guess; the WOL probe states it only when it read every Ethernet adapter's magic-packet setting, and the OOB probe only when it read an AMD CPU vendor (AMT is Intel-only)"
+      "why": "Not possible is the host's own statement about its build or platform, never the phone's guess; the WOL probe states it only when it read every Ethernet adapter's magic-packet setting, and the OOB probe never states it (an AMD vendor proves no AMT, not the absence of DASH or a BMC)"
     },
     "capability-value.not-configured": {
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
@@ -180,7 +180,7 @@
       "producer": "src/main/runtime/host-oob-verdict.ts",
       "emitters": ["src/main/runtime/host-oob-probe.ts"],
       "supported": null,
-      "why": "No out-of-band controller is proven here and an AMD board has no AMT, so the OOB verdict never reads supported"
+      "why": "No out-of-band controller is ever proven by a CPU-vendor read, so the OOB verdict never reads supported and an AMD vendor reads unknown"
     },
     "can-relay": {
       "producer": "src/main/runtime/host-availability-producer.ts#describeRelayCapability",
