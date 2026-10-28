@@ -1,4 +1,5 @@
 import type { HostConnectivityState, HostObserved } from './host-availability'
+import { isHostKey } from './host-wake'
 import { HOST_WAKE_BROKER_RUNTIME_CAPABILITY } from './protocol-version'
 
 export type WakeProxyInputs = {
@@ -38,7 +39,9 @@ function isCurrent(observedAt: number, lastConnectedAt: number): boolean {
   return Number.isFinite(observedAt) && observedAt >= lastConnectedAt
 }
 
-function isGrantedTarget(entry: unknown): boolean {
+function isGrantedTarget(
+  entry: unknown
+): entry is Record<string, unknown> & { targetId: string; label: string } {
   return isRecord(entry) && typeof entry.targetId === 'string' && typeof entry.label === 'string'
 }
 
@@ -80,4 +83,76 @@ export function planWakeRequest(observation: WakeProxyObservation): WakeRequestP
   return observation.value === 'wake-proxy-available'
     ? { send: true }
     : { send: false, reason: observation.reason }
+}
+
+// Why separate from WAKE_PROXY_UNKNOWN_REASONS: those say whether a broker can proxy, these say where to send.
+export const HOST_WAKE_ROUTE_REASONS = [
+  'no_host_key',
+  'no_bound_target',
+  'ambiguous_broker'
+] as const
+
+export type HostWakeRouteReason = (typeof HOST_WAKE_ROUTE_REASONS)[number]
+
+export type WakeRouteBroker = { brokerHostId: string; inputs: WakeProxyInputs }
+
+export type HostWakeRoute =
+  | { send: true; brokerHostId: string; targetId: string; observedAt: number }
+  | { send: false; reason: HostWakeRouteReason }
+
+type RouteMatch = { brokerHostId: string; targetId: string; observedAt: number }
+
+// Why isHostKey on the entry too: a malformed broker value must never match, whatever the card holds.
+function boundTargetIds(targets: unknown, hostKey: string): string[] {
+  if (!Array.isArray(targets)) {
+    return []
+  }
+  return targets.flatMap((entry: unknown) =>
+    isGrantedTarget(entry) && isHostKey(entry.hostKey) && entry.hostKey === hostKey
+      ? [entry.targetId]
+      : []
+  )
+}
+
+// Why per broker: only an answer proven current this session may name a target (D-03).
+function collectRouteMatches(
+  targetHostId: string,
+  hostKey: string,
+  brokers: readonly WakeRouteBroker[]
+): RouteMatch[] {
+  return brokers.flatMap((broker) => {
+    if (broker.brokerHostId === targetHostId) {
+      return []
+    }
+    const observed = composeWakeProxyAvailability(broker.inputs)
+    if (observed.value !== 'wake-proxy-available') {
+      return []
+    }
+    const { observedAt } = observed.evidence
+    return boundTargetIds(broker.inputs.targets?.targets, hostKey).map((targetId) => ({
+      brokerHostId: broker.brokerHostId,
+      targetId,
+      observedAt
+    }))
+  })
+}
+
+// Why: label, targetId, IP and runtimeId never route; only an exact hostKey from this session's answers does.
+export function composeHostWakeRoute(input: {
+  targetHostId: string
+  hostKey: string | null
+  brokers: readonly WakeRouteBroker[]
+}): HostWakeRoute {
+  if (!isHostKey(input.hostKey)) {
+    return { send: false, reason: 'no_host_key' }
+  }
+  const matches = collectRouteMatches(input.targetHostId, input.hostKey, input.brokers)
+  if (matches.length === 0) {
+    return { send: false, reason: 'no_bound_target' }
+  }
+  // Why: guessing which broker (most recent, first listed) is refused; two bindings yield no control (D-04).
+  if (matches.length > 1) {
+    return { send: false, reason: 'ambiguous_broker' }
+  }
+  return { send: true, ...matches[0] }
 }
