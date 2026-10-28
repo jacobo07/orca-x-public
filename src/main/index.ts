@@ -127,6 +127,7 @@ import {
   createHostAutostartProbe,
   defaultHostAutostartProbeDeps
 } from './runtime/host-autostart-probe'
+import { createHostOobProbe, defaultHostOobProbeDeps } from './runtime/host-oob-probe'
 import { createHostWolProbe, defaultHostWolProbeDeps } from './runtime/host-wol-probe'
 import { startWakeBroker } from './runtime/wake-broker-host'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
@@ -442,6 +443,8 @@ const hostRelayOwner = createHostRelayOwner()
 const hostAutostartProbe = createHostAutostartProbe(defaultHostAutostartProbeDeps())
 // Why module scope: serve and desktop registrations share one single-flight adapter read.
 const hostWolProbe = createHostWolProbe(defaultHostWolProbeDeps())
+// Why module scope: serve and desktop registrations share one single-flight CPU and MEI read.
+const hostOobProbe = createHostOobProbe(defaultHostOobProbeDeps())
 let pendingUnpairedDeviceAuthFailure = false
 // Why: gates whether headless serve installs the offscreen browser backend (and advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
@@ -3411,7 +3414,8 @@ void app.whenReady().then(async () => {
       relayReadiness: serveHostRelay.getReadiness,
       webSocketEndpoint: () => runtimeRpc?.getWebSocketEndpoint() ?? null,
       autostart: hostAutostartProbe,
-      wakeOnLan: hostWolProbe
+      wakeOnLan: hostWolProbe,
+      oob: hostOobProbe
     })
     // Why: start the first Task Scheduler read before a phone asks.
     hostAutostartProbe.read()
@@ -3531,7 +3535,8 @@ void app.whenReady().then(async () => {
     relayReadiness: hostRelay.getReadiness,
     webSocketEndpoint: () => runtimeRpc?.getWebSocketEndpoint() ?? null,
     autostart: hostAutostartProbe,
-    wakeOnLan: hostWolProbe
+    wakeOnLan: hostWolProbe,
+    oob: hostOobProbe
   })
   // Why: start the first Task Scheduler read before a phone asks.
   hostAutostartProbe.read()

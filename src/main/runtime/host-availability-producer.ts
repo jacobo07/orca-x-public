@@ -11,10 +11,21 @@ export type HostAvailabilitySources = {
   webSocketEndpoint: () => string | null
   autostart: { read: () => HostCapability }
   wakeOnLan: { read: () => HostCapability }
+  oob: { read: () => HostCapability }
 }
 
 function unknownCapability(reason: string): HostCapability {
   return { value: 'unknown', reason, evidence: null }
+}
+
+// Why option B: a broker serves wake targets and is not one; a phone learns acceptance from
+// host.wake-broker.v1 plus host.wake.targets, never from this capability (D-04).
+export function describeRemoteWakeCapability(nowMs: number): HostCapability {
+  return {
+    value: 'not-configured',
+    reason: 'no_wake_broker',
+    evidence: { kind: 'host-announced', observedAt: nowMs }
+  }
 }
 
 export function describeRelayCapability(
@@ -93,7 +104,6 @@ export function createHostAvailabilityProducer(options: { now?: () => number } =
     },
     describe: () => {
       const nowMs = now()
-      const announced = { kind: 'host-announced', observedAt: nowMs } as const
       return {
         schema: 1,
         processKind: sources?.processKind ?? null,
@@ -101,15 +111,11 @@ export function createHostAvailabilityProducer(options: { now?: () => number } =
         capabilities: {
           'can-start-orca':
             sources?.autostart.read() ?? unknownCapability('autostart_reader_unregistered'),
-          // Why: can-wake-lan is measured by the WOL probe (D-01); remote wake is still phase 20.
+          // Why: can-wake-lan is measured by the WOL probe (D-01); remote wake has its own producer below.
           'can-wake-lan': sources?.wakeOnLan.read() ?? unknownCapability('wol_reader_unregistered'),
-          'can-wake-remote': {
-            value: 'not-configured',
-            reason: 'no_wake_broker',
-            evidence: announced
-          },
-          // Why: nothing in code measures out-of-band power-on, and D-05 says unmeasured is unknown.
-          'can-power-on-oob': unknownCapability('oob_not_measured'),
+          'can-wake-remote': describeRemoteWakeCapability(nowMs),
+          // Why: out-of-band power-on is measured read-only by the OOB probe (D-07).
+          'can-power-on-oob': sources?.oob.read() ?? unknownCapability('oob_reader_unregistered'),
           'can-relay': describeRelayCapability(sources?.relayReadiness() ?? null, nowMs),
           'can-direct': describeDirectCapability(
             sources?.webSocketEndpoint() ?? null,
