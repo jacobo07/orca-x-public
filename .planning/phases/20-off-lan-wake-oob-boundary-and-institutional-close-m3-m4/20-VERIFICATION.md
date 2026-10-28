@@ -164,6 +164,8 @@ M3 procedure starting from a shut-down PC.
 | `pnpm exec oxlint` on the ten phase 20 source modules | exit 0, no diagnostics |
 | `git diff --quiet -- src config mobile` | exit 0 |
 
+2026-10-28 (phase 21): the success line is now `check-host-card-claims: 41 labels classified, 3 controls classified, 600 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`; this table records the line at its recorded HEAD.
+
 ## Named residuals
 
 - 19-REVIEW IN-01..IN-05 deferred (IN-01 effect re-judge refusal leaves a record at `authorized`; IN-02 `orca wake`

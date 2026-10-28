@@ -12,7 +12,7 @@ do, and the out-of-band (OOB) power boundary.
 | Same broker reached through the relay | UNIT in-process relay (phase 20); never M3 | `src/main/runtime/wake-broker-relay-dispatch.test.ts` |
 | Off-LAN wake from a phone on 5G (M3) | OWNER_BOUND | ordered procedure in `.planning/phases/20-*/20-VERIFICATION.md` |
 | Real OOB power-on (M4) | HARDWARE_BOUND on this host (measured board: AMD B450M consumer board, no AMT); the wire reads `unknown` | `src/main/runtime/host-oob-probe.live.test.ts` |
-| Mobile Wake control on the host card | DEFERRED (19 D-13) | `check:host-card-claims` still classifies 2 controls, both navigation |
+| Mobile Wake control on the host card | BUILT (phase 21): UNIT and GEX44 render tests; the phone leg is owed | `mobile/src/components/MobileHostCard.test.tsx`, `mobile/src/components/host-availability-presentation.test.ts`; `check:host-card-claims` classifies 3 controls, one of them the `host-card-wake` effect |
 
 ## The broker role
 
@@ -83,8 +83,9 @@ parsed by `src/shared/host-availability.ts`. None of the three wake or power cap
 - **wake-proxy-available** (connectivity, phone side): composed in `src/shared/host-wake-proxy.ts`
   only from this session's broker answers (connected, a current `status.get` with
   `host.wake-broker.v1`, a current `host.wake.targets` with a well-formed target). Anything else is
-  `unknown` with a named reason, and `planWakeRequest` refuses to send. It has no UI consumer yet:
-  UNIT, WIRED-BUT-UNRENDERED.
+  `unknown` with a named reason, and `planWakeRequest` refuses to send. Its UI consumer is the host
+  card's Wake route (`composeHostWakeRoute`, phase 21); the session wiring that feeds the card is
+  plan 21-05, so until then it is UNIT, rendered only in tests.
 
 ### Wire reasons are lowercase
 
@@ -114,7 +115,38 @@ emit `supported` only under an evidence allowance whose kinds it quotes; `can-wa
 `supported` planted in a probe fails too (mutant P20-O3). A new capability id, a missing section or
 `emitters` key, a vacuous producer or a stale allowance fails the gate. The success line ends
 `6 capability producers classified, 3 capability emitters scanned.` G5 in the same gate refuses
-a card control whose wording promises an effect (such as "Wake") without a host RPC behind it.
+a card control whose wording promises an effect (such as "Wake") without a host RPC behind it, judged
+per control: the wording must sit inside the innermost control classified `effect`. The card now has
+3 controls, `host-card-open` and `host-card-actions` (navigation) and `host-card-wake` (effect,
+`host.wake.request`), and 19 `wake.*` labels, each naming its observer (G7). The full success line:
+
+`check-host-card-claims: 41 labels classified, 3 controls classified, 600 host RPC methods known, no unevidenced power-loss state, no control without an effect, 6 capability producers classified, 3 capability emitters scanned.`
+
+## Binding a broker target to a host
+
+The phone draws Wake on a host card only when exactly one broker answered this session with a
+target bound to that host. The Owner binds it:
+
+1. On the host to be woken: `orca wake host-key` prints its 43-character host key.
+2. On the broker: `orca wake target bind <targetId> --host-key <hostKey>`; `orca wake target unbind <targetId>`
+   undoes it.
+
+The binding is the host key fingerprint (sha256 of the host's E2EE public key, the key the phone
+already pinned when it paired) and never a label, a runtimeId or an IP: a label is free text, a
+runtimeId changes with a reinstall, and an IP changes with DHCP, so any of them could route a press
+to the wrong machine. The route is composed by `composeHostWakeRoute` in
+`src/shared/host-wake-proxy.ts`:
+
+- an old broker that sends no `hostKey` binds nothing, so the card draws no control;
+- two bindings for one host (two brokers, or two targets on one broker) are ambiguous, so the card
+  draws no control and reads "Wake unavailable: ambiguous broker";
+- a host whose own current answer reads awake gets no control.
+
+After a press the card shows the broker's stages (`requested`, `authorized`, `packet-sent` or
+`packet-send-failed`, each rebased to the phone's reply time) and each refusal code as its own
+state. Stages after `packet-sent` come only from the target's own `status.get` answer, on a
+connection made after the press and observed after the reply: "Host answered after wake", then
+"Orca runtime ready after wake" when its graph is ready.
 
 ## Owner procedure
 
