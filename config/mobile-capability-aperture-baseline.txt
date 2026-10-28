@@ -186,6 +186,15 @@ gitlab.listMRs
 gitlab.rateLimit
 gitlab.retryJob
 gitlab.updateMRReviewers
+# Added 2026-10-28, host-only by design: LAN Wake Broker administration (targets, MACs, grants, the host-key readout). The handlers refuse every remote caller (remote_caller_refused) and the CLI refuses the SSH relay, so a phone can never register a MAC or grant itself wake. Phones use host.wake.targets/request/status instead.
+host.wake.admin.grantAdd
+host.wake.admin.grantList
+host.wake.admin.grantRemove
+host.wake.admin.hostKey
+host.wake.admin.targetAdd
+host.wake.admin.targetBind
+host.wake.admin.targetList
+host.wake.admin.targetRemove
 jira.addIssueComment
 jira.connect
 jira.createIssue

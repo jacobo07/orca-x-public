@@ -279,6 +279,12 @@
       "reason": "The pair service runs in the desktop main process and spends that process's own SSH relay session to read each remote setup. A phone or web client has no such session and must not borrow the desktop's credentials, so the replicaPair IPC channels exist on desktop only and the web preload answers the closed refusal remote-caller without sending a request. The runtime RPC projectReplica.compare is local-caller-only for the same reason."
     },
     {
+      "id": "host-wake.broker-administration",
+      "title": "Registering wake targets, binding them to a host key and granting wake",
+      "disposition": "desktop-only",
+      "reason": "host.wake.admin.* is how the Owner administers a LAN Wake Broker from a shell on that machine: it writes MAC addresses and wake grants into the broker's own state. Every handler refuses a remote caller and the orca wake CLI refuses the SSH relay, so a paired phone can never register a MAC or grant itself wake. The phone's part is host.wake.targets, host.wake.request and host.wake.status, which are on the mobile allowlist. Reference: docs/reference/host-wake-broker.md."
+    },
+    {
       "id": "updater.application-self-update",
       "title": "The application updates itself in place",
       "disposition": "not-applicable",
