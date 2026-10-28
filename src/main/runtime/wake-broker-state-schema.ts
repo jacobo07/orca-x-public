@@ -1,4 +1,5 @@
 import { isIPv4 } from 'node:net'
+import { isHostKey } from '../../shared/host-wake'
 import { normalizeMac } from './wake-magic-packet'
 import type { WakeTarget } from './wake-broker'
 
@@ -40,7 +41,9 @@ function isStoredTarget(value: unknown): value is WakeTarget {
     typeof value.label === 'string' &&
     value.label.length <= LABEL_MAX &&
     typeof value.createdAt === 'number' &&
-    Number.isFinite(value.createdAt)
+    Number.isFinite(value.createdAt) &&
+    // Why no schema bump: an older Orca keeps a well-formed key and projects nothing, while a bump would refuse the broker.
+    (!('hostKey' in value) || isHostKey(value.hostKey))
   )
 }
 

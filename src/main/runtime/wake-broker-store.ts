@@ -195,6 +195,11 @@ function createStore(
       if ((current.hostKey ?? null) === hostKey) {
         return { ...current }
       }
+      // Why: one host behind two targets of one broker is ambiguity at the source (D-04).
+      const holder = state.targets.find((target) => hostKey !== null && target.hostKey === hostKey)
+      if (holder) {
+        throw invalidArgument(`hostKey is already bound to wake target ${holder.targetId}`)
+      }
       const next: WakeTarget = { ...current }
       if (hostKey === null) {
         delete next.hostKey

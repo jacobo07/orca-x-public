@@ -101,7 +101,7 @@
     },
     {
       "id": "runtime.wake-broker-state",
-      "state": "<userData>/orca-wake-broker.json — LAN wake targets (MAC, broadcast, port, label) and REMOTE_WAKE grants (device, target)",
+      "state": "<userData>/orca-wake-broker.json — LAN wake targets (MAC, broadcast, port, label, optional bound hostKey) and REMOTE_WAKE grants (device, target)",
       "writer": "src/main/runtime/wake-broker-store.ts",
       "tier": "crash-durable",
       "lostIf": "Lost targets cost the Owner re-registering every wake target on the broker. A lost grant removal would resurrect wake access for a device the Owner had cut off, which is the security case: that is why removals swap memory first, and why the effect re-derives authority from the device registry so a grant counts only while its device still authorizes. The publish goes through writeDurableSecureJsonFile (src/shared/secure-file.ts:95), whose durable path fsyncs the staged file before the rename (secure-file.ts:117-122) and ACL-hardens it, because a MAC is LAN topology.",
