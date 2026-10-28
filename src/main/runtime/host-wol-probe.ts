@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { HostCapability } from '../../shared/host-availability'
+import { getWindowsSystemToolPath } from '../../shared/windows-system-tool-path'
 import {
   WINDOWS_WOL_ADAPTER_SCRIPT,
   darwinWolVerdict,
@@ -23,6 +24,9 @@ export type HostWolProbeDeps = {
   exec: (file: string, args: readonly string[]) => Promise<HostWolExecResult>
   listPhysicalInterfaces: () => Promise<string[]>
   readText: (path: string) => Promise<string | null>
+  // Why absolute: a bare name resolves from the cwd before PATH on Windows.
+  windowsPowerShellPath: string
+  windowsPowercfgPath: string
 }
 
 export type HostWolProbe = {
@@ -95,19 +99,21 @@ export function defaultHostWolProbeDeps(): HostWolProbeDeps {
     now: Date.now,
     exec: runWolCommand,
     listPhysicalInterfaces: listDeviceBackedInterfaces,
-    readText: readTextOrNull
+    readText: readTextOrNull,
+    windowsPowerShellPath: getWindowsSystemToolPath('WindowsPowerShell\\v1.0\\powershell.exe'),
+    windowsPowercfgPath: getWindowsSystemToolPath('powercfg.exe')
   }
 }
 
 async function readWindows(deps: HostWolProbeDeps): Promise<HostCapability> {
   const [adapterResult, armedResult] = await Promise.all([
-    deps.exec('powershell.exe', [
+    deps.exec(deps.windowsPowerShellPath, [
       '-NoProfile',
       '-NonInteractive',
       '-Command',
       WINDOWS_WOL_ADAPTER_SCRIPT
     ]),
-    deps.exec('powercfg.exe', ['/devicequery', 'wake_armed'])
+    deps.exec(deps.windowsPowercfgPath, ['/devicequery', 'wake_armed'])
   ])
   if (adapterResult.code !== 0 || armedResult.code !== 0) {
     return UNREADABLE

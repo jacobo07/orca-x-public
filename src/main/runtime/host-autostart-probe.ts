@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { userInfo } from 'node:os'
 import type { HostCapability } from '../../shared/host-availability'
+import { getWindowsSystemToolPath } from '../../shared/windows-system-tool-path'
 import {
   SERVE_AUTOSTART_ROOT_TASK_PATH,
   SERVE_AUTOSTART_STATUS_SCRIPT,
@@ -117,7 +118,8 @@ export function createHostAutostartProbe(deps: HostAutostartProbeDeps): HostAuto
   const refresh = (): Promise<void> =>
     deps
       .exec(
-        'powershell.exe',
+        // Why absolute: a bare name resolves from the cwd before PATH on Windows.
+        getWindowsSystemToolPath('WindowsPowerShell\\v1.0\\powershell.exe', deps.env),
         ['-NoProfile', '-NonInteractive', '-Command', SERVE_AUTOSTART_STATUS_SCRIPT],
         {
           env: {
