@@ -141,9 +141,9 @@ describe('status.get host availability', () => {
       reason: 'no_wake_broker'
     })
     expect(caps['can-power-on-oob']).toEqual({
-      value: 'not-supported',
-      reason: 'hardware_bound_amd_no_amt',
-      evidence: { kind: 'os-probe', observedAt: T }
+      value: 'unknown',
+      reason: 'amd_no_amt_oob_unmeasured',
+      evidence: null
     })
     expect(caps['can-power-on-oob']).toEqual(oobProbe.read())
     expect(caps['can-start-orca']).toEqual({

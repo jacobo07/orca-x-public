@@ -252,7 +252,7 @@ function registerWithOob(
 }
 
 describe('can-power-on-oob from the OOB probe (D-07)', () => {
-  it('answers pending first, then not-supported hardware_bound_amd_no_amt on an AMD CPU', async () => {
+  it('answers pending first, then unknown amd_no_amt_oob_unmeasured on an AMD CPU', async () => {
     const h = amdOobProbe()
     expect(h.probe.read()).toEqual({
       value: 'unknown',
@@ -263,9 +263,9 @@ describe('can-power-on-oob from the OOB probe (D-07)', () => {
     h.advance(400)
     await h.probe.settled()
     expect(h.probe.read()).toEqual({
-      value: 'not-supported',
-      reason: 'hardware_bound_amd_no_amt',
-      evidence: { kind: 'os-probe', observedAt: T + 400 }
+      value: 'unknown',
+      reason: 'amd_no_amt_oob_unmeasured',
+      evidence: null
     })
   })
 
@@ -289,7 +289,7 @@ describe('can-power-on-oob from the OOB probe (D-07)', () => {
     registerWithOob(producer, h.probe)
     const announcement = producer.describe()
     expect(announcement.capabilities['can-power-on-oob']).toEqual(h.probe.read())
-    expect(announcement.capabilities['can-power-on-oob'].value).toBe('not-supported')
+    expect(announcement.capabilities['can-power-on-oob'].reason).toBe('amd_no_amt_oob_unmeasured')
     const serialized = JSON.stringify(announcement)
     expect(serialized).not.toContain('AuthenticAMD')
     expect(serialized).not.toContain('MS-7B89')

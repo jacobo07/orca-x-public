@@ -71,7 +71,7 @@ describe('host OOB probe bounds', () => {
     h.probe.read()
     await h.probe.settled()
     const cached = h.probe.read()
-    expect(cached.value).toBe('not-supported')
+    expect(cached.reason).toBe('amd_no_amt_oob_unmeasured')
     h.advance(OOB_STATUS_MAX_AGE_MS)
     expect(h.probe.read()).toEqual(cached)
     expect(h.calls).toHaveLength(2)

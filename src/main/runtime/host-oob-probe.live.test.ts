@@ -54,5 +54,13 @@ describe.runIf(READY)('live OOB probe on this Windows host (read-only)', () => {
     expect(Number.isFinite(parsed?.meiCount)).toBe(true)
     expect(HOST_CAPABILITY_VALUES).toContain(verdict.value)
     expect(verdict.value).not.toBe('supported')
+    // Why: a CPU vendor proves no AMT, not the absence of DASH or a BMC (review WR-02).
+    if (parsed?.vendor === 'AuthenticAMD') {
+      expect(verdict).toEqual({
+        value: 'unknown',
+        reason: 'amd_no_amt_oob_unmeasured',
+        evidence: null
+      })
+    }
   }, 90_000)
 })

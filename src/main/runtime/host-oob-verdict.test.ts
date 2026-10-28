@@ -21,7 +21,8 @@ const TWO_CPU_CPUINFO =
 const HYGON_CPUINFO = 'processor\t: 0\nvendor_id\t: HygonGenuine\n'
 
 type Expected = { value: HostCapability['value']; reason: string }
-const AMD: Expected = { value: 'not-supported', reason: 'hardware_bound_amd_no_amt' }
+// Why unknown: a CPU vendor proves no AMT, not the absence of DASH or a BMC (review WR-02).
+const AMD: Expected = { value: 'unknown', reason: 'amd_no_amt_oob_unmeasured' }
 const NO_MEI: Expected = { value: 'unknown', reason: 'intel_mei_not_detected' }
 const AMT_UNVERIFIED: Expected = { value: 'unknown', reason: 'intel_amt_unverified' }
 const UNRECOGNIZED: Expected = { value: 'unknown', reason: 'oob_vendor_unrecognized' }
