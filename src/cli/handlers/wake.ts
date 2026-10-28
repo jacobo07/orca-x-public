@@ -143,20 +143,24 @@ function formatGrantList(result: { grants: WakeGrantRow[] }): string {
 
 // Why every gate runs before the client is touched: the relay bridge and a remote pairing both reach a
 // runtime as its local caller, so only the CLI can tell that the Owner is not at the broker (T-19-19).
-function assertWakeRunsOnBroker(ctx: HandlerContext, env: NodeJS.ProcessEnv): void {
-  assertLocalInvocation(env, 'orca wake')
+function assertWakeRunsLocally(ctx: HandlerContext, env: NodeJS.ProcessEnv, verb: string): void {
+  // Why per verb: host-key is read on the host to be woken, every other verb administers the broker (IN-01).
+  const readsWokenHost = verb === 'wake host-key'
+  const command = readsWokenHost ? 'orca wake host-key (read on the host to be woken)' : 'orca wake'
+  const machine = readsWokenHost ? 'the host to be woken' : 'the broker host'
+  assertLocalInvocation(env, command)
   for (const flag of ['environment', 'pairing-code']) {
     if (ctx.flags.has(flag)) {
       throw new RuntimeClientError(
         'remote_invocation_refused',
-        `--${flag} does not retarget orca wake: run it in a shell on the broker host itself.`
+        `--${flag} does not retarget ${command}: run it in a shell on ${machine} itself.`
       )
     }
   }
   if (ctx.client.isRemote) {
     throw new RuntimeClientError(
       'remote_invocation_refused',
-      'orca wake resolved to a remote runtime: run it in a shell on the broker host itself.'
+      `${command} resolved to a remote runtime: run it in a shell on ${machine} itself.`
     )
   }
 }
@@ -168,7 +172,7 @@ export function createWakeHandlers(
     Object.entries(WAKE_HANDLER_BODIES).map(([key, body]): [string, CommandHandler] => [
       key,
       async (ctx) => {
-        assertWakeRunsOnBroker(ctx, env)
+        assertWakeRunsLocally(ctx, env, key)
         await body(ctx)
       }
     ])
