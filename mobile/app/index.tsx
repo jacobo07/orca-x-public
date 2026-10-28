@@ -50,6 +50,7 @@ import type { ConnectionState, HostCatalogEntry, HostProfile } from '../src/tran
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { MobileHostCard } from '../src/components/MobileHostCard'
+import { useHostCardWake } from '../src/components/use-host-card-wake'
 import { MobileHomeQuickActions } from '../src/components/MobileHomeQuickActions'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
 import { ActionSheetModal } from '../src/components/ActionSheetModal'
@@ -282,6 +283,13 @@ export default function HomeScreen() {
     hostId: entry.hostId,
     client: entry.client
   }))
+  // Why: per-session evidence only (D-03); broker answers and wakes never reach the home snapshot.
+  const { wakeFor, pressWake } = useHostCardWake({
+    allClientsRef,
+    hostStates,
+    hostLastConnected,
+    hostStatusSnapshots
+  })
 
   // Why: hydrate from a persisted snapshot on cold-start so Resume + Account cards paint immediately instead of flashing empty.
   const hydratedRef = useRef(false)
@@ -786,6 +794,8 @@ export default function HomeScreen() {
                 worktreeInfo={worktreeInfo[item.id]}
                 lastConnectedAt={lastConnectedAt}
                 statusSnapshot={hostStatusSnapshots[item.id]}
+                wake={wakeFor(item)}
+                onWake={() => pressWake(item)}
                 onPress={() => {
                   if (item.credentialStatus === 'missing') {
                     router.push('/pair-scan')
