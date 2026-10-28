@@ -181,3 +181,13 @@ Plans:
 1. Cross-host routing from evidence: the card of a target host offers Wake only when a broker answered in this session (`host.wake-broker.v1` plus a `host.wake.targets` entry bound to that host's identity), and the request goes to that broker; no binding, no control. No MAC reaches the phone.
 2. Stages render as labels from one presenter table (requested, authorized, packet-sent, then host-announced only from the target's own answer); "Woken" never renders from a broker stage; refusal codes render as their own states.
 3. `check:host-card-claims` classifies the Wake control with its backend method and the new stage labels, the effect-wording check is scoped per control (no weakening when the first effect control lands), and mutants for both are CAUGHT; mobile tests run on a GEX44 disposable root; the phone leg is owed as human_needed.
+
+**Plans:** 6 plans
+Plans:
+
+- [ ] 21-01-PLAN.md — broker binding by hostKey (sha256 of the host E2EE key): store/schema (no bump), `host.wake.targets` additive hostKey (no MAC), local-only `host.wake.admin.targetBind` + `host.wake.admin.hostKey`, CLI `orca wake target bind|unbind` and `orca wake host-key` (wave 1)
+- [ ] 21-02-PLAN.md — shared route composer `composeHostWakeRoute` (one bound broker from this session's answers, `ambiguous_broker` refused, nothing persisted) + phone-side hostKey derivation proven equal to the host fingerprint, pinned vector (wave 2)
+- [ ] 21-03-PLAN.md — claims gate first: per-control effect-wording scope replaces the card-wide short-circuit, `wake` label family and observer rule (target-only host-announced/runtime-ready) in a sibling .mjs, `wakeModel` (wave 2)
+- [ ] 21-04-PLAN.md — `host-card-wake` Pressable (sibling, no confirm) + 19 `wake.*` labels and `presentHostCardWake` (phone-rebased stages, closed refusal table), jsonc classification, success line 41/3 pinned with notes; GEX44 render tests (wave 3)
+- [ ] 21-05-PLAN.md — per-session broker answers, press to the routed broker with a fresh requestId, focus re-reads (no timer), refusals outside the revocation latch, index.tsx wiring; GEX44 full run (wave 4)
+- [ ] 21-06-PLAN.md — seven mutants (scope x2, rpc, Woken, no-binding x2, ambiguous), 21-VERIFICATION.md human_needed (phone leg owed, OWNER_BOUND b/c), STATE.md row 21 (wave 5)

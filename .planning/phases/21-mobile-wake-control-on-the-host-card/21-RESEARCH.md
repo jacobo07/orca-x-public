@@ -364,11 +364,13 @@ for a host the phone knows and receive a request id and target id, no MAC on the
 | A3 | Mobile default max-lines for new files is about 300 | split files earlier |
 | A4 | Relay-reached phone profiles keep the original `publicKeyB64` (relay registers the same key) | binding mismatch on relay; test a relay-upgraded profile fixture |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. How the Owner obtains the target's `hostKey` (status.get field + `orca status`, or a local CLI). Recommend the
-   status.get field; decide in planning.
+   status.get field; decide in planning. **RESOLVED (orchestrator, 2026-10-28):** a local-only CLI readout,
+   `orca wake host-key` over `host.wake.admin.hostKey`; no status.get field, so no wire change.
 2. Should a broker refuse binding its own key? Recommend yes (cheap, avoids a meaningless Wake on the broker card).
+   **RESOLVED:** yes, as planned in 21-01.
 
 ## Environment Availability
 
