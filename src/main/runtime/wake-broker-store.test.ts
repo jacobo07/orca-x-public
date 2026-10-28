@@ -334,3 +334,167 @@ describe('wake broker store', () => {
     expect(JSON.parse(readFileSync(stateFile(), 'utf-8')).targets).toHaveLength(1)
   })
 })
+
+const KEY_A = 'A'.repeat(43)
+const KEY_B = `${'b'.repeat(41)}-_`
+const STORED_ID = 'wt_0123456789ab'
+
+function stateBytes(extra: Record<string, unknown>): string {
+  const target = {
+    targetId: STORED_ID,
+    mac: MAC,
+    broadcast: '192.168.1.255',
+    port: 9,
+    label: 'Desk',
+    createdAt: NOW,
+    ...extra
+  }
+  return JSON.stringify({ schema: 1, targets: [target], grants: [] })
+}
+
+function thrownBy(run: () => unknown): { code?: string; message: string; data?: unknown } {
+  try {
+    run()
+  } catch (error) {
+    return error as { code?: string; message: string; data?: unknown }
+  }
+  throw new Error('expected a throw')
+}
+
+function targetsOnDisk(): Record<string, unknown>[] {
+  return JSON.parse(readFileSync(stateFile(), 'utf-8')).targets
+}
+
+describe('wake target binding to a host key', () => {
+  it('loads a schema-1 target with a well-formed hostKey and keeps it', () => {
+    writeFileSync(stateFile(), stateBytes({ hostKey: KEY_A }))
+    expect(load().store.target(STORED_ID)?.hostKey).toBe(KEY_A)
+  })
+
+  it('loads a schema-1 target without hostKey unchanged, with no hostKey key', () => {
+    writeFileSync(stateFile(), stateBytes({}))
+    const target = load().store.target(STORED_ID)
+    expect(target).not.toBeNull()
+    expect(Object.keys(target ?? {})).not.toContain('hostKey')
+  })
+
+  it.each([
+    ['42 characters', 'A'.repeat(42)],
+    ['44 characters', 'A'.repeat(44)],
+    ['a + character', `${'A'.repeat(42)}+`],
+    ['a / character', `${'A'.repeat(42)}/`],
+    ['an empty string', ''],
+    ['a number', 42],
+    ['null', null]
+  ])('treats a stored hostKey of %s as an unreadable file', (_name, hostKey) => {
+    writeFileSync(stateFile(), stateBytes({ hostKey }))
+    const loaded = loadWakeBrokerStore(dir, {
+      publish: recordingPublisher().publish,
+      now: () => NOW
+    })
+    expect(loaded).toEqual({ ok: false, reason: 'wake_broker_state_unreadable' })
+  })
+
+  it('refuses an unknown target and a malformed key without writing', () => {
+    const { store, publisher } = load()
+    const target = store.addTarget(TARGET_INPUT)
+    const before = publisher.published.length
+    expect(thrownBy(() => store.bindTarget('wt_ffffffffffff', KEY_A)).code).toBe(
+      'wake_target_unknown'
+    )
+    expect(thrownBy(() => store.bindTarget(target.targetId, 'A'.repeat(42))).code).toBe(
+      'invalid_argument'
+    )
+    expect(publisher.published).toHaveLength(before)
+  })
+
+  it('rebinds from one key to another, keeps schema 1 and writes the new key to disk', () => {
+    const { store } = load()
+    const target = store.addTarget(TARGET_INPUT)
+    expect(store.bindTarget(target.targetId, KEY_A).hostKey).toBe(KEY_A)
+    expect(store.bindTarget(target.targetId, KEY_B).hostKey).toBe(KEY_B)
+    expect(JSON.parse(readFileSync(stateFile(), 'utf-8')).schema).toBe(1)
+    expect(targetsOnDisk()[0]?.hostKey).toBe(KEY_B)
+    expect(load().store.target(target.targetId)?.hostKey).toBe(KEY_B)
+  })
+
+  it('treats binding a target to its own key again as a no-op with no write', () => {
+    const { store, publisher } = load()
+    const target = store.addTarget(TARGET_INPUT)
+    store.bindTarget(target.targetId, KEY_A)
+    const before = publisher.published.length
+    expect(store.bindTarget(target.targetId, KEY_A).hostKey).toBe(KEY_A)
+    expect(publisher.published).toHaveLength(before)
+  })
+
+  it('refuses one key on two targets of this broker, naming the bound target, without writing', () => {
+    const { store, publisher } = load()
+    const one = store.addTarget(TARGET_INPUT)
+    const two = store.addTarget({ ...TARGET_INPUT, label: 'Other' })
+    store.bindTarget(one.targetId, KEY_A)
+    const before = publisher.published.length
+    const refused = thrownBy(() => store.bindTarget(two.targetId, KEY_A))
+    expect(refused.code).toBe('invalid_argument')
+    expect(refused.message).toContain(one.targetId)
+    expect(publisher.published).toHaveLength(before)
+    expect(store.target(two.targetId)).not.toHaveProperty('hostKey')
+  })
+
+  it('unbinds in memory first: a failed publish still leaves the target unbound and propagates', () => {
+    const { store, publisher } = load()
+    const target = store.addTarget(TARGET_INPUT)
+    store.bindTarget(target.targetId, KEY_A)
+    publisher.control.failNext = true
+    expect(() => store.bindTarget(target.targetId, null)).toThrow(/injected publish failure/)
+    expect(store.target(target.targetId)).not.toHaveProperty('hostKey')
+  })
+
+  it('unbinds by removing the key, never storing an empty or undefined one', () => {
+    const { store } = load()
+    const target = store.addTarget(TARGET_INPUT)
+    store.bindTarget(target.targetId, KEY_A)
+    const unbound = store.bindTarget(target.targetId, null)
+    expect(Object.keys(unbound)).not.toContain('hostKey')
+    expect(Object.keys(targetsOnDisk()[0] ?? {})).not.toContain('hostKey')
+  })
+
+  it('binds disk first: a publish that fails before landing leaves the target unbound', () => {
+    const { store, publisher } = load()
+    const target = store.addTarget(TARGET_INPUT)
+    publisher.control.failNext = true
+    expect(() => store.bindTarget(target.targetId, KEY_A)).toThrow(/injected publish failure/)
+    expect(store.target(target.targetId)).not.toHaveProperty('hostKey')
+  })
+
+  it('reports a bind that landed and then failed as indeterminate and active', () => {
+    const control = { failAfterWrite: false }
+    const loaded = loadWakeBrokerStore(dir, {
+      now: () => NOW,
+      publish: (path, value) => {
+        writeFileSync(path, JSON.stringify(value))
+        if (control.failAfterWrite) {
+          control.failAfterWrite = false
+          throw Object.assign(new Error('EIO after rename'), { code: 'EIO' })
+        }
+      }
+    })
+    if (!loaded.ok) {
+      throw new Error(loaded.reason)
+    }
+    const target = loaded.store.addTarget(TARGET_INPUT)
+    control.failAfterWrite = true
+    const thrown = thrownBy(() => loaded.store.bindTarget(target.targetId, KEY_A))
+    expect(thrown.code).toBe('wake_broker_state_indeterminate')
+    expect(thrown.data).toMatchObject({ active: true, cause: 'EIO' })
+    expect(loaded.store.target(target.targetId)?.hostKey).toBe(KEY_A)
+  })
+
+  it('removes a bound target with its key, leaving no orphan binding in the state', () => {
+    const { store } = load()
+    const target = store.addTarget(TARGET_INPUT)
+    store.bindTarget(target.targetId, KEY_A)
+    expect(store.removeTarget(target.targetId)).toBe(true)
+    expect(readFileSync(stateFile(), 'utf-8')).not.toContain(KEY_A)
+    expect(store.targets()).toEqual([])
+  })
+})
