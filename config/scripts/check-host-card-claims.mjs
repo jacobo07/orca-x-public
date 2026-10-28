@@ -11,6 +11,7 @@ import {
   resolveSpecifier,
   stringLiterals
 } from './check-workspace-surface-claims.mjs'
+import { evaluateCapabilityProducers } from './host-capability-producer-gate.mjs'
 
 /**
  * The phone's host card says only what a producer can prove (D-10).
@@ -26,6 +27,8 @@ import {
  *   G3 evidence   kinds from HOST_EVIDENCE_KINDS; unknown carries none, a claim carries some
  *   G4 power-loss power-loss copy only on an evidenced power-loss key, never outside the table
  *   G5 controls   literal testID, classified, navigation without effect words, effect with an RPC
+ *   G6 producers  every capability id classified; supported only with evidence its producer quotes
+ *                 (host-capability-producer-gate.mjs)
  *
  * Floors on labels, controls and RPC method names stop a scanner that matched nothing from
  * reporting a clean bill; a classification whose subject is gone is stale and fails.
@@ -196,7 +199,7 @@ const NAME_FAMILIES = new Set(['capability', 'capabilities'])
 const POWER_LOSS_KEYS = Object.freeze(['power.sleeping', 'power.hibernating', 'power.powered-off'])
 
 /** Comments blanked to spaces, so indices and lines still match the original source. */
-function stripComments(source) {
+export function stripComments(source) {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
     .replace(/^[ \t]*\/\/.*$/gm, (line) => ' '.repeat(line.length))
@@ -483,15 +486,17 @@ export async function main(root = process.cwd()) {
   const rpcMethods = rpcMethodNames(methodSources(root, config.rpcMethodsDir))
   const vocab = modelVocabulary(readRepoFile(root, config.model) ?? '')
   const result = evaluateHostCardClaims({ config, files, read, rpcMethods, vocab })
-  if (result.failures.length > 0) {
-    console.error(`check-host-card-claims: ${result.failures.length} problem(s)`)
-    for (const failure of result.failures) {
+  const producers = evaluateCapabilityProducers({ config, read, vocab, stripComments })
+  const failures = [...result.failures, ...producers.failures]
+  if (failures.length > 0) {
+    console.error(`check-host-card-claims: ${failures.length} problem(s)`)
+    for (const failure of failures) {
       console.error(`  - ${failure}`)
     }
     return 1
   }
   console.log(
-    `check-host-card-claims: ${result.labelCount} labels classified, ${result.actionCount} controls classified, ${result.rpcCount} host RPC methods known, no unevidenced power-loss state, no control without an effect.`
+    `check-host-card-claims: ${result.labelCount} labels classified, ${result.actionCount} controls classified, ${result.rpcCount} host RPC methods known, no unevidenced power-loss state, no control without an effect, ${producers.producerCount} capability producers classified.`
   )
   return 0
 }

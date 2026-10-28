@@ -13,6 +13,12 @@
 //   kind          "navigation" (phone-local, no effect wording) or "effect" (names `rpc`, a host RPC
 //                 method that exists);
 //   why           as above.
+// hostCapabilities classifies every HOST_CAPABILITY_IDS member for G6
+// (config/scripts/host-capability-producer-gate.mjs):
+//   producer      "path" (whole file) or "path#function", the host code that decides the value;
+//   supported     null when it must never read supported, or { evidence, why } naming the
+//                 HOST_EVIDENCE_KINDS that producer quotes beside its supported value;
+//   why           as above.
 //
 // Unreachable is not powered off, and no button exists without a backend effect (D-10).
 {
@@ -111,7 +117,7 @@
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
       "hostProducer": "src/main/runtime/host-availability-producer.ts#createHostAvailabilityProducer",
       "evidence": ["host-announced", "os-probe"],
-      "why": "Not possible is the host's own statement about its build or platform, never the phone's guess; the WOL probe states it only when it read every Ethernet adapter's magic-packet setting"
+      "why": "Not possible is the host's own statement about its build or platform, never the phone's guess; the WOL probe states it only when it read every Ethernet adapter's magic-packet setting, and the OOB probe only when it read an AMD CPU vendor (AMT is Intel-only)"
     },
     "capability-value.not-configured": {
       "producer": "src/shared/host-availability.ts#parseHostAvailabilityAnnouncement",
@@ -144,6 +150,47 @@
     "host-card-actions": {
       "kind": "navigation",
       "why": "Opens the phone-side sheet, whose reconnect, edit and remove are phone-local"
+    }
+  },
+  "hostCapabilities": {
+    "can-start-orca": {
+      "producer": "src/main/runtime/host-autostart-probe.ts#capabilityFromStatus",
+      "supported": {
+        "evidence": ["os-probe"],
+        "why": "Supported only from an installed logon task the OS itself reported in a ready, running or queued state"
+      },
+      "why": "Start-on-logon is read from the OS task scheduler, never assumed from a build flag"
+    },
+    "can-wake-lan": {
+      "producer": "src/main/runtime/host-wol-verdict.ts",
+      "supported": null,
+      "why": "Only an observed wake proves LAN wake and that is OWNER_BOUND, so the WOL verdict has no supported branch"
+    },
+    "can-wake-remote": {
+      "producer": "src/main/runtime/host-availability-producer.ts#describeRemoteWakeCapability",
+      "supported": null,
+      "why": "Option B: a broker serves wake targets and is not one; the phone learns acceptance from host.wake-broker.v1 and host.wake.targets"
+    },
+    "can-power-on-oob": {
+      "producer": "src/main/runtime/host-oob-verdict.ts",
+      "supported": null,
+      "why": "No out-of-band controller is proven here and an AMD board has no AMT, so the OOB verdict never reads supported"
+    },
+    "can-relay": {
+      "producer": "src/main/runtime/host-availability-producer.ts#describeRelayCapability",
+      "supported": {
+        "evidence": ["relay-reported"],
+        "why": "Supported only once the relay itself reported a status for this host"
+      },
+      "why": "Relay reachability comes from the host's relay readiness, never from the phone"
+    },
+    "can-direct": {
+      "producer": "src/main/runtime/host-availability-producer.ts#describeDirectCapability",
+      "supported": {
+        "evidence": ["host-announced"],
+        "why": "Supported only when the host announces a WebSocket listener bound beyond loopback"
+      },
+      "why": "Direct reachability is the host's own listener endpoint; a loopback bind is not configured"
     }
   }
 }
