@@ -13,7 +13,7 @@ import type { HomeHostStatusSnapshot } from './home-host-status-fetch'
 import { sendSingleFlightRequest } from './request-single-flight'
 import type { RpcClient, SendRequestOptions } from './rpc-client'
 import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
-import type { RpcResponse } from './types'
+import type { ConnectionState, RpcResponse } from './types'
 
 // Why: same cutover cap as fetchHomeHostStatus, so a relay↔direct migration loop cannot spin.
 const CUTOVER_RETRY_LIMIT = 2
@@ -303,4 +303,30 @@ export function wakesToRefresh(
       ? [{ targetHostId, attempt }]
       : []
   )
+}
+
+export type WakeAttemptEnd = { targetHostId: string; requestId: string }
+
+// Why: once the target answered and then dropped, that wake's evidence describes a past boot (IN-02).
+export function endedWakeAttempts(
+  attempts: Record<string, HostCardWakeAttempt>,
+  observations: WakeTargetObservations & { hostStates: Record<string, ConnectionState> }
+): WakeAttemptEnd[] {
+  return Object.entries(attempts).flatMap(([targetHostId, attempt]) =>
+    observations.hostStates[targetHostId] !== 'connected' &&
+    targetAnswered(targetHostId, attempt, observations)
+      ? [{ targetHostId, requestId: attempt.requestId }]
+      : []
+  )
+}
+
+// Why the pressed key: a re-pair under another key is another host identity, not this wake's target.
+export function wakeAttemptForPairing(input: {
+  attempt: HostCardWakeAttempt | undefined
+  pressedHostKey: string | null | undefined
+  hostKey: string | null
+}): HostCardWakeAttempt | null {
+  return input.attempt !== undefined && input.pressedHostKey === input.hostKey
+    ? input.attempt
+    : null
 }

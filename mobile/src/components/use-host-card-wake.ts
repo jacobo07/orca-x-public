@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
 import {
   brokerRouteInputs,
+  endedWakeAttempts,
   fetchHomeHostWakeTargets,
   hostKeyOfPublicKey,
   hostsAskableForWakeTargets,
   pressHostWake,
   readHostWakeStatus,
+  wakeAttemptForPairing,
   wakesToRefresh,
   type HomeHostWakeTargetsSnapshot,
   type HostWakeClientEntry,
@@ -34,6 +36,8 @@ export function useHostCardWake(input: {
   const { allClientsRef, hostStates, hostLastConnected, hostStatusSnapshots } = input
   const [targetsByHost, setTargetsByHost] = useState<TargetsByHost>({})
   const [attempts, setAttempts] = useState<Record<string, HostCardWakeAttempt>>({})
+  // The card key each attempt was pressed under (IN-02).
+  const [pressedKeys, setPressedKeys] = useState<Record<string, string | null>>({})
   // Why a ref: the focus callback stays stable yet reads the latest attempts.
   const attemptsRef = useRef(attempts)
   attemptsRef.current = attempts
@@ -85,13 +89,47 @@ export function useHostCardWake(input: {
     [hostStates, hostLastConnected, hostStatusSnapshots, targetsByHost]
   )
 
+  // Why prune, not hide: a target that answered and dropped would otherwise re-show it on its next connect.
+  useEffect(() => {
+    const ended = endedWakeAttempts(attempts, {
+      hostStates,
+      statuses: hostStatusSnapshots,
+      lastConnected: hostLastConnected
+    })
+    if (ended.length === 0) {
+      return
+    }
+    setAttempts((prev) => {
+      const next = { ...prev }
+      for (const { targetHostId, requestId } of ended) {
+        // Why match requestId: a newer press on the same card is not the wake that ended.
+        if (next[targetHostId]?.requestId === requestId) {
+          delete next[targetHostId]
+        }
+      }
+      return next
+    })
+  }, [attempts, hostStates, hostStatusSnapshots, hostLastConnected])
+
   const wakeFor = useCallback(
-    (host: WakeCardHost): HostCardWakeInputs => ({
-      hostKey: hostKeyOfPublicKey(host.publicKeyB64),
-      brokers,
-      attempt: attempts[host.id] ?? null
-    }),
-    [attempts, brokers]
+    (host: WakeCardHost): HostCardWakeInputs => {
+      const hostKey = hostKeyOfPublicKey(host.publicKeyB64)
+      const paired = wakeAttemptForPairing({
+        attempt: attempts[host.id],
+        pressedHostKey: pressedKeys[host.id],
+        hostKey
+      })
+      const observations = {
+        hostStates,
+        statuses: hostStatusSnapshots,
+        lastConnected: hostLastConnected
+      }
+      // Why also here: the pruning effect runs after paint; the ended wake must not flash first.
+      const ended =
+        paired !== null && endedWakeAttempts({ [host.id]: paired }, observations).length > 0
+      return { hostKey, brokers, attempt: ended ? null : paired }
+    },
+    [attempts, brokers, pressedKeys, hostStates, hostStatusSnapshots, hostLastConnected]
   )
 
   const pressWake = useCallback(
@@ -100,9 +138,11 @@ export function useHostCardWake(input: {
       if (inFlightRef.current.has(host.id)) {
         return
       }
+      const hostKey = hostKeyOfPublicKey(host.publicKeyB64)
       const store = (attempt: HostCardWakeAttempt) => {
         if (!unmountedRef.current) {
           setAttempts((prev) => ({ ...prev, [host.id]: attempt }))
+          setPressedKeys((prev) => ({ ...prev, [host.id]: hostKey }))
         }
       }
       const pending = pressHostWake({
