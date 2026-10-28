@@ -18,6 +18,7 @@ import {
   evaluateWakeLabels,
   wakeVocabulary
 } from './host-card-effect-claims.mjs'
+import { checkCardCopyReach } from './host-card-copy-reach.mjs'
 
 /**
  * The phone's host card says only what a producer can prove (D-10).
@@ -39,6 +40,9 @@ import {
  *                 (host-capability-producer-gate.mjs)
  *   G7 wake       wake.* suffixes from wakeModel; every wake label names its observer, and only the
  *                 target's own answer may say the host woke (host-card-effect-claims.mjs)
+ *   G8 reach      the woken and effect wording rules over every module the card renders copy from:
+ *                 presenter literals outside the table, its helpers, child components
+ *                 (host-card-copy-reach.mjs)
  *
  * Floors on labels, controls and RPC method names stop a scanner that matched nothing from
  * reporting a clean bill; a classification whose subject is gone is stale and fails.
@@ -277,6 +281,12 @@ function copyOutside(source, block) {
   return copy
 }
 
+/** Comment-stripped source and its copy; the presenter's label table is left to G1-G4 and W3. */
+function moduleCopy(file, source, presenter) {
+  const stripped = stripComments(source)
+  return { stripped, copy: copyOutside(stripped, file === presenter ? labelBlock(source) : null) }
+}
+
 function checkModuleExport(label, role, reference, read, failures) {
   const [module, symbol] = String(reference).split('#')
   const source = read(module)
@@ -486,23 +496,37 @@ export function evaluateHostCardClaims({ config, files, read, rpcMethods, vocab 
       )
     }
   }
-  checkEffectWordingScope({
-    card,
-    cardSource: strippedCard,
-    cardCopy,
+  const controlRules = {
     actions: config.actions ?? {},
     rpcMethods,
     effectVerb: EFFECT_VERB,
     literalTestID,
     controlTags: CONTROL_TAGS,
     failures
+  }
+  checkEffectWordingScope({ ...controlRules, card, cardSource: strippedCard, cardCopy })
+  const copyModuleCount = checkCardCopyReach({
+    ...controlRules,
+    card,
+    presenter,
+    read,
+    exists,
+    labelKeys: [...rows.keys()],
+    vocab,
+    copyOf: (file, source) => moduleCopy(file, source, presenter)
   })
   if (rpcMethods.size < MIN_RPC_METHODS) {
     failures.push(
       `found ${rpcMethods.size} host RPC method names, expected at least ${MIN_RPC_METHODS}; the sweep may have stopped seeing ${config.rpcMethodsDir}`
     )
   }
-  return { failures, labelCount: table.length, actionCount, rpcCount: rpcMethods.size }
+  return {
+    failures,
+    labelCount: table.length,
+    actionCount,
+    rpcCount: rpcMethods.size,
+    copyModuleCount
+  }
 }
 
 function readRepoFile(root, relative) {
@@ -562,7 +586,7 @@ export async function main(root = process.cwd(), configText = readRepoFile(root,
     return 1
   }
   console.log(
-    `check-host-card-claims: ${result.labelCount} labels classified, ${result.actionCount} controls classified, ${result.rpcCount} host RPC methods known, no unevidenced power-loss state, no control without an effect, ${producers.producerCount} capability producers classified, ${producers.emitterCount} capability emitters scanned.`
+    `check-host-card-claims: ${result.labelCount} labels classified, ${result.actionCount} controls classified, ${result.rpcCount} host RPC methods known, no unevidenced power-loss state, no control without an effect, ${producers.producerCount} capability producers classified, ${producers.emitterCount} capability emitters scanned, ${result.copyModuleCount} card copy modules scanned.`
   )
   return 0
 }

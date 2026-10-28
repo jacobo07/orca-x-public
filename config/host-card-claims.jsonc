@@ -11,6 +11,20 @@
 //   why           one sentence someone can disagree with.
 //   observer      wake.* only: broker, target or phone; target only on host-announced/runtime-ready.
 // wakeModel is the module whose HOST_WAKE_* arrays are the wake.* suffixes (G7).
+// G8 copy reach (config/scripts/host-card-copy-reach.mjs) applies the woken-wording rule and the
+// effect-wording rule to the card, to the presenter's literals outside HOST_CARD_LABELS, and to every
+// module they reach through relative imports inside the card's directory (child components such as
+// StatusDot.tsx, presenter helpers such as host-card-wake-stage.ts). Known limits (a text scan, not
+// a parser):
+//   - a module outside mobile/src/components, or reached through a package or alias import, is not
+//     followed: transport copy such as verdictDisplayLabel and mobileConnectionPathLabel, and
+//     homeHostWorktreeSummary;
+//   - copy the card receives as props from its parent (mobile/app/index.tsx) is not scanned;
+//   - text assembled at run time from pieces that are each clean (concatenation, template
+//     substitution, join, String.fromCharCode) is not followed;
+//   - a literal equal to a HOST_CARD_LABELS key, a model or wakeModel vocabulary member, or the
+//     module's own import specifier is read as a machine token, not copy;
+//   - dynamic import() and require() are not followed.
 // A control is a pressable in the card, identified by its literal testID, classified with:
 //   kind          "navigation" (phone-local, no effect wording) or "effect" (names `rpc`, a host RPC
 //                 method that exists);
