@@ -150,6 +150,11 @@ Reasons (19-RESEARCH section 6):
 The SCRIPTED CLIENT drives `host.wake.*` instead. `capability.can-wake-lan` still says the card has no wake control,
 and `check:host-card-claims` still classifies 2 controls, both navigation.
 
+**Closed by phase 21** (2026-10-28, appended; the text above is the phase 19 record). The four reasons were closed by
+21-01/21-02/21-05 (routing by hostKey binding), 21-03/21-04 (the `wake` label family), 21-03 (per-control effect
+scope) and 21-04/21-05/21-06 (GEX44 runs). The control was built at UNIT and GEX44 render level, with seven mutants
+CAUGHT. The phone leg is owed: see `21-VERIFICATION.md` ("D-13 closure") and STATE.md Deferred Verification row 21.
+
 ## Named residuals
 
 - No CLI device listing (19-04): a serve-only broker has no Settings window, so the Owner reads the id from the
