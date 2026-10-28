@@ -8,10 +8,13 @@ import { mapRuntimeError } from '../errors'
 import { startWakeBroker, wakeBrokerHost } from '../../wake-broker-host'
 import { loadWakeBrokerStore } from '../../wake-broker-store'
 import { wakeDeviceState, type WakeDeviceAuthority } from '../../wake-broker'
+import { fingerprintHostKeyBytes } from '../../host-key-fingerprint'
 import { HOST_WAKE_ADMIN_METHODS } from './host-wake-admin'
 import { HOST_WAKE_METHODS } from './host-wake'
 
 type Outcome = { ok: true; result: unknown } | { ok: false; error: RpcFailure['error'] }
+
+const HOST_KEY = fingerprintHostKeyBytes(Buffer.alloc(32, 7))
 
 const LOCAL: RpcContext = { runtime: {} as OrcaRuntimeService }
 const REMOTE_CONTEXTS: [string, RpcContext][] = [
@@ -114,6 +117,16 @@ describe('host.wake.admin target add and list', () => {
     }
   )
 
+  it.each(REMOTE_CONTEXTS)(
+    'refuses targetBind from a non-local caller (%s) before the broker is resolved',
+    async (_label, ctx) => {
+      const params = { targetId: 'wt_0123456789ab', hostKey: HOST_KEY }
+      expect(refusalCode(await call('host.wake.admin.targetBind', params, ctx))).toBe(
+        'remote_caller_refused'
+      )
+    }
+  )
+
   it('refuses with wake_broker_disabled when no broker runs', async () => {
     expect(refusalCode(await call('host.wake.admin.targetList', null))).toBe('wake_broker_disabled')
     expect(refusalCode(await call('host.wake.admin.targetAdd', { mac: 'aa:bb:cc:dd:ee:ff' }))).toBe(
@@ -194,6 +207,42 @@ describe('host.wake.admin grants and target removal', () => {
     const added = await call('host.wake.admin.targetAdd', { mac: 'aa:bb:cc:dd:ee:01', label })
     return (added as { result: { target: { targetId: string } } }).result.target.targetId
   }
+
+  async function phoneTargets(): Promise<Record<string, unknown>[]> {
+    const targets = HOST_WAKE_METHODS.find((m) => m.name === 'host.wake.targets')
+    if (!targets || isStreamingMethod(targets)) {
+      throw new Error('host.wake.targets must be a request method')
+    }
+    const result = (await targets.handler(null, phone)) as { targets: Record<string, unknown>[] }
+    return result.targets
+  }
+
+  it('projects a target bound through targetBind to its granted phone with hostKey and no MAC', async () => {
+    const boundId = await addTarget('desk')
+    const unboundId = await addTarget('nas')
+    await call('host.wake.admin.grantAdd', { deviceId: 'dev-a', targetId: boundId })
+    await call('host.wake.admin.grantAdd', { deviceId: 'dev-a', targetId: unboundId })
+    const before = await phoneTargets()
+    expect(before.map((target) => Object.keys(target).sort())).toEqual([
+      ['label', 'targetId'],
+      ['label', 'targetId']
+    ])
+
+    const bound = await call('host.wake.admin.targetBind', { targetId: boundId, hostKey: HOST_KEY })
+    expect(bound.ok && bound.result).toEqual({
+      target: expect.objectContaining({ targetId: boundId, hostKey: HOST_KEY })
+    })
+    const after = await phoneTargets()
+    expect(after).toEqual([
+      { targetId: boundId, label: 'desk', hostKey: HOST_KEY },
+      { targetId: unboundId, label: 'nas' }
+    ])
+    expect(after.map((target) => Object.keys(target).sort())).toEqual([
+      ['hostKey', 'label', 'targetId'],
+      ['label', 'targetId']
+    ])
+    expect(JSON.stringify(after)).not.toMatch(MAC_PATTERN)
+  })
 
   beforeEach(() => {
     userData = mkdtempSync(join(tmpdir(), 'orca-wake-admin-'))

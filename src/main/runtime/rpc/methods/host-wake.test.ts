@@ -10,9 +10,11 @@ import {
   type WakeTarget
 } from '../../wake-broker'
 import { wakeBrokerHost, wakeBrokerRuntimeCapabilities } from '../../wake-broker-host'
+import { fingerprintHostKeyBytes } from '../../host-key-fingerprint'
 import { HOST_WAKE_METHODS } from './host-wake'
 
 const MAC_PATTERN = /([0-9a-f]{2}[:-]){5}[0-9a-f]{2}/i
+const HOST_KEY = fingerprintHostKeyBytes(Buffer.alloc(32, 2))
 const T1: WakeTarget = {
   targetId: 'wt_0000000000a1',
   mac: 'aa:bb:cc:dd:ee:01',
@@ -27,7 +29,8 @@ const T2: WakeTarget = {
   broadcast: '192.168.1.255',
   port: 7,
   label: 'NAS',
-  createdAt: 2
+  createdAt: 2,
+  hostKey: HOST_KEY
 }
 const REMOVED_TARGET_ID = 'wt_0000000000c3'
 
@@ -249,7 +252,7 @@ describe('host.wake.* phone methods', () => {
     expect(status.ok && (status.result as { stages: unknown[] }).stages).toEqual(result.stages)
   })
 
-  it('lists only the targets the calling device holds a grant for, as id and label', async () => {
+  it('lists only the targets the calling device holds a grant for, as id, label and a bound hostKey', async () => {
     enableBroker()
     const outcome = await call('host.wake.targets', null, deviceCtx('tok-a', 'dev-a'))
     expect(outcome.ok && outcome.result).toEqual({
@@ -257,8 +260,21 @@ describe('host.wake.* phone methods', () => {
     })
     const other = await call('host.wake.targets', null, deviceCtx('tok-b', 'dev-b'))
     expect(other.ok && other.result).toEqual({
-      targets: [{ targetId: T2.targetId, label: T2.label }]
+      targets: [{ targetId: T2.targetId, label: T2.label, hostKey: HOST_KEY }]
     })
+  })
+
+  it('projects exactly targetId, label and a bound hostKey: never mac, broadcast or port', async () => {
+    enableBroker()
+    const keysOf = async (token: string, deviceId: string): Promise<string[][]> => {
+      const outcome = await call('host.wake.targets', null, deviceCtx(token, deviceId))
+      const { targets } = (outcome.ok ? outcome.result : { targets: [] }) as {
+        targets: Record<string, unknown>[]
+      }
+      return targets.map((target) => Object.keys(target).sort())
+    }
+    expect(await keysOf('tok-a', 'dev-a')).toEqual([['label', 'targetId']])
+    expect(await keysOf('tok-b', 'dev-b')).toEqual([['hostKey', 'label', 'targetId']])
   })
 
   it('advertises host.wake-broker.v1 only while a broker is enabled, never statically', () => {
