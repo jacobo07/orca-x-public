@@ -389,6 +389,27 @@ describe('orca wake refuses the SSH relay bridge and remote retargeting', () => 
     }
   )
 
+  it('sends the Owner to the host to be woken for wake host-key, never to the broker (IN-01)', async () => {
+    const remoteClient = { call: callMock, isRemote: true } as unknown as RuntimeClient
+    const refusals = [
+      createWakeHandlers({ ORCA_CLI_CWD: '/home/owner/repo' })['wake host-key'](context([])),
+      createWakeHandlers({})['wake host-key'](context([['environment', 'homelab']])),
+      createWakeHandlers({})['wake host-key']({ ...context([]), client: remoteClient })
+    ]
+    for (const refusal of refusals) {
+      const { message } = (await refusal.catch((error: unknown) => error)) as Error
+      expect(message).toContain('host to be woken')
+      expect(message).not.toContain('broker')
+    }
+    // Control: every other verb still names the broker host when it is retargeted.
+    const brokerRefusal = createWakeHandlers({})['wake grant list'](
+      context([['environment', 'homelab']])
+    )
+    const { message } = (await brokerRefusal.catch((error: unknown) => error)) as Error
+    expect(message).toContain('broker host')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('still reaches the runtime with an empty ORCA_CLI_CWD (positive control)', async () => {
     callMock.mockResolvedValue(success({ grants: [] }))
     await createWakeHandlers({ ORCA_CLI_CWD: '' })['wake grant list'](context([]))
