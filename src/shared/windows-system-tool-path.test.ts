@@ -24,6 +24,25 @@ describe('getWindowsSystemToolPath', () => {
     ).toBe(expected)
   })
 
+  it.each([
+    ['a relative root', 'Windows'],
+    ['a drive-relative root', 'C:Windows'],
+    ['a root with no drive', '\\Windows'],
+    ['a dot-relative root', '.\\Windows']
+  ])('never resolves against the cwd for %s, falling back to C:\\Windows (IN-04)', (_, root) => {
+    expect(getWindowsSystemToolPath('powercfg.exe', { SystemRoot: root })).toBe(
+      'C:\\Windows\\System32\\powercfg.exe'
+    )
+    expect(getWindowsSystemToolPath('powercfg.exe', { WINDIR: root })).toBe(
+      'C:\\Windows\\System32\\powercfg.exe'
+    )
+  })
+
+  it('skips a relative SystemRoot for an absolute WINDIR (IN-04)', () => {
+    const env = { SystemRoot: 'Windows', WINDIR: 'E:\\Win' }
+    expect(getWindowsSystemToolPath('powercfg.exe', env)).toBe('E:\\Win\\System32\\powercfg.exe')
+  })
+
   it('joins System32 with backslashes on any host OS', () => {
     const toolPath = getWindowsSystemToolPath('WindowsPowerShell/v1.0/powershell.exe', {
       SystemRoot: 'C:\\Windows'
