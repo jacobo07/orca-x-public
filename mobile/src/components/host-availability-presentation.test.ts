@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HOST_ORCA_STATES, HOST_POWER_STATES } from '../../../src/shared/host-availability'
+import { HOST_WAKE_REFUSAL_CODES, type HostWakeRefusalCode } from '../../../src/shared/host-wake'
+import type { WakeRouteBroker } from '../../../src/shared/host-wake-proxy'
 import type { HomeHostStatusSnapshot } from '../transport/home-host-status-fetch'
 import { MIN_COMPATIBLE_DESKTOP_VERSION } from '../transport/protocol-version'
 import {
@@ -7,7 +9,11 @@ import {
   orcaLabelId,
   powerLabelId,
   presentHostCardAvailability,
-  type HostCardAvailabilityProjection
+  presentHostCardWake,
+  type HostCardAvailabilityProjection,
+  type HostCardLabelId,
+  type HostCardWakeAttempt,
+  type HostCardWakeProjection
 } from './host-availability-presentation'
 
 const LABEL_TEXTS = new Set<string>(Object.values(HOST_CARD_LABELS))
@@ -185,5 +191,276 @@ describe('host card label lookup', () => {
     const id = orcaLabelId(value)
     expect(id).toBe(`orca.${value}`)
     expect(LABEL_TEXTS.has(HOST_CARD_LABELS[id])).toBe(true)
+  })
+})
+
+const HOST_KEY = 'Yw3NKWbEM2aRElRIu7JbT_QSpJxzLbLIq8G4WBvXEN0'
+const PRESSED_AT = 5000
+const REPLIED_AT = 5200
+const HOUR = 3_600_000
+const WOKEN_WORDING = /\b(?:woken|awake|on|up|ready|running|online|booted)\b/i
+const TARGET_STAGE_LABELS: readonly HostCardLabelId[] = [
+  'wake.host-announced',
+  'wake.runtime-ready'
+]
+
+function routeBroker(brokerHostId: string): WakeRouteBroker {
+  return {
+    brokerHostId,
+    inputs: {
+      broker: { connected: true, lastConnectedAt: 1000 },
+      status: { observedAt: 1001, result: { capabilities: ['host.wake-broker.v1'] } },
+      targets: {
+        observedAt: 1002,
+        targets: [{ targetId: 'wt_0123456789ab', label: 'Studio', hostKey: HOST_KEY }]
+      }
+    }
+  }
+}
+
+function brokerStages(stages: readonly string[], offset = 0): unknown[] {
+  return stages.map((stage, index) => ({
+    stage,
+    observedAt: PRESSED_AT + 50 + index + offset,
+    observer: 'broker'
+  }))
+}
+
+const SENT = ['requested', 'authorized', 'packet-sent'] as const
+
+function attempt(overrides: Partial<HostCardWakeAttempt> = {}): HostCardWakeAttempt {
+  return {
+    brokerHostId: 'host-broker',
+    targetId: 'wt_0123456789ab',
+    requestId: 'req-00000001',
+    pressedAt: PRESSED_AT,
+    repliedAt: REPLIED_AT,
+    wakeId: 'wake-1',
+    brokerStages: brokerStages(SENT),
+    refusalCode: null,
+    ...overrides
+  }
+}
+
+function targetAnswer(graphStatus: string, observedAt = 6100): HomeHostStatusSnapshot {
+  return { observedAt, result: { protocolVersion: MIN_COMPATIBLE_DESKTOP_VERSION, graphStatus } }
+}
+
+function presentWake(input: {
+  attempt?: HostCardWakeAttempt | null
+  brokers?: WakeRouteBroker[]
+  powerAwake?: boolean
+  snapshot?: HomeHostStatusSnapshot
+  lastConnectedAt?: number | null
+}): HostCardWakeProjection {
+  return presentHostCardWake({
+    targetHostId: 'host-1',
+    wake: {
+      hostKey: HOST_KEY,
+      brokers: input.brokers ?? [routeBroker('host-broker')],
+      attempt: input.attempt === undefined ? null : input.attempt
+    },
+    powerAwake: input.powerAwake ?? false,
+    targetSnapshot: input.snapshot,
+    targetLastConnectedAt: input.lastConnectedAt === undefined ? 6000 : input.lastConnectedAt
+  })
+}
+
+describe('presentHostCardWake', () => {
+  it('route: a bound route offers the control; no wake inputs, awake power or no binding do not', () => {
+    expect(presentWake({}).showControl).toBe(true)
+    expect(presentWake({ powerAwake: true }).showControl).toBe(false)
+    expect(presentWake({ brokers: [] }).showControl).toBe(false)
+    const none = presentHostCardWake({
+      targetHostId: 'host-1',
+      wake: undefined,
+      powerAwake: false,
+      targetSnapshot: undefined,
+      targetLastConnectedAt: null
+    })
+    expect(none).toEqual({
+      showControl: false,
+      busy: false,
+      stageLabelId: null,
+      stageText: null,
+      tone: 'muted'
+    })
+  })
+
+  it('broker stages: requested, authorized and packet-sent show the packet sent, muted', () => {
+    const projection = presentWake({ attempt: attempt() })
+
+    expect(projection.stageLabelId).toBe('wake.packet-sent')
+    expect(projection.stageText).toBe('Wake packet sent')
+    expect(projection.tone).toBe('muted')
+    expect(projection.busy).toBe(false)
+  })
+
+  it('broker stages: a failed send shows packet-send-failed with tone warning', () => {
+    const projection = presentWake({
+      attempt: attempt({
+        brokerStages: brokerStages(['requested', 'authorized', 'packet-send-failed'])
+      })
+    })
+
+    expect(projection.stageLabelId).toBe('wake.packet-send-failed')
+    expect(projection.tone).toBe('warning')
+  })
+
+  it('broker stages: evidence order, not the order the broker listed them in', () => {
+    const projection = presentWake({
+      attempt: attempt({ brokerStages: brokerStages(['packet-sent', 'authorized', 'requested']) })
+    })
+
+    expect(projection.stageLabelId).toBe('wake.packet-sent')
+  })
+
+  it.each([
+    ['not a list', 'stages'],
+    ['an empty list', []],
+    ['an unknown stage', [{ stage: 'woken', observedAt: 5300, observer: 'broker' }]],
+    ['a record without a time', [{ stage: 'packet-sent', observer: 'broker' }]],
+    ['a broker writing target stages', brokerStages(['host-announced', 'runtime-ready'])]
+  ] as const)('broker stages: %s shows wake.unknown', (_name, stages) => {
+    const projection = presentWake({ attempt: attempt({ brokerStages: stages }) })
+
+    expect(projection.stageLabelId).toBe('wake.unknown')
+    expect(projection.stageText).toBe('Wake status unknown')
+    expect(projection.tone).toBe('muted')
+  })
+
+  it('target evidence: an answer after the reply on a connection after the press shows host-announced', () => {
+    const projection = presentWake({ attempt: attempt(), snapshot: targetAnswer('reloading') })
+
+    expect(projection.stageLabelId).toBe('wake.host-announced')
+    expect(projection.stageText).toBe('Host answered after wake')
+    expect(projection.tone).toBe('normal')
+  })
+
+  it('target evidence: a ready graph in that answer shows runtime-ready', () => {
+    const projection = presentWake({ attempt: attempt(), snapshot: targetAnswer('ready') })
+
+    expect(projection.stageLabelId).toBe('wake.runtime-ready')
+    expect(projection.tone).toBe('normal')
+  })
+
+  it.each([
+    ['observed before the reply', targetAnswer('ready', REPLIED_AT - 1), PRESSED_AT + 100],
+    ['observed at the reply', targetAnswer('ready', REPLIED_AT), PRESSED_AT + 100],
+    ['on a connection made before the press', targetAnswer('ready'), PRESSED_AT - 1],
+    ['on a connection made at the press', targetAnswer('ready'), PRESSED_AT],
+    ['with no connection time', targetAnswer('ready'), null],
+    ['from before the latest connect', targetAnswer('ready', 6100), 6200],
+    ['unreadable', { observedAt: 6100, result: 'ready' }, 6000]
+  ] as const)(
+    'before the press: an answer %s never shows host-announced',
+    (_name, snapshot, at) => {
+      const projection = presentWake({ attempt: attempt(), snapshot, lastConnectedAt: at })
+
+      expect(projection.stageLabelId).toBe('wake.packet-sent')
+    }
+  )
+
+  it.each([
+    ['one hour ahead', HOUR],
+    ['one hour behind', -HOUR]
+  ])('clock skew: broker records %s give the unskewed result', (_name, offset) => {
+    for (const snapshot of [undefined, targetAnswer('reloading'), targetAnswer('ready')]) {
+      const unskewed = presentWake({ attempt: attempt(), snapshot })
+      const skewed = presentWake({
+        attempt: attempt({ brokerStages: brokerStages(SENT, offset) }),
+        snapshot
+      })
+      expect(skewed).toEqual(unskewed)
+    }
+    expect(
+      presentWake({
+        attempt: attempt({ brokerStages: brokerStages(SENT, HOUR) }),
+        snapshot: targetAnswer('ready')
+      }).stageLabelId
+    ).toBe('wake.runtime-ready')
+  })
+
+  const PHONE_REFUSALS = HOST_WAKE_REFUSAL_CODES.filter(
+    (code): code is Exclude<HostWakeRefusalCode, 'host_key_unavailable'> =>
+      code !== 'host_key_unavailable'
+  )
+
+  it('refusals: eleven phone refusal codes, each with its own label', () => {
+    expect(PHONE_REFUSALS).toHaveLength(11)
+  })
+
+  it.each(PHONE_REFUSALS)('refusals: %s shows its own label with tone warning', (code) => {
+    const projection = presentWake({ attempt: attempt({ refusalCode: code, brokerStages: [] }) })
+
+    expect(projection.stageLabelId).toBe(`wake.${code}`)
+    expect(projection.stageText).toBe(HOST_CARD_LABELS[`wake.${code}`])
+    expect(projection.tone).toBe('warning')
+  })
+
+  it.each(['wake_new_reason', 'host_key_unavailable', '', 'wake.unknown', 'toString'])(
+    'refusals: unlisted code %j shows wake.unknown',
+    (code) => {
+      const projection = presentWake({ attempt: attempt({ refusalCode: code, brokerStages: [] }) })
+
+      expect(projection.stageLabelId).toBe('wake.unknown')
+      expect(projection.tone).toBe('muted')
+    }
+  )
+
+  it('refusals: a refusal wins over stages the same answer carried', () => {
+    const projection = presentWake({
+      attempt: attempt({ refusalCode: 'wake_grant_missing' }),
+      snapshot: targetAnswer('ready')
+    })
+
+    expect(projection.stageLabelId).toBe('wake.wake_grant_missing')
+  })
+
+  it('in flight: no reply yet is busy with the control still routed and no stage', () => {
+    const projection = presentWake({
+      attempt: attempt({ repliedAt: null, wakeId: null, brokerStages: null }),
+      snapshot: targetAnswer('ready')
+    })
+
+    expect(projection).toEqual({
+      showControl: true,
+      busy: true,
+      stageLabelId: null,
+      stageText: null,
+      tone: 'muted'
+    })
+  })
+
+  it('ambiguity: two bound brokers and no attempt read ambiguous with no control', () => {
+    const projection = presentWake({
+      brokers: [routeBroker('host-broker'), routeBroker('host-broker-2')]
+    })
+
+    expect(projection.showControl).toBe(false)
+    expect(projection.stageLabelId).toBe('wake.ambiguous-broker')
+    expect(projection.stageText).toBe('Wake unavailable: ambiguous broker')
+    expect(projection.tone).toBe('warning')
+  })
+
+  it('ambiguity: an unbound or bound route with no attempt shows no stage', () => {
+    expect(presentWake({ brokers: [] }).stageText).toBeNull()
+    expect(presentWake({}).stageText).toBeNull()
+  })
+
+  it('text law: no broker- or phone-observed wake label reads as a woken host', () => {
+    const observed = Object.entries(HOST_CARD_LABELS).filter(
+      ([key]) => key.startsWith('wake.') && !TARGET_STAGE_LABELS.includes(key as HostCardLabelId)
+    )
+    expect(observed).toHaveLength(17)
+    for (const [, text] of observed) {
+      expect(text).not.toMatch(WOKEN_WORDING)
+    }
+  })
+
+  it('table: 41 labels, exactly 19 of them wake.*', () => {
+    const keys = Object.keys(HOST_CARD_LABELS)
+    expect(keys).toHaveLength(41)
+    expect(keys.filter((key) => key.startsWith('wake.'))).toHaveLength(19)
   })
 })
