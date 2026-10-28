@@ -54,5 +54,25 @@ export function oobVerdict(input: {
     // Why unknown with an interface: a present MEI is not a provisioned, reachable AMT.
     return unknownOob(input.meiPresent ? 'intel_amt_unverified' : 'intel_mei_not_detected')
   }
-  return unknownOob('oob_vendor_unrecognized')
+  return unknownOob(input.vendor === null ? 'oob_cpu_vendor_unreported' : 'oob_vendor_unrecognized')
+}
+
+export function windowsOobVerdict(stdout: string, observedAt: number): HostCapability {
+  const parsed = parseWindowsOobProbe(stdout)
+  return parsed === null
+    ? unknownOob('oob_probe_unreadable')
+    : oobVerdict({ vendor: parsed.vendor, meiPresent: parsed.meiCount > 0, observedAt })
+}
+
+export function linuxOobVerdict(
+  cpuinfo: string,
+  meiPresent: boolean,
+  observedAt: number
+): HostCapability {
+  return oobVerdict({ vendor: parseLinuxCpuVendor(cpuinfo), meiPresent, observedAt })
+}
+
+// Why meiPresent false: macOS exposes no Intel management engine interface to user space.
+export function darwinOobVerdict(stdout: string, observedAt: number): HostCapability {
+  return oobVerdict({ vendor: stdout.trim() || null, meiPresent: false, observedAt })
 }
