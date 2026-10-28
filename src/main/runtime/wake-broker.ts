@@ -187,6 +187,8 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
       judge(caller, target.targetId)
     } catch (error) {
       if (error instanceof HostWakeRefusal) {
+        // Why an existing terminal stage: other granted devices must see this wake end, and old clients only know these stages.
+        record(entry, 'packet-send-failed', error.code)
         throw hostWakeRefusal(error.code, error.message, {
           wakeId: entry.wakeId,
           stages: copyStages(entry)
@@ -204,7 +206,8 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
       record(entry, 'packet-send-failed', code)
       throw hostWakeRefusal('wake_send_failed', 'The wake packet could not be sent.', {
         wakeId: entry.wakeId,
-        code
+        code,
+        stages: copyStages(entry)
       })
     }
     record(entry, 'packet-sent')
