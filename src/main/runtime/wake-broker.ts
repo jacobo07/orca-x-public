@@ -23,6 +23,7 @@ export type WakeTarget = {
   port: number
   label: string
   createdAt: number
+  hostKey?: string
 }
 
 export type WakeBrokerStoreView = {
@@ -290,11 +291,16 @@ export function createWakeBroker(deps: WakeBrokerDeps): WakeBroker {
     targetsFor(args) {
       prune()
       const deviceId = authorizeCaller(args)
+      // Why spread: an unbound target carries no hostKey key at all; MAC, broadcast and port never leave the broker.
       return {
         targets: deps.store
           .targets()
           .filter((target) => deps.store.hasGrant(deviceId, target.targetId))
-          .map((target) => ({ targetId: target.targetId, label: target.label }))
+          .map((target) => ({
+            targetId: target.targetId,
+            label: target.label,
+            ...(target.hostKey ? { hostKey: target.hostKey } : {})
+          }))
       }
     }
   }

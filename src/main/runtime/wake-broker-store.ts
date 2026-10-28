@@ -4,7 +4,7 @@ import { isIPv4 } from 'node:net'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { hardenExistingSecureFile, writeDurableSecureJsonFile } from '../../shared/secure-file'
-import { hostWakeRefusal } from '../../shared/host-wake'
+import { hostWakeRefusal, isHostKey } from '../../shared/host-wake'
 import { normalizeMac } from './wake-magic-packet'
 import type { WakeBrokerStoreView, WakeTarget } from './wake-broker'
 import {
@@ -27,6 +27,7 @@ export type WakeBrokerStore = WakeBrokerStoreView & {
   grants(): WakeGrant[]
   addTarget(input: WakeTargetInput): WakeTarget
   removeTarget(targetId: string): boolean
+  bindTarget(targetId: string, hostKey: string | null): WakeTarget
   addGrant(deviceId: string, targetId: string): WakeGrant
   removeGrant(deviceId: string, targetId: string): boolean
   dropGrantsForDevice(deviceId: string): number
@@ -181,6 +182,33 @@ function createStore(
         grants: state.grants.filter((grant) => grant.targetId !== targetId)
       })
       return true
+    },
+
+    bindTarget(targetId, hostKey) {
+      const current = state.targets.find((target) => target.targetId === targetId)
+      if (!current) {
+        throw hostWakeRefusal('wake_target_unknown', 'That wake target is not registered.')
+      }
+      if (hostKey !== null && !isHostKey(hostKey)) {
+        throw invalidArgument('hostKey must be a 43-character base64url host key fingerprint')
+      }
+      if ((current.hostKey ?? null) === hostKey) {
+        return { ...current }
+      }
+      const next: WakeTarget = { ...current }
+      if (hostKey === null) {
+        delete next.hostKey
+      } else {
+        next.hostKey = hostKey
+      }
+      const targets = state.targets.map((target) => (target === current ? next : target))
+      // Why split: a binding is an addition (durable before active); an unbind is a removal (inactive at once).
+      if (hostKey === null) {
+        commitRemoval({ ...state, targets })
+      } else {
+        commitAddition({ ...state, targets })
+      }
+      return { ...next }
     },
 
     addGrant(deviceId, targetId) {

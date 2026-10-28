@@ -50,7 +50,15 @@ export type HostWakeStatusResult = {
   stages: HostWakeStageRecord[]
 }
 
-export type HostWakeTargetSummary = { targetId: string; label: string }
+// Why hostKey only: a binding names the host by its E2EE key fingerprint, never a label, IP or runtimeId (D-01).
+export type HostWakeTargetSummary = { targetId: string; label: string; hostKey?: string }
+
+// sha256 of the host's E2EE public key, base64url without padding (fingerprintHostPublicKey).
+export const HOST_KEY_FORM = /^[A-Za-z0-9_-]{43}$/
+
+export function isHostKey(value: unknown): value is string {
+  return typeof value === 'string' && HOST_KEY_FORM.test(value)
+}
 
 export const WAKE_DEFAULT_BROADCAST = '255.255.255.255'
 export const WAKE_DEFAULT_PORT = 9

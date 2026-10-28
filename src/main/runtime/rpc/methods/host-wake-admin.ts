@@ -6,6 +6,7 @@ import {
   WAKE_DEFAULT_BROADCAST,
   WAKE_DEFAULT_PORT,
   hostWakeRefusal,
+  isHostKey,
   isWakeTargetLabel,
   normalizeMac
 } from '../../../../shared/host-wake'
@@ -29,6 +30,16 @@ const TargetAddParams = z.object({
 })
 
 const TargetIdParams = z.object({ targetId: z.string().min(1).max(64) })
+
+// Why a new method, not a targetAdd param: zod strips unknown keys, so an old broker would silently store an
+// unbound target; an old broker answers method-not-found to this one instead (T-21-03).
+const TargetBindParams = z.object({
+  targetId: z.string().min(1).max(64),
+  hostKey: z
+    .string()
+    .refine(isHostKey, { message: 'hostKey must be a 43-character base64url host key' })
+    .nullable()
+})
 
 const GrantParams = z.object({
   deviceId: z.string().min(1).max(128),
@@ -96,6 +107,13 @@ export const HOST_WAKE_ADMIN_METHODS: RpcMethod[] = [
       }
       return { removed: true, targetId: params.targetId }
     }
+  }),
+  defineMethod({
+    name: 'host.wake.admin.targetBind',
+    params: TargetBindParams,
+    handler: async (params, ctx) => ({
+      target: adminStore(ctx).bindTarget(params.targetId, params.hostKey)
+    })
   }),
   defineMethod({
     name: 'host.wake.admin.grantAdd',
