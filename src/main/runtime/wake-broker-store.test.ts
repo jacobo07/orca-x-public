@@ -190,6 +190,79 @@ describe('wake broker store', () => {
     expect(store.hasGrant('dev-a', target.targetId)).toBe(false)
   })
 
+  describe('a publish that throws after its rename (IN-05)', () => {
+    // Why: writeSecureFile can throw from chmod or the directory fsync after the bytes are published.
+    function postRenameFailure(writtenBytes?: (value: unknown) => string) {
+      const control = { failAfterWrite: false }
+      return {
+        control,
+        publish: (path: string, value: unknown) => {
+          writeFileSync(
+            path,
+            writtenBytes && control.failAfterWrite ? writtenBytes(value) : JSON.stringify(value)
+          )
+          if (control.failAfterWrite) {
+            control.failAfterWrite = false
+            throw Object.assign(new Error('EIO after rename'), { code: 'EIO' })
+          }
+        }
+      }
+    }
+
+    function loadWith(publisher: ReturnType<typeof postRenameFailure>): Store {
+      const loaded = loadWakeBrokerStore(dir, { publish: publisher.publish, now: () => NOW })
+      if (!loaded.ok) {
+        throw new Error(`expected a store, got ${loaded.reason}`)
+      }
+      return loaded.store
+    }
+
+    it('reports an on-disk grant as indeterminate and active, never as a definite failure', () => {
+      const publisher = postRenameFailure()
+      const store = loadWith(publisher)
+      const target = store.addTarget(TARGET_INPUT)
+      publisher.control.failAfterWrite = true
+      const thrown = (() => {
+        try {
+          store.addGrant('dev-a', target.targetId)
+        } catch (error) {
+          return error as { code?: string; data?: Record<string, unknown> }
+        }
+        throw new Error('expected a throw')
+      })()
+      expect(thrown.code).toBe('wake_broker_state_indeterminate')
+      expect(thrown.data).toMatchObject({ active: true, cause: 'EIO' })
+      expect(store.hasGrant('dev-a', target.targetId), 'memory must match the grant on disk').toBe(
+        true
+      )
+      expect(loadWith(postRenameFailure()).hasGrant('dev-a', target.targetId)).toBe(true)
+    })
+
+    it('reconciles a target addition the same way', () => {
+      const publisher = postRenameFailure()
+      const store = loadWith(publisher)
+      publisher.control.failAfterWrite = true
+      expect(() => store.addTarget(TARGET_INPUT)).toThrow(
+        expect.objectContaining({ code: 'wake_broker_state_indeterminate' })
+      )
+      expect(store.targets()).toHaveLength(1)
+    })
+
+    it('reports indeterminate and inactive when disk holds neither the old nor the new state', () => {
+      const publisher = postRenameFailure(() => '{"schema":1,"targets":[')
+      const store = loadWith(publisher)
+      const target = store.addTarget(TARGET_INPUT)
+      publisher.control.failAfterWrite = true
+      expect(() => store.addGrant('dev-a', target.targetId)).toThrow(
+        expect.objectContaining({
+          code: 'wake_broker_state_indeterminate',
+          data: expect.objectContaining({ active: false })
+        })
+      )
+      expect(store.hasGrant('dev-a', target.targetId)).toBe(false)
+    })
+  })
+
   it('swaps memory before publishing a removal, so a failed write never leaves a grant valid', () => {
     const { store, publisher } = load()
     const one = store.addTarget(TARGET_INPUT)
