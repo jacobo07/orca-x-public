@@ -35,10 +35,41 @@ function pipe(from: WebSocket, to: WebSocket): void {
   from.once('close', () => to.close())
 }
 
+function decodeConnId(encoded: string): string | null {
+  try {
+    return decodeURIComponent(encoded)
+  } catch {
+    // Why null: a malformed path is a refused leg, never a throw from the message listener.
+    return null
+  }
+}
+
+function listening(cell: WebSocketServer): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error): void => {
+      cell.off('listening', onListening)
+      reject(error)
+    }
+    const onListening = (): void => {
+      cell.off('error', onError)
+      resolve()
+    }
+    cell.once('error', onError)
+    cell.once('listening', onListening)
+  })
+}
+
 // Splices the host's /v1/host/data/<connId> leg to the phone leg whose relay credential names that connId.
-export async function startLoopbackRelayCell(relayHostId: string): Promise<LoopbackRelayCell> {
-  const cell = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
-  await new Promise<void>((resolve) => cell.once('listening', resolve))
+export async function startLoopbackRelayCell(
+  relayHostId: string,
+  options: { port?: number } = {}
+): Promise<LoopbackRelayCell> {
+  const cell = new WebSocketServer({
+    host: '127.0.0.1',
+    port: options.port ?? 0,
+    perMessageDeflate: false
+  })
+  await listening(cell)
   const address = cell.address()
   if (!address || typeof address === 'string') {
     throw new Error('relay cell has no TCP address')
@@ -59,8 +90,16 @@ export async function startLoopbackRelayCell(relayHostId: string): Promise<Loopb
   }
   const admit = (path: string, auth: Record<string, unknown> | null, socket: WebSocket): void => {
     if (path.startsWith('/v1/host/data/')) {
-      const connId = decodeURIComponent(path.slice('/v1/host/data/'.length))
-      if (auth?.type === 'host-data-auth' && auth.connTicket === tickets.get(connId)) {
+      const connId = decodeConnId(path.slice('/v1/host/data/'.length))
+      const ticket = connId === null ? undefined : tickets.get(connId)
+      // Why both typed: undefined === undefined would admit an unregistered connId with no ticket.
+      if (
+        connId !== null &&
+        auth?.type === 'host-data-auth' &&
+        typeof ticket === 'string' &&
+        typeof auth.connTicket === 'string' &&
+        auth.connTicket === ticket
+      ) {
         attachLeg(connId, 'host', socket)
         return
       }
