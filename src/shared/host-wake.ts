@@ -9,7 +9,9 @@ export const HOST_WAKE_REFUSAL_CODES = [
   'wake_target_unknown',
   'wake_send_failed',
   'wake_unknown',
-  'wake_broker_state_indeterminate'
+  'wake_broker_state_indeterminate',
+  // Why here: the passthrough must carry data.reason (not_ready | unavailable) to the Owner's CLI.
+  'host_key_unavailable'
 ] as const
 
 export type HostWakeRefusalCode = (typeof HOST_WAKE_REFUSAL_CODES)[number]

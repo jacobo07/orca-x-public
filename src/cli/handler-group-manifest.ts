@@ -28,6 +28,9 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'wake target add',
       'wake target list',
       'wake target remove',
+      'wake target bind',
+      'wake target unbind',
+      'wake host-key',
       'wake grant add',
       'wake grant remove',
       'wake grant list'

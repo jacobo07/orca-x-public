@@ -7,7 +7,7 @@ import {
   type RuntimeRpcSuccess
 } from '../runtime-client'
 import { assertLocalInvocation } from '../runtime/local-invocation'
-import { isWakeTargetLabel, normalizeMac } from '../../shared/host-wake'
+import { isHostKey, isWakeTargetLabel, normalizeMac } from '../../shared/host-wake'
 
 const START_BROKER_FIX = 'Start the broker on this host first: orca serve --wake-broker'
 const DEVICE_ID_SOURCES =
@@ -20,6 +20,7 @@ type WakeTargetRow = {
   port: number
   label: string
   createdAt: number
+  hostKey?: string
 }
 
 type WakeGrantRow = { deviceId: string; targetId: string; grantedAt: number }
@@ -118,7 +119,8 @@ async function adminCall<TResult>(
 
 function formatTarget(target: WakeTargetRow): string {
   const label = target.label ? ` "${target.label}"` : ''
-  return `${target.targetId}${label}  ${target.mac} -> ${target.broadcast}:${target.port}`
+  const binding = target.hostKey ? `host ${target.hostKey}` : 'unbound'
+  return `${target.targetId}${label}  ${target.mac} -> ${target.broadcast}:${target.port}  ${binding}`
 }
 
 function formatTargetList(result: { targets: WakeTargetRow[] }): string {
@@ -213,6 +215,38 @@ const WAKE_HANDLER_BODIES: Record<string, CommandHandler> = {
       ctx.json,
       (result) => `Wake target ${result.targetId} removed, with every grant for it.`
     )
+  },
+  'wake target bind': async (ctx) => {
+    const usage = 'orca wake target bind <targetId> --host-key <hostKey>'
+    const targetId = requiredFlag(ctx, 'target', usage)
+    const hostKey = requiredFlag(ctx, 'host-key', usage)
+    if (!isHostKey(hostKey)) {
+      throw invalid(
+        '--host-key must be the 43-character key printed by `orca wake host-key` on the host to be woken.'
+      )
+    }
+    const response = await adminCall<{ target: WakeTargetRow }>(ctx, 'host.wake.admin.targetBind', {
+      targetId,
+      hostKey
+    })
+    printResult(response, ctx.json, (result) => `Wake target bound: ${formatTarget(result.target)}`)
+  },
+  'wake target unbind': async (ctx) => {
+    const targetId = requiredFlag(ctx, 'target', 'orca wake target unbind <targetId>')
+    const response = await adminCall<{ target: WakeTargetRow }>(ctx, 'host.wake.admin.targetBind', {
+      targetId,
+      hostKey: null
+    })
+    printResult(
+      response,
+      ctx.json,
+      (result) => `Wake target unbound: ${formatTarget(result.target)}`
+    )
+  },
+  'wake host-key': async (ctx) => {
+    // Why the plain client: this verb runs on the host to be woken, so the broker recovery hints would mislead.
+    const response = await ctx.client.call<{ hostKey: string }>('host.wake.admin.hostKey', null)
+    printResult(response, ctx.json, (result) => result.hostKey)
   },
   'wake grant add': async (ctx) => {
     const response = await adminCall<{ grant: WakeGrantRow }>(

@@ -1296,6 +1296,7 @@ export class OrcaRuntimeRpcServer {
         this.deviceRegistry = null
         this.e2eeKeypair = null
         this.pairingInitializationFailure = pairingIdentity.failure
+        wakeBrokerHost.attachPairingKeySource(null)
       } else {
         this.deviceRegistry = pairingIdentity.deviceRegistry
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
@@ -1312,6 +1313,8 @@ export class OrcaRuntimeRpcServer {
           },
           deviceState: (deviceId) => wakeDeviceState(this.deviceRegistry, deviceId)
         })
+        // Why this server's own key: a profile or serve data dir can differ from the canonical userData path (W2).
+        wakeBrokerHost.attachPairingKeySource(() => this.getE2EEPublicKey())
         try {
           const host = this.resolveInitialWebSocketBindHost()
           const { transport, endpoint } = await this.startWebSocketTransport({

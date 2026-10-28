@@ -10,6 +10,7 @@ import {
   isWakeTargetLabel,
   normalizeMac
 } from '../../../../shared/host-wake'
+import { fingerprintHostPublicKey } from '../../host-key-fingerprint'
 import { wakeBrokerHost } from '../../wake-broker-host'
 import type { WakeBrokerStore } from '../../wake-broker-store'
 import type { WakeBrokerStoreView } from '../../wake-broker'
@@ -54,6 +55,39 @@ function remoteCallerRefused(): Error {
 
 function isPersistentStore(store: WakeBrokerStoreView): store is WakeBrokerStore {
   return typeof (store as Partial<WakeBrokerStore>).addTarget === 'function'
+}
+
+type OwnHostKeyRead =
+  | { ok: true; hostKey: string }
+  | { ok: false; reason: 'not_ready' | 'unavailable' }
+
+// Why one reason for unreadable and malformed: either way there is no key the Owner could bind (plan check W1).
+function readOwnHostKey(): OwnHostKeyRead {
+  const publicKeyB64 = wakeBrokerHost.pairingPublicKey()
+  if (!publicKeyB64) {
+    return { ok: false, reason: 'not_ready' }
+  }
+  const hostKey = fingerprintHostPublicKey(publicKeyB64)
+  return hostKey ? { ok: true, hostKey } : { ok: false, reason: 'unavailable' }
+}
+
+// Why only for a non-null key: unbinding must never wait on the broker's own key read.
+function assertNotOwnHostKey(hostKey: string): void {
+  const own = readOwnHostKey()
+  if (!own.ok) {
+    // Why refuse: unknown is not different, so the broker cannot rule out binding itself.
+    throw hostWakeRefusal(
+      'wake_broker_unavailable',
+      'The broker cannot read its own host key, so no binding was written.',
+      { brokerState: 'host_key_unavailable' }
+    )
+  }
+  if (own.hostKey === hostKey) {
+    throw Object.assign(
+      new Error('That host key belongs to this broker, and a broker cannot wake itself.'),
+      { code: 'invalid_argument' }
+    )
+  }
 }
 
 // Why local-only: targets and grants are the Owner's act on the broker (D-05, D-07); runtime-scope
@@ -111,9 +145,34 @@ export const HOST_WAKE_ADMIN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'host.wake.admin.targetBind',
     params: TargetBindParams,
-    handler: async (params, ctx) => ({
-      target: adminStore(ctx).bindTarget(params.targetId, params.hostKey)
-    })
+    handler: async (params, ctx) => {
+      const store = adminStore(ctx)
+      if (params.hostKey !== null) {
+        assertNotOwnHostKey(params.hostKey)
+      }
+      return { target: store.bindTarget(params.targetId, params.hostKey) }
+    }
+  }),
+  defineMethod({
+    name: 'host.wake.admin.hostKey',
+    params: null,
+    // Why no adminStore: the readout runs on the host to be woken, which is usually not a broker.
+    handler: async (_params, ctx) => {
+      if (!isLocalRpcCaller(ctx)) {
+        throw remoteCallerRefused()
+      }
+      const own = readOwnHostKey()
+      if (!own.ok) {
+        throw hostWakeRefusal(
+          'host_key_unavailable',
+          own.reason === 'not_ready'
+            ? 'This host has no pairing key yet; start Orca with pairing available and try again.'
+            : 'This host pairing key could not be read as a host key.',
+          { reason: own.reason }
+        )
+      }
+      return { hostKey: own.hostKey }
+    }
   }),
   defineMethod({
     name: 'host.wake.admin.grantAdd',

@@ -27,13 +27,21 @@ export type WakeBrokerHost = {
   unavailableReason(): string | null
   attachDeviceAuthority(authority: WakeDeviceAuthority | null): void
   authority(): WakeDeviceAuthority | null
+  attachPairingKeySource(read: (() => string | null) | null): void
+  pairingPublicKey(): string | null
 }
 
 export function createWakeBrokerHost(): WakeBrokerHost {
   let enabled: EnabledWakeBroker | null = null
   let unavailable: string | null = null
   let deviceAuthority: WakeDeviceAuthority | null = null
+  // Why a live reader: the readout must name the keypair the server pairs with now, never a separately resolved file.
+  let pairingKeySource: (() => string | null) | null = null
   return {
+    attachPairingKeySource(read) {
+      pairingKeySource = read
+    },
+    pairingPublicKey: () => (pairingKeySource ? pairingKeySource() : null),
     enable(next) {
       enabled = next
       unavailable = null
