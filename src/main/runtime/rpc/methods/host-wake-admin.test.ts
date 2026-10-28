@@ -15,6 +15,8 @@ import { HOST_WAKE_METHODS } from './host-wake'
 type Outcome = { ok: true; result: unknown } | { ok: false; error: RpcFailure['error'] }
 
 const HOST_KEY = fingerprintHostKeyBytes(Buffer.alloc(32, 7))
+const BROKER_PUBLIC_KEY = Buffer.alloc(32, 9).toString('base64')
+const BROKER_HOST_KEY = fingerprintHostKeyBytes(Buffer.alloc(32, 9))
 
 const LOCAL: RpcContext = { runtime: {} as OrcaRuntimeService }
 const REMOTE_CONTEXTS: [string, RpcContext][] = [
@@ -55,6 +57,49 @@ function persistedTargetCount(): number {
   }
   return loaded.store.targets().length
 }
+
+describe('host.wake.admin.hostKey readout', () => {
+  afterEach(() => {
+    wakeBrokerHost.attachPairingKeySource(null)
+    wakeBrokerHost.disable()
+  })
+
+  it('answers a local caller with the fingerprint of the attached pairing key, with no broker running', async () => {
+    wakeBrokerHost.attachPairingKeySource(() => BROKER_PUBLIC_KEY)
+    expect(wakeBrokerHost.current()).toBeNull()
+    const outcome = await call('host.wake.admin.hostKey', null)
+    expect(outcome.ok && outcome.result).toEqual({ hostKey: BROKER_HOST_KEY })
+  })
+
+  it.each(REMOTE_CONTEXTS)(
+    'refuses a non-local caller (%s) with remote_caller_refused without reading the key',
+    async (_label, ctx) => {
+      let reads = 0
+      wakeBrokerHost.attachPairingKeySource(() => {
+        reads += 1
+        return BROKER_PUBLIC_KEY
+      })
+      const outcome = await call('host.wake.admin.hostKey', null, ctx)
+      expect(refusalCode(outcome)).toBe('remote_caller_refused')
+      expect(JSON.stringify(outcome)).not.toContain(BROKER_HOST_KEY)
+      expect(reads).toBe(0)
+    }
+  )
+
+  it.each([
+    ['no source attached', undefined, 'not_ready'],
+    ['a source reading null', () => null, 'not_ready'],
+    ['a source reading text that is no 32-byte key', () => 'not-a-key', 'unavailable'],
+    ['a source reading a 31-byte key', () => Buffer.alloc(31, 1).toString('base64'), 'unavailable']
+  ])('refuses with host_key_unavailable for %s', async (_label, source, reason) => {
+    if (source) {
+      wakeBrokerHost.attachPairingKeySource(source)
+    }
+    const outcome = await call('host.wake.admin.hostKey', null)
+    expect(refusalCode(outcome)).toBe('host_key_unavailable')
+    expect(outcome.ok ? null : outcome.error.data).toMatchObject({ reason })
+  })
+})
 
 describe('host.wake.admin target add and list', () => {
   beforeEach(() => {
@@ -244,6 +289,50 @@ describe('host.wake.admin grants and target removal', () => {
     expect(JSON.stringify(after)).not.toMatch(MAC_PATTERN)
   })
 
+  it('refuses binding the broker own host key: a broker cannot wake itself', async () => {
+    const targetId = await addTarget('desk')
+    const refused = await call('host.wake.admin.targetBind', { targetId, hostKey: BROKER_HOST_KEY })
+    expect(refusalCode(refused)).toBe('invalid_argument')
+    expect(refused.ok ? '' : refused.error.message).toContain('cannot wake itself')
+    const reloaded = loadWakeBrokerStore(userData)
+    expect(reloaded.ok && reloaded.store.target(targetId)).not.toHaveProperty('hostKey')
+  })
+
+  it.each([
+    ['no pairing key source', null],
+    ['a source reading null', () => null],
+    ['a source reading a malformed key', () => 'not-a-key']
+  ])(
+    'refuses binding while the broker own key is unknown (%s), but still unbinds',
+    async (_label, source) => {
+      const targetId = await addTarget('desk')
+      await call('host.wake.admin.targetBind', { targetId, hostKey: HOST_KEY })
+      wakeBrokerHost.attachPairingKeySource(source)
+      const refused = await call('host.wake.admin.targetBind', {
+        targetId,
+        hostKey: fingerprintHostKeyBytes(Buffer.alloc(32, 3))
+      })
+      expect(refusalCode(refused)).toBe('wake_broker_unavailable')
+      expect(refused.ok ? null : refused.error.data).toMatchObject({
+        brokerState: 'host_key_unavailable'
+      })
+      expect(wakeBrokerHost.current()?.store.target(targetId)?.hostKey).toBe(HOST_KEY)
+
+      const unbound = await call('host.wake.admin.targetBind', { targetId, hostKey: null })
+      expect(unbound.ok).toBe(true)
+      expect(wakeBrokerHost.current()?.store.target(targetId)).not.toHaveProperty('hostKey')
+    }
+  )
+
+  it.each([
+    ['a missing hostKey', { targetId: 'wt_0123456789ab' }],
+    ['a 42-character hostKey', { targetId: 'wt_0123456789ab', hostKey: 'A'.repeat(42) }],
+    ['a padded base64 hostKey', { targetId: 'wt_0123456789ab', hostKey: `${'A'.repeat(42)}=` }],
+    ['a runtimeId in place of a key', { targetId: 'wt_0123456789ab', hostKey: 'runtime-1' }]
+  ])('rejects %s as invalid targetBind params', (_label, params) => {
+    expect(method('host.wake.admin.targetBind').params?.safeParse(params).success).toBe(false)
+  })
+
   beforeEach(() => {
     userData = mkdtempSync(join(tmpdir(), 'orca-wake-admin-'))
     startWakeBroker(userData, {
@@ -252,11 +341,13 @@ describe('host.wake.admin grants and target removal', () => {
       }
     })
     wakeBrokerHost.attachDeviceAuthority(authority())
+    wakeBrokerHost.attachPairingKeySource(() => BROKER_PUBLIC_KEY)
   })
 
   afterEach(() => {
     wakeBrokerHost.disable()
     wakeBrokerHost.attachDeviceAuthority(null)
+    wakeBrokerHost.attachPairingKeySource(null)
     sent.length = 0
     rmSync(userData, { recursive: true, force: true })
   })

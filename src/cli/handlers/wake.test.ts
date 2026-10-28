@@ -226,11 +226,101 @@ describe('orca wake grant and target removal', () => {
   })
 })
 
+const HOST_KEY = `${'k'.repeat(41)}-_`
+
+describe('orca wake target bind, unbind and host-key', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    logSpy.mockRestore()
+    errorSpy.mockRestore()
+  })
+
+  it('binds a target with one targetBind call carrying the target and the host key', async () => {
+    callMock.mockResolvedValue(success({ target: { ...TARGET, hostKey: HOST_KEY } }))
+    await WAKE_HANDLERS['wake target bind'](
+      context([
+        ['target', TARGET.targetId],
+        ['host-key', HOST_KEY]
+      ])
+    )
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('host.wake.admin.targetBind', {
+      targetId: TARGET.targetId,
+      hostKey: HOST_KEY
+    })
+    expect(printed()).toContain(HOST_KEY)
+  })
+
+  it.each([
+    ['a missing --host-key', [['target', TARGET.targetId]] as [string, string][]],
+    ['a missing target', [['host-key', HOST_KEY]] as [string, string][]],
+    [
+      'a 42-character --host-key',
+      [
+        ['target', TARGET.targetId],
+        ['host-key', 'k'.repeat(42)]
+      ] as [string, string][]
+    ],
+    [
+      'a standard-base64 --host-key',
+      [
+        ['target', TARGET.targetId],
+        ['host-key', `${'k'.repeat(41)}+/`]
+      ] as [string, string][]
+    ]
+  ])('fails fast on %s without calling the runtime', async (_label, flags) => {
+    await expect(WAKE_HANDLERS['wake target bind'](context(flags))).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('unbinds a target by sending hostKey null', async () => {
+    callMock.mockResolvedValue(success({ target: TARGET }))
+    await WAKE_HANDLERS['wake target unbind'](context([['target', TARGET.targetId]], true))
+    expect(callMock).toHaveBeenCalledWith('host.wake.admin.targetBind', {
+      targetId: TARGET.targetId,
+      hostKey: null
+    })
+    expect(JSON.parse(printed()).result).toEqual({ target: TARGET })
+  })
+
+  it('prints the host key from one hostKey call, and { hostKey } with --json', async () => {
+    callMock.mockResolvedValue(success({ hostKey: HOST_KEY }))
+    await WAKE_HANDLERS['wake host-key'](context([]))
+    expect(callMock).toHaveBeenCalledWith('host.wake.admin.hostKey', null)
+    expect(printed()).toBe(HOST_KEY)
+    logSpy.mockClear()
+    await WAKE_HANDLERS['wake host-key'](context([], true))
+    expect(JSON.parse(printed()).result).toEqual({ hostKey: HOST_KEY })
+  })
+
+  it('shows host <key> for a bound row and unbound for the rest in target list', async () => {
+    const other = { ...TARGET, targetId: 'wt_ba9876543210', label: 'nas' }
+    callMock.mockResolvedValue(success({ targets: [{ ...TARGET, hostKey: HOST_KEY }, other] }))
+    await WAKE_HANDLERS['wake target list'](context([]))
+    const [boundRow, unboundRow] = printed().split('\n')
+    expect(boundRow).toContain(`host ${HOST_KEY}`)
+    expect(unboundRow).toContain('unbound')
+  })
+})
+
 describe('orca wake refuses the SSH relay bridge and remote retargeting', () => {
   const VALID_FLAGS: Record<string, [string, string][]> = {
     'wake target add': [['mac', 'aa:bb:cc:dd:ee:ff']],
     'wake target list': [],
     'wake target remove': [['target', TARGET.targetId]],
+    'wake target bind': [
+      ['target', TARGET.targetId],
+      ['host-key', HOST_KEY]
+    ],
+    'wake target unbind': [['target', TARGET.targetId]],
+    'wake host-key': [],
     'wake grant add': [
       ['device', 'dev-a'],
       ['target', TARGET.targetId]
