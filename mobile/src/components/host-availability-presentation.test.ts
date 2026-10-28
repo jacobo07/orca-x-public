@@ -464,3 +464,32 @@ describe('presentHostCardWake', () => {
     expect(keys.filter((key) => key.startsWith('wake.'))).toHaveLength(19)
   })
 })
+
+describe('presentHostCardWake: a status read never downgrades the wake (WR-01)', () => {
+  it('a record the broker forgot keeps the furthest observed stage', () => {
+    const sent = presentWake({ attempt: attempt({ statusReadCode: 'wake_unknown' }) })
+    expect(sent.stageLabelId).toBe('wake.packet-sent')
+
+    const ready = presentWake({
+      attempt: attempt({ statusReadCode: 'wake_unknown' }),
+      snapshot: targetAnswer('ready')
+    })
+    expect(ready).toMatchObject({ stageLabelId: 'wake.runtime-ready', tone: 'normal' })
+  })
+
+  it('a read refused after packet-sent reads unknown, never as a refused wake', () => {
+    const projection = presentWake({ attempt: attempt({ statusReadCode: 'wake_device_revoked' }) })
+
+    expect(projection.stageLabelId).toBe('wake.unknown')
+    expect(projection.stageText).not.toMatch(/refused/i)
+  })
+
+  it('the target answer outranks any read code', () => {
+    const projection = presentWake({
+      attempt: attempt({ statusReadCode: 'wake_device_revoked' }),
+      snapshot: targetAnswer('starting')
+    })
+
+    expect(projection.stageLabelId).toBe('wake.host-announced')
+  })
+})

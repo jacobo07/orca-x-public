@@ -6,6 +6,7 @@ import type { HomeHostStatusSnapshot } from './home-host-status-fetch'
 import {
   advertisesWakeBroker,
   brokerRouteInputs,
+  endedWakeAttempts,
   fetchHomeHostWakeTargets,
   hostKeyOfPublicKey,
   hostsAskableForWakeTargets,
@@ -15,6 +16,7 @@ import {
   readHostWakeStatus,
   requestHostWake,
   shouldFetchWakeTargets,
+  wakeAttemptForPairing,
   wakesToRefresh,
   type HomeHostWakeTargetsSnapshot
 } from './home-host-wake-session'
@@ -43,6 +45,7 @@ const TARGET_ID = 'wt_0123456789ab'
 type FakeSession = {
   client: RpcClient
   calls: Array<{ method: string; params: unknown }>
+  options: unknown[]
   settle: (response: RpcResponse | Error) => void
 }
 
@@ -50,12 +53,14 @@ function fakeSession(state: ConnectionState = 'connected'): FakeSession {
   const pending: Array<(response: RpcResponse | Error) => void> = []
   const fake: FakeSession = {
     calls: [],
+    options: [],
     settle(response: RpcResponse | Error) {
       pending.shift()?.(response)
     },
     client: {
-      sendRequest: (method: string, params?: unknown) => {
+      sendRequest: (method: string, params?: unknown, options?: unknown) => {
         fake.calls.push({ method, params })
+        fake.options.push(options)
         return new Promise<RpcResponse>((resolve, reject) => {
           pending.push((response) =>
             response instanceof Error ? reject(response) : resolve(response)
@@ -362,6 +367,45 @@ describe('a press on a bound card', () => {
     expect(target.calls).toEqual([])
   })
 
+  it('sends nothing when the routed broker client is not connected right now (WR-02)', () => {
+    const broker = fakeSession('reconnecting')
+    const press = pressHostWake({
+      target: { id: 'host-t', publicKeyB64: VECTOR_PUBLIC_KEY },
+      brokers: sessionBrokers(BOUND_TARGETS),
+      clients: [{ hostId: 'host-a', client: broker.client }],
+      now: phoneClock(5_000)
+    })
+
+    expect(press).toBeNull()
+    expect(broker.calls).toEqual([])
+  })
+
+  it('bounds every wake rpc: no connect wait, and a deadline (WR-02)', async () => {
+    const broker = fakeSession()
+    const done = requestHostWake({
+      client: broker.client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      requestId: 'req-00000001',
+      now: phoneClock(5_000)
+    })
+    broker.settle(okResponse({ wakeId: 'wake-1', stages: PRESS_STAGES }))
+    const read = readHostWakeStatus({ client: broker.client, attempt: await done })
+    broker.settle(okResponse({ wakeId: 'wake-1', stages: PRESS_STAGES }))
+    await read
+
+    expect(broker.calls.map((call) => call.method)).toEqual([
+      'host.wake.request',
+      'host.wake.status'
+    ])
+    expect(broker.options).toHaveLength(2)
+    for (const options of broker.options) {
+      expect(options).toMatchObject({ failWhenDisconnected: true, budgetSpansConnect: true })
+      const { timeoutMs } = options as { timeoutMs: number }
+      expect(timeoutMs > 0 && timeoutMs <= 30_000).toBe(true)
+    }
+  })
+
   it('sends nothing when the routed broker has no registered client', () => {
     const target = fakeSession()
     expect(
@@ -437,6 +481,17 @@ function wakeAttempt(overrides: Partial<HostCardWakeAttempt> = {}): HostCardWake
   }
 }
 
+type TargetObservations = Parameters<typeof wakesToRefresh>[1]
+const NO_TARGET_ANSWERS: TargetObservations = { statuses: {}, lastConnected: {} }
+
+// Why 6_000 and 6_100: a connection made after the press (5_000), answered after the reply (5_001).
+function answeredBy(targetHostId: string): TargetObservations {
+  return {
+    statuses: { [targetHostId]: { observedAt: 6_100, result: { graphStatus: 'ready' } } },
+    lastConnected: { [targetHostId]: 6_000 }
+  }
+}
+
 describe('wake progress without a timer', () => {
   it('re-reads host.wake.status on the broker client and replaces the broker stages', async () => {
     const broker = fakeSession()
@@ -450,15 +505,28 @@ describe('wake progress without a timer', () => {
     expect(after).toEqual({ ...before, brokerStages: PRESS_STAGES })
   })
 
-  it('records wake_unknown as the refusal and the attempt ends', async () => {
+  it('a read the broker no longer knows ends the reads but is never a press refusal (WR-01)', async () => {
     const broker = fakeSession()
+    const before = wakeAttempt()
 
-    const done = readHostWakeStatus({ client: broker.client, attempt: wakeAttempt() })
+    const done = readHostWakeStatus({ client: broker.client, attempt: before })
     broker.settle(failResponse('wake_unknown'))
     const after = await done
 
-    expect(after.refusalCode).toBe('wake_unknown')
+    expect(after).toEqual({ ...before, statusReadCode: 'wake_unknown' })
+    expect(after.refusalCode).toBeNull()
     expect(isWakeAttemptTerminal(after)).toBe(true)
+  })
+
+  it('a status-read refusal after packet-sent stays a read code, keeping the stages (WR-01)', async () => {
+    const broker = fakeSession()
+    const before = wakeAttempt()
+
+    const done = readHostWakeStatus({ client: broker.client, attempt: before })
+    broker.settle(failResponse('wake_device_revoked'))
+    const after = await done
+
+    expect(after).toEqual({ ...before, statusReadCode: 'wake_device_revoked' })
   })
 
   it('keeps the attempt by identity when the read never answers', async () => {
@@ -493,10 +561,59 @@ describe('wake progress without a timer', () => {
       refused: wakeAttempt({ refusalCode: 'wake_send_failed' }),
       failed: wakeAttempt({ brokerStages: FAILED_STAGES }),
       pending: wakeAttempt({ repliedAt: null, wakeId: null, brokerStages: null }),
-      unnamed: wakeAttempt({ wakeId: null })
+      unnamed: wakeAttempt({ wakeId: null }),
+      readClosed: wakeAttempt({ statusReadCode: 'wake_unknown' })
     }
 
-    expect(wakesToRefresh(attempts)).toEqual([{ targetHostId: 'sent', attempt: attempts.sent }])
+    expect(wakesToRefresh(attempts, NO_TARGET_ANSWERS)).toEqual([
+      { targetHostId: 'sent', attempt: attempts.sent }
+    ])
+  })
+
+  it('stops re-reading once the target itself answered after the press (WR-01)', () => {
+    const attempts = { answered: wakeAttempt(), waiting: wakeAttempt() }
+
+    expect(wakesToRefresh(attempts, answeredBy('answered'))).toEqual([
+      { targetHostId: 'waiting', attempt: attempts.waiting }
+    ])
+  })
+})
+
+describe('a wake attempt ends with the boot and the pairing it describes (IN-02)', () => {
+  it('ends an attempt whose target answered after the press and is no longer connected', () => {
+    const attempts = { 'host-t': wakeAttempt() }
+    const observations = {
+      ...answeredBy('host-t'),
+      hostStates: { 'host-t': 'reconnecting' as const }
+    }
+
+    expect(endedWakeAttempts(attempts, observations)).toEqual([
+      { targetHostId: 'host-t', requestId: 'req-00000001' }
+    ])
+  })
+
+  it('keeps it while the target stays connected, and while the target has not answered yet', () => {
+    const attempts = { 'host-t': wakeAttempt() }
+    const connected = { ...answeredBy('host-t'), hostStates: { 'host-t': 'connected' as const } }
+    const asleep = { ...NO_TARGET_ANSWERS, hostStates: { 'host-t': 'reconnecting' as const } }
+
+    expect(endedWakeAttempts(attempts, connected)).toEqual([])
+    expect(endedWakeAttempts(attempts, asleep)).toEqual([])
+  })
+
+  it('shows an attempt only under the pairing key it was pressed under', () => {
+    const attempt = wakeAttempt()
+    const otherKey = hostKeyOfPublicKey(OTHER_PUBLIC_KEY)
+
+    expect(
+      wakeAttemptForPairing({ attempt, pressedHostKey: VECTOR_HOST_KEY, hostKey: VECTOR_HOST_KEY })
+    ).toBe(attempt)
+    expect(
+      wakeAttemptForPairing({ attempt, pressedHostKey: VECTOR_HOST_KEY, hostKey: otherKey })
+    ).toBeNull()
+    expect(
+      wakeAttemptForPairing({ attempt: undefined, pressedHostKey: null, hostKey: VECTOR_HOST_KEY })
+    ).toBeNull()
   })
 })
 
@@ -735,6 +852,36 @@ describe('a wake refusal through a real RpcClient', () => {
     expect(authRejections()).toBeGreaterThan(0)
     expect(client.getState()).toBe('auth-failed')
     expect(attempt.refusalCode).toBe('unknown')
+
+    client.close()
+  })
+
+  it('a press on a disconnected client settles now as unknown and never sends after reconnect (WR-02)', async () => {
+    arm()
+    const client = connect('ws://desktop.invalid', 'token', 'server-key', {})
+    const socket = mockSockets[0]!
+    expect(client.getState()).not.toBe('connected')
+
+    const attempt = await requestHostWake({
+      client,
+      brokerHostId: 'host-a',
+      targetId: TARGET_ID,
+      requestId: 'req-00000001',
+      now: phoneClock(5_000)
+    })
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    for (let tick = 0; tick < 50; tick += 1) {
+      await Promise.resolve()
+    }
+
+    expect(attempt).toMatchObject({ repliedAt: 5_001, wakeId: null, refusalCode: 'unknown' })
+    expect(client.getState()).toBe('connected')
+    const wakeSends = socket.sent
+      .map(readWireRequest)
+      .filter((r) => r?.method === 'host.wake.request')
+    expect(wakeSends).toEqual([])
 
     client.close()
   })
