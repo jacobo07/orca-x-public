@@ -166,7 +166,7 @@ Plans:
 **Plans:** 5 plans
 Plans:
 
-- [ ] 20-01-PLAN.md — relay-delivered wake proof on a real RuntimeRpcServer (real CloudRelayTransport, loopback relay cell, simulated E2EE v2 phones): positive control, dedupe, refusals, revoke (row L), relay device binding; mutants P20-L1/L2 (wave 1)
+- [x] 20-01-PLAN.md — relay-delivered wake proof on a real RuntimeRpcServer (real CloudRelayTransport, loopback relay cell, simulated E2EE v2 phones): positive control, dedupe, refusals, revoke (row L), relay device binding; mutants P20-L1/L2 (wave 1)
 - [ ] 20-02-PLAN.md — read-only OOB probe + verdict tables (AMD -> not-supported/hardware_bound_amd_no_amt), can-power-on-oob from the probe at both start paths, can-wake-remote pinned non-supported (D-04 option B), one System32 path authority (wave 1)
 - [ ] 20-03-PLAN.md — shared wake-proxy-available composer (rows K, M; UNIT, unrendered), old-client additive pin, OOB power contract + test-only double + import sweep (wave 1)
 - [ ] 20-04-PLAN.md — G6 capability-producer ratchet inside check:host-card-claims (all six ids classified), rule table, ten mutants K/M/O/W/G (wave 2)
